@@ -1,14 +1,14 @@
 ---
 name: wf-douyin_video_publish
-version: 0.1.0
+version: 0.1.1
 description: "work-commander 陪跑 skill：抖音·视频发布（安卓真机，私密）workflow 的专属陪跑规矩。由 workflow-commander 第〇节按合同 commander_skill 字段自加载，不靠猜名字。第一阶段只记已知正常态与处置，随运行攒厚。"
 ---
 
-# 陪跑 skill · 抖音视频发布（wf-douyin_video_publish 0.1.0）
+# 陪跑 skill · 抖音视频发布（wf-douyin_video_publish 0.1.1）
 
 > 真身：zenithjoy-workspace `services/phone-adb-controller/commander/skills/wf-douyin_video_publish/SKILL.md`，deploy.sh 同步到 work-commander 工作区。
-> 合同：`product-map/contracts/douyin_video_publish.yaml`（`commander_skill: {name: wf-douyin_video_publish, version: 0.1.0}`）。
-> 熟化四态（决策 26df670a）：本 skill 从运行中攒出（变厚）→ 重复的写成代码（变薄）。第一阶段 0.1.0 = 最薄：只有正常态表与已知坑。
+> 合同：`product-map/contracts/douyin_video_publish.yaml`（`commander_skill: {name: wf-douyin_video_publish, version: 0.1.1}`）。
+> 熟化四态（决策 26df670a）：本 skill 从运行中攒出（变厚）→ 重复的写成代码（变薄）。第一阶段 0.1.1 = 最薄：只有正常态表与已知坑。
 
 ## 形态
 
@@ -34,4 +34,6 @@ codex_agent：外壳准备（wf-agent-run 查手机/领控制器锁/查账号）
 
 ## 汇报
 
-COMMANDER_RESULT 里 `commander_skill` 写 `{"name":"wf-douyin_video_publish","version":"0.1.0"}`；evidence 抄 delivery.json 的 `final_evidence` 与各活动 `evidence_files`。新判例写进 FINDINGS，攒够再升本 skill 版本（改合同 commander_skill.version 同 PR）。
+COMMANDER_RESULT 里 `commander_skill` 写 `{"name":"wf-douyin_video_publish","version":"0.1.1"}`；evidence 抄 delivery.json 的 `final_evidence` 与各活动 `evidence_files`。新判例写进 FINDINGS，攒够再升本 skill 版本（改合同 commander_skill.version 同 PR）。
+
+已知归属保护：exec 中不能用 CLI agent 派业务；按 workflow-commander 的正式 sessions_spawn 交接段执行，外壳等待绑定交付。丢失父归属不是模型故障，不得切模型、删exec标记或从别的CLI重派。

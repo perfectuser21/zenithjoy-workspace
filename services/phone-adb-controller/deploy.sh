@@ -64,7 +64,7 @@ deploy_commander() {
   echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
   ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
   # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py workflow-contracts.json; do
+  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json; do
     if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
     case "$f" in
       *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
@@ -107,6 +107,27 @@ deploy_commander() {
       echo "  ✅ work-commander skills 白名单已含全部陪跑 skill"
     fi
   fi
+  # 正式 sessions_spawn 只补业务执行者；CAS 保留人工授权，冲突时重新读，不扩其他权限。
+  if ssh mmv /usr/bin/env python3 <<'PYREMOTE'
+import json, subprocess, sys
+cli = '/opt/homebrew/bin/openclaw'
+path = 'agents.entries.work-commander.subagents.allowAgents'
+for attempt in range(3):
+    current = json.loads(subprocess.check_output([cli, 'config', 'get', path], text=True))
+    if not isinstance(current, list):
+        raise ValueError('Commander allowAgents must be an authored list')
+    if 'skill-factory' in current:
+        break
+    merged = current + ['skill-factory']
+    result = subprocess.run([cli, 'config', 'set', path, json.dumps(merged), '--strict-json',
+                             '--expect-current-json', json.dumps(current)], stdout=subprocess.DEVNULL)
+    if result.returncode == 0:
+        break
+else:
+    sys.exit('Commander allowAgents CAS conflict')
+PYREMOTE
+  then echo "  ✅ work-commander 允许正式派发 skill-factory（CAS 只增）"
+  else echo "  ❌ work-commander 子代理授权未完成"; FAILED=1; fi
   # 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
   if [[ -s "$D/commander/AGENTS.md" ]]; then
     push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md

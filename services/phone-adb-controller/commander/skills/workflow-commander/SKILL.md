@@ -42,7 +42,7 @@ Brain 主动派发（workflow_dispatch）的调度单一律带 `--run-id/--task-
 - **缺任何一项 → 回报缺什么，不发起、不自选、不猜**。主理人说「找台空闲的」「随便哪部手机」也一样：回复「调度单缺 <机器/profile/serial>，机器与手机由编排/调度选定（决策 e8f872cb），请给完整调度单」，并可附上台账查询命令 `ssh xian-m4 'cat ~/.config/openclaw/douyin-phone-profiles.tsv'` 供主理人自己挑。
 - **不写契约草稿、不组装新 workflow**：主理人说「把 X 活动和 Y 活动拼成一条新流程」「只换掉发现这一步」→ 回复「workflow 在设计时用契约写死（`product-map/contracts/<能力>.yaml` → PR/CI 组装闸 → `wf-plan` 编译 → 部署 plans），请走设计时流程（有头会话 /dev）；我只照调度单跑已组装通过的能力」。**禁止直接在执行机上改脚本或 plans 文件**。
 - 没有 plans 文件的获客能力 = 还没组装通过或没部署，**不许发起**，如实告诉主理人（退出码 4）。
-- **codex_agent 形态**（合同 `execution_profile: codex_agent`，如八个平台视频发布）：wf-launch 在 MMV 本机起 `wf-agent-run.sh`——共享外壳准备（查手机、领手机控制器锁、查账号）→ 业务块（skill-factory agent 在 Codex 运行时跑业务 skill）→ 共享外壳收尾（关 App、放锁、回读 free，trap 保证必执行）。输出 `host=mmv`，查状态用 `wf-status.sh mmv <TAG>`。没有 escort，**由你本会话陪跑到终态**。外壳与业务块都不是你做的：你不碰手机、不代领锁、不判成败。
+- **codex_agent 形态**（合同 `execution_profile: codex_agent`，如八个平台视频发布）：wf-launch 在 MMV 本机起 `wf-agent-run.sh`——共享外壳准备（查手机、领手机控制器锁、查账号）→ 等待你正式派发业务块（skill-factory agent 在 Codex 运行时跑业务 skill）→ 共享外壳收尾（关 App、放锁、回读 free，trap 保证必执行）。输出 `host=mmv`，查状态用 `wf-status.sh mmv <TAG>`。没有 escort，**由你本会话陪跑到终态**。外壳与业务块都不是你做的：你不碰手机、不代领锁、不判成败。
 - `--allow-missing`：plan 里 `WF_MISSING` 非空（契约有未实现步骤）时 wf-run 默认拒跑；**只有调度单/主理人明确说「调试/试跑」才加**，并在回复里写明本次跑的是未验收实现。
 - `--dry-run`：演练，只做参数/plan/设备占用校验并回报 `DRY_RUN`，不起跑、不碰手机。
 - **时窗**：北京 8–22 点手机归触达用，采收类 run 会在预检之后自动退让（正常，不是故障）。白天被召唤时先告诉主理人「现在发起只会跑到预检就退让」，调度单仍要跑就照发（可用来验证链路）。
@@ -64,6 +64,7 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 
 - `--push 0` = 只采不落库（试跑用）；默认 1。
 - 读最后一行 `WF_LAUNCHED tag=… escort=…` 回报主理人：跑的哪个能力、哪台机器哪部手机、TAG、陪跑 escort 已上岗。
+- codex_agent 发起前用本轮正式 `session_status` 取得自己的 session key，给上述命令追加 `--parent-session <当前 work-commander session key>`；不得伪造或使用别轮父会话。获客形态不需此参数。
 - **退出码 0 只代表「已起跑」**：预检（设备/账号/时窗/KPI）约 1 分钟后才出结果。没用 `wf-status.sh` 查到之前，**禁止说「预检已过」「没再被拦」**（0930 实证：刚发起就宣称账号校验已过，属编造）。想给结论就先等约 90 秒查一次 wf-status 再说。
 
 | 退出码 | 意思 | 你怎么做 |
@@ -73,6 +74,19 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 | 3 | 这部手机已有 run 在跑 | 不叠跑；告诉主理人在跑的是什么；**不自行换另一部**，要换需主理人给新调度单 |
 | 4 | 能力没部署/没组装通过 | 如实报告，不发起 |
 | 5 | 起跑失败 | 把报错原文（含日志尾）给主理人；属于 SOP 外的问题按升级链升级 |
+
+## codex_agent 正式业务交接（必须在本会话工具中完成）
+
+外壳只准备、续锁、等待、系统验收及收尾。禁止从 `gateway_exec`/shell 调 `openclaw agent`、`sessions.send` 或删除 `OPENCLAW_SHELL` 绕过归属保护。
+
+1. 起跑后读取 MMV `~/wf-agent-runs/<run_id>/agent-request.json` 和 `msg.txt`。准备尚未结束则查日志，最长等待 120 秒；预检已结束/失败就汇报该终态，不派业务。核对 request 的 run_id/task_id/parent_session_key 与本单、本会话一致，且未过 expires_at。
+2. **本轮只调用一次正式 `sessions_spawn`**：`agentId: "skill-factory"`, `taskName: "wf-<run_id>"`（若超过64字符，用task_id前8位）, `mode: "run"`, `cleanup: "keep"`, `completionTarget: "parent"`, `context: "isolated"`, `runTimeoutSeconds: 2700`。`task` 原样带 msg.txt 与完整 request，并追加：开始任何手机动作前必须读到 MMV 上的 `agent-binding.json`（用本轮实际可用的文件工具；在跑场机可用既有 SSH `administrator@100.71.151.105` 只读该文件，不强指定子代理未暴露的gateway_exec工具），确认其 parent/run/task/nonce 与 request 一致、childSessionKey 是自己；若60秒仍未绑定或出现 `handoff-closed.json`，立即报阻塞，不能碰手机。不得 fork Commander 历史，不传模型覆盖、fallback或消息附件。
+3. 工具若返回JSON字符串，先JSON.parse解析成对象（不要把字符串当receipt）；读取正式 spawn receipt 的 `childSessionKey`、`runId`、`resolvedProvider`、`resolvedModel`。现行 skill-factory 配置为 `openai/gpt-6.1-sol`，fallbacks为空；receipt 必须仍为该 Codex 模型。缺少或不一致先用正式 `subagents` 取消本次 child 并确认终止，禁止绑定/降级模型/再次spawn。把 receipt 原样保存为 run目录 `spawn-receipt.json` 留审计。
+4. 将 request 的 `run_id/task_id/parent_session_key/nonce` 与 receipt 改名字段 `child_session_key/child_run_id` 组成 JSON，经 stdin 调 `python3 ~/.openclaw/commander/wf-agent-handoff.py bind <run_dir>`。务必用结构化工具或安全 JSON 文件管道，勿 shell 插值正文。bind失败时取消这次child并确认终止，不重派。
+5. 在 MMV 用 `gateway_exec` 前台执行 `python3 ~/.openclaw/commander/wf-agent-handoff.py await <run_dir>`（timeoutSeconds 至少 2900；若返回后台process session，用 gateway_process 等该进程完成）。**不要调用 sessions_yield**：它会让入口CLI以空结果退出。helper通过官方非消息 `agent.wait` 等绑定child的确切run终态，校验runId、endedAt、terminalReceipt真实Codex模型，然后将 `terminalReply.text` 原始全文直接complete并保存官方terminal元数据。不需要挑history、提炼或重写回复；官方timeout/error不能变成成功。私有callback若稍后到达，只复读已有交付，不能再spawn或另写不同结果。await失败时报告精确阻塞，按绑定子run确认终止，不自行放锁。
+6. 外壳才会关App、精确放锁、查动作账、产 delivery.json 和 FINISHED；继续按下节读终态。超时/TERM由外壳仅对绑定 child 调官方非消息 `sessions.abort` 和 `agent.wait`；未确认终止时保留锁，不能自行释放或重派。
+
+同一个 run 的 bind/complete 重复完全相同回执幂等；跨run、父子不符、nonce不符、过期与已关闭交付均被拒绝。只转交任务和原始结果，Commander不执行业务或修改成败。
 
 ## 三、陪跑与售后
 

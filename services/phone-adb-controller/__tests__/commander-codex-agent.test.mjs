@@ -15,6 +15,7 @@ const LAUNCH = join(CMD, "wf-launch.sh");
 const STATUS = join(CMD, "wf-status.sh");
 const RUNNER = join(CMD, "wf-agent-run.sh");
 const LIB = join(CMD, "wf-agent-lib.py");
+const HANDOFF = join(CMD, "wf-agent-handoff.py");
 const RUN = "wfd-1234abcd-1760000000000";
 const TASK = "1234abcd-0000-4000-8000-000000000001";
 const SERIAL = "ANGYVB4311010223";
@@ -40,7 +41,14 @@ exit 0`;
 // 业务块：STUB_AGENT=ok 正常交付并「留」三份读回证据；=nodelivery 不交付；=hang 卡住（测超时与 TERM）
 const FAKE_OC = `#!/bin/sh
 printf '%s\\n' "$*" >> "$HOME/oc-argv.log"
-[ "$1" = "agent" ] || exit 0
+if [ "$1" = "gateway" ]; then
+  case "$3" in
+    sessions.abort) echo '{"ok":true,"status":"aborted"}';;
+    agent.wait) if [ "$STUB_CHILD_STOP" = "uncertain" ]; then echo '{"status":"timeout"}'; else python3 -c 'import json,sys; p=json.loads(sys.argv[1]); print(json.dumps({"status":"error","runId":p["runId"],"endedAt":1}))' "$5"; fi;;
+  esac
+  exit 0
+fi
+[ "$1" = "fixture" ] || exit 97
 case "$STUB_AGENT" in
   hang) sleep 30; exit 0;;
   nodelivery) echo "agent crashed"; exit 1;;
@@ -65,9 +73,9 @@ function setup(stub = {}) {
   }
   if (stub.lockedBy) writeFileSync(join(home, "lock"), `${stub.lockedBy}\n`);
   const env = {
-    ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
+    ...process.env, HOME: home, OPENCLAW: join(bin, "openclaw"), PATH: `${bin}:${process.env.PATH}`,
     WF_START_WAIT: "1", WF_ESCORT_RETRY_SLEEP: "0", WF_AGENT_POLL_S: "1", WF_LOCK_REFRESH_S: "1",
-    WF_AGENT_TIMEOUT_S: stub.timeout ?? "60", WF_BRAIN_URL: "http://brain.test:5221",
+    WF_AGENT_TIMEOUT_S: stub.timeout ?? "60", WF_PARENT_SESSION_KEY: "agent:work-commander:test-parent", WF_BRAIN_URL: "http://brain.test:5221",
     STUB_PHONE: stub.phone ?? "online", STUB_NICK: stub.nick ?? "Ai办公室", STUB_AGENT: stub.agent ?? "ok",
     STUB_PUBLISH: stub.publish ?? "1", STUB_BRAIN: stub.brain ?? "up",
   };
@@ -77,7 +85,30 @@ const read = (home, f) => (existsSync(join(home, f)) ? readFileSync(join(home, f
 const runDir = (home) => join(home, "wf-agent-runs", RUN);
 const delivery = (home) => JSON.parse(read(home, `wf-agent-runs/${RUN}/delivery.json`));
 const ARGS = ["douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室", "--tag", "cmd10121200", "--run-id", RUN, "--task-id", TASK];
-const runner = (env, args = ARGS) => spawnSync("bash", [RUNNER, ...args], { encoding: "utf8", env, timeout: 60000 });
+// 假官方回调只用于测试：真实 Commander 经 sessions_spawn 得到 receipt，再交回原始终态。
+function coordinator(env) {
+  return spawn(process.execPath,["--input-type=module","-e", `
+    import {existsSync,readFileSync} from 'node:fs';
+    import {spawnSync} from 'node:child_process';
+    const dir=process.env.HOME+'/wf-agent-runs/${RUN}';
+    const pause=()=>new Promise(r=>setTimeout(r,50));
+    for(let i=0;i<200&&!existsSync(dir+'/agent-request.json');i++) await pause();
+    if(!existsSync(dir+'/agent-request.json')) process.exit(0);
+    const request=JSON.parse(readFileSync(dir+'/agent-request.json'));
+    const receipt={...request,child_session_key:'agent:skill-factory:subagent:fixture',child_run_id:'1234abcd-0000-4000-8000-000000000002'};
+    const call=(cmd,data)=>spawnSync('python3',[process.argv[1],cmd,dir],{input:JSON.stringify(data),encoding:'utf8'});
+    if(call('bind',receipt).status!==0) process.exit(2);
+    if(process.env.STUB_AGENT==='hang') { for(let i=0;i<1000;i++) await pause(); process.exit(0); }
+    const output=spawnSync('openclaw',['fixture'],{encoding:'utf8'});
+    const result=call('complete',{...receipt,status:output.status===0?'ok':'error',result:output.stdout});
+    process.exit(result.status);
+  `,HANDOFF],{env,stdio:'ignore'});
+}
+function runner(env,args=ARGS) {
+  const helper=coordinator(env);
+  try{return spawnSync("bash",[RUNNER,...args],{encoding:"utf8",env,timeout:60000});}
+  finally{helper.kill('SIGTERM');}
+}
 
 test("wf-agent-lib：合同清单分形态，codex_agent 才走外壳 runner", () => {
   const p = (cap) => spawnSync("python3", [LIB, "profile", join(CMD, "workflow-contracts.json"), cap], { encoding: "utf8" });
@@ -110,7 +141,7 @@ test("正常一轮：外壳领锁查号 → 业务块 → 收尾关 App 放锁�
   assert.equal(d.readback.lock_status, "free", "锁状态取外壳回读，不采信自报 held");
   assert.equal(d.readback.publish_attempts, 1, "对外动作次数取 outward-ledger 系统账，不采信自报 9");
   assert.equal(d.readback.private_after, 4);
-  assert.deepEqual(d.commander_skill, { name: "wf-douyin_video_publish", version: "0.1.0" });
+  assert.deepEqual(d.commander_skill, { name: "wf-douyin_video_publish", version: "0.1.1" });
   assert.deepEqual(d.activities.map((a) => [a.key, a.evidence_files.length]), [["preflight", 1], ["prepare", 1], ["publish", 1], ["verify", 1], ["cleanup", 1]]);
   assert.equal(d.activities.find((a) => a.key === "publish").readback.glob, "*publish*original.json");
   for (const id of [`${RUN}-lock-acquire`, `${RUN}-lock-release`, `${RUN}-outward-ledger`]) assert.ok(d.final_evidence.includes(id), id);
@@ -121,7 +152,8 @@ test("正常一轮：外壳领锁查号 → 业务块 → 收尾关 App 放锁�
   const msg = read(home, `wf-agent-runs/${RUN}/msg.txt`);
   assert.match(msg, /不要 lock-acquire \/ lock-release/);
   assert.match(msg, /android-douyin-private-video@1\.0\.8/, "业务块消息带 Brain 任务正文");
-  assert.match(read(home, "oc-argv.log"), new RegExp(`agent --agent skill-factory --session-id wfa-${RUN}`));
+  assert.doesNotMatch(read(home, "oc-argv.log"), /^agent /m);
+  assert.equal(JSON.parse(read(home, `wf-agent-runs/${RUN}/agent-binding.json`)).parent_session_key, env.WF_PARENT_SESSION_KEY);
   const ssh = read(home, "ssh-argv.log");
   assert.match(ssh, new RegExp(`--lock-owner ${RUN} account-current ${RUN}-preflight-account`));
 });
@@ -185,10 +217,12 @@ test("业务块超时：外壳杀会话、failed agent_timeout、照样收尾放
 
 test("被 TERM：trap 收尾仍关 App、放锁、写 delivery", async () => {
   const { home, env } = setup({ agent: "hang" });
+  const helper = coordinator(env);
   const child = spawn("bash", [RUNNER, ...ARGS], { env, stdio: "ignore" });
-  for (let i = 0; i < 100 && !read(home, "oc-argv.log"); i++) await new Promise((r) => setTimeout(r, 100));
+  for (let i = 0; i < 100 && !existsSync(join(runDir(home), "agent-binding.json")); i++) await new Promise((r) => setTimeout(r, 100));
   child.kill("SIGTERM");
   await new Promise((r) => child.on("exit", r));
+  helper.kill("SIGTERM");
   const d = delivery(home);
   assert.match(d.fail_reason, /interrupted/);
   assert.equal(d.lock_released, true);
@@ -257,8 +291,30 @@ test("wf-status mmv：读本机 runner 日志，FINISHED 标记即 finished", ()
 
 test("deploy.sh：Commander 入口下发 runner/lib/合同清单与全部 commander skills，白名单只增不删，可 --commander-only 单独部署", () => {
   const deploy = readFileSync(join(HERE, "..", "deploy.sh"), "utf8");
-  assert.match(deploy, /for f in wf-launch\.sh wf-status\.sh wf-agent-run\.sh wf-agent-lib\.py workflow-contracts\.json/);
+  assert.match(deploy, /for f in wf-launch\.sh wf-status\.sh wf-agent-run\.sh wf-agent-lib\.py wf-agent-handoff\.py workflow-contracts\.json/);
   assert.match(deploy, /commander\/skills\/\*\/SKILL\.md/);
   assert.match(deploy, /openclaw config set agents\.entries\.work-commander\.skills/);
   assert.match(deploy, /--commander-only[\s\S]*deploy_commander/);
+});
+
+// 实际故障：gateway_exec 中的 CLI agent 消息丢失父归属，被 OpenClaw 拒绝。
+test("exec 来源只能等待正式父子交接，不能从外壳启动 CLI agent", async () => {
+  const {home,env}=setup({agent:"nodelivery"});
+  const child=spawn("bash",[RUNNER,...ARGS],{env:{...env,OPENCLAW_SHELL:"exec",WF_PARENT_SESSION_KEY:"agent:work-commander:regression"},stdio:"ignore"});
+  try {
+    for(let i=0;i<30&&!existsSync(join(runDir(home),"msg.txt"));i++) await new Promise(r=>setTimeout(r,100));
+    await new Promise(r=>setTimeout(r,200));
+    assert.equal(read(home,"oc-argv.log"),"","外壳不能调用 agent CLI 消息通道");
+    assert.ok(existsSync(join(runDir(home),"agent-request.json")));
+  } finally { if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r));} }
+});
+
+test("超时子会话未确认终止：不释放仍可能被业务使用的控制器锁", () => {
+ const {home,env}=setup({agent:"hang"});
+ runner({...env,WF_AGENT_TIMEOUT_S:"-118",STUB_CHILD_STOP:"uncertain"});
+ const d=delivery(home);
+ assert.equal(d.fail_reason,"child_termination_unconfirmed");
+ assert.equal(d.lock_released,false);
+ assert.equal(read(home,"lock").trim(),RUN);
+ assert.doesNotMatch(read(home,"ssh-argv.log"),/lock-release|close-app/);
 });

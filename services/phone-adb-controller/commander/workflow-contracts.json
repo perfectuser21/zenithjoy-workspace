@@ -86,7 +86,7 @@
       "brain_workflow_key": "douyin_video_publish.android",
       "commander_skill": {
         "name": "wf-douyin_video_publish",
-        "version": "0.1.0"
+        "version": "0.1.1"
       },
       "activities": [
         {
