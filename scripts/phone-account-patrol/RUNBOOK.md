@@ -2,15 +2,23 @@
 
 维护负责人：主理人。计划时间：每天北京时间22:00（Asia/Shanghai）。
 
-## OpenClaw 领跑入口
+## OpenClaw 原生领跑入口
 
-领跑 agent 为 OpenClaw `infra`（OPC 运维官）。中央 Brain 每晚 22:00 唤醒 infra，infra 通过网关工具在 MMV 启动已有固定版代码批次；手机侧仍由 Python、ADB、Vision OCR 与原生设备锁执行。整体为 AI 领跑加代码执行，手机巡查 Activity 本身继续纯代码。
+最终入口：中央 Brain 定时生成 `qiumi_task`，通过独立 OpenClaw agent 调度通道直接召唤 `infra`（OPC 运维官）。infra 在 MMV 使用实际工具调用 `openclaw_native.py enqueue`，只登记一个冻结源 `script_run` 代码批次。代码批次再登记每部手机任务；M4 的 Python、ADB、Vision OCR、原生设备锁与账号写回继续纯代码。整体是 AI 领跑加代码执行，AI 领跑任务与代码任务分开记账。
 
-`openclaw_commander.py launch` 不直接启动巡查，不以 AI 回复文字认定成功；它核对官方 Agent 终态回执、真实批次文件及中央四个子任务的归属、设备、Workflow、源码版本和幂等键。启动成功只表示任务已登记；设备拔出、离线、被人使用及账号待确认仍按实际结果记录。
+计划目标为每天北京时间 22:00 领跑、22:45 只读复核。既有每 30 分钟纯代码维护检查继续运行。是否正式启用与部署验收，以中央 registry、recurring-tasks 和真实任务读回为准；本次原生领跑自动运行与正式复核尚需真实验收，不以静态测试或历史手机验收代替。
 
-每日 22:45 由同一 infra 只读复核当天正式批次，留下独立 review 执行记录。既有每 30 分钟代码维护检查继续运行；领跑者不能抢占设备锁、替主理人登录切号、删除失败历史或自行改生产代码。Agent 超时只表示未确认，不能宣称 Gateway run 已取消。
+### infra 使用步骤
 
-桥的源码版本与手机执行源码版本分别登记：桥任务的 `source_revision` 是桥自身提交，`phone_source_revision` 指向已验收的手机代码固定源。OpenClaw 的 run/session、Brain 的批次及各手机 task/run 可以互相核对。中央 registry 为部署与调度真身，Workflows 和 Runs 为查看入口；以实际登记的启用状态为准。
+1. 通过本轮官方 `session_status` 获取 `agent:infra:<run_id>`，在 MMV 调用 `openclaw_native.py resolve-task --session-key <真实sessionKey>`。它完整分页读取中央任务，唯一匹配同项目、运行中、qiumi/infra、`payload.run_id` 一致的真实领跑者；没有唯一匹配即停止，禁止猜最新任务。
+2. 对 22 点巡查领跑，调用 `openclaw_native.py enqueue --leader-task-id <真实中央ID>`。helper 校验父任务、项目、Workflow 与双源身份，使用稳定 `OpenClaw:infra:<leader>:batch` 幂等键登记代码批次，并 GET 读回真实父子/源码/流程/routing receipt 身份。返回 queued 仅表示登记成功，不表示手机完成。
+3. 对只读维护领跑，调用 `openclaw_native.py inspect --review-leader-task-id <真实中央ID>`。默认目标只取经过核验的 native 最新登记，并回读真实领跑父任务的正式计划及北京时间当天 22 点时段。`--batch-task-id` 仅用于明确指定实际验收批次；也须核验来源及孩子身份。
+
+helper 不调用模型、OpenClaw CLI 或手机，不修改部署指针，不自行修配置、补跑或发送外部消息。父任务必须明确 `qiumi_route.source=explicit`。复核保留 failed、waiting、unknown、deferred 及各 task/run/exit；非零退出码优先失败，completed/deferred 必须对应真实 Run 与退出码 0，缺证据为 unknown；手机离线或被人占用按真实状态记录。维护负责人仍是主理人。
+
+本机私有证据：`native-launch-<leader>.json`、`native-openclaw.latest.json`、`native-review-<review>.json`，权限 600。领跑源码 `source_revision` 与手机固定源 `phone_source_revision` 分别登记；正式代码批次的 `source_revision` 为冻结手机源。代码批次复制已核验领跑任务的定时计划与时段，既有 runner monitor 可读到实际代码批次。中央 registry 是调度和部署真身，Notion 页面为查看入口。
+
+`openclaw_commander.py` 保留为共享真实性验证库，仅提供冻结八文件哈希、UUID、真实父子/设备/来源核验与私有原子保存。部署 native helper 时共享库必须在同一目录，手机固定 release 不改。
 
 ## 正式登记与执行
 
@@ -22,7 +30,7 @@
 - 运维登记：`1d7335b8-fdfe-4c7f-b246-52180c03339a`，负责人、版本、调度和验收证据均在metadata。
 - 项目：`8386209b-ed0f-4f0f-a1f0-9ddf1bddbff6`。
 
-中央Brain定时器生成script_run领跑任务，OpenClaw infra 经网关启动 MMV 上的固定版代码批次。批次读取设备清单，为每个启用手机登记单手机任务。每部手机在M4通过原生设备锁、ADB和Vision OCR逐平台检查，再写回账号登录明细；设备镜子更新页面。手机巡查不调用大模型，不切换账号、不登录、不发布；领跑与复核使用 AI。
+中央Brain定时器生成 qiumi_task 领跑任务，OpenClaw infra 经 MMV 实际工具登记固定源的 script_run 代码批次。批次读取设备清单，为每个启用手机登记单手机任务。每部手机在M4通过原生设备锁、ADB和Vision OCR逐平台检查，再写回账号登录明细；设备镜子更新页面。手机巡查不调用大模型，不切换账号、不登录、不发布；领跑与复核使用 AI。
 
 批次完成只表示子任务已排队。每部手机是否巡查完成，以该子任务及独立task_runs为准；占用跳过不是完成巡查，未知记待确认，离线和写回失败返回非零。定时器last_run_at只是建单时间，不能拿它证明手机已经执行。
 
@@ -51,7 +59,7 @@ Notion入口：
 | 小黄 | `44a58e21-8fd5-4b79-ab64-38b329088a88` | 完成，抖音/头条已登录；其他未登录或待确认 |
 | 小蓝 | `e2b1a491-35bb-4dc9-b252-b707d70cc84a` | 完成，抖音/快手已登录；其他未登录、未安装或待确认 |
 
-上述为真实手动巡查验收，均有独立script Run、exit 0、账号写回及设备镜子JSON回执。批次 `c3526656-1443-4ce5-af6c-1402fb08bf57` 与独立实际重放 `67d31662-6108-457c-8622-c1e4a055b494` 返回完全相同的四个子任务ID；批次通过不替代自动单手机运行证明。
+上述为历史固定手机源的真实手动巡查验收，不证明本次原生 OpenClaw 领跑已完成部署或自动验收；均有独立script Run、exit 0、账号写回及设备镜子JSON回执。批次 `c3526656-1443-4ce5-af6c-1402fb08bf57` 与独立实际重放 `67d31662-6108-457c-8622-c1e4a055b494` 返回完全相同的四个子任务ID；批次通过不替代自动单手机运行证明。
 
 ## 部署门槛与当前状态
 
@@ -59,6 +67,6 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 
 启用门槛：正式源码CI与代码审查通过、纯代码中央自动派发实测通过、Notion代码运行记录读回真实Run。启用时在巡查template写activated_at，不追责停用期间的历史漏跑；同时通过账号工作面正式维护入口仅更新调度标签，保留真实账号核验时间。
 
-不得绕过CI、管理员强行合并、直接SQL注册、另开本机隐藏定时器，或把未部署版本标成已部署。完整验收后才通过Brain recurring-tasks API启用。中央自动派发池满可能延后执行，22:00是计划时间；排队必须可见并记录异常。
+不得绕过CI、管理员强行合并、直接SQL注册、另开本机隐藏定时器，或把未部署版本标成已部署。完整验收后才通过Brain recurring-tasks API启用。独立 OpenClaw agent 通道和代码执行队列的排队均可能延后执行，22:00是计划时间；排队必须可见并记录异常。
 
 监控自身异常也必须留下中央失败Run。巡查失败、排队超时、漏跑或设备占用由主理人查看维护任务和运行记录；代码修复走Git PR、测试、固定版本部署和正式定义更新。

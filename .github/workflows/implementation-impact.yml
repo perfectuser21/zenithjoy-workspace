@@ -74,14 +74,14 @@ jobs:
     name: Implementation impact
     needs: [caller-contract, scope-classification]
     if: needs['scope-classification'].outputs.classification == 'applicable'
-    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@68ee3bd092ad6c0d765d26b64799529fe4a0f773
+    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@07b294a6a454e9ad3464111f48cfef9602931a37
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: cecelia-device-patrol
       base_revision: ${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}
       head_revision: ${{ github.event.pull_request.head.sha || github.sha }}
       mode: ${{ github.event_name == 'pull_request' && 'pr' || 'main' }}
-      tooling_revision: 68ee3bd092ad6c0d765d26b64799529fe4a0f773
+      tooling_revision: 07b294a6a454e9ad3464111f48cfef9602931a37
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
