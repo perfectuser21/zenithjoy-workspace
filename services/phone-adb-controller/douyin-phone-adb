@@ -2408,7 +2408,7 @@ record_playback_state() {
   print -r -- "$raw" | "$PYTHON_BIN" -c '
 import re,sys
 raw=sys.stdin.read()
-targets=re.findall(r"(?m)^\s*Media button session is\s+(\S+)\s*$",raw)
+targets=re.findall(r"(?m)^[ \t]*Media button session is[ \t]+(\S+)(?:[ \t]+\(userId=[0-9]+\))?[ \t]*$",raw)
 if len(targets)!=1 or not targets[0].startswith("com.ss.android.ugc.aweme/"):
  print("unknown");sys.exit(0)
 matches=list(re.finditer(r"(?m)^\s*package=([^\s]+)",raw));states=[]
