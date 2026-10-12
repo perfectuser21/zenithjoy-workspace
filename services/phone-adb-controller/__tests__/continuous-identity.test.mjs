@@ -318,3 +318,45 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
  const r=phone({copyGuide:true,guideDismissIdle:true,controlledWait:true});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
  assert.match(r.stdout,new RegExp('IDENTITY\\t'+vid+'\\tverified'));assert.equal(r.state.guideDismisses,1);assert.equal(r.state.guideIdleAttempts,2);assert.equal(r.state.media85,2);assert.equal(r.state.play,'playing');
 });
+
+// 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
+function recordBoundary({session='playing',playFails=false}={}){
+ const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
+ try{
+  const text=readFileSync(controller,'utf8');
+  const fn=text.slice(text.indexOf('record_start() {'),text.indexOf('\nrecord_status() {'));
+  const adb=join(d,'adb');
+  writeFileSync(adb,`#!/bin/zsh
+print -r -- "$*" >> "$FIXTURE/calls"
+if [[ "$*" == *'keyevent 126'* ]]; then ${playFails?'exit 1':'exit 0'}; fi
+if [[ "$*" == *'dumpsys media_session'* ]]; then
+case "$SESSION" in
+playing) print '  package=com.ss.android.ugc.aweme\n  active=true\n  state=PlaybackState {state=3, position=50}' ;;
+paused) print '  package=com.ss.android.ugc.aweme\n  active=true\n  state=PlaybackState {state=2, position=50}' ;;
+other) print '  package=com.netease.cloudmusic\n  active=true\n  state=PlaybackState {state=3, position=50}\n  package=com.ss.android.ugc.aweme\n  active=true\n  state=PlaybackState {state=1, position=0}' ;;
+inactive) print '  package=com.ss.android.ugc.aweme\n  active=false\n  state=PlaybackState {state=3, position=50}' ;;
+unknown) print 'unexpected output' ;;
+esac
+fi
+`,{mode:0o755});
+  writeFileSync(join(d,'scrcpy'),`#!/bin/zsh\nprint start >> "$FIXTURE/scrcpy-started"\n/bin/sleep 3\n`,{mode:0o755});
+  // 其余真实控制器辅助函数后续按相同命名边界加载；只替换设备/等待/页面守卫。
+  const helpers=text.slice(text.indexOf('record_pid_file()'),text.indexOf('# set_playback_speed'));
+  const extraStart=text.indexOf('record_playback_');
+  const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
+  const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ print com.ss.android.ugc.aweme; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\nrecord_start probe 25\n`;
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session},timeout:6000});
+  const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
+  return {...r,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
+ }finally{rmSync(d,{recursive:true,force:true});}
+}
+for(const session of ['paused','other','inactive','unknown'])test('record-start必须拒绝未证实抖音正在播放 '+session,()=>{
+ const r=recordBoundary({session});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false,'不能启动scrcpy');
+});
+test('MEDIA_PLAY命令失败禁止启动录制',()=>{
+ const r=recordBoundary({playFails:true});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
+});
+test('调速后record-start需最后恢复播放并按抖音active会话读回',()=>{
+ const r=recordBoundary();assert.equal(r.status,0,r.stderr);assert.match(r.calls,/keyevent 126/);assert.match(r.calls,/dumpsys media_session/);
+ assert.match(r.stdout,/playback_verified=true/);assert.match(r.stdout,/playback_package=com.ss.android.ugc.aweme/);assert.match(r.stdout,/playback_state=3/);
+});

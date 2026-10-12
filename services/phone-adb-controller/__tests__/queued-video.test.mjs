@@ -8,7 +8,7 @@ import {createRequire} from 'node:module';
 const historyHelper=createRequire(import.meta.url)('../queued-comment-history.js');
 const script=path.resolve('services/phone-adb-controller/process-queued-video.sh');
 const vid='7646309328911907195';
-function recordedQualification({volume='1',db='-35',startFail=false}={}){
+function recordedQualification({volume='1',db='-35',startFail=false,playback=true}={}){
  const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
   const ctl=path.join(dir,'ctl'),remote=path.join(dir,'remote');
   writeFileSync(ctl,`#!/bin/zsh
@@ -16,7 +16,7 @@ print "$3" >> "$FIXTURE/calls"
 case "$3" in
 lock-refresh) print 'lock=refreshed';;
 current-video-link) print 'content_type=video';print 'video_id=${vid}';;
-record-start) ${startFail?'exit 4':`print 'record_started media_volume=${volume}'`};;
+record-start) ${startFail?'exit 4':`print 'record_started media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=3':''}'`};;
 record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=${db} audio_streams=1';;
 record-extract-audio) print "audio_extracted path=$FIXTURE/record.wav";;
 esac
@@ -310,3 +310,10 @@ test('注销候选不毒死采样，重读树后5真实评论才满足配额',()
 test('未知OID缺失仍code6，不能泛化接受缓冲或配额',()=>{const r=run('collection',{UNKNOWN_OID:'1'});assert.equal(r.status,6,r.stderr);assert.match(r.stderr,/douyin_id_missing/);assert.doesNotMatch(r.stdout,/LEAD\t|COMMENT_SKIP\t|sampled\t/);});
 
 test('注销skip证据不得覆盖旧文件，写入失败不发布skip或伪造配额',()=>{const r=run('collection',{DEREGISTERED_FIRST:'1',DEREGISTERED_PROOF_EXISTS:'1',LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101'});assert.equal(r.status,6,r.stderr);assert.doesNotMatch(r.stdout,/COMMENT_SKIP\t|LEAD\t|sampled\t/);});
+
+test('暂停/未知播放的死寂音轨保持pending，不能永久拒绝视频',()=>{
+ const r=recordedQualification({db:'-91',playback:false});
+ assert.equal(r.status,5,r.stderr);assert.match(r.stdout,/\tpending\t/);
+ assert.doesNotMatch(r.stdout,/\trejected\t/);assert.ok(!r.calls.includes('remote'));
+ assert.equal(r.proof.playback_verified,false);
+});
