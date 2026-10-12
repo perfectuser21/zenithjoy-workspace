@@ -153,7 +153,27 @@ class NativeCommanderTests(unittest.TestCase):
                 native.resolve_task(key, self.deployment, self.api)
         with self.assertRaises(ValueError):
             native.resolve_task('agent:infra:native-run-1', self.deployment,
-                lambda path: [self.leader, dict(copy.deepcopy(self.leader), id=CHILD)] if path.startswith('tasks?') else self.api(path))
+                lambda path: [self.leader, dict(copy.deepcopy(self.leader), id=CHILD)] if path.startswith('tasks?') else (dict(copy.deepcopy(self.leader), id=CHILD) if path == 'tasks/' + CHILD else self.api(path)))
+
+    def test_unknown_child_business_outcome_is_not_completed(self):
+        self.completed_batch()
+        self.child['status'] = 'completed'
+        self.child['result']['script'].update(exit_code=0, stdout='AI claimed success')
+        self.assertEqual(native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)['status'], 'unknown')
+        self.child['status'] = 'queued'
+        self.assertEqual(native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)['status'], 'waiting')
+
+    def test_review_parent_must_be_current_infra_maintenance_leader(self):
+        self.completed_batch()
+        for field, value in [('project_id', WORKFLOW), ('status', 'completed'), ('qiumi_department', 'other'), ('phone_source_revision', 'old')]:
+            original = copy.deepcopy(self.review)
+            if field in ['project_id', 'status']:
+                self.review[field] = value
+            else:
+                self.review['payload'][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)
+            self.review = original
 
     def test_parent_and_child_mismatch_cannot_be_reviewed(self):
         self.completed_batch()
