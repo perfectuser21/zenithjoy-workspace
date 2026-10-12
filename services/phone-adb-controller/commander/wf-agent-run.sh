@@ -67,6 +67,18 @@ lock_owner_now(){
   case "$s" in lock=free*) echo free ;; *owner=*) s="${s#*owner=}"; echo "held:${s%% *}" ;; *) echo unknown ;; esac
 }
 
+# 所有控制器动作仍持精确 owner；复制原件不经压缩或重绘，回执保留 stdout/stderr。
+cleanup_desktop_evidence(){
+  local eid="$RUN_ID-cleanup-desktop-original" ext
+  ctl --lock-owner "$RUN_ID" return-safe-desktop > "$RUN_DIR/cleanup-desktop.log" 2>&1 || return 1
+  ctl --lock-owner "$RUN_ID" snapshot-evidence "$eid" > "$RUN_DIR/cleanup-screenshot.log" 2>&1 || return 1
+  ctl --lock-owner "$RUN_ID" ui-evidence "$eid" > "$RUN_DIR/cleanup-ui.log" 2>&1 || return 1
+  for ext in png xml; do
+    ssh "${SSH_OPTS[@]}" "$HOST" "cat $HOST_EVIDENCE_ROOT/$eid.$ext" > "$RUN_DIR/evidence/$eid.$ext" 2>> "$RUN_DIR/cleanup-copy.log" || return 1
+  done
+  st DESKTOP_CAPTURED 1
+}
+
 cleanup(){
   (( FINISHED )) && return 0
   FINISHED=1
@@ -81,7 +93,10 @@ cleanup(){
   local now summary
   now="$(lock_owner_now)"
   if [[ "$now" == "held:$RUN_ID" ]] && (( child_stopped )); then
-    if ctl --lock-owner "$RUN_ID" close-app >/dev/null 2>&1; then st APP_CLOSED 1; log "cleanup: 抖音已关闭"; else st APP_CLOSED 0; log "cleanup: close-app 失败"; fi
+    if ctl --lock-owner "$RUN_ID" close-app > "$RUN_DIR/cleanup-close-app.log" 2>&1; then
+      st APP_CLOSED 1
+      cleanup_desktop_evidence || log "cleanup: 桌面原证据采集失败，交付不得宣称收尾完整"
+    else st APP_CLOSED 0; log "cleanup: close-app 失败"; fi
     ctl lock-release "$RUN_ID" >/dev/null 2>&1 || log "cleanup: lock-release 返回非 0"
   elif (( LOCK_MINE )); then
     st APP_CLOSED 0; log "cleanup: 锁已不在本 run 名下（${now}），不关 App 不放锁"

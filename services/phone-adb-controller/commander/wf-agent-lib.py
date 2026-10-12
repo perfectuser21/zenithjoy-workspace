@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 STATUSES = ("success", "failed", "blocked")
 
@@ -157,6 +158,40 @@ def _host_has(host_files, eid):
     return [f for f in host_files if f == eid or f.startswith(eid + ".")]
 
 
+def cleanup_evidence(run_dir, run_id, st):
+    """系统原回执 + 同 run 原图/树；缺证或非默认桌面都不能证明收尾。"""
+    eid = "%s-cleanup-desktop-original" % run_id
+    paths = {
+        "screenshot": os.path.join(run_dir, "evidence", eid + ".png"),
+        "ui_tree": os.path.join(run_dir, "evidence", eid + ".xml"),
+        "close_app_receipt": os.path.join(run_dir, "cleanup-close-app.log"),
+        "desktop_receipt": os.path.join(run_dir, "cleanup-desktop.log"),
+        "screenshot_receipt": os.path.join(run_dir, "cleanup-screenshot.log"),
+        "ui_receipt": os.path.join(run_dir, "cleanup-ui.log"),
+    }
+    try:
+        if st.get("DESKTOP_CAPTURED") != "1" or st.get("APP_CLOSED") != "1":
+            raise ValueError("capture_failed")
+        receipt = read_state(paths["desktop_receipt"])
+        launcher = receipt.get("launcher", "")
+        if not launcher or receipt.get("foreground_package") != launcher:
+            raise ValueError("desktop_unconfirmed")
+        with open(paths["screenshot"], "rb") as f:
+            png = f.read()
+        if not png.startswith(b"\x89PNG\r\n\x1a\n") or not png.endswith(b"IEND\xaeB`\x82"):
+            raise ValueError("screenshot_invalid")
+        tree = ET.parse(paths["ui_tree"]).getroot()
+        packages = {node.get("package") for node in tree.iter("node")}
+        if tree.tag != "hierarchy" or launcher not in packages or "com.ss.android.ugc.aweme" in packages:
+            raise ValueError("desktop_tree_mismatch")
+        for key in ("close_app_receipt", "screenshot_receipt", "ui_receipt"):
+            if not os.path.getsize(paths[key]):
+                raise ValueError("receipt_missing")
+        return True, None, paths
+    except (OSError, ValueError, ET.ParseError) as error:
+        return False, str(error), {key: path for key, path in paths.items() if os.path.isfile(path)}
+
+
 def assemble(run_dir):
     st = read_state(os.path.join(run_dir, "state.env"))
     contract = _load(os.path.join(run_dir, "contract.json"), {}) or {}
@@ -187,12 +222,14 @@ def assemble(run_dir):
             "account_note": st.get("ACCOUNT_NOTE") or None,
             "host_evidence": _host_has(host_files, "%s-preflight-account" % run_id) + _host_has(host_files, "%s-lock-acquire" % run_id),
         })
-    cleanup_ok = lock_status == "free" and (st.get("LOCK_MINE") != "1" or st.get("APP_CLOSED") == "1")
+    desktop_ok, cleanup_reason, cleanup_paths = cleanup_evidence(run_dir, run_id, st)
+    cleanup_ok = lock_status == "free" and desktop_ok
     if cleanup_ok:
         _write(os.path.join(ev_dir, "%s-cleanup-original.json" % run_id), {
             "activity": "cleanup", "by": "shell", "run_id": run_id, "app_closed": st.get("APP_CLOSED") == "1",
             "lock_status": lock_status, "outward_attempts": attempts,
             "host_evidence": _host_has(host_files, "%s-lock-release" % run_id),
+            "desktop_evidence": cleanup_paths, "desktop_verified": desktop_ok,
         })
 
     # 业务活动读回：执行者报的证据 ID 必须在宿主机证据目录真实存在才算（系统核对，不采信自报）
@@ -216,7 +253,7 @@ def assemble(run_dir):
         key = a.get("key")
         activities.append({
             "key": key, "by": a.get("by"), "from": a.get("from"), "readback": a.get("readback"),
-            "evidence_files": [f for f in files if f.startswith("%s-%s-" % (run_id, key))],
+            "evidence_files": [f for f in files if f.startswith("%s-%s-" % (run_id, key)) and f.endswith(".json")],
         })
 
     agent_found = bool(agent)
@@ -228,6 +265,10 @@ def assemble(run_dir):
     else:
         claimed = agent.get("claimed_result") if agent.get("claimed_result") in STATUSES else "failed"
         reason = agent.get("fail_reason") or (None if claimed == "success" else "agent_claimed_%s" % claimed)
+    if st.get("LOCK_MINE") == "1" and not cleanup_ok:
+        reason = "; ".join(x for x in [reason, "cleanup_evidence_incomplete:" + (cleanup_reason or "lock_not_free")] if x)
+        if claimed == "success":
+            claimed = "failed"
     if st.get("CHILD_STOP_FAILED"):
         claimed, reason = "failed", "child_termination_unconfirmed"
     if st.get("INTERRUPTED"):
@@ -242,6 +283,8 @@ def assemble(run_dir):
     for sys_id in ("%s-lock-acquire" % run_id, "%s-lock-release" % run_id, "%s-outward-ledger" % run_id):
         if _host_has(host_files, sys_id) and sys_id not in final_ev:
             final_ev.append(sys_id)
+    if desktop_ok:
+        final_ev.append("%s-cleanup-desktop-original" % run_id)
     locations = agent.get("evidence_locations") if isinstance(agent.get("evidence_locations"), (dict, list)) else {}
     delivery = {
         "source": "wf-agent-run",
@@ -257,12 +300,12 @@ def assemble(run_dir):
         "readback": readback,
         "acceptance": agent.get("acceptance"),
         "final_evidence": final_ev,
-        "evidence_locations": {"agent": locations, "host_evidence_root": st.get("HOST_EVIDENCE_ROOT"), "run_dir": run_dir},
+        "evidence_locations": {"agent": locations, "host_evidence_root": st.get("HOST_EVIDENCE_ROOT"), "run_dir": run_dir, "cleanup": cleanup_paths},
         "activities": activities,
         "shell": {
             "preflight": {"ok": pre_ok, "reason": st.get("PRE_REASON") or None, "lock_acquired": st.get("LOCK_MINE") == "1",
                           "account_verified": st.get("ACCOUNT_VERIFIED") == "true", "account_nickname": st.get("ACCOUNT_NICK") or None},
-            "cleanup": {"ok": cleanup_ok, "app_closed": st.get("APP_CLOSED") == "1", "lock_status": lock_status, "outward_attempts": attempts},
+            "cleanup": {"ok": cleanup_ok, "desktop_verified": desktop_ok, "evidence_error": cleanup_reason, "app_closed": st.get("APP_CLOSED") == "1", "lock_status": lock_status, "outward_attempts": attempts},
         },
         "agent": {"name": st.get("AGENT"), "child_run_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_run_id")), "spawn_receipt": _load(os.path.join(run_dir, "spawn-receipt.json"), {}), "terminal_receipt": (_load(os.path.join(run_dir, "agent-terminal.json"), {}) or {}).get("terminalReceipt"), "session_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_session_key")), "parent_session_key": st.get("PARENT_SESSION_KEY"), "exit": st.get("AGENT_EXIT") or None, "delivery_found": agent_found},
         "commander_skill": contract.get("commander_skill"),
