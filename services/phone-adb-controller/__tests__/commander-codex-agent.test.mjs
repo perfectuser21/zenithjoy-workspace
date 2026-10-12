@@ -218,6 +218,33 @@ test("wf-launch：获客 wf-run 形态接受 Brain 派发单带的 --run-id/--ta
   assert.match(r.stdout, /DRY_RUN host=xian-m4/);
 });
 
+test("wf-launch：网关调用结束清理进程组后，独立外壳仍存活并完成收尾", async () => {
+  const { home, env } = setup();
+  const fake = join(home, "bin", "scope-runner");
+  writeFileSync(fake, `#!/bin/sh\necho $$ > "$HOME/scope-runner.pid"\necho WF_RUN_STARTED\nwhile [ ! -f "$HOME/continue" ]; do sleep 0.1; done\necho WF_RUN_FINISHED > "$HOME/finished"\n`);
+  chmodSync(fake, 0o755);
+  const child = spawn("bash", [LAUNCH, "douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室", "--run-id", RUN, "--task-id", TASK], {
+    env: { ...env, WF_AGENT_RUNNER: fake }, detached: true, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", data => { output += data; });
+  child.stderr.on("data", data => { output += data; });
+  try {
+    const code = await new Promise((resolve, reject) => { child.once("exit", resolve); child.once("error", reject); });
+    assert.equal(code, 0, output);
+    assert.match(output, /WF_LAUNCHED/);
+    // OpenClaw command scope 正常结束也以 SIGKILL 清掉命令进程组；nohup 只能抗 HUP。
+    try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    writeFileSync(join(home, "continue"), "go");
+    for (let i = 0; i < 30 && !existsSync(join(home, "finished")); i++) await new Promise(resolve => setTimeout(resolve, 100));
+    assert.match(read(home, "finished"), /WF_RUN_FINISHED/, "调用返回后的后台外壳不能被调用者收尾杀掉");
+  } finally {
+    const pid = Number(read(home, "scope-runner.pid").trim());
+    if (pid > 0) { try { process.kill(pid, "SIGKILL"); } catch {} }
+    try { process.kill(-child.pid, "SIGKILL"); } catch {}
+  }
+});
+
 test("wf-status mmv：读本机 runner 日志，FINISHED 标记即 finished", () => {
   const { home, env } = setup();
   mkdirSync(join(home, "wf-logs"));
