@@ -1,5 +1,5 @@
 // codex_agent 形态 workflow（任务 c0fe7e30；决策 2186700a / 26df670a）：
-//   wf-launch.sh 按合同清单分形态 → MMV 本机 nohup wf-agent-run.sh（共享外壳准备 → Codex 业务块 → 共享外壳收尾）→ delivery.json。
+//   wf-launch.sh 按合同清单分形态 → MMV 独立会话 wf-agent-run.sh（共享外壳准备 → Codex 业务块 → 共享外壳收尾）→ delivery.json。
 // 假 ssh 模拟手机控制器（锁状态落 $HOME/lock，证据清单 $HOME/host-files.txt），假 openclaw 模拟业务块，假 curl 回 Brain 任务正文。
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -195,7 +195,7 @@ test("被 TERM：trap 收尾仍关 App、放锁、写 delivery", async () => {
   assert.equal(read(home, "lock"), "");
 });
 
-test("wf-launch：codex_agent 合同缺 --run-id/--task-id 退 2；带了就本机 nohup runner，输出 host=mmv", () => {
+test("wf-launch：codex_agent 合同缺 --run-id/--task-id 退 2；带了就本机独立会话 runner，输出 host=mmv", () => {
   const { home, env } = setup();
   const base = ["douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室"];
   assert.equal(spawnSync("bash", [LAUNCH, ...base], { encoding: "utf8", env }).status, 2);
@@ -216,6 +216,33 @@ test("wf-launch：获客 wf-run 形态接受 Brain 派发单带的 --run-id/--ta
   const r = spawnSync("bash", [LAUNCH, "keyword_acquisition", "xian-m4", "legacy", "ANGYVB4402004137", "biz", "--run-id", RUN, "--task-id", TASK, "--dry-run"], { encoding: "utf8", env });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /DRY_RUN host=xian-m4/);
+});
+
+test("wf-launch：网关调用结束清理进程组后，独立外壳仍存活并完成收尾", async () => {
+  const { home, env } = setup();
+  const fake = join(home, "bin", "scope-runner");
+  writeFileSync(fake, `#!/bin/sh\necho $$ > "$HOME/scope-runner.pid"\necho WF_RUN_STARTED\nwhile [ ! -f "$HOME/continue" ]; do sleep 0.1; done\necho WF_RUN_FINISHED > "$HOME/finished"\n`);
+  chmodSync(fake, 0o755);
+  const child = spawn("bash", [LAUNCH, "douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室", "--run-id", RUN, "--task-id", TASK], {
+    env: { ...env, WF_AGENT_RUNNER: fake }, detached: true, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", data => { output += data; });
+  child.stderr.on("data", data => { output += data; });
+  try {
+    const code = await new Promise((resolve, reject) => { child.once("exit", resolve); child.once("error", reject); });
+    assert.equal(code, 0, output);
+    assert.match(output, /WF_LAUNCHED/);
+    // OpenClaw command scope 正常结束也以 SIGKILL 清掉命令进程组；nohup 只能抗 HUP。
+    try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    writeFileSync(join(home, "continue"), "go");
+    for (let i = 0; i < 30 && !existsSync(join(home, "finished")); i++) await new Promise(resolve => setTimeout(resolve, 100));
+    assert.match(read(home, "finished"), /WF_RUN_FINISHED/, "调用返回后的后台外壳不能被调用者收尾杀掉");
+  } finally {
+    const pid = Number(read(home, "scope-runner.pid").trim());
+    if (pid > 0) { try { process.kill(pid, "SIGKILL"); } catch {} }
+    try { process.kill(-child.pid, "SIGKILL"); } catch {}
+  }
 });
 
 test("wf-status mmv：读本机 runner 日志，FINISHED 标记即 finished", () => {

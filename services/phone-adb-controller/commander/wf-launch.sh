@@ -12,7 +12,7 @@
 #   WF_LAUNCHED tag=<TAG> host=<host> cap=<cap> serial=<serial> escort=<id|none> log=~/wf-logs/<TAG>.out
 # 两种形态（按 commander/workflow-contracts.json 的 execution_profile 分）：
 #   获客 wf-run 形态（plans/<cap>.plan）：escort 陪跑 + ssh 执行机 nohup wf-run.sh（下文 ①~④）
-#   codex_agent 形态（任务 c0fe7e30，决策 2186700a）：MMV 本机 nohup wf-agent-run.sh = 共享外壳准备 → Codex 业务块 → 共享外壳收尾，
+#   codex_agent 形态（任务 c0fe7e30，决策 2186700a）：MMV 独立会话 wf-agent-run.sh = 共享外壳准备 → Codex 业务块 → 共享外壳收尾，
 #     不起 escort（Commander 本会话陪跑到终态），输出 host=mmv，状态用 wf-status.sh mmv <TAG> 查
 # 退出码: 0 已起跑 / 2 参数错 / 3 设备忙(已有 run 在跑) / 4 能力未部署到执行机 / 5 起跑失败
 set -uo pipefail
@@ -74,8 +74,18 @@ if [[ "$EXEC_PROFILE" == codex_agent ]]; then
     exit 0
   fi
   mkdir -p "$HOME/wf-logs"
-  nohup bash "$AGENT_RUNNER" "$CAP" "$HOST" "$PROFILE" "$SERIAL" "$BIZ" --tag "$TAG" --run-id "$RUN_ID" --task-id "$TASK_ID" \
-    > "$HOME/wf-logs/$TAG.out" 2>&1 < /dev/null &
+  # gateway_exec 返回时会清理调用进程组；nohup 只屏蔽 HUP，不能抵挡组 SIGKILL。
+  # 外壳必须拥有独立 session/进程组，才能继续执行业务和自己的 trap 收尾。
+  python3 - "$HOME/wf-logs/$TAG.out" "$AGENT_RUNNER" "$CAP" "$HOST" "$PROFILE" "$SERIAL" "$BIZ" --tag "$TAG" --run-id "$RUN_ID" --task-id "$TASK_ID" <<'PY' \
+    || die 5 "MMV 独立会话外壳启动失败"
+import subprocess
+import sys
+
+with open(sys.argv[1], "wb") as log:
+    subprocess.Popen(["bash", *sys.argv[2:]], stdin=subprocess.DEVNULL,
+                     stdout=log, stderr=subprocess.STDOUT,
+                     start_new_session=True, close_fds=True)
+PY
   sleep "$START_WAIT"
   grep -q WF_RUN_STARTED "$HOME/wf-logs/$TAG.out" 2>/dev/null \
     || die 5 "${START_WAIT}s 内未见 WF_RUN_STARTED，判定起跑失败: $(tail -n 5 "$HOME/wf-logs/$TAG.out" 2>/dev/null | tr '\n' ' ' | head -c 300)"
