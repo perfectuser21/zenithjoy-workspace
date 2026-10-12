@@ -44,7 +44,7 @@ printf '%s\\n' "$*" >> "$HOME/oc-argv.log"
 if [ "$1" = "gateway" ]; then
   case "$3" in
     sessions.abort) echo '{"ok":true,"status":"aborted"}';;
-    agent.wait) if [ "$STUB_CHILD_STOP" = "uncertain" ]; then echo '{"status":"timeout"}'; else echo '{"status":"error"}'; fi;;
+    agent.wait) if [ "$STUB_CHILD_STOP" = "uncertain" ]; then echo '{"status":"timeout"}'; else python3 -c 'import json,sys; p=json.loads(sys.argv[1]); print(json.dumps({"status":"error","runId":p["runId"],"endedAt":1}))' "$5"; fi;;
   esac
   exit 0
 fi
@@ -73,7 +73,7 @@ function setup(stub = {}) {
   }
   if (stub.lockedBy) writeFileSync(join(home, "lock"), `${stub.lockedBy}\n`);
   const env = {
-    ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
+    ...process.env, HOME: home, OPENCLAW: join(bin, "openclaw"), PATH: `${bin}:${process.env.PATH}`,
     WF_START_WAIT: "1", WF_ESCORT_RETRY_SLEEP: "0", WF_AGENT_POLL_S: "1", WF_LOCK_REFRESH_S: "1",
     WF_AGENT_TIMEOUT_S: stub.timeout ?? "60", WF_PARENT_SESSION_KEY: "agent:work-commander:test-parent", WF_BRAIN_URL: "http://brain.test:5221",
     STUB_PHONE: stub.phone ?? "online", STUB_NICK: stub.nick ?? "Ai办公室", STUB_AGENT: stub.agent ?? "ok",

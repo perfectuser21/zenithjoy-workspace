@@ -264,7 +264,7 @@ def assemble(run_dir):
                           "account_verified": st.get("ACCOUNT_VERIFIED") == "true", "account_nickname": st.get("ACCOUNT_NICK") or None},
             "cleanup": {"ok": cleanup_ok, "app_closed": st.get("APP_CLOSED") == "1", "lock_status": lock_status, "outward_attempts": attempts},
         },
-        "agent": {"name": st.get("AGENT"), "child_run_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_run_id")), "spawn_receipt": _load(os.path.join(run_dir, "spawn-receipt.json"), {}), "session_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_session_key")), "parent_session_key": st.get("PARENT_SESSION_KEY"), "exit": st.get("AGENT_EXIT") or None, "delivery_found": agent_found},
+        "agent": {"name": st.get("AGENT"), "child_run_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_run_id")), "spawn_receipt": _load(os.path.join(run_dir, "spawn-receipt.json"), {}), "terminal_receipt": (_load(os.path.join(run_dir, "agent-terminal.json"), {}) or {}).get("terminalReceipt"), "session_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_session_key")), "parent_session_key": st.get("PARENT_SESSION_KEY"), "exit": st.get("AGENT_EXIT") or None, "delivery_found": agent_found},
         "commander_skill": contract.get("commander_skill"),
     }
     _write(os.path.join(run_dir, "delivery.json"), delivery)

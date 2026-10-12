@@ -64,3 +64,27 @@ test('官方await不yield早退：等绑定child终态，原始terminalReply直�
  const terminal=JSON.parse(readFileSync(join(dir,'agent-terminal.json')));
  assert.equal(terminal.runId,receipt.child_run_id);
 });
+
+
+test('官方await拒绝串run、错误模型和缺失终态；错误终态不能转成业务成功',()=>{
+ for(const variant of ['cross-run','wrong-model','missing-terminal','error']){
+  const {dir,receipt}=setup();assert.equal(call(dir,'bind',receipt).status,0);
+  const cli=join(dir,'openclaw');
+  const terminal={runId:receipt.child_run_id,status:'ok',endedAt:1,
+   terminalReceipt:{runId:receipt.child_run_id,effective:{provider:'openai',model:'gpt-6.1-sol'}},
+   terminalReply:{text:'WF_DELIVERY {"claimed_result":"success"}'}};
+  if(variant==='cross-run')terminal.runId='another-run';
+  if(variant==='wrong-model')terminal.terminalReceipt.effective.provider='anthropic';
+  if(variant==='missing-terminal')delete terminal.endedAt;
+  if(variant==='error')terminal.status='error';
+  writeFileSync(cli,'#!/usr/bin/env python3\nprint('+JSON.stringify(JSON.stringify(terminal))+')\n');chmodSync(cli,0o755);
+  const r=spawnSync('python3',[HELPER,'await',dir],{env:{...process.env,OPENCLAW:cli},encoding:'utf8'});
+  if(variant==='error'){
+   assert.equal(r.status,0,r.stderr);
+   assert.equal(JSON.parse(readFileSync(join(dir,'agent-delivery.json'))).claimed_result,'failed');
+  }else{
+   assert.notEqual(r.status,0,variant);
+   assert.equal(existsSync(join(dir,'agent-completion.json')),false,variant);
+  }
+ }
+});

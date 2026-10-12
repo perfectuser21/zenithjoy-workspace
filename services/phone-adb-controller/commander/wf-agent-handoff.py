@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Commander 正式子会话交接：init/bind/complete/status/stop。消息只经 sessions_spawn。
+"""Commander 正式子会话交接：init/bind/await/complete/status/stop。消息只经 sessions_spawn。
 
 bind/complete 从 stdin 读取 JSON。身份绑定 run/task/parent/nonce/child，不接受跨 run 或晚到交付。
 stop 只精确取消已绑定的子 run；取消和只读等待均为官方非消息 RPC，不删 exec 标记。
@@ -115,13 +115,49 @@ def status(directory):
     return 3
 
 
-def rpc(method, payload):
+def rpc(method, payload, timeout=20):
     result = subprocess.run([os.environ.get('OPENCLAW', 'openclaw'), 'gateway', 'call', method,
-                             '--params', json.dumps(payload), '--json', '--timeout', '15000'],
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
+                             '--params', json.dumps(payload), '--json', '--timeout', str(int(timeout * 1000))],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout + 2)
     if result.returncode:
-        raise ValueError('child stop RPC failed')
+        raise ValueError('child lifecycle RPC failed')
     return json.loads(result.stdout)
+
+
+def await_result(directory):
+    # 不持文件锁等待网络，否则会阻塞外壳续租/超时检查；完成时重新校验全部身份。
+    binding = load(directory / 'agent-binding.json')
+    request = request_at(directory)
+    validate_identity(request, binding)
+    while True:
+        remaining = request['expires_at'] - time.time()
+        if remaining <= 0:
+            raise ValueError('child await expired')
+        seconds = min(60, remaining)
+        terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(seconds * 1000)), seconds + 5)
+        if terminal.get('runId') != binding['child_run_id']:
+            raise ValueError('official terminal run mismatch')
+        if terminal.get('endedAt') is not None:
+            break
+        if terminal.get('status') not in ('pending', 'timeout'):
+            raise ValueError('official terminal receipt missing')
+        if terminal['status'] == 'pending':
+            time.sleep(1)  # 服务端排队未进入可等待run，限制重试速率
+    receipt = terminal.get('terminalReceipt') or {}
+    if terminal.get('status') == 'ok':
+        effective = receipt.get('effective') or {}
+        if receipt.get('runId') != binding['child_run_id'] or effective.get('provider') != 'openai' or effective.get('model') != 'gpt-6.1-sol':
+            raise ValueError('official child model/run mismatch')
+    text = (terminal.get('terminalReply') or {}).get('text') or ''
+    if not isinstance(text, str):
+        raise ValueError('official terminalReply text invalid')
+    with open(directory / '.handoff.lock', 'a') as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        write(directory / 'agent-terminal.json', terminal)
+        complete(directory, dict(binding, status=terminal['status'], result=text))
+    print(json.dumps(dict(run_id=binding['run_id'], child_run_id=binding['child_run_id'],
+                         status=terminal['status'], terminalReceipt=receipt)))
+    return 0
 
 
 def stop(directory):
@@ -136,7 +172,7 @@ def stop(directory):
     write(directory / 'child-abort.json', abort)
     terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=10000))
     write(directory / 'child-stop-readback.json', terminal)
-    if terminal.get('status') not in ('ok', 'error'):
+    if terminal.get('runId') != binding['child_run_id'] or terminal.get('endedAt') is None or terminal.get('status') not in ('ok', 'error', 'timeout'):
         raise ValueError('child termination unconfirmed; retain controller lock')
     return 0
 
@@ -144,6 +180,8 @@ def stop(directory):
 def main():
     command, root, *args = sys.argv[1:]
     directory = Path(root)
+    if command == 'await':
+        return await_result(directory)
     with open(directory / '.handoff.lock', 'a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)
         if command == 'init':
