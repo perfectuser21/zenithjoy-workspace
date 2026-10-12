@@ -1,5 +1,5 @@
 // codex_agent 形态 workflow（任务 c0fe7e30；决策 2186700a / 26df670a）：
-//   wf-launch.sh 按合同清单分形态 → MMV 本机 nohup wf-agent-run.sh（共享外壳准备 → Codex 业务块 → 共享外壳收尾）→ delivery.json。
+//   wf-launch.sh 按合同清单分形态 → MMV 独立会话 wf-agent-run.sh（共享外壳准备 → Codex 业务块 → 共享外壳收尾）→ delivery.json。
 // 假 ssh 模拟手机控制器（锁状态落 $HOME/lock，证据清单 $HOME/host-files.txt），假 openclaw 模拟业务块，假 curl 回 Brain 任务正文。
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -195,7 +195,7 @@ test("被 TERM：trap 收尾仍关 App、放锁、写 delivery", async () => {
   assert.equal(read(home, "lock"), "");
 });
 
-test("wf-launch：codex_agent 合同缺 --run-id/--task-id 退 2；带了就本机 nohup runner，输出 host=mmv", () => {
+test("wf-launch：codex_agent 合同缺 --run-id/--task-id 退 2；带了就本机独立会话 runner，输出 host=mmv", () => {
   const { home, env } = setup();
   const base = ["douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室"];
   assert.equal(spawnSync("bash", [LAUNCH, ...base], { encoding: "utf8", env }).status, 2);
