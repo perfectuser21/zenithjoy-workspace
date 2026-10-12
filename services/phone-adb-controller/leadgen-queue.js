@@ -106,11 +106,15 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   }
   if(op==='reject_recording'){
     const p=input.recording;
-    if(!/^\d{16,24}$/.test(input.video_id||'')||p?.version!==1||p.run!==run||p.video_id!==input.video_id
+    if(!/^\d{16,24}$/.test(input.video_id||'')||p?.version!==2||p.run!==run||p.video_id!==input.video_id
       ||p.evidence_id!==`${run}-v${input.video_id}-qualification-record`||p.media_volume_verified!==true
       ||!Number.isSafeInteger(p.media_volume)||p.media_volume<=0||p.audio_status!=='silent'
-      ||p.playback_verified!==true||p.playback_package!=='com.ss.android.ugc.aweme'||p.playback_state!==3||p.playback_end_state!==3
+      ||p.playback_verified!==true||p.playback_proof_kind!=='native_audio'||p.playback_package!=='com.ss.android.ugc.aweme'
       ||typeof p.mean_volume_db!=='number'||!Number.isFinite(p.mean_volume_db)||p.mean_volume_db>-80)throw Error('本轮录音拒绝证据不符');
+    const nativePhases=['start','end'].map(phase=>{const n=p.native_audio?.[phase],prefix=p.evidence_id+'-playback-'+phase;
+      if(n?.state!=='started'||n.package_uid_verified!==true||n.foreign_started!==0||!['uid','pid','piid'].every(k=>Number.isSafeInteger(n[k])&&n[k]>0)
+        ||!['evidence','package_uid','uid_owners'].every((k,i)=>n[k+'_file']===prefix+'.'+['audio.txt','package-uid.txt','uid-owners.txt'][i]&&/^[0-9a-f]{64}$/.test(n[k+'_sha256']||'')))throw Error('本轮录音native播放证据不符');return n;});
+    if(nativePhases[0].uid!==nativePhases[1].uid)throw Error('本轮录音native UID发生变化');
     return transaction(pool,async client=>{
       const reason='本轮录音核验拒绝:静音音轨';
       const result=await client.query(`UPDATE zenithjoy.leadgen_videos SET judgment_status='rejected',judgment_reason=$4,updated_at=now()

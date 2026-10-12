@@ -1,0 +1,6 @@
+PlaybackActivityMonitor dump time: 13:34:03
+  players:
+  AudioPlaybackConfiguration piid:3127 deviceIds:[2] type:android.media.AudioTrack u/pid:10099/9975 state:paused attr:AudioAttributes: usage=USAGE_MEDIA content=CONTENT_TYPE_MUSIC flags=0x800 tags= bundle=null sessionId:3545 mutedState:streamVolume portVolume  FormatInfo{isSpatialized=false, channelMask=0x3, sampleRate=44100}
+  AudioPlaybackConfiguration piid:73615 deviceIds:[2] type:android.media.AudioTrack u/pid:10203/528 state:started attr:AudioAttributes: usage=USAGE_MEDIA content=CONTENT_TYPE_UNKNOWN flags=0x800 tags= bundle=null sessionId:79177 mutedState:none  FormatInfo{isSpatialized=false, channelMask=0x3, sampleRate=44100}
+
+Events log: playback activity as reported by players

@@ -262,10 +262,14 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
           const path=join(env.WFR_RUN_DIR,`${run}-recording-${v.video_id}.json`);
           if(lstatSync(path).isSymbolicLink())throw Error('本轮录音工件不得是symlink');
           const proof=JSON.parse(readFileSync(path,'utf8'));
-          if(proof.version!==1||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
+          if(proof.version!==2||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
-          if(proof.playback_verified!==true||proof.playback_package!=='com.ss.android.ugc.aweme'||proof.playback_state!==3||proof.playback_end_state!==3)throw Error('本轮播放未实际核验，禁止将暂停录制判为静音淘汰');
+          if(proof.playback_verified!==true||proof.playback_proof_kind!=='native_audio'||proof.playback_package!=='com.ss.android.ugc.aweme')throw Error('本轮native播放未实际核验');
+          const nativePhases=['start','end'].map(phase=>{const p=proof.native_audio?.[phase],prefix=proof.evidence_id+'-playback-'+phase;
+            if(p?.state!=='started'||p.package_uid_verified!==true||p.foreign_started!==0||!['uid','pid','piid'].every(k=>Number.isSafeInteger(p[k])&&p[k]>0)
+              ||!['evidence','package_uid','uid_owners'].every((k,i)=>p[k+'_file']===prefix+'.'+['audio.txt','package-uid.txt','uid-owners.txt'][i]&&/^[0-9a-f]{64}$/.test(p[k+'_sha256']||'')))throw Error('本轮native音轨或UID/raw证据不符');return p;});
+          if(nativePhases[0].uid!==nativePhases[1].uid)throw Error('本轮native音轨UID发生变化');
           if(result.code===0&&verdict==='rejected'&&marker[3]==='recording_silent'){
             const receipt=await queue('reject_recording',{video_id:v.video_id,recording:proof});
             if(receipt?.verified!==true||receipt.video_id!==v.video_id||receipt.verdict!=='rejected'||receipt.kind!=='recording_silent')throw Error('本轮录音拒绝缺真实PG回执');

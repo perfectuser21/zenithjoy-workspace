@@ -1,0 +1,1 @@
+<hierarchy rotation="0"><node package="com.ss.android.ugc.aweme" text="" content-desc="播放视频，按钮" resource-id="com.ss.android.ugc.aweme:id/qbt" class="android.view.View" clickable="true" enabled="true" bounds="[0,0][1200,2504]"/></hierarchy>
