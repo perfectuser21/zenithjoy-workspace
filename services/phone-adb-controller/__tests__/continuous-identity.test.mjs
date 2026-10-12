@@ -483,3 +483,12 @@ for(const nativeSequence of [['foreign','started'],['unknown','started'],['pause
  assert.equal(r.error,undefined);assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
  assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);assert.doesNotMatch(r.stdout,/record_started|playback_verified=true/);
 });
+
+test('视频tab机会性策略只做一次dump，失败不发送全局媒体toggle',()=>{
+ const r=shareWave({policy:'opportunistic-search-tab',fallback:'none'});
+ assert.equal(r.status,1,r.stderr);assert.equal(r.state.dumps,1);assert.deepEqual(r.state.keys,[]);
+});
+test('视频tab机会性策略接受完整新鲜树，不额外dump或toggle',()=>{
+ const r=shareWave({policy:'opportunistic-search-tab',freshFirst:true});
+ assert.equal(r.status,0,r.stderr);assert.equal(r.state.dumps,1);assert.deepEqual(r.state.keys,[]);assert.match(r.xml,/<hierarchy/);
+});
