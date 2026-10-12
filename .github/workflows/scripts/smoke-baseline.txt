@@ -149,3 +149,4 @@ brain-device-job-mirror-smoke.sh
 codex-publish-catalog-smoke.sh
 phone-account-patrol-smoke.sh
 codex-publish-contract-smoke.sh
+commander-codex-agent-smoke.sh
