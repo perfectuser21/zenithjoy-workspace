@@ -265,9 +265,9 @@ PYDOUYIN
 }
 
 _ui_evidence_wave() {
-  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg stat_output stat_status remote_absent absent_ack
+  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg stat_output stat_status remote_absent absent_ack max_attempts=3
   evidence_id="$1"
-  case "$policy" in standard|verified-seed-share|verified-seed-share-retry|paused-douyin|paused-detail) ;; *) return 2 ;; esac
+  case "$policy" in standard|opportunistic-search-tab|verified-seed-share|verified-seed-share-retry|paused-douyin|paused-detail) ;; *) return 2 ;; esac
   require_evidence_id "$evidence_id"
   if [[ "$policy" == paused-* ]]; then
     # 每个call重新建立前提，不能继承gate上轮dismiss前或父进程的许可。
@@ -287,7 +287,8 @@ _ui_evidence_wave() {
   # 20260903: 旧注释声称的"Worker 30秒 node_exec 天花板"已查明是 OpenClaw gateway
   # node.invoke 顶层漏传 timeoutMs 的 bug（默认30s），已打补丁拆除；worker 显式 timeout
   # 现在真实生效(120-180s)。此处仍保持快速失败，交给 stage 级重试策略。
-  for dump_attempt in 1 2 3; do
+  [[ "$policy" != opportunistic-search-tab ]] || max_attempts=1
+  for (( dump_attempt=1; dump_attempt<=max_attempts; dump_attempt++ )); do
     /bin/rm -f "$local_path"
     "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
     if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 ]]; then
@@ -321,7 +322,7 @@ _ui_evidence_wave() {
       if [[ -s "$local_path" ]] \
         && /usr/bin/grep -q '<hierarchy' "$local_path" \
         && /usr/bin/grep -q '</hierarchy>' "$local_path" \
-        && { [[ "$policy" == standard ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
+        && { [[ "$policy" == standard || "$policy" == opportunistic-search-tab ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
         if (( dump_status != 0 )) || [[ "$dump_output" == *"ERROR:"* ]]; then
           print -u2 -- "warning: accepted fresh complete hierarchy despite dynamic-page idle warning (attempt $dump_attempt)"
         fi
@@ -346,8 +347,10 @@ _ui_evidence_wave() {
       break
     fi
     # 波内也要留时间：背靠背瞬发三次，页面还在动的话必然三次同样失败。
-    (( dump_attempt < 3 )) && wait_ms 900
+    (( dump_attempt < max_attempts )) && wait_ms 900
   done
+  # 搜索综合页仅机会性读树一次，失败立即交视觉，避免耗掉整个动作预算。
+  [[ "$policy" != opportunistic-search-tab ]] || return 1
   # 媒体键85是toggle：toggle→dump→toggle成对恢复原媒体状态。
   if [[ "$dump_output" == *"could not get idle state"* ]]; then
     # 改用媒体键：详情页可暂停视频，其它页面无副作用——绝不制造导航（a7 案卷：点击版把搜索页点飞）。
@@ -361,7 +364,7 @@ _ui_evidence_wave() {
     if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
       "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null || { [[ "$policy" != paused-* ]] || return 3; }
       if [[ -s "$local_path" ]] && /usr/bin/grep -q "<hierarchy" "$local_path" && /usr/bin/grep -q "</hierarchy>" "$local_path" \
-        && { [[ "$policy" == standard ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
+        && { [[ "$policy" == standard || "$policy" == opportunistic-search-tab ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
         print -u2 -- "warning: hierarchy captured via toggle-dump-toggle fallback (single-shot)"
         print -- "$local_path"
         return 0
@@ -4281,7 +4284,7 @@ case "$command" in
     # 这里是「机会性读树」：综合 tab 上明知读不到（feed 永不 idle），
     # 所以只用单波快速失败，立刻退到视觉兜底；不能用带三波重试的 ui_evidence，
     # 否则每次切 tab 都要先白烧约 180 秒（0912 我改三波时引入的回归，已修）。
-    if vt_xml="$(_ui_evidence_wave "$2-tabs" 2>/dev/null)"; then
+    if vt_xml="$(_ui_evidence_wave "$2-tabs" opportunistic-search-tab)"; then
       vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_xml" | /usr/bin/head -1)"
       if [[ -n "$vt_line" ]]; then
         read vt_x1 vt_y1 vt_x2 vt_y2 <<< "$(print -- "$vt_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
