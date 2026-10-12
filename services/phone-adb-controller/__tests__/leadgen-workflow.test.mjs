@@ -481,7 +481,7 @@ for(const fault of ['none','mixed_3new_2history','legacy_hyphen','wrong_run','wr
    const key=Buffer.from(JSON.stringify([row.douyin_id,row.comment_body])).toString('base64');
    let extra='';
    if(mixed){const second=historyRows[1],eid2=`${run}-v${vid}-collection-person1-t1`;writeFileSync(join(dir,eid2+'-history-readback.json'),JSON.stringify({...proof,...second,identity_eid:eid2}),{mode:0o600});extra=`HISTORY\t${vid}\t${second.id}\t${Buffer.from(JSON.stringify([second.douyin_id,second.comment_body])).toString('base64')}\t${eid2}\t${sha}\n`+Array.from({length:3},(_,i)=>`LEAD\t模拟昵称\tmock_new${i}\tpersonal\t模拟新评论${i}\t今天\t陕西\tAI\tAI\t西安\thttps://www.douyin.com/user/mock${i}\t${url}\n`).join('');}
-   return {code:0,stdout:extra+`HISTORY\t${vid}\t${row.id}\t${key}\t${eid}\t${fault==='wrong_sha'?'0'.repeat(64):sha}\nCOLLECTION\t${vid}\tcollected\t0\nRESCAN\t${vid}\t0\n`,stderr:''};
+   return {code:0,stdout:extra+`HISTORY\t${vid}\t${row.id}\t${key}\t${eid}\t${fault==='wrong_sha'?'0'.repeat(64):sha}\nCOLLECTION\t${vid}\tcollected\t${mixed?3:0}\nRESCAN\t${vid}\t0\n`,stderr:''};
   }});
   await h.qualification();const out=await h.collection();
   if(['none','mixed_3new_2history','legacy_hyphen'].includes(fault)){

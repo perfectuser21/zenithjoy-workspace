@@ -237,7 +237,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     const consumed=[],ids=new Set();
     for(const line of result.stdout.split('\n').filter(s=>s.startsWith('HISTORY\t'))){
       const f=line.split('\t'),r=h.rows.get(f[3]);
-      if(f.length!==6||f[1]!==v.video_id||h.receipt.status!=='verified'||!r||r.id!==f[2]||ids.has(r.id)||f[5]!==h.sha256||!/^[-a-zA-Z0-9]+$/.test(f[4]))throw Error('历史消费证据scope不符');
+      if(f.length!==6||f[1]!==v.video_id||h.receipt.status!=='verified'||!r||r.id!==f[2]||ids.has(r.id)||f[5]!==h.sha256||!/^[-_a-zA-Z0-9]+$/.test(f[4])||!f[4].startsWith(`${run}-v${v.video_id}-collection-`))throw Error('历史消费证据scope不符');
       const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,f[4]+'-history-readback.json'),'utf8'));
       if(proof.verified!==true||proof.id!==r.id||proof.video_id!==v.video_id||proof.douyin_id!==r.douyin_id||proof.comment_body!==r.comment_body||proof.history_sha256!==h.sha256||proof.identity_eid!==f[4]||proof.comment_context_verified!==true||!/^([a-f0-9]{64})$/.test(proof.profile_sha256)||!/^([a-f0-9]{64})$/.test(proof.returned_sha256))throw Error('历史新鲜身份或评论返回读回失败');
       ids.add(r.id);consumed.push({id:r.id,douyinId:r.douyin_id,commentBody:r.comment_body,identity_eid:f[4],history_sha256:h.sha256,...(r.source_video_url?{sourceVideoUrl:r.source_video_url}:{})});
