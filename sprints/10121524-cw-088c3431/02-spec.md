@@ -152,3 +152,36 @@ pre-PR 的通过条件仅为本地行为、真实红绿与 CI 收集静态核验
 - 直接部署/构建是否调用此 CLI：已读 package.json 与工作流 YAML 未发现直接调用，本次只确保新增永久测试进入既有 CI glob，不新增调用链；如需强制部署入口执行，建议另立任务。
 - 第三方 API 链路无：本 CLI 只读文本，模块名不代表调用对应 SDK；无需 key，不访问第三方、生产数据库、页面或设备。
 
+## commander 裁决（第 1 次）
+
+### T-7（Q-6）：采纳，拆分黑盒验收与实施历史核验职责
+
+理由：I-4 要求永久测试真实先红后绿；该要求维持。Q-6 将 build 历史回执审计交给禁止读取 03/04 开发回执、禁止以永久测试替代黑盒证据的 QA，产生职责冲突，并非产品缺陷或本机缺工具。第 1 轮 QA 保持 CANNOT_VERIFY 是正确处理，不将原报告改成 PASS。仅追加本节，不修改需求、原规格或既有回执。
+
+补充 S-4：build 的先红后绿、真实退出码、失败断言、源码身份、解释器、无 skip/cancel 要求全部保留。历史证据由独立 verify／编排者／commander 审核，不要求受隔离约束的 QA 读取开发回执或运行永久测试。历史门与黑盒门必须分别满足；缺少历史原始证据、只有事后重跑或开发者 PASS 自述时，不得宣告历史门通过，应交编排者补证，无法补证则上交。
+
+补充 S-4（Q-6 的可执行验收分工）：后续 QA 按 Q-6 原定隔离基线方法直接运行 Q-1、Q-2、Q-3，对比固定基线与 PR CLI 的退出码和诊断，并静态核对新增测试路径匹配实际 CI glob。这些构成 QA 对 Q-6 的完整责任；QA 无须读取 03/04、历史原始日志或执行 node:test，不以本节的历史核验结论替代直接 CLI 行为证据。Q-6 原文中的 build 时序、失败断言和永久测试无 skip/cancel 审核归属以下独立历史门，不再作为 QA 无法访问而重复报 CANNOT_VERIFY 的子项。Q-1～Q-5 不变；runner 在新 head 继续 QA、CI 与独立裁判，最终停 awaiting_human，禁止合并。
+
+### commander 独立历史门核验（对应 I-4、S-4）
+
+执行者：coding commander，第 1 次介入。已读取本次 03-build.md、04-evidence.md、05-qa-report-r1.md；上下文无前轮 commander、judge 报告及 CI 修复状态。本次另直接核对 `/tmp/cw-088c3431-build-vx05bfo9/` 内四组原始 `.json`／`.log`，未借用前一任务结果。
+
+| 原始阶段（2026-10-12 UTC） | 实际结果 | 核验含义 |
+|---|---|---|
+| red，07:31:50.654395—07:31:53.290633 | exit 1；89 项，8 过、81 败 | 旧 CLI；24 项 mjs/cjs 阻断均为 CLI 退出码 actual 0、expected 1，先于修复源码运行 |
+| initial-after-change，07:32:06.607618—07:32:09.411502 | exit 1；89 项，8 过、81 败 | 已修 CLI；测试路径别名仍导致失败，不能冒充绿态 |
+| baseline-red，07:32:33.568487—07:32:36.127733 | exit 1；89 项，56 过、33 败 | 路径规范化后，相同最终永久测试在真实固定基线复验；33 项全为退出码 actual 0、expected 1 |
+| green，07:32:36.127942—07:32:38.740738 | exit 0；89 项全过 | 当前实现通过；四次原始运行 cancelled/skipped 均为 0 |
+
+首次红态还混有 macOS 路径别名失败，不能将该次整体称为干净缺陷红态；其 24 项新扩展名的真实退出码失败证明修复前已运行测试。最终固定基线红态与绿态验证路径修正后的完整契约，不冒充首次实施时序。
+
+源码与解释器核验：
+
+- 固定真实基线：`efaa9152a621cbdb7a8e2dfbc269cc9743f0fd15`，本次用 `git rev-parse --verify '<SHA>^{commit}'` 验证对象，再用 `git show <SHA>:scripts/check-staff-hub-llm-imports.mjs` 取原始源码，未手工反改当前 CLI。
+- 基线 CLI SHA256：`ba535372fd4a906bd059387b8366341a3cfb65a6f60dfe7e400c3985f5f3f555`；当前 CLI SHA256：`ddfa6dad60e264c135f51442adc5f2abb23ba24583d89106591e632566a771be`。均与原始元数据一致，源码差异只有 S-1 正则扩展。
+- 当前永久测试 SHA256：`6b6f615f62f54cb99a70d2e713f9b887c1b8994fa3c6cafc1188f13be176f2a5`。
+- 原始 red 元数据与本次解释器：`/opt/homebrew/Cellar/node/26.8.2/bin/node`，`v26.8.2`。
+- commander 本次额外复验：将 Git 基线 CLI 与当前永久测试按原相对路径复制到独享 `cw-088c3431-commander-` 临时目录，运行 `node --test --test-reporter=tap .github/workflows/scripts/__tests__/check-staff-hub-llm-imports.test.mjs`，exit 1、89 项中 56 过／33 败；在当前 worktree 运行同一命令，exit 0、89 项全过。两次 cancelled/skipped 均为 0；临时目录已清理，未覆盖当前实现。此次复验与原始时序证据分开记账。
+- `.github/workflows/ci-l3-code.yml:243` 的实际 `node --test` 命令包含 `.github/workflows/scripts/__tests__/*.test.mjs`，直接收集新增测试；`npm run product-map:check` 通过。
+
+独立历史门结论：本次原始红绿时序、真实缺陷断言、固定基线身份和最终无 skip/cancel 已核验满足 I-4。无需修改产品代码或测试，不重置 CI 额度；本结论不宣告远端 CI、后续 QA 或独立裁判已通过。
