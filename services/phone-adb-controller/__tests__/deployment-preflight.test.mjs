@@ -33,6 +33,37 @@ function release(f,target='xian-m4'){
  const payload={...f.bundle.snapshot.definitions,components:[{kind:'repo',repo,revision:sha},{kind:'code',repo,path:file,revision:sha,digest:'sha256:'+digest(bytes)}],verification:{status:'verified'}};
  const r={id:target==='xian-m4'?vid[0]:vid[2],environment:'production',target,payload};r.manifest_sha256=digest({environment:r.environment,target:r.target,payload});return r;
 }
+function withOtherWorkflow(){
+ const f=fixture(),version='55555555-5555-4555-8555-555555555555',activity='66666666-6666-4666-8666-666666666666';
+ const extraActivity=row(version,{activity_id:activity,implementation_bindings:[{kind:'skill',scope:'activity',repo,path:'.agents/skills/publish/SKILL.md',revision:sha,digest:'sha256:'+digest(Buffer.from('other skill')),status:'verified'}],steps:[]},{activity_id:activity});
+ const otherId='b2000000-0000-4000-8000-000000000001';
+ const extraWorkflow=row('99999999-9999-4999-8999-999999999999',{workflow_id:otherId,key:'other_publish',activities:[{activity_id:activity,activity_version_id:version}]},{workflow_id:otherId});
+ f.bundle.snapshot.definitions.workflows.push(extraWorkflow);f.bundle.snapshot.definitions.activities.push(extraActivity);
+ f.bundle.report.expected_usages.push({workflow_id:otherId});
+ return f;
+}
+function refreshEvidence(f){
+ const s=f.bundle.snapshot,{snapshot_sha256,...body}=s;s.snapshot_sha256=digest(body);
+ const p=f.bundle.report;p.snapshot_sha256=s.snapshot_sha256;
+ p.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,p[k]])));
+ Object.assign(f.bundle.receipt,{snapshot_sha256:s.snapshot_sha256,assertion_plan_sha256:p.assertion_plan_sha256,report_sha256:digest(Buffer.from(JSON.stringify(p)))});
+}
+test('全批CI有其他流程时，只打包目标四获客流程与其完整依赖',async()=>{
+ const {validateDeploymentEvidence}=await implementation(),f=withOtherWorkflow();refreshEvidence(f);
+ const out=validateDeploymentEvidence(f.bundle,sha,path=>{assert.equal(path,file,'不读取未部署流程的资产');return bytes;});
+ assert.deepEqual(out.definitions.workflows.map(w=>w.workflow_id).sort(),wid.slice().sort());
+ assert.deepEqual(out.definitions.activities.map(a=>a.id),[avId]);
+ assert.ok(!out.components.some(c=>c.path?.startsWith('.agents/')));
+ assert.equal(f.bundle.snapshot.definitions.workflows.length,5,'原始完整CI快照不修改');
+});
+test('目标四流程缺失/重复或依赖缺失仍拒绝；CI必须覆盖未打包的其他流程',async()=>{
+ const {validateDeploymentEvidence}=await implementation();
+ for(const mutate of [f=>f.bundle.snapshot.definitions.workflows.shift(),f=>f.bundle.snapshot.definitions.workflows.push(f.bundle.snapshot.definitions.workflows[0]),f=>f.bundle.snapshot.definitions.activities.shift()]){
+  const f=withOtherWorkflow();mutate(f);refreshEvidence(f);assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,()=>bytes));
+ }
+ const f=withOtherWorkflow();f.bundle.report.definition_versions={...f.bundle.snapshot.definitions,workflows:f.bundle.snapshot.definitions.workflows.slice(0,4)};refreshEvidence(f);
+ assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,()=>bytes),/完整固定定义/);
+});
 test('固定证据生成M4与MMV两目标release；真实Brain回读后才返回可部署映射',async()=>{
  const {prepareDeploymentReleases}=await implementation();const f=fixture(),calls=[];
  const request=async(path,body)=>{calls.push({path,body});if(body)return {release:release(f,body.target)};return {release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')};};

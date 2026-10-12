@@ -10,6 +10,22 @@ export const WORKFLOWS=[101,102,103,104].map(n=>`b1000000-0000-4000-8000-${Strin
 const requireThat=(ok,message)=>{if(!ok)throw Error(`部署预检: ${message}`);};
 const equal=(a,b)=>digest(a)===digest(b);
 const key=c=>`${c.kind}:${c.repo}:${c.path||''}`;
+function deploymentDefinitions(full,sha){
+ requireThat(Array.isArray(full?.workflows)&&Array.isArray(full?.activities),'缺固定定义');
+ const workflows=full.workflows.filter(w=>WORKFLOWS.includes(w.workflow_id));
+ requireThat(workflows.length===WORKFLOWS.length&&WORKFLOWS.every(id=>workflows.filter(w=>w.workflow_id===id).length===1),'缺四流程唯一Workflow');
+ for(const kind of ['workflows','activities']){
+  requireThat(new Set(full[kind].map(r=>r.id)).size===full[kind].length,'固定定义版本重复');
+  for(const r of full[kind]){
+   const field=kind==='workflows'?'workflow_id':'activity_id';
+   requireThat(UUID.test(r.id)&&UUID.test(r[field])&&r.payload?.[field]===r[field]&&r.source_repo===DEPLOY_REPO&&r.source_commit===sha,'完整定义身份或来源不符');
+   requireThat(r.payload_sha256===digest({source:{repo:r.source_repo,path:r.source_path,commit:r.source_commit},payload:r.payload}),'完整定义摘要不符');
+  }
+ }
+ const referenced=new Set(workflows.flatMap(w=>w.payload.activities||[]).map(r=>r.activity_version_id));
+ const activities=full.activities.filter(a=>referenced.has(a.id));
+ return {workflows,activities};
+}
 function componentsFor(definitions,sha){
  requireThat(Array.isArray(definitions?.workflows)&&Array.isArray(definitions?.activities),'缺固定定义');
  requireThat(definitions.workflows.length===WORKFLOWS.length&&WORKFLOWS.every(id=>definitions.workflows.filter(w=>w.workflow_id===id&&w.payload?.workflow_id===id).length===1),'缺四流程唯一Workflow');
@@ -41,7 +57,8 @@ export function validateDeploymentEvidence(bundle,sha,readFile){
  const {snapshot,report,receipt}=bundle||{};
  requireThat(snapshot?.schema_version===1&&snapshot.scope==='zenithjoy'&&snapshot.repo===DEPLOY_REPO&&snapshot.revision===sha&&snapshot.status==='verified'&&Array.isArray(snapshot.gaps)&&snapshot.gaps.length===0,'快照来源/状态不符');
  const {snapshot_sha256,...body}=snapshot;requireThat(snapshot_sha256===digest(body),'快照摘要不符');
- const components=componentsFor(snapshot.definitions,sha);
+ const definitions=deploymentDefinitions(snapshot.definitions,sha);
+ const components=componentsFor(definitions,sha);
  requireThat(report?.protocol==='pilot_release_verification_v1'&&report.purpose==='release_verification'&&report.scope==='zenithjoy'&&report.source?.repo===DEPLOY_REPO&&report.source.head_revision===sha&&report.verification_status==='verified'&&Array.isArray(report.gaps)&&report.gaps.length===0,'CI来源或状态未核验');
  requireThat(equal(Object.keys(report.source).sort(),['head_revision','repo'])&&report.snapshot_sha256===snapshot_sha256&&report.assertion_source==='current_registration','CI不是本次完整试点发布证据');
  const plan=Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,report[k]]));
@@ -51,7 +68,7 @@ export function validateDeploymentEvidence(bundle,sha,readFile){
  requireThat(receipt.assertions.every(a=>a.source_repo===DEPLOY_REPO&&a.source_revision===sha&&a.exit_code===0&&!a.error&&!a.signal&&/^[0-9a-f]{64}$/.test(a.test_sha256||'')),'回归执行证据不符');
  for(const kind of ['workflows','activities'])requireThat(Array.isArray(report.definition_versions?.[kind])&&snapshot.definitions[kind].every(row=>report.definition_versions[kind].some(r=>r.id===row.id&&r.payload_sha256===row.payload_sha256&&r.source_repo===row.source_repo&&r.source_commit===row.source_commit)),'CI不覆盖完整固定定义');
  for(const c of components.filter(c=>c.kind!=='repo'))requireThat('sha256:'+digest(readFile(c.path))===c.digest,'本机部署组件字节不符');
- return {definitions:snapshot.definitions,components};
+ return {definitions,components};
 }
 function verifyRelease(release,{id,environment,target,manifest}){
  requireThat(release&&release.id===id&&UUID.test(id),'release不存在或ID不符');
