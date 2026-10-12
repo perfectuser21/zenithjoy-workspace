@@ -109,6 +109,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if(!/^\d{16,24}$/.test(input.video_id||'')||p?.version!==1||p.run!==run||p.video_id!==input.video_id
       ||p.evidence_id!==`${run}-v${input.video_id}-qualification-record`||p.media_volume_verified!==true
       ||!Number.isSafeInteger(p.media_volume)||p.media_volume<=0||p.audio_status!=='silent'
+      ||p.playback_verified!==true||p.playback_package!=='com.ss.android.ugc.aweme'||p.playback_state!==3||p.playback_end_state!==3
       ||typeof p.mean_volume_db!=='number'||!Number.isFinite(p.mean_volume_db)||p.mean_volume_db>-80)throw Error('本轮录音拒绝证据不符');
     return transaction(pool,async client=>{
       const reason='本轮录音核验拒绝:静音音轨';

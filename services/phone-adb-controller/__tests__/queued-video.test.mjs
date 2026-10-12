@@ -8,7 +8,7 @@ import {createRequire} from 'node:module';
 const historyHelper=createRequire(import.meta.url)('../queued-comment-history.js');
 const script=path.resolve('services/phone-adb-controller/process-queued-video.sh');
 const vid='7646309328911907195';
-function recordedQualification({volume='1',db='-35',startFail=false,playback=true}={}){
+function recordedQualification({volume='1',db='-35',startFail=false,playback=true,endState=3}={}){
  const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
   const ctl=path.join(dir,'ctl'),remote=path.join(dir,'remote');
   writeFileSync(ctl,`#!/bin/zsh
@@ -17,7 +17,7 @@ case "$3" in
 lock-refresh) print 'lock=refreshed';;
 current-video-link) print 'content_type=video';print 'video_id=${vid}';;
 record-start) ${startFail?'exit 4':`print 'record_started media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=3':''}'`};;
-record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=${db} audio_streams=1';;
+record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=${db} audio_streams=1 playback_package=com.ss.android.ugc.aweme playback_state=${endState}';;
 record-extract-audio) print "audio_extracted path=$FIXTURE/record.wav";;
 esac
 `,{mode:0o755});
@@ -54,8 +54,8 @@ case 'lock-refresh': console.log('lock=refreshed owner=multi-video-run');break;
 case 'open-video':fs.writeFileSync(p.join(d,'active'),args[0]);fs.writeFileSync(p.join(d,args[1]+'.xml'),args[0]);break;
 case 'current-video-link':fs.writeFileSync(p.join(d,args[0]+'.xml'),active());console.log('content_type=video\\nvideo_id='+active());break;
 case 'open-comments':console.log('reason=no_comments_on_this_video');break;
-case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}console.log('record_started media_volume=1');break;
-case 'record-stop':console.log('record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1');break;
+case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}console.log('record_started media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=3');break;
+case 'record-stop':console.log('record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1 playback_package=com.ss.android.ugc.aweme playback_state=3');break;
 case 'record-extract-audio':{
  const wav=p.join(d,args[0]+'.wav');fs.writeFileSync(wav,fs.readFileSync(p.join(d,args[0]+'.mkv')),{flag:'wx'});console.log('audio_extracted path='+wav);break;}
 }
@@ -103,8 +103,8 @@ case "$3" in
  collect-comments) if [[ -n "$DEREGISTERED_FIRST" ]];then if [[ "$(grep -c '^commenter-identity$' "$CALLS")" -eq 0 ]];then print "甲\\t注销候选\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy";fi;for j in {1..5};do print "甲\\t合法$j\\t今天\\t北京\\treader\\ttap=900 $((300+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;if [[ -n "$BULK_NEW" ]];then for j in {1..8};do print "甲\\t新评论$j\\t今天\\t北京\\treader\\ttap=100 $((200+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;if [[ -n "$REORDER_AFTER_HISTORY" ]];then if [[ "$(grep -c '^commenter-identity$' "$CALLS")" -gt 0 ]];then xy=900;else xy=300;fi;print "甲\\t咨询价格\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy";print "乙\\t新咨询\\t今天\\t北京\\treader\\ttap=$xy 200\\tb64=5LmZ";print 'exhausted=1';exit 0;fi;if [[ -n "$BULK_HISTORY" ]];then for j in {1..51};do print "甲\\t历史$j\\t今天\\t北京\\treader\\ttap=100 $((200+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;n=100;if [[ -n "$RELOCATE" && "$(grep -c '^collect-comments$' "$CALLS")" -gt 1 ]];then n=300;fi;print "甲\\t咨询价格\\t今天\\t北京\\treader\\ttap=$n 200\\tb64=55Sy"; if [[ -n "$NEXT_NEW_ROW" ]];then print '甲\\t新咨询\\t今天\\t北京\\treader\\ttap=300 200\\tb64=55Sy';fi;print 'exhausted=1';;
  commenter-identity) print "$4 $5" >> "$CALLS_COORD";if [[ -n "$DEREGISTERED_FIRST" && "$4" == 100 ]];then print 'nickname=甲';print 'douyin_id=';print 'profile_status=unavailable';print 'unavailable_reason=account_deregistered';print "profile_evidence=$DEREGISTERED_ROOT/$7-profile.xml";print "return_evidence=$DEREGISTERED_ROOT/$7-returned.xml";print "comment_evidence=$DEREGISTERED_ROOT/$7-comments.xml";for suffix in comments returned;do print '<hierarchy><node package="com.ss.android.ugc.aweme" text="4条评论"/><node package="com.ss.android.ugc.aweme" content-desc="放大评论区"/><node package="com.ss.android.ugc.aweme" content-desc="关闭"/></hierarchy>' > "$DEREGISTERED_ROOT/$7-$suffix.xml";done;print '<hierarchy><node package="com.ss.android.ugc.aweme" text="甲" resource-id="com.ss.android.ugc.aweme:id/tj1" content-desc="甲，复制名字和修改备注"/><node package="com.ss.android.ugc.aweme" text="暂无作品"/><node package="com.ss.android.ugc.aweme" text="账号已经注销"/></hierarchy>' > "$DEREGISTERED_ROOT/$7-profile.xml";exit 0;fi;[[ -z "$IDENTITY_FAIL" ]] || exit 1;if [[ -n "$RELOCATE" && "$(grep -c '^commenter-identity$' "$CALLS")" -eq 1 ]];then exit 1;fi;if [[ -n "$REORDER_AFTER_HISTORY" && "$4" != 100 ]];then if [[ "$4" == 900 ]];then print 'nickname=乙';else print 'nickname=错位';fi;print 'douyin_id=person999';else print 'nickname=甲';[[ -n "$UNKNOWN_OID" ]] || print 'douyin_id=person123';fi;print 'account_type=personal';if [[ -n "$QUEUED_COMMENT_HISTORY_FILE" ]];then mkdir -p "$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work";pf="$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work/$7-profile.xml";rf="$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work/$7-returned.xml";print '<hierarchy><node package="com.ss.android.ugc.aweme" text="抖音号：person123" /></hierarchy>' > "$pf";print '<hierarchy><node package="com.ss.android.ugc.aweme" text="评论 1" /><node package="com.ss.android.ugc.aweme" class="android.widget.EditText" text="发条评论" /></hierarchy>' > "$rf";print "profile_evidence=$pf";print "return_evidence=$rf";fi;;
  commenter-card-link) [[ -z "$CARD_RETURNS_OFF_DETAIL" ]] || touch "$CARD_STATE";print 'profile_url=https://www.douyin.com/user/a';;
- record-start) print 'record_started media_volume=1';;
- record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1';;
+ record-start) print 'record_started media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=3';;
+ record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1 playback_package=com.ss.android.ugc.aweme playback_state=3';;
  record-extract-audio) print "audio_extracted path=$FIXTURE_AUDIO";;
  *) ;;
 esac
@@ -316,4 +316,8 @@ test('暂停/未知播放的死寂音轨保持pending，不能永久拒绝视频
  assert.equal(r.status,5,r.stderr);assert.match(r.stdout,/\tpending\t/);
  assert.doesNotMatch(r.stdout,/\trejected\t/);assert.ok(!r.calls.includes('remote'));
  assert.equal(r.proof.playback_verified,false);
+});
+
+test('录前已播放但录后暂停或未知时，静音仍保pending且禁止模型判定',()=>{
+ for(const endState of [2,'unknown']){const r=recordedQualification({db:'-91',endState});assert.equal(r.status,5,r.stderr);assert.match(r.stdout,/\tpending\tplayback_unverified/);assert.ok(!r.calls.includes('remote'));assert.equal(r.proof.playback_verified,false);}
 });

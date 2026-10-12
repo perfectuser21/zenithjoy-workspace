@@ -192,7 +192,7 @@ test('资格动作容纳已实测的打开与身份核验组合耗时，仍受�
    timeouts.push(opts.timeoutMs);
    if(opts.timeoutMs<520000)throw Error('EXECUTION_DEADLINE');
    writeFileSync(join(dir,`fresh-processing-identity-${videoId}.json`),JSON.stringify({verified:true,observed_video_id:videoId,content_type:'video'}));
-   writeFileSync(join(dir,`fresh-processing-recording-${videoId}.json`),JSON.stringify({version:1,run:'fresh-processing',video_id:videoId,evidence_id:`fresh-processing-v${videoId}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'usable',mean_volume_db:-35}));
+   writeFileSync(join(dir,`fresh-processing-recording-${videoId}.json`),JSON.stringify({version:1,run:'fresh-processing',video_id:videoId,evidence_id:`fresh-processing-v${videoId}-qualification-record`,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:3,playback_end_state:3,media_volume_verified:true,media_volume:1,audio_status:'usable',mean_volume_db:-35}));
    return {code:0,stdout:`QUAL\t${videoId}\tmatched\tjudged\n`,stderr:''};
   };
   try{
@@ -210,7 +210,7 @@ test('实际静音本轮只经租约PG拒绝回执终结，不能进入matched�
   const dir=mkdtempSync(join(tmpdir(),'silent-workflow-')),id='7663337150875733275',ops=[];
   const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'silent-processing',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
   const rpc=async body=>{const op=body.request.op;ops.push(op);if(op==='claim_videos')return {result:[{video_id:id,video_url:'https://v.douyin.com/fresh/',title:'新视频',keyword:'AI',judgment_status:'pending'}]};if(op==='reject_recording')return {result:{verified:true,video_id:id,verdict:'rejected',kind:'recording_silent'}};return {result:{}};};
-  const execute=async()=>{writeFileSync(join(dir,`silent-processing-identity-${id}.json`),JSON.stringify({verified:true,observed_video_id:id,content_type:'video'}));writeFileSync(join(dir,`silent-processing-recording-${id}.json`),JSON.stringify({version:1,run:badScope?'other':'silent-processing',video_id:id,evidence_id:`silent-processing-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91}));return {code:0,stdout:`QUAL\t${id}\trejected\trecording_silent\n`,stderr:''};};
+  const execute=async()=>{writeFileSync(join(dir,`silent-processing-identity-${id}.json`),JSON.stringify({verified:true,observed_video_id:id,content_type:'video'}));writeFileSync(join(dir,`silent-processing-recording-${id}.json`),JSON.stringify({version:1,run:badScope?'other':'silent-processing',video_id:id,evidence_id:`silent-processing-v${id}-qualification-record`,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:3,playback_end_state:3,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91}));return {code:0,stdout:`QUAL\t${id}\trejected\trecording_silent\n`,stderr:''};};
   try{const h=createHandlers({root:dir,env,rpc,execute});h.state.budgetDeadline=Date.now()+1800000;const r=await h.qualification();assert.equal(r.matched,0);if(badScope){assert.equal(r.failures.length,1);assert.ok(!ops.includes('reject_recording'));assert.equal(r.media_volume_failures,1);}else{assert.equal(r.failures.length,0);assert.ok(ops.includes('reject_recording'));assert.equal(r.media_volume_failures,0);assert.equal(r.recordings_silent_rejected,1);}}finally{rmSync(dir,{recursive:true,force:true});}
  }
 });

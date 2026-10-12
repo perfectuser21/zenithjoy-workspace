@@ -2392,8 +2392,50 @@ ensure_media_volume() {
     || print -u2 -- "warning: media volume settled at $MEDIA_VOLUME_NOW (target $target)"
 }
 
+# 非破坏读回：只接受唯一 active 的抖音会话，其他应用或未知格式不能充当播放证明。
+record_playback_state() {
+  local raw fg evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  umask 077
+  fg="$(foreground_package)"
+  print -r -- "$fg" > "$EVIDENCE_ROOT/$evidence_id.foreground.txt"
+  /bin/chmod 600 "$EVIDENCE_ROOT/$evidence_id.foreground.txt"
+  raw="$("$ADB" -s "$SERIAL" shell dumpsys media_session 2>/dev/null)" || raw=""
+  print -r -- "$raw" > "$EVIDENCE_ROOT/$evidence_id.media-session.txt"
+  /bin/chmod 600 "$EVIDENCE_ROOT/$evidence_id.media-session.txt"
+  _foreground_is_exact_douyin "$fg" || { print unknown; return 0; }
+  print -r -- "$raw" | "$PYTHON_BIN" -c '
+import re,sys
+raw=sys.stdin.read()
+targets=re.findall(r"(?m)^\s*Media button session is\s+(\S+)\s*$",raw)
+if len(targets)!=1 or not targets[0].startswith("com.ss.android.ugc.aweme/"):
+ print("unknown");sys.exit(0)
+matches=list(re.finditer(r"(?m)^\s*package=([^\s]+)",raw));states=[]
+for i,m in enumerate(matches):
+ if m.group(1)!="com.ss.android.ugc.aweme":continue
+ block=raw[m.end():matches[i+1].start() if i+1<len(matches) else len(raw)]
+ active=re.search(r"(?m)^\s*active=(true|false)\s*$",block)
+ if not active or active.group(1)!="true":continue
+ state=re.search(r"PlaybackState\s*\{\s*state=(\d+|[A-Z_]+\(\d+\))(?=,|\s|\})",block)
+ value=state.group(1) if state else "unknown"
+ named=re.fullmatch(r"([A-Z_]+)\((\d+)\)",value)
+ if named:
+  expected={"NONE":0,"STOPPED":1,"PAUSED":2,"PLAYING":3,"FAST_FORWARDING":4,"REWINDING":5,"BUFFERING":6,"ERROR":7,"CONNECTING":8,"SKIPPING_TO_PREVIOUS":9,"SKIPPING_TO_NEXT":10,"SKIPPING_TO_QUEUE_ITEM":11}
+  value=named.group(2) if expected.get(named.group(1))==int(named.group(2)) else "unknown"
+ states.append(value)
+print(states[0] if len(states)==1 else "unknown")'
+}
+
+record_playback_hash() {
+  "$PYTHON_BIN" - "$EVIDENCE_ROOT/$1" <<'PYPLAYHASH'
+import hashlib,sys
+with open(sys.argv[1],"rb") as f:print(hashlib.sha256(f.read()).hexdigest())
+PYPLAYHASH
+}
+
 record_start() {
-  local eid max out pidf pid
+  local eid max out pidf pid playback_state=unknown playback_try
   eid="$1"; max="${2:-110}"
   require_evidence_id "$eid"
   require_uint "$max"
@@ -2412,7 +2454,22 @@ record_start() {
   /bin/mkdir -p "$EVIDENCE_ROOT"
   # 媒体音量必须非 0，否则录到 -91dB 死寂、ASR 必挂；幂等驱动到最低非零档，
   # 稳态零按键、不再形成音量棘轮。依据见 ensure_media_volume 注释。
+  _foreground_is_exact_douyin "$(foreground_package)" || die "RECORD_PLAYBACK_WRONG_FOREGROUND"
+  # MEDIA_PAUSE/PLAY都是全局媒体键；读树前先确认归属，不能误暂停/恢复其他播放器。
+  playback_state="$(record_playback_state "$eid-playback-before-detail")"
+  [[ "$playback_state" == <-> ]] || die "RECORD_MEDIA_TARGET_UNVERIFIED"
+  # 详情树核验会暂停视频，必须放在最后一次恢复播放之前。
+  _on_video_detail "$eid-playback-detail" paused-detail || die "RECORD_PLAYBACK_DETAIL_UNVERIFIED"
   ensure_media_volume "$RECORD_MEDIA_VOLUME"
+  playback_state="$(record_playback_state "$eid-playback-before-play")"
+  [[ "$playback_state" == <-> ]] || die "RECORD_MEDIA_TARGET_UNVERIFIED"
+  "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null || die "MEDIA_PLAY_FAILED"
+  for playback_try in 1 2 3 4; do
+    playback_state="$(record_playback_state "$eid-playback-start")"
+    [[ "$playback_state" == 3 ]] && break
+    (( playback_try == 4 )) || wait_ms 250
+  done
+  [[ "$playback_state" == 3 ]] || die "RECORD_PLAYBACK_UNVERIFIED state=$playback_state"
   # --no-window：无头 Mac 上禁止起 Metal 渲染窗口。实测教训：带窗口连录数轮后整机离网
   # （m4 于 20260831 录制中失联 1 小时+），无头图形渲染是 Mac mini 经典死法。
   ADB="$ADB" "$SCRCPY" -s "$SERIAL" --no-window --no-playback --record="$out" --time-limit="$max" \
@@ -2424,7 +2481,7 @@ record_start() {
     /bin/rm -f "$pidf"
     die "scrcpy failed to start; see $EVIDENCE_ROOT/$eid.rec.log"
   fi
-  print -- "record_started pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown}"
+  print -- "record_started pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
 }
 
 record_status() {
@@ -2439,8 +2496,9 @@ record_status() {
 }
 
 record_stop() {
-  local eid pidf out pid i dur vstreams astreams
+  local eid pidf out pid i dur vstreams astreams playback_state
   eid="$1"; require_evidence_id "$eid"
+  playback_state="$(record_playback_state "$eid-playback-end")"
   pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
   if [[ -f "$pidf" ]]; then
     pid="$(cat "$pidf")"
@@ -2476,8 +2534,8 @@ record_stop() {
   # 实测过（音量0=-91dB 死寂 / 音量1=-35.4dB / 音量4=-35.3dB）。换机型若真录到死寂，
   # 下面 astreams>=1 照样通过——音轨"存在"但全是静音，通义 ASR 报
   # ASR_RESPONSE_HAVE_NO_WORDS，判定链静默退化成 title-only，没人会察觉。
-  # 故实测 mean_volume 打进输出行；**只打点不 die**（Alex 0924 拍板）：真·无声视频
-  # 是合法内容，die 会误伤，让它照常走 title-only 兜底即可。
+  # 电平与录末播放状态分别输出；控制器不把静音当录制命令故障。
+  # 新队列仅在录前、录末播放均核验后判定静音；缺证据保pending，禁止标题或旧转写兜底。
   # -vn 跳过视频解码（只需音轨，105s 录像也就一两秒）；-v info 不能省——
   # volumedetect 的结果是 info 级 stderr，用 -v error 会把它一起吞掉。
   # || true 不可省：本脚本 set -euo pipefail，函数内命令替换失败会直接打死整个进程，
@@ -2485,7 +2543,7 @@ record_stop() {
   local mean_db
   mean_db="$("$FFMPEG" -hide_banner -nostats -v info -i "$out" -vn -af volumedetect -f null - 2>&1 \
     | /usr/bin/grep -o 'mean_volume: [-0-9.]* dB' | /usr/bin/tail -1 | /usr/bin/awk '{print $2}' || true)"
-  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown}"
+  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown} playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
   if [[ -n "$mean_db" ]] && (( $(print -- "$mean_db" | /usr/bin/awk '{print ($1 <= -80) ? 1 : 0}') )); then
     print -u2 -- "warning: recording is near-silent (mean_volume=${mean_db} dB); ASR will likely return no words — check the phone's speaker-stream volume is non-zero"
   fi

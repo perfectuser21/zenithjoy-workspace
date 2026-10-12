@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync,existsSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {createHash} from 'node:crypto';
 
 const controller=new URL('../douyin-phone-adb',import.meta.url).pathname;
 const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
@@ -320,7 +321,7 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101'}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   const text=readFileSync(controller,'utf8');
@@ -330,6 +331,9 @@ function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.a
 print -r -- "$*" >> "$FIXTURE/calls"
 if [[ "$*" == *'keyevent 126'* ]]; then ${playFails?'exit 1':'exit 0'}; fi
 if [[ "$*" == *'dumpsys media_session'* ]]; then
+count=0; [[ ! -f "$FIXTURE/session-count" ]] || count="$(cat "$FIXTURE/session-count")"
+print $((count+1)) > "$FIXTURE/session-count"
+[[ "$TARGET_CHANGES" != 1 || "$count" == 0 ]] || MEDIA_TARGET=com.hihonor.cloudmusic/MediaSession/23
 [[ "$MEDIA_TARGET" == absent ]] || print -r -- "  Media button session is $MEDIA_TARGET"
 case "$SESSION" in
 named) print '  package=com.hihonor.cloudmusic\\n  active=true\\n  state=PlaybackState {state=PAUSED(2), position=17405}\\n  package=com.ss.android.ugc.aweme\\n  active=true\\n  state=PlaybackState {state=PLAYING(3), position=50}' ;;
@@ -350,9 +354,10 @@ fi
   const extraStart=text.indexOf('record_playback_');
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ print com.ss.android.ugc.aweme; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\nrecord_start probe 25\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget},timeout:6000});
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0'},timeout:6000});
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
-  return {...r,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
+  const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
+  return {...r,rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
 for(const session of ['paused','namedPaused','mismatch','other','inactive','unknown'])test('record-start必须拒绝未证实抖音正在播放 '+session,()=>{
@@ -366,11 +371,15 @@ test('调速后record-start需最后恢复播放并按抖音active会话读回',
  assert.match(r.stdout,/playback_verified=true/);assert.match(r.stdout,/playback_package=com.ss.android.ugc.aweme/);assert.match(r.stdout,/playback_state=3/);
 });
 
+// PLAYING样本仅沿用真实HONOR named-state格式派生，ADB/会话/原始文件均为模拟，不是真机播放事实。
 test('HONOR真实named_state(number)格式只接受抖音active PLAYING(3)，与音乐PAUSED隔离',()=>{const r=recordBoundary({session:'named'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/playback_verified=true/);});
 
 // 2026-10-12只读HONOR dump脱敏摘录：当前只有云音乐PAUSED，无抖音会话。
-test('实际HONOR dump摘录缺失抖音会话时不能以云音乐active伪播放',()=>{const r=recordBoundary({session:'actualHonor'});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);});
+test('实际HONOR dump摘录缺失抖音会话时不能以云音乐active伪播放',()=>{const r=recordBoundary({session:'actualHonor',mediaTarget:'null'});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);});
 
 for(const mediaTarget of ['absent','null','com.hihonor.cloudmusic/MediaSession/23'])test('全局126前必须拒绝缺失或其他应用媒体键归属 '+mediaTarget,()=>{
  const r=recordBoundary({mediaTarget});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/keyevent 126/,'不能先恢复其他播放器再发现错归属');
 });
+
+test('最后126前媒体键归属发生变化时必须重新拒绝',()=>{const r=recordBoundary({targetChanges:true});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/keyevent 126/);});
+test('模拟设备原始录前dump与前台证据均600且stdout哈希匹配原始文件',()=>{const r=recordBoundary();assert.equal(r.status,0,r.stderr);for(const [kind,p] of Object.entries(r.rawEvidence)){assert.ok(p);assert.equal(p.mode,0o600);const key=kind==='media-session.txt'?'playback_evidence_sha256':'playback_foreground_sha256';assert.match(r.stdout,new RegExp(key+'='+p.sha256));}assert.match(r.stdout,/playback_evidence_file=probe-playback-start.media-session.txt/);});

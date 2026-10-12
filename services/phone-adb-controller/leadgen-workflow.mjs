@@ -265,6 +265,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
           if(proof.version!==1||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
+          if(proof.playback_verified!==true||proof.playback_package!=='com.ss.android.ugc.aweme'||proof.playback_state!==3||proof.playback_end_state!==3)throw Error('本轮播放未实际核验，禁止将暂停录制判为静音淘汰');
           if(result.code===0&&verdict==='rejected'&&marker[3]==='recording_silent'){
             const receipt=await queue('reject_recording',{video_id:v.video_id,recording:proof});
             if(receipt?.verified!==true||receipt.video_id!==v.video_id||receipt.verdict!=='rejected'||receipt.kind!=='recording_silent')throw Error('本轮录音拒绝缺真实PG回执');
