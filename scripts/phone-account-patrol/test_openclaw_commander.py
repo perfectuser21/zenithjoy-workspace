@@ -40,10 +40,10 @@ class OpenClawCommanderTests(unittest.TestCase):
         (self.state / 'deployment-current.json').write_text(json.dumps(self.deployment))
         self.receipt = {'status': 'queued', 'task_id': TASK, 'source_revision': commander.PHONE_SOURCE_REVISION,
                         'children': [{'task_id': CHILD, 'serial': 'phone-a', 'phone': '小白'}]}
-        self.child = {'id': CHILD, 'parent_task_id': TASK, 'source_id': 'phone-account-patrol:' + TASK + ':phone-a',
+        self.child = {'id': CHILD, 'parent_task_id': TASK,
                       'project_id': PROJECT, 'task_type': 'script_run',
                       'payload': {'workflow_id': WF, 'source_revision': commander.PHONE_SOURCE_REVISION,
-                                  'phone_serial': 'phone-a'}}
+                                  'phone_serial': 'phone-a', 'routing_receipt_id': '77777777-7777-4777-8777-777777777777'}}
         self.calls = []
 
     def api(self, path):
@@ -179,7 +179,7 @@ class OpenClawCommanderTests(unittest.TestCase):
             self.receipt = original
 
     def test_brain_child_parent_source_workflow_and_serial_must_match(self):
-        cases = [('parent_task_id', CHILD), ('source_id', 'other'), ('id', TASK), ('project_id', BATCH),
+        cases = [('parent_task_id', CHILD), ('payload.routing_receipt_id', 'not-uuid'), ('id', TASK), ('project_id', BATCH),
                  ('payload.workflow_id', BATCH), ('payload.source_revision', 'wrong'), ('payload.phone_serial', 'wrong')]
         for key, value in cases:
             original = copy.deepcopy(self.child)
@@ -198,6 +198,16 @@ class OpenClawCommanderTests(unittest.TestCase):
             return self.api(path)
         with patch.object(commander.subprocess, 'run', side_effect=self.gateway), self.assertRaises(RuntimeError):
             commander.launch(TASK, self.deployment, self.state, call=failing)
+
+    def test_actual_task_api_without_source_id_uses_real_routing_receipt_uuid(self):
+        self.assertNotIn('source_id', self.child)
+        self.assertIn('routing_receipt_id', self.child['payload'])
+        result = self.run_launch()
+        self.assertEqual(result['children'][0]['task_id'], CHILD)
+        for invalid in [None, '', 'not-uuid']:
+            self.child['payload']['routing_receipt_id'] = invalid
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                self.run_launch()
 
     def test_success_keeps_monitor_children_and_private_commander_receipt(self):
         receipt = self.run_launch()
@@ -228,13 +238,32 @@ class OpenClawCommanderTests(unittest.TestCase):
         if path == 'tasks/' + TASK:
             task = self.api(path)
             task['status'] = 'completed'
-            task['result'] = {'script': {'stdout': json.dumps(self.receipt)}}
+            launched = dict(self.receipt, commander={'agent_id': 'infra', 'openclaw_run_id': 'real-launch-run',
+                'session_key': 'agent:infra:phone-patrol:' + TASK + ':launch', 'source_version': commander.SOURCE_VERSION,
+                'source_sha256': 'b' * 64})
+            task['result'] = {'script': {'stdout': json.dumps(launched)}}
             return task
         if path == 'tasks/' + CHILD:
             task = dict(self.child, status='completed', result={'script': {'run_id': 'child-run-a1', 'exit_code': 0,
                 'stdout': json.dumps({'task_id': CHILD, 'status': 'deferred'})}})
             return task
         return self.api(path)
+
+    def test_review_rejects_old_python_batch_without_commander_provenance(self):
+        def old_batch(path):
+            value = self.review_api(path)
+            if path == 'tasks/' + TASK:
+                value['result'] = {'script': {'stdout': json.dumps(self.receipt)}}
+            return value
+        with self.assertRaises(ValueError):
+            commander.inspection(TASK, BATCH, self.deployment, self.state, old_batch)
+        def wrong_source(path):
+            value = self.review_api(path)
+            if path == 'tasks/' + TASK:
+                value['payload'].pop('phone_source_revision')
+            return value
+        with self.assertRaises(ValueError):
+            commander.inspection(TASK, BATCH, self.deployment, self.state, wrong_source)
 
     def test_review_requires_real_inspect_snapshot_and_preserves_business_deferred(self):
         def gateway(command, **kwargs):

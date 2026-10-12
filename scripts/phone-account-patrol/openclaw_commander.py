@@ -115,7 +115,7 @@ def verify_children(receipt, task_id, deployment, call, *, current_phones=True):
         payload = task.get('payload') or {}
         if (task.get('parent_task_id') != task_id or task.get('task_type') != 'script_run'
                 or task.get('project_id') != deployment['project_id']
-                or task.get('source_id') != 'phone-account-patrol:' + task_id + ':' + serial
+                or not re.fullmatch(UUID, payload.get('routing_receipt_id') or '')
                 or payload.get('workflow_id') != deployment['single_workflow_id']
                 or payload.get('source_revision') != PHONE_SOURCE_REVISION or payload.get('phone_serial') != serial):
             raise ValueError('中央子任务与冻结巡查合同不一致')
@@ -236,6 +236,12 @@ def inspection(batch_task_id, review_task_id, deployment, state, call=None, *, p
             break
     if receipt is None:
         raise ValueError('批次尚无派发结果，不能生成复核终态')
+    provenance = receipt.get('commander') or {}
+    if (provenance.get('agent_id') != 'infra' or not provenance.get('openclaw_run_id')
+            or provenance.get('session_key') != 'agent:infra:phone-patrol:' + batch_task_id + ':launch'
+            or provenance.get('source_version') != SOURCE_VERSION
+            or not re.fullmatch(r'[0-9a-f]{64}', provenance.get('source_sha256') or '')):
+        raise ValueError('批次缺少真实 OpenClaw 领跑入口回执')
     children = verify_children(receipt, batch_task_id, deployment, call, current_phones=False)
     snapshot = {'status': 'reviewed', 'task_id': uuid(review_task_id), 'batch_task_id': batch_task_id,
                 'source_revision': PHONE_SOURCE_REVISION, 'batch_status': batch['status'], 'actor': 'OpenClaw:infra', 'children': []}
