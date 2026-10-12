@@ -13,12 +13,27 @@ export const RPC_FILES = ['queued-comment-history.js','leadgen-rpc.mjs', 'leadge
   'plans/douyin_video_discovery.steps.json', 'plans/douyin_video_processing.steps.json',
   'plans/douyin_comment_scoring.steps.json', 'plans/douyin_lead_outreach.steps.json'];
 
+// 失败诊断先脱敏后限长；长不完整行不留无前缀的秘密/图片尾巴。
+export function safeExecutionDiagnostic(value, env = process.env) {
+  let text = String(value ?? '');
+  for (const [name, secret] of Object.entries(env)) {
+    if (/key|token|secret|password/i.test(name) && typeof secret === 'string' && secret.length >= 4)
+      text = text.split(secret).join('[REDACTED]');
+  }
+  text = text.replace(/data:[^;\s]+;base64,[^\s"']*/gi, '[REDACTED_IMAGE]')
+    .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [REDACTED]')
+    .replace(/(["']?(?:api[_-]?key|token|password|secret|authorization)["']?\s*[:=]\s*)["']?[^\r\n"']*/gi, '$1[REDACTED]');
+  if (text.length <= 8000) return text;
+  const prefix = text.slice(0, 7900), boundary = prefix.lastIndexOf('\n');
+  return (boundary >= 0 ? prefix.slice(0, boundary + 1) : '') + '[diagnostic truncated]\n';
+}
+
 export function execInput(command, args, { input = '', timeoutMs = 180000, env = process.env } = {}) {
   return new Promise((resolveResult, reject) => {
     // Mac/Linux上每次动作独占进程组，只停止本次动作及其子进程，不碰ADB服务或其他批次。
     const ownGroup = process.platform !== 'win32';
     const child = spawn(command, args, { env, detached: ownGroup, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer;
+    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer, stderrTruncated = false;
     const timer = setTimeout(() => stop(Error('EXECUTION_DEADLINE')), timeoutMs);
     function signalOwned(signal) {
       try { if (ownGroup && child.pid) process.kill(-child.pid, signal); else child.kill(signal); }
@@ -32,7 +47,11 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
     }
     function finish(error, result) {
       if (settled) return; settled = true; clearTimeout(timer); clearTimeout(forceTimer);
-      if (error) reject(error); else resolveResult(result);
+      if (error) {
+        error.stdout = safeExecutionDiagnostic(stdout, env);
+        error.stderr = safeExecutionDiagnostic(stderr, env);
+        reject(error);
+      } else resolveResult(result);
     }
     child.on('error', () => finish(Error('EXECUTION_START_FAILED')));
     child.stdout.on('data', chunk => {
@@ -40,7 +59,15 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
       stdout += chunk;
       if (Buffer.byteLength(stdout) > 8 * 1024 * 1024) stop(Error('EXECUTION_OUTPUT_LIMIT'));
     });
-    child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8000); });
+    child.stderr.on('data', chunk => {
+      if (stderrTruncated) return;
+      stderr += chunk;
+      if (stderr.length > 16000) {
+        const prefix = stderr.slice(0, 15000), boundary = prefix.lastIndexOf('\n');
+        stderr = (boundary >= 0 ? prefix.slice(0, boundary + 1) : '') + '[diagnostic truncated]\n';
+        stderrTruncated = true;
+      }
+    });
     // 必须等close：旧动作还活着时不可返回失败并开始操作同一台手机的下一候选。
     child.on('close', code => finish(stoppingError, { code, stdout, stderr }));
     child.stdin.on('error', () => {});

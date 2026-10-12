@@ -1,10 +1,10 @@
-import {readFileSync,writeFileSync,appendFileSync,existsSync,renameSync,readdirSync,lstatSync} from 'node:fs';
+import {readFileSync,writeFileSync,appendFileSync,chmodSync,existsSync,renameSync,readdirSync,lstatSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runActivity} from './activity-commander.mjs';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
-import {createRpc,execInput} from './leadgen-client.mjs';
+import {createRpc,execInput,safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
@@ -70,11 +70,23 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run};
-  const bounded=async(command,args,opts={})=>{const result=await execute(command,args,{...opts,
-    timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
-      state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
-    env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});appendFileSync(join(env.WFR_RUN_DIR,'activity.log'),result.stderr||'',{mode:0o600});return result;};
-  const checked=async(command,args,opts)=>{const r=await bounded(command,args,opts);if(r.code!==0)throw Error(`动作失败 code=${r.code}: ${r.stderr?.slice(-500)||command}`);return r.stdout;};
+  const recordDiagnostic=value=>{
+    const file=join(env.WFR_RUN_DIR,'activity.log');
+    appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
+    chmodSync(file,0o600);
+  };
+  const bounded=async(command,args,opts={})=>{
+    try {
+      const result=await execute(command,args,{...opts,
+        timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
+          state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
+        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
+      recordDiagnostic(result.stderr||'');return result;
+    } catch(error) {
+      recordDiagnostic(error.stderr||'');throw error;
+    }
+  };
+  const checked=async(command,args,opts)=>{const r=await bounded(command,args,opts);if(r.code!==0)throw Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`);return r.stdout;};
   const phone=async(command,...args)=>{
     const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
     if(!locked&&!['lock-acquire','preflight'].includes(command))throw Error('设备操作未持本批锁');
@@ -85,7 +97,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     const ownerArgs=['close-app','return-safe-desktop'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
-      command==='current-video-link'?{maxDurationS:300}:{});
+      command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:{});
   };
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
