@@ -7,8 +7,13 @@
 #
 # 用法:
 #   wf-launch.sh <capability> <host> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources "链接1,链接2"] [--allow-missing] [--dry-run]
+#               [--run-id RUN --task-id TASK]（Brain workflow_dispatch 派发单必带；codex_agent 形态必填，获客 wf-run 形态忽略）
 # 输出（最后一行，供 Commander 读）:
 #   WF_LAUNCHED tag=<TAG> host=<host> cap=<cap> serial=<serial> escort=<id|none> log=~/wf-logs/<TAG>.out
+# 两种形态（按 commander/workflow-contracts.json 的 execution_profile 分）：
+#   获客 wf-run 形态（plans/<cap>.plan）：escort 陪跑 + ssh 执行机 nohup wf-run.sh（下文 ①~④）
+#   codex_agent 形态（任务 c0fe7e30，决策 2186700a）：MMV 本机 nohup wf-agent-run.sh = 共享外壳准备 → Codex 业务块 → 共享外壳收尾，
+#     不起 escort（Commander 本会话陪跑到终态），输出 host=mmv，状态用 wf-status.sh mmv <TAG> 查
 # 退出码: 0 已起跑 / 2 参数错 / 3 设备忙(已有 run 在跑) / 4 能力未部署到执行机 / 5 起跑失败
 set -uo pipefail
 
@@ -27,7 +32,7 @@ rsh(){ ssh "${SSH_OPTS[@]}" "$HOST" "$1"; }
 
 [[ $# -ge 5 ]] || die 2 "用法: wf-launch.sh <capability> <host> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources 列表] [--allow-missing] [--dry-run]"
 CAP="$1"; HOST="$2"; PROFILE="$3"; SERIAL="$4"; BIZ="$5"; shift 5
-N=6; PUSH=1; SOURCES=""; DRY=0; ALLOW_MISSING=""
+N=6; PUSH=1; SOURCES=""; DRY=0; ALLOW_MISSING=""; RUN_ID=""; TASK_ID=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --n) N="${2:-}"; shift 2 ;;
@@ -35,6 +40,8 @@ while [[ $# -gt 0 ]]; do
     --sources) SOURCES="${2:-}"; shift 2 ;;
     --allow-missing) ALLOW_MISSING=" --allow-missing"; shift ;;  # 契约有未实现步骤仍跑(真机调试用)
     --dry-run) DRY=1; shift ;;
+    --run-id) RUN_ID="${2:-}"; shift 2 ;;
+    --task-id) TASK_ID="${2:-}"; shift 2 ;;
     *) die 2 "未知参数: $1" ;;
   esac
 done
@@ -47,6 +54,34 @@ done
 # 网关 MMV 系统时区是美西(us-mac 约定 LA),TAG/起跑时间一律按北京时间,与执行机日志、采收时窗对得上
 bj(){ TZ=Asia/Shanghai date "$@"; }
 TAG="cmd$(bj +%m%d%H%M)"
+
+# ⓪ 形态判定：codex_agent 合同走 MMV 本机外壳 runner（合同清单由 gen-commander-contracts.mjs 生成、deploy 同步）
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CONTRACTS_JSON="${WF_CONTRACTS_JSON:-$HERE/workflow-contracts.json}"
+AGENT_RUNNER="${WF_AGENT_RUNNER:-$HERE/wf-agent-run.sh}"
+EXEC_PROFILE="$(python3 "$HERE/wf-agent-lib.py" profile "$CONTRACTS_JSON" "$CAP" 2>/dev/null || true)"
+if [[ "$EXEC_PROFILE" == codex_agent ]]; then
+  [[ "$RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ && "$TASK_ID" =~ ^[0-9a-f-]{36}$ ]] \
+    || die 2 "codex_agent 形态须由 Brain 派发单带 --run-id <run> --task-id <uuid>（缺或非法）"
+  [[ -x "$AGENT_RUNNER" ]] || die 4 "MMV 上没有 ${AGENT_RUNNER}（codex_agent 外壳未部署）"
+  LBUSY=$(pgrep -fl "wf-agent-run.sh .* $SERIAL " 2>/dev/null | grep -v pgrep | head -3 || true)
+  [[ -z "$LBUSY" ]] || die 3 "设备 $SERIAL 正在跑: $(echo "$LBUSY" | tr '\n' ' ' | head -c 200)"
+  RBUSY=$(rsh "pgrep -fl 'wf-run.sh .*$SERIAL|harvest-cron.sh .*$SERIAL' | grep -v pgrep | head -3" 2>/dev/null || true)
+  [[ -z "$RBUSY" ]] || die 3 "设备 $SERIAL 正在跑: $(echo "$RBUSY" | tr '\n' ' ' | head -c 200)"
+  if (( DRY == 1 )); then
+    echo "DRY_RUN host=mmv profile=codex_agent runner=$AGENT_RUNNER run_id=$RUN_ID task_id=$TASK_ID"
+    echo "WF_LAUNCHED tag=$TAG host=mmv cap=$CAP serial=$SERIAL escort=dry run_id=$RUN_ID profile=codex_agent log=~/wf-logs/$TAG.out"
+    exit 0
+  fi
+  mkdir -p "$HOME/wf-logs"
+  nohup bash "$AGENT_RUNNER" "$CAP" "$HOST" "$PROFILE" "$SERIAL" "$BIZ" --tag "$TAG" --run-id "$RUN_ID" --task-id "$TASK_ID" \
+    > "$HOME/wf-logs/$TAG.out" 2>&1 < /dev/null &
+  sleep "$START_WAIT"
+  grep -q WF_RUN_STARTED "$HOME/wf-logs/$TAG.out" 2>/dev/null \
+    || die 5 "${START_WAIT}s 内未见 WF_RUN_STARTED，判定起跑失败: $(tail -n 5 "$HOME/wf-logs/$TAG.out" 2>/dev/null | tr '\n' ' ' | head -c 300)"
+  echo "WF_LAUNCHED tag=$TAG host=mmv cap=$CAP serial=$SERIAL escort=none run_id=$RUN_ID profile=codex_agent log=~/wf-logs/$TAG.out"
+  exit 0
+fi
 
 # ① 能力已部署到执行机（plans/<cap>.plan 由 wf-plan 生成、deploy 同步）
 rsh "test -r ~/bin-harvest/plans/$CAP.plan && test -x ~/bin-harvest/wf-run.sh" \

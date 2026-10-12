@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 22e980828662b602f1c9688a7287d262dc912d53394120de20a8c91b579effd0 -->
+<!-- digest: 18d78b986a1cc7c71107151de2a712a8052417eb8bb590173341e3bd18b318be -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -29,7 +29,7 @@
 
 | ID | App | Line | Status | Steps | Smoke Files |
 |----|-----|------|--------|-------|-------------|
-| android_worker_publish | customer_app | line01 | active | step1:取得本人账号与同run发布上下文<br>step2:准确素材及文案形成待发布稿<br>step3:单次提交并保原outward账本<br>step4:读回准确目标及实际作品状态<br>step5:安全归位与精确双锁释放 | .github/workflows/scripts/smoke/codex-publish-contract-smoke.sh |
+| android_worker_publish | customer_app | line01 | active | step1:取得本人账号与同run发布上下文<br>step2:准确素材及文案形成待发布稿<br>step3:单次提交并保原outward账本<br>step4:读回准确目标及实际作品状态<br>step5:安全归位与精确双锁释放 | .github/workflows/scripts/smoke/codex-publish-contract-smoke.sh<br>.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh |
 | customer_first_success | customer_app | line01 | active | step1:注册自动登录（含 free license）<br>step2:装客户端 + Agent 自动连中台<br>step3:画像诊断（行业/受众/风格 3 字段）<br>step4:扫码绑定抖音主号（Agent 弹登录窗，session 存本地）<br>step5:AI 生成 1 条内容（接 Claude API）<br>step6:中台派任务 + dryrun 发布 + 回执 | .github/workflows/scripts/smoke/golden-path-1-smoke.sh<br>.github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh<br>.github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh<br>.github/workflows/scripts/smoke/feishu-orchestrator-selfcheck-smoke.sh<br>.github/workflows/scripts/smoke/my-works-api-smoke.sh |
 | benchmark_link_acquisition | customer_app | line02 | proposed | step1:客户手填对标账号链接<br>step2:读对标账号视频→抓评论区<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
 | customer_smart_acquisition | customer_app | line02 | deprecated | — | — |

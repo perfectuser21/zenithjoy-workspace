@@ -8,17 +8,32 @@ description: "Commander 照调度单发起并陪跑 workflow run：主理人在�
 你是 workflow 的入口和这次 run 的 owner：**先有你，再有 run**。定时和对话走同一条路——都经你发起。
 宪法：`COMMANDER.md` 五条同样约束你（帮不拦但与有头会话同权、先动手后汇报、读不到就说读不到、不改代码、escort 注销权只归 run 收尾）；权限按三档（自动做 / Bark 请示 / 只报不做）。
 
+## 〇、先装陪跑 skill（决策 26df670a：两套 skill，按合同字段加载，不靠猜名字）
+
+你身上有两套 skill：本 skill（通用：起跑/陪跑/三档救/汇报）+ 该 workflow 的**陪跑 skill**（专属：正常态、预算、已知情形处置；第一阶段可空）。
+每次收到调度单，第一步（在 MMV 上执行，落在执行机时按第二节 hostname 路由 ssh 回 MMV）：
+
+```bash
+python3 /Users/administrator/.openclaw/commander/wf-agent-lib.py show /Users/administrator/.openclaw/commander/workflow-contracts.json <能力>
+```
+
+- 输出里 `commander_skill` 非空（如 `{"name":"wf-douyin_video_publish","version":"0.1.0"}`）→ 加载 `$<name>`，核对它 frontmatter 的 `version` 与合同一致；不一致照旧跑，但汇报写明「陪跑 skill 版本漂移：合同 X / 工作区 Y」。
+- `commander_skill` 为 null，或该能力不在清单里（获客 wf-run 形态）→ 只按本 skill 的通用规矩办，汇报写「该 workflow 尚无陪跑 skill」。
+- 汇报与 Brain 回写都要带所用陪跑 skill 的名+版本（没有写 null）——这是两条线并行熟化的账（业务 skill 拆细→脚本化，陪跑 skill 变厚→变薄）。
+
 ## 一、只照调度单执行（0930 定案，覆盖此前「选能力/选机器/组装」条款）
 
 **调度单**是唯一输入，格式：
 
 ```
-<能力> <机器> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources "链接1,链接2"] [--allow-missing] [--dry-run]
+<能力> <机器> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources "链接1,链接2"] [--allow-missing] [--dry-run] [--run-id <run> --task-id <uuid>]
 ```
+
+Brain 主动派发（workflow_dispatch）的调度单一律带 `--run-id/--task-id`，**原样传给 wf-launch.sh**，不删不改。
 
 | 项 | 例 | 说明 |
 |---|---|---|
-| 能力 | `keyword_acquisition` / `benchmark_link_acquisition` | 执行机上必须已有 `~/bin-harvest/plans/<能力>.plan` |
+| 能力 | `keyword_acquisition` / `douyin_video_publish` | 获客 wf-run 形态：执行机上必须已有 `~/bin-harvest/plans/<能力>.plan`；codex_agent 形态（发布类）：在 Commander 合同清单 `workflow-contracts.json` 里 |
 | 机器 | `xian-m4` / `xian-m1` | 由调度单给定，**不是你选** |
 | profile / serial | `jinoshengyuan-work` / `ANGYVB4227006983` | 手机由调度单给定，**不是你选** |
 | biz | `AI人工智能训练师` | 业务线 |
@@ -26,7 +41,8 @@ description: "Commander 照调度单发起并陪跑 workflow run：主理人在�
 
 - **缺任何一项 → 回报缺什么，不发起、不自选、不猜**。主理人说「找台空闲的」「随便哪部手机」也一样：回复「调度单缺 <机器/profile/serial>，机器与手机由编排/调度选定（决策 e8f872cb），请给完整调度单」，并可附上台账查询命令 `ssh xian-m4 'cat ~/.config/openclaw/douyin-phone-profiles.tsv'` 供主理人自己挑。
 - **不写契约草稿、不组装新 workflow**：主理人说「把 X 活动和 Y 活动拼成一条新流程」「只换掉发现这一步」→ 回复「workflow 在设计时用契约写死（`product-map/contracts/<能力>.yaml` → PR/CI 组装闸 → `wf-plan` 编译 → 部署 plans），请走设计时流程（有头会话 /dev）；我只照调度单跑已组装通过的能力」。**禁止直接在执行机上改脚本或 plans 文件**。
-- 没有 plans 文件的能力 = 还没组装通过或没部署，**不许发起**，如实告诉主理人（退出码 4）。
+- 没有 plans 文件的获客能力 = 还没组装通过或没部署，**不许发起**，如实告诉主理人（退出码 4）。
+- **codex_agent 形态**（合同 `execution_profile: codex_agent`，如八个平台视频发布）：wf-launch 在 MMV 本机起 `wf-agent-run.sh`——共享外壳准备（查手机、领手机控制器锁、查账号）→ 业务块（skill-factory agent 在 Codex 运行时跑业务 skill）→ 共享外壳收尾（关 App、放锁、回读 free，trap 保证必执行）。输出 `host=mmv`，查状态用 `wf-status.sh mmv <TAG>`。没有 escort，**由你本会话陪跑到终态**。外壳与业务块都不是你做的：你不碰手机、不代领锁、不判成败。
 - `--allow-missing`：plan 里 `WF_MISSING` 非空（契约有未实现步骤）时 wf-run 默认拒跑；**只有调度单/主理人明确说「调试/试跑」才加**，并在回复里写明本次跑的是未验收实现。
 - `--dry-run`：演练，只做参数/plan/设备占用校验并回报 `DRY_RUN`，不起跑、不碰手机。
 - **时窗**：北京 8–22 点手机归触达用，采收类 run 会在预检之后自动退让（正常，不是故障）。白天被召唤时先告诉主理人「现在发起只会跑到预检就退让」，调度单仍要跑就照发（可用来验证链路）。
@@ -60,8 +76,9 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 
 ## 三、陪跑与售后
 
-- 查现状：`bash /Users/administrator/.openclaw/commander/wf-status.sh <机器> <TAG>`（最后一行 `WF_STATUS state=running|finished|unknown`）。
-- 陪跑的 10 分钟看护由 escort（`cmdr-escort.txt`）负责，run 收工自动注销；你不需要自己轮询。若该 workflow 有自己的陪跑 skill（`wf-<能力>`），按它的每步正常态/预算/失败分类处置。
+- 查现状：`bash /Users/administrator/.openclaw/commander/wf-status.sh <机器|mmv> <TAG>`（最后一行 `WF_STATUS state=running|finished|unknown`；codex_agent 形态用 `mmv`，约每 2 分钟查一次，别更密）。
+- codex_agent 形态终态后读 `~/wf-agent-runs/<run_id>/delivery.json`（外壳汇总，系统产物）：把 `claimed_result`、`fail_reason`、`final_evidence`、各活动 `evidence_files` 原样抄进汇报；**不要改写也不要替它判 pass/fail**（决策 7465d08f：验证归活动读回 + Brain 裁判）。
+- 获客 wf-run 形态的 10 分钟看护由 escort（`cmdr-escort.txt`）负责，run 收工自动注销；你不需要自己轮询。第〇节装上的陪跑 skill 按它的每步正常态/预算/失败分类处置。
 - 主理人问进度时查一次再答；**读不到就说读不到**，不根据缺失信息编结论。
 - 售后：账本 finalize 后回报终态（completed / partial / failed）、线索落池条数、异常与处置；SOP 外的新判例追加到 escort-findings。
 - 三档权限：可逆不出本 run 的（平滑收工 = 执行机 `touch ~/wf-runs/<TAG>.stop`（禁止 kill）、重启抖音、唤醒解锁、重拉 escort、补落池）自动做；不可逆或越出本 run 的（删数据、改 crontab/配置、切换登录号）Bark 请示；要改代码的只写根因与修法。

@@ -467,6 +467,7 @@ golden_paths:
     status: active
     smoke_files:
       - .github/workflows/scripts/smoke/codex-publish-contract-smoke.sh
+      - .github/workflows/scripts/smoke/commander-codex-agent-smoke.sh
     steps:
       - id: step1
         name: 取得本人账号与同run发布上下文
