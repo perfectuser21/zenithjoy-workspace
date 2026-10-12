@@ -88,6 +88,12 @@ function setup(stub = {}) {
 const read = (home, f) => (existsSync(join(home, f)) ? readFileSync(join(home, f), "utf8") : "");
 const runDir = (home) => join(home, "wf-agent-runs", RUN);
 const delivery = (home) => JSON.parse(read(home, `wf-agent-runs/${RUN}/delivery.json`));
+// 仅下面两项“假空闲设备起跑”测试调用；真实生产pgrep及占锁/忙设备测试不变。
+function mockIdleLauncherProcesses(home) {
+  const p = join(home, "bin", "pgrep");
+  writeFileSync(p, `#!/bin/sh\nprintf '%s\\n' "$*" >> "$HOME/pgrep-argv.log"\nexit 1\n`);
+  chmodSync(p, 0o755);
+}
 const ARGS = ["douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室", "--tag", "cmd10121200", "--run-id", RUN, "--task-id", TASK];
 // 假官方回调只用于测试：真实 Commander 经 sessions_spawn 得到 receipt，再交回原始终态。
 function coordinator(env) {
@@ -237,10 +243,12 @@ test("wf-launch：codex_agent 合同缺 --run-id/--task-id 退 2；带了就本�
   const { home, env } = setup();
   const base = ["douyin_video_publish", "xian-m4", "xiaolongxia", SERIAL, "Ai办公室"];
   assert.equal(spawnSync("bash", [LAUNCH, ...base], { encoding: "utf8", env }).status, 2);
+  mockIdleLauncherProcesses(home);
   const fake = join(home, "bin", "fake-runner");
   writeFileSync(fake, `#!/bin/sh\necho "WF_RUN_STARTED $*"\necho "$*" >> "$HOME/runner-argv.log"\n`); chmodSync(fake, 0o755);
   const r = spawnSync("bash", [LAUNCH, ...base, "--run-id", RUN, "--task-id", TASK], { encoding: "utf8", env: { ...env, WF_AGENT_RUNNER: fake } });
   assert.equal(r.status, 0, r.stderr);
+  assert.match(read(home, "pgrep-argv.log"), /wf-agent-run\.sh/, "假空闲只替换进程列表读回，仍真实经过launcher忙设备守卫");
   assert.match(r.stdout.trim().split("\n").pop(), new RegExp(`^WF_LAUNCHED tag=cmd\\d{8} host=mmv cap=douyin_video_publish serial=${SERIAL} escort=none run_id=${RUN} profile=codex_agent`));
   assert.match(read(home, "runner-argv.log"), new RegExp(`douyin_video_publish xian-m4 xiaolongxia ${SERIAL} Ai办公室 --tag cmd\\d{8} --run-id ${RUN} --task-id ${TASK}`));
   assert.equal(read(home, "oc-argv.log"), "", "codex_agent 不起 escort cron");
@@ -258,6 +266,7 @@ test("wf-launch：获客 wf-run 形态接受 Brain 派发单带的 --run-id/--ta
 
 test("wf-launch：网关调用结束清理进程组后，独立外壳仍存活并完成收尾", async () => {
   const { home, env } = setup();
+  mockIdleLauncherProcesses(home);
   const fake = join(home, "bin", "scope-runner");
   writeFileSync(fake, `#!/bin/sh\necho $$ > "$HOME/scope-runner.pid"\necho WF_RUN_STARTED\nwhile [ ! -f "$HOME/continue" ]; do sleep 0.1; done\necho WF_RUN_FINISHED > "$HOME/finished"\n`);
   chmodSync(fake, 0o755);
@@ -270,6 +279,7 @@ test("wf-launch：网关调用结束清理进程组后，独立外壳仍存活�
   try {
     const code = await new Promise((resolve, reject) => { child.once("exit", resolve); child.once("error", reject); });
     assert.equal(code, 0, output);
+    assert.match(read(home, "pgrep-argv.log"), /wf-agent-run\.sh/);
     assert.match(output, /WF_LAUNCHED/);
     // OpenClaw command scope 正常结束也以 SIGKILL 清掉命令进程组；nohup 只能抗 HUP。
     try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
