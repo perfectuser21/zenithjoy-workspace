@@ -453,19 +453,20 @@ test('无本轮播放证明的静音录制不得经PG业务拒绝，cleanup释�
 });
 
 // 现场 run/eid 保留原格式，客户 ID/正文显式模拟；不冒称 mock proof 为真机证据。
-for(const fault of ['none','legacy_hyphen','wrong_run','wrong_vid','wrong_sha','traversal','missing_proof','wrong_identity','wrong_profile_sha','unverified','pg_readback'])test('HISTORY正式underscore消费及拒绝边界 '+fault,async()=>{
+for(const fault of ['none','mixed_3new_2history','legacy_hyphen','wrong_run','wrong_vid','wrong_sha','traversal','missing_proof','wrong_identity','wrong_profile_sha','unverified','pg_readback'])test('HISTORY正式underscore消费及拒绝边界 '+fault,async()=>{
  const {createHandlers}=await import('../leadgen-workflow.mjs'),{createHash}=await import('node:crypto');
  const dir=mkdtempSync(join(tmpdir(),'history-formal-eid-')),vid='7664177880607247666',url='https://v.douyin.com/Vn_ErpbjvQg/',run=fault==='legacy_hyphen'?'history-run':'codexp_blue_20261012T113917Z_102_01';
  const row={id:'11111111-1111-4111-8111-111111111111',douyin_id:'mock_history_user',comment_body:'模拟历史评论'},calls=[];
+ const mixed=fault==='mixed_3new_2history',historyRows=mixed?[row,{...row,id:'22222222-2222-4222-8222-222222222222',douyin_id:'mock_history_user2',comment_body:'模拟历史评论2'}]:[row];
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:run,P:'work',LEADGEN_LINE:'AI人工智能训练师',LEADGEN_SOURCE_RUN:'codexp_blue_20261012T113917Z_101'};
  try{
   const h=createHandlers({root:dir,env,rpc:async({request:q})=>{
    calls.push(q);
    if(q.op==='claim_videos')return {result:[{video_id:vid,video_url:url,judgment_status:'matched'}]};
    if(q.op==='renew_video')return {result:{renewed:true}};
-   if(q.op==='comment_history')return {result:{version:1,status:'verified',line:env.LEADGEN_LINE,line_key:'jinuo',run,source_run:env.LEADGEN_SOURCE_RUN,video_id:vid,video_url:url,rows:[row]}};
-   if(q.op==='collect')return {result:{comments:0,inserted:0,history_verified:1,coverage:1}};
-   if(q.op==='comment_history_readback')return {result:{verified:fault!=='pg_readback',video_id:vid,ids:[row.id],history_verified:1}};
+   if(q.op==='comment_history')return {result:{version:1,status:'verified',line:env.LEADGEN_LINE,line_key:'jinuo',run,source_run:env.LEADGEN_SOURCE_RUN,video_id:vid,video_url:url,rows:historyRows}};
+   if(q.op==='collect')return {result:{comments:mixed?3:0,inserted:mixed?3:0,history_verified:historyRows.length,coverage:mixed?5:1}};
+   if(q.op==='comment_history_readback')return {result:{verified:fault!=='pg_readback',video_id:vid,ids:historyRows.map(r=>r.id),history_verified:historyRows.length}};
    throw Error('unexpected '+q.op);
   },execute:async(c,a,o)=>{
    if(a[1]==='identity')return {code:0,stdout:'',stderr:''};
@@ -478,13 +479,15 @@ for(const fault of ['none','legacy_hyphen','wrong_run','wrong_vid','wrong_sha','
    // Wrong-scope proof is deliberately present: absence must not accidentally implement binding.
    if(!['missing_proof','traversal'].includes(fault))writeFileSync(join(dir,eid+'-history-readback.json'),JSON.stringify(proof),{mode:0o600});
    const key=Buffer.from(JSON.stringify([row.douyin_id,row.comment_body])).toString('base64');
-   return {code:0,stdout:`HISTORY\t${vid}\t${row.id}\t${key}\t${eid}\t${fault==='wrong_sha'?'0'.repeat(64):sha}\nCOLLECTION\t${vid}\tcollected\t0\nRESCAN\t${vid}\t0\n`,stderr:''};
+   let extra='';
+   if(mixed){const second=historyRows[1],eid2=`${run}-v${vid}-collection-person1-t1`;writeFileSync(join(dir,eid2+'-history-readback.json'),JSON.stringify({...proof,...second,identity_eid:eid2}),{mode:0o600});extra=`HISTORY\t${vid}\t${second.id}\t${Buffer.from(JSON.stringify([second.douyin_id,second.comment_body])).toString('base64')}\t${eid2}\t${sha}\n`+Array.from({length:3},(_,i)=>`LEAD\t模拟昵称\tmock_new${i}\tpersonal\t模拟新评论${i}\t今天\t陕西\tAI\tAI\t西安\thttps://www.douyin.com/user/mock${i}\t${url}\n`).join('');}
+   return {code:0,stdout:extra+`HISTORY\t${vid}\t${row.id}\t${key}\t${eid}\t${fault==='wrong_sha'?'0'.repeat(64):sha}\nCOLLECTION\t${vid}\tcollected\t0\nRESCAN\t${vid}\t0\n`,stderr:''};
   }});
   await h.qualification();const out=await h.collection();
-  if(['none','legacy_hyphen'].includes(fault)){
-   assert.equal(out.history_failures,0,JSON.stringify(out.failures));assert.equal(out.history_consumption_readback,1);assert.equal(out.history_verified,1);assert.equal(out.comments_inserted,0);assert.equal(out.videos_collected,1);assert.equal(out.status,undefined);
-   assert.equal(calls.find(q=>q.op==='collect').history[0].identity_eid,`${run}-v${vid}-collection-person3-t1`);
-   const consumption=JSON.parse(readFileSync(join(dir,`${run}-history-consumption-${vid}.json`)));assert.equal(consumption.verified,true);assert.equal(consumption.run,run);assert.deepEqual(consumption.ids,[row.id]);
+  if(['none','mixed_3new_2history','legacy_hyphen'].includes(fault)){
+   assert.equal(out.history_failures,0,JSON.stringify(out.failures));assert.equal(out.history_consumption_readback,1);assert.equal(out.history_verified,historyRows.length);assert.equal(out.comments_inserted,mixed?3:0);assert.equal(out.coverage,mixed?5:1);assert.equal(out.videos_collected,1);assert.equal(out.status,undefined);
+   assert.ok(calls.find(q=>q.op==='collect').history.some(r=>r.identity_eid===`${run}-v${vid}-collection-person3-t1`));
+   const consumption=JSON.parse(readFileSync(join(dir,`${run}-history-consumption-${vid}.json`)));assert.equal(consumption.verified,true);assert.equal(consumption.run,run);assert.deepEqual(new Set(consumption.ids),new Set(historyRows.map(r=>r.id)));
   }else{
    assert.equal(out.status,'partial');assert.equal(out.history_failures,1);assert.equal(out.history_consumption_readback,0);assert.equal(out.videos_collected,0);
    assert.equal(calls.some(q=>q.op==='collect'),fault==='pg_readback','invalid proof must fail before collect RPC');
