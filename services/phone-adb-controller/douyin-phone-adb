@@ -2498,9 +2498,10 @@ sys.exit(0 if re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)',sys.argv[1])==[
 PYRECORDDETAIL
 }
 
-# native inactive后只读一次新树；不存在明确播放视频控件时不点击素材中的三角形。
+# 只在native仍inactive时单击新鲜树的明确播放器控件。
+# 真机qbt文案会与音轨状态相反；动作结果必须再由native证明，不能按文案宣告播放。
 record_play_control() {
-  local eid="$1" xml="$EVIDENCE_ROOT/$1.xml" size="" pos x y
+  local eid="$1" xml="$EVIDENCE_ROOT/$1.xml" size="" pos x y before before_state
   require_evidence_id "$eid"
   umask 077
   record_detail_foreground || return 1
@@ -2518,7 +2519,7 @@ try:
  if root.tag!='hierarchy':sys.exit(1)
  for n in root.iter('node'):
   if n.get('package') not in (None,'',pkg):sys.exit(1)
-  if n.get('content-desc')!='播放视频，按钮' or n.get('clickable')!='true' or n.get('enabled')!='true' or not n.get('resource-id','').startswith(pkg+':id/'):continue
+  if n.get('content-desc') not in ('播放视频，按钮','暂停视频，按钮') or n.get('clickable')!='true' or n.get('enabled')!='true' or n.get('resource-id')!=pkg+':id/qbt':continue
   m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
   if not m:continue
   x1,y1,x2,y2=map(int,m.groups())
@@ -2529,6 +2530,11 @@ except (ET.ParseError,OSError,ValueError):sys.exit(1)
 PYPLAYCONTROL
 )" || return 1
   read x y <<< "$pos"
+  # 树读取期间可能自行恢复；再次核实，绝不把已started的播放器切回暂停。
+  before="$(record_native_audio "$eid-native-preclick")"
+  before_state="$(print -r -- "$before" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  [[ "$before_state" != started ]] || return 0
+  [[ "$before_state" == inactive ]] || return 1
   record_detail_foreground || return 1
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || return 1
   print -u2 -- "record-play-control: source=tree x=$x y=$y evidence=$eid single_click=true"
@@ -2558,6 +2564,13 @@ record_start() {
   ensure_media_volume "$RECORD_MEDIA_VOLUME"
   native="$(record_native_audio "$eid-playback-start")"
   native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  # 加载/恢复的瞬态暂停先做两次被动复查；unknown不能等待后续结果洗白。
+  for playback_try in 1 2; do
+    [[ "$native_state" == inactive ]] || break
+    wait_ms 250
+    native="$(record_native_audio "$eid-playback-start")"
+    native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  done
   if [[ "$native_state" == inactive ]]; then
     record_play_control "$eid-playback-control" || die "RECORD_PLAY_CONTROL_UNVERIFIED"
     for playback_try in 1 2 3 4; do
@@ -2565,6 +2578,7 @@ record_start() {
       native="$(record_native_audio "$eid-playback-start")"
       native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
       [[ "$native_state" == started ]] && break
+      [[ "$native_state" == inactive ]] || break
     done
   fi
   [[ "$native_state" == started ]] || die "RECORD_NATIVE_AUDIO_UNVERIFIED state=$native_state"
