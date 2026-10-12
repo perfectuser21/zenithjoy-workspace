@@ -22,16 +22,16 @@ function fakePool(responses) {
   return { calls, query: client.query.bind(client), async connect() { return client; } };
 }
 test('本轮静音拒绝必须限定真实租约且保留旧转写，PG回执独立读回',async()=>{
- const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
+ const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:3,playback_end_state:3,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
  const row={video_id:id,judgment_status:'rejected',judgment_reason:'本轮录音核验拒绝:静音音轨',process_status:'处理中:audio-run'};
  const pool=fakePool([{rows:[row],rowCount:1},{rows:[row],rowCount:1}]);
  const result=await queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:proof});
  assert.equal(result.verified,true);assert.equal(result.video_id,id);const update=pool.calls.find(c=>c.sql.startsWith('UPDATE'));assert.match(update.sql,/process_status=\$3/);assert.match(update.sql,/judgment_status='pending'/);assert.ok(!/SET[\s\S]*transcript\s*=/.test(update.sql));assert.ok(pool.calls.some(c=>c.sql.startsWith('SELECT')));
 });
 test('租约已失效或伪造静音证据不得写rejected',async()=>{
- const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
+ const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:3,playback_end_state:3,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
  const pool=fakePool([{rows:[],rowCount:0}]);await assert.rejects(queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:proof}),/租约|判定/);assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));
- for(const change of [{run:'wrong'},{video_id:'7646309328911907196'},{audio_status:'usable'},{mean_volume_db:-35},{media_volume_verified:false}]){const p=fakePool([]);await assert.rejects(queueRequest(p,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:{...proof,...change}}),/录音/);assert.equal(p.calls.length,0);}
+ for(const change of [{run:'wrong'},{video_id:'7646309328911907196'},{audio_status:'usable'},{mean_volume_db:-35},{media_volume_verified:false},{playback_verified:false},{playback_end_state:2},{playback_end_state:null},{playback_package:'com.netease.cloudmusic'}]){const p=fakePool([]);await assert.rejects(queueRequest(p,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:{...proof,...change}}),/录音/);assert.equal(p.calls.length,0);}
 });
 
 test('视频租约认领同时含待判及合格未采，崩溃可回收，同库竞争跳过锁行', async () => {
@@ -256,4 +256,12 @@ test('采样领取优先flag必须真boolean且有明确source与VID清单，非
  for(const q of [{prefer_matched:'true',source_run:'s',video_ids:[]},{prefer_matched:1,source_run:'s',video_ids:[]},{prefer_matched:true,video_ids:[]},{prefer_matched:true,source_run:'s'},{prefer_matched:true,source_run:'s',video_ids:null}]){const p=fakePool([]);await assert.rejects(queueRequest(p,{op:'claim_videos',line:'jinuo',run:'sample-run',...q}));assert.equal(p.calls.length,0);}
  const p=fakePool([{rows:[]}]);await queueRequest(p,{op:'claim_videos',line:'jinuo',run:'sample-run',source_run:'s',video_ids:[],prefer_matched:true});assert.deepEqual(p.calls.find(c=>c.sql.startsWith('WITH')).args[5],[]);
  const legacy=fakePool([{rows:[]}]);await queueRequest(legacy,{op:'claim_videos',line:'jinuo',run:'legacy',prefer_matched:false});assert.match(legacy.calls.find(c=>c.sql.startsWith('WITH')).sql,/judgment_status='pending' THEN 0/);
+});
+
+test('静音拒绝RPC在任何SQL前拒绝缺失或非抖音PLAYING证明',async()=>{
+ const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
+ for(const change of [{},{playback_verified:true,playback_package:'com.netease.cloudmusic',playback_state:3},{playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:2}]){
+  const calls=[],pool={async connect(){calls.push('connect');throw Error('SQL_BYPASS');},async query(){calls.push('query');throw Error('SQL_BYPASS');}};
+  await assert.rejects(queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:{...proof,...change}}),/播放|录音/);assert.deepEqual(calls,[]);
+ }
 });

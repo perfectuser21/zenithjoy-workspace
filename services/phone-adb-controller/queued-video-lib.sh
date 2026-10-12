@@ -54,7 +54,7 @@ qv_open(){
   DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-identity" || return 4
 }
 qv_qualify(){
-  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started="" stopped="" extracted audio="" db duration remote result verdict media="" media_ok=0 audio_status=unavailable
+  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started="" stopped="" extracted audio="" db duration remote result verdict media="" media_ok=0 playback_ok=0 playback_start=unknown playback_end=unknown playback_package=unknown audio_status=unavailable
   [[ "$seconds" == <-> ]] && (( seconds >= 10 && seconds <= 105 )) || return 2
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
   if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null; then
@@ -62,8 +62,12 @@ qv_qualify(){
     if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null)"; then
       media="$(print -r -- "$started" | sed -n 's/.*media_volume=\([^ ]*\).*/\1/p')"
       [[ "$started" == record_started* && "$media" == <-> ]] && (( media > 0 )) && media_ok=1
+      playback_start="$(print -r -- "$started" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
+      playback_package="$(print -r -- "$started" | sed -n 's/.* playback_package=\([^ ]*\).*/\1/p')"
       qv_nap "$((seconds+2))"
       stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null)" || stopped=""
+      playback_end="$(print -r -- "$stopped" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
+      [[ "$started" == *" playback_verified=true "* && "$playback_start" == 3 && "$playback_end" == 3 && "$playback_package" == com.ss.android.ugc.aweme && "$stopped" == *" playback_package=com.ss.android.ugc.aweme "* ]] && playback_ok=1
       if [[ "$stopped" == record_stopped* ]]; then
         db="$(print -r -- "$stopped" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
         duration="$(print -r -- "$stopped" | sed -n 's/.*duration_seconds=\([^ ]*\).*/\1/p')"
@@ -74,7 +78,7 @@ qv_qualify(){
           [[ "$db" == -<->(.<->|) || "$db" == <->(.<->|) ]] && (( db <= -80 )) && audio_status=silent
         else
           audio_status=usable
-          if (( media_ok )); then
+          if (( media_ok && playback_ok )); then
             extracted="$("$C" --profile "$P" record-extract-audio "$record_eid" </dev/null)" || extracted=""
             audio="$(print -r -- "$extracted" | sed -n 's/^audio_extracted path=\([^ ]*\).*/\1/p')"
           fi
@@ -84,15 +88,18 @@ qv_qualify(){
   fi
   # 媒体音量与内容电平分别存证；静音不是模型内容判定，也不得用旧转写伪装本轮ASR。
   [[ -n "${WFR_RUN_DIR:-}" ]] || return 5
-  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" <<'PYRECORD' || return 5
+  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" <<'PYRECORD' || return 5
 import sys,json,os,tempfile,datetime,math
-d,run,vid,eid,media,ok,status,db,duration,started,stopped=sys.argv[1:]
+d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end=sys.argv[1:]
 def number(v):
  try:
   n=float(v);return n if math.isfinite(n) else None
  except ValueError:return None
 os.makedirs(d,mode=0o700,exist_ok=True)
-p={"version":1,"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+p={"version":1,"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","playback_verified":playback_ok=="1","playback_package":playback_package,"playback_state":number(playback_start),"playback_end_state":number(playback_end),"audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"playback_raw_evidence":{},"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+for phase,raw in [('start',started),('end',stopped)]:
+ fields=dict(x.split('=',1) for x in raw.split() if '=' in x)
+ p['playback_raw_evidence'][phase]={k:fields.get('playback_'+k) for k in ('evidence_file','evidence_sha256','foreground_file','foreground_sha256')}
 fd,tmp=tempfile.mkstemp(prefix='.recording-',dir=d)
 with os.fdopen(fd,'w') as f:json.dump(p,f)
 os.replace(tmp,os.path.join(d,run+'-recording-'+vid+'.json'))
@@ -100,6 +107,10 @@ PYRECORD
   if (( ! media_ok )); then
     qv_log 'recording_pending reason=media_volume_unverified'
     print -- "QUAL\t$VID\tpending\tmedia_volume_unverified"; return 5
+  fi
+  if (( ! playback_ok )); then
+    qv_log 'recording_pending reason=playback_unverified'
+    print -- "QUAL\t$VID\tpending\tplayback_unverified"; return 5
   fi
   if [[ "$audio_status" == silent ]]; then
     print -- "QUAL\t$VID\trejected\trecording_silent"; return 0
