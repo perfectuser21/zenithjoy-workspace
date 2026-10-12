@@ -231,6 +231,8 @@ function shareWave({policy='verified-seed-share',error='idle',freshFirst=false,f
   writeFileSync(join(d,'state'),JSON.stringify({dumps:0,keys:[]}));
   if(stale){writeFileSync(join(d,'remote'),detail);writeFileSync(join(d,'case.xml'),detail);}
   const adb=join(d,'adb');
+  for(const kind of ['paused','playing'])writeFileSync(join(d,'native-'+kind),readFileSync(join(fixtures,'real-honor-native-audio-'+kind+'.txt')));
+  writeFileSync(join(d,'play.xml'),playControl?readFileSync(join(fixtures,'real-honor-paused-play-control.xml')):'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="视频素材白三角" clickable="true" enabled="true" bounds="[300,600][800,1800]"/></hierarchy>');
   writeFileSync(adb,`#!/usr/bin/env node
 const fs=require('fs'),p=require('path'),d=${JSON.stringify(d)},a=process.argv.slice(2),s=JSON.parse(fs.readFileSync(p.join(d,'state')));let code=0;
 if(a[2]==='pull'){if(fs.existsSync(p.join(d,'remote')))fs.copyFileSync(p.join(d,'remote'),a[4]);else code=1;}
@@ -245,7 +247,7 @@ else if(a[3]==='uiautomator'){
 }
 fs.writeFileSync(p.join(d,'state'),JSON.stringify(s));process.exit(code);
 `,{mode:0o755});
-  const script=`set -eu\nADB=${JSON.stringify(adb)}; SERIAL=fake; EVIDENCE_ROOT=${JSON.stringify(d)}; REMOTE_UI=/fake; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; PYTHON_BIN=/usr/bin/python3\nrequire_evidence_id(){ [[ "$1" == case ]]; }; wait_ms(){ :; }; wait_seconds(){ :; }; die(){ print -u2 -- "$1"; exit 4; };\n${functions.join('\n')}\n${waves?'ui_evidence':'_ui_evidence_wave'} case ${policy}`;
+  const script=`set -eu\nADB=${JSON.stringify(adb)}; SERIAL=fake; EVIDENCE_ROOT=${JSON.stringify(d)}; REMOTE_UI=/fake; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; PYTHON_BIN=/usr/bin/python3\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ [[ "$1" == case ]]; }; wait_ms(){ :; }; wait_seconds(){ :; }; die(){ print -u2 -- "$1"; exit 4; };\n${functions.join('\n')}\n${waves?'ui_evidence':'_ui_evidence_wave'} case ${policy}`;
   const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:10000});
   return {...r,state:JSON.parse(readFileSync(join(d,'state'),'utf8')),xml:existsSync(join(d,'case.xml'))?readFileSync(join(d,'case.xml'),'utf8'):''};
  }finally{rmSync(d,{recursive:true,force:true});}
@@ -296,7 +298,7 @@ test('真实once策略边界：先清旧witness，无证据或错包保标准，
   for(const [kind,expected] of [['none','standard'],['wrong','standard'],['valid','verified-seed-share']]){
    writeFileSync(join(d,'case-seed-detail-verified.xml'),detail);
    const seed=kind==='none'?':':`/bin/cp ${JSON.stringify(join(d,kind))} "$EVIDENCE_ROOT/$1-seed-detail-verified.xml"`;
-   const r=spawnSync('zsh',['-c',`set -eu; EVIDENCE_ROOT=${JSON.stringify(d)}; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; PYTHON_BIN=/usr/bin/python3; ADB=/usr/bin/true; SERIAL=fake\nrequire_evidence_id(){ :; }; foreground_package(){ print com.ss.android.ugc.aweme; }; clip_state_file(){ print ${JSON.stringify(join(d,'oldclip'))}; }; wait_ms(){ :; }; die(){ exit 4; }; seed_clipboard_nonce(){ ${seed}; print clipnonceProof; }; ui_evidence(){ print -u2 -- "strategy=$2"; exit 8; };\n${fns.join('\n')}\n_current_video_link_once case 人工智能`],{encoding:'utf8',timeout:10000});
+   const r=spawnSync('zsh',['-c',`set -eu; EVIDENCE_ROOT=${JSON.stringify(d)}; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; PYTHON_BIN=/usr/bin/python3; ADB=/usr/bin/true; SERIAL=fake\nrequire_evidence_id(){ :; }; foreground_package(){ print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; }; clip_state_file(){ print ${JSON.stringify(join(d,'oldclip'))}; }; wait_ms(){ :; }; die(){ exit 4; }; seed_clipboard_nonce(){ ${seed}; print clipnonceProof; }; ui_evidence(){ print -u2 -- "strategy=$2"; exit 8; };\n${fns.join('\n')}\n_current_video_link_once case 人工智能`],{encoding:'utf8',timeout:10000});
    assert.equal(r.error,undefined);assert.equal(r.status,8);assert.match(r.stderr,new RegExp('strategy='+expected+'(?:\\n|$)'),kind);
    if(kind==='none')assert.equal(existsSync(join(d,'case-seed-detail-verified.xml')),false,'旧witness必须真实删除');
   }
@@ -321,7 +323,7 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',uidMode='unique',playControl=true,nativeAfterTap='started'}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   const text=readFileSync(controller,'utf8');
@@ -329,6 +331,27 @@ function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.a
   const adb=join(d,'adb');
   writeFileSync(adb,`#!/bin/zsh
 print -r -- "$*" >> "$FIXTURE/calls"
+if [[ "$*" == *'cmd package list packages'* ]]; then
+ print 'package:com.ss.android.ugc.aweme uid:10203'
+ [[ "$UID_MODE" != shared || "$*" != *'--uid'* ]] || print 'package:com.other.shared uid:10203'
+ exit 0
+fi
+if [[ "$*" == *'dumpsys audio'* ]]; then
+ current="$NATIVE"; [[ ! -f "$FIXTURE/tapped" ]] || current="$AFTER_TAP"
+ case "$current" in
+ started) cat "$FIXTURE/native-playing";;
+ paused) cat "$FIXTURE/native-paused";;
+ other) sed 's/u\/pid:10203\//u\/pid:10999\//' "$FIXTURE/native-playing";;
+ history) cat "$FIXTURE/native-paused";cat "$FIXTURE/native-playing";;
+ muted) sed 's/mutedState:none/mutedState:clientVolume/' "$FIXTURE/native-playing";;
+ *) print unknown;;
+ esac
+ exit 0
+fi
+if [[ "$*" == *'input tap'* ]]; then print tapped > "$FIXTURE/tapped";exit 0;fi
+if [[ "$*" == *'uiautomator dump'* ]]; then exit 0;fi
+if [[ "$*" == *'stat -c %s'* ]]; then wc -c < "$FIXTURE/play.xml";exit 0;fi
+if [[ "$*" == *' pull '* ]]; then cp "$FIXTURE/play.xml" "$argv[-1]";exit 0;fi
 if [[ "$*" == *'keyevent 126'* ]]; then ${playFails?'exit 1':'exit 0'}; fi
 if [[ "$*" == *'dumpsys media_session'* ]]; then
 count=0; [[ ! -f "$FIXTURE/session-count" ]] || count="$(cat "$FIXTURE/session-count")"
@@ -354,7 +377,7 @@ fi
   const extraStart=text.indexOf('record_playback_');
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ print com.ss.android.ugc.aweme; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\nrecord_start probe 25\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0'},timeout:6000});
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap},timeout:6000});
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
   return {...r,rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
@@ -400,3 +423,8 @@ for(const mediaTarget of [
 ])test('HONOR媒体目标后缀与包名严格拒绝 '+mediaTarget,()=>{
  const r=recordBoundary({session:'named',mediaTarget});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/keyevent 126/);
 });
+
+// 真实HONOR当前native配置：录制客户端PID528不是MediaSession ownerPid，UID绑定才是归属。
+test('native真started即使MediaSession STOPPED也可起录且不toggle',()=>{const r=recordBoundary({session:'namedPaused',native:'started'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/playback_proof_kind=native_audio/);assert.match(r.stdout,/native_audio_state=started/);assert.doesNotMatch(r.calls,/keyevent (126|85)|input tap/);});
+test('native真paused只点fresh树明确播放视频控件一次，后started才起录',()=>{const r=recordBoundary({session:'namedPaused',native:'paused'});assert.equal(r.status,0,r.stderr);assert.equal(r.calls.split('\n').filter(l=>l.includes('input tap')).length,1);assert.match(r.calls,/input tap 600 1252/);assert.match(r.stdout,/native_audio_state=started/);});
+for(const opts of [{native:'other'},{native:'history'},{native:'muted'},{native:'unknown'},{uidMode:'shared'},{native:'paused',playControl:false},{native:'paused',nativeAfterTap:'paused'}])test('native缺证据/他人UID/历史日志/共享UID/白三角不许起录 '+JSON.stringify(opts),()=>{const r=recordBoundary(opts);assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);if(opts.playControl===false)assert.doesNotMatch(r.calls,/input tap/);});
