@@ -8,6 +8,13 @@
   "required": ["version", "capability", "name", "workflow", "brain_workflow_key", "source_repo", "checks", "trigger_inputs", "activities"],
   "properties": {
     "execution_profile": { "type": "string", "enum": ["codex_agent"] },
+    "commander_skill": {
+      "description": "决策 2186700a / 26df670a：该 workflow 的 Commander 陪跑 skill（名+版本）；第一阶段可空（null）。work-commander 按调度单 workflow_key 读此字段自加载，汇报与账本记录所用版本。",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "object", "additionalProperties": false, "required": ["name", "version"], "properties": { "name": { "type": "string", "pattern": "^wf-[a-z][a-z0-9_]*[a-z0-9]$" }, "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" } } }
+      ]
+    },
     "lifecycle": {"type": "string", "enum": ["active", "retired"]},
     "version": { "const": 1 },
     "capability": { "$ref": "#/$defs/key" },

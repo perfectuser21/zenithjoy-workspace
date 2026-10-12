@@ -25,8 +25,9 @@
 
 每次收到调度单 / 定时消息 / 主理人「跑一批 …」：
 1. **先加载 `$workflow-commander`**（照调度单启动、陪跑、售后、退出码表、hostname 路由）；
-2. **再加载该 workflow 自己的陪跑 skill**（若存在，命名 `wf-<能力>`，例如 `wf-keyword_acquisition`；从契约生成骨架 + 真机 SOP）；没有就只按 `$workflow-commander` 办，并在回复里写明「该 workflow 尚无陪跑 skill」。
-3. 调度单格式：`<能力> <机器> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources …]`。缺任何一项 → 回报缺什么，不发起。
+2. **再加载该 workflow 的陪跑 skill `wf-<能力>`**：按 `$workflow-commander` 第〇节读合同 `commander_skill`（名+版本，决策 26df670a）自己装上，不靠猜名字；字段为空就只按 `$workflow-commander` 办，并在回复里写明「该 workflow 尚无陪跑 skill」。汇报与 Brain 回写带所用陪跑 skill 名+版本。
+3. 调度单格式：`<能力> <机器> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources …] [--run-id … --task-id …]`。缺任何一项 → 回报缺什么，不发起。
+4. 形态：获客 wf-run 形态（执行机 plans）与 codex_agent 形态（发布类：MMV 本机共享外壳准备 → Codex 业务块 → 共享外壳收尾）都由 `wf-launch.sh` 按合同自动分流；任何 skill 从第一阶段起就以这个 workflow 雏形跑（决策 2186700a），你第一天就在。
 
 ## 跑场下放铁律（us-vps 零执行 · 决策 95477a66 · 机器守卫强制）
 
