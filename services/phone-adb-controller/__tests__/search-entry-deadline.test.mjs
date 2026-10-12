@@ -36,3 +36,9 @@ test('超时诊断真实写私有活动log，保持原错误且不重试',async(
   const log=readFileSync(join(d,'activity.log'),'utf8');assert.match(log,/phase=vision timeout/);assert.doesNotMatch(log,/sk-fake-token|AAAAFAKE/);assert.equal(statSync(join(d,'activity.log')).mode&0o777,0o600);
  }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+test('正常非零动作错误摘要也先脱敏再截断',async()=>{
+ const {d,h}=setup(async()=>({code:1,stdout:'',stderr:'HTTP unavailable\nAuthorization: Bearer sk-fake-secret\n'}));
+ try{await h.preflight();await assert.rejects(h.collect_videos(),e=>{assert.match(e.message,/HTTP unavailable/);assert.doesNotMatch(e.message,/sk-fake-secret/);return true;});}
+ finally{rmSync(d,{recursive:true,force:true});}
+});
