@@ -2434,8 +2434,108 @@ with open(sys.argv[1],"rb") as f:print(hashlib.sha256(f.read()).hexdigest())
 PYPLAYHASH
 }
 
+# 当前native音轨与包UID独立读回；MediaSession仅保存诊断原值，不充当播放事实。
+record_native_audio() {
+  local eid="$1" uid="" result media_state
+  require_evidence_id "$eid"
+  umask 077
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  media_state="$(record_playback_state "$eid")"
+  "$ADB" -s "$SERIAL" shell cmd package list packages -U "$DOUYIN_PACKAGE" > "$EVIDENCE_ROOT/$eid.package-uid.txt" 2>/dev/null || true
+  uid="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.package-uid.txt" "$DOUYIN_PACKAGE" <<'PYUID'
+import re,sys
+lines=open(sys.argv[1]).read().splitlines()
+m=re.fullmatch(r'package:'+re.escape(sys.argv[2])+r' uid:([0-9]+)',lines[0].strip()) if len(lines)==1 else None
+print(m.group(1) if m and int(m.group(1))>0 else '')
+PYUID
+)"
+  : > "$EVIDENCE_ROOT/$eid.uid-owners.txt"
+  if [[ "$uid" == <-> ]] && (( uid > 0 )); then
+    "$ADB" -s "$SERIAL" shell cmd package list packages -U --uid "$uid" > "$EVIDENCE_ROOT/$eid.uid-owners.txt" 2>/dev/null || true
+  fi
+  "$ADB" -s "$SERIAL" shell dumpsys audio > "$EVIDENCE_ROOT/$eid.audio.txt" 2>/dev/null || true
+  /bin/chmod 600 "$EVIDENCE_ROOT/$eid.package-uid.txt" "$EVIDENCE_ROOT/$eid.uid-owners.txt" "$EVIDENCE_ROOT/$eid.audio.txt"
+  result="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.audio.txt" "$EVIDENCE_ROOT/$eid.uid-owners.txt" "$uid" "$DOUYIN_PACKAGE" "$EVIDENCE_ROOT/$eid.native-audio.json" "$EVIDENCE_ROOT/$eid.foreground.txt" <<'PYNATIVE'
+import re,sys,json,os
+raw=open(sys.argv[1]).read();owners=open(sys.argv[2]).read().splitlines();uid=sys.argv[3];pkg=sys.argv[4]
+p={'unparsed_media_tracks':[],'kind':'native_audio','state':'unknown','uid':int(uid) if uid.isdigit() else None,'package_uid_verified':False,'tracks':[],'foreign_started':[]}
+expected='package:'+pkg+' uid:'+uid
+fg=open(sys.argv[6]).read();p['foreground_verified']=re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)',fg)==[(pkg,pkg+'.detail.ui.DetailActivity')]
+if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 and owners[0].strip()==expected:
+ p['package_uid_verified']=True
+ monitor=re.search(r'(?m)^PlaybackActivityMonitor[^\n]*$',raw)
+ if monitor:
+  tail=raw[monitor.end():];players=re.search(r'(?m)^[ \t]*players:[ \t]*$',tail)
+  if players:
+   block=re.split(r'(?m)^[ \t]*Events log:',tail[players.end():],maxsplit=1)[0]
+   for line in block.splitlines():
+    if not re.match(r'^[ \t]*(?:\(not logged\)[ \t]*)?AudioPlaybackConfiguration ',line):continue
+    m=re.search(r'piid:([0-9]+).*?type:android\.media\.AudioTrack u/pid:([0-9]+)/([0-9]+) state:([a-z]+) attr:.*?usage=USAGE_MEDIA\b.*?mutedState:([a-zA-Z]+(?: [a-zA-Z]+)*?)[ \t]+FormatInfo',line)
+    if not m:
+     if 'type:android.media.AudioTrack ' in line and 'usage=USAGE_MEDIA' in line:p['unparsed_media_tracks'].append(line)
+     continue
+    track={'piid':int(m[1]),'uid':int(m[2]),'pid':int(m[3]),'state':m[4],'muted':m[5].strip()}
+    if track['uid']==int(uid):p['tracks'].append(track)
+    elif track['state']=='started':p['foreign_started'].append(track)
+   started=[t for t in p['tracks'] if t['state']=='started' and t['muted']=='none']
+   if not p['foreign_started'] and not p['unparsed_media_tracks'] and len(started)==1:
+    p['state']='started';p.update({k:started[0][k] for k in ('pid','piid')})
+   elif not p['foreign_started'] and not p['unparsed_media_tracks'] and p['tracks'] and all(t['state'] in ('paused','stopped','idle') and t['muted']=='none' for t in p['tracks']):p['state']='inactive'
+with open(sys.argv[5],'w') as f:json.dump(p,f)
+os.chmod(sys.argv[5],0o600)
+print('native_audio_state='+p['state']+' native_audio_uid='+str(p['uid'] or 'unknown')+' native_audio_pid='+str(p.get('pid','unknown'))+' native_audio_piid='+str(p.get('piid','unknown'))+' native_audio_package_uid_verified='+str(p['package_uid_verified']).lower()+' native_audio_foreign_started='+str(len(p['foreign_started'])))
+PYNATIVE
+)"
+  _foreground_is_exact_douyin "$(cat "$EVIDENCE_ROOT/$eid.foreground.txt")" || result="native_audio_state=unknown native_audio_uid=unknown native_audio_pid=unknown native_audio_piid=unknown native_audio_package_uid_verified=false native_audio_foreign_started=unknown"
+  [[ "$(cat "$EVIDENCE_ROOT/$eid.foreground.txt")" == *"com.ss.android.ugc.aweme.detail.ui.DetailActivity"* ]] || result="native_audio_state=unknown native_audio_uid=unknown native_audio_pid=unknown native_audio_piid=unknown native_audio_package_uid_verified=false native_audio_foreign_started=unknown"
+  print -r -- "$result media_session_state=$media_state native_audio_evidence_file=$eid.audio.txt native_audio_evidence_sha256=$(record_playback_hash "$eid.audio.txt") native_audio_package_uid_file=$eid.package-uid.txt native_audio_package_uid_sha256=$(record_playback_hash "$eid.package-uid.txt") native_audio_uid_owners_file=$eid.uid-owners.txt native_audio_uid_owners_sha256=$(record_playback_hash "$eid.uid-owners.txt")"
+}
+
+record_detail_foreground() {
+  "$PYTHON_BIN" - "$(foreground_package)" "$DOUYIN_PACKAGE" <<'PYRECORDDETAIL'
+import sys,re
+sys.exit(0 if re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)',sys.argv[1])==[(sys.argv[2],sys.argv[2]+'.detail.ui.DetailActivity')] else 1)
+PYRECORDDETAIL
+}
+
+# native inactive后只读一次新树；不存在明确播放视频控件时不点击素材中的三角形。
+record_play_control() {
+  local eid="$1" xml="$EVIDENCE_ROOT/$1.xml" size="" pos x y
+  require_evidence_id "$eid"
+  umask 077
+  record_detail_foreground || return 1
+  /bin/rm -f "$xml"
+  "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null || return 1
+  "$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" >/dev/null 2>&1 || true
+  size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d '\r')"
+  [[ "$size" == <-> ]] && (( size > 0 )) || return 1
+  "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$xml" >/dev/null || return 1
+  /bin/chmod 600 "$xml"
+  pos="$("$PYTHON_BIN" - "$xml" "$DOUYIN_PACKAGE" "$SCREEN_W" "$SCREEN_H" <<'PYPLAYCONTROL'
+import sys,re,xml.etree.ElementTree as ET
+try:
+ root=ET.parse(sys.argv[1]).getroot();pkg=sys.argv[2];w,h=map(int,sys.argv[3:]);found=[]
+ if root.tag!='hierarchy':sys.exit(1)
+ for n in root.iter('node'):
+  if n.get('package') not in (None,'',pkg):sys.exit(1)
+  if n.get('content-desc')!='播放视频，按钮' or n.get('clickable')!='true' or n.get('enabled')!='true' or not n.get('resource-id','').startswith(pkg+':id/'):continue
+  m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+  if not m:continue
+  x1,y1,x2,y2=map(int,m.groups())
+  if 0<=x1<x2<=w and 0<=y1<y2<=h:found.append(((x1+x2)//2,(y1+y2)//2))
+ if len(found)!=1:sys.exit(1)
+ print(*found[0])
+except (ET.ParseError,OSError,ValueError):sys.exit(1)
+PYPLAYCONTROL
+)" || return 1
+  read x y <<< "$pos"
+  record_detail_foreground || return 1
+  "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || return 1
+  print -u2 -- "record-play-control: source=tree x=$x y=$y evidence=$eid single_click=true"
+}
+
 record_start() {
-  local eid max out pidf pid playback_state=unknown playback_try
+  local eid max out pidf pid playback_state=unknown playback_try native="" native_state=unknown
   eid="$1"; max="${2:-110}"
   require_evidence_id "$eid"
   require_uint "$max"
@@ -2455,21 +2555,20 @@ record_start() {
   # 媒体音量必须非 0，否则录到 -91dB 死寂、ASR 必挂；幂等驱动到最低非零档，
   # 稳态零按键、不再形成音量棘轮。依据见 ensure_media_volume 注释。
   _foreground_is_exact_douyin "$(foreground_package)" || die "RECORD_PLAYBACK_WRONG_FOREGROUND"
-  # MEDIA_PAUSE/PLAY都是全局媒体键；读树前先确认归属，不能误暂停/恢复其他播放器。
-  playback_state="$(record_playback_state "$eid-playback-before-detail")"
-  [[ "$playback_state" == <-> ]] || die "RECORD_MEDIA_TARGET_UNVERIFIED"
-  # 详情树核验会暂停视频，必须放在最后一次恢复播放之前。
-  _on_video_detail "$eid-playback-detail" paused-detail || die "RECORD_PLAYBACK_DETAIL_UNVERIFIED"
   ensure_media_volume "$RECORD_MEDIA_VOLUME"
-  playback_state="$(record_playback_state "$eid-playback-before-play")"
-  [[ "$playback_state" == <-> ]] || die "RECORD_MEDIA_TARGET_UNVERIFIED"
-  "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null || die "MEDIA_PLAY_FAILED"
-  for playback_try in 1 2 3 4; do
-    playback_state="$(record_playback_state "$eid-playback-start")"
-    [[ "$playback_state" == 3 ]] && break
-    (( playback_try == 4 )) || wait_ms 250
-  done
-  [[ "$playback_state" == 3 ]] || die "RECORD_PLAYBACK_UNVERIFIED state=$playback_state"
+  native="$(record_native_audio "$eid-playback-start")"
+  native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  if [[ "$native_state" == inactive ]]; then
+    record_play_control "$eid-playback-control" || die "RECORD_PLAY_CONTROL_UNVERIFIED"
+    for playback_try in 1 2 3 4; do
+      wait_ms 250
+      native="$(record_native_audio "$eid-playback-start")"
+      native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+      [[ "$native_state" == started ]] && break
+    done
+  fi
+  [[ "$native_state" == started ]] || die "RECORD_NATIVE_AUDIO_UNVERIFIED state=$native_state"
+  playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
   # --no-window：无头 Mac 上禁止起 Metal 渲染窗口。实测教训：带窗口连录数轮后整机离网
   # （m4 于 20260831 录制中失联 1 小时+），无头图形渲染是 Mac mini 经典死法。
   ADB="$ADB" "$SCRCPY" -s "$SERIAL" --no-window --no-playback --record="$out" --time-limit="$max" \
@@ -2481,7 +2580,7 @@ record_start() {
     /bin/rm -f "$pidf"
     die "scrcpy failed to start; see $EVIDENCE_ROOT/$eid.rec.log"
   fi
-  print -- "record_started pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
+  print -- "record_started pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
 }
 
 record_status() {
@@ -2496,9 +2595,10 @@ record_status() {
 }
 
 record_stop() {
-  local eid pidf out pid i dur vstreams astreams playback_state
+  local eid pidf out pid i dur vstreams astreams playback_state native
   eid="$1"; require_evidence_id "$eid"
-  playback_state="$(record_playback_state "$eid-playback-end")"
+  native="$(record_native_audio "$eid-playback-end")"
+  playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
   pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
   if [[ -f "$pidf" ]]; then
     pid="$(cat "$pidf")"
@@ -2543,7 +2643,7 @@ record_stop() {
   local mean_db
   mean_db="$("$FFMPEG" -hide_banner -nostats -v info -i "$out" -vn -af volumedetect -f null - 2>&1 \
     | /usr/bin/grep -o 'mean_volume: [-0-9.]* dB' | /usr/bin/tail -1 | /usr/bin/awk '{print $2}' || true)"
-  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown} playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
+  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown} playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
   if [[ -n "$mean_db" ]] && (( $(print -- "$mean_db" | /usr/bin/awk '{print ($1 <= -80) ? 1 : 0}') )); then
     print -u2 -- "warning: recording is near-silent (mean_volume=${mean_db} dB); ASR will likely return no words — check the phone's speaker-stream volume is non-zero"
   fi

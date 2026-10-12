@@ -67,7 +67,21 @@ qv_qualify(){
       qv_nap "$((seconds+2))"
       stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null)" || stopped=""
       playback_end="$(print -r -- "$stopped" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
-      [[ "$started" == *" playback_verified=true "* && "$playback_start" == 3 && "$playback_end" == 3 && "$playback_package" == com.ss.android.ugc.aweme && "$stopped" == *" playback_package=com.ss.android.ugc.aweme "* ]] && playback_ok=1
+      if python3 - "$started" "$stopped" "$record_eid" <<'PYNATIVEPAIR'
+import sys,re
+phases=[]
+for phase,raw in zip(('start','end'),sys.argv[1:3]):
+ f=dict(x.split('=',1) for x in raw.split() if '=' in x);prefix=sys.argv[3]+'-playback-'+phase
+ required={'playback_proof_kind':'native_audio','playback_package':'com.ss.android.ugc.aweme','native_audio_state':'started','native_audio_package_uid_verified':'true','native_audio_foreign_started':'0'}
+ if any(f.get(k)!=v for k,v in required.items()):sys.exit(1)
+ for k in ('uid','pid','piid'):
+  if not f.get('native_audio_'+k,'').isdigit() or int(f['native_audio_'+k])<=0:sys.exit(1)
+ for name,suffix in [('evidence','audio.txt'),('package_uid','package-uid.txt'),('uid_owners','uid-owners.txt')]:
+  if f.get('native_audio_'+name+'_file')!=prefix+'.'+suffix or not re.fullmatch('[0-9a-f]{64}',f.get('native_audio_'+name+'_sha256','')):sys.exit(1)
+ phases.append(f)
+if phases[0]['native_audio_uid']!=phases[1]['native_audio_uid']:sys.exit(1)
+PYNATIVEPAIR
+      then playback_ok=1; fi
       if [[ "$stopped" == record_stopped* ]]; then
         db="$(print -r -- "$stopped" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
         duration="$(print -r -- "$stopped" | sed -n 's/.*duration_seconds=\([^ ]*\).*/\1/p')"
@@ -96,10 +110,13 @@ def number(v):
   n=float(v);return n if math.isfinite(n) else None
  except ValueError:return None
 os.makedirs(d,mode=0o700,exist_ok=True)
-p={"version":1,"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","playback_verified":playback_ok=="1","playback_package":playback_package,"playback_state":number(playback_start),"playback_end_state":number(playback_end),"audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"playback_raw_evidence":{},"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+p={"version":2,"playback_proof_kind":"native_audio","native_audio":{},"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","playback_verified":playback_ok=="1","playback_package":playback_package,"playback_state":number(playback_start),"playback_end_state":number(playback_end),"audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"playback_raw_evidence":{},"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
 for phase,raw in [('start',started),('end',stopped)]:
  fields=dict(x.split('=',1) for x in raw.split() if '=' in x)
  p['playback_raw_evidence'][phase]={k:fields.get('playback_'+k) for k in ('evidence_file','evidence_sha256','foreground_file','foreground_sha256')}
+ p['native_audio'][phase]={k:fields.get('native_audio_'+k) for k in ('state','evidence_file','evidence_sha256','package_uid_file','package_uid_sha256','uid_owners_file','uid_owners_sha256')}
+ p['native_audio'][phase].update({k:number(fields.get('native_audio_'+k,'')) for k in ('uid','pid','piid','foreign_started')})
+ p['native_audio'][phase]['package_uid_verified']=fields.get('native_audio_package_uid_verified')=='true'
 fd,tmp=tempfile.mkstemp(prefix='.recording-',dir=d)
 with os.fdopen(fd,'w') as f:json.dump(p,f)
 os.replace(tmp,os.path.join(d,run+'-recording-'+vid+'.json'))
