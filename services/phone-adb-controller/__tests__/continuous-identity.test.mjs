@@ -83,8 +83,8 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  case "$3" in
   lock-refresh) print lock=refreshed;exit 0;;
   set-playback-speed) exit 0;;
-  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)' || exit $?;print 'record_started media_volume=1';exit 0;;
-  record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=-35';exit 0;;
+  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)' || exit $?;print 'record_started media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=3';exit 0;;
+  record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=-35 playback_package=com.ss.android.ugc.aweme playback_state=3';exit 0;;
   record-extract-audio) print fixture-audio > "$FAKE_PHONE_DIR/record.wav";print "audio_extracted path=$FAKE_PHONE_DIR/record.wav";exit 0;;
  esac
  exec zsh '${runner}' "$@"
@@ -320,7 +320,7 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101'}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   const text=readFileSync(controller,'utf8');
@@ -330,7 +330,12 @@ function recordBoundary({session='playing',playFails=false}={}){
 print -r -- "$*" >> "$FIXTURE/calls"
 if [[ "$*" == *'keyevent 126'* ]]; then ${playFails?'exit 1':'exit 0'}; fi
 if [[ "$*" == *'dumpsys media_session'* ]]; then
+[[ "$MEDIA_TARGET" == absent ]] || print -r -- "  Media button session is $MEDIA_TARGET"
 case "$SESSION" in
+named) print '  package=com.hihonor.cloudmusic\\n  active=true\\n  state=PlaybackState {state=PAUSED(2), position=17405}\\n  package=com.ss.android.ugc.aweme\\n  active=true\\n  state=PlaybackState {state=PLAYING(3), position=50}' ;;
+actualHonor) print '  package=com.android.server.telecom\\n  active=false\\n  package=com.hihonor.cloudmusic\\n  active=true\\n  state=PlaybackState {state=PAUSED(2), position=17405, buffered position=0, speed=1.0}' ;;
+namedPaused) print '  package=com.ss.android.ugc.aweme\\n  active=true\\n  state=PlaybackState {state=PAUSED(2), position=50}' ;;
+mismatch) print '  package=com.ss.android.ugc.aweme\\n  active=true\\n  state=PlaybackState {state=PAUSED(3), position=50}' ;;
 playing) print '  package=com.ss.android.ugc.aweme\n  active=true\n  state=PlaybackState {state=3, position=50}' ;;
 paused) print '  package=com.ss.android.ugc.aweme\n  active=true\n  state=PlaybackState {state=2, position=50}' ;;
 other) print '  package=com.netease.cloudmusic\n  active=true\n  state=PlaybackState {state=3, position=50}\n  package=com.ss.android.ugc.aweme\n  active=true\n  state=PlaybackState {state=1, position=0}' ;;
@@ -345,12 +350,12 @@ fi
   const extraStart=text.indexOf('record_playback_');
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ print com.ss.android.ugc.aweme; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\nrecord_start probe 25\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session},timeout:6000});
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget},timeout:6000});
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
   return {...r,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
-for(const session of ['paused','other','inactive','unknown'])test('record-start必须拒绝未证实抖音正在播放 '+session,()=>{
+for(const session of ['paused','namedPaused','mismatch','other','inactive','unknown'])test('record-start必须拒绝未证实抖音正在播放 '+session,()=>{
  const r=recordBoundary({session});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false,'不能启动scrcpy');
 });
 test('MEDIA_PLAY命令失败禁止启动录制',()=>{
@@ -359,4 +364,13 @@ test('MEDIA_PLAY命令失败禁止启动录制',()=>{
 test('调速后record-start需最后恢复播放并按抖音active会话读回',()=>{
  const r=recordBoundary();assert.equal(r.status,0,r.stderr);assert.match(r.calls,/keyevent 126/);assert.match(r.calls,/dumpsys media_session/);
  assert.match(r.stdout,/playback_verified=true/);assert.match(r.stdout,/playback_package=com.ss.android.ugc.aweme/);assert.match(r.stdout,/playback_state=3/);
+});
+
+test('HONOR真实named_state(number)格式只接受抖音active PLAYING(3)，与音乐PAUSED隔离',()=>{const r=recordBoundary({session:'named'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/playback_verified=true/);});
+
+// 2026-10-12只读HONOR dump脱敏摘录：当前只有云音乐PAUSED，无抖音会话。
+test('实际HONOR dump摘录缺失抖音会话时不能以云音乐active伪播放',()=>{const r=recordBoundary({session:'actualHonor'});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);});
+
+for(const mediaTarget of ['absent','null','com.hihonor.cloudmusic/MediaSession/23'])test('全局126前必须拒绝缺失或其他应用媒体键归属 '+mediaTarget,()=>{
+ const r=recordBoundary({mediaTarget});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/keyevent 126/,'不能先恢复其他播放器再发现错归属');
 });
