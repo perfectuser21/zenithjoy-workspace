@@ -2,6 +2,16 @@
 
 维护负责人：主理人。计划时间：每天北京时间22:00（Asia/Shanghai）。
 
+## OpenClaw 领跑入口
+
+领跑 agent 为 OpenClaw `infra`（OPC 运维官）。中央 Brain 每晚 22:00 唤醒 infra，infra 通过网关工具在 MMV 启动已有固定版代码批次；手机侧仍由 Python、ADB、Vision OCR 与原生设备锁执行。整体为 AI 领跑加代码执行，手机巡查 Activity 本身继续纯代码。
+
+`openclaw_commander.py launch` 不直接启动巡查，不以 AI 回复文字认定成功；它核对官方 Agent 终态回执、真实批次文件及中央四个子任务的归属、设备、Workflow、源码版本和幂等键。启动成功只表示任务已登记；设备拔出、离线、被人使用及账号待确认仍按实际结果记录。
+
+每日 22:45 由同一 infra 只读复核当天正式批次，留下独立 review 执行记录。既有每 30 分钟代码维护检查继续运行；领跑者不能抢占设备锁、替主理人登录切号、删除失败历史或自行改生产代码。Agent 超时只表示未确认，不能宣称 Gateway run 已取消。
+
+桥的源码版本与手机执行源码版本分别登记：桥任务的 `source_revision` 是桥自身提交，`phone_source_revision` 指向已验收的手机代码固定源。OpenClaw 的 run/session、Brain 的批次及各手机 task/run 可以互相核对。中央 registry 为部署与调度真身，Workflows 和 Runs 为查看入口；以实际登记的启用状态为准。
+
 ## 正式登记与执行
 
 - 单手机流程：`66fe22f5-1a60-4e23-bcfb-7b4df2f0fbff`（single-phone-account-patrol，0.1.1）。
@@ -12,7 +22,7 @@
 - 运维登记：`1d7335b8-fdfe-4c7f-b246-52180c03339a`，负责人、版本、调度和验收证据均在metadata。
 - 项目：`8386209b-ed0f-4f0f-a1f0-9ddf1bddbff6`。
 
-中央Brain定时器生成script_run批次，MMV代码执行器读取设备清单，为每个启用手机登记单手机任务。每部手机在M4通过原生设备锁、ADB和Vision OCR逐平台检查，再写回账号登录明细；设备镜子更新页面。执行不调用大模型，不切换账号、不登录、不发布。
+中央Brain定时器生成script_run领跑任务，OpenClaw infra 经网关启动 MMV 上的固定版代码批次。批次读取设备清单，为每个启用手机登记单手机任务。每部手机在M4通过原生设备锁、ADB和Vision OCR逐平台检查，再写回账号登录明细；设备镜子更新页面。手机巡查不调用大模型，不切换账号、不登录、不发布；领跑与复核使用 AI。
 
 批次完成只表示子任务已排队。每部手机是否巡查完成，以该子任务及独立task_runs为准；占用跳过不是完成巡查，未知记待确认，离线和写回失败返回非零。定时器last_run_at只是建单时间，不能拿它证明手机已经执行。
 
