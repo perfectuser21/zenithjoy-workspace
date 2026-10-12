@@ -257,3 +257,11 @@ test('采样领取优先flag必须真boolean且有明确source与VID清单，非
  const p=fakePool([{rows:[]}]);await queueRequest(p,{op:'claim_videos',line:'jinuo',run:'sample-run',source_run:'s',video_ids:[],prefer_matched:true});assert.deepEqual(p.calls.find(c=>c.sql.startsWith('WITH')).args[5],[]);
  const legacy=fakePool([{rows:[]}]);await queueRequest(legacy,{op:'claim_videos',line:'jinuo',run:'legacy',prefer_matched:false});assert.match(legacy.calls.find(c=>c.sql.startsWith('WITH')).sql,/judgment_status='pending' THEN 0/);
 });
+
+test('静音拒绝RPC在任何SQL前拒绝缺失或非抖音PLAYING证明',async()=>{
+ const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
+ for(const change of [{},{playback_verified:true,playback_package:'com.netease.cloudmusic',playback_state:3},{playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:2}]){
+  const calls=[],pool={async connect(){calls.push('connect');throw Error('SQL_BYPASS');},async query(){calls.push('query');throw Error('SQL_BYPASS');}};
+  await assert.rejects(queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:{...proof,...change}}),/播放|录音/);assert.deepEqual(calls,[]);
+ }
+});
