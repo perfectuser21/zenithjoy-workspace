@@ -323,14 +323,19 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',uidMode='unique',playControl=true,nativeAfterTap='started',probeMode='record',foregroundChanges=false}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
-  const text=readFileSync(controller,'utf8');
+  // 只读RED可指定冻结git源的私有副本；生产及默认GREEN仍用仓库实际控制器。
+  const text=readFileSync(process.env.RECORD_BOUNDARY_FROZEN_SOURCE||controller,'utf8');
   const fn=text.slice(text.indexOf('record_start() {'),text.indexOf('\nrecord_status() {'));
   const adb=join(d,'adb');
   for(const kind of ['paused','playing'])writeFileSync(join(d,'native-'+kind),readFileSync(join(fixtures,'real-honor-native-audio-'+kind+'.txt')));
-  writeFileSync(join(d,'play.xml'),playControl?readFileSync(join(fixtures,'real-honor-paused-play-control.xml')):'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="视频素材白三角" clickable="true" enabled="true" bounds="[300,600][800,1800]"/></hierarchy>');
+  const playXml=readFileSync(join(fixtures,'real-honor-paused-play-control.xml'),'utf8');
+  let controlXml=playControl==='pause'?playXml.replace('content-desc="播放视频，按钮"','content-desc="暂停视频，按钮"'):playControl?playXml:'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="视频素材白三角" clickable="true" enabled="true" bounds="[300,600][800,1800]"/></hierarchy>';
+  if(playControl==='wrongId')controlXml=playXml.replace('resource-id="com.ss.android.ugc.aweme:id/qbt"','resource-id="com.ss.android.ugc.aweme:id/unknown"');
+  if(playControl==='multiple')controlXml=playXml.replace('</hierarchy>','<node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/qbt" content-desc="暂停视频，按钮" clickable="true" enabled="true" bounds="[0,0][1200,2504]"/></hierarchy>');
+  writeFileSync(join(d,'play.xml'),controlXml);
   writeFileSync(adb,`#!/bin/zsh
 print -r -- "$*" >> "$FIXTURE/calls"
 if [[ "$*" == *'cmd package list packages'* ]]; then
@@ -340,6 +345,20 @@ if [[ "$*" == *'cmd package list packages'* ]]; then
 fi
 if [[ "$*" == *'dumpsys audio'* ]]; then
  current="$NATIVE"; [[ ! -f "$FIXTURE/tapped" ]] || current="$AFTER_TAP"
+ audio_count=0; [[ ! -f "$FIXTURE/audio-count" ]] || audio_count="$(cat "$FIXTURE/audio-count")"
+ print $((audio_count+1)) > "$FIXTURE/audio-count"
+ sequence=( ${nativeSequence.map(value=>{assert.match(value,/^[a-zA-Z]+$/);return value;}).join(' ')} )
+ if (( \${#sequence} > 0 )); then
+  sequence_index=$((audio_count+1)); (( sequence_index <= \${#sequence} )) || sequence_index=\${#sequence}
+  current="$sequence[$sequence_index]"
+ fi
+ after_sequence=( ${nativeAfterTapSequence.map(value=>{assert.match(value,/^[a-zA-Z]+$/);return value;}).join(' ')} )
+ if [[ -f "$FIXTURE/tapped" ]] && (( \${#after_sequence} > 0 )); then
+  after_count=0; [[ ! -f "$FIXTURE/after-audio-count" ]] || after_count="$(cat "$FIXTURE/after-audio-count")"
+  print $((after_count+1)) > "$FIXTURE/after-audio-count"
+  after_index=$((after_count+1)); (( after_index <= \${#after_sequence} )) || after_index=\${#after_sequence}
+  current="$after_sequence[$after_index]"
+ fi
  case "$current" in
  started) cat "$FIXTURE/native-playing";;
  paused) cat "$FIXTURE/native-paused";;
@@ -381,7 +400,7 @@ fi
   const helpers=text.slice(text.indexOf('record_pid_file()'),text.indexOf('# set_playback_speed'));
   const extraStart=text.indexOf('record_playback_');
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
-  const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${probeMode==='session'?'record_playback_state probe':'record_start probe 25'}\n`;
+  const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${probeMode==='session'?'record_playback_state probe':'record_start probe 25'}\n`;
   const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0'},timeout:6000});
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
@@ -410,3 +429,57 @@ test('抖音started但其他UID当前媒体AudioTrack也started时拒绝混音�
 
 test('无法解析的其他UID当前MEDIA AudioTrack也不能静默忽略混音风险',()=>{const r=recordBoundary({native:'foreignUnparsed'});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);});
 test('新树读回后前台已切搜索页时禁止点播放控件旧坐标',()=>{const r=recordBoundary({native:'paused',foregroundChanges:true});assert.notEqual(r.status,0,r.stderr);assert.doesNotMatch(r.calls,/input tap/);});
+
+// r1现场先读native paused，稍后fresh树显示“暂停视频”；这些序列明确为模拟时序，不冒充实机恢复事实。
+for(const nativeSequence of [['paused','started'],['paused','paused','started']])test('native无动作复查：异步inactive到started才起录 '+nativeSequence.join('→'),()=>{
+ const r=recordBoundary({session:'namedStopped',nativeSequence,playControl:'pause'});
+ assert.equal(r.status,0,r.stderr);assert.equal(r.started,true);
+ assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/,'原生音轨自行恢复时禁止点击或媒体键');
+ assert.ok(r.calls.split('\n').filter(l=>l.includes('dumpsys audio')).length>=nativeSequence.length,'必须读取新鲜native证据');
+ assert.match(r.stdout,/native_audio_state=started/);assert.match(r.stdout,/media_session_state=1/);assert.match(r.stdout,/playback_state=1/);
+});
+test('native无动作复查：稳定inactive加UI暂停最多单击后仍必须有界拒绝',()=>{
+ const r=recordBoundary({session:'namedStopped',nativeSequence:['paused'],playControl:'pause'});
+ assert.equal(r.error,undefined,'应在既有6秒测试上界内退出');assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
+ assert.doesNotMatch(r.calls,/keyevent (85|126|127)/);assert.doesNotMatch(r.stdout,/record_started|playback_verified=true/);
+ assert.ok(r.calls.split('\n').filter(l=>l.includes('input tap')).length<=1,'实机事实允许单次qbt恢复，稳定inactive不能反复toggle');
+ assert.ok(r.calls.split('\n').filter(l=>l.includes('dumpsys audio')).length<=12,'复查与点击后读回必须有明确次数上界');
+});
+
+// 0905独立实机核证paused→单击fresh唯一qbt暂停标签→started；这里模拟同一状态转换，不宣称测试为真机。
+test('native单次qbt恢复：paused加暂停标签单击后真started才起录且保留MediaSession1',()=>{
+ const r=recordBoundary({session:'namedStopped',native:'paused',playControl:'pause',nativeAfterTap:'started'});
+ assert.equal(r.status,0,r.stderr);assert.equal(r.started,true);
+ assert.equal(r.calls.split('\n').filter(l=>l.includes('input tap')).length,1);assert.match(r.calls,/input tap 600 1252/);
+ assert.doesNotMatch(r.calls,/keyevent (85|126|127)/);assert.match(r.stdout,/native_audio_state=started/);
+ assert.match(r.stdout,/media_session_state=1/);assert.match(r.stdout,/playback_state=1/);
+});
+for(const after of ['paused','foreign','unknown'])test('native单次qbt恢复：点击后'+after+'拒绝起录且最多一次点击',()=>{
+ const r=recordBoundary({session:'namedStopped',native:'paused',playControl:'pause',nativeAfterTap:after});
+ assert.equal(r.error,undefined);assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
+ assert.ok(r.calls.split('\n').filter(l=>l.includes('input tap')).length<=1);assert.doesNotMatch(r.calls,/keyevent (85|126|127)/);
+ assert.doesNotMatch(r.stdout,/record_started|playback_verified=true/);
+});
+for(const after of ['foreign','unknown'])test('native单次qbt恢复：点击后'+after+'不能继续等started洗白',()=>{
+ const r=recordBoundary({session:'namedStopped',native:'paused',playControl:'pause',nativeAfterTapSequence:[after,'started']});
+ assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
+ assert.ok(r.calls.split('\n').filter(l=>l.includes('input tap')).length<=1);assert.doesNotMatch(r.calls,/keyevent (85|126|127)/);
+});
+for(const playControl of ['wrongId','multiple',false])test('native单次qbt恢复：未知resource或多个播放控件不能点击 '+playControl,()=>{
+ const r=recordBoundary({session:'namedStopped',native:'paused',playControl});
+ assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);
+});
+test('native单次qbt恢复：fresh树读取后native自行started，点击前复核必须跳过点击',()=>{
+ const r=recordBoundary({session:'namedStopped',nativeSequence:['paused','paused','paused','started'],playControl:'pause'});
+ assert.equal(r.status,0,r.stderr);assert.equal(r.started,true);assert.match(r.calls,/uiautomator dump/);
+ assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);assert.match(r.stdout,/playback_state=1/);
+});
+for(const before of ['unknown','foreign'])test('native单次qbt恢复：点击前'+before+'不得点击或等started洗白',()=>{
+ const r=recordBoundary({session:'namedStopped',nativeSequence:['paused','paused','paused',before,'started'],playControl:true});
+ assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);
+});
+for(const nativeSequence of [['foreign','started'],['unknown','started'],['paused','foreign','started'],['paused','unknown','started']])test('native无动作复查：遇foreign或unknown仍拒绝，不等后续started洗白 '+nativeSequence.join('→'),()=>{
+ const r=recordBoundary({session:'namedStopped',nativeSequence,playControl:'pause'});
+ assert.equal(r.error,undefined);assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
+ assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);assert.doesNotMatch(r.stdout,/record_started|playback_verified=true/);
+});
