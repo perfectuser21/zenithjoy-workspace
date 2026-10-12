@@ -383,3 +383,20 @@ for(const mediaTarget of ['absent','null','com.hihonor.cloudmusic/MediaSession/2
 
 test('最后126前媒体键归属发生变化时必须重新拒绝',()=>{const r=recordBoundary({targetChanges:true});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/keyevent 126/);});
 test('模拟设备原始录前dump与前台证据均600且stdout哈希匹配原始文件',()=>{const r=recordBoundary();assert.equal(r.status,0,r.stderr);for(const [kind,p] of Object.entries(r.rawEvidence)){assert.ok(p);assert.equal(p.mode,0o600);const key=kind==='media-session.txt'?'playback_evidence_sha256':'playback_foreground_sha256';assert.match(r.stdout,new RegExp(key+'='+p.sha256));}assert.match(r.stdout,/playback_evidence_file=probe-playback-start.media-session.txt/);});
+
+// Header逐字采用2026-10-12实际HONOR只读输出；PLAYING仍为明确派生的模拟状态，不是实机验收。
+test('实际HONOR媒体目标header合法userId后缀兼容派生PLAYING样本',()=>{
+ const r=recordBoundary({session:'named',mediaTarget:'com.ss.android.ugc.aweme/FeedPlayerSession/8101 (userId=0)'});
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/playback_verified=true/);
+});
+for(const mediaTarget of [
+ 'com.ss.android.ugc.aweme.evil/FeedPlayerSession/8101 (userId=0)',
+ 'com.hihonor.cloudmusic/FeedPlayerSession/8101 (userId=0)',
+ 'com.ss.android.ugc.aweme/FeedPlayerSession/8101 extra',
+ 'com.ss.android.ugc.aweme/FeedPlayerSession/8101 (userId=0) extra',
+ 'com.ss.android.ugc.aweme/FeedPlayerSession/8101 (userId=-1)',
+ 'com.ss.android.ugc.aweme/FeedPlayerSession/8101 (userId=abc)',
+ 'com.ss.android.ugc.aweme/FeedPlayerSession/8101 (userId=0.5)',
+])test('HONOR媒体目标后缀与包名严格拒绝 '+mediaTarget,()=>{
+ const r=recordBoundary({session:'named',mediaTarget});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/keyevent 126/);
+});
