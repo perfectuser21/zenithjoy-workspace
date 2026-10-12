@@ -343,6 +343,7 @@ if [[ "$*" == *'dumpsys audio'* ]]; then
  paused) cat "$FIXTURE/native-paused";;
  other) sed 's/u\/pid:10203\//u\/pid:10999\//' "$FIXTURE/native-playing";;
  history) cat "$FIXTURE/native-paused";cat "$FIXTURE/native-playing";;
+ foreign) sed -e 's/state:paused/state:started/' -e 's/mutedState:streamVolume portVolume/mutedState:none/' "$FIXTURE/native-playing";;
  muted) sed 's/mutedState:none/mutedState:clientVolume/' "$FIXTURE/native-playing";;
  *) print unknown;;
  esac
@@ -428,3 +429,5 @@ for(const mediaTarget of [
 test('native真started即使MediaSession STOPPED也可起录且不toggle',()=>{const r=recordBoundary({session:'namedPaused',native:'started'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/playback_proof_kind=native_audio/);assert.match(r.stdout,/native_audio_state=started/);assert.doesNotMatch(r.calls,/keyevent (126|85)|input tap/);});
 test('native真paused只点fresh树明确播放视频控件一次，后started才起录',()=>{const r=recordBoundary({session:'namedPaused',native:'paused'});assert.equal(r.status,0,r.stderr);assert.equal(r.calls.split('\n').filter(l=>l.includes('input tap')).length,1);assert.match(r.calls,/input tap 600 1252/);assert.match(r.stdout,/native_audio_state=started/);});
 for(const opts of [{native:'other'},{native:'history'},{native:'muted'},{native:'unknown'},{uidMode:'shared'},{native:'paused',playControl:false},{native:'paused',nativeAfterTap:'paused'}])test('native缺证据/他人UID/历史日志/共享UID/白三角不许起录 '+JSON.stringify(opts),()=>{const r=recordBoundary(opts);assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);if(opts.playControl===false)assert.doesNotMatch(r.calls,/input tap/);});
+
+test('抖音started但其他UID当前媒体AudioTrack也started时拒绝混音录制',()=>{const r=recordBoundary({native:'foreign'});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);});
