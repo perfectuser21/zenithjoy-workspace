@@ -228,6 +228,8 @@ def assemble(run_dir):
     else:
         claimed = agent.get("claimed_result") if agent.get("claimed_result") in STATUSES else "failed"
         reason = agent.get("fail_reason") or (None if claimed == "success" else "agent_claimed_%s" % claimed)
+    if st.get("CHILD_STOP_FAILED"):
+        claimed, reason = "failed", "child_termination_unconfirmed"
     if st.get("INTERRUPTED"):
         reason = "; ".join([x for x in [reason, "interrupted:%s" % st["INTERRUPTED"]] if x])
         if claimed == "success":
@@ -262,7 +264,7 @@ def assemble(run_dir):
                           "account_verified": st.get("ACCOUNT_VERIFIED") == "true", "account_nickname": st.get("ACCOUNT_NICK") or None},
             "cleanup": {"ok": cleanup_ok, "app_closed": st.get("APP_CLOSED") == "1", "lock_status": lock_status, "outward_attempts": attempts},
         },
-        "agent": {"name": st.get("AGENT"), "session_id": st.get("SESSION_ID"), "exit": st.get("AGENT_EXIT") or None, "delivery_found": agent_found},
+        "agent": {"name": st.get("AGENT"), "child_run_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_run_id")), "spawn_receipt": _load(os.path.join(run_dir, "spawn-receipt.json"), {}), "session_id": ((_load(os.path.join(run_dir, "agent-binding.json"), {}) or {}).get("child_session_key")), "parent_session_key": st.get("PARENT_SESSION_KEY"), "exit": st.get("AGENT_EXIT") or None, "delivery_found": agent_found},
         "commander_skill": contract.get("commander_skill"),
     }
     _write(os.path.join(run_dir, "delivery.json"), delivery)

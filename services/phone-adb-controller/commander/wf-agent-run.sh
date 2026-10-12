@@ -3,7 +3,7 @@
 #
 # 形状：共享外壳-准备(preflight：查手机 → 领手机控制器锁 → 查账号) → 业务块(OpenClaw skill-factory agent，Codex 运行时跑业务 skill)
 #       → 共享外壳-收尾(cleanup：关抖音 → 放本 run 的锁 → 回读 free)。收尾挂 trap EXIT：业务块成功/失败/超时/被 TERM 都执行。
-# 由 wf-launch.sh 在网关机 MMV 本机 nohup 拉起（openclaw CLI 在本机）；手机经 ssh <host> 调登记控制器 douyin-phone-adb。
+# 由 wf-launch.sh 在网关机 MMV 独立会话拉起（openclaw CLI 在本机）；手机经 ssh <host> 调登记控制器 douyin-phone-adb。
 # Brain 设备锁由 Brain 派发器代领（owner=Brain 任务），这里管的是手机控制器锁（owner=run_id），两层互不替代。
 # 成败不在这里判：本脚本只如实汇总外壳事实 + 业务块交付 + 系统读回到 ~/wf-agent-runs/<run_id>/delivery.json，由 Brain 收割与裁判。
 #
@@ -13,6 +13,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="${WF_AGENT_LIB:-$HERE/wf-agent-lib.py}"
+HANDOFF="$HERE/wf-agent-handoff.py"
+PARENT_SESSION="${WF_PARENT_SESSION_KEY:-}"
 CONTRACTS="${WF_CONTRACTS_JSON:-$HERE/workflow-contracts.json}"
 OPENCLAW="${OPENCLAW:-openclaw}"
 PY="${WF_PYTHON:-python3}"
@@ -32,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --tag) TAG="${2:-}"; shift 2 ;;
     --run-id) RUN_ID="${2:-}"; shift 2 ;;
     --task-id) TASK_ID="${2:-}"; shift 2 ;;
+    --parent-session) PARENT_SESSION="${2:-}"; shift 2 ;;
     *) die 2 "未知参数: $1" ;;
   esac
 done
@@ -40,6 +43,8 @@ done
 
 RUN_DIR="$HOME/wf-agent-runs/$RUN_ID"
 HOST_EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence/$PROFILE"
+[[ "$PARENT_SESSION" == agent:work-commander:* ]] || die 2 "须带 Commander 父会话 --parent-session"
+[[ ! -e "$RUN_DIR/state.env" ]] || die 3 "run 已存在，不得重启"
 mkdir -p "$RUN_DIR/evidence" || die 5 "建不了 $RUN_DIR"
 STATE="$RUN_DIR/state.env"
 : > "$STATE"
@@ -50,13 +55,13 @@ st(){ printf '%s=%s\n' "$1" "$(printf '%s' "$2" | tr '\n\r' '  ' | head -c 400)"
 last(){ sed -n "s/^$1=//p" "$STATE" | tail -n 1; }
 ctl(){ ssh "${SSH_OPTS[@]}" "$HOST" "export PATH=\$HOME/.local/bin:\$PATH; douyin-phone-adb --profile $PROFILE $*"; }
 
-for kv in "RUN_ID=$RUN_ID" "TAG=$TAG" "TASK_ID=$TASK_ID" "SERIAL=$SERIAL" "AGENT=$AGENT" "SESSION_ID=wfa-$RUN_ID" "HOST_EVIDENCE_ROOT=$HOST_EVIDENCE_ROOT"; do
+for kv in "RUN_ID=$RUN_ID" "TAG=$TAG" "TASK_ID=$TASK_ID" "SERIAL=$SERIAL" "AGENT=$AGENT" "PARENT_SESSION_KEY=$PARENT_SESSION" "HOST_EVIDENCE_ROOT=$HOST_EVIDENCE_ROOT"; do
   st "${kv%%=*}" "${kv#*=}"
 done
 "$PY" "$LIB" contract "$CONTRACTS" "$CAP" "$RUN_DIR/contract.json" || die 4 "Commander 合同清单里没有 $CAP"
 echo "WF_RUN_STARTED tag=$TAG run_id=$RUN_ID cap=$CAP host=$HOST serial=$SERIAL"
 
-LOCK_MINE=0; AGENT_PID=""; FINISHED=0
+LOCK_MINE=0; FINISHED=0
 lock_owner_now(){
   local s; s="$(ctl lock-status 2>&1)"
   case "$s" in lock=free*) echo free ;; *owner=*) s="${s#*owner=}"; echo "held:${s%% *}" ;; *) echo unknown ;; esac
@@ -66,13 +71,16 @@ cleanup(){
   (( FINISHED )) && return 0
   FINISHED=1
   trap '' TERM INT HUP
-  if [[ -n "$AGENT_PID" ]] && kill -0 "$AGENT_PID" 2>/dev/null; then
-    log "cleanup: 业务块仍在跑，终止会话 pid=$AGENT_PID"
-    kill "$AGENT_PID" 2>/dev/null; sleep 2; kill -9 "$AGENT_PID" 2>/dev/null
+  local child_stopped=1
+  if [[ -f "$RUN_DIR/agent-request.json" ]]; then
+    "$PY" "$HANDOFF" stop "$RUN_DIR" >> "$RUN_DIR/child-stop.log" 2>&1 || child_stopped=0
+  fi
+  if (( ! child_stopped )); then
+    st CHILD_STOP_FAILED 1; log "cleanup: 子run终止未确认，保留本run锁，不关App不释放"
   fi
   local now summary
   now="$(lock_owner_now)"
-  if [[ "$now" == "held:$RUN_ID" ]]; then
+  if [[ "$now" == "held:$RUN_ID" ]] && (( child_stopped )); then
     if ctl --lock-owner "$RUN_ID" close-app >/dev/null 2>&1; then st APP_CLOSED 1; log "cleanup: 抖音已关闭"; else st APP_CLOSED 0; log "cleanup: close-app 失败"; fi
     ctl lock-release "$RUN_ID" >/dev/null 2>&1 || log "cleanup: lock-release 返回非 0"
   elif (( LOCK_MINE )); then
@@ -153,27 +161,23 @@ WF_KEY="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("bra
   echo "$BRIEF"
 } > "$RUN_DIR/msg.txt"
 
-log "agent running agent=$AGENT session=wfa-$RUN_ID timeout=${AGENT_TIMEOUT_S}s"
-LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 "$OPENCLAW" agent --agent "$AGENT" --session-id "wfa-$RUN_ID" --thinking high \
-  --timeout "$AGENT_TIMEOUT_S" --message-file "$RUN_DIR/msg.txt" > "$RUN_DIR/agent.log" 2>&1 < /dev/null &
-AGENT_PID=$!
-START=$(date +%s); LAST_REFRESH=$START; TIMED_OUT=0
-while kill -0 "$AGENT_PID" 2>/dev/null; do
+# 正式子会话由 Commander 的 sessions_spawn 启动；外壳不能以 CLI 消息丢失父归属。
+WAIT_S=$(( AGENT_TIMEOUT_S + ${WF_AGENT_GRACE_S:-120} ))
+"$PY" "$HANDOFF" init "$RUN_DIR" "$PARENT_SESSION" "$WAIT_S" >/dev/null || { st AGENT_EXIT handoff_init_failed; exit 1; }
+echo "WF_AGENT_READY run_id=$RUN_ID request=$RUN_DIR/agent-request.json message=$RUN_DIR/msg.txt"
+START=$(date +%s); LAST_REFRESH=$START
+while true; do
+  EXIT_CODE="$("$PY" "$HANDOFF" status "$RUN_DIR")"; HANDOFF_STATUS=$?
+  if (( HANDOFF_STATUS == 0 )); then st AGENT_EXIT "$EXIT_CODE"; break; fi
+  if (( HANDOFF_STATUS == 4 )); then st AGENT_EXIT timeout; log "业务交接超时，取消精确子run后收尾"; break; fi
+  if (( HANDOFF_STATUS != 3 )); then st AGENT_EXIT handoff_invalid; break; fi
   sleep "$POLL_S"
   NOW=$(date +%s)
-  if (( NOW - START > AGENT_TIMEOUT_S + 120 )); then
-    log "业务块超时 $(( NOW - START ))s，终止"
-    kill "$AGENT_PID" 2>/dev/null; sleep 2; kill -9 "$AGENT_PID" 2>/dev/null
-    TIMED_OUT=1; st AGENT_EXIT timeout; break
-  fi
   if (( NOW - LAST_REFRESH >= REFRESH_S )); then
     if ctl lock-refresh "$RUN_ID" >/dev/null 2>&1; then log "lock-refresh ok"; else log "lock-refresh 失败"; fi
     LAST_REFRESH=$NOW
   fi
-  log "agent running $(( NOW - START ))s"
+  log "awaiting attributed child $(( NOW - START ))s"
 done
-if (( ! TIMED_OUT )); then wait "$AGENT_PID"; st AGENT_EXIT "$?"; fi
-AGENT_PID=""
-"$PY" "$LIB" parse-delivery "$RUN_DIR/agent.log" > "$RUN_DIR/agent-delivery.json"
-log "agent done exit=$(last AGENT_EXIT) delivery=$(head -c 160 "$RUN_DIR/agent-delivery.json")"
+log "agent handoff done exit=$(last AGENT_EXIT)"
 exit 0

@@ -32,7 +32,7 @@ rsh(){ ssh "${SSH_OPTS[@]}" "$HOST" "$1"; }
 
 [[ $# -ge 5 ]] || die 2 "用法: wf-launch.sh <capability> <host> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources 列表] [--allow-missing] [--dry-run]"
 CAP="$1"; HOST="$2"; PROFILE="$3"; SERIAL="$4"; BIZ="$5"; shift 5
-N=6; PUSH=1; SOURCES=""; DRY=0; ALLOW_MISSING=""; RUN_ID=""; TASK_ID=""
+N=6; PUSH=1; SOURCES=""; DRY=0; ALLOW_MISSING=""; RUN_ID=""; TASK_ID=""; PARENT_SESSION="${WF_PARENT_SESSION_KEY:-}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --n) N="${2:-}"; shift 2 ;;
@@ -42,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY=1; shift ;;
     --run-id) RUN_ID="${2:-}"; shift 2 ;;
     --task-id) TASK_ID="${2:-}"; shift 2 ;;
+    --parent-session) PARENT_SESSION="${2:-}"; shift 2 ;;
     *) die 2 "未知参数: $1" ;;
   esac
 done
@@ -63,6 +64,7 @@ EXEC_PROFILE="$(python3 "$HERE/wf-agent-lib.py" profile "$CONTRACTS_JSON" "$CAP"
 if [[ "$EXEC_PROFILE" == codex_agent ]]; then
   [[ "$RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ && "$TASK_ID" =~ ^[0-9a-f-]{36}$ ]] \
     || die 2 "codex_agent 形态须由 Brain 派发单带 --run-id <run> --task-id <uuid>（缺或非法）"
+  [[ "$PARENT_SESSION" == agent:work-commander:* ]] || die 2 "codex_agent 须带 Commander 父会话 --parent-session"
   [[ -x "$AGENT_RUNNER" ]] || die 4 "MMV 上没有 ${AGENT_RUNNER}（codex_agent 外壳未部署）"
   LBUSY=$(pgrep -fl "wf-agent-run.sh .* $SERIAL " 2>/dev/null | grep -v pgrep | head -3 || true)
   [[ -z "$LBUSY" ]] || die 3 "设备 $SERIAL 正在跑: $(echo "$LBUSY" | tr '\n' ' ' | head -c 200)"
@@ -76,7 +78,7 @@ if [[ "$EXEC_PROFILE" == codex_agent ]]; then
   mkdir -p "$HOME/wf-logs"
   # gateway_exec 返回时会清理调用进程组；nohup 只屏蔽 HUP，不能抵挡组 SIGKILL。
   # 外壳必须拥有独立 session/进程组，才能继续执行业务和自己的 trap 收尾。
-  python3 - "$HOME/wf-logs/$TAG.out" "$AGENT_RUNNER" "$CAP" "$HOST" "$PROFILE" "$SERIAL" "$BIZ" --tag "$TAG" --run-id "$RUN_ID" --task-id "$TASK_ID" <<'PY' \
+  python3 - "$HOME/wf-logs/$TAG.out" "$AGENT_RUNNER" "$CAP" "$HOST" "$PROFILE" "$SERIAL" "$BIZ" --tag "$TAG" --run-id "$RUN_ID" --task-id "$TASK_ID" --parent-session "$PARENT_SESSION" <<'PY' \
     || die 5 "MMV 独立会话外壳启动失败"
 import subprocess
 import sys

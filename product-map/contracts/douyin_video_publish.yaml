@@ -2,7 +2,7 @@ version: 1
 execution_profile: codex_agent
 commander_skill:
   name: wf-douyin_video_publish
-  version: 0.1.0
+  version: 0.1.1
 capability: android_worker_publish
 contract_key: douyin_video_publish
 name: douyin · 视频发布（既有安卓流程）

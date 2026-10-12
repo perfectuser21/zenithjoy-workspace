@@ -43,3 +43,13 @@ test('过期或已关闭的run拒绝晚到交付，不把失败伪装成功',()=
  assert.notEqual(call(dir,'complete',{...receipt,status:'ok',result:'WF_DELIVERY {"claimed_result":"success"}'}).status,0);
  assert.equal(existsSync(join(dir,'agent-delivery.json')),false);
 });
+
+test('关闭后拒绝绑定/交付；官方失败不能采信模型自报success',()=>{
+ const {dir,receipt}=setup();
+ assert.equal(call(dir,'stop',null).status,0);
+ assert.notEqual(call(dir,'bind',receipt).status,0);
+ const next=setup();
+ assert.equal(call(next.dir,'bind',next.receipt).status,0);
+ assert.equal(call(next.dir,'complete',{...next.receipt,status:'error',result:'WF_DELIVERY {"claimed_result":"success"}'}).status,0);
+ assert.equal(JSON.parse(readFileSync(join(next.dir,'agent-delivery.json'))).claimed_result,'failed');
+});
