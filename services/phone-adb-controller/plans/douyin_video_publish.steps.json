@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_publish",
   "brain_workflow_key": "douyin_video_publish.android",
-  "contract_sha256": "9d692bdecd87356c9d8082be64421a6961e3d9dedc91244a6e83858daa837816",
+  "contract_sha256": "89e4d3a92cbcab5d93e09802287b76b4114749f230e3f167fac422686bf908e0",
   "promotion": {
     "min_consecutive_pass": 20
   },

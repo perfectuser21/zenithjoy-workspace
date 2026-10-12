@@ -34,6 +34,8 @@ function fixture() {
     mkdirSync(dirname(resolve(root, path)), { recursive: true });
     cpSync(resolve(repoRoot, path), resolve(root, path));
   }
+  // 合同 commander_skill 指向的陪跑 skill（任务 c0fe7e30），check 校验其存在与版本
+  cpSync(resolve(repoRoot, 'services/phone-adb-controller/commander/skills'), resolve(root, 'services/phone-adb-controller/commander/skills'), { recursive: true });
   return root;
 }
 

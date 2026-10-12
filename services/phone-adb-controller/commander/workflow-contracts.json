@@ -1,0 +1,633 @@
+{
+  "version": 1,
+  "generated_by": "scripts/product-map/gen-commander-contracts.mjs",
+  "contracts": {
+    "bilibili_video_publish": {
+      "contract_key": "bilibili_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "bilibili_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "bilibili_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "bilibili_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "bilibili_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "douyin_video_publish": {
+      "contract_key": "douyin_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "douyin_video_publish.android",
+      "commander_skill": {
+        "name": "wf-douyin_video_publish",
+        "version": "0.1.0"
+      },
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "douyin_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "douyin_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "douyin_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "kuaishou_video_publish": {
+      "contract_key": "kuaishou_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "kuaishou_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "kuaishou_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "kuaishou_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "kuaishou_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "toutiao_video_publish": {
+      "contract_key": "toutiao_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "toutiao_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "toutiao_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "toutiao_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "toutiao_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "wechat_channels_video_publish": {
+      "contract_key": "wechat_channels_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "wechat_channels_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "wechat_channels_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "wechat_channels_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "wechat_channels_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "weibo_video_publish": {
+      "contract_key": "weibo_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "weibo_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "weibo_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "weibo_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "weibo_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "xiaohongshu_video_publish": {
+      "contract_key": "xiaohongshu_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "xiaohongshu_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "xiaohongshu_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "xiaohongshu_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "xiaohongshu_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    },
+    "zhihu_video_publish": {
+      "contract_key": "zhihu_video_publish",
+      "execution_profile": "codex_agent",
+      "brain_workflow_key": "zhihu_video_publish.android",
+      "commander_skill": null,
+      "activities": [
+        {
+          "key": "preflight",
+          "order": 1,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*preflight*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "prepare",
+          "order": 2,
+          "from": "zhihu_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*prepare*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "publish",
+          "order": 3,
+          "from": "zhihu_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*publish*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "verify",
+          "order": 4,
+          "from": "zhihu_video_publish",
+          "by": "agent",
+          "readback": {
+            "type": "evidence",
+            "glob": "*verify*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        },
+        {
+          "key": "cleanup",
+          "order": 5,
+          "from": "douyin_video_publish",
+          "by": "shell",
+          "readback": {
+            "type": "evidence",
+            "glob": "*cleanup*original.json",
+            "expect": {
+              "op": ">=",
+              "value": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -12,7 +12,7 @@
  * 账本 req_keys 与探针文件里出现的每个 stage 都必须有同名活动契约。
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -153,6 +153,19 @@ function validateStepDod(ctx, capId, a, s, errors) {
   }
 }
 
+// Commander 陪跑 skill（决策 2186700a / 26df670a）：结构由 schema 守；这里守「真有这份 skill 且版本一致」——
+// work-commander 按字段自加载，指向不存在或版本对不上 = 运行时装不上/装错，合同阶段就拦。
+export const COMMANDER_SKILLS_DIR = 'services/phone-adb-controller/commander/skills';
+function validateCommanderSkill(ctx, capId, doc, errors) {
+  const cs = doc.commander_skill;
+  if (!cs) return;
+  const file = join(ctx.repoRoot, COMMANDER_SKILLS_DIR, cs.name, 'SKILL.md');
+  if (!existsSync(file)) { errors.push(`${capId}: commander_skill ${cs.name} 不存在（${COMMANDER_SKILLS_DIR}/${cs.name}/SKILL.md）`); return; }
+  const fm = readFileSync(file, 'utf8').match(/^---\n([\s\S]*?)\n---/);
+  const version = fm && (fm[1].match(/^version:\s*["']?([^"'\s]+)["']?\s*$/m) || [])[1];
+  if (version !== cs.version) errors.push(`${capId}: commander_skill ${cs.name} 版本 ${cs.version} 与 SKILL.md frontmatter version=${version ?? '缺'} 不一致`);
+}
+
 export function validateContracts(ctx) {
   const errors = [];
   validateObjectTypes(ctx, errors);
@@ -170,6 +183,7 @@ export function validateContracts(ctx) {
       continue;
     }
     if (!ctx.productMapIds.has(doc.capability)) errors.push(`${capId}: 能力不在 product-map.yaml golden_paths`);
+    validateCommanderSkill(ctx, capId, doc, errors);
     const checksDoc = ctx.checks[doc.checks];
     if (!checksDoc) { errors.push(`${capId}: 探针文件 ${doc.checks} 未加载`); continue; }
     const probesByKey = new Map((checksDoc.probes || []).map((p) => [p.key, p]));
@@ -256,4 +270,29 @@ export function contractsDigest(ctx) {
     capabilities[capId] = { sha256: sha({ ...ctx.contracts[capId], activities: acts }), activities };
   }
   return { object_types: sha(ctx.objectTypes), capabilities };
+}
+
+// ─── Commander 运行时合同清单（决策 2186700a / 26df670a，任务 c0fe7e30）──────────────────────────
+// 只收 execution_profile=codex_agent 的合同：wf-launch / wf-agent-run 在 MMV 上按它起「外壳准备 → 业务块 → 外壳收尾」，
+// work-commander 按它读陪跑 skill。preflight / cleanup 是全公司共享外壳活动（领锁/查手机/查账号 · 关App/放锁/交回），
+// 由系统脚本强制执行（by=shell）；其余活动是业务块，由 Codex 会话跑业务 skill（by=agent）。读回照抄合同步骤 DoD。
+export const SHELL_ACTIVITIES = ['preflight', 'cleanup'];
+export function commanderContractsSpec(ctx) {
+  const contracts = {};
+  for (const capId of Object.keys(ctx.contracts).sort()) {
+    const doc = ctx.contracts[capId];
+    if (doc.execution_profile !== 'codex_agent') continue;
+    const acts = resolveActivities(ctx, capId, []).sort((x, y) => x.order - y.order);
+    contracts[capId] = {
+      contract_key: doc.contract_key || capId,
+      execution_profile: doc.execution_profile,
+      brain_workflow_key: doc.brain_workflow_key,
+      commander_skill: doc.commander_skill ?? null,
+      activities: acts.map((a) => {
+        const rb = (a.steps || []).map((s) => s.dod?.readback).find((r) => r && r.type === 'evidence') || null;
+        return { key: a.key, order: a.order, from: a.from, by: SHELL_ACTIVITIES.includes(a.key) ? 'shell' : 'agent', readback: rb };
+      }),
+    };
+  }
+  return { version: 1, generated_by: 'scripts/product-map/gen-commander-contracts.mjs', contracts };
 }
