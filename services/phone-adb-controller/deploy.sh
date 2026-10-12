@@ -57,6 +57,72 @@ push_atomic() {
   fi
 }
 
+# Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
+# （任务 c0fe7e30：Commander 件不进 release manifest，单独下发不影响两机执行包的对账）
+deploy_commander() {
+  # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
+  echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
+  ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
+  # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
+  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py workflow-contracts.json; do
+    if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
+    case "$f" in
+      *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
+      *.py) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/.openclaw/commander/$f";;
+      *.json) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f"; _chk="python3 -c 'import json,sys; json.load(open(sys.argv[1]))' ~/.openclaw/commander/$f";;
+    esac
+    if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
+      echo "  ✅ commander/$f"
+    else
+      echo "  ❌ commander/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
+      FAILED=1
+    fi
+    rm -f /tmp/deploy-err-$$
+  done
+  # 通用 skill workflow-commander + 各 workflow 陪跑 skill wf-<能力>（决策 26df670a：合同 commander_skill 指向它们，Commander 按字段自加载）
+  CMDR_SKILLS=()
+  for sk in "$D"/commander/skills/*/SKILL.md; do
+    [[ -s "$sk" ]] || continue
+    _name="$(basename "$(dirname "$sk")")"
+    ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name"
+    push_atomic "$sk" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name" SKILL.md
+    CMDR_SKILLS+=("$_name")
+    echo "  ✅ skills/$_name/SKILL.md"
+  done
+  # work-commander 的 skills 白名单放开到上面部署的全部 skill（只增不删：保留人工加的项），变了才写
+  if (( ${#CMDR_SKILLS[@]} )); then
+    _want="$(printf '%s\n' "${CMDR_SKILLS[@]}")"
+    _cur="$(ssh mmv "/opt/homebrew/bin/openclaw config get agents.entries.work-commander.skills" 2>/dev/null || echo '[]')"
+    _merged="$(python3 -c 'import json,sys; cur=json.loads(sys.argv[1] or "[]"); want=[w for w in sys.argv[2].split("\n") if w]; out=list(cur)+[w for w in want if w not in cur]; print(json.dumps(out) if out!=cur else "")' "$_cur" "$_want" 2>/dev/null || echo ERR)"
+    if [[ "$_merged" == ERR ]]; then
+      echo "  ❌ work-commander skills 白名单读不到/解析失败: $_cur"; FAILED=1
+    elif [[ -n "$_merged" ]]; then
+      if ssh mmv "/opt/homebrew/bin/openclaw config set agents.entries.work-commander.skills '$_merged' --strict-json" >/dev/null 2>/tmp/deploy-err-$$; then
+        echo "  ✅ work-commander skills 白名单 → $_merged"
+      else
+        echo "  ❌ work-commander skills 白名单写入失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1
+      fi
+      rm -f /tmp/deploy-err-$$
+    else
+      echo "  ✅ work-commander skills 白名单已含全部陪跑 skill"
+    fi
+  fi
+  # 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
+  if [[ -s "$D/commander/AGENTS.md" ]]; then
+    push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
+    echo "  ✅ commander/AGENTS.md → work-commander 工作区"
+  else
+    echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
+  fi
+}
+
+if [[ "${1:-}" == "--commander-only" ]]; then
+  deploy_commander
+  if [[ "$FAILED" == "1" ]]; then echo "⚠️ Commander 入口部署有失败项，见上方 ❌"; exit 1; fi
+  echo "✅ Commander 入口已部署(mmv)"
+  exit 0
+fi
+
 MMV_JS_FILES=(
   push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
   leadgen-db-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
@@ -328,60 +394,7 @@ for host in xian-m4; do
   done
 done
 
-# Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
-echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
-ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
-# wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py workflow-contracts.json; do
-  if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
-  case "$f" in
-    *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
-    *.py) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/.openclaw/commander/$f";;
-    *.json) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f"; _chk="python3 -c 'import json,sys; json.load(open(sys.argv[1]))' ~/.openclaw/commander/$f";;
-  esac
-  if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
-    echo "  ✅ commander/$f"
-  else
-    echo "  ❌ commander/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
-    FAILED=1
-  fi
-  rm -f /tmp/deploy-err-$$
-done
-# 通用 skill workflow-commander + 各 workflow 陪跑 skill wf-<能力>（决策 26df670a：合同 commander_skill 指向它们，Commander 按字段自加载）
-CMDR_SKILLS=()
-for sk in "$D"/commander/skills/*/SKILL.md; do
-  [[ -s "$sk" ]] || continue
-  _name="$(basename "$(dirname "$sk")")"
-  ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name"
-  push_atomic "$sk" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name" SKILL.md
-  CMDR_SKILLS+=("$_name")
-  echo "  ✅ skills/$_name/SKILL.md"
-done
-# work-commander 的 skills 白名单放开到上面部署的全部 skill（只增不删：保留人工加的项），变了才写
-if (( ${#CMDR_SKILLS[@]} )); then
-  _want="$(printf '%s\n' "${CMDR_SKILLS[@]}")"
-  _cur="$(ssh mmv "/opt/homebrew/bin/openclaw config get agents.entries.work-commander.skills" 2>/dev/null || echo '[]')"
-  _merged="$(python3 -c 'import json,sys; cur=json.loads(sys.argv[1] or "[]"); want=[w for w in sys.argv[2].split("\n") if w]; out=list(cur)+[w for w in want if w not in cur]; print(json.dumps(out) if out!=cur else "")' "$_cur" "$_want" 2>/dev/null || echo ERR)"
-  if [[ "$_merged" == ERR ]]; then
-    echo "  ❌ work-commander skills 白名单读不到/解析失败: $_cur"; FAILED=1
-  elif [[ -n "$_merged" ]]; then
-    if ssh mmv "/opt/homebrew/bin/openclaw config set agents.entries.work-commander.skills '$_merged' --strict-json" >/dev/null 2>/tmp/deploy-err-$$; then
-      echo "  ✅ work-commander skills 白名单 → $_merged"
-    else
-      echo "  ❌ work-commander skills 白名单写入失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1
-    fi
-    rm -f /tmp/deploy-err-$$
-  else
-    echo "  ✅ work-commander skills 白名单已含全部陪跑 skill"
-  fi
-fi
-# 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
-if [[ -s "$D/commander/AGENTS.md" ]]; then
-  push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
-  echo "  ✅ commander/AGENTS.md → work-commander 工作区"
-else
-  echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
-fi
+deploy_commander
 
 if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then
   echo "❌ PHONE_RECOVERY 开机自检安装失败"; FAILED=1

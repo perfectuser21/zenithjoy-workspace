@@ -227,3 +227,11 @@ test("wf-status mmv：读本机 runner 日志，FINISHED 标记即 finished", ()
   assert.match(r.stdout.trim().split("\n").pop(), /^WF_STATUS state=finished$/);
   assert.equal(read(home, "ssh-argv.log"), "", "mmv 本机不经 ssh");
 });
+
+test("deploy.sh：Commander 入口下发 runner/lib/合同清单与全部 commander skills，白名单只增不删，可 --commander-only 单独部署", () => {
+  const deploy = readFileSync(join(HERE, "..", "deploy.sh"), "utf8");
+  assert.match(deploy, /for f in wf-launch\.sh wf-status\.sh wf-agent-run\.sh wf-agent-lib\.py workflow-contracts\.json/);
+  assert.match(deploy, /commander\/skills\/\*\/SKILL\.md/);
+  assert.match(deploy, /openclaw config set agents\.entries\.work-commander\.skills/);
+  assert.match(deploy, /--commander-only[\s\S]*deploy_commander/);
+});
