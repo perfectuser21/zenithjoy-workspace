@@ -33,8 +33,8 @@ def leader(task_id, deployment, call, workflow, *, active=False):
             or not re.fullmatch(r'[0-9a-f]{40}', payload.get('source_revision', ''))
             or (active and task.get('status') != 'in_progress')):
         raise ValueError('领跑者不是归属和源码一致的真实 infra 中央任务')
-    route = payload.get('qiumi_route') or {}
-    if route and route.get('source') != 'explicit':
+    route = payload.get('qiumi_route')
+    if not isinstance(route, dict) or route.get('source') != 'explicit':
         raise ValueError('领跑者没有明确 infra 路由')
     return task
 
@@ -133,11 +133,19 @@ def inspect(review_id, batch_id, deployment, state, call=None, current=None):
                          'run_id': script.get('run_id') or task['payload'].get('script_run_id'), 'exit_code': script.get('exit_code'),
                          'business_status': result.get('status') if result else 'unknown',
                          'business_receipt': {k: result[k] for k in ['task_id', 'status', 'serial', 'phone', 'checked_at', 'states'] if k in result} if result else None})
-    if batch['status'] in ['failed', 'cancelled', 'blocked'] or any(c['status'] in ['failed', 'cancelled', 'blocked'] or c['business_status'] == 'failed' for c in children):
+    batch_script = (batch.get('result') or {}).get('script') or {}
+    batch_exit = batch_script.get('exit_code')
+    nonzero_exit = lambda value: type(value) is int and value != 0
+    valid_run = lambda task_id, run_id: isinstance(run_id, str) and re.fullmatch('script-' + re.escape(task_id) + '-a[1-9][0-9]*', run_id) is not None
+    if (batch['status'] in ['failed', 'cancelled', 'blocked'] or nonzero_exit(batch_exit)
+            or any(c['status'] in ['failed', 'cancelled', 'blocked'] or c['business_status'] == 'failed' or nonzero_exit(c['exit_code']) for c in children)):
         status = 'failed'
     elif batch['status'] != 'completed' or any(c['status'] != 'completed' for c in children):
         status = 'waiting'
-    elif not children or any(c['business_status'] not in ['completed', 'deferred'] for c in children):
+    elif (not children or type(batch_exit) is not int or batch_exit != 0 or not valid_run(batch_id, batch_script.get('run_id'))
+            or any(c['business_status'] not in ['completed', 'deferred'] or type(c['exit_code']) is not int or c['exit_code'] != 0
+                   or not valid_run(c['task_id'], c['run_id']) for c in children)
+            or any(((t.get('result') or {}).get('script') or {}).get('run_id') != c['run_id'] for c, t in zip(children, tasks))):
         status = 'unknown'
     elif any(c['business_status'] == 'deferred' for c in children):
         status = 'deferred'

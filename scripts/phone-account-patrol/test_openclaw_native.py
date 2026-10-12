@@ -39,7 +39,7 @@ class NativeCommanderTests(unittest.TestCase):
         self.child = {'id': CHILD, 'parent_task_id': BATCH, 'project_id': PROJECT, 'task_type': 'script_run', 'status': 'failed',
             'payload': {'workflow_id': SINGLE, 'phone_serial': 'phone-a', 'routing_receipt_id': ROUTING,
                         'source_revision': native.bridge.PHONE_SOURCE_REVISION},
-            'result': {'script': {'run_id': 'script-real-a2', 'exit_code': 255, 'stdout': ''}}}
+            'result': {'script': {'run_id': 'script-' + CHILD + '-a2', 'exit_code': 255, 'stdout': ''}}}
 
     def api(self, path, body=None):
         if path == 'tasks' and body is not None:
@@ -70,7 +70,7 @@ class NativeCommanderTests(unittest.TestCase):
         self.batch['status'] = 'completed'
         receipt = {'task_id': BATCH, 'source_revision': native.bridge.PHONE_SOURCE_REVISION, 'status': 'queued',
                    'children': [{'task_id': CHILD, 'serial': 'phone-a'}]}
-        self.batch['result'] = {'script': {'stdout': json.dumps(receipt), 'run_id': 'script-batch-a1', 'exit_code': 0}}
+        self.batch['result'] = {'script': {'stdout': json.dumps(receipt), 'run_id': 'script-' + BATCH + '-a1', 'exit_code': 0}}
 
     def test_enqueue_is_server_idempotent_code_only_and_preserves_schedule(self):
         first, second = self.enqueue(), self.enqueue()
@@ -131,7 +131,7 @@ class NativeCommanderTests(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['children'][0]['status'], 'failed')
         self.assertEqual(result['children'][0]['exit_code'], 255)
-        self.assertEqual(result['children'][0]['run_id'], 'script-real-a2')
+        self.assertEqual(result['children'][0]['run_id'], 'script-' + CHILD + '-a2')
         self.child['status'] = 'completed'
         self.child['result']['script'].update(exit_code=0, stdout=json.dumps({'task_id': CHILD, 'status': 'deferred'}))
         self.assertEqual(native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)['status'], 'deferred')
@@ -174,6 +174,36 @@ class NativeCommanderTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)
             self.review = original
+
+    def test_missing_or_empty_explicit_route_is_rejected(self):
+        for route in [None, {}, [], {'source': 'inferred'}]:
+            self.leader['payload']['qiumi_route'] = route
+            with self.subTest(route=route), self.assertRaises(ValueError):
+                self.enqueue()
+        self.assertEqual(self.posts, [])
+
+    def test_nonzero_exit_overrides_claimed_completed_or_deferred(self):
+        self.completed_batch()
+        self.child['status'] = 'completed'
+        for claimed in ['completed', 'deferred']:
+            self.child['result']['script'].update(exit_code=255, stdout=json.dumps({'task_id': CHILD, 'status': claimed}))
+            with self.subTest(claimed=claimed):
+                self.assertEqual(native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)['status'], 'failed')
+        self.child['result']['script']['exit_code'] = 0
+        self.batch['result']['script']['exit_code'] = 1
+        self.assertEqual(native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)['status'], 'failed')
+
+    def test_completed_requires_real_run_and_zero_exit_for_batch_and_children(self):
+        self.completed_batch()
+        self.child['status'] = 'completed'
+        self.child['result']['script'].update(exit_code=0, stdout=json.dumps({'task_id': CHILD, 'status': 'completed'}))
+        for target, key in [('child', 'run_id'), ('child', 'exit_code'), ('batch', 'run_id'), ('batch', 'exit_code')]:
+            task = self.child if target == 'child' else self.batch
+            original = copy.deepcopy(task['result']['script'])
+            task['result']['script'].pop(key)
+            with self.subTest(target=target, key=key):
+                self.assertEqual(native.inspect(REVIEW, BATCH, self.deployment, self.state, self.api)['status'], 'unknown')
+            task['result']['script'] = original
 
     def test_parent_and_child_mismatch_cannot_be_reviewed(self):
         self.completed_batch()
