@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """OpenClaw infra 领跑桥：AI 负责派发/复核，冻结 Python 负责手机巡查。"""
 import argparse
+import fcntl
+import uuid as uuid_module
 import datetime as dt
 import zoneinfo
 import hashlib
@@ -17,6 +19,7 @@ STATE = pathlib.Path.home() / '.local/share/phone-account-patrol'
 API = 'http://localhost:5221/api/brain/'
 PHONE_SOURCE_REVISION = '4f899cab6425341646e27c5fca20979b8ac42be7'
 SOURCE_VERSION = '0.1.0'
+MAINTENANCE_WORKFLOW_ID = 'e4d2030f-129f-4668-95dd-4a6d880493a8'
 EXPECTED_SHA256 = {
     'runner.py': '26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce',
     'collector.py': '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3',
@@ -163,25 +166,77 @@ def restrictions():
             '工具调用不可用时立即失败，禁止用文字回执代替执行。']
 
 
+def source_hash():
+    return hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
+
+
+def validate_parent(task_id, deployment, call, workflow_id):
+    task = read_task(call, task_id)
+    payload = task.get('payload') or {}
+    if (task.get('task_type') != 'script_run' or task.get('status') != 'in_progress'
+            or task.get('project_id') != deployment['project_id'] or payload.get('workflow_id') != workflow_id
+            or payload.get('phone_source_revision') != PHONE_SOURCE_REVISION
+            or not re.fullmatch(r'[0-9a-f]{40}', payload.get('source_revision', ''))):
+        raise ValueError('入口不是归属和源码一致的中央运行任务')
+
+
+def action_name(task_id, mode, nonce):
+    return 'action-' + uuid(task_id) + '-' + mode + '-' + uuid(nonce) + '.json'
+
+
+def save_action(state, task_id, mode, nonce, receipt):
+    action = {'task_id': task_id, 'mode': mode, 'nonce': uuid(nonce), 'source_sha256': source_hash(),
+              'phone_source_revision': PHONE_SOURCE_REVISION, 'receipt': receipt}
+    save(state, action_name(task_id, mode, nonce), action)
+    return action
+
+
+def read_action(state, task_id, mode, nonce):
+    action = json.loads((state / action_name(task_id, mode, nonce)).read_text())
+    expected = {'task_id': task_id, 'mode': mode, 'nonce': nonce, 'source_sha256': source_hash(),
+                'phone_source_revision': PHONE_SOURCE_REVISION}
+    if any(action.get(k) != v for k, v in expected.items()) or not isinstance(action.get('receipt'), dict):
+        raise ValueError('本次 Gateway 动作缺少身份一致的执行证据')
+    return action['receipt']
+
+
+def invoke(task_id, nonce, deployment, state, call=None):
+    """只能由 infra 的 MMV 工具调用；同批次互斥，不代替手机任务执行。"""
+    call = call or api
+    validate_parent(task_id, deployment, call, deployment['batch_workflow_id'])
+    uuid(nonce)
+    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (state / ('commander-' + task_id + '.lock')).open('a') as lock:
+        os.fchmod(lock.fileno(), 0o600)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError('batch_launch_in_progress')
+        command = ['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'batch', '--task-id', task_id]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=180)
+        if result.returncode:
+            raise RuntimeError('frozen_batch_failed')
+        receipt = json.loads((state / ('batch-' + task_id + '.json')).read_text())
+        if json.loads(result.stdout) != receipt:
+            raise ValueError('冻结批次命令输出与实际文件回执不一致')
+        verify_children(receipt, task_id, deployment, call)
+        save_action(state, task_id, 'launch', nonce, receipt)
+        return receipt
+
+
 def launch(task_id, deployment, state, call=None):
     call = call or api
-    uuid(task_id)
-    task = read_task(call, task_id)
-    if (task.get('task_type') != 'script_run' or task.get('status') != 'in_progress'
-            or task.get('project_id') != deployment['project_id']
-            or (task.get('payload') or {}).get('workflow_id') != deployment['batch_workflow_id']
-            or (task.get('payload') or {}).get('phone_source_revision') != PHONE_SOURCE_REVISION
-            or not re.fullmatch(r'[0-9a-f]{40}', (task.get('payload') or {}).get('source_revision', ''))):
-        raise ValueError('入口不是正在执行的中央批次任务')
-    command = '/usr/bin/python3 ' + shlex.quote(str(pathlib.Path(deployment['release']) / 'runner.py')) + ' batch --task-id ' + task_id
+    validate_parent(task_id, deployment, call, deployment['batch_workflow_id'])
+    nonce = str(uuid_module.uuid4())
+    command = '/usr/bin/python3 ' + shlex.quote(str(pathlib.Path(__file__).resolve())) + ' invoke --task-id ' + task_id + ' --nonce ' + nonce
     message = {'任务': '派发四手机账号巡查，完成派发后立即返回，不等待手机巡查终态', 'mode': 'launch', 'task_id': task_id,
-               'source_revision': PHONE_SOURCE_REVISION, 'command': command,
-               '规则': restrictions() + ['可重试同一 task_id 的幂等批次命令；只由冻结代码登记手机子任务。'],
-               '验收': '实际 batch-' + task_id + '.json 及中央每个孩子的身份、来源、手机与版本读回一致。'}
+               'nonce': nonce, 'source_revision': PHONE_SOURCE_REVISION, 'command': command,
+               '规则': restrictions() + ['必须执行指定 invoke 命令产生本次 nonce 动作证据；不可直接调用 runner 或复用旧回执。'],
+               '验收': '本次 nonce 执行证据及中央每个孩子的身份、手机与版本读回一致。'}
     commander = run_gateway(task_id, 'launch', message)
-    receipt = json.loads((state / ('batch-' + task_id + '.json')).read_text())
+    receipt = read_action(state, task_id, 'launch', nonce)
     verify_children(receipt, task_id, deployment, call)
-    # 每次调用都必须先有新的 Gateway 成功凭证。已有幂等批次回执可复用，但再次核验真实中央孩子。
+    commander['attempt_nonce'] = nonce
     receipt = dict(receipt, commander=commander)
     save(state, 'commander-' + task_id + '.launch.json', receipt)
     save(state, 'openclaw-commander.latest.json', dict(receipt, verified=True))
@@ -214,7 +269,7 @@ def resolve_batch(batch_task_id, deployment, state, call=None, current=None):
         raise ValueError('missing_launch')
 
 
-def inspection(batch_task_id, review_task_id, deployment, state, call=None, *, persist=True):
+def inspection(batch_task_id, review_task_id, deployment, state, call=None, *, persist=True, nonce=None):
     """仅供 infra 通过 MMV 工具读中央真实状态；不登记、不重跑、不操作手机。"""
     call = call or api
     batch = read_task(call, batch_task_id)
@@ -261,25 +316,29 @@ def inspection(batch_task_id, review_task_id, deployment, state, call=None, *, p
                                      'run_id': (task.get('result') or {}).get('script', {}).get('run_id') or task['payload'].get('script_run_id'),
                                      'exit_code': (task.get('result') or {}).get('script', {}).get('exit_code')})
     if persist:
-        save(state, 'review-' + review_task_id + '.json', snapshot)
+        if nonce is None:
+            save(state, 'review-' + review_task_id + '.json', snapshot)
+        else:
+            validate_parent(review_task_id, deployment, call, MAINTENANCE_WORKFLOW_ID)
+            save_action(state, review_task_id, 'review', nonce, snapshot)
     return snapshot
 
 
 def review(task_id, batch_task_id, deployment, state, call=None):
     call = call or api
-    parent = read_task(call, task_id)
-    if parent.get('status') != 'in_progress' or parent.get('task_type') != 'script_run':
-        raise ValueError('复核入口不是正在执行的中央任务')
+    validate_parent(task_id, deployment, call, MAINTENANCE_WORKFLOW_ID)
+    nonce = str(uuid_module.uuid4())
     uuid(batch_task_id)
-    command = '/usr/bin/python3 ' + shlex.quote(str(pathlib.Path(__file__).resolve())) + ' inspect --batch-task-id ' + batch_task_id + ' --review-task-id ' + task_id
+    command = '/usr/bin/python3 ' + shlex.quote(str(pathlib.Path(__file__).resolve())) + ' inspect --batch-task-id ' + batch_task_id + ' --review-task-id ' + task_id + ' --nonce ' + nonce
     metadata = run_gateway(task_id, 'review', {'任务': '只读复核指定巡查批次及各手机状态，指出失败/占用/未确认，禁止补跑',
-                    'mode': 'review', 'task_id': task_id, 'batch_task_id': batch_task_id, 'command': command, '规则': restrictions(),
+                    'mode': 'review', 'task_id': task_id, 'batch_task_id': batch_task_id, 'nonce': nonce, 'command': command, '规则': restrictions(),
                     '验收': '通过 MMV 工具执行 inspect，真实中央读回快照落盘后返回分析；没有完成的孩子明确列为等待。'})
-    observed = json.loads((state / ('review-' + task_id + '.json')).read_text())
+    observed = read_action(state, task_id, 'review', nonce)
     # 二次独立读取中央任务进行对账；不相信 AI 自述。状态变化期间失败并在下一次复核重试。
     expected = inspection(batch_task_id, task_id, deployment, state, call, persist=False)
     if observed != expected:
         raise ValueError('复核快照与中央真实状态不一致')
+    metadata['attempt_nonce'] = nonce
     receipt = dict(expected, commander=metadata)
     save(state, 'commander-' + task_id + '.review.json', receipt)
     return receipt
@@ -287,16 +346,22 @@ def review(task_id, batch_task_id, deployment, state, call=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['launch', 'review', 'inspect'])
+    parser.add_argument('mode', choices=['launch', 'review', 'invoke', 'inspect'])
     parser.add_argument('--execution-script')
     parser.add_argument('--batch-task-id')
     parser.add_argument('--review-task-id')
+    parser.add_argument('--task-id')
+    parser.add_argument('--nonce')
     args = parser.parse_args(argv)
     task_id = None
     try:
         deployment = load_deployment(STATE)
-        if args.mode == 'inspect':
-            receipt = inspection(uuid(args.batch_task_id), uuid(args.review_task_id), deployment, STATE)
+        if args.mode == 'invoke':
+            task_id = uuid(args.task_id)
+            receipt = invoke(task_id, uuid(args.nonce), deployment, STATE)
+        elif args.mode == 'inspect':
+            task_id = uuid(args.review_task_id)
+            receipt = inspection(uuid(args.batch_task_id), task_id, deployment, STATE, nonce=uuid(args.nonce))
         else:
             task_id = task_from_script(args.execution_script or '')
             if args.mode == 'launch':

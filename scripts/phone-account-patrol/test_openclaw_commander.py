@@ -1,5 +1,6 @@
 """回归：只有真实 Gateway 执行和中央子任务证据才能承认派发。"""
 import contextlib
+import fcntl
 import datetime as dt
 import copy
 import hashlib
@@ -58,13 +59,18 @@ class OpenClawCommanderTests(unittest.TestCase):
         raise AssertionError(path)
 
     def gateway(self, command, **kwargs):
+        if command[0] == '/usr/bin/python3':
+            self.assertEqual(command, ['/usr/bin/python3', str(self.release / 'runner.py'), 'batch', '--task-id', TASK])
+            commander.save(self.state, 'batch-' + TASK + '.json', self.receipt)
+            return subprocess.CompletedProcess(command, 0, json.dumps(self.receipt), '')
         self.assertEqual(command[:4], ['/opt/homebrew/bin/openclaw', 'agent', '--agent', 'infra'])
         self.assertNotIn('--local', command)
         self.assertIn('agent:infra:phone-patrol:' + TASK + ':launch', command)
         message = json.loads(command[command.index('--message') + 1])
-        self.assertIn(str(self.release / 'runner.py'), message['command'])
+        self.assertIn(' invoke --task-id ' + TASK, message['command'])
+        self.assertIn('--nonce ' + message['nonce'], message['command'])
         self.assertIn('--task-id ' + TASK, message['command'])
-        (self.state / ('batch-' + TASK + '.json')).write_text(json.dumps(self.receipt))
+        commander.invoke(TASK, message['nonce'], self.deployment, self.state, self.api)
         return subprocess.CompletedProcess(command, 0, json.dumps(self.envelope()), '')
 
     def envelope(self):
@@ -134,6 +140,17 @@ class OpenClawCommanderTests(unittest.TestCase):
             return value
         with patch.object(commander.subprocess, 'run', side_effect=self.gateway), self.assertRaises(ValueError):
             commander.launch(TASK, self.deployment, self.state, two_phones)
+
+    def test_old_batch_cannot_count_as_new_gateway_action(self):
+        commander.save(self.state, 'batch-' + TASK + '.json', self.receipt)
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            self.run_launch(lambda *a, **k: subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), ''))
+
+    def test_old_review_cannot_count_as_new_gateway_inspection(self):
+        commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api)
+        with patch.object(commander.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), '')):
+            with self.assertRaises((ValueError, FileNotFoundError)):
+                commander.review(BATCH, TASK, self.deployment, self.state, self.review_api)
 
     def test_ai_success_without_real_batch_receipt_is_failure(self):
         output = json.dumps(self.envelope())
@@ -234,7 +251,9 @@ class OpenClawCommanderTests(unittest.TestCase):
 
     def review_api(self, path):
         if path == 'tasks/' + BATCH:
-            return {'id': BATCH, 'status': 'in_progress', 'task_type': 'script_run'}
+            return {'id': BATCH, 'status': 'in_progress', 'task_type': 'script_run', 'project_id': PROJECT,
+                    'payload': {'workflow_id': commander.MAINTENANCE_WORKFLOW_ID,
+                    'phone_source_revision': commander.PHONE_SOURCE_REVISION, 'source_revision': 'a' * 40}}
         if path == 'tasks/' + TASK:
             task = self.api(path)
             task['status'] = 'completed'
@@ -269,7 +288,7 @@ class OpenClawCommanderTests(unittest.TestCase):
         def gateway(command, **kwargs):
             message = json.loads(command[command.index('--message') + 1])
             self.assertIn(' inspect --batch-task-id ' + TASK, message['command'])
-            commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api)
+            commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api, nonce=message['nonce'])
             return subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), '')
         with patch.object(commander.subprocess, 'run', side_effect=gateway):
             result = commander.review(BATCH, TASK, self.deployment, self.state, self.review_api)
@@ -284,12 +303,55 @@ class OpenClawCommanderTests(unittest.TestCase):
         for fake_snapshot in [False, True]:
             def gateway(command, **kwargs):
                 if fake_snapshot:
-                    value = commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api)
+                    message = json.loads(command[command.index('--message') + 1])
+                    value = commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api, persist=False)
                     value['children'][0]['status'] = 'failed'
-                    commander.save(self.state, 'review-' + BATCH + '.json', value)
+                    commander.save_action(self.state, BATCH, 'review', message['nonce'], value)
                 return subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), '')
             with patch.object(commander.subprocess, 'run', side_effect=gateway), self.assertRaises((ValueError, FileNotFoundError)):
                 commander.review(BATCH, TASK, self.deployment, self.state, self.review_api)
+
+    def test_invoke_nonblocking_lock_refuses_concurrent_batch(self):
+        with (self.state / ('commander-' + TASK + '.lock')).open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch.object(commander.subprocess, 'run') as run, self.assertRaises(RuntimeError):
+                commander.invoke(TASK, '88888888-8888-4888-8888-888888888888', self.deployment, self.state, self.api)
+            run.assert_not_called()
+
+    def test_nonce_and_bridge_hash_cannot_be_replaced_in_action_receipt(self):
+        for field, wrong in [('nonce', CHILD), ('source_sha256', 'f' * 64), ('task_id', CHILD), ('mode', 'review')]:
+            def fake(command, **kwargs):
+                message = json.loads(command[command.index('--message') + 1])
+                action = commander.save_action(self.state, TASK, 'launch', message['nonce'], self.receipt)
+                action[field] = wrong
+                commander.save(self.state, commander.action_name(TASK, 'launch', message['nonce']), action)
+                return subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), '')
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.run_launch(fake)
+
+    def test_retry_has_new_nonce_and_preserves_previous_attempt_actions(self):
+        first = self.run_launch()
+        second = self.run_launch()
+        a, b = first['commander']['attempt_nonce'], second['commander']['attempt_nonce']
+        self.assertNotEqual(a, b)
+        for nonce in [a, b]:
+            path = self.state / commander.action_name(TASK, 'launch', nonce)
+            self.assertTrue(path.exists())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_review_parent_must_match_project_maintenance_workflow_and_both_sources(self):
+        for field, bad in [('project_id', TASK), ('workflow_id', WF), ('phone_source_revision', 'wrong'), ('source_revision', 'no-git')]:
+            def wrong(path):
+                value = self.review_api(path)
+                if path == 'tasks/' + BATCH:
+                    if field == 'project_id':
+                        value[field] = bad
+                    else:
+                        value['payload'][field] = bad
+                return value
+            with self.subTest(field=field), patch.object(commander.subprocess, 'run') as run, self.assertRaises(ValueError):
+                commander.review(BATCH, TASK, self.deployment, self.state, wrong)
+            run.assert_not_called()
 
     def test_automatic_review_uses_only_verified_same_day_formal_launch(self):
         with self.assertRaises(ValueError):
