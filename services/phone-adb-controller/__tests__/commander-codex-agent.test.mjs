@@ -262,3 +262,15 @@ test("deploy.sh：Commander 入口下发 runner/lib/合同清单与全部 comman
   assert.match(deploy, /openclaw config set agents\.entries\.work-commander\.skills/);
   assert.match(deploy, /--commander-only[\s\S]*deploy_commander/);
 });
+
+// 实际故障：gateway_exec 中的 CLI agent 消息丢失父归属，被 OpenClaw 拒绝。
+test("exec 来源只能等待正式父子交接，不能从外壳启动 CLI agent", async () => {
+  const {home,env}=setup({agent:"nodelivery"});
+  const child=spawn("bash",[RUNNER,...ARGS],{env:{...env,OPENCLAW_SHELL:"exec",WF_PARENT_SESSION_KEY:"agent:work-commander:regression"},stdio:"ignore"});
+  try {
+    for(let i=0;i<30&&!existsSync(join(runDir(home),"msg.txt"));i++) await new Promise(r=>setTimeout(r,100));
+    await new Promise(r=>setTimeout(r,200));
+    assert.equal(read(home,"oc-argv.log"),"","外壳不能调用 agent CLI 消息通道");
+    assert.ok(existsSync(join(runDir(home),"agent-request.json")));
+  } finally { if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r));} }
+});
