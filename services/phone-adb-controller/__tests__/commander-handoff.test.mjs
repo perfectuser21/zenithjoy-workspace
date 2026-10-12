@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,writeFileSync,readFileSync,existsSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,existsSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -52,4 +52,15 @@ test('关闭后拒绝绑定/交付；官方失败不能采信模型自报success
  assert.equal(call(next.dir,'bind',next.receipt).status,0);
  assert.equal(call(next.dir,'complete',{...next.receipt,status:'error',result:'WF_DELIVERY {"claimed_result":"success"}'}).status,0);
  assert.equal(JSON.parse(readFileSync(join(next.dir,'agent-delivery.json'))).claimed_result,'failed');
+});
+
+test('官方await不yield早退：等绑定child终态，原始terminalReply直接交付',()=>{
+ const {dir,receipt}=setup();assert.equal(call(dir,'bind',receipt).status,0);
+ const cli=join(dir,'openclaw');
+ writeFileSync(cli,'#!/usr/bin/env python3\nimport sys,json,time\nassert sys.argv[1:4]==["gateway","call","agent.wait"]\np=json.loads(sys.argv[sys.argv.index("--params")+1])\ntime.sleep(.15)\nprint(json.dumps({"runId":p["runId"],"status":"ok","endedAt":1,"terminalReceipt":{"runId":p["runId"],"effective":{"provider":"openai","model":"gpt-6.1-sol"}},"terminalReply":{"text":"WF_DELIVERY {\\"claimed_result\\":\\"blocked\\",\\"fail_reason\\":\\"probe\\"}"}}))\n');chmodSync(cli,0o755);
+ const r=spawnSync('python3',[HELPER,'await',dir],{env:{...process.env,OPENCLAW:cli},encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);
+ assert.equal(JSON.parse(readFileSync(join(dir,'agent-delivery.json'))).fail_reason,'probe');
+ const terminal=JSON.parse(readFileSync(join(dir,'agent-terminal.json')));
+ assert.equal(terminal.runId,receipt.child_run_id);
 });
