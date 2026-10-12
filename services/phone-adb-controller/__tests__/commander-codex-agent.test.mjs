@@ -25,6 +25,10 @@ host="$5"; cmd="$6"
 printf '%s\\t%s\\n' "$host" "$cmd" >> "$HOME/ssh-argv.log"
 case "$cmd" in
   *"ls -1 /private/tmp/openclaw-phone/evidence/"*) cat "$HOME/host-files.txt" 2>/dev/null; exit 0;;
+  *"cat /private/tmp/openclaw-phone/evidence/"*) f="\${cmd##*/}"; cat "$HOME/$f"; exit $?;;
+  *" return-safe-desktop"*) [ "$STUB_CLEANUP" = "desktop" ] && exit 1; printf 'launcher=com.test.launcher\\nforeground_package=com.test.launcher\\n'; exit 0;;
+  *" snapshot-evidence "*) id="\${cmd##* }"; [ "$STUB_CLEANUP" = "png" ] && exit 1; python3 -c 'import base64,sys; open(sys.argv[1],"wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg=="))' "$HOME/$id.png"; echo "/private/tmp/openclaw-phone/evidence/xiaolongxia/$id.png"; exit 0;;
+  *" ui-evidence "*) id="\${cmd##* }"; [ "$STUB_CLEANUP" = "xml" ] && exit 1; printf '<hierarchy><node package="com.test.launcher"/></hierarchy>' > "$HOME/$id.xml"; [ "$STUB_CLEANUP" = "wrong_package" ] && echo '<hierarchy><node package="com.ss.android.ugc.aweme"/></hierarchy>' > "$HOME/$id.xml"; echo "/private/tmp/openclaw-phone/evidence/xiaolongxia/$id.xml"; exit 0;;
   *"pgrep -fl"*) exit 0;;
   *" preflight"*) [ "$STUB_PHONE" = "offline" ] && { echo "error: device offline" >&2; exit 1; }; echo "profile=xiaolongxia"; echo "serial=${SERIAL}"; echo "state=device"; exit 0;;
   *" lock-status"*) if [ -f "$HOME/lock" ]; then echo "lock=held owner=$(cat "$HOME/lock") age=3s stale=false"; else echo "lock=free"; fi; exit 0;;
@@ -77,7 +81,7 @@ function setup(stub = {}) {
     WF_START_WAIT: "1", WF_ESCORT_RETRY_SLEEP: "0", WF_AGENT_POLL_S: "1", WF_LOCK_REFRESH_S: "1",
     WF_AGENT_TIMEOUT_S: stub.timeout ?? "60", WF_PARENT_SESSION_KEY: "agent:work-commander:test-parent", WF_BRAIN_URL: "http://brain.test:5221",
     STUB_PHONE: stub.phone ?? "online", STUB_NICK: stub.nick ?? "Ai办公室", STUB_AGENT: stub.agent ?? "ok",
-    STUB_PUBLISH: stub.publish ?? "1", STUB_BRAIN: stub.brain ?? "up",
+    STUB_CLEANUP: stub.cleanup ?? "ok", STUB_PUBLISH: stub.publish ?? "1", STUB_BRAIN: stub.brain ?? "up",
   };
   return { home, env };
 }
@@ -317,4 +321,30 @@ test("超时子会话未确认终止：不释放仍可能被业务使用的控�
  assert.equal(d.lock_released,false);
  assert.equal(read(home,"lock").trim(),RUN);
  assert.doesNotMatch(read(home,"ssh-argv.log"),/lock-release|close-app/);
+});
+
+
+test("cleanup：同 owner 回桌面后保存 PNG/XML 原件及原回执，再放锁", () => {
+  const {home,env}=setup(); runner(env);
+  const d=delivery(home), eid=`${RUN}-cleanup-desktop-original`;
+  assert.equal(d.shell.cleanup.desktop_verified,true);
+  assert.ok(d.final_evidence.includes(eid));
+  const evidence=d.evidence_locations.cleanup;
+  assert.deepEqual(readFileSync(evidence.screenshot).subarray(0,8),Buffer.from([137,80,78,71,13,10,26,10]));
+  assert.match(readFileSync(evidence.ui_tree,"utf8"),/com.test.launcher/);
+  assert.match(readFileSync(evidence.close_app_receipt,"utf8"),/foreground=launcher/);
+  assert.match(readFileSync(evidence.desktop_receipt,"utf8"),/foreground_package=com.test.launcher/);
+  const calls=read(home,"ssh-argv.log");
+  const ordered=[`--lock-owner ${RUN} close-app`,`--lock-owner ${RUN} return-safe-desktop`,`--lock-owner ${RUN} snapshot-evidence ${eid}`,`--lock-owner ${RUN} ui-evidence ${eid}`,`lock-release ${RUN}`];
+  let index=-1; for(const call of ordered){const next=calls.indexOf(call);assert.ok(next>index,call);index=next;}
+});
+
+for(const failure of ["desktop","png","xml","wrong_package"]) test(`cleanup：${failure} 缺桌面证据不得声称收尾完整，仍释放自己的锁`,()=>{
+  const {home,env}=setup({cleanup:failure}); runner(env);
+  const d=delivery(home);
+  assert.equal(d.shell.cleanup.ok,false);
+  assert.equal(d.claimed_result,"failed");
+  assert.match(d.fail_reason,/cleanup_evidence_incomplete/);
+  assert.equal(d.lock_released,true);
+  assert.equal(existsSync(join(runDir(home),"evidence",`${RUN}-cleanup-original.json`)),false);
 });
