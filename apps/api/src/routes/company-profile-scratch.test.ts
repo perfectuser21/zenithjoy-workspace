@@ -38,7 +38,7 @@ describe('真实scratch公司Wiki/API/页面闭环', () => {
       await client.query(await readFile(resolve(root,'apps/api/db/migrations/20261013_170000_company_wiki_config.sql'),'utf8'));
       const evidence=process.env.COMPANY_WIKI_EVIDENCE_PATH ? JSON.parse(await readFile(process.env.COMPANY_WIKI_EVIDENCE_PATH,'utf8')) : representativeEvidence;
       const docs=process.env.COMPANY_WIKI_DOCS_PATH ? JSON.parse(await readFile(process.env.COMPANY_WIKI_DOCS_PATH,'utf8')) : representativeDocs;
-      const mapping=Object.fromEntries(['jinoshengyuan','yueshengyun'].map(key=>[key,{tenant_id:randomUUID(),company_id:randomUUID(),owner:'scratch-owner',verification_source:'scratch随机测试身份；资料按指定证据或去敏样本加载，不代表生产映射'}]));
+      const mapping=Object.fromEntries(['jinoshengyuan','yueshengyun'].map(key=>[key,{environment:'scratch',database:'cecelia_scratch',tenant_id:randomUUID(),company_id:randomUUID(),owner:'scratch-owner',verification_source:'scratch随机测试身份；资料按指定证据或去敏样本加载，不代表生产映射'}]));
       const {buildSeeds,persistSeeds}=await import('../../scripts/company-wiki-import.mjs');
       const seeds=buildSeeds(evidence,docs,mapping);
       for(const seed of seeds) await client.query('INSERT INTO zenithjoy.tenants(id,name) VALUES($1,$2)',[seed.tenant_id,seed.company_name]);

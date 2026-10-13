@@ -4,8 +4,8 @@ import { validateCompanyIdentity, validateEnabledCompany } from './company-profi
 import { buildSeeds } from '../../scripts/company-wiki-import.mjs';
 
 const mapping = {
-  jinoshengyuan: { company_id: '11111111-1111-4111-8111-111111111111', tenant_id: 'aaaaaaaa-1111-4111-8111-111111111111', owner: 'fixture-owner-a', verification_source: '隔离测试绑定' },
-  yueshengyun: { company_id: '22222222-2222-4222-8222-222222222222', tenant_id: 'bbbbbbbb-2222-4222-8222-222222222222', owner: 'fixture-owner-b', verification_source: '隔离测试绑定' },
+  jinoshengyuan: { environment: 'scratch', database: 'cecelia_scratch', company_id: '11111111-1111-4111-8111-111111111111', tenant_id: 'aaaaaaaa-1111-4111-8111-111111111111', owner: 'fixture-owner-a', verification_source: '隔离测试绑定' },
+  yueshengyun: { environment: 'scratch', database: 'cecelia_scratch', company_id: '22222222-2222-4222-8222-222222222222', tenant_id: 'bbbbbbbb-2222-4222-8222-222222222222', owner: 'fixture-owner-b', verification_source: '隔离测试绑定' },
 };
 const seeds = () => buildSeeds(structuredClone(representativeEvidence), representativeDocs, mapping);
 

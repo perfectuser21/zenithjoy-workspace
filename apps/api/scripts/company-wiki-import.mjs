@@ -12,6 +12,8 @@ export function buildSeeds(evidence, docs, mapping) {
     if(lineRoutes.routeOf(identity.evidence).line!==identity.line)throw Error('business line route mismatch');
     const binding=mapping[identity.key];
     if(!binding || !uuid.test(binding.tenant_id) || !uuid.test(binding.company_id) || !binding.verification_source || !binding.owner) throw Error(`verified mapping missing: ${identity.key}`);
+    const targets={production:'zenithjoy',staging:'zenithjoy_staging',scratch:'cecelia_scratch'};
+    if((binding.environment!==undefined||binding.database!==undefined)&&(!Object.prototype.hasOwnProperty.call(targets,binding.environment)||binding.database!==targets[binding.environment]))throw Error('mapping environment target database missing/mismatch');
     if(binding.company_id===binding.tenant_id) throw Error('company_id must be independently assigned');
     if(seenTenants.has(binding.tenant_id)||seenCompanies.has(binding.company_id))throw Error('duplicate company/tenant mapping');
     seenTenants.add(binding.tenant_id);seenCompanies.add(binding.company_id);
@@ -35,7 +37,7 @@ export function buildSeeds(evidence, docs, mapping) {
       city:String(basic[0].fields['经营地区']||'').includes('西安')?'西安':'',industry:basic[0].fields['所属行业']||'',description:basic[0].fields['主营业务']||'',products:products.map(p=>p.name).filter(Boolean),key_advantages:basic[0].fields['能带来的价值']?[basic[0].fields['能带来的价值']]:[],customer_problem:audiences.map(a=>a.fields['核心痛点']).filter(Boolean).join('\n'),customer_portrait:audiences.map(a=>Object.entries(a.fields).map(([key,value])=>`${key}：${typeof value==='string'?value:JSON.stringify(value)}`).join('；')).join('\n\n'),qa_list:[],
       wiki:{markdown,basic:basic[0],products,audiences,brand_expression:basic[0].fields['品牌语气'],business_boundaries:basic[0].fields['交付边界']||basic[0].fields['排除词'],source_documents:identity.key==='yueshengyun'?docs:[],raw_intake:raw,conflicts,verification_status:'source_preserved_pending_owner_review',disclaimer:'初稿和未核实声明保留原文；不代表独立核验事实'},
       runtime_config:{routing:{line_key:identity.evidence,profiles:rows(identity.accounts).map(r=>r.fields['手机Profile']).filter(Boolean),feishu_base:company.base,status:'unverified'},language:'zh-CN',timezone:'Asia/Shanghai',search_strategy:{keywords},product_ids:products.map(p=>p.id),video_judgment:{status:'draft',audiences,products,instructions:'这段内容是否匹配目标客户画像,评论区/内容本身是否可能吸引到潜在客户',source:'现已运行judge-jev规则'},comment_scoring:{status:'draft',audiences,confidence_threshold:0.6,criteria:{A:'主动问价/问报名/求资料/明确求助(高意向)',B:'表达兴趣/相关讨论但没有明确行动意图(中意向)',C:'纯寒暄/表情互动,但确实是画像内人群(低意向,不是垃圾,不要丢)',不相关:'同行企业号/广告引流号/完全跑题'},source:'现已运行judge-comment规则'},platform_accounts:rows(identity.accounts).map(r=>({...r,verification_status:'unverified',enabled:false})),contact_rules:{status:'unverified',ssot:'feishu',approved_scripts_table:identity.scripts},crm:{status:'unmapped',ssot:'feishu'},business_goals:goals,policy_id:`${identity.key}-draft-v1`,sync_mappings:{feishu:{status:'source_retained',base:company.base,source_tables:company.tables.filter(t=>t.config).map(t=>t.table_id)},notion:{status:'unmapped'}},legacy_moments:{enabled:false,records:identity.key==='yueshengyun'?rows('tblblCysRwrB9BHF'):[]},ssot_boundary:{company_profile:'postgresql',keywords:'postgresql_after_enabled',orders:'feishu',approved_scripts:'feishu',sent_facts:'feishu'}},
-      source_evidence:{read_at:evidence.read_at,base:company.base,identity_verification:binding.verification_source,source_company_key:identity.key,configuration_tables:company.tables.filter(t=>t.config).map(t=>({table_id:t.table_id,name:t.name,total:t.total})),migration_status:'seed_draft_not_enabled'},
+      source_evidence:{deployment_environment:binding.environment||'unspecified',target_database:binding.database||null,read_at:evidence.read_at,base:company.base,identity_verification:binding.verification_source,source_company_key:identity.key,configuration_tables:company.tables.filter(t=>t.config).map(t=>({table_id:t.table_id,name:t.name,total:t.total})),migration_status:'seed_draft_not_enabled'},
     };
   });
 }
@@ -43,6 +45,8 @@ export async function persistSeeds(db,seeds) {
   const results=[];
   await db.query('BEGIN');
   try{
+    const databases=[...new Set(seeds.map(seed=>seed.source_evidence?.target_database).filter(Boolean))];
+    if(databases.length){const actual=(await db.query('SELECT current_database() AS name')).rows[0]?.name;if(databases.length!==1||actual!==databases[0])throw Error('company mapping environment target database mismatch');}
     for(const seed of seeds){
       const existing=await db.query('SELECT company_id,company_key,tenant_id FROM zenithjoy.tenant_company_profiles WHERE tenant_id=$1 OR company_id=$2 OR company_key=$3 FOR UPDATE',[seed.tenant_id,seed.company_id,seed.company_key]);
       if(existing.rows.length){
@@ -66,6 +70,7 @@ async function main(){
   if(!args.includes('--mapping'))throw Error('--mapping verified mapping JSON required');
   const files=[value('--evidence')||'/tmp/codex-company-feishu-evidence-20261013.json',value('--docs')||'/tmp/codex-yuesheng-company-docs-20261013.json',value('--mapping')];
   const [evidence,docs,mapping]=await Promise.all(files.map(async p=>JSON.parse(await readFile(p,'utf8'))));
+  if(Object.values(mapping).some(binding=>!binding.environment||!binding.database))throw Error('formal import mapping environment/database required');
   const seeds=buildSeeds(evidence,docs,mapping);
   console.log(JSON.stringify({mode:'dry-run',companies:seeds.map(s=>({company_id:s.company_id,company_key:s.company_key,status:s.config_status,products:s.wiki.products.length,audiences:s.wiki.audiences.length,keywords:s.runtime_config.search_strategy.keywords.length,enabled_keywords:s.runtime_config.search_strategy.keywords.filter(k=>k.enabled).length,conflicts:s.wiki.conflicts.length,notion:'unmapped',feishu:'unmapped'}))},null,2));
   if(!args.includes('--execute'))return;
