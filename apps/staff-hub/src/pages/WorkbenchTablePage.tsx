@@ -8,7 +8,7 @@
  *
  * 上限不写死在前端：row_limit 由服务端随行列表下发。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import WorkbenchRowGrid, { type RelationMeta, type RollupMeta } from '../components/WorkbenchRowGrid';
 import WorkbenchRowDetailPanel from '../components/WorkbenchRowDetailPanel';
@@ -66,6 +66,9 @@ export function parseClipboardTable(text: string): { header: string[]; rows: str
 
 export default function WorkbenchTablePage() {
   const { tableId = '' } = useParams<{ tableId: string }>();
+  const currentTable = useRef({ id: tableId });
+  if (currentTable.current.id !== tableId) currentTable.current = { id: tableId };
+  const tableContext = currentTable.current;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tableName, setTableName] = useState('');
@@ -93,7 +96,14 @@ export default function WorkbenchTablePage() {
   const [filterValue, setFilterValue] = useState('');
   const [sortFieldId, setSortFieldId] = useState('');
   const [sortDir, setSortDir] = useState('asc');
-  const [viewPrefsError, setViewPrefsError] = useState('');
+  const [viewPrefsErrors, setViewPrefsErrors] = useState<Record<string, string>>({});
+  const viewPrefsError = activeViewId ? viewPrefsErrors[activeViewId] ?? '' : '';
+  const setViewPrefsError = (message: string, viewId = activeViewId) => {
+    if (viewId) setViewPrefsErrors((prev) => ({ ...prev, [viewId]: message }));
+  };
+  const viewSaves = useRef(new Map<string, Promise<void>>());
+  const viewFieldEdits = useRef(new Map<string, Map<keyof Parameters<typeof patchView>[1], symbol>>());
+  const unsavedViewFields = useRef(new Map<string, Set<keyof Parameters<typeof patchView>[1]>>());
   const [kanbanError, setKanbanError] = useState('');
   const [kanbanConflict, setKanbanConflict] = useState('');
 
@@ -104,6 +114,7 @@ export default function WorkbenchTablePage() {
 
   const fetchRows = useCallback(async () => {
     const out = await listRows(tableId);
+    if (currentTable.current !== tableContext) return out.rows;
     setRows(out.rows);
     setRowLimit(out.row_limit);
     return out.rows;
@@ -163,7 +174,9 @@ export default function WorkbenchTablePage() {
   );
 
   const refreshViews = useCallback(async (): Promise<WorkbenchView[]> => {
+    if (currentTable.current !== tableContext) return [];
     const out = await listViews(tableId);
+    if (currentTable.current !== tableContext) return [];
     let list = out.views;
     let active = out.active_view_id;
     // 首次进表没有任何视图 → 建一个默认表格视图（前端建默认视图，S1）
@@ -173,10 +186,17 @@ export default function WorkbenchTablePage() {
         view_type: 'grid',
         is_active: true,
       });
+      if (currentTable.current !== tableContext) return [];
       list = [created];
       active = created.view_id;
     }
-    setViews(list);
+    setViews((prev) => list.map((server) => {
+      const local = prev.find((v) => v.view_id === server.view_id);
+      const dirty = unsavedViewFields.current.get(server.view_id);
+      return local && dirty?.size ? { ...server, ...Object.fromEntries(
+        [...dirty].map((key) => [key, local[key]])
+      ) } : server;
+    }));
     setActiveViewId((prev) => (prev && list.some((v) => v.view_id === prev) ? prev : active ?? list[0].view_id));
     return list;
   }, [tableId]);
@@ -185,18 +205,21 @@ export default function WorkbenchTablePage() {
     setLoading(true);
     try {
       const detail = await getTable(tableId);
+      if (currentTable.current !== tableContext) return;
       setTableName(detail.name);
       setFields(detail.fields);
       await refreshViews();
+      if (currentTable.current !== tableContext) return;
       await fetchRows();
+      if (currentTable.current !== tableContext) return;
       await fetchTrash();
       await refreshRelationMeta(detail.fields);
       await refreshRollupMeta(detail.fields);
       setError('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败');
+      if (currentTable.current === tableContext) setError(e instanceof Error ? e.message : '加载失败');
     } finally {
-      setLoading(false);
+      if (currentTable.current === tableContext) setLoading(false);
     }
   }, [tableId, refreshViews, fetchRows, fetchTrash, refreshRelationMeta, refreshRollupMeta]);
 
@@ -398,20 +421,38 @@ export default function WorkbenchTablePage() {
   // ── 视图偏好持久化（S3 / A21 / A23）─────────────────────────────────────────
   // 保存失败 → 可见提示「视图偏好未保存」，页面主体不白屏、本地状态保留可重试（禁静默吞）。
   const saveView = useCallback(
-    async (patch: Parameters<typeof patchView>[1]) => {
-      if (!activeViewId) return;
-      // 本地先乐观回填，保证保存失败时用户改的东西还在
-      setViews((prev) => prev.map((v) => (v.view_id === activeViewId ? { ...v, ...patch } : v)));
-      try {
-        const updated = await patchView(activeViewId, patch);
-        setViews((prev) => prev.map((v) => (v.view_id === activeViewId ? updated : v)));
-        setViewPrefsError('');
-      } catch (e) {
-        const err = e instanceof WorkbenchRequestError ? e : null;
-        setViewPrefsError(`视图偏好未保存${err ? `（${err.message}）` : ''}，请重试`);
-      }
+    async (patch: Parameters<typeof patchView>[1], viewId = activeViewId) => {
+      if (!viewId) return;
+      const keys = Object.keys(patch) as Array<keyof typeof patch>;
+      const edit = Symbol();
+      const edits = viewFieldEdits.current.get(viewId) ?? new Map<keyof typeof patch, symbol>();
+      keys.forEach((key) => edits.set(key, edit));
+      viewFieldEdits.current.set(viewId, edits);
+      const failed = unsavedViewFields.current.get(viewId) ?? new Set<keyof typeof patch>();
+      keys.forEach((key) => failed.add(key));
+      unsavedViewFields.current.set(viewId, failed);
+      setViews((prev) => prev.map((v) => (v.view_id === viewId ? { ...v, ...patch } : v)));
+      // 同一视图串行落库，防止服务端增量补丁的读改写互相覆盖。
+      const previous = viewSaves.current.get(viewId) ?? Promise.resolve();
+      const saving = previous.then(async () => {
+        try {
+          const updated = await patchView(viewId, patch);
+          const accepted = Object.fromEntries(keys
+            .filter((key) => edits.get(key) === edit)
+            .map((key) => [key, updated[key]]));
+          if (currentTable.current === tableContext) setViews((prev) => prev.map((v) => (v.view_id === viewId ? { ...v, ...accepted } : v)));
+          keys.forEach((key) => { if (edits.get(key) === edit) failed.delete(key); });
+          if (failed.size === 0 && currentTable.current === tableContext) setViewPrefsError('', viewId);
+        } catch (e) {
+          keys.forEach((key) => failed.add(key));
+          const err = e instanceof WorkbenchRequestError ? e : null;
+          if (currentTable.current === tableContext) setViewPrefsError(`视图偏好未保存${err ? `（${err.message}）` : ''}，请重试`, viewId);
+        }
+      });
+      viewSaves.current.set(viewId, saving);
+      await saving;
     },
-    [activeViewId]
+    [activeViewId, tableId]
   );
 
   const retrySaveView = useCallback(() => {
@@ -432,10 +473,12 @@ export default function WorkbenchTablePage() {
     const sorts: ViewSort[] = sortFieldId ? [{ field_id: sortFieldId, dir: sortDir }] : [];
     try {
       const out = await listRowsWith(tableId, { filter: filters, sort: sorts });
+      if (currentTable.current !== tableContext) return;
       setRows(out.rows);
       setRowLimit(out.row_limit);
       setError('');
     } catch (e) {
+      if (currentTable.current !== tableContext) return;
       setError(e instanceof Error ? e.message : '筛选排序失败');
     }
     await saveView({ filters, sorts });
@@ -445,14 +488,16 @@ export default function WorkbenchTablePage() {
     async (viewId: string) => {
       setActiveViewId(viewId);
       try {
-        await patchView(viewId, { is_active: true });
+        await saveView({ is_active: true }, viewId);
+        if (currentTable.current !== tableContext) return;
         await refreshViews();
+        if (currentTable.current !== tableContext) return;
         await fetchRows();
       } catch (e) {
-        setError(e instanceof Error ? e.message : '切换视图失败');
+        if (currentTable.current === tableContext) setError(e instanceof Error ? e.message : '切换视图失败');
       }
     },
-    [refreshViews, fetchRows]
+    [refreshViews, fetchRows, saveView]
   );
 
   const handleCreateView = useCallback(async () => {

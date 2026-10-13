@@ -1,3 +1,4 @@
+import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
@@ -53,4 +54,25 @@ test('unrelated deploy syntax/hash reads cannot invalidate a verified pair recei
  const f=fixture(t);f.capture();f.upload();assert.equal(f.install().status,0);
  assert.equal(f.ssh('md5 -q ~/bin-harvest/input-runtime-release.py ~/.local/bin/input-runtime-release.py 2>/dev/null | sort -u | wc -l').status,0);
  assert.equal(verify(f.root).status,'verified');
+});
+
+for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实dry-run公司readiness ${mode} 在admission/安装前判定`,t=>{
+ const root=mkdtempSync(join(tmpdir(),'paired-company-readiness-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
+ const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH,PAIR_COMPANY_READINESS_MODE:mode,...(mode==='schema-ready'?{PAIR_DEPLOY_STOP_AT_ADMISSION:'1'}:{})}});
+ const output=result.stdout+result.stderr;
+ const ssh=readFileSync(join(root,'ssh.log'),'utf8');
+ if(mode==='schema-ready') {
+  assert.match(output,/"business_runtime_status":"disabled"/);assert.match(output,/"schema_verified":true/);
+  assert.equal(result.error,undefined,'正向readiness必须真正结束，不能靠超时后的旧receipt通过');
+  assert.match(output,/explicit fixture admission denied after readiness/);
+  assert.match(ssh,/^mmv python3$/m,'schema通过后真实进入admission，显式busy夹具在安装前停止');
+  assert.throws(()=>verify(root),/not verified/,'仅readiness通过不生成配套安装receipt');
+ } else {
+  assert.notEqual(result.status,0);
+  assert.match(output,new RegExp(mode==='missing-schema'?'COMPANY_SCHEMA_NOT_READY':'COMPANY_READINESS_RESPONSE_INVALID'));
+  assert.throws(()=>verify(root),/not verified/);
+  assert.doesNotMatch(ssh,/^mmv python3$/m,'readiness失败不得执行远端admission');
+  let uploads='';try{uploads=readFileSync(join(root,'scp.log'),'utf8');}catch{}
+  assert.equal(uploads,'','readiness失败不得执行任何安装上传');
+ }
 });

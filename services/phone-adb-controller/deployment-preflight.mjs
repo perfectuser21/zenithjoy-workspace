@@ -1,6 +1,7 @@
 // 部署前证据核验；HTTP只创建不可变发布声明，不触及目标机器。
 import {readFileSync,lstatSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
+import {checkDeploymentCompanyReadiness} from './company-config-readiness.mjs';
 import {digest} from './runtime-definition.mjs';
 export const DEPLOY_REPO='perfectuser21/zenithjoy-workspace';
 export const DEPLOY_HOSTS=['xian-m4','mmv'];
@@ -81,14 +82,20 @@ function verifyRelease(release,{id,environment,target,manifest}){
  for(const c of components.filter(c=>c.kind!=='repo'))requireThat(manifest.files.some(f=>f.path===c.path&&`sha256:${f.content_sha256}`===c.digest),'release组件无本机固定字节');
  return release;
 }
-export async function preflightDeploymentReleases({manifest,environment,releaseIds,request}){
+export async function preflightDeploymentReleases({manifest,environment,releaseIds,request,companyReadiness}){
  requireThat(typeof environment==='string'&&environment.length>0,'缺部署环境');
  requireThat(releaseIds&&equal(Object.keys(releaseIds).sort(),[...DEPLOY_HOSTS].sort())&&DEPLOY_HOSTS.every(h=>UUID.test(releaseIds[h])),`必须明确全部${DEPLOY_HOSTS.length}目标release`);
  const releases=[];
  for(const target of DEPLOY_HOSTS){const id=releaseIds[target],response=await request(`/api/brain/releases/${id}`);releases.push(verifyRelease(response?.release,{id,environment,target,manifest}));}
+ if(manifest.files?.some(f=>f.path.endsWith('/company-config-lib.js')||f.path==='company-config-lib.js')) {
+  requireThat(typeof companyReadiness==='function','COMPANY_READINESS_REQUIRED');
+  const readiness=await companyReadiness();
+  requireThat(readiness?.schema_verified===true&&['ready','disabled'].includes(readiness.business_runtime_status)&&Array.isArray(readiness.gaps),'COMPANY_READINESS_INVALID');
+  releases.company_readiness=readiness;
+ }
  return releases;
 }
-export async function prepareDeploymentReleases({bundle,sha,environment,attemptKey,readFile,request}){
+export async function prepareDeploymentReleases({bundle,sha,environment,attemptKey,readFile,request,companyReadiness=checkDeploymentCompanyReadiness}){
  const {definitions,components}=validateDeploymentEvidence(bundle,sha,readFile);
  requireThat(environment==='production'&&typeof attemptKey==='string'&&/^github:\d+:[\w:.-]+$/.test(attemptKey),'部署环境/attempt无效');
  const releaseIds={};
@@ -102,7 +109,7 @@ export async function prepareDeploymentReleases({bundle,sha,environment,attemptK
   requireThat(equal(release.payload.workflows.map(w=>[w.id,w.payload_sha256]).sort(),definitions.workflows.map(w=>[w.id,w.payload_sha256]).sort()),'Brain返回其他固定版本');
   releaseIds[target]=release.id;
  }
- await preflightDeploymentReleases({manifest,environment,releaseIds,request});return releaseIds;
+ await preflightDeploymentReleases({manifest,environment,releaseIds,request,companyReadiness});return releaseIds;
 }
 export function readDeploymentToken(path){
  const stat=lstatSync(path);requireThat(stat.isFile()&&stat.uid===process.getuid()&&(stat.mode&0o077)===0,'凭据镜像权限无效');
@@ -117,6 +124,6 @@ export function brainRequest(base,token){
  return async(path,body)=>{const response=await fetch(new URL(path,url),{method:body?'POST':'GET',redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});requireThat(response.ok,`Brain HTTP ${response.status}`);return response.json();};
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{await preflightDeploymentReleases({manifest:JSON.parse(readFileSync(process.argv[2],'utf8')),environment:process.env.WF_DEPLOY_ENVIRONMENT,releaseIds:JSON.parse(process.env.WF_RELEASE_IDS||'{}'),request:brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN)});}
+ try{await preflightDeploymentReleases({manifest:JSON.parse(readFileSync(process.argv[2],'utf8')),environment:process.env.WF_DEPLOY_ENVIRONMENT,releaseIds:JSON.parse(process.env.WF_RELEASE_IDS||'{}'),request:brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN),companyReadiness:async()=>{const readiness=await checkDeploymentCompanyReadiness({requireEnabled:(process.env.WF_COMPANY_REQUIRE_ENABLED||'').split(',').filter(Boolean)});process.stderr.write(JSON.stringify({company_readiness:readiness})+'\n');return readiness;}});}
  catch(error){process.stderr.write(`${error.message}\n`);process.exitCode=1;}
 }

@@ -48,7 +48,7 @@ async function listPendingVideos(pool, lineKey, limit = 50) {
 // 0929修复(DoD审计发现): 契约要求 judgment_reason 非空(便于事后追溯判定依据),但此前
 // judge-jev.js 对 matched 结果给 reason:null，这里又完全不校验，导致 matched 视频的
 // judgment_reason 在库里必为 NULL——契约自己写的断言，代码毫无感知。现在真正拦住它。
-function markVideoJudgment(pool, { lineKey, videoId, verdict, reason = null, transcript = null }) {
+function markVideoJudgment(pool, { lineKey, videoId, verdict, reason = null, transcript = null, configEvidence = null }) {
   if (verdict !== "matched" && verdict !== "rejected") {
     throw new Error(`markVideoJudgment: verdict 必须是 matched/rejected,收到 ${verdict}`);
   }
@@ -57,9 +57,9 @@ function markVideoJudgment(pool, { lineKey, videoId, verdict, reason = null, tra
   }
   return pool.query(
     `UPDATE zenithjoy.leadgen_videos
-        SET judgment_status = $3, judgment_reason = $4, transcript = COALESCE($5, transcript), updated_at = now()
+        SET judgment_status = $3, judgment_reason = $4, transcript = COALESCE($5, transcript), judgment_config = $6::jsonb, updated_at = now()
       WHERE line_key = $1 AND video_id = $2`,
-    [lineKey, videoId, verdict, reason, transcript]
+    [lineKey, videoId, verdict, reason, transcript, JSON.stringify(configEvidence)]
   );
 }
 

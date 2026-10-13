@@ -31,7 +31,8 @@ const PING_INTERVAL_MS = 15_000;
 interface Room {
   docId: string;
   ydoc: Y.Doc;
-  seeded: boolean;
+  seedPromise: Promise<void> | null;
+  pendingFrames: number;
   clients: Set<WebSocket>;
 }
 
@@ -47,34 +48,35 @@ const rooms = new Map<string, Room>();
 function getRoom(docId: string): Room {
   let room = rooms.get(docId);
   if (!room) {
-    room = { docId, ydoc: new Y.Doc(), seeded: false, clients: new Set() };
+    room = { docId, ydoc: new Y.Doc(), seedPromise: null, pendingFrames: 0, clients: new Set() };
     rooms.set(docId, room);
   }
   return room;
 }
 
 /** 房间冷启动时从 DB 载入既有状态（crdt_state 优先；否则从 content 白名单重建）。 */
-async function seedRoom(room: Room): Promise<void> {
-  if (room.seeded) return;
-  room.seeded = true;
-  try {
-    const r = await pool.query('SELECT crdt_state, content FROM zenithjoy.documents WHERE id = $1', [
-      room.docId,
-    ]);
-    if (r.rowCount === 0) return;
-    const crdt = r.rows[0].crdt_state as Buffer | null;
-    if (crdt && crdt.length) {
-      Y.applyUpdate(room.ydoc, new Uint8Array(crdt));
-      return;
+function seedRoom(room: Room): Promise<void> {
+  if (room.seedPromise) return room.seedPromise;
+  // 同一房间的每个连接等待同一初始化，不能把“开始查询”当成“查询已完成”。
+  room.seedPromise = (async () => {
+    try {
+      const r = await pool.query('SELECT crdt_state, content FROM zenithjoy.documents WHERE id = $1', [room.docId]);
+      if (r.rowCount === 0) return;
+      const crdt = r.rows[0].crdt_state as Buffer | null;
+      if (crdt && crdt.length) {
+        Y.applyUpdate(room.ydoc, new Uint8Array(crdt));
+        return;
+      }
+      const content = r.rows[0].content;
+      if (isValidProseMirrorDoc(content)) {
+        const seedDoc = proseMirrorToYDoc(content as { type: string; content?: Record<string, unknown>[] });
+        Y.applyUpdate(room.ydoc, Y.encodeStateAsUpdate(seedDoc));
+      }
+    } catch (err) {
+      console.warn('[collab-ws] seedRoom 失败:', (err as Error).message);
     }
-    const content = r.rows[0].content;
-    if (isValidProseMirrorDoc(content)) {
-      const seedDoc = proseMirrorToYDoc(content as { type: string; content?: Record<string, unknown>[] });
-      Y.applyUpdate(room.ydoc, Y.encodeStateAsUpdate(seedDoc));
-    }
-  } catch (err) {
-    console.warn('[collab-ws] seedRoom 失败:', (err as Error).message);
-  }
+  })();
+  return room.seedPromise;
 }
 
 /** 会话是否仍存活（未被删、未过期）。A3-e：删 session 后下一写操作即断连。 */
@@ -205,54 +207,60 @@ export function attachCollabWS(server: HttpServer): WebSocketServer {
       });
 
       const room = getRoom(conn!.docId);
-      await seedRoom(room);
       room.clients.add(ws);
-
-      // 下发当前房间状态给新加入者（真浏览器据此渲染既有正文）
-      try {
-        const state = Y.encodeStateAsUpdate(room.ydoc);
-        if (state.length) ws.send(state);
-      } catch {
-        /* 忽略 */
-      }
-
-      ws.on('message', async (raw: Buffer) => {
-        // A3-e：每次写操作先复核会话存活，失效即断，不静默续命
-        if (!(await sessionAlive(ext._conn!.sessionToken))) {
-          try {
-            ws.close(4401, 'session expired');
-          } catch {
-            /* 忽略 */
-          }
-          return;
-        }
-        const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as unknown as ArrayBuffer);
-        const update = new Uint8Array(buf);
-        try {
-          await applyAndPersist(room, update);
-        } catch (err) {
-          console.warn('[collab-ws] applyAndPersist 失败:', (err as Error).message);
-          return;
-        }
-        // 广播给房间内其它客户端（实时字符级合并）
-        for (const client of room.clients) {
-          if (client !== ws && client.readyState === client.OPEN) {
-            try {
-              client.send(update, { binary: true });
-            } catch {
-              /* 忽略 */
-            }
-          }
-        }
-      });
-
+      const releaseEmptyRoom = () => {
+        // 已确认收到的首帧仍可能在等待seed；完成CV/广播前保留同一房间供重连者共享。
+        if (room.clients.size === 0 && room.pendingFrames === 0 && rooms.get(room.docId) === room) rooms.delete(room.docId);
+      };
       ws.on('close', () => {
         room.clients.delete(ws);
-        if (room.clients.size === 0) rooms.delete(room.docId);
+        releaseEmptyRoom();
       });
       ws.on('error', () => {
         room.clients.delete(ws);
+        releaseEmptyRoom();
       });
+      const seeded = seedRoom(room);
+      let messages = Promise.resolve();
+      // 101握手后客户端会立即发送resync；先接收帧，再等seed，避免await期间没有监听器而丢帧。
+      ws.on('message', (raw: Buffer) => {
+        room.pendingFrames += 1;
+        messages = messages.then(async () => {
+          await seeded;
+          // A3-e：每次写操作先复核会话存活，失效即断，不静默续命。
+          if (!(await sessionAlive(ext._conn!.sessionToken))) {
+            try { ws.close(4401, 'session expired'); } catch { /* 连接已关闭 */ }
+            return;
+          }
+          const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as unknown as ArrayBuffer);
+          const update = new Uint8Array(buf);
+          try {
+            await applyAndPersist(room, update);
+          } catch (err) {
+            console.warn('[collab-ws] applyAndPersist 失败:', (err as Error).message);
+            return;
+          }
+          for (const client of room.clients) {
+            if (client !== ws && client.readyState === client.OPEN) {
+              try { client.send(update, { binary: true }); } catch { /* 连接已关闭 */ }
+            }
+          }
+        }).finally(() => {
+          room.pendingFrames -= 1;
+          releaseEmptyRoom();
+        });
+      });
+
+      await seeded;
+      await messages;
+      if (ws.readyState !== ws.OPEN) return;
+      // 初始状态包含初始化期间已收到的首帧，所有连接都使用完成seed后的相同基线。
+      try {
+        const state = Y.encodeStateAsUpdate(room.ydoc);
+        if (state.length) ws.send(state);
+      } catch { /* 连接已关闭 */ }
+
+
     });
   });
 

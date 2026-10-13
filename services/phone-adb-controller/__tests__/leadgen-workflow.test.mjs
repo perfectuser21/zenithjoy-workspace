@@ -1,3 +1,4 @@
+import {withCompanyFixture} from './company-config-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync,chmodSync,symlinkSync} from 'node:fs';
@@ -55,7 +56,7 @@ test('独立读回未知或失败不能让执行exit0成为活动成功',async()
 });
 
 test('触达暂停预检不取单、不触碰手机、不发送',async()=>{
-  const {createHandlers}=await import('../leadgen-workflow.mjs');
+  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
   const handlers=createHandlers({root:'/tmp',env:{HOME:'/tmp',P:'jinoshengyuan-work',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'},
     rpc:async()=>{throw Error('不允许取单');},execute:async()=>{throw Error('不允许操作手机');}});
   assert.equal((await handlers.preflight()).status,'paused');
@@ -63,7 +64,7 @@ test('触达暂停预检不取单、不触碰手机、不发送',async()=>{
 });
 
 test('profile注册的手机与命令serial不符时，在拿锁与手势前拒绝',async()=>{
-  const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-identity-'));const calls=[];
+  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'leadgen-identity-'));const calls=[];
   try{
     const handlers=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,P:'work',SERIAL:'S1',WFR_TAG:'run'},rpc:async()=>{},
       execute:async(command,args)=>{calls.push({command,args});return {code:0,stdout:command==='adb'?'device\n':'serial=S2\n',stderr:''};}});
@@ -73,7 +74,7 @@ test('profile注册的手机与命令serial不符时，在拿锁与手势前拒�
 });
 
 test('评分必须按实际处理ID读回，缺行在工件记录verified=false',async()=>{
-  const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-score-'));const ops=[];
+  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'leadgen-score-'));const ops=[];
   try{
     const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'run',LEADGEN_LINE:'jinuo'},
       rpc:async body=>{ops.push(body.request);return {result:body.request.op==='score'?{scored:1,ids:['c1']}:{verified:false,failures:1}};}});
@@ -125,7 +126,7 @@ test('部分取链失败必须把活动记partial，不能把部分结果记comp
 });
 
 test('需要140秒的取链能够完整入库，但不能越过活动剩余预算',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  // 明示的设备模拟：140秒代表本次真机nonce+UI重抓+复制+归位的完整动作，并不实际睡眠。
  for(const remaining of [480000,30000]){
   const dir=mkdtempSync(join(tmpdir(),'leadgen-link-envelope-'));
@@ -177,7 +178,7 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
 
 
 test('资格动作容纳已实测的打开与身份核验组合耗时，仍受活动剩余预算限制',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  // 明示模拟：真机打开约145秒，加取链、归位、录音、远端判定，整体需520秒。
  for(const remaining of [1800000,250000]){
   const dir=mkdtempSync(join(tmpdir(),'leadgen-qualification-envelope-'));
@@ -207,7 +208,7 @@ test('资格动作容纳已实测的打开与身份核验组合耗时，仍受�
 });
 
 test('实际静音本轮只经租约PG拒绝回执终结，不能进入matched或内容模型',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  for(const badScope of [false,true]){
   const dir=mkdtempSync(join(tmpdir(),'silent-workflow-')),id='7663337150875733275',ops=[];
   const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'silent-processing',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
@@ -219,7 +220,7 @@ test('实际静音本轮只经租约PG拒绝回执终结，不能进入matched�
 
 
 test('已匹配视频的身份核验也包含打开与取链，不能沿用单取链时限',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  const dir=mkdtempSync(join(tmpdir(),'leadgen-matched-identity-envelope-')),videoId='7657464669711404351';
  try{
   const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'fresh-matched',P:'work',LEADGEN_LINE:'jinuo'},
@@ -233,7 +234,7 @@ test('已匹配视频的身份核验也包含打开与取链，不能沿用单�
 });
 
 test('采集组合预算包含重新打开核验和本身480秒采集，但不越过活动剩余预算',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  for(const remaining of [7200000,250000]){
   const dir=mkdtempSync(join(tmpdir(),'leadgen-collection-envelope-')),videoId='7657464669711404351',stored=[],timeouts=[];
   try{
@@ -293,7 +294,7 @@ async function freezeFixture(f){const {digest}=await import('../runtime-definiti
  const body={files:{},deployment:{source_commit:'a'.repeat(40)},run_identity:{capability:cap,tag,profile:f.env.P}};writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
  }writeFileSync(f.env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:['自己'],ids:[]}));}
 test('102按上游实际VID和PG终态判重，旧批次已采不重录、同标题新VID保留',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs'),dir=mkdtempSync(join(tmpdir(),'intake102-'));
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),dir=mkdtempSync(join(tmpdir(),'intake102-'));
  try{const f=upstreamFixture(dir);await freezeFixture(f);const ids=['7685662999797258417','7684845398191623487','7684845398191623488'];
  const videos=ids.map((videoId,i)=>({videoId,title:'同标题',author:i===2?'自己':'别人'}));writeFileSync(join(f.upstream,'discovery-progress.json'),JSON.stringify({run:f.source,profile:'work',videos,captures:videos}));
  const requests=[];const h=createHandlers({root:dir,env:f.env,rpc:async b=>{requests.push(b.request);return {result:ids.map((video_id,i)=>({video_id,line_key:'jinuo',judgment_status:'pending',process_status:i===0?'评论已采':'待判定',harvest_batch:'old101'}))};}});
@@ -302,7 +303,7 @@ test('102按上游实际VID和PG终态判重，旧批次已采不重录、同标
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 test('102上游清单身份错或PG缺VID时拒绝，不退回全库认领',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs'),dir=mkdtempSync(join(tmpdir(),'intake102-guard-'));
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),dir=mkdtempSync(join(tmpdir(),'intake102-guard-'));
  try{const f=upstreamFixture(dir);await freezeFixture(f);const file=join(f.upstream,'discovery-progress.json'),video={videoId:'7685662999797258417',title:'标题',author:'别人'};let calls=0;
  writeFileSync(file,JSON.stringify({run:'wrong',profile:'work',videos:[video],captures:[video]}));const h=createHandlers({root:dir,env:f.env,rpc:async()=>{calls++;return {result:[]};}});
  await assert.rejects(h.dedup(),/上游/);assert.equal(calls,0);
@@ -311,7 +312,7 @@ test('102上游清单身份错或PG缺VID时拒绝，不退回全库认领',asyn
 });
 
 test('真实workflow包装器达到目标且仅有消失候选缺口时保留成功，数据库缺行仍partial',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  for(const missingRow of [false,true]){
   const dir=mkdtempSync(join(tmpdir(),'leadgen-relocation-wrapper-')),registry=join(dir,'accounts.tsv');
   writeFileSync(registry,'work\ttest-account\n');
@@ -347,7 +348,7 @@ test('真实workflow包装器达到目标且仅有消失候选缺口时保留成
 
 
 test('历史输入逐VID局部绑定，scope失败不假报通过；无qualified明确0样本',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  const dir=mkdtempSync(join(tmpdir(),'history-workflow-')),ids=['7646309328911907195','7646309328911907196'],actions=[];
  try{
   const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'history-run',P:'work',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:'/outside/previous-video.json'};
@@ -378,7 +379,7 @@ async function sampleFixture(dir){
  return {...f,videoId,url:'https://www.douyin.com/video/'+videoId};
 }
 for(const mode of ['quota','footer','bad_pg','fake_footer','budget'])test('真实102 wrapper采样持租约与PG状态 '+mode,async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs'),dir=mkdtempSync(join(tmpdir(),'sample-wrapper-'));
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),dir=mkdtempSync(join(tmpdir(),'sample-wrapper-'));
  try{
   const f=await sampleFixture(dir),calls=[],n=mode==='footer'?3:mode==='budget'?1:5;
   const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{
@@ -407,7 +408,7 @@ for(const mode of ['quota','footer','bad_pg','fake_footer','budget'])test('真�
 });
 
 for(const bad of ['none','pg_missing','wrong_quota','wrong_source','failed_activity','blocked_activity','wrong_profile','wrong_serial','wrong_line','wrong_sha','wrong_vid','bad_digest','symlink','missing_run_id','wrong_run_id','false_verification','missing_verification','wrong_attempt','bad_binding_digest','wrong_frozen_serial'])test('前序采样排除只限同源冻结事实且intake/claim一致 '+bad,async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs'),{digest}=await import('../runtime-definition.mjs'),dir=mkdtempSync(join(tmpdir(),'sample-prior-'));
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),{digest}=await import('../runtime-definition.mjs'),dir=mkdtempSync(join(tmpdir(),'sample-prior-'));
  try{
   const f=await sampleFixture(dir),priorDir=join(dir,'douyin_video_processing-prior102');mkdirSync(priorDir);
   const {snapshot_sha256,...current}=JSON.parse(readFileSync(join(f.current,'run-definition.json')));
@@ -430,7 +431,7 @@ for(const verified of [true,false])test('采样collection partial仍执行原独
  assert.equal(called,1);assert.equal(out.status,verified?'partial':'failed');assert.equal(out.results[0].verification.verified,verified);assert.equal(out.results[0].status,verified?'partial':'failed');
 });
 for(const config of [{budget:undefined,max:960},{budget:'1620',max:2100},{budget:'6720',max:7200},{budget:'1620',max:2100,globalNear:true}])test('逐视频collection显式预算真实作用且保持全局截止 '+JSON.stringify(config),async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs'),{digest}=await import('../runtime-definition.mjs');const dir=mkdtempSync(join(tmpdir(),'collection-explicit-budget-'));
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),{digest}=await import('../runtime-definition.mjs');const dir=mkdtempSync(join(tmpdir(),'collection-explicit-budget-'));
  try{const f=await sampleFixture(dir);if(config.budget){f.env.QUEUED_VIDEO_COLLECTION_SECONDS=config.budget;const file=join(f.current,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(readFileSync(file));body.sampling_input.collection_budget_s=Number(config.budget);writeFileSync(file,JSON.stringify({...body,snapshot_sha256:digest(body)}));}
  Object.assign(f.env,{WF_RUN_MAX_SECONDS:'3600',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)-(config.globalNear?3598:0))});const actions=[],requests=[];
  const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{requests.push(q);if(q.op==='inspect_videos')return {result:[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待采评论'}]};if(q.op==='claim_videos')return {result:[{video_id:f.videoId,video_url:f.url,judgment_status:'matched'}]};if(q.op==='renew_video')return {result:{renewed:true}};if(q.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:f.env.WFR_TAG,source_run:f.source,video_id:f.videoId,video_url:f.url,rows:[]}};if(q.op==='collect')return {result:{comments:0,inserted:0,history_verified:0,coverage:0}};if(q.op==='comment_history_readback')return {result:{verified:true,video_id:f.videoId,ids:[],history_verified:0}};if(q.op==='sample_readback')return {result:{verified:true,video_id:f.videoId,coverage:0,rows:[]}};throw Error('unexpected '+q.op);},execute:async(c,a,o)=>{actions.push({a,o});return {code:0,stdout:a[1]==='identity'?'':`COLLECTION\t${f.videoId}\tno_comments\t0\nRESCAN\t${f.videoId}\t0\n`,stderr:''};}});
@@ -438,13 +439,13 @@ for(const config of [{budget:undefined,max:960},{budget:'1620',max:2100},{budget
  const proof=JSON.parse(readFileSync(join(f.current,'process102-collection-budget-readback.json')));assert.equal(proof.collection_budget_s,Number(config.budget||480));assert.equal(proof.action_max_duration_s,config.max);assert.equal(proof.sampling_input?.collection_budget_s,config.budget?Number(config.budget):undefined);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
-test('非法collection预算在RPC和手机动作之前拒绝',async()=>{const {createHandlers}=await import('../leadgen-workflow.mjs');for(const value of ['0','-1','6721','abc','1.5','0480',''])assert.throws(()=>createHandlers({root:'/tmp',env:{HOME:'/tmp',QUEUED_VIDEO_COLLECTION_SECONDS:value},rpc:async()=>{throw Error('不可RPC');},execute:async()=>{throw Error('不可phone');}}),/采集.*预算/);});
-test('仅真实冻结采样intake才给claim matched优先flag',async()=>{const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'sample-claim-priority-'));try{const f=await sampleFixture(dir),qs=[];const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{qs.push(q);return {result:q.op==='inspect_videos'?[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待采评论'}]:[]};}});await h.dedup();await h.qualification();const q=qs.find(q=>q.op==='claim_videos');assert.equal(q.prefer_matched,true);assert.equal(q.source_run,f.source);assert.deepEqual(q.video_ids,[f.videoId]);}finally{rmSync(dir,{recursive:true,force:true});}});
-test('真实videoAction显式1620必须突破旧960但不越过截止',async()=>{const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'budget-action-red-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let seen;const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'budget-test',P:'work',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source101',QUEUED_VIDEO_COLLECTION_SECONDS:'1620',WF_RUN_MAX_SECONDS:'3600'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:q.op==='comment_history'?{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'budget-test',source_run:'source101',video_id:vid,video_url:url,rows:[]}:q.op==='collect'?{comments:0,inserted:0,history_verified:0,coverage:0}:q.op==='comment_history_readback'?{verified:true,video_id:vid,ids:[],history_verified:0}:{}}),execute:async(c,a,o)=>{if(a[1]==='collection'){seen=o;return {code:0,stdout:`COLLECTION\t${vid}\tno_comments\t0\nRESCAN\t${vid}\t0\n`,stderr:''};}return {code:0,stdout:'',stderr:''};}});await h.qualification();await h.collection();assert.equal(seen.maxDurationS,2100,'原960秒进程上限与显式1620软预算冲突');assert.equal(seen.env.QUEUED_VIDEO_COLLECTION_SECONDS,'1620');}finally{rmSync(dir,{recursive:true,force:true});}});
-test('collection到实际global截止不再renew/history/phone，不假完成',async()=>{const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'collection-expired-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let phase='qualification';const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'expired',P:'work',LEADGEN_LINE:'jinuo',WF_RUN_MAX_SECONDS:'3600',QUEUED_VIDEO_COLLECTION_SECONDS:'1620'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>{if(phase==='collection')throw Error('expired must not RPC');return {result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:{}};},execute:async()=>{assert.equal(phase,'qualification');return {code:0,stdout:'',stderr:''};}});await h.qualification();phase='collection';env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000)-3601);h.state.budgetDeadline=Date.now()+7200000;const r=await h.collection();assert.equal(r.status,'partial');assert.equal(r.videos_collected,0);assert.match(r.failures[0].reason,/EXECUTION_DEADLINE/);}finally{rmSync(dir,{recursive:true,force:true});}});
+test('非法collection预算在RPC和手机动作之前拒绝',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);for(const value of ['0','-1','6721','abc','1.5','0480',''])assert.throws(()=>createHandlers({root:'/tmp',env:{HOME:'/tmp',QUEUED_VIDEO_COLLECTION_SECONDS:value},rpc:async()=>{throw Error('不可RPC');},execute:async()=>{throw Error('不可phone');}}),/采集.*预算/);});
+test('仅真实冻结采样intake才给claim matched优先flag',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'sample-claim-priority-'));try{const f=await sampleFixture(dir),qs=[];const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{qs.push(q);return {result:q.op==='inspect_videos'?[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待采评论'}]:[]};}});await h.dedup();await h.qualification();const q=qs.find(q=>q.op==='claim_videos');assert.equal(q.prefer_matched,true);assert.equal(q.source_run,f.source);assert.deepEqual(q.video_ids,[f.videoId]);}finally{rmSync(dir,{recursive:true,force:true});}});
+test('真实videoAction显式1620必须突破旧960但不越过截止',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'budget-action-red-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let seen;const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'budget-test',P:'work',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source101',QUEUED_VIDEO_COLLECTION_SECONDS:'1620',WF_RUN_MAX_SECONDS:'3600'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:q.op==='comment_history'?{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'budget-test',source_run:'source101',video_id:vid,video_url:url,rows:[]}:q.op==='collect'?{comments:0,inserted:0,history_verified:0,coverage:0}:q.op==='comment_history_readback'?{verified:true,video_id:vid,ids:[],history_verified:0}:{}}),execute:async(c,a,o)=>{if(a[1]==='collection'){seen=o;return {code:0,stdout:`COLLECTION\t${vid}\tno_comments\t0\nRESCAN\t${vid}\t0\n`,stderr:''};}return {code:0,stdout:'',stderr:''};}});await h.qualification();await h.collection();assert.equal(seen.maxDurationS,2100,'原960秒进程上限与显式1620软预算冲突');assert.equal(seen.env.QUEUED_VIDEO_COLLECTION_SECONDS,'1620');}finally{rmSync(dir,{recursive:true,force:true});}});
+test('collection到实际global截止不再renew/history/phone，不假完成',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'collection-expired-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let phase='qualification';const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'expired',P:'work',LEADGEN_LINE:'jinuo',WF_RUN_MAX_SECONDS:'3600',QUEUED_VIDEO_COLLECTION_SECONDS:'1620'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>{if(phase==='collection')throw Error('expired must not RPC');return {result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:{}};},execute:async()=>{assert.equal(phase,'qualification');return {code:0,stdout:'',stderr:''};}});await h.qualification();phase='collection';env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000)-3601);h.state.budgetDeadline=Date.now()+7200000;const r=await h.collection();assert.equal(r.status,'partial');assert.equal(r.videos_collected,0);assert.match(r.failures[0].reason,/EXECUTION_DEADLINE/);}finally{rmSync(dir,{recursive:true,force:true});}});
 
 test('无本轮播放证明的静音录制不得经PG业务拒绝，cleanup释放视频租约',async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  const dir=mkdtempSync(join(tmpdir(),'paused-recording-workflow-')),id='7663337150875733275',ops=[];
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'paused-processing',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
  const rpc=async body=>{const op=body.request.op;ops.push(op);if(op==='claim_videos')return {result:[{video_id:id,video_url:'https://v.douyin.com/fresh/',title:'新视频',keyword:'AI',judgment_status:'pending'}]};if(op==='reject_recording')return {result:{verified:true,video_id:id,verdict:'rejected',kind:'recording_silent'}};return {result:{}};};
@@ -454,7 +455,7 @@ test('无本轮播放证明的静音录制不得经PG业务拒绝，cleanup释�
 
 // 现场 run/eid 保留原格式，客户 ID/正文显式模拟；不冒称 mock proof 为真机证据。
 for(const fault of ['none','mixed_3new_2history','legacy_hyphen','wrong_run','wrong_vid','wrong_sha','traversal','missing_proof','wrong_identity','wrong_profile_sha','unverified','pg_readback'])test('HISTORY正式underscore消费及拒绝边界 '+fault,async()=>{
- const {createHandlers}=await import('../leadgen-workflow.mjs'),{createHash}=await import('node:crypto');
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),{createHash}=await import('node:crypto');
  const dir=mkdtempSync(join(tmpdir(),'history-formal-eid-')),vid='7664177880607247666',url='https://v.douyin.com/Vn_ErpbjvQg/',run=fault==='legacy_hyphen'?'history-run':'codexp_blue_20261012T113917Z_102_01';
  const row={id:'11111111-1111-4111-8111-111111111111',douyin_id:'mock_history_user',comment_body:'模拟历史评论'},calls=[];
  const mixed=fault==='mixed_3new_2history',historyRows=mixed?[row,{...row,id:'22222222-2222-4222-8222-222222222222',douyin_id:'mock_history_user2',comment_body:'模拟历史评论2'}]:[row];

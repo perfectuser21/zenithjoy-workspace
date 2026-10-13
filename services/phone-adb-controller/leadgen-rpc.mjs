@@ -47,7 +47,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
   }
   for (const path of ['queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
     'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
-    'leadgen-db-connect.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
+    'leadgen-db-connect.js','company-config-lib.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
     'verify-step.mjs','step-judge.mjs','checks/probes-lib.js','checks/schema.json',
     'checks/douyin-video-discovery.yaml','checks/douyin-video-processing.yaml','checks/douyin-comment-scoring.yaml',
@@ -69,14 +69,10 @@ export async function handleRpc(input, deps = {}) {
       return { ok: true, decision: await openRouterCommander()(input.receipt) };
     }
     if (input.kind === 'keywords') {
-      const { routeOf } = require('./line-routes.js');
-      const route = routeOf(input.line);
-      const count = Math.max(1, Math.min(12, Number(input.limit) || 2));
-      if (!input.source.files.some(f => f.path === 'next-keywords.js')
-          || !input.source.files.some(f => f.path === 'keyword-enabled-lib.js')) throw Error('RPC_KEYWORDS_DEPENDENCY_MISSING');
-      const { stdout } = await exec(process.execPath, [resolve(root, 'next-keywords.js'), route.line, String(count)],
-        { timeout: 60000, maxBuffer: 1024 * 1024 });
-      return { ok: true, result: stdout.trim().split('\n').filter(Boolean) };
+      pool = deps.pool || require('./leadgen-db-connect.js').getPool();
+      const result = await require('./next-keywords.js').companyKeywords(pool,
+        { lineHint: input.line, runId: input.run, limit: input.limit, keywords: input.keywords }, deps);
+      return { ok: true, result: result.keywords, config: result.config };
     }
     if(input.kind==='verify'){
       const names={douyin_video_discovery:'douyin-video-discovery',douyin_video_processing:'douyin-video-processing',

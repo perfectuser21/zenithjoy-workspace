@@ -1,13 +1,15 @@
+import {withCompanyFixture} from './company-config-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {createHandlers,parseCollection} from '../leadgen-workflow.mjs';
+import {createHandlers as rawCreateHandlers,parseCollection} from '../leadgen-workflow.mjs';
 import {createRequire} from 'node:module';
 const {queueRequest}=createRequire(import.meta.url)('../leadgen-queue.js');
 
+const createHandlers=withCompanyFixture(rawCreateHandlers);
 const root = new URL('../',import.meta.url).pathname;
 const vid = '7681632828384394202';
 

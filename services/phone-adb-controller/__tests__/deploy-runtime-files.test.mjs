@@ -21,5 +21,7 @@ test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包�
   assert.equal(runtime.length, new Set(runtime).size);
   assert.deepEqual(new Set(runtime), new Set(expected));
   assert.ok(runtime.includes('leadgen-workflow.mjs'));
+  assert.ok(runtime.includes('company-config-sync-lib.js'),'公司同步lib必须进入MMV发布源manifest');
+  assert.ok(!runtime.some(path=>/company-config-sync\.test\./.test(path)),'测试不作为生产运行包发布');
   assert.ok(runtime.includes('plans/douyin_comment_scoring.plan'));
 });
