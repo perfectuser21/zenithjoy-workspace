@@ -46,9 +46,9 @@ def write(path, value):
 
 
 @contextlib.contextmanager
-def lock(path, blocking=True):
+def lock(path, blocking=True, shared=False):
     with open(path, 'a') as guard:
-        fcntl.flock(guard, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        fcntl.flock(guard, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | (0 if blocking else fcntl.LOCK_NB))
         yield
 
 
@@ -152,8 +152,36 @@ def replay(directory):
                 return
 
 
+def admitted(descriptor):
+    try:
+        fd = int(descriptor)
+        actual, expected = os.fstat(fd), (HERE / '.admission.lock').stat()
+        if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+            return False
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def legacy(script, args):
+    with open(HERE / '.admission.lock', 'a') as guard:
+        fcntl.flock(guard, fcntl.LOCK_SH)
+        if (HERE / '.deploying').exists():
+            print('Commander deployment in progress; legacy admission denied', file=sys.stderr)
+            return 4
+        env = dict(os.environ, WF_LEGACY_ADMISSION_FD=str(guard.fileno()))
+        # 同一fd传给launch的直接runner；不会发生父等待起跑而子等待同一把锁。
+        os.set_inheritable(guard.fileno(), True)
+        os.execvpe('bash', ['bash', script, *args], env)
+
+
 if __name__ == '__main__':
-    if sys.argv[1] == 'verify':
+    if sys.argv[1] == 'admitted':
+        sys.exit(0 if admitted(sys.argv[2]) else 1)
+    elif sys.argv[1] == 'legacy':
+        sys.exit(legacy(sys.argv[2], sys.argv[3:]))
+    elif sys.argv[1] == 'verify':
         deployed = read(HERE / 'runtime-manifest.json')
         files = components(HERE)
         if deployed['files'] != files or deployed['runtime_snapshot_sha256'] != digest(files):

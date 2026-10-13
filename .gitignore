@@ -208,3 +208,6 @@ apps/staff-hub/test-results/
 apps/staff-hub/playwright-report/
 apps/agent-panel-host/AgentPanelHost.Tests/bin/
 apps/agent-panel-host/AgentPanelHost.Tests/obj/
+
+# Commander本地/部署准入锁，非版本化组件
+services/phone-adb-controller/commander/.admission.lock

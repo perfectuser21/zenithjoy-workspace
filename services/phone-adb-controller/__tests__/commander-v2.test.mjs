@@ -219,3 +219,26 @@ test('通用skill以原始v2信封与正式会话交接为主，不保留旧esco
  assert.doesNotMatch(skill,/重拉 escort|陪跑 escort 已上岗|Brain 已先登记 task\/run，并将 JSON 信封写到绝对路径/);
  for(const required of ['原始JSON信封','结构化文件工具','session_status','claim-spawn','resolvedProvider','resolvedModel','previous_attempt'])assert.ok(skill.includes(required),required);
 });
+test('清理失败在剩余预算内不固化delivery，重入只清理并补一次最终回执',()=>{
+ const f=fixture(),dir=start(f);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'};r.io.write(d/'envelope.json',e)
+r.io.write(d/'agent-completion.json',{'status':'ok'});r.io.write(d/'agent-delivery.json',{'status':'completed','outputs':{'unchanged':True},'evidence':[],'effects':[]})
+request=(d/'agent-request.json').read_bytes();calls=[]
+class CleanupOnly:
+ def __init__(self,*args):pass
+ def prepare(self):raise AssertionError('business prepare repeated')
+ def cleanup(self):
+  calls.append('cleanup');result={'completed':len(calls)>1,'evidence':['real-cleanup']};r.io.write(d/'cleanup.json',result);return result
+r.phone_module.Phone=CleanupOnly
+r.worker(d)
+assert r.io.read(d/'runtime.json')['phase']=='cleanup_pending'
+assert not (d/'delivery.json').exists(),'failed cleanup became immutable terminal delivery'
+assert not any(x['type']=='delivery' for x in r.io.read(d/'events.json'))
+r.worker(d)
+assert calls==['cleanup','cleanup']
+assert r.io.read(d/'delivery.json')['cleanup']['completed'] is True
+assert sum(x['type']=='delivery' for x in r.io.read(d/'events.json'))==1
+assert (d/'agent-request.json').read_bytes()==request
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});

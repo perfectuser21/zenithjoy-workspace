@@ -29,23 +29,20 @@ test("workflow-commander SKILL.md：只照调度单执行，不选空闲手机�
   assert.doesNotMatch(skill, /起草契约|起草新能力契约/, "不得再教 Commander 起草契约");
   assert.doesNotMatch(skill, /串新的 workflow/, "「串新的 workflow（组装）」整节必须删除");
   assert.match(skill, /调度单/, "必须定义调度单");
-  assert.match(skill, /<能力> <机器> <profile> <serial> <biz>/, "调度单格式必须写死");
-  assert.match(skill, /设计时/, "要组装新 workflow 必须指回设计时流程");
-  for (const keep of ["hostname", "wf-status", "100.71.151.105", "退出码", "禁止说「预检已过」"]) {
-    assert.ok(skill.includes(keep), `收窄不得误删仍有效条款: ${keep}`);
+  assert.match(skill, /原始JSON信封/, "正式调度单必须是冻结v2信封");
+  for (const keep of ["session_status", "claim-spawn", "wf-status", "100.71.151.105", "退出码", "禁止说「预检已过」"]) {
+    assert.ok(skill.includes(keep), `通用闭环有效条款缺失: ${keep}`);
   }
+  assert.doesNotMatch(skill, /重拉 escort|陪跑 escort 已上岗/, "新流程不再指挥旧看护角色");
 });
 
-test("AGENTS.md 真身进仓：只留身份/宪法指针/启动约定 + 两节铁律，n8n V4 协议全删", () => {
+test("AGENTS.md 真身：通用Commander身份/冻结归属/核验恢复，n8n V4 协议全删", () => {
   const agents = read("commander/AGENTS.md");
   assert.match(agents, /\$workflow-commander/, "启动约定必须先加载 $workflow-commander");
-  assert.match(agents, /wf-<能力>/, "启动约定必须再加载该 workflow 自己的陪跑 skill wf-<能力>");
-  assert.match(agents, /COMMANDER\.md/, "必须指向宪法真身");
-  assert.match(agents, /三档/, "必须提到三档权限");
-  assert.match(agents, /只服务 workflow/, "身份：只服务 workflow");
-  assert.match(agents, /## 跑场下放铁律/, "保留跑场下放铁律");
-  assert.match(agents, /## 零等待铁律/, "保留零等待铁律");
-  for (const dead of ["V4-SKELETON", "WORKFLOW_STAGE_REQUEST", "COMMANDER_STAGE_RESULT", "sessions_spawn", "workflow-state.mjs",
+  for (const keep of ["commander-v2", "sessions_spawn", "agent.wait", "冻结", "previous_attempt", "cleanup", "Brain 在 us-vps"]) {
+    assert.ok(agents.includes(keep), `通用角色合同缺失: ${keep}`);
+  }
+  for (const dead of ["V4-SKELETON", "WORKFLOW_STAGE_REQUEST", "COMMANDER_STAGE_RESULT", "workflow-state.mjs",
     "## Ownership", "## Startup contract", "## Stage loop", "## Lifecycle relay", "## Control messages", "agentic-workflow-runtime"]) {
     assert.ok(!agents.includes(dead), `n8n V4 协议残留: ${dead}`);
   }

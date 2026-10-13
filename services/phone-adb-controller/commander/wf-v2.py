@@ -26,6 +26,10 @@ handoff = module('wf-agent-handoff')
 phone_module = module('wf-v2-phone')
 
 
+class CleanupPending(Exception):
+    pass
+
+
 def timestamp(value):
     return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
 
@@ -89,11 +93,11 @@ def make_request(directory, envelope, parent):
         '【通用Commander业务子会话】仅执行冻结合同，禁止修改代码或直接完成Brain任务。\n'
         '完整输入：' + str(directory / 'input.json') + '\n冻结合同：' + str(directory / 'contract.json') +
         '\n运行信封：' + str(directory / 'envelope.json') + '\n产物目录：' + str(directory / 'evidence') +
-        '\n按照合同skill与activities执行；原样保留所有输入字段，活动完成通过 wf-v2.py event 记录。'
+        '\n按照合同skill与activities执行；原样保留所有输入字段，每个真实完成的activity/step，按definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
         '\n手机资源由外壳领锁/收尾，业务全程精确使用run_id作lock-owner，不另领或释放锁。'
         '\n外部副作用幂等key用task_id与activity，不用run_id；未知副作用先读回，不重复发布。'
         '\n最后一行：WF_DELIVERY {"status":"completed|failed|blocked","outputs":{},"evidence":[],"effects":[],"failure":null}'
-        '\n核验失败的断言与证据见信封recovery；只在冻结恢复合同允许范围修复产物，不现场修代码。\n', encoding='utf-8')
+        '\n上次失败结构化上下文见信封recovery.previous_attempt（run_id、attempt、failure、verification.assertions/evidence、diagnostic_sha256）；先核对证据，原始记录按task/run只读回查。\n核验失败的断言与证据见信封recovery；只在冻结恢复合同允许范围修复产物，不现场修代码。\n', encoding='utf-8')
 
 
 def current(directory):
@@ -112,6 +116,8 @@ def current(directory):
                       request=str(directory / 'agent-request.json'), message=str(directory / 'msg.txt'))
     else:
         result['action'] = 'wait'
+    if state['phase'] == 'cleanup_pending':
+        result['action'] = 'cleanup'
     if (directory / 'delivery.json').exists():
         result['action'] = 'awaiting_verify'
     return result
@@ -127,7 +133,7 @@ def start_worker(directory):
 
 def launch(path, parent):
     # 与部署封签的admission锁串行，避免ready之后半上线抢跑。
-    with io.lock(HERE / '.admission.lock'):
+    with io.lock(HERE / '.admission.lock', shared=True):
         return launch_locked(path, parent)
 
 
@@ -178,13 +184,15 @@ def finalize(directory, envelope, phone):
     completion = io.read(directory / 'agent-completion.json')
     agent = io.read(directory / 'agent-delivery.json')
     cleanup_path = directory / 'cleanup.json'
-    if cleanup_path.exists():
+    if cleanup_path.exists() and io.read(cleanup_path).get('completed') is True:
         cleanup = io.read(cleanup_path)
     elif phone:
         cleanup = phone.cleanup()
     else:
         cleanup = dict(completed=True, evidence=[str(directory / 'agent-terminal.json')])
         io.write(cleanup_path, cleanup)
+    if phone and not cleanup['completed'] and time.time() < timestamp(envelope['cleanup_deadline_at']):
+        raise CleanupPending('cleanup evidence or release incomplete; cleanup-only reentry')
     if not isinstance(agent.get('outputs'), (dict, list)) or not isinstance(agent.get('evidence'), list) or not isinstance(agent.get('effects'), list):
         raise ValueError('complete outputs/evidence/effects required; never infer absent effects')
     for effect in agent['effects']:
@@ -247,7 +255,18 @@ def worker(directory):
             io.write(directory / 'runtime.json', dict(state, phase='awaiting_verify', execution_stopped=True))
             io.replay(directory)
             return
-        if phone and not (directory / 'preflight.json').exists():
+        if (directory / 'execution-failure.json').exists():
+            reason = io.read(directory / 'execution-failure.json')['reason']
+            if phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
+                cleanup = phone.cleanup()
+                io.write(directory / 'cleanup.json', cleanup)
+                if not cleanup['completed'] and time.time() < timestamp(envelope['cleanup_deadline_at']):
+                    raise CleanupPending('failed execution cleanup-only reentry')
+            failed_delivery(directory, envelope, reason)
+            io.write(directory / 'runtime.json', dict(state, phase='awaiting_verify', execution_stopped=True))
+            io.replay(directory)
+            return
+        if phone and not (directory / 'agent-completion.json').exists() and not (directory / 'preflight.json').exists():
             if (directory / 'preflight-intent.json').exists():
                 raise ValueError('preflight interrupted; inspect owner/account before recovery')
             io.write(directory / 'preflight-intent.json', {'at': time.time()})
@@ -260,7 +279,10 @@ def worker(directory):
                 raise ValueError('cleanup budget exhausted; retain unknown execution ownership')
             if time.time() >= timestamp(envelope['deadline_at']):
                 if (directory / 'agent-binding.json').exists():
-                    handoff.await_result(directory, once=True)
+                    try:
+                        handoff.await_result(directory, once=True)
+                    except Exception as error:
+                        io.write(directory / 'deadline-await-error.json', {'reason': str(error)})
                     if (directory / 'agent-completion.json').exists():
                         break
                     if time.time() < timestamp(envelope['cleanup_deadline_at']):
@@ -277,6 +299,10 @@ def worker(directory):
             else:
                 time.sleep(1)
         finalize(directory, envelope, phone)
+        io.replay(directory)
+    except CleanupPending as error:
+        io.write(directory / 'runtime.json', dict(state, phase='cleanup_pending', execution_stopped=True, failure=str(error)))
+        io.emit(directory, 'blocked', {'reason': str(error), 'execution_stopped': True, 'recovery': 'cleanup_only'})
         io.replay(directory)
     except Exception as error:
         # 活性不明不收锁、不重跑；明确终态后可再次启动worker完成收尾/补账。
@@ -295,11 +321,18 @@ def worker(directory):
             with io.lock(directory / '.launch.lock'):
                 io.write(directory / 'handoff-closed.json', {'reason': str(error)})
                 stopped = True
-        if stopped and phone and not (directory / 'cleanup.json').exists():
+        if stopped:
+            io.write(directory / 'execution-failure.json', {'reason': str(error)})
+        if stopped and phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
             try:
-                phone.cleanup()
+                io.write(directory / 'cleanup.json', phone.cleanup())
             except Exception:
                 io.write(directory / 'cleanup.json', {'completed': False, 'evidence': []})
+        if stopped and phone and not io.read(directory / 'cleanup.json')['completed'] and time.time() < timestamp(envelope['cleanup_deadline_at']):
+            io.write(directory / 'runtime.json', dict(state, phase='cleanup_pending', execution_stopped=True, failure=str(error)))
+            io.emit(directory, 'blocked', {'reason': str(error), 'execution_stopped': True, 'recovery': 'cleanup_only'})
+            io.replay(directory)
+            return
         io.write(directory / 'runtime.json', dict(state, phase='blocked', execution_stopped=stopped, failure=str(error)))
         io.emit(directory, 'blocked', {'reason': str(error), 'execution_stopped': stopped,
                                     'recovery': 'read existing child/side effects; retain task and immutable budget'})
@@ -324,7 +357,7 @@ def main():
     elif command == 'status':
         directory = run_directory(sys.argv[2])
         result = current(directory)
-        if not result['execution_stopped'] and (directory / 'agent-binding.json').exists():
+        if result['state'] == 'cleanup_pending' or (not result['execution_stopped'] and (directory / 'agent-binding.json').exists()):
             try:
                 with io.lock(directory / '.worker.lock', blocking=False):
                     start_worker(directory)  # 仅续接官方child监督，不产生新业务会话

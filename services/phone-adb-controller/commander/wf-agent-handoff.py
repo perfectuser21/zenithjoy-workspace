@@ -198,8 +198,12 @@ def stop(directory):
         if left <= 0:
             raise ValueError('cancellation cleanup budget exhausted')
         return left
-    abort = rpc('sessions.abort', params, budget())
-    write(directory / 'child-abort.json', abort)
+    try:
+        abort = rpc('sessions.abort', params, budget())
+        write(directory / 'child-abort.json', abort)
+    except Exception as error:
+        # abort回执丢失不代表未取消；终态读回独立进行，不能靠取消成功自述释放资源。
+        write(directory / 'child-abort-error.json', {'reason': str(error)})
     timeout = budget()
     terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(min(10, timeout) * 1000)), timeout)
     write(directory / 'child-stop-readback.json', terminal)

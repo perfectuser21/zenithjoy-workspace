@@ -66,7 +66,10 @@ import fcntl,json,pathlib,subprocess,sys
 root=pathlib.Path.home()/'.openclaw/commander'
 root.mkdir(parents=True,exist_ok=True)
 with open(root/'.admission.lock','a') as guard:
-    fcntl.flock(guard,fcntl.LOCK_EX)
+    try:
+        fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(3)
     active=subprocess.run(['pgrep','-f','[w]f-agent-run.sh|[w]f-v2.py worker'],stdout=subprocess.DEVNULL).returncode==0
     for path in (pathlib.Path.home()/'wf-agent-runs').glob('*/runtime.json'):
         active=active or json.loads(path.read_text()).get('execution_stopped') is not True
