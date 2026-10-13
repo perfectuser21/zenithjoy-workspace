@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {createHash} from 'node:crypto';
 import {createHandlers,runWorkflow} from '../leadgen-workflow.mjs';
 
 // 全部账号、订单、模板和发送XML为明示fake，测试不访问手机/网络/生产库。
@@ -11,7 +12,7 @@ function fixture(){
  const registry=join(dir,'accounts.tsv');writeFileSync(registry,'jinoshengyuan-work\tlangzi63485\n');
  const stateDir=join(dir,'bin-harvest/state');mkdirSync(stateDir,{recursive:true});
  const events=[];
- const env={HOME:dir,WFR_RUN_DIR:dir,P:'jinoshengyuan-work',SERIAL:'FAKE6983',WFR_TAG:'fake104',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',LEADGEN_LIMIT:'1',DOUYIN_ACCOUNT_REGISTRY:registry};
+ const env={HOME:dir,WFR_RUN_DIR:dir,P:'jinoshengyuan-work',SERIAL:'FAKE6983',WFR_TAG:'fake104',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',LEADGEN_LIMIT:'1',DOUYIN_ACCOUNT_REGISTRY:registry,PHONE_EVIDENCE_ROOT:join(dir,'fake-evidence')};
  const order={id:'e92b90f1-19d1-4121-a434-96e0ee46a493',line_key:'jinuo',douyin_id:'1873867835',profile_url:'https://v.douyin.com/FAKEONLY/',script_id:'fake-approved-B',script_version:'B',message:'测试批准正文',sender_douyin_id:'langzi63485'};
  const rpc=async body=>{events.push(body);const op=body.request?.op;
   if(op==='claim_outreach')return {result:[order]};
@@ -27,10 +28,21 @@ function fixture(){
   if(action==='preflight')stdout='serial=FAKE6983\n';
   if(action?.startsWith('lock-'))stdout='lock='+({'lock-acquire':'acquired','lock-refresh':'refreshed','lock-release':'released'}[action])+'\n';
   if(action==='account-current')stdout='douyin_id=langzi63485\n';
-  if(action==='private-message-send')stdout='send_status=sent\nsender_douyin_id=langzi63485\ntarget_douyin_id=1873867835\n';
+  if(action==='private-message-send'){
+   const base=join(env.PHONE_EVIDENCE_ROOT,env.P);mkdirSync(base,{recursive:true});const raw=join(base,'fake104-a2-dm-1-sent-ui.xml');
+   writeFileSync(raw,'<hierarchy><node text="测试批准正文" class="android.widget.TextView"/></hierarchy>');const typed=join(base,'fake104-a2-dm-1-typed.xml');writeFileSync(typed,'<hierarchy><node text="测试批准正文" class="android.widget.EditText"/></hierarchy>');
+   stdout='send_status=sent\nmessage_delta_verified=true\nsender_douyin_id=langzi63485\ntarget_douyin_id=1873867835\nmessage_sha256='+createHash('sha256').update(order.message).digest('hex')+'\nsent_ui_evidence='+raw+'\ntyped_ui_evidence='+typed+'\n';
+  }
   return {code:0,stdout,stderr:''};};
  return {dir,env,events,order,rpc,execute,clean:()=>rmSync(dir,{recursive:true,force:true})};
 }
+const legacyDay=()=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(x=>x.type===k).value).join('');};
+for(const stateFile of ['halt','count'])test('104遵守已有YYYYMMDD '+stateFile+'文件，不能绕过旧风控/额度',async()=>{
+ const f=fixture();try{writeFileSync(join(f.env.HOME,'bin-harvest/state',`dm-${stateFile}-${f.env.P}-${legacyDay()}.txt`),stateFile==='count'?'60':'fake real-risk halt');
+ const h=createHandlers({root:f.dir,...f});await assert.rejects(h.preflight(),/风险|日发送上限/);
+ assert.ok(!f.events.some(e=>e.request?.op==='claim_outreach'||e.args?.includes('private-message-send')));
+ }finally{f.clean();}
+});
 test('104授权新流程通过预检、永久预留、唯一一次真sender调用、写回及Commander清场',async()=>{
  const f=fixture();try{const h=createHandlers({root:f.dir,...f});const receipts=[];
  const out=await runWorkflow({activities:['preflight','send_dm','write_back','cleanup'].map(key=>({key})),context:{},handlers:h,
