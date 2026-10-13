@@ -80,7 +80,8 @@ class Methods(unittest.TestCase):
   with patch.dict(os.environ,PYTHONPATH=str(poison)):
    result=self.method_module().execute(self.envelope,{'source_path':PATH,'args':[]},self.io.ready)
    self.assertEqual(json.loads(result['stdout'])['value'],'frozen dependency')
-  self.repack({PATH:entry});self.attest();self.envelope['definition']['runtime_snapshot_sha256']=None
+  self.repack({PATH:entry});self.envelope['definition']['runtime_snapshot_sha256']=None
+  with self.assertRaises(ValueError):self.attest()
   with patch.dict(os.environ,PYTHONPATH=str(poison)):
    with self.assertRaises(ValueError):self.io.ready(self.envelope)
  def test_parent_symlink_and_current_workspace_drift_are_rejected(self):
