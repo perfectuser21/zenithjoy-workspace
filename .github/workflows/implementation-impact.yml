@@ -29,6 +29,7 @@ jobs:
         run: test "$RUN_REF" = refs/heads/main
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -38,6 +39,19 @@ jobs:
       - run: node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/implementation-patrol-scope.test.mjs
+      - name: 固定已合并Brain真实冻结校验器
+        uses: actions/checkout@v4
+        with:
+          repository: perfectuser21/cecelia
+          ref: f99f372689b895751bcb30a8e1bb429aaf8edfaa
+          path: .ci-brain-tooling
+          persist-credentials: false
+      - run: npm ci --ignore-scripts --workspace packages/brain
+        working-directory: .ci-brain-tooling
+      - name: 真实跨仓Commander技能与完整定义冻结回归
+        env:
+          COMMANDER_BRAIN_ROOT: ${{ github.workspace }}/.ci-brain-tooling
+        run: node --test scripts/ci/__tests__/commander-skill-freeze.test.mjs
 
   scope-classification:
     name: Implementation scope classification

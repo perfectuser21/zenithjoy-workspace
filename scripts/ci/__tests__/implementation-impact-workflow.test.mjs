@@ -48,3 +48,16 @@ test('caller协议检查永久在CI执行，不因触发路径或continue-on-err
   assert.equal(config.on.pull_request.paths, undefined);
   assert.equal(config.on.push.paths, undefined);
 });
+
+test('Commander冻结回归固定真实Brain源码且CI不可缺席',()=>{
+ const steps=workflow().jobs['caller-contract'].steps;
+ const source=steps.find(s=>s.uses==='actions/checkout@v4'&&!s.with?.repository);
+ assert.equal(source.with.ref,'${{ github.event.pull_request.head.sha || github.sha }}');
+ const tooling=steps.find(s=>s.with?.repository==='perfectuser21/cecelia');
+ assert.equal(tooling?.with.ref,'f99f372689b895751bcb30a8e1bb429aaf8edfaa');
+ assert.equal(tooling.with.path,'.ci-brain-tooling');assert.equal(tooling.with['persist-credentials'],false);
+ const run=steps.find(s=>s.run==='node --test scripts/ci/__tests__/commander-skill-freeze.test.mjs');
+ assert.equal(run?.env.COMMANDER_BRAIN_ROOT,'${{ github.workspace }}/.ci-brain-tooling');
+ assert.equal(run.if,undefined);assert.equal(run['continue-on-error'],undefined);
+ assert.ok(steps.some(s=>s['working-directory']==='.ci-brain-tooling'&&s.run==='npm ci --ignore-scripts --workspace packages/brain'));
+});
