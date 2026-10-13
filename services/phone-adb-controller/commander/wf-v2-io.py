@@ -144,8 +144,22 @@ def validate_fact(envelope, kind, data):
         raise ValueError('activity reference/step must match one frozen expected_path')
     if 'activity_id' in data and data['activity_id'] != paths[0].get('activity_id'):
         raise ValueError('activity_id does not match frozen expected_path')
+    definition = envelope['definition']
+    identities = {'run_id': envelope['run_id'], 'identity_protocol': 2,
+                  'workflow_id': definition.get('workflow_id'), 'attempt_key': definition.get('attempt_key'),
+                  'workflow_definition_version_id': definition.get('workflow_definition_version_id'),
+                  'activity_definition_version_id': paths[0].get('activity_definition_version_id')}
+    for field, expected in identities.items():
+        if field in data and (expected is None or type(data[field]) is not type(expected) or data[field] != expected):
+            raise ValueError('activity identity does not match frozen envelope: ' + field)
+    if 'run_binding_id' in data:
+        raise ValueError('run_binding_id is server-only; omit this declaration')
+    if isinstance(data.get('evidence'), dict) and 'runtime_snapshot_sha256' in data['evidence']:
+        expected = definition.get('runtime_snapshot_sha256')
+        if not expected or data['evidence']['runtime_snapshot_sha256'] != expected:
+            raise ValueError('evidence runtime_snapshot_sha256 does not match frozen envelope')
     if data.get('outcome') not in ('pass', 'fail', 'skipped', 'unknown'):
-        raise ValueError('outcome must be pass|fail|skipped|unknown; completed is an event type')
+        raise ValueError('outcome must be pass|fail|skipped|unknown; activity_completed is event type; completed is delivery.status')
     def timestamp(field):
         value = data.get(field)
         if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)', value):
