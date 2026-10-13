@@ -612,6 +612,24 @@ except (ET.ParseError,OSError):
 PYGUIDE
 }
 
+
+# 20261013 真机评论名片复制分享提示；只授权关闭这一层，不能证明视频身份。
+_is_comment_card_copy_overlay_xml() {
+  local xml="$1"
+  _is_complete_douyin_xml "$xml" || return 1
+  "$PYTHON_BIN" - "$xml" "$DOUYIN_PACKAGE" <<'PYCARDOVERLAY'
+import sys,xml.etree.ElementTree as ET
+try:
+    nodes=list(ET.parse(sys.argv[1]).getroot().iter('node'));pkg=sys.argv[2]
+    markers={'z8=':'链接已复制成功，去粘贴分享：','z88':'可以通过分享的链接找到我'}
+    for key,text in markers.items():
+        hits=[n for n in nodes if n.get('resource-id')==pkg+':id/'+key]
+        if len(hits)!=1 or hits[0].get('text')!=text:sys.exit(1)
+    if any(n.get('content-desc','').startswith('分享') for n in nodes):sys.exit(1)
+except (ET.ParseError,OSError):sys.exit(1)
+PYCARDOVERLAY
+}
+
 _on_video_detail() {
   local probe_id="$1" probe_xml w policy="${2:-standard}" read_rc
   for w in 1 2; do
@@ -4244,9 +4262,30 @@ case "$command" in
     wait_ms 600
     foreground_gate "$3-gate" paused-douyin || die "UNTRUSTED_FOREGROUND_EVIDENCE"
     ov_g=0; _on_video_detail "$3-openvideo" paused-detail || ov_g=$?
+    ov_guard_eid="$3-openvideo"
+    if (( ov_g == 1 || ov_g == 3 )); then
+      # rc3也可能是错误前台/树，因此只凭独立新树识别，不信失败树或错误码。
+      ov_overlay_xml=""
+      if ov_overlay_xml="$(_ui_evidence_wave "$3-card-copy-overlay" paused-douyin)" \
+          && _is_comment_card_copy_overlay_xml "$ov_overlay_xml"; then
+        ov_overlay_fg="$(foreground_package)"
+        "$PYTHON_BIN" - "$ov_overlay_fg" "$DOUYIN_PACKAGE" <<'PYCARDFOCUS' || die "CARD_COPY_OVERLAY_FOREGROUND_CHANGED"
+import re,sys
+components=re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)',sys.argv[1])
+pkg=sys.argv[2]
+sys.exit(0 if components==[(pkg,pkg+'.detail.ui.DetailActivity')] else 1)
+PYCARDFOCUS
+        "$ADB" -s "$SERIAL" shell input keyevent 4 || die "CARD_COPY_OVERLAY_BACK_FAILED"
+        wait_ms 600
+        "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://aweme/detail/$ov_id" >/dev/null || die "CARD_COPY_OVERLAY_REOPEN_FAILED"
+        foreground_gate "$3-card-copy-reopen-gate" paused-douyin || die "UNTRUSTED_FOREGROUND_EVIDENCE"
+        ov_guard_eid="$3-card-copy-reopen"
+        ov_g=0; _on_video_detail "$ov_guard_eid" paused-detail || ov_g=$?
+      fi
+    fi
     if (( ov_g == 2 )); then
       wait_ms 3000
-      ov_g=0; _on_video_detail "$3-openvideo-w2" paused-detail || ov_g=$?
+      ov_g=0; _on_video_detail "$ov_guard_eid-w2" paused-detail || ov_g=$?
     fi
     (( ov_g == 0 )) || die "detail deeplink for $ov_id did not land on a verified video detail page (guard rc=$ov_g)"
     snapshot_evidence "$3-openvideo-ok" >/dev/null
@@ -4254,8 +4293,8 @@ case "$command" in
     # 零评论的视频不许流向录屏/ASR（最贵工序不该排在最便宜的过滤器前面）。
     # 有数字形态：评论3，按钮 / 评论736，按钮 / 评论1.2万，按钮；
     # 零评论实测形态：评论评论，按钮（无数字）⇒ comment_count=0。
-    ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w1.xml"
-    [[ -s "$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml" ]] && ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml"
+    ov_cc_xml="$EVIDENCE_ROOT/$ov_guard_eid-w1.xml"
+    [[ -s "$EVIDENCE_ROOT/$ov_guard_eid-w2-w1.xml" ]] && ov_cc_xml="$EVIDENCE_ROOT/$ov_guard_eid-w2-w1.xml"
     ov_cc="$(/usr/bin/grep -oE 'content-desc="评论[0-9][^，"]*，按钮"' "$ov_cc_xml" 2>/dev/null | /usr/bin/head -1 | /usr/bin/sed -E 's/.*评论([0-9][^，"]*)，按钮.*/\1/' || true)"
     if [[ "$DETAIL_PLAYBACK" == standard ]]; then
       "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
