@@ -25,24 +25,58 @@ async function filter() {
 beforeEach(() => {
  vi.clearAllMocks();
  vi.mocked(getTable).mockResolvedValue({ name: 'Table', fields: [{field_id:'text',name:'Text',field_type:'text'}, {field_id:'number',name:'Number',field_type:'number'}] } as Awaited<ReturnType<typeof getTable>>);
- vi.mocked(listRows).mockResolvedValue({ rows: [], row_limit: 100 });
- vi.mocked(listRowsWith).mockResolvedValue({ rows: [], row_limit: 100 });
+ vi.mocked(listRows).mockResolvedValue({ rows: [], total: 0, row_limit: 100 });
+ vi.mocked(listRowsWith).mockResolvedValue({ rows: [], total: 0, row_limit: 100 });
  vi.mocked(listRowTrash).mockResolvedValue([]);
  vi.mocked(listViews).mockResolvedValue({ views: [{...view}], active_view_id:'view' });
 });
 afterEach(cleanup);
 describe('view preferences save ordering', () => {
- it('preserves a later hidden-column choice while a real earlier save response is pending, and saves both patches', async () => {
+ it('preserves a later hidden-column choice while an earlier save response is pending, and saves both patches', async () => {
   const first=deferred<WorkbenchView>(), second=deferred<WorkbenchView>();
   vi.mocked(patchView).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
   await open(); await filter(); fireEvent.click(screen.getByTestId('hide-col-number'));
   expect(screen.getByTestId('hide-col-number')).toBeChecked();
+  expect(patchView).toHaveBeenCalledTimes(1);
   await act(async () => first.resolve({...view, filters:[{field_id:'text',op:'contains',value:'甲'}]}));
   expect(screen.getByTestId('hide-col-number')).toBeChecked();
   await waitFor(() => expect(patchView).toHaveBeenCalledTimes(2));
   expect(vi.mocked(patchView).mock.calls[1]).toEqual(['view',{hidden_field_ids:['number']}]);
   await act(async () => second.resolve({...view, filters:[{field_id:'text',op:'contains',value:'甲'}],hidden_field_ids:['number']}));
   expect(screen.getByTestId('hide-col-number')).toBeChecked();
+ });
+ it('saves consecutive edits to the same field in order without rechecking a later unchecked choice', async () => {
+  const first=deferred<WorkbenchView>(), second=deferred<WorkbenchView>();
+  vi.mocked(patchView).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  await open(); fireEvent.click(screen.getByTestId('hide-col-number'));
+  await waitFor(() => expect(patchView).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByTestId('hide-col-number'));
+  expect(screen.getByTestId('hide-col-number')).not.toBeChecked();
+  expect(patchView).toHaveBeenCalledTimes(1);
+  await act(async () => first.resolve({...view,hidden_field_ids:['number']}));
+  expect(screen.getByTestId('hide-col-number')).not.toBeChecked();
+  await waitFor(() => expect(patchView).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(patchView).mock.calls.map(call=>call[1])).toEqual([{hidden_field_ids:['number']},{hidden_field_ids:[]}]);
+  await act(async () => second.resolve({...view}));
+  expect(screen.getByTestId('hide-col-number')).not.toBeChecked();
+ });
+ it('preserves an unsaved choice across another view activation and retries that view after failure', async () => {
+  const first=deferred<WorkbenchView>(); const other={...view,view_id:'other',name:'Other',is_active:false};
+  vi.mocked(listViews).mockResolvedValue({views:[{...view},other],active_view_id:'view'});
+  vi.mocked(patchView).mockImplementation(async (id,patch)=> id==='view' && patch.hidden_field_ids ? first.promise : {...(id==='other'?other:view),...patch});
+  await open(); fireEvent.click(screen.getByTestId('hide-col-number'));
+  await waitFor(()=>expect(patchView).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByTestId('view-tab-other'));
+  await waitFor(()=>expect(listViews).toHaveBeenCalledTimes(2));
+  await act(async()=>first.reject(new Error('offline')));
+  fireEvent.click(screen.getByTestId('view-tab-view'));
+  await waitFor(()=>expect(listViews).toHaveBeenCalledTimes(3));
+  expect(screen.getByTestId('hide-col-number')).toBeChecked();
+  expect(screen.getByTestId('view-prefs-error')).toHaveTextContent('视图偏好未保存');
+  vi.mocked(patchView).mockResolvedValue({...view,hidden_field_ids:['number']});
+  fireEvent.click(screen.getByTestId('view-prefs-retry'));
+  await waitFor(()=>expect(screen.queryByTestId('view-prefs-error')).not.toBeInTheDocument());
+  expect(vi.mocked(patchView).mock.calls.at(-1)).toEqual(['view',expect.objectContaining({hidden_field_ids:['number']})]);
  });
  it('does not erase an unsaved filter error when another field succeeds, and explicit retry saves the complete choice', async () => {
   const first=deferred<WorkbenchView>(), second=deferred<WorkbenchView>();
