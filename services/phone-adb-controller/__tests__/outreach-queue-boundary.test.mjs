@@ -31,7 +31,7 @@ test('真实原订单adapter同recipient两个大小写别名、两个run竞争�
 test('原Feishu永久预留提交但回复丢失，重启/cleanup不能重新获得发送许可',async()=>{
  const f=fakeOriginalOrders();try{
  const [order]=await queueRequest({...f.input,op:'claim_outreach'},f.deps);
- const input={...f.input,id:order.id,op:'prepare_outreach',script_id:'fake-B',message_sha256:f.digest};
+ const input={...f.input,id:order.id,op:'prepare_outreach',script_id:'fake-B',script_version:'B',message_sha256:f.digest,target_douyin_id:order.douyin_id,profile_url:order.profile_url};
  const put=f.deps.client.put;f.deps.client.put=async(id,fields)=>{await put(id,fields);if(fields['回复结果']?.startsWith('[104 prepared:'))throw Error('fake commit reply lost');};
  await assert.rejects(queueRequest(input,f.deps),/reply lost/);f.deps.client.put=put;
  await assert.rejects(queueRequest(input,f.deps),/首次发送许可证/);
@@ -55,6 +55,11 @@ test('原订单prepare PUT后正文变更，必须保永久挂起而非给发送
 test('已restricted或rate_limited的104原订单终态仍永久防大小写别名再次发送',()=>{
  const lib=require('../next-outreach-lib.js');
  for(const outcome of ['restricted','rate_limited'])assert.equal(lib.recipientReserved([{fields:{'状态':'触达受阻','抖音号':'ABC123','回复结果':`[104 ${outcome}:fake104:${'f'.repeat(40)}]`}}],'abc123'),true);
+});
+test('两个选单入口共享一次构建的normalized reserved Set，避免逐候选重扫全表',()=>{
+ const lib=require('../next-outreach-lib.js');
+ const result=lib.reservedRecipientSet([{fields:{'状态':'已触达','抖音号':'ABC123'}},{fields:{'状态':'触达中','抖音号':'abc123'}},{fields:{'状态':'待触达','抖音号':'READY999'}}]);
+ assert.ok(result instanceof Set);assert.deepEqual([...result],['abc123']);
 });
 test('104直接RPC写回缺本轮原始收件人正文hash证明时不允许落发送成功',async()=>{
  let queries=0;const pool={query:async()=>{queries++;throw Error('SQL不该执行');},connect:async()=>{queries++;throw Error('SQL不该执行');}};
