@@ -122,7 +122,7 @@ class Phone:
         if not nick or nick.group(1) != self.account:
             raise ValueError('account mismatch or unavailable')
         self.check_roots('preflight-end')
-        io.write(self.directory / 'preflight.json', dict(serial=self.serial, owner=self.run, account=nick.group(1)))
+        return shell.commit_receipt(self, 'preflight', dict(serial=self.serial, owner=self.run, account=nick.group(1)))
 
     def refresh(self):
         self.deadline = self.execution_deadline
@@ -174,8 +174,7 @@ class Phone:
         evidence += [str(self.directory / name) for name in ('cleanup-release.log', 'cleanup-lock-readback.json') if (self.directory / name).exists()]
         receipt = dict(completed=ok and owner == 'free', evidence=evidence, lock_status=owner,
                        failure='; '.join(failures) or None)
-        io.write(self.directory / 'cleanup.json', receipt)
-        return receipt
+        return shell.commit_receipt(self, 'cleanup', receipt)
 
     def capture_cleanup(self):
         for op, name in [('close-app', 'cleanup-close-app.log'), ('return-safe-desktop', 'cleanup-desktop.log')]:

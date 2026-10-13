@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "zhihu_video_publish",
   "brain_workflow_key": "zhihu_video_publish.android",
-  "contract_sha256": "3143cb06eaa7a56c4ddb7f536e1f4f5eda56bb57238255e9bfca9e9253cf14f8",
+  "contract_sha256": "254adedecdf7d5ccbcdad22deb49a3b1aeab66028a448428d9274609296dc873",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -14,7 +14,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*preflight*original.json",
+        "glob": "shell-evidence/preflight/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1
@@ -90,7 +90,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*cleanup*original.json",
+        "glob": "shell-evidence/cleanup/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1

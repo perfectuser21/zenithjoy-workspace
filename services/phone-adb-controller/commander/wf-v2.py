@@ -88,9 +88,11 @@ def make_request(directory, envelope, parent):
     request = io.read(directory / 'agent-request.json')
     request['expires_at'] = timestamp(envelope['deadline_at'])
     request['protocol'] = io.PROTOCOL
+    request['execution_location'] = {'host': 'mmv', 'tool': 'gateway_exec', 'run_directory': str(directory)}
     io.write(directory / 'agent-request.json', request)
     (directory / 'msg.txt').write_text(
         '【通用Commander业务子会话】仅执行冻结合同，禁止修改代码或直接完成Brain任务。\n'
+        '执行位置execution_location=MMV网关宿主；模型本机不是MMV。读取绑定、input/contract、活动event、报告collect/verify、产物和交付文件均须gateway_exec；JSON用结构化env配固定Python读os.environ传stdin，正文不得拼shell。长进程用gateway_process。resources.machine仅指手机动作宿主，不能据此迁移run目录或报告helper。\n'
         '完整输入：' + str(directory / 'input.json') + '\n冻结合同：' + str(directory / 'contract.json') +
         '\n运行信封：' + str(directory / 'envelope.json') + '\n产物目录：' + str(directory / 'evidence') +
         '\n按照合同skill与activities执行；原样保留所有输入字段，仅为contract中by=agent的业务activity/step上报（preflight与cleanup由外壳负责，不能代补）；每个真实完成的activity/step，用activity_bindings按key定位并对照definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
@@ -247,10 +249,10 @@ def worker(directory):
     envelope = io.read(directory / 'envelope.json')
     phone = phone_module.Phone(directory, envelope) if envelope['contract'].get('resources') else None
     state = io.read(directory / 'runtime.json')
-    if phone:
-        for key in ('preflight', 'cleanup'):
-            phone_module.shell.replay(directory, key)
     try:
+        if phone:
+            for key in ('preflight', 'cleanup'):
+                phone_module.shell.recover(phone, key)
         if (directory / 'delivery.json').exists():
             delivery = io.read(directory / 'delivery.json')
             if not any(event['type'] == 'delivery' for event in io.read(directory / 'events.json')):

@@ -11,19 +11,48 @@ description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻�
 
 调度单是 Brain 已登记并绑定 run 的**原始JSON信封**，不是预先存在的文件。字段包括 protocol、task_id、run_id、workflow_key、attempt、owner_epoch、deadline_at、cleanup_deadline_at、input、input_sha256、definition、contract、recovery。不得删字段、重构输入、改身份或延长预算。
 
-1. 先用 hostname 核实工具所在机器。在 MMV（网关机 `administrator@100.71.151.105`）执行运行端工具。若当前工具位于其他跑场机，通过已有通道回调 MMV；不能在 Brain 服务器运行重活。
-2. 使用**结构化文件工具**把完整信封原样写入本 run 独享的绝对路径，例如 `/Users/administrator/wf-agent-inputs/<task_id>/<run_id>.json`。写后重新读取，核对全部 JSON 值，保留中文、换行、空数组及所有扩展字段。同路径已有内容时只接受相同信封，冲突不能覆盖。禁止用 echo、shell 插值或自由文本拼命令写业务输入；凭据不得进入信封。
+1. Codex 的模型本机 shell 可能位于 `/Users/Shared/openclaw-workspaces`，不等于 MMV。先用 `gateway_exec` 执行 hostname 核对网关宿主。本文所有 `~/.openclaw/commander`、run目录、报告helper及文件读写都在 MMV（`administrator@100.71.151.105`），必须用 `gateway_exec`；不要假造 MMV 的 node_exec 节点。手机动作才使用冻结资源对应跑场通道。
+2. 使用明确面向 MMV 的**结构化文件工具**，或下方已验证的 `gateway_exec.env` 桥，将完整信封原样写入本 run 独享路径。模型本机写出的文件不能当成远端文件。固定脚本从结构化 env 取 JSON，独占创建、0600写入，再重新解析比较；同路径相同信封可重入，冲突拒绝。禁止把业务值插进 command、echo 或自由文本 shell；凭据不得进入信封。
 3. 正式调用 `session_status` 取得当前 `agent:work-commander:…` session key，后续 parent_session_key 必须是它。不能伪造其他父会话。
 4. 调 `~/.openclaw/commander/wf-launch.sh --ready`，经 stdin 传结构化 `{definition,workflow_key}`。只有 ready=true，且返回的 release_id、snapshot_sha256、runtime_snapshot_sha256 与本次绑定一致，才能启动。该接口实际校验整包文件与加载的工作区；半上线、缺映射或漂移都不能起跑或降级旧协议。
 5. 读取信封内冻结 contract；commander_skill 非空则核对指定名称和版本并加载，版本不符要记录阻塞。不得拿最新合同替换冻结合同。`resources={}` 是正常非手机流程，不增加或伪造 serial/profile/biz。
 
+`gateway_exec` 参数为 `{command:string,title:string,env:Record<string,string>,timeoutSeconds:number,yieldMs:number}`。command 固定；env 每个值是字符串，信封/事件先 JSON.stringify 后作为一个 env 值传入。下面是实际可执行模板，替换 env 值即可；不能把业务字符串替换进 command。
+
+<!-- gateway-envelope-write -->
+```json
+{
+  "command": "python3 - <<'PY'\nimport hashlib,json,os,re\nfrom pathlib import Path\nraw=os.environ['WF_ENVELOPE_JSON']\ne=json.loads(raw)\ncanonical=lambda v:json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(',',':'))\nassert len(raw.encode())<=180000, 'envelope too large'\nassert re.fullmatch(r'[0-9a-f-]{36}', e['task_id']), 'invalid task'\nassert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', e['run_id']), 'invalid run'\nroot=Path.home()/'wf-agent-inputs'/e['task_id']\nroot.mkdir(parents=True,exist_ok=True,mode=0o700)\npath=root/(e['run_id']+'.json')\ntry:\n fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)\nexcept FileExistsError:\n assert canonical(json.loads(path.read_text()))==canonical(e), 'frozen envelope conflict'\nelse:\n with os.fdopen(fd,'w') as f:\n  f.write(raw);f.flush();os.fsync(f.fileno())\nassert canonical(json.loads(path.read_text()))==canonical(e), 'readback mismatch'\nprint(json.dumps({'envelope_path':str(path),'verified':True,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}))\nPY",
+  "title": "在MMV独占保存并读回Commander信封",
+  "env": {
+    "WF_ENVELOPE_JSON": "<完整原始JSON字符串；通过工具env字段传入>"
+  },
+  "timeoutSeconds": 30,
+  "yieldMs": 10000
+}
+```
+
+后续命令同样交给 `gateway_exec`，把已核对路径、session及JSON置于对应结构化 env。工具无 stdin 参数，用固定 Python 从 env 生成管道输入；先保存并读回完整 spawn receipt，再组合绑定 JSON。ready命令的env继续使用同一原始信封：
+
+```bash
+python3 -c 'import os,json; e=json.loads(os.environ["WF_ENVELOPE_JSON"]); print(json.dumps({"definition":e["definition"],"workflow_key":e["workflow_key"]}))' | bash "$HOME/.openclaw/commander/wf-launch.sh" --ready
+```
+
+绑定命令的env为 `WF_BINDING_JSON=JSON.stringify(按request及receipt组合的完整绑定对象)`、`WF_RUN_DIR=启动回执的run目录`：
+
+```bash
+python3 -c 'import os; print(os.environ["WF_BINDING_JSON"])' | python3 "$HOME/.openclaw/commander/wf-agent-handoff.py" bind "$WF_RUN_DIR"
+```
+
+活动事件同理从 `WF_EVENT_JSON` 经固定 Python 输出到 `wf-v2.py event "$WF_RUN_DIR"`。receipt或交付文件也必须在网关写入并读回，不能把模型本机路径当成MMV路径。
+
 ## 2. 正式启动、唯一 spawn 与绑定
 
 ```bash
-~/.openclaw/commander/wf-launch.sh --envelope <绝对JSON路径> --parent-session <本轮正式session_key>
+bash "$HOME/.openclaw/commander/wf-launch.sh" --envelope "$WF_ENVELOPE_PATH" --parent-session "$WF_PARENT_SESSION"
 ```
 
-退出码0只代表入口受理，未查回实际状态前禁止说「预检已过」。业务文本始终留在 JSON 文件中。返回 JSON 的 action 决定下一步：
+在 `gateway_exec.env` 传已读回的 WF_ENVELOPE_PATH 与 session_status 的 WF_PARENT_SESSION。退出码0只代表入口受理，未查回实际状态前禁止说「预检已过」。业务文本始终留在 JSON 文件中。返回 JSON 的 action 决定下一步：
 
 | action | 执行 |
 |---|---|
@@ -46,7 +75,7 @@ description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻�
 
 ## 3. 持续等待与同 run 恢复
 
-前台调用 `python3 ~/.openclaw/commander/wf-agent-handoff.py await <run目录>`，工具超时时间依据剩余预算设置；若工具返回进程 session，继续等待该进程。不调用 sessions_yield，也不通过 CLI agent、sessions.send 或删除来源标记替代正式归属。
+通过 MMV `gateway_exec` 前台调用 `python3 ~/.openclaw/commander/wf-agent-handoff.py await <run目录>`，timeoutSeconds 依据剩余预算设置；若返回后台进程 session，使用 `gateway_process` 持续读回该进程。不调用 sessions_yield，也不通过 CLI agent、sessions.send 或删除来源标记替代正式归属。
 
 helper 使用官方 `agent.wait` 读取绑定 child 的确切 run，校验 runId、endedAt 和 terminalReceipt 的实际 Codex 模型，保存 terminalReply.text 全文。不得从 history 摘写或改写结果。子会话 error/timeout 不能因文本自称成功变成成功。
 
@@ -77,3 +106,5 @@ FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt �
 ## 旧在途兼容边界
 
 旧五参数入口只用于既有历史调度兼容；历史在途运行继续按原外壳收尾。新 JSON 信封不得转换为旧参数。全部入口共用部署 admission；部署期间不启动旧外壳，也不创建历史看护角色。部署和代码变更由版本化发布流程处理。
+
+冻结 recovery.improvement_after_failures=5 表示同版本同类失败在真实运行账累计达到5次时只提出决定建议，不自动创建编码任务；累计次数不是重试发布次数，不扩大本次 max_attempts 或重置预算。

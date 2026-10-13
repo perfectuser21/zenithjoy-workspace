@@ -19,6 +19,7 @@
     }, "dependentRequired": { "device_serial": ["machine", "profile", "account_ref"], "machine": ["device_serial"], "profile": ["device_serial"], "account_ref": ["device_serial"] } },
     "recovery": { "type": "object", "additionalProperties": false, "properties": {
       "max_attempts": { "type": "integer", "minimum": 1 },
+      "improvement_after_failures": { "type": "integer", "minimum": 1 },
       "total_timeout_sec": { "type": "integer", "minimum": 1 },
       "cleanup_timeout_sec": { "type": "integer", "minimum": 1 },
       "retry_safe": { "type": "boolean" },

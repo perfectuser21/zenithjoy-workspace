@@ -39,6 +39,7 @@
   "resources": {},
   "recovery": {
     "max_attempts": 2,
+    "improvement_after_failures": 5,
     "total_timeout_sec": 1200,
     "cleanup_timeout_sec": 120,
     "retry_safe": true,

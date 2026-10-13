@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "kuaishou_video_publish",
   "brain_workflow_key": "kuaishou_video_publish.android",
-  "contract_sha256": "25716937f2dd23072f5d1152f51a0c63c4790b1ece3755a04d732e7a86d66bac",
+  "contract_sha256": "34b8c878bfe78a08699ec674f79dff6ac61e418948e55440c061b5d31f8eec87",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -14,7 +14,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*preflight*original.json",
+        "glob": "shell-evidence/preflight/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1
@@ -90,7 +90,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*cleanup*original.json",
+        "glob": "shell-evidence/cleanup/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1

@@ -3,7 +3,7 @@ execution_profile: codex_agent
 agent: skill-factory
 skill: multi-platform-publish
 resources: {machine: xian-m4, profile: xiaolongxia, device_serial: ANGYVB4311010223, account_ref: Ai办公室}
-recovery: {max_attempts: 1, total_timeout_sec: 2400, cleanup_timeout_sec: 300, retry_safe: false, retry_on: []}
+recovery: {max_attempts: 1, improvement_after_failures: 5, total_timeout_sec: 2400, cleanup_timeout_sec: 300, retry_safe: false, retry_on: []}
 input_schema:
   type: object
   additionalProperties: false
@@ -53,7 +53,7 @@ verification:
   - 仅以上冻结合同条款与原件作为判据，业务报告额外自述不自动增列验收项
 commander_skill:
   name: wf-douyin_video_publish
-  version: 0.1.1
+  version: 0.1.2
 capability: android_worker_publish
 contract_key: douyin_video_publish
 name: douyin · 视频发布（既有安卓流程）

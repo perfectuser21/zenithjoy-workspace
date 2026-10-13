@@ -86,7 +86,7 @@
       "brain_workflow_key": "douyin_video_publish.android",
       "commander_skill": {
         "name": "wf-douyin_video_publish",
-        "version": "0.1.1"
+        "version": "0.1.2"
       },
       "agent": "skill-factory",
       "skill": "multi-platform-publish",
@@ -218,6 +218,7 @@
       },
       "recovery": {
         "max_attempts": 1,
+        "improvement_after_failures": 5,
         "total_timeout_sec": 2400,
         "cleanup_timeout_sec": 300,
         "retry_safe": false,

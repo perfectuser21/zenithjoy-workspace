@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "weibo_video_publish",
   "brain_workflow_key": "weibo_video_publish.android",
-  "contract_sha256": "8b24fa98f863a26113107925be8aa512e1a2148542211190ba2d272067a53af1",
+  "contract_sha256": "09d35296ae5e426e119cc21804136d3f28188fc3491ed586eea2e5738b6d7085",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -14,7 +14,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*preflight*original.json",
+        "glob": "shell-evidence/preflight/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1
@@ -90,7 +90,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*cleanup*original.json",
+        "glob": "shell-evidence/cleanup/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1

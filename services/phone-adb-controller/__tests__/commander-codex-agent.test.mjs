@@ -151,7 +151,7 @@ test("正常一轮：外壳领锁查号 → 业务块 → 收尾关 App 放锁�
   assert.equal(d.readback.lock_status, "free", "锁状态取外壳回读，不采信自报 held");
   assert.equal(d.readback.publish_attempts, 1, "对外动作次数取 outward-ledger 系统账，不采信自报 9");
   assert.equal(d.readback.private_after, 4);
-  assert.deepEqual(d.commander_skill, { name: "wf-douyin_video_publish", version: "0.1.1" });
+  assert.deepEqual(d.commander_skill, { name: "wf-douyin_video_publish", version: "0.1.2" });
   assert.deepEqual(d.activities.map((a) => [a.key, a.evidence_files.length]), [["preflight", 1], ["prepare", 1], ["publish", 1], ["verify", 1], ["cleanup", 1]]);
   assert.equal(d.activities.find((a) => a.key === "publish").readback.glob, "*publish*original.json");
   for (const id of [`${RUN}-lock-acquire`, `${RUN}-lock-release`, `${RUN}-outward-ledger`]) assert.ok(d.final_evidence.includes(id), id);
