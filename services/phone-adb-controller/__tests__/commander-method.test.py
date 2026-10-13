@@ -103,6 +103,14 @@ class Methods(unittest.TestCase):
    self.assertFalse((new/'agent-request.json').exists());self.assertEqual((new/'unexpected.json').read_text(),'preexisting artifact')
    shutil.rmtree(new);core.launch(str(file),'agent:work-commander:method-fixture')
    self.assertNotEqual(new.resolve(),old.resolve());self.assertEqual(digest(evidence.read_bytes()),original)
+ def test_method_cli_uses_only_persisted_run_envelope_and_input(self):
+  m=self.method_module();directory=self.home/'wf-agent-runs'/self.envelope['run_id'];directory.mkdir(parents=True)
+  for name,value in [('envelope.json',self.envelope),('input.json',self.envelope['input']),('contract.json',self.envelope['contract'])]:self.io.write(directory/name,value)
+  self.assertEqual(m.read_bound_envelope(directory/'envelope.json',self.io),self.envelope)
+  copied=self.home/'copied.json';self.io.write(copied,self.envelope)
+  with self.assertRaises(ValueError):m.read_bound_envelope(copied,self.io)
+  self.io.write(directory/'input.json',{'changed':True})
+  with self.assertRaises(ValueError):m.read_bound_envelope(directory/'envelope.json',self.io)
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
   golden=json.loads((SOURCE/'__tests__/fixtures/commander-method-brain.json').read_text())
