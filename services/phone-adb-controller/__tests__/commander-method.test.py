@@ -146,6 +146,19 @@ class Methods(unittest.TestCase):
     if b.get('path')==path:b['kind']='skill'
   self.a['payload']['implementation_bindings'][0]['field']='implementation_bindings'
   with self.assertRaises(ValueError):self.method_module().manifest_for(self.method)
+ def test_nested_skill_entries_are_rejected_and_default_recovery_is_not_budget_drift(self):
+  m=self.method_module()
+  for contract in [{'steps':[{'skill':'hidden'}]},{'implementation':{'kind':'skill'}},{'runtime':{'kind':'skill'}},{'activities':[{'steps':[{'implementation':{'kind':'skill'}}]}]}]:
+   release=copy.deepcopy(self.method);release['payload']['activities'][0]['payload']['steps']=[{'contract':contract}]
+   with self.assertRaisesRegex(ValueError,'unsupported_method_skill'):m.manifest_for(release)
+  partial={'max_attempts':2,'retry_safe':True,'retry_on':['verification_failed']}
+  self.contract['recovery']=copy.deepcopy(partial);self.original['payload']['workflows'][0]['payload']['contract']['recovery']=copy.deepcopy(partial)
+  goal=self.envelope['method_selection']['original_goal_definition'];goal['contract']['recovery']=copy.deepcopy(partial)
+  goal['recovery']={**partial,'total_timeout_sec':2400,'cleanup_timeout_sec':300}
+  for r in (self.method,self.original):r['manifest_sha256']=digest({k:r[k] for k in ('environment','target','payload')})
+  self.attest();self.assertTrue(self.io.ready(self.envelope)['ready'])
+  goal['recovery']['total_timeout_sec']=2401
+  with self.assertRaises(ValueError):self.io.ready(self.envelope)
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
   golden=json.loads((SOURCE/'__tests__/fixtures/commander-method-brain.json').read_text())
