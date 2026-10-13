@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO_ROOT"
 node scripts/product-map/gen-commander-contracts.mjs --check
 node --test scripts/product-map/__tests__/commander-skill-contracts.test.js
-node --test services/phone-adb-controller/__tests__/commander-codex-agent.test.mjs services/phone-adb-controller/__tests__/commander-handoff.test.mjs
+node --test services/phone-adb-controller/__tests__/commander-v2.test.mjs services/phone-adb-controller/__tests__/commander-codex-agent.test.mjs services/phone-adb-controller/__tests__/commander-handoff.test.mjs
 bash -n services/phone-adb-controller/commander/wf-agent-run.sh
 python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' services/phone-adb-controller/commander/wf-agent-lib.py
 echo "commander-codex-agent-smoke: PASS"
