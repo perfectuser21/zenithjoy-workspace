@@ -67,3 +67,12 @@ test('旧毒事件保持原字节pending，worker不因运输失败改delivery�
  assert.equal((await f.asyncCall('worker')).status,0);assert.equal(readFileSync(events,'utf8'),before);assert.equal(readFileSync(join(f.run,'delivery.json'),'utf8'),deliveryBefore);assert.equal(read(join(f.run,'feedback-ack.json')).seq,1);assert.equal(existsSync(join(f.run,'execution-failure.json')),false);
  const status=f.call('status');assert.equal(status.status,0,status.stdout);assert.equal(JSON.parse(status.stdout).feedback.pending,2);assert.equal(JSON.parse(status.stdout).feedback.failed_seq,2);assert.notEqual((await f.asyncCall('replay')).status,0);
 });
+test('正式拒收原件与ACK同次持久，duplicate保留拒收；ACK绝不表示活动成功',async t=>{
+ const f=fixture(t),path=join(f.run,'events.json'),events=read(path);events[0]={...events[0],...fact()};events[0].data.outcome='completed';events[0].data.evidence={number:1e-7,'10':1,'2':false};writeFileSync(path,JSON.stringify(events));
+ const sorted=v=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v;
+ const rejection={code:'invalid_activity_fact',seq:1,event_sha256:createHash('sha256').update(JSON.stringify(sorted(events[0]))).digest('hex'),fields:['outcome']};let mode='bad';
+ await server(t,f,(event,req,res)=>{res.end(JSON.stringify({[mode==='duplicate'?'duplicate':'accepted']:true,seq:event.seq,rejected:mode==='bad'?{...rejection,event_sha256:'0'.repeat(64)}:rejection}));});
+ let r=await f.asyncCall('replay');assert.notEqual(r.status,0);assert.equal(existsSync(join(f.run,'feedback-ack.json')),false);
+ mode='duplicate';r=await f.asyncCall('replay');assert.notEqual(r.status,0);let result=JSON.parse(r.stdout);assert.equal(result.replayed,true);assert.equal(result.pending,0);assert.deepEqual(result.rejected,[rejection]);assert.deepEqual(read(join(f.run,'feedback-ack.json')),{seq:1,rejected:[rejection]});
+ r=await f.asyncCall('replay');assert.notEqual(r.status,0);assert.deepEqual(JSON.parse(r.stdout).rejected,[rejection]);assert.deepEqual(JSON.parse(f.call('status').stdout).feedback.rejected,[rejection]);assert.equal(read(path)[0].data.outcome,'completed');
+});
