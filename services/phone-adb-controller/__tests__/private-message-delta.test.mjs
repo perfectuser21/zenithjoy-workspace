@@ -42,7 +42,8 @@ function dmFocusFlow(mode='moved'){
 import sys,json,base64,pathlib
 p=pathlib.Path(${JSON.stringify(state)});s=json.loads(p.read_text());a=sys.argv[1:];a=a[a.index('shell')+1:]
 with open(${JSON.stringify(join(d,'calls'))},'a') as f:f.write(json.dumps(a)+'\\n')
-if a[:4]==['settings','get','secure','default_input_method']:print(s['ime'])
+if a==['fake-foreground']:print('mCurrentFocus=Window{1 u0 '+('other.package/.Chat' if s['mode']=='foreground_changed' and s['layout']=='new' else 'com.ss.android.ugc.aweme/.im.ChatRoomActivity')+'}')
+elif a[:4]==['settings','get','secure','default_input_method']:print(s['ime'])
 elif a[:2]==['ime','enable']:print('Input method now enabled')
 elif a[:2]==['ime','set']:
  s['ime']=a[2]
@@ -52,7 +53,7 @@ elif a[:2]==['input','tap']:
  if s['text'] and x==1100 and y==1666:s['sent']=True;s['text']=''
 elif a[:2]==['am','broadcast']:
  if 'ADB_CLEAR_TEXT' in a and s['focused']:s['text']=''
- if 'ADB_INPUT_B64' in a and s['focused']:s['text']=base64.b64decode(a[-1]).decode()
+ if 'ADB_INPUT_B64' in a and s['focused']:s['text']=('错误正文' if s['mode']=='wrong_text' else base64.b64decode(a[-1]).decode())
 p.write_text(json.dumps(s))
 `,{mode:0o755});
   const dump=join(d,'dump.py');writeFileSync(dump,`import sys,json,pathlib,xml.sax.saxutils as X
@@ -64,9 +65,10 @@ elif eid.endswith('dmpanel'):xml=n('发私信','panel',bounds='[100,100][300,300
 else:
  pkg='com.ss.android.ugc.aweme.evil' if s['mode']=='wrong_package' and s['layout']=='new' else pkg
  bounds='[157,2501][777,2634]' if s['layout']=='old' else '[157,1600][777,1733]'
- input=n(s['text'] or '只能发送一条消息',pkg+':id/msg_et','android.widget.EditText',bounds,'true' if s['focused'] else 'false',click='true')
+ if s['mode']=='typed_growth' and s['text']:bounds='[157,1500][1050,1800]'
+ input=n(s['text'] or '只能发送一条消息',pkg+':id/msg_et','android.widget.EditText',bounds,('unknown' if s['mode']=='unknown_focus' and s['layout']=='new' else 'true' if s['focused'] else 'false'),click='true')
  if s['mode']=='duplicate' and s['layout']=='new':input+=input
- xml='<node package="'+pkg+'" class="android.view.View" resource-id="'+pkg+':id/l+=" enabled="true"><node package="'+pkg+'" class="android.widget.LinearLayout" resource-id="'+pkg+':id/d2_" enabled="true"><node package="'+pkg+'" class="androidx.recyclerview.widget.RecyclerView" resource-id="'+pkg+':id/v54" enabled="true">'+n('为保障用户沟通安全，未互相关注的陌生人违规消息可能会被处理，请遵守法律法规和社区规范',pkg+':id/sv_')+(n(${JSON.stringify(message)},'bubble') if s['sent'] else '')+'</node>'+input+'</node></node>'
+ xml='<node package="'+pkg+'" class="android.widget.FrameLayout" resource-id="" enabled="true"><node package="'+pkg+'" class="android.view.View" resource-id="'+pkg+':id/l+=" enabled="true" /><node package="'+pkg+'" class="android.widget.LinearLayout" resource-id="'+pkg+':id/d2_" enabled="true"><node package="'+pkg+'" class="androidx.recyclerview.widget.RecyclerView" resource-id="'+pkg+':id/v54" enabled="true">'+n('为保障用户沟通安全，未互相关注的陌生人违规消息可能会被处理，请遵守法律法规和社区规范',pkg+':id/sv_')+(n(${JSON.stringify(message)},'bubble') if s['sent'] else '')+'</node>'+input+'</node></node>'
  if s['text']:xml+=n(desc='发送',bounds='[1000,1600][1200,1733]',click='true')
  if s['mode']=='changed_chat' and s['layout']=='new':xml=xml.replace('为保障用户沟通安全','不同会话')
 out.write_text('<hierarchy>'+xml+'</hierarchy>')
@@ -75,14 +77,30 @@ out.write_text('<hierarchy>'+xml+'</hierarchy>')
   let send=fn('send_private_message');let flag='';for(const f of ['-D','-d','--decode']){const p=spawnSync('/usr/bin/base64',[f],{input:Buffer.from(message).toString('base64'),encoding:'utf8'});if(p.status===0&&p.stdout===message){flag=f;break;}}assert.ok(flag);
   const old=send;send=send.replace('/usr/bin/base64 -D','/usr/bin/base64 '+flag);assert.equal(send.replace('/usr/bin/base64 '+flag,'/usr/bin/base64 -D'),old);
   const script=`set -eu; setopt EXTENDED_GLOB\nADB=${JSON.stringify(adb)}; SERIAL=fake; MAX_X=1200; MAX_Y=2664; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; EVIDENCE_ROOT=${JSON.stringify(d)}; PYTHON_BIN=${JSON.stringify(python)}; TEXT_INPUT_FOCUS_HELPER=${JSON.stringify(new URL('../text-input-focus.py',import.meta.url).pathname)}\n`+
-   ['require_uint','require_evidence_id','require_account_id','node_center','_foreground_is_exact_douyin','_verify_private_message_delta'].map(fn).join('\n')+'\n'+send+`\ndie(){ print -u2 -- "$1"; exit 2; }; wait_ms(){ :; }; ensure_feed(){ :; }; read_current_account(){ print douyin_id=sender123; }; foreground_package(){ print 'mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/.im.ChatRoomActivity}'; }; ui_evidence(){ "$PYTHON_BIN" ${JSON.stringify(dump)} "$1"; }; _ui_evidence_wave(){ ui_evidence "$1"; }; snapshot_evidence(){ print ${JSON.stringify(join(d,'fake.png'))}; }; print_jpg_line(){ :; }; send_private_message sender123 target456 ${JSON.stringify(Buffer.from(message).toString('base64'))} focus-case https://v.douyin.com/fake/`;
+   ['require_uint','require_evidence_id','require_account_id','node_center','_foreground_is_exact_douyin','_verify_private_message_delta'].map(fn).join('\n')+'\n'+send+`\ndie(){ print -u2 -- "$1"; exit 2; }; wait_ms(){ :; }; ensure_feed(){ :; }; read_current_account(){ print douyin_id=sender123; }; foreground_package(){ \"$ADB\" -s \"$SERIAL\" shell fake-foreground; }; ui_evidence(){ "$PYTHON_BIN" ${JSON.stringify(dump)} "$1"; }; _ui_evidence_wave(){ ui_evidence "$1"; }; snapshot_evidence(){ print ${JSON.stringify(join(d,'fake.png'))}; }; print_jpg_line(){ :; }; send_private_message sender123 target456 ${JSON.stringify(Buffer.from(message).toString('base64'))} focus-case https://v.douyin.com/fake/`;
   const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:10000});
-  return {...r,calls:readFileSync(join(d,'calls'),'utf8').trim().split('\n').map(JSON.parse),state:JSON.parse(readFileSync(state))};
+  return {...r,typed: (()=>{try{return readFileSync(join(d,'focus-case-typed.xml'),'utf8');}catch{return '';}})(),calls:readFileSync(join(d,'calls'),'utf8').trim().split('\n').map(JSON.parse),state:JSON.parse(readFileSync(state))};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
 test('真实私信函数IME布局变化后用fresh坐标入焦再输入，保持正文与增量核验',()=>{
- const r=dmFocusFlow();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/send_status=sent/);assert.ok(r.calls.some(a=>a.join(' ')==='input tap 467 1666'));assert.ok(r.state.sent);
+ const r=dmFocusFlow();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/send_status=sent/);assert.ok(r.calls.some(a=>a.join(' ')==='input tap 467 1666'));assert.ok(r.state.sent);assert.match(r.typed,/resource-id="com.ss.android.ugc.aweme:id\/msg_et"[^>]*focused="true"/);assert.ok(r.typed.includes(`text="${message}"`));
 });
-for(const mode of ['no_focus','wrong_package','duplicate','changed_chat'])test('IME后不可信输入必须在清空/输入/发送前拒绝 '+mode,()=>{
+for(const mode of ['no_focus','unknown_focus','wrong_package','duplicate','changed_chat','foreground_changed'])test('IME后不可信输入必须在清空/输入/发送前拒绝 '+mode,()=>{
  const r=dmFocusFlow(mode);assert.notEqual(r.status,0);assert.ok(!r.calls.some(a=>a.includes('ADB_INPUT_B64')));assert.ok(!r.calls.some(a=>a.includes('ADB_CLEAR_TEXT')));assert.equal(r.state.sent,false);
+});
+
+// 原件回放而非假树推断：l+=和d2_是共同FrameLayout下的兄弟。
+test('7883真实空会话chat/typed可定位唯一输入，但原typed无焦点必须拒绝',()=>{
+ const helper=new URL('../text-input-focus.py',import.meta.url).pathname;
+ const chat=new URL('./fixtures/dm-focus/chat-7883-unfocused.xml',import.meta.url).pathname;
+ const typed=new URL('./fixtures/dm-focus/typed-7883-unfocused.xml',import.meta.url).pathname;
+ const locate=spawnSync('python3',[helper,'douyin-dm-locate',chat,typed],{encoding:'utf8',timeout:5000});assert.equal(locate.status,0,locate.stderr);assert.deepEqual(JSON.parse(locate.stdout),{bounds:'[157,2501][777,2634]',focused:false});
+ const focus=spawnSync('python3',[helper,'douyin-dm-focused',chat,typed],{encoding:'utf8',timeout:5000});assert.notEqual(focus.status,0);assert.match(focus.stderr,/no focused standard input/);
+});
+
+test('typed正文扩展只接受同chat唯一focused字段与exact正文，不再用IME前bounds',()=>{
+ const r=dmFocusFlow('typed_growth');assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/send_status=sent/);assert.ok(r.typed.includes('bounds="[157,1500][1050,1800]"'));assert.ok(r.typed.includes(`text="${message}"`));
+});
+test('即使focus正确，正文不精确也绝不点击发送',()=>{
+ const r=dmFocusFlow('wrong_text');assert.notEqual(r.status,0);assert.match(r.stderr,/did not exactly match approved text/);assert.equal(r.state.sent,false);assert.ok(!r.calls.some(a=>a.join(' ')==='input tap 1100 1666'));
 });

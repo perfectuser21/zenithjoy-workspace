@@ -1,0 +1,16 @@
+[
+  {
+    "file": "chat-7883-unfocused.xml",
+    "sha256": "5b7340e267ccf80126cd4a8def33351c6d460db63a9b7ef195109869d0d3e61b",
+    "source": "/tmp/codex-7883-104-input-failure-20261014/chat.xml",
+    "source_commit": "7883a6f4c609ba2b6344a1bbb573826cf32b80f9",
+    "limit": "只有chat和typed两帧，未证明IME中间布局移动因果；focused=false且正文未输入"
+  },
+  {
+    "file": "typed-7883-unfocused.xml",
+    "sha256": "fc373041dbab50358e2a9745e318639d79ad794836dd2f5f798112791972b458",
+    "source": "/tmp/codex-7883-104-input-failure-20261014/typed.xml",
+    "source_commit": "7883a6f4c609ba2b6344a1bbb573826cf32b80f9",
+    "limit": "只有chat和typed两帧，未证明IME中间布局移动因果；focused=false且正文未输入"
+  }
+]

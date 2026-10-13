@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
-INPUT_RUNTIME_REVISION = 2
+INPUT_RUNTIME_REVISION = 3
 import json
 import hashlib
 import re
@@ -374,9 +374,63 @@ def readback(xml_path, selection):
     return candidates[0].get("text", "")
 
 
+
+def douyin_dm_context(xml_path):
+    """只读已实证原生DM结构；不声称聊天XML包含此前profile核验的目标OID。"""
+    tree = ET.parse(xml_path)
+    if tree.getroot().tag != "hierarchy":
+        raise ValueError("private-message hierarchy missing")
+    nodes = list(tree.iter("node"))
+    package = "com.ss.android.ugc.aweme"
+    def one(rid, cls):
+        candidates = [n for n in nodes if n.get("resource-id") == package + ":id/" + rid]
+        if len(candidates) != 1 or candidates[0].get("package") != package or candidates[0].get("class") != cls:
+            raise ValueError("private-message native structure missing or ambiguous: " + rid)
+        return candidates[0]
+    root = one("l+=", "android.view.View")
+    container = one("d2_", "android.widget.LinearLayout")
+    messages = one("v54", "androidx.recyclerview.widget.RecyclerView")
+    privacy = one("sv_", "android.widget.TextView")
+    field = one("msg_et", "android.widget.EditText")
+    parents = {child: parent for parent in nodes for child in parent}
+    frame = parents.get(root)
+    if (frame is None or frame is not parents.get(container)
+            or frame.get("class") != "android.widget.FrameLayout" or frame.get("package") != package
+            or frame.get("resource-id", "") != ""
+            or messages not in list(container.iter("node"))
+            or privacy not in list(messages.iter("node")) or field not in list(container.iter("node"))
+            or not privacy.get("text")
+            or any(n.get("package") != package for n in frame.iter("node"))):
+        raise ValueError("private-message context is not the verified native chat")
+    if (field.get("enabled") != "true" or field.get("focusable") != "true"
+            or field.get("clickable") != "true" or field.get("password") != "false"
+            or field.get("editable", "true") != "true"):
+        raise ValueError("private-message input unsafe")
+    left, top, right, bottom = bounds_rect(field.get("bounds", ""))
+    # 键盘/正文允许布局变化，身份只绑定该唯一原生输入；坐标每次从当次树获取。
+    context = {"package": package, "frame_class": frame.get("class"), "frame_id": frame.get("resource-id", ""), "root": root.get("resource-id"), "container": container.get("resource-id"),
+               "messages": messages.get("resource-id"), "privacy_id": privacy.get("resource-id"),
+               "privacy_text": privacy.get("text"), "field_id": field.get("resource-id"), "field_class": field.get("class")}
+    return context, field
+
+
+def douyin_dm_check(baseline, current, focused=False):
+    original, _ = douyin_dm_context(baseline)
+    actual, field = douyin_dm_context(current)
+    if actual != original:
+        raise ValueError("private-message chat context changed after IME")
+    if focused:
+        selection = standard_resolve(current)
+        if (selection["package"] != actual["package"] or selection["resource-id"] != actual["field_id"]
+                or selection["class"] != actual["field_class"] or selection["bounds"] != field.get("bounds")):
+            raise ValueError("private-message focus is not the unique intended input")
+    return {"bounds": field.get("bounds"), "focused": field.get("focused") == "true"}
+
 def main():
     command = sys.argv[1]
-    if command == "standard-resolve":
+    if command in ("douyin-dm-locate", "douyin-dm-focused"):
+        print(json.dumps(douyin_dm_check(sys.argv[2], sys.argv[3], command == "douyin-dm-focused")))
+    elif command == "standard-resolve":
         print(json.dumps(standard_resolve(sys.argv[2]), ensure_ascii=False))
     elif command in ("standard-check", "standard-readback"):
         selection = json.loads(Path(sys.argv[2]).read_text())
