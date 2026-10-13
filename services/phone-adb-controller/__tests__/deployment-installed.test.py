@@ -90,6 +90,18 @@ class GuardTests(unittest.TestCase):
     guard.guarded([sys.executable,'-c',"import time;from pathlib import Path;time.sleep(2);Path("+repr(str(marker))+").write_text('unexpected')"],transport=transport)
    self.assertFalse(marker.exists())
 
+ def test_default_ssh_lock_has_bounded_liveness_checks(self):
+  import subprocess,sys,os
+  guard=module('deployment-guard');original=subprocess.Popen;commands=[]
+  with tempfile.TemporaryDirectory() as tmp:
+   def launch(args,**kwargs):
+    if args[0]=='ssh':
+     commands.append(args);return original([sys.executable,'-u','-c',guard.SERVER],env=dict(os.environ,HOME=tmp),**kwargs)
+    return original(args,**kwargs)
+   with patch.object(guard.subprocess,'Popen',side_effect=launch):self.assertEqual(guard.guarded([sys.executable,'-c','pass']),0)
+   self.assertEqual(len(commands),1)
+   for option in ('ConnectTimeout=10','ServerAliveInterval=5','ServerAliveCountMax=3'):self.assertIn(option,commands[0])
+
  def test_guard_termination_stops_child_before_releasing_remote_lock(self):
   import subprocess,sys,os,signal,time
   guard=module('deployment-guard')

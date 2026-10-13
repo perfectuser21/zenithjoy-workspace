@@ -8,3 +8,5 @@
 - 红测试 `5b882a05` 复现旧名称错误，`1dec4d4b` 复现缺第二scope及串用风险；真实ZIP和双scope回归永久保留在既有L3 CI。
 
 同一environment+target的观测必须对应完整workflow闭包，不能用两份同目标release依次部署来维持旧新入口。MMV聚合观测纳入真实跨host绑定，但旧runtime本机manifest只能保留本机files；多个根共享一个release/ACK。部署互斥位于MMV，覆盖上传至正式观测读回，SSH锁通道丢失终止部署，失败保留admission标记。永久回归包括七加四闭包、缺映射零SSH、真实HTTP观测顺序、安装文件/官方skill来源及内核锁竞争；相对路径执行新增红绿smoke防止cd后重入找错脚本。
+
+共享用户checkout长期停在开发分支是合法现场，自动部署不能依赖切回main或清理它。把对象获取与执行checkout分离，独立SHA目录仍要核共同Git身份和当前main。守卫使用独立子进程组后，默认SIGTERM/SIGHUP会跳过finally并留下写进程；显式信号处理必须先停止整组，最后关闭持锁通道，永久保留两种真实信号红绿回归。

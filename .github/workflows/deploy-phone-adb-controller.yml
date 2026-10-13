@@ -104,7 +104,16 @@ jobs:
           }
 
           echo "=== [0/4] git fetch(只更新引用,不碰工作区) ==="
-          git -C "$REPO" fetch --force --prune origin main
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          case "$(git -C "$REPO" remote get-url origin)" in
+            https://github.com/perfectuser21/zenithjoy-workspace.git|https://github.com/perfectuser21/zenithjoy-workspace|git@github.com:perfectuser21/zenithjoy-workspace.git) ;;
+            *) echo "部署源仓库身份不符" >&2; exit 1 ;;
+          esac
+          git -C "$REPO" fetch --force origin refs/heads/main:refs/remotes/origin/main
+          if [[ "$(git -C "$REPO" rev-parse origin/main)" != "$DEPLOY_SHA" ]]; then
+            notify "phone-adb自动部署已拒绝" "目标SHA不是当前origin/main，禁止旧run回滚"
+            exit 1
+          fi
 
           # 用目标commit版本的lib,不能从当前(未同步)工作区source——
           # 工作区可能是上一版部署遗留的旧lib,或者第一次跑时这个文件压根还不存在。
@@ -118,31 +127,15 @@ jobs:
           source "$LIB_TMP"
           rm -f "$LIB_TMP"
 
-          CURRENT_BRANCH="$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null || echo "(detached)")"
-          if [[ "$CURRENT_BRANCH" != "main" ]]; then
-            notify "phone-adb自动部署已跳过" "mmv checkout当前在分支${CURRENT_BRANCH}非main,需人工检查(sha=${DEPLOY_SHA:0:8})"
+          echo "=== [1/4] 独立detached部署checkout → ${DEPLOY_SHA} ==="
+          if ! DEPLOY_CHECKOUT="$(prepare_deployment_checkout "$REPO" "$DEPLOY_SHA")"; then
+            notify "phone-adb自动部署已拒绝" "固定SHA独立checkout核验失败，现场保留(sha=${DEPLOY_SHA:0:8})"
             exit 1
           fi
-
-          if ! check_clean_checkout "$REPO"; then
-            notify "phone-adb自动部署已跳过" "mmv本地checkout不干净,需人工检查(sha=${DEPLOY_SHA:0:8})"
-            exit 1
-          fi
-
-          # 防重跑旧 run 把生产静默回滚(I-B)：DEPLOY_SHA 必须等于当前 origin/main，
-          # 且当前 HEAD 必须是 DEPLOY_SHA 的祖先(即 reset 只会前进不会后退)。
-          # 这道闸同时防住 mmv 共享 checkout 上 main 分支有本地未推送 commit 时被 reset --hard 静默冲掉。
-          if [[ "$(git -C "$REPO" rev-parse origin/main)" != "$DEPLOY_SHA" ]] || \
-             ! git -C "$REPO" merge-base --is-ancestor HEAD "$DEPLOY_SHA"; then
-            notify "phone-adb自动部署已跳过" "目标SHA不是当前origin/main,或会让mmv checkout后退(sha=${DEPLOY_SHA:0:8}),可能是重跑了旧run,已阻止"
-            exit 1
-          fi
-
-          echo "=== [1/4] git reset --hard → ${DEPLOY_SHA} ==="
-          git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
           echo "=== [2/4] deploy.sh（推 mmv + xian-m4）==="
-          cd "$REPO"
+          cd "$DEPLOY_CHECKOUT"
+          export PYTHONDONTWRITEBYTECODE=1
           # wrapper从mmv 0600凭据镜像读token，先构造/核验release，再调用现有deploy.sh。
           if ! DEPLOY_LOG=$(node services/phone-adb-controller/deployment-prepare.mjs "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
@@ -154,7 +147,7 @@ jobs:
           echo "$DEPLOY_LOG"
 
           echo "=== [3/4] drift-check.sh 后验(锁定本次部署的SHA,不重新fetch避免中途又有合并造成误报) ==="
-          if ! DRIFT_LOG=$(DRIFT_REF="$DEPLOY_SHA" DRIFT_SKIP_FETCH=1 bash services/phone-adb-controller/drift-check.sh </dev/null 2>&1); then
+          if ! DRIFT_LOG=$(DRIFT_REPO="$DEPLOY_CHECKOUT" DRIFT_REF="$DEPLOY_SHA" DRIFT_SKIP_FETCH=1 bash services/phone-adb-controller/drift-check.sh </dev/null 2>&1); then
             echo "$DRIFT_LOG"
             notify "phone-adb自动部署后验失败" "drift-check未通过(sha=${DEPLOY_SHA:0:8}): $(echo "$DRIFT_LOG" | tail -3 | tr '\n' ';')"
             exit 1
