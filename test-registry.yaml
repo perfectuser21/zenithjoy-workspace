@@ -6260,6 +6260,14 @@ agent_suite:
     product: 员工知识中枢
     note: "路③ 看板纯逻辑(test-pairing)：resolveDropPatch 映射被拖那一行(非 rows[0]，变异 A24-drag-wrong-row 注入点)、拖到未分组列清空该格、groupRowsByField 三态未分组。smoke --a24-pure-only 也跑本文件。"
 
+  - id: workbench-view-prefs-save-ordering
+    path: apps/staff-hub/src/pages/WorkbenchTablePage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "真实页面组件 + deferred mock patchView：跨字段旧响应不覆盖后改隐藏列；同字段连续操作串行发出并保最后选择；失败不能被无关成功清提示、明确重试发送完整未保存配置；切视图读回保留原视图pending/failed输入；跨表路由拒绝旧activation/view/row响应倒灌，同view activation也串行真实保存。staff-hub 默认 Vitest src/**/*test 实际执行；真实 API/PG 响应顺序另外由隔离浏览器验收。"
+
   - id: workbench-views-e2e-golden-path
     path: apps/staff-hub/e2e/structured-workbench-views.spec.ts
     type: e2e
