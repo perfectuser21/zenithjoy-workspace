@@ -321,3 +321,27 @@ shell.execute(p,'cleanup',lambda:{'completed':False,'failure':'budget exhausted'
 assert all(x['outcome']=='fail' for x in r.io.read(d/'shell-cleanup.json')['facts'])
 `);assert.equal(result.status,0,result.stderr+result.stdout);
 });
+test('真实执行包和run根stat前后绑定，路径同名替换inode拒绝且清理仍精确放锁',()=>{
+ for(const target of ['run','package']){
+  const f=fixture(),dir=start(f);
+  const result=python(f,`import shutil
+d=pathlib.Path(${JSON.stringify(dir)})
+`.trimStart()+`
+e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
+p=r.phone_module.Phone(d,e);p.check_roots('preflight-start',establish=True);p.check_roots('preflight-end')
+root=d if ${JSON.stringify(target)}=='run' else r.HERE
+old=root.with_name(root.name+'-old');root.rename(old);shutil.copytree(old,root)
+try:p.check_roots('cleanup-start');raise AssertionError('same path different inode accepted')
+except ValueError as error:assert 'root identity' in str(error)
+calls=[]
+def ctl(*args):
+ calls.append(args)
+ if args[0]=='lock-status':return 'lock=free'
+ return 'lock=free'
+p.ctl=ctl
+receipt=p.cleanup();assert receipt['completed'] is False
+assert ('lock-release',e['run_id']) in calls,'root error skipped exact release'
+readback=r.io.read(d/'cleanup-root-start.json');assert readback['matches'] is False
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+ }
+});
