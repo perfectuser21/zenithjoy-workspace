@@ -273,3 +273,51 @@ test('部署准入拒绝业务已停但cleanup_pending且无delivery的包',()=>
  writeFileSync(join(f.home,'pgrep'),'#!/bin/sh\nexit 1\n',{mode:0o755});f.env.PATH=f.home+':'+process.env.PATH;
  const result=spawnSync('python3',['-c',script],{env:f.env,encoding:'utf8'});assert.notEqual(result.status,0,'cleanup pending deployment was admitted');assert.equal(existsSync(join(f.home,'.openclaw/commander/.deploying')),false);
 });
+test('外壳绑定缺失先拒绝；失败preflight重入仍失败且不重复设备动作',()=>{
+ const f=fixture(),dir=start(f);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');path={'reference_id':'ref','activity_id':'act','activity_definition_version_id':'version'}
+e['definition']['expected_path']=[path,dict(path,step_id='step')]
+class Phone:directory=d;envelope=e;cleanup_deadline=time.time()+30;control_receipts=[]
+p=Phone();calls=[]
+def fail():calls.append('device');raise ValueError('real preflight failure')
+try:r.phone_module.shell.execute(p,'preflight',fail);raise AssertionError('missing binding accepted')
+except ValueError as error:assert 'binding' in str(error)
+assert calls==[]
+e['activity_bindings']=[dict(path,key='preflight',steps=[{'key':'check','step_id':'step'}])]
+for i in range(2):
+ try:r.phone_module.shell.execute(p,'preflight',fail);raise AssertionError('failed preflight replay became success')
+ except ValueError as error:assert 'real preflight failure' in str(error)
+assert calls==['device']
+facts=[x for x in r.io.read(d/'events.json') if x['type']=='activity_completed']
+assert len(facts)==2 and all(x['data']['outcome']=='fail' for x in facts)
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('cleanup中间失败只记blocked且原件不可覆盖；最终唯一pass并可重放，预算耗尽才fail',()=>{
+ const f=fixture(),dir=start(f);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');path={'reference_id':'ref','activity_id':'act','activity_definition_version_id':'version'}
+e['definition']['expected_path']=[path,dict(path,step_id='step')];e['activity_bindings']=[dict(path,key='cleanup',steps=[{'key':'check','step_id':'step'}])]
+class Phone:directory=d;envelope=e;cleanup_deadline=time.time()+30;control_receipts=[]
+p=Phone();calls=[]
+def clean():
+ calls.append('cleanup');(d/'cleanup-original.log').write_text('raw-'+str(len(calls)));return {'completed':len(calls)>1,'failure':'lost screenshot' if len(calls)==1 else None}
+shell=r.phone_module.shell
+assert shell.execute(p,'cleanup',clean)['completed'] is False
+assert not any(x['type']=='activity_completed' for x in r.io.read(d/'events.json'))
+blocked=[x for x in r.io.read(d/'events.json') if x['type']=='blocked'];assert len(blocked)==1
+original=[x for x in blocked[0]['data']['evidence']['files'] if x['path'].endswith('cleanup-original.log')][0]
+assert pathlib.Path(original['path']).read_text()=='raw-1'
+assert shell.execute(p,'cleanup',clean)['completed'] is True
+assert pathlib.Path(original['path']).read_text()=='raw-1'
+assert shell.execute(p,'cleanup',clean)['completed'] is True and len(calls)==2
+facts=[x for x in r.io.read(d/'events.json') if x['type']=='activity_completed'];assert len(facts)==2 and all(x['data']['outcome']=='pass' for x in facts)
+# 模拟终态checkpoint写好、outbox尚未写齐；重放一次补齐，第二次幂等。
+r.io.write(d/'events.json',[x for x in r.io.read(d/'events.json') if x['type']!='activity_completed'])
+shell.replay(d,'cleanup');shell.replay(d,'cleanup')
+assert sum(x['type']=='activity_completed' for x in r.io.read(d/'events.json'))==2
+(d/'shell-cleanup.json').unlink();p.cleanup_deadline=time.time()-1
+shell.execute(p,'cleanup',lambda:{'completed':False,'failure':'budget exhausted'})
+assert all(x['outcome']=='fail' for x in r.io.read(d/'shell-cleanup.json')['facts'])
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
