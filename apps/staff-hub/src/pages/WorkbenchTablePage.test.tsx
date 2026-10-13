@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WorkbenchTablePage from './WorkbenchTablePage';
 import { getTable, listRows, listRowsWith, listRowTrash, listViews, patchView, type WorkbenchView } from '../lib/workbenchFetch';
@@ -21,6 +21,14 @@ async function filter() {
  fireEvent.change(screen.getByTestId('filter-value-input'), { target: { value: '甲' } });
  fireEvent.click(screen.getByTestId('apply-query-button'));
  await waitFor(() => expect(patchView).toHaveBeenCalledTimes(1));
+}
+function TableNavigator() { const go = useNavigate(); return <button data-testid="go-other-table" onClick={() => go('/tables/other-table')}>Other table</button>; }
+function openWithNavigation() {
+ render(<MemoryRouter initialEntries={['/tables/table']}><TableNavigator /><Routes><Route path="/tables/:tableId" element={<WorkbenchTablePage />} /></Routes></MemoryRouter>);
+}
+function twoTables() {
+ const other={...view,view_id:'other-view',name:'Other view'};
+ vi.mocked(listViews).mockImplementation(async id => ({views:[id==='table'?{...view}:other],active_view_id:id==='table'?'view':'other-view'}));
 }
 beforeEach(() => {
  vi.clearAllMocks();
@@ -91,4 +99,34 @@ describe('view preferences save ordering', () => {
   expect(vi.mocked(patchView).mock.calls[2][1]).toMatchObject({filters:[{field_id:'text',op:'contains',value:'甲'}],hidden_field_ids:['number']});
   await waitFor(() => expect(screen.queryByTestId('view-prefs-error')).not.toBeInTheDocument());
  });
+ it('rejects an old activation response after navigation to another table', async () => {
+  twoTables(); const activation=deferred<WorkbenchView>();vi.mocked(patchView).mockReturnValue(activation.promise);
+  openWithNavigation();await screen.findByTestId('view-tab-view');fireEvent.click(screen.getByTestId('view-tab-view'));
+  await waitFor(()=>expect(patchView).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByTestId('go-other-table'));await screen.findByTestId('view-tab-other-view');
+  await act(async()=>activation.resolve({...view}));
+  expect(screen.queryByTestId('view-tab-view')).not.toBeInTheDocument();
+  expect(screen.getByTestId('view-tab-other-view')).toBeInTheDocument();
+ });
+ it('rejects old activation row refresh after the new table has loaded', async () => {
+  twoTables(); const oldRows=deferred<Awaited<ReturnType<typeof listRows>>>();let reads=0;
+  vi.mocked(patchView).mockResolvedValue({...view});
+  vi.mocked(listRows).mockImplementation(async id => id==='table' && ++reads===2 ? oldRows.promise : {rows:[],total:0,row_limit:id==='table'?100:222});
+  openWithNavigation();await screen.findByTestId('view-tab-view');fireEvent.click(screen.getByTestId('view-tab-view'));
+  await waitFor(()=>expect(listRows).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByTestId('go-other-table'));await screen.findByTestId('view-tab-other-view');
+  await waitFor(()=>expect(screen.getByTestId('row-limit-hint')).toHaveTextContent('222'));
+  await act(async()=>oldRows.resolve({rows:[],total:0,row_limit:111}));
+  expect(screen.getByTestId('row-limit-hint')).toHaveTextContent('222');
+ });
+ it('serializes activation of the same view after its pending preferences write', async () => {
+  const pending=deferred<WorkbenchView>();vi.mocked(patchView).mockReturnValueOnce(pending.promise).mockResolvedValue({...view,hidden_field_ids:['number']});
+  await open();fireEvent.click(screen.getByTestId('hide-col-number'));
+  await waitFor(()=>expect(patchView).toHaveBeenCalledTimes(1));fireEvent.click(screen.getByTestId('view-tab-view'));
+  expect(patchView).toHaveBeenCalledTimes(1);
+  await act(async()=>pending.resolve({...view,hidden_field_ids:['number']}));
+  await waitFor(()=>expect(patchView).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(patchView).mock.calls[1]).toEqual(['view',{is_active:true}]);
+ });
+
 });
