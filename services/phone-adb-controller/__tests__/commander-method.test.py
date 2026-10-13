@@ -121,6 +121,15 @@ class Methods(unittest.TestCase):
   self.assertNotEqual((self.runtime/'wf-report.py').read_bytes(),self.code)
   self.repack({PATH:self.code,safety:raw});self.attest()
   result=self.io.ready(self.envelope);self.assertTrue(result['ready'])
+ def test_historical_business_skill_with_bare_global_command_is_rejected_mechanically(self):
+  path='skills/business/SKILL.md';raw=b'---\nname: business\nversion: 1.0.0\n---\n```sh\npython3 ~/.openclaw/commander/not-frozen.py\n```\n'
+  self.repack({path:raw})
+  for rows in (self.manifest['bindings'],self.method['payload']['components'],self.a['payload']['implementation_bindings']):
+   for b in rows:
+    if b.get('path')==path:b['kind']='skill'
+  m=self.method_module()
+  with self.assertRaisesRegex(ValueError,'unsupported_method_skill'):m.dependencies(self.manifest,self.root)
+  with self.assertRaisesRegex(ValueError,'unsupported_method_skill'):m.manifest_for(self.method)
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
   golden=json.loads((SOURCE/'__tests__/fixtures/commander-method-brain.json').read_text())
