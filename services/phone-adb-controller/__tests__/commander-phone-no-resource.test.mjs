@@ -70,15 +70,20 @@ assert p.cleanup()['completed'] is False
 
 test('发送领锁前持久intent；响应前crash后锁free也不得冒充无动作',()=>scenario(`
 fail_prepare()
-class Crash(BaseException):pass
-def crash(argv,**kwargs):
- assert (d/'phone-action-intent.json').exists(),'acquire was sent before durable intent'
- raise Crash()
-r.phone_module.subprocess.run=crash
-try:p.ctl('lock-acquire',e['run_id'])
-except Crash:pass
-r.phone_module.subprocess.run=transport
-assert p.cleanup()['completed'] is False,'unknown sent acquisition accepted as no-resource'
+import os
+before={str(x) for x in (d/'controller-receipts').rglob('*') if x.is_file()}
+pid=os.fork()
+if pid==0:
+ def crash(argv,**kwargs):
+  os._exit(73 if (d/'phone-action-intent.json').exists() else 74)
+ r.phone_module.subprocess.run=crash
+ p.ctl('lock-acquire',e['run_id'])
+ os._exit(75)
+_,status=os.waitpid(pid,0)
+assert os.waitstatus_to_exitcode(status)==73,'acquire was sent before durable intent'
+assert {str(x) for x in (d/'controller-receipts').rglob('*') if x.is_file()}==before,'hard exit must leave no new RPC receipt'
+p=r.phone_module.Phone(d,e)
+assert p.cleanup()['completed'] is False,'new process accepted unknown sent acquisition as no-resource'
 `));
 
 test('真实失败边界校验原件hash与run身份；错误证据不得no-resource',()=>{
