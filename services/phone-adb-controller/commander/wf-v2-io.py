@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import sys
 import urllib.request
@@ -83,8 +84,17 @@ def ready(query):
                     raise ValueError('loaded Commander workspace drift')
     definition = query['definition']
     release = deployed.get('releases', {}).get(definition['release_id'])
-    if not release or release.get('workflow_key') != query['workflow_key'] or release.get('snapshot_sha256') != definition['snapshot_sha256']:
-        raise ValueError('frozen release not deployed')
+    workflow = None
+    if isinstance(release, dict):
+        # 同一target的一个release可绑定多个冻结workflow；新shape存在时绝不回退旧字段。
+        if 'workflows' in release:
+            workflows = release['workflows']
+            workflow = workflows.get(query['workflow_key']) if isinstance(workflows, dict) else None
+        elif release.get('workflow_key') == query['workflow_key']:
+            workflow = release  # 历史单workflow部署映射兼容。
+    snapshot = workflow.get('snapshot_sha256') if isinstance(workflow, dict) else None
+    if not isinstance(snapshot, str) or not re.fullmatch(r'[a-f0-9]{64}', snapshot) or snapshot != definition['snapshot_sha256']:
+        raise ValueError('frozen release workflow not deployed or snapshot mismatch')
     if definition.get('runtime_snapshot_sha256') and definition['runtime_snapshot_sha256'] != runtime:
         raise ValueError('frozen runtime mismatch')
     return dict(protocol=PROTOCOL, ready=True, release_id=definition['release_id'],

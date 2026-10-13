@@ -444,6 +444,7 @@ test('同一release ready按workflow固定摘要握手，多workflow未知或串
   // 显式新shape损坏时不得退回旁边碰巧匹配的旧字段。
   seal({'release-test':{workflows:invalid,workflow_key:'workflow.meta',snapshot_sha256:'1'.repeat(64)}});
   assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
+  assert.notEqual(ready('workflow.meta','invalid').status,0);
  }
  seal({'release-test':{workflows}});writeFileSync(join(f.dir,'wf-agent-lib.py'),'# component changed');assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
  assert.equal(existsSync(join(f.home,'wf-agent-runs')),false,'ready must not start any run');
