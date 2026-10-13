@@ -430,3 +430,21 @@ except ValueError as error:assert 'durable shell attempt identity' in str(error)
 assert not any(x['type']=='activity_completed' for x in r.io.read(d/'events.json'))
 `);assert.equal(result.status,0,result.stderr+result.stdout);
 });
+test('同一release ready按workflow固定摘要握手，多workflow未知或串用摘要均拒绝',()=>{
+ const f=fixture();const workflows=Object.fromEntries(['workflow.meta','workflow_report.internal','douyin_video_publish.android'].map((key,i)=>[key,{snapshot_sha256:String(i+1).repeat(64)}]));
+ const seal=releases=>{const result=spawnSync('python3',[join(f.dir,'wf-v2-io.py'),'manifest',f.dir,JSON.stringify(releases)],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);return JSON.parse(readFileSync(join(f.dir,'runtime-manifest.json')));};
+ const manifest=seal({'release-test':{workflows}});
+ const ready=(key,snapshot,definition={})=>f.call('wf-launch.sh',['--ready'],{workflow_key:key,definition:{...f.definition,snapshot_sha256:snapshot,runtime_snapshot_sha256:manifest.runtime_snapshot_sha256,...definition}});
+ for(const [key,value] of Object.entries(workflows)){
+  const result=ready(key,value.snapshot_sha256);assert.equal(result.status,0,result.stdout+result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout),{protocol:'commander-v2',ready:true,release_id:'release-test',snapshot_sha256:value.snapshot_sha256,runtime_snapshot_sha256:manifest.runtime_snapshot_sha256});
+ }
+ for(const [key,snapshot,definition] of [['missing.workflow','1'.repeat(64),{}],['workflow.meta','2'.repeat(64),{}],['workflow.meta','1'.repeat(64),{release_id:'missing-release'}],['workflow.meta','1'.repeat(64),{runtime_snapshot_sha256:'f'.repeat(64)}]])assert.notEqual(ready(key,snapshot,definition).status,0);
+ for(const invalid of [null,[],{'workflow.meta':{}},{'workflow.meta':{snapshot_sha256:null}},{'workflow.meta':{snapshot_sha256:'invalid'}}]){
+  // 显式新shape损坏时不得退回旁边碰巧匹配的旧字段。
+  seal({'release-test':{workflows:invalid,workflow_key:'workflow.meta',snapshot_sha256:'1'.repeat(64)}});
+  assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
+ }
+ seal({'release-test':{workflows}});writeFileSync(join(f.dir,'wf-agent-lib.py'),'# component changed');assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
+ assert.equal(existsSync(join(f.home,'wf-agent-runs')),false,'ready must not start any run');
+});
