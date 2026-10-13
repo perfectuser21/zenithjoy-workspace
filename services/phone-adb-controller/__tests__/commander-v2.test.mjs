@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, writeFileSync, cpSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync, cpSync, existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -141,4 +141,81 @@ test('deadline跨重启不变：只补预算内官方终态，晚终态拒绝冒
   if(late){assert.equal(status.execution_stopped,true);assert.equal(status.delivery.status,'failed');}else{assert.equal(status.delivery.status,'completed');assert.equal(status.execution_stopped,true);assert.notEqual(helper(f,'event',dir,{type:'activity_completed',data:{}}).status,0);}
   assert.equal(JSON.parse(readFileSync(join(dir,'agent-request.json'))).expires_at,request.expires_at);
  }
+});
+function python(f,body){return spawnSync('python3',['-c',`import importlib.util,json,pathlib,time\nspec=importlib.util.spec_from_file_location('runtime',${JSON.stringify(join(f.dir,'wf-v2.py'))})\nr=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)\n`+body],{env:f.env,encoding:'utf8'});}
+test('清理取证异常仍精确放锁；已失败的清理可重入且不重复业务',()=>{
+ const f=fixture(),dir=start(f);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
+p=r.phone_module.Phone(d,e);calls=[];owner=[e['run_id']]
+p.owner=lambda:owner[0]
+def ctl(*args):
+ calls.append(args)
+ if args[0]=='lock-release':owner[0]='free';return 'lock=free'
+ if 'snapshot-evidence' in args:raise ValueError('evidence copy interrupted')
+ return 'receipt'
+p.ctl=ctl
+try:p.cleanup()
+except ValueError:pass
+assert ('lock-release',e['run_id']) in calls,'failed evidence leaked exact owner lock'
+r.io.write(d/'envelope.json',e);r.io.write(d/'agent-completion.json',{'status':'ok'});r.io.write(d/'agent-delivery.json',{'status':'completed','outputs':{},'evidence':[],'effects':[]})
+r.io.write(d/'cleanup.json',{'completed':False,'evidence':[]})
+class CleanupOnly:
+ def __init__(self,*args):pass
+ def prepare(self):raise AssertionError('business preflight repeated')
+ def cleanup(self):
+  calls.append(('cleanup-retry',));return {'completed':True,'evidence':['actual-cleanup']}
+r.phone_module.Phone=CleanupOnly
+r.worker(d)
+assert ('cleanup-retry',) in calls,'cached failure never retried'
+assert r.io.read(d/'delivery.json')['cleanup']['completed'] is True
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('执行deadline后wait异常仍精确abort；abort异常仍独立读终态',()=>{
+ const f=fixture(),dir=start(f);helper(f,'claim-spawn',dir);bind(f,dir);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');e['deadline_at']='2000-01-01T00:00:00Z';r.io.write(d/'envelope.json',e)
+calls=[]
+def wait(*args,**kwargs):calls.append('wait');raise ValueError('wait unavailable')
+def stop(*args):calls.append('abort');raise ValueError('termination unknown')
+r.handoff.await_result=wait;r.handoff.stop=stop
+r.worker(d)
+assert calls==['wait','abort'],calls
+assert r.io.read(d/'runtime.json')['execution_stopped'] is False
+spec=importlib.util.spec_from_file_location('fresh',r.HERE/'wf-agent-handoff.py');h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
+calls=[]
+def rpc(method,payload,timeout=20):
+ calls.append(method)
+ if method=='sessions.abort':raise ValueError('abort response lost')
+ return {'runId':r.io.read(d/'agent-binding.json')['child_run_id'],'endedAt':1,'status':'error'}
+h.rpc=rpc;h.stop(d)
+assert calls==['sessions.abort','agent.wait'],calls
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('phone准备禁止消费cleanup预算；cleanup独立使用原收尾截止时间',()=>{
+ const f=fixture(),dir=start(f);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');e['deadline_at']='2000-01-01T00:00:00Z';e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
+p=r.phone_module.Phone(d,e);calls=[]
+class Result:returncode=0;stdout=b'lock=free'
+def run(*args,**kwargs):calls.append(args);return Result()
+r.phone_module.subprocess.run=run
+try:p.prepare()
+except ValueError:pass
+assert calls==[],'preparation consumed cleanup budget'
+p.cleanup()
+assert calls,'cleanup failed to use its reserved budget'
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('部署中旧launch和直接旧runner均不得触发业务或绕过admission',()=>{
+ for(const command of ['wf-launch.sh','wf-agent-run.sh']){
+  const f=fixture();writeFileSync(join(f.dir,'.deploying'),'');writeFileSync(join(f.home,'ssh'),'#!/bin/sh\ntouch "$HOME/ssh-called"\nexit 0\n',{mode:0o755});f.env.PATH=f.home+':'+process.env.PATH;
+  const args=command==='wf-launch.sh'?['keyword_acquisition','xian-m4','test','ABC123','授权测试','--dry-run']:['douyin_video_publish','xian-m4','test','ABC123','授权测试','--tag','cmd10130000','--run-id',f.envelope.run_id,'--task-id',f.envelope.task_id,'--parent-session','agent:work-commander:test'];
+  const result=f.call(command,args);assert.notEqual(result.status,0,result.stdout+result.stderr);assert.match(result.stderr+result.stdout,/deployment|部署/);assert.equal(existsSync(join(f.home,'ssh-called')),false);
+ }
+});
+test('通用skill以原始v2信封与正式会话交接为主，不保留旧escort操作指令',()=>{
+ const skill=readFileSync(join(source,'skills/workflow-commander/SKILL.md'),'utf8');
+ assert.doesNotMatch(skill,/重拉 escort|陪跑 escort 已上岗|Brain 已先登记 task\/run，并将 JSON 信封写到绝对路径/);
+ for(const required of ['原始JSON信封','结构化文件工具','session_status','claim-spawn','resolvedProvider','resolvedModel','previous_attempt'])assert.ok(skill.includes(required),required);
 });
