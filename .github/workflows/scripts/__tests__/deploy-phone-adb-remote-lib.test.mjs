@@ -75,3 +75,35 @@ test("未跟踪新文件 + 已跟踪文件改动同时存在 → 仍然 return 1
   const result = runCheck(dir);
   assert.equal(result.code, 1);
 });
+
+const git=(dir,...args)=>execFileSync('git',['-C',dir,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+function deploymentFixture(t){
+ const repo=fs.realpathSync(makeTempRepo()),base=fs.mkdtempSync(path.join(os.tmpdir(),'deploy-worktrees-'));
+ t.after(()=>fs.rmSync(base,{recursive:true,force:true}));t.after(()=>fs.rmSync(repo,{recursive:true,force:true}));
+ git(repo,'remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace.git');
+ const sha=git(repo,'rev-parse','HEAD');git(repo,'update-ref','refs/remotes/origin/main',sha);
+ git(repo,'checkout','-qb','cp-user-work');fs.writeFileSync(path.join(repo,'a.txt'),'user dirty bytes\n');fs.writeFileSync(path.join(repo,'untracked.txt'),'keep me\n');
+ return {repo,base:fs.realpathSync(base),sha};
+}
+function prepare(f,sha=f.sha){return spawnSync('bash',['-c','source "$1"; prepare_deployment_checkout "$2" "$3" "$4"','test',LIB,f.repo,sha,f.base],{encoding:'utf8'});}
+test('真实脏非main原仓创建并复用固定SHA detached部署树，原分支与字节不变',t=>{
+ const f=deploymentFixture(t),before=git(f.repo,'status','--porcelain');
+ const first=prepare(f);assert.equal(first.status,0,first.stderr);const target=first.stdout.trim();assert.equal(target,path.join(f.base,f.sha));
+ assert.equal(git(target,'rev-parse','HEAD'),f.sha);assert.equal(spawnSync('git',['-C',target,'symbolic-ref','-q','HEAD']).status,1);assert.equal(git(target,'status','--porcelain'),'');
+ assert.equal(prepare(f).stdout.trim(),target);assert.equal(git(f.repo,'branch','--show-current'),'cp-user-work');assert.equal(git(f.repo,'status','--porcelain'),before);assert.equal(fs.readFileSync(path.join(f.repo,'a.txt'),'utf8'),'user dirty bytes\n');
+});
+test('旧run与错误origin在创建目录前拒绝，脏原仓保留',t=>{
+ const f=deploymentFixture(t);assert.notEqual(prepare(f,'b'.repeat(40)).status,0);assert.equal(fs.existsSync(path.join(f.base,'b'.repeat(40))),false);
+ git(f.repo,'remote','set-url','origin','https://github.com/other/repo.git');assert.notEqual(prepare(f).status,0);assert.equal(fs.existsSync(path.join(f.base,f.sha)),false);
+});
+test('复用树有tracked/untracked漂移拒绝，绝不reset或删除',t=>{
+ const f=deploymentFixture(t);assert.equal(prepare(f).status,0);const target=path.join(f.base,f.sha);
+ fs.writeFileSync(path.join(target,'a.txt'),'deployment drift');assert.notEqual(prepare(f).status,0);assert.equal(fs.readFileSync(path.join(target,'a.txt'),'utf8'),'deployment drift');
+ fs.writeFileSync(path.join(target,'a.txt'),'hello\n');fs.writeFileSync(path.join(target,'foreign'),'retain');assert.notEqual(prepare(f).status,0);assert.equal(fs.readFileSync(path.join(target,'foreign'),'utf8'),'retain');
+});
+test('伪装目标：软链、其它Git common目录或非detached树一律拒绝',t=>{
+ const f=deploymentFixture(t),other=fs.realpathSync(makeTempRepo());t.after(()=>fs.rmSync(other,{recursive:true,force:true}));const target=path.join(f.base,f.sha);
+ fs.symlinkSync(other,target);assert.notEqual(prepare(f).status,0);fs.unlinkSync(target);
+ git(other,'worktree','add','--detach',target);assert.notEqual(prepare(f).status,0);git(other,'worktree','remove',target);
+ assert.equal(prepare(f).status,0);git(target,'checkout','-qb','cp-foreign-branch');assert.notEqual(prepare(f).status,0);
+});
