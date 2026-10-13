@@ -87,13 +87,13 @@ test('数值指数与Unicode键按Brain JSON摘要一致，部署进行中拒绝
 });
 test('反馈断网后按原seq重放，0600凭据仅存在Authorization头',async()=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');
- const f=fixture(),dir=start(f);helper(f,'event',dir,{type:'activity_completed',data:{reference_id:'ref',outcome:'pass',evidence:{path:'报告.json'}}});
+ const f=fixture();f.envelope.definition.expected_path=[{reference_id:'ref',activity_id:'activity'}];writeFileSync(f.file,JSON.stringify(f.envelope));const dir=start(f);helper(f,'event',dir,{type:'activity_completed',data:{reference_id:'ref',outcome:'pass',started_at:'2026-10-13T10:00:00Z',ended_at:'2026-10-13T10:00:01Z',evidence:{path:'报告.json'}}});
  const expected=JSON.parse(readFileSync(join(dir,'events.json')));const token=join(f.home,'internal-token');writeFileSync(token,'test-secret-only-in-header',{mode:0o600});f.env.WF_INTERNAL_TOKEN_FILE=token;
  const received=[];let fail=true;
- const server=createServer((req,res)=>{let body='';req.on('data',x=>body+=x);req.on('end',()=>{assert.equal(req.headers.authorization,'Bearer test-secret-only-in-header');received.push(JSON.parse(body));res.statusCode=fail?503:200;res.end('{}');});});
+ const server=createServer((req,res)=>{let body='';req.on('data',x=>body+=x);req.on('end',()=>{assert.equal(req.headers.authorization,'Bearer test-secret-only-in-header');received.push(JSON.parse(body));res.statusCode=fail?503:200;res.end(JSON.stringify({accepted:true,seq:JSON.parse(body).seq}));});});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));f.env.WF_BRAIN_URL='http://127.0.0.1:'+server.address().port;
  const replay=()=>new Promise((resolve,reject)=>{const p=spawn('python3',[join(f.dir,'wf-v2.py'),'replay',dir],{env:f.env,stdio:'ignore'});p.on('error',reject);p.on('exit',resolve);});
- try{assert.equal(await replay(),0);fail=false;assert.equal(await replay(),0);assert.deepEqual(received,[expected[0],...expected]);received.length=0;assert.equal(await replay(),0);assert.deepEqual(received,[]);assert.equal(readFileSync(join(dir,'events.json'),'utf8').includes('test-secret'),false);}finally{await new Promise(resolve=>server.close(resolve));}
+ try{assert.notEqual(await replay(),0);fail=false;assert.equal(await replay(),0);assert.deepEqual(received,[expected[0],...expected]);received.length=0;assert.equal(await replay(),0);assert.deepEqual(received,[]);assert.equal(readFileSync(join(dir,'events.json'),'utf8').includes('test-secret'),false);}finally{await new Promise(resolve=>server.close(resolve));}
 });
 test('v2手机共享控制器外壳：精确owner、官方child停止后桌面原件与放锁读回',async()=>{
  const {spawn}=await import('node:child_process');const {existsSync}=await import('node:fs');
