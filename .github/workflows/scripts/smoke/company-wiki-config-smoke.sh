@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 node --test "$ROOT/services/phone-adb-controller/__tests__/company-config.test.mjs"
-node --test "$ROOT/apps/api/scripts/company-wiki-import.test.mjs" "$ROOT/apps/api/scripts/company-projection-adapters.test.mjs" "$ROOT/services/phone-adb-controller/company-config-sync.test.js"
+node --test "$ROOT/apps/api/scripts/company-wiki-import.test.mjs" "$ROOT/apps/api/scripts/company-projection-adapters.test.mjs" "$ROOT/services/phone-adb-controller/__tests__/company-config-sync.test.mjs"
 cd "$ROOT"
 node --input-type=module <<'JS'
 import {spawnSync} from 'node:child_process';
@@ -24,3 +24,9 @@ if(scratch) {
  if(api.status!==0)throw Error('公司Wiki真实API/Postgres闭环失败');
 } else console.log('本次为本地单元检查；真实Postgres需COMPANY_CONFIG_SCRATCH_URL（CI强制执行）');
 JS
+
+# 明示mock的远端PG catalog仍必须经过真实公司readiness判定。
+# 缺schema或坏JSON在admission/安装前拒绝；不接触任何手机或生产库。
+# 配套input/controller的verified仍来自隔离目录真实CAS安装和双路径字节读回。
+node --test \
+  "$ROOT/services/phone-adb-controller/__tests__/paired-deploy-smoke.test.mjs"

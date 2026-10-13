@@ -17,6 +17,11 @@ export function prepare(root){
  for(const mode of ['ssh','scp'])writeFileSync(join(root,mode),`#!/bin/sh\nexec ${quote(process.execPath)} ${quote(self)} transport ${quote(root)} ${mode} "$@"\n`,{mode:0o700});
  return p;
 }
+// 明示mock的PG catalog输入；生产evaluateCompanyReadiness负责给出结论。
+function companyInventory(){
+ const tables={tenant_company_profiles:{company_id:'uuid',tenant_id:'uuid',company_key:'text',wiki:'jsonb',runtime_config:'jsonb',config_status:'text',config_version:'integer',source_evidence:'jsonb'},company_config_versions:{company_id:'uuid',tenant_id:'uuid',version:'integer',snapshot:'jsonb'},company_config_runs:{company_id:'uuid',tenant_id:'uuid',run_id:'text',version:'integer',snapshot:'jsonb',task_inputs:'jsonb',source_run:'text'},leadgen_videos:{judgment_config:'jsonb'},leadgen_comments:{judgment_config:'jsonb'}};
+ return {columns:Object.entries(tables).flatMap(([table_name,fields])=>Object.entries(fields).map(([column_name,data_type])=>({table_name,column_name,data_type}))),indexes:[{tablename:'company_config_runs',indexdef:'CREATE UNIQUE INDEX fixture_run_key ON zenithjoy.company_config_runs (company_id, run_id)'}],triggers:['immutable_company_run','immutable_company_version'].map(tgname=>({tgname,tgenabled:'O'})),profiles:[]};
+}
 export function transport(root,mode,args){
  root=resolve(root);const p=paths(root);const ok=stdout=>({status:0,stdout:stdout||'',stderr:''});
  try{
@@ -35,6 +40,15 @@ export function transport(root,mode,args){
   }
   if(mode!=='ssh')throw Error('unknown transport');
   appendFileSync(join(root,'ssh.log'),args.join(' ')+'\n');const [host,cmd]=args;
+  if(args.at(-2)==='mmv'&&args.at(-1)==='set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node -'){
+   const mode=process.env.PAIR_COMPANY_READINESS_MODE||'schema-ready';
+   if(mode==='invalid-json')return ok('explicit-mock-invalid-inventory\n');
+   const inventory=companyInventory();
+   if(mode==='missing-schema')inventory.columns=inventory.columns.filter(c=>!(c.table_name==='company_config_runs'&&c.column_name==='task_inputs'));
+   else if(mode!=='schema-ready')throw Error('unknown readiness fixture mode');
+   return ok(JSON.stringify(inventory)+'\n');
+  }
+  if(host==='mmv'&&cmd==='python3'&&process.env.PAIR_DEPLOY_STOP_AT_ADMISSION==='1')return {status:3,stdout:'',stderr:'explicit fixture admission denied after readiness\n'};
   if(host==='xian-m4'&&cmd==='mktemp -d /tmp/input-runtime-deploy.XXXXXX')return ok(p.stage+'\n');
   if(cmd?.includes(p.stage)){
    if(host!=='xian-m4')throw Error('unexpected paired host');

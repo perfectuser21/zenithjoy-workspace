@@ -31,11 +31,22 @@ describe('真实scratch公司Wiki/API/页面闭环', () => {
     const client = await pool.connect(); shared.client=client;
     let browser:Browser|undefined, vite:ViteDevServer|undefined, server:Server|undefined;
     const cookieFiles:string[]=[];
+    let originalNamespace: number | null | undefined;
     const nested = {query:nestedQuery,connect:async()=>({query:nestedQuery,release(){}})};
     try {
       expect((await client.query('SELECT current_database() AS db')).rows[0].db).toBe('cecelia_scratch');
+      originalNamespace=(await client.query<{namespace_oid:number|null}>("SELECT to_regnamespace('zenithjoy')::oid AS namespace_oid")).rows[0].namespace_oid;
       await client.query('BEGIN');
-      await client.query(await readFile(resolve(root,'apps/api/db/migrations/20261013_170000_company_wiki_config.sql'),'utf8'));
+      // 整个清空与建库都在scratch外层事务内，ROLLBACK恢复既存对象；不依赖前序测试留下schema。
+      await client.query('DROP SCHEMA IF EXISTS zenithjoy CASCADE');
+      expect((await client.query("SELECT to_regnamespace('zenithjoy') AS namespace")).rows[0].namespace).toBeNull();
+      // 复用真实历史迁移建立最小依赖，不假设其他fixture在提交后留下公司/租户基础表。
+      for(const migration of [
+        '20260428_100000_create_tenants.sql',
+        '20260819_210500_tenants_license_key_default.sql',
+        '20260628_line02_tenant_company_profiles.sql',
+        '20261013_170000_company_wiki_config.sql',
+      ])await client.query(await readFile(resolve(root,'apps/api/db/migrations',migration),'utf8'));
       const evidence=process.env.COMPANY_WIKI_EVIDENCE_PATH ? JSON.parse(await readFile(process.env.COMPANY_WIKI_EVIDENCE_PATH,'utf8')) : representativeEvidence;
       const docs=process.env.COMPANY_WIKI_DOCS_PATH ? JSON.parse(await readFile(process.env.COMPANY_WIKI_DOCS_PATH,'utf8')) : representativeDocs;
       const mapping=Object.fromEntries(['jinoshengyuan','yueshengyun'].map(key=>[key,{environment:'scratch',database:'cecelia_scratch',tenant_id:randomUUID(),company_id:randomUUID(),owner:'scratch-owner',verification_source:'scratch随机测试身份；资料按指定证据或去敏样本加载，不代表生产映射'}]));
@@ -128,8 +139,8 @@ describe('真实scratch公司Wiki/API/页面闭环', () => {
       expect((await freezeCompanyConfig(nested,{lineHint:'jinuo',runId:'scratch-new-run',step:'102'})).version).toBe(6);
       const conflict=await save(seeds[0],{expected_version:3,company_name:'不能覆盖'});expect(conflict.status).toBe(409);
       expect((await read(seeds[0])).body.data.config_version).toBe(6);
-      if(process.env.COMPANY_WIKI_E2E_ARTIFACT_DIR)await writeFile(resolve(process.env.COMPANY_WIKI_E2E_ARTIFACT_DIR,'result.json'),JSON.stringify({database:'cecelia_scratch',real_api:true,real_browser:process.env.COMPANY_WIKI_E2E_BROWSER==='1',evidence_source:process.env.COMPANY_WIKI_EVIDENCE_PATH?'private_evidence':'representative_fixture',real_postgres:true,companies:seeds.map((seed:{tenant_id:string})=>({company_id:seed.company_id,company_key:seed.company_key,source_base:seed.source_evidence.base,products:seed.wiki.products.length,audiences:seed.wiki.audiences.length})),first_run_version:3,new_run_version:6,conflict_status:conflict.status,transaction:'rolled_back_after_test'},null,2),{mode:0o600});
+      if(process.env.COMPANY_WIKI_E2E_ARTIFACT_DIR)await writeFile(resolve(process.env.COMPANY_WIKI_E2E_ARTIFACT_DIR,'result.json'),JSON.stringify({database:'cecelia_scratch',real_api:true,real_browser:process.env.COMPANY_WIKI_E2E_BROWSER==='1',evidence_source:process.env.COMPANY_WIKI_EVIDENCE_PATH?'private_evidence':'representative_fixture',real_postgres:true,companies:seeds.map((seed:{company_id:string;company_key:string;source_evidence:{base:string};wiki:{products:unknown[];audiences:unknown[]}})=>({company_id:seed.company_id,company_key:seed.company_key,source_base:seed.source_evidence.base,products:seed.wiki.products.length,audiences:seed.wiki.audiences.length})),first_run_version:3,new_run_version:6,conflict_status:conflict.status,transaction:'rolled_back_after_test'},null,2),{mode:0o600});
       const history=await client.query('SELECT count(*)::int AS count FROM zenithjoy.company_config_versions WHERE company_id=$1',[seeds[0].company_id]);expect(history.rows[0].count).toBe(6);
-    } finally {if(browser)await browser.close();if(vite)await vite.close();if(server)await new Promise<void>(resolve=>server.close(()=>resolve()));await client.query('ROLLBACK');for(const cookieFile of cookieFiles)await unlink(cookieFile).catch(()=>{});shared.client=null;shared.cookies={};client.release();await pool.end();}
+    } finally {if(browser)await browser.close();if(vite)await vite.close();if(server)await new Promise<void>(resolve=>server.close(()=>resolve()));await client.query('ROLLBACK');if(originalNamespace!==undefined)expect((await client.query<{namespace_oid:number|null}>("SELECT to_regnamespace('zenithjoy')::oid AS namespace_oid")).rows[0].namespace_oid).toBe(originalNamespace);for(const cookieFile of cookieFiles)await unlink(cookieFile).catch(()=>{});shared.client=null;shared.cookies={};client.release();await pool.end();}
   }, process.env.COMPANY_WIKI_EXTERNAL_E2E==='1'?240_000:60_000);
 });

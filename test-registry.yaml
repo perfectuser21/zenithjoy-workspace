@@ -7377,7 +7377,7 @@ agent_suite:
   note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
 
 - id: company-config-sync
-  path: services/phone-adb-controller/company-config-sync.test.js
+  path: services/phone-adb-controller/__tests__/company-config-sync.test.mjs
   type: unit
   ci: L3
   status: active
@@ -7423,3 +7423,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "真实fail/start_api错误路径在fixture stdout重定向后仍保留stderr；不修改健康判据和40秒预算"
+
+- id: paired-deploy-smoke-company-readiness
+  path: services/phone-adb-controller/__tests__/paired-deploy-smoke.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "明示fake SSH PG catalog输入经真实readiness；缺schema/无效JSON先于admission及安装拒绝，配套CAS安装须真实字节读回"

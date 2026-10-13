@@ -1,5 +1,7 @@
-const test=require('node:test');const assert=require('node:assert/strict');
-const { synchronizeProjection, mergeProjectionEdit }=require('./company-config-sync-lib');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import sync from '../company-config-sync-lib.js';
+const { synchronizeProjection, mergeProjectionEdit }=sync;
 const source={company_id:'a',tenant_id:'t',config_version:2,wiki:{markdown:'new'}};
 test('缺映射必须红，不能宣称已同步',async()=>{const result=await synchronizeProjection({snapshot:source,platform:'notion',mapping:null,adapter:{}});assert.equal(result.status,'unmapped');});
 test('独立readback不一致报失败并留证据',async()=>{const events=[];const result=await synchronizeProjection({snapshot:source,platform:'feishu',mapping:{company_id:'a',tenant_id:'t',target:'doc'},adapter:{read:async()=>null,write:async()=>({ok:true}),readback:async()=>({...source,wiki:{markdown:'old'}}),record:async x=>events.push(x)}});assert.equal(result.status,'mismatch');assert.equal(events.at(-1).readback.wiki.markdown,'old');});

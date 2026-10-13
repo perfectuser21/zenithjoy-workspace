@@ -194,7 +194,7 @@ PYMANIFEST
 
 MMV_JS_FILES=(
   push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
-  leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
+  leadgen-db-lib.js company-config-lib.js company-config-sync-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
   judge-video-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
   lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js keyword-stats-lib.js
   fetch-seen-videos.js fetch-seen-titles.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
