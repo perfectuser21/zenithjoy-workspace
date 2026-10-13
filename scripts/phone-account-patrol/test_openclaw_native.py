@@ -235,7 +235,7 @@ class ContinuousRecoveryTests(unittest.TestCase):
         self.tasks = {BATCH: copy.deepcopy(self.batch), CHILD: copy.deepcopy(self.child), REVIEW: {
             'id': REVIEW, 'status': 'in_progress', 'task_type': 'script_run', 'project_id': PROJECT,
             'payload': {'workflow_id': native.bridge.MAINTENANCE_WORKFLOW_ID, 'source_revision': 'a' * 40, 'runtime_requires_llm': False}}}
-        self.serial_enabled = True
+        self.serial_enabled = True;self.serial_host = 'xian-m4'
         self.posts = []
         self.counter = 100
         self.router = 1
@@ -246,12 +246,14 @@ class ContinuousRecoveryTests(unittest.TestCase):
         if path == 'recurring-tasks':
             return [{'id': SCHEDULE, 'is_active': True, 'template': {'activated_at': '2026-10-11T02:04:22Z'}}]
         if path == 'phone-registry':
-            return {'phones': [{'serial': 'phone-a', 'nickname': '白', 'enabled': self.serial_enabled, 'host': 'xian-m4'}]}
+            return {'phones': [{'serial': 'phone-a', 'nickname': '白', 'enabled': self.serial_enabled, 'host': self.serial_host}]}
         if path.startswith('tasks?'):
             from urllib.parse import parse_qs
             query = parse_qs(path.split('?', 1)[1]);offset = int(query.get('offset', ['0'])[0]);limit = int(query.get('limit', ['200'])[0])
             return copy.deepcopy(list(self.tasks.values())[offset:offset + limit])
         if path == 'tasks' and body is not None:
+            duplicate = next((t for t in self.tasks.values() if t.get('title') == body['title'] and t.get('project_id') == body['project_id'] and t['status'] in ['queued', 'in_progress', 'blocked']), None)
+            if duplicate:return {'id': duplicate['id']}
             self.posts.append(copy.deepcopy(body));key = (self.router, body.get('source_id'))
             if key not in self.keys:
                 self.counter += 1;task_id = str(uuid_module.UUID(int=self.counter));self.keys[key] = task_id
@@ -289,9 +291,12 @@ class ContinuousRecoveryTests(unittest.TestCase):
 
     def complete_phone(self, task, outcome='completed', exit_code=0, checked=None):
         task['status'] = 'completed' if exit_code == 0 else 'failed'
+        task['completed_at'] = self.current.isoformat()
         task['result'] = {'script': {'run_id': 'script-' + task['id'] + '-a1', 'exit_code': exit_code,
             'stdout': json.dumps({'task_id': task['id'], 'status': outcome, 'serial': 'phone-a',
-                'source_revision': native.bridge.PHONE_SOURCE_REVISION, 'checked_at': checked or self.current.isoformat()})}}
+                'source_revision': native.bridge.PHONE_SOURCE_REVISION, 'checked_at': checked or self.current.isoformat(), 'workflow_id': SINGLE,
+                'states': {'抖音': '已登录', '小红书': '已登录', '微信': '已登录', '快手': '已登录', '今日头条': '已登录', '知乎': '待确认', '微博': '已登录', 'B站': '已登录', '视频号': '待确认'},
+                'evidence': ['/private/observation.json', '/private/publish.json', '/private/mirror.json', 'xian-m4:/private/evidence']})}}
 
     def test_failed_previous_day_creates_blocked_demand_and_real_code_attempt(self):
         result = self.cycle();demand = self.demands()[0];attempt = self.attempts()[0]
@@ -348,6 +353,71 @@ class ContinuousRecoveryTests(unittest.TestCase):
         def forbidden(*args, **kwargs):raise AssertionError('取消后不能执行手机')
         value, code = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, forbidden)
         self.assertEqual(value['status'], 'stopped');self.assertEqual(code, 0)
+
+    def test_echo_success_missing_platforms_or_future_time_cannot_close(self):
+        for fault in ['cmd', 'states', 'evidence', 'future']:
+            self.setUp();self.cycle();attempt = self.attempts()[0];self.current += dt.timedelta(minutes=45);self.complete_phone(attempt)
+            if fault == 'cmd':attempt['payload']['cmd'] = 'echo arbitrary-json'
+            else:
+                receipt = json.loads(attempt['result']['script']['stdout'])
+                if fault == 'future':receipt['checked_at'] = (self.current + dt.timedelta(hours=2)).isoformat()
+                else:receipt.pop(fault)
+                attempt['result']['script']['stdout'] = json.dumps(receipt)
+            self.cycle();self.assertEqual(self.demands()[0]['status'], 'blocked', fault)
+
+    def test_legacy_monitor_failure_does_not_stop_persistent_recovery(self):
+        self.assertTrue(callable(getattr(native, 'maintain', None)))
+        result = native.maintain(REVIEW, self.deployment, self.state, self.call, self.current,
+            lambda *a, **k: subprocess.CompletedProcess([], 1, '', 'legacy error'))
+        self.assertEqual(result['status'], 'partial_failure');self.assertEqual(result['legacy_health']['status'], 'unknown')
+        self.assertEqual(len(self.demands()), 1);self.assertEqual(len(self.attempts()), 1)
+
+    def test_cancel_during_guard_and_disabled_device_have_no_phone_effect(self):
+        self.cycle();demand = self.demands()[0];attempt = self.attempts()[0];attempt['status'] = 'in_progress'
+        count = 0
+        def cancelled(path, body=None, method=None):
+            nonlocal count
+            if path == 'tasks/' + demand['id']:
+                count += 1
+                if count == 2:self.tasks[demand['id']]['status'] = 'canceled'
+            return self.call(path, body, method)
+        def forbidden(*args, **kwargs):raise AssertionError('守卫必须在手机动作之前终止')
+        value, code = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, cancelled, forbidden)
+        self.assertEqual(value['status'], 'stopped');self.assertEqual(code, 0)
+
+    def test_fixed_current_configuration_can_resume_after_old_controller_error(self):
+        self.cycle();attempt = self.attempts()[0];attempt['status'] = 'blocked';attempt['updated_at'] = self.current.isoformat();attempt['payload']['control_sha256'] = 'f' * 64
+        self.current += dt.timedelta(hours=2);self.cycle()
+        self.assertEqual(len(self.attempts()), 2)
+        self.assertEqual(self.demands()[0]['status'], 'blocked')
+
+    def test_same_phone_different_original_slots_get_distinct_attention_tasks(self):
+        self.tasks[CHILD]['payload']['script_attempts'] = [{'run_id': 'script-' + CHILD + '-a' + str(i), 'exit_code': 255} for i in [1, 2, 3]]
+        self.cycle()
+        old_batch = copy.deepcopy(self.tasks[BATCH]);old_batch.update(id=LEADER, created_at='2026-10-11T14:05:00Z')
+        old_batch['payload']['recurring_slot'] = '2026-10-11T14:00:00Z';self.tasks[LEADER] = old_batch
+        old_phone = copy.deepcopy(self.tasks[CHILD]);old_phone.update(id=ROUTING, parent_task_id=LEADER, created_at='2026-10-11T14:10:00Z')
+        old_phone['payload']['script_attempts'] = [{'run_id': 'script-' + ROUTING + '-a' + str(i), 'exit_code': 255} for i in [1, 2, 3]]
+        self.tasks[ROUTING] = old_phone;self.cycle()
+        self.assertEqual(len([t for t in self.tasks.values() if t.get('payload', {}).get('recovery_attention')]), 2)
+
+    def test_authorized_manual_success_before_late_bookkeeping_covers_old_failure(self):
+        task = copy.deepcopy(self.tasks[CHILD]);task.update(id=ROUTING, parent_task_id=CHILD, created_at=(self.current - dt.timedelta(minutes=5)).isoformat())
+        task['payload'].update(host='mmv', runtime_requires_llm=False, recovery_origin_task_id=CHILD,
+            cmd='/usr/bin/python3 /fixed/release/runner.py phone --serial phone-a --execution-script "$0"')
+        self.complete_phone(task, checked=(self.current - dt.timedelta(minutes=1)).isoformat());self.tasks[ROUTING] = task
+        result = self.cycle();self.assertEqual(len(self.demands()), 0)
+        self.assertEqual(result['recovery']['covered_originals'][0]['satisfied_by_task_id'], ROUTING)
+        self.assertEqual(self.tasks[CHILD]['status'], 'failed')
+
+    def test_execution_guard_rejects_wrong_command_or_generation_before_phone(self):
+        self.cycle();demand = self.demands()[0];attempt = self.attempts()[0];attempt['status'] = 'in_progress'
+        for key, wrong in [('cmd', 'echo wrong-entry'), ('recovery_generation', 0), ('recovery_demand_id', CHILD), ('host', 'other')]:
+            original = copy.deepcopy(attempt['payload']);attempt['payload'][key] = wrong
+            def forbidden(*a, **k):raise AssertionError('错误执行身份不能碰手机')
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, forbidden)
+            attempt['payload'] = original
 
     def test_existing_closed_manual_demand_is_not_recreated(self):
         self.cycle();demand = self.demands()[0];self.tasks[demand['id']]['status'] = 'completed_no_pr'

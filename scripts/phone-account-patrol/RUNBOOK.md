@@ -14,7 +14,7 @@
 2. 对 22 点巡查领跑，调用 `openclaw_native.py enqueue --leader-task-id <真实中央ID>`。helper 校验父任务、项目、Workflow 与双源身份，使用稳定 `OpenClaw:infra:<leader>:batch` 幂等键登记代码批次，并 GET 读回真实父子/源码/流程/routing receipt 身份。返回 queued 仅表示登记成功，不表示手机完成。
 3. 对只读维护领跑，调用 `openclaw_native.py inspect --review-leader-task-id <真实中央ID>`。默认目标只取经过核验的 native 最新登记，并回读真实领跑父任务的正式计划及北京时间当天 22 点时段。`--batch-task-id` 仅用于明确指定实际验收批次；也须核验来源及孩子身份。
 
-helper 不调用模型、OpenClaw CLI 或手机，不修改部署指针，不自行修配置、补跑或发送外部消息。父任务必须明确 `qiumi_route.source=explicit`。复核保留 failed、waiting、unknown、deferred 及各 task/run/exit；非零退出码优先失败，completed/deferred 必须对应真实 Run 与退出码 0，缺证据为 unknown；手机离线或被人占用按真实状态记录。维护负责人仍是主理人。
+enqueue、inspect 与 resolve-task 不调用模型、OpenClaw CLI 或手机。持续维护只登记补查任务；recovery-phone 在执行前重新核验需求、任务与设备，再委托冻结单手机 runner。控制代码不修改手机部署指针、生产配置或账号，不发送外部消息。父任务必须明确 `qiumi_route.source=explicit`。复核保留 failed、waiting、unknown、deferred 及各 task/run/exit；非零退出码优先失败，completed/deferred 必须对应真实 Run 与退出码 0，缺证据为 unknown；手机离线或被人占用按真实状态记录。维护负责人仍是主理人。
 
 本机私有证据：`native-launch-<leader>.json`、`native-openclaw.latest.json`、`native-review-<review>.json`，权限 600。领跑源码 `source_revision` 与手机固定源 `phone_source_revision` 分别登记；正式代码批次的 `source_revision` 为冻结手机源。代码批次复制已核验领跑任务的定时计划与时段，既有 runner monitor 可读到实际代码批次。中央 registry 是调度和部署真身，Notion 页面为查看入口。
 
@@ -70,3 +70,17 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 不得绕过CI、管理员强行合并、直接SQL注册、另开本机隐藏定时器，或把未部署版本标成已部署。完整验收后才通过Brain recurring-tasks API启用。独立 OpenClaw agent 通道和代码执行队列的排队均可能延后执行，22:00是计划时间；排队必须可见并记录异常。
 
 监控自身异常也必须留下中央失败Run。巡查失败、排队超时、漏跑或设备占用由主理人查看维护任务和运行记录；代码修复走Git PR、测试、固定版本部署和正式定义更新。
+
+## 持续恢复：失败不结束需求
+
+沿用原30分钟维护计划，目标入口为 openclaw_native.py maintain --execution-script "$0"，不新增有效 timer。是否正式启用以中央计划和registry读回确认。maintain保留冻结runner monitor的原批次健康，并独立推进持续恢复；原monitor故障显示partial_failure，仍尝试读取中央需求，不伪称健康。
+
+每个未完成正式手机任务对应中央 blocked project需求，blocked_until为空；维护负责人主理人，commander为OpenClaw:infra。固定原任务/批次/计划/slot/serial/source放payload，变量仅进result.recovery。完整分页读取activated_at之后的正式22点slot，跨日持续；旧failed任务和Run不改。结清或取消需求不重建；后续正式巡查或已授权人工补查可凭真实完成证据覆盖旧需求。
+
+补查是需求下独立script_run，稳定需求+generation幂等，POST丢回执先读中央记录，不盲重建。新任务只用original_schedule_id/original_slot，不带主计划recurring_task_id。同设备已有正式/恢复任务时延后；退避15/30/60分钟后每小时继续，由实际30分钟维护轮检查到期。超过3次真实失败只登记一条blocked人工维护任务，需求仍未完成。设备停用、需求明确终止时停止；当前身份、指纹或迁移不符合合同则待维护，不盲执行。
+
+执行包装器重读需求取消、设备enabled/宿主、scope、command和控制源码哈希，再由冻结控制器仲裁原生手机锁。phone source_revision仍为4f，控制包装另记control_source_revision/control_sha256。attempt预算1500秒，内部phone调用1150秒；超时不声称远端动作已取消。
+
+只有正式冻结手机子任务或核验过的补查任务，具备规范Run、exit0、完整九平台及写回/镜子证据、同serial/source/workflow和真实时间窗口，才结清completed_no_pr。原需求时间取原任务/slot，且不早于被采用成功任务created_at；不会因晚建账强制重复已完成人工补查。不同slot的后继证据记明实际task/run/slot，inspect追加recovery_demands但不覆盖原children和原failure。
+
+私有native-maintenance-<任务ID>.json只是执行回执，需求真身始终是中央Tasks。正式入口、真实补查及取消守卫仍须部署后验收，不以静态回归替代。
