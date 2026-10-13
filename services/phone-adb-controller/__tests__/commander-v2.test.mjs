@@ -346,3 +346,17 @@ readback=r.io.read(d/'cleanup-root-start.json');assert readback['matches'] is Fa
 `);assert.equal(result.status,0,result.stderr+result.stdout);
  }
 });
+test('MMV gateway_exec结构化env示例可执行、无损落盘且拒绝覆盖冲突',()=>{
+ const f=fixture();const skill=readFileSync(join(source,'skills/workflow-commander/SKILL.md'),'utf8');
+ const block=skill.split('<!-- gateway-envelope-write -->')[1];assert.ok(block,'missing executable gateway envelope example');
+ const call=JSON.parse(block.split('```json\n')[1].split('\n```')[0]);
+ assert.equal(call.timeoutSeconds,30);assert.ok(call.command.includes('os.environ'));assert.doesNotMatch(call.command,/中文|touch \/tmp/);
+ const execute=envelope=>spawnSync('bash',['-c',call.command],{env:{...f.env,WF_ENVELOPE_JSON:JSON.stringify(envelope)},encoding:'utf8'});
+ const first=execute(f.envelope);assert.equal(first.status,0,first.stderr);
+ const result=JSON.parse(first.stdout);assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
+ assert.equal(execute(f.envelope).status,0);assert.notEqual(execute({...f.envelope,input:{changed:true}}).status,0);
+ assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
+ assert.ok(skill.includes('gateway_process'));assert.ok(skill.includes('WF_BINDING_JSON'));assert.ok(skill.includes('模型本机'));
+ const special=readFileSync(join(source,'skills/wf-douyin_video_publish/SKILL.md'),'utf8');
+ assert.match(special,/version: 0\.1\.2/);assert.match(special,/multi-platform-publish/);assert.doesNotMatch(special,/android-douyin-private-video|45 分钟|wf-status\.sh mmv/);
+});
