@@ -17,7 +17,7 @@ async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readF
  const cache=env.LEADGEN_FEISHU_CREDENTIALS||require('path').join(require('os').homedir(),'.credentials/leadgen-feishu-accounts.json');
  const acc=JSON.parse(read(cache,'utf8'))[route.account];
  if(!acc?.appId||!acc.appSecret)throw Error('触达批准话术账号绑定缺失');
- const ramp=JSON.parse(read(require('path').join(__dirname,'config/dm-rate-ramp.json'),'utf8'))[input.profile];
+ const ramp=JSON.parse(read(require('path').join(__dirname,'config/leadgen-outreach-rate-ramp.json'),'utf8'))[input.profile];
  if(!ramp)throw Error('触达日上限配置缺失');const cap=computeDailyCap(ramp,now);
  if(!Number.isSafeInteger(cap)||cap<1||cap>1000)throw Error('触达日上限无效');
  const token=(await request('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:acc.appId,app_secret:acc.appSecret})},fetcher)).tenant_access_token;

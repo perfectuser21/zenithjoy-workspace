@@ -2,6 +2,8 @@ import {readFileSync,writeFileSync,existsSync,mkdirSync,chmodSync} from 'node:fs
 import {join,basename,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
+const {computeDailyCap}=createRequire(import.meta.url)('./dm-rate-ramp-lib.js');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const one=(stdout,key)=>{const rows=stdout.split('\n').filter(s=>s.startsWith(key+'='));if(rows.length!==1)throw Error('触达回执字段缺失或不唯一: '+key);return rows[0].slice(key.length+1).trim();};
@@ -16,12 +18,19 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
   if(existsSync(join(stateDir,`dm-paused-${profile}.flag`))||existsSync(join(stateDir,`dm-halt-${profile}-${day()}.txt`)))throw Error('账号风险暂停标记生效');
  };
  const count=()=>{const path=join(stateDir,`dm-count-${profile}-${day()}.txt`);const value=existsSync(path)?readFileSync(path,'utf8').trim():'0';if(!/^\d+$/.test(value))throw Error('触达计数未知');return {path,value:Number(value)};};
+ const cap=()=>{
+  const live=join(env.HOME,'bin-harvest/config/dm-rate-ramp.json');
+  if(!existsSync(live))return policy.daily_cap;
+  const cfg=JSON.parse(readFileSync(live,'utf8'))[profile];if(!cfg)throw Error('手机已有日限额配置缺本profile');
+  const actual=computeDailyCap(cfg,new Date());if(!Number.isSafeInteger(actual)||actual<0)throw Error('手机已有日限额配置未知');
+  return Math.min(policy.daily_cap,actual);
+ };
  const preflight=async()=>{
   risk();if(Number(env.LEADGEN_LIMIT)!==1)throw Error('首版104必须显式单条范围');
   if(!/^[a-f0-9]{40}$/.test(state.source_commit||''))throw Error('触达正式来源证明缺失');
   policy=(await rpc({kind:'outreach_policy',line,profile,sender_douyin_id:state.account})).result;
   if(policy?.profile!==profile||policy.sender_douyin_id!==state.account||!Number.isSafeInteger(policy.daily_cap)||policy.daily_cap<1||!policy.template?.message)throw Error('触达账号或批准话术配置缺失');
-  if(count().value>=policy.daily_cap)throw Error('账号日发送上限生效');
+  if(count().value>=cap())throw Error('账号日发送上限生效');
   return {outreach_policy_verified:1,send_authorized:1};
  };
  const send_dm=async()=>{
@@ -30,7 +39,7 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
   if(rows.length!==1) return {status:'skipped',reason:'没有符合合同的未发送订单',sent:0,messages_sent_while_paused:0};
   [order]=rows;
   if(order.sender_douyin_id!==state.account||order.line_key!==policy.line_key||order.script_id!==policy.template.id||order.script_version!==policy.template.version||order.message!==policy.template.message)throw Error('领单与批准快照不符');
-  risk();const current=count();if(current.value>=policy.daily_cap)throw Error('账号日发送上限生效');
+  risk();const current=count();if(current.value>=cap())throw Error('账号日发送上限生效');
   // 先消费本次尝试额度，再提交原订单永久预留。回复丢失也不允许第二次手机发送。
   mkdirSync(stateDir,{recursive:true});writeFileSync(current.path,String(current.value+1),{mode:0o600});chmodSync(current.path,0o600);
   prepared=true;

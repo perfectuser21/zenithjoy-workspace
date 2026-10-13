@@ -46,7 +46,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
     if (actual !== file.sha256) throw Error('RPC_SOURCE_BYTES_MISMATCH');
   }
   for (const path of ['queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
-    'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/dm-rate-ramp.json',
+    'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
     'leadgen-db-connect.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
     'verify-step.mjs','step-judge.mjs','checks/probes-lib.js','checks/schema.json',
