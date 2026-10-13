@@ -58,7 +58,7 @@ helper 使用官方 `agent.wait` 读取绑定 child 的确切 run，校验 runId
 
 ## 4. 活动事实、交付与反馈
 
-活动从 definition.expected_path 读取 reference_id/activity_id/step_id。每个实际完成的activity与step都逐项发activity_completed，必须有started_at、ended_at、outcome和真实evidence；不能只发最外层activity，不能凭delivery自述补造步骤证据。经 `wf-v2.py event <run目录>` stdin 传 `{type:'activity_started|activity_completed',data:{reference_id,activity_id,step_id,started_at,ended_at,outcome,evidence}}`；不编 ID，不用执行者自述代替实际证据。
+活动key先经冻结 activity_bindings 映射，再与 definition.expected_path 的 reference_id/activity_id/step_id 对照；缺映射立即报告，不按数组位置猜。preflight/cleanup 由外壳保存 controller 原始回执并发活动及step终态事实，业务子会话只上报 by=agent 的实际动作；清理中间失败只记录 blocked 与独立归档原件，活动最终完成才发唯一终态。每个实际完成的activity与step都逐项发activity_completed，必须有started_at、ended_at、outcome和真实evidence；不能只发最外层activity，不能凭delivery自述补造步骤证据。经 `wf-v2.py event <run目录>` stdin 传 `{type:'activity_started|activity_completed',data:{reference_id,activity_id,step_id,started_at,ended_at,outcome,evidence}}`；不编 ID，不用执行者自述代替实际证据。
 
 业务最后一行输出 `WF_DELIVERY` 加完整 JSON：status 为 completed/failed/blocked，带 outputs、evidence、effects、failure。effects 每项 `{key,status,receipt}`，status 只允许 none/committed/compensated/unknown；key 基于任务目标和活动，不用 run_id 作为唯一外部幂等键。外部发布结果不明先读回，禁止重复动作。
 

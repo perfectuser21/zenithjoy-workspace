@@ -1,5 +1,56 @@
 version: 1
 execution_profile: codex_agent
+agent: skill-factory
+skill: multi-platform-publish
+resources: {machine: xian-m4, profile: xiaolongxia, device_serial: ANGYVB4311010223, account_ref: Ai办公室}
+recovery: {max_attempts: 1, total_timeout_sec: 2400, cleanup_timeout_sec: 300, retry_safe: false, retry_on: []}
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [title, body, media_path, media_sha256, allow_discard_existing_draft, authorized, privacy, content_type]
+  properties:
+    title: {type: string, minLength: 1}
+    body: {type: string}
+    media_path: {type: string, pattern: '^/'}
+    media_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    allow_discard_existing_draft: {type: boolean}
+    authorized: {const: true}
+    privacy: {const: private}
+    content_type: {const: video}
+output_schema:
+  type: object
+  additionalProperties: false
+  required: [publication, privacy, readback, media_sha256, evidence]
+  properties:
+    publication:
+      type: object
+      additionalProperties: false
+      required: [platform, account, title, body]
+      properties:
+        platform: {const: douyin}
+        account: {const: Ai办公室}
+        title: {type: string, minLength: 1}
+        body: {type: string}
+        work_id: {type: string, minLength: 1}
+    privacy: {const: private}
+    media_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    readback:
+      type: object
+      additionalProperties: false
+      required: [account_verified, content_verified, private_verified]
+      properties:
+        account_verified: {const: true}
+        content_verified: {const: true}
+        private_verified: {const: true}
+    evidence: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+verification:
+  required: true
+  criteria:
+  - 独立读取本人发布后的实屏原件，核对输入标题正文、私密权限、实际视频；work_id能读取则保留，不能读取用本人作品入口及原件定位，不伪造ID
+  - prepare保存源文件SHA256实际命令原件，独立核验重算并与输入media_sha256对照；输出media_sha256与其一致
+  - 外壳preflight/cleanup原生stat记录Commander执行包根及本run证据根的realpath/st_dev/st_ino，前后须保持；根换址或替换即拒绝，原件在对应阶段root-start/root-end回执
+  - delivery后独立读取Brain设备锁free响应并归档，不能拿cleanup执行时仍由Brain持有的租约伪报free
+  - 仅以上冻结合同条款与原件作为判据，业务报告额外自述不自动增列验收项
 commander_skill:
   name: wf-douyin_video_publish
   version: 0.1.1
@@ -49,7 +100,7 @@ activities:
   - 遵循当前真实设备owner/TTL和同run执行边界；未知不行动
   postconditions:
   - probe: publish_preflight_verified
-    asserts: 本人账号与声明一致、source SHA准确、run同owner两层锁及真实根inode前后在线
+    asserts: controller预检设备在线、本人账号与声明一致、run同owner控制器锁读回；原始预检与账号回执完整，执行包根和run证据根真实路径/dev/inode前后相同
   execution:
     location: xian-m4
     via: Codex multi-platform-publish + 本run受控controller原生路径
@@ -65,7 +116,7 @@ activities:
   idempotency:
     dedupe_key: task_id/run_id/platform/content_type
     on_duplicate: reject
-  failure:
+  failure: &publish_failure
     empty_ok: []
     retryable:
     - 仅只读可按合同有限重试；不得重复发表
@@ -82,6 +133,8 @@ activities:
   invokers:
   - agent
   implementation_bindings:
+  - {kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/commander/wf-v2-phone.py, revision: contract}
+  - {kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/commander/wf-v2-shell.py, revision: contract}
   - kind: skill
     repo: perfectuser21/zenithjoy-workspace
     path: .agents/skills/multi-platform-publish/SKILL.md
@@ -100,22 +153,22 @@ activities:
     revision: contract
   steps:
   - key: preflight_evidence
-    name: 本人账号与声明一致、source SHA准确、run同owner两层锁及真实根inode前后在线
+    name: controller预检设备在线、本人账号与声明一致、run同owner控制器锁读回；原始预检与账号回执完整，执行包根和run证据根真实路径/dev/inode前后相同
     order: 1
     reads:
     - PublishRequest.task_id
     writes:
     - PublishContext.task_id
-    check: 本人账号与声明一致、source SHA准确、run同owner两层锁及真实根inode前后在线
+    check: controller预检设备在线、本人账号与声明一致、run同owner控制器锁读回；原始预检与账号回执完整，执行包根和run证据根真实路径/dev/inode前后相同
     implementation:
-      status: missing
-      ref: Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现
+      status: implemented
+      ref: services/phone-adb-controller/commander/wf-v2-phone.py + wf-v2-shell.py
     uses_llm: false
     dod:
       mode: checkpoint
       readback:
         type: evidence
-        glob: '*preflight*original.json'
+        glob: 'shell-evidence/preflight/*/attempt.json'
         expect:
           op: '>='
           value: 1
@@ -164,19 +217,7 @@ activities:
   idempotency:
     dedupe_key: task_id/run_id/platform/content_type
     on_duplicate: reject
-  failure:
-    empty_ok: []
-    retryable:
-    - 仅只读可按合同有限重试；不得重复发表
-    needs_human:
-      cases:
-      - 原证缺失或输入/权限/账号/锁/预算未知
-      - 登录短信风控或付费
-      alert:
-        channel: brain_alert
-        object: 本task真实result/handoff
-    fatal:
-    - 源身份或owner不一致立即停止
+  failure: *publish_failure
   side_effects: []
   invokers:
   - agent
@@ -261,19 +302,7 @@ activities:
   idempotency:
     dedupe_key: task_id/run_id/platform/content_type
     on_duplicate: reject
-  failure:
-    empty_ok: []
-    retryable:
-    - 仅只读可按合同有限重试；不得重复发表
-    needs_human:
-      cases:
-      - 原证缺失或输入/权限/账号/锁/预算未知
-      - 登录短信风控或付费
-      alert:
-        channel: brain_alert
-        object: 本task真实result/handoff
-    fatal:
-    - 源身份或owner不一致立即停止
+  failure: *publish_failure
   side_effects:
   - kind: external_visible
     target: 声明平台的本人账号
@@ -334,7 +363,7 @@ activities:
   - 遵循当前真实设备owner/TTL和同run执行边界；未知不行动
   postconditions:
   - probe: publish_verify_verified
-    asserts: 正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+    asserts: 正确目标本人作品入口（能取则附work_id）/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
   execution:
     location: xian-m4
     via: Codex multi-platform-publish + 本run受控controller原生路径
@@ -350,19 +379,7 @@ activities:
   idempotency:
     dedupe_key: task_id/run_id/platform/content_type
     on_duplicate: reject
-  failure:
-    empty_ok: []
-    retryable:
-    - 仅只读可按合同有限重试；不得重复发表
-    needs_human:
-      cases:
-      - 原证缺失或输入/权限/账号/锁/预算未知
-      - 登录短信风控或付费
-      alert:
-        channel: brain_alert
-        object: 本task真实result/handoff
-    fatal:
-    - 源身份或owner不一致立即停止
+  failure: *publish_failure
   side_effects: []
   invokers:
   - agent
@@ -373,13 +390,13 @@ activities:
     revision: contract
   steps:
   - key: verify_evidence
-    name: 正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+    name: 正确目标本人作品入口（能取则附work_id）/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
     order: 1
     reads:
     - PublishSubmission.task_id
     writes:
     - PublishEvidence.task_id
-    check: 正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+    check: 正确目标本人作品入口（能取则附work_id）/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
     implementation:
       status: missing
       ref: Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现
@@ -419,7 +436,7 @@ activities:
   - 遵循当前真实设备owner/TTL和同run执行边界；未知不行动
   postconditions:
   - probe: publish_cleanup_verified
-    asserts: 原launcher及sameowner controllerfree/Brain请求响应null，所有命令结束
+    asserts: 原launcher桌面原件、应用关闭、sameowner controller释放及free读回；执行包根和run证据根真实路径/dev/inode前后相同，Brain锁由delivery后独立核验
   execution:
     location: xian-m4
     via: Codex multi-platform-publish + 本run受控controller原生路径
@@ -435,48 +452,38 @@ activities:
   idempotency:
     dedupe_key: task_id/run_id/platform/content_type
     on_duplicate: reject
-  failure:
-    empty_ok: []
-    retryable:
-    - 仅只读可按合同有限重试；不得重复发表
-    needs_human:
-      cases:
-      - 原证缺失或输入/权限/账号/锁/预算未知
-      - 登录短信风控或付费
-      alert:
-        channel: brain_alert
-        object: 本task真实result/handoff
-    fatal:
-    - 源身份或owner不一致立即停止
+  failure: *publish_failure
   side_effects: []
   invokers:
   - agent
   implementation_bindings:
+  - {kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/commander/wf-v2-phone.py, revision: contract}
+  - {kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/commander/wf-v2-shell.py, revision: contract}
   - kind: code
     repo: perfectuser21/zenithjoy-workspace
     path: services/phone-adb-controller/douyin-phone-adb
     revision: contract
   steps:
   - key: cleanup_evidence
-    name: 原launcher及sameowner controllerfree/Brain请求响应null，所有命令结束
+    name: 原launcher桌面原件、应用关闭、sameowner controller释放及free读回；执行包根和run证据根真实路径/dev/inode前后相同，Brain锁由delivery后独立核验
     order: 1
     reads:
     - PublishEvidence.task_id
     writes:
     - PublishCleanup.task_id
-    check: 原launcher及sameowner controllerfree/Brain请求响应null，所有命令结束
+    check: 原launcher桌面原件、应用关闭、sameowner controller释放及free读回；执行包根和run证据根真实路径/dev/inode前后相同，Brain锁由delivery后独立核验
     implementation:
-      status: missing
-      ref: Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现
+      status: implemented
+      ref: services/phone-adb-controller/commander/wf-v2-phone.py + wf-v2-shell.py
     uses_llm: false
     dod:
       mode: checkpoint
       readback:
         type: evidence
-        glob: '*cleanup*original.json'
+        glob: 'shell-evidence/cleanup/*/attempt.json'
         expect:
           op: '>='
           value: 1
 known_gaps:
-- gap: 真实运行已有独立原证；工厂runner阶段metrics自动写入和共享持久部署未完成，缺证不判通过
+- gap: 真实运行已有独立原证；外壳preflight/cleanup已接冻结activity与step原件事实；业务阶段仍须真实子会话证据与独立核验，缺证不判通过
   task: 5d2e620a

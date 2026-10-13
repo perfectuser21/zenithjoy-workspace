@@ -189,22 +189,25 @@ def stop(directory):
         return 0
     binding = load(binding_path)
     params = dict(key=binding['child_session_key'], runId=binding['child_run_id'])
-    def budget():
-        if request_at(directory).get('protocol') != 'commander-v2':
-            return 20
+    if request_at(directory).get('protocol') == 'commander-v2':
         from datetime import datetime
         end = datetime.fromisoformat(load(directory / 'envelope.json')['cleanup_deadline_at'].replace('Z', '+00:00')).timestamp()
-        left = min(20, end - time.time() - 2)
-        if left <= 0:
-            raise ValueError('cancellation cleanup budget exhausted')
-        return left
+    else:
+        end = time.time() + 44.1
+    # rpc子进程硬超时还要+2秒；先为独立读回保留完整的RPC+进程退出预算。
+    left = end - time.time()
+    readback_reserve = min(12, max(2.5, left / 2))
+    abort_timeout = min(20, left - readback_reserve - 2.05)
     try:
-        abort = rpc('sessions.abort', params, budget())
+        if abort_timeout <= 0:
+            raise ValueError('insufficient abort budget; reserved official readback')
+        abort = rpc('sessions.abort', params, abort_timeout)
         write(directory / 'child-abort.json', abort)
     except Exception as error:
-        # abort回执丢失不代表未取消；终态读回独立进行，不能靠取消成功自述释放资源。
         write(directory / 'child-abort-error.json', {'reason': str(error)})
-    timeout = budget()
+    timeout = min(10, end - time.time() - 2.05)
+    if timeout <= 0:
+        raise ValueError('official stop readback budget exhausted; termination unknown')
     terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(min(10, timeout) * 1000)), timeout)
     write(directory / 'child-stop-readback.json', terminal)
     if terminal.get('runId') != binding['child_run_id'] or terminal.get('endedAt') is None or terminal.get('status') not in ('ok', 'error', 'timeout'):

@@ -93,7 +93,7 @@ def make_request(directory, envelope, parent):
         '【通用Commander业务子会话】仅执行冻结合同，禁止修改代码或直接完成Brain任务。\n'
         '完整输入：' + str(directory / 'input.json') + '\n冻结合同：' + str(directory / 'contract.json') +
         '\n运行信封：' + str(directory / 'envelope.json') + '\n产物目录：' + str(directory / 'evidence') +
-        '\n按照合同skill与activities执行；原样保留所有输入字段，每个真实完成的activity/step，按definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
+        '\n按照合同skill与activities执行；原样保留所有输入字段，仅为contract中by=agent的业务activity/step上报（preflight与cleanup由外壳负责，不能代补）；每个真实完成的activity/step，用activity_bindings按key定位并对照definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
         '\n手机资源由外壳领锁/收尾，业务全程精确使用run_id作lock-owner，不另领或释放锁。'
         '\n外部副作用幂等key用task_id与activity，不用run_id；未知副作用先读回，不重复发布。'
         '\n最后一行：WF_DELIVERY {"status":"completed|failed|blocked","outputs":{},"evidence":[],"effects":[],"failure":null}'
@@ -247,6 +247,9 @@ def worker(directory):
     envelope = io.read(directory / 'envelope.json')
     phone = phone_module.Phone(directory, envelope) if envelope['contract'].get('resources') else None
     state = io.read(directory / 'runtime.json')
+    if phone:
+        for key in ('preflight', 'cleanup'):
+            phone_module.shell.replay(directory, key)
     try:
         if (directory / 'delivery.json').exists():
             delivery = io.read(directory / 'delivery.json')

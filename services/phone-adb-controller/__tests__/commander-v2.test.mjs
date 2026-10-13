@@ -137,6 +137,7 @@ else:print('ok')
   for(const fact of shellFacts){assert.equal(fact.data.outcome,'pass');assert.ok(fact.data.started_at&&fact.data.ended_at);assert.ok(fact.data.evidence.files.every(x=>existsSync(x.path)));}
   assert.match(readFileSync(join(dir,'preflight-controller.log'),'utf8'),/serial=ABC123/);
   assert.match(readFileSync(join(dir,'preflight-account.log'),'utf8'),/nickname=授权测试/);
+  for(const stage of ['preflight','cleanup'])for(const edge of ['start','end'])assert.equal(JSON.parse(readFileSync(join(dir,stage+'-root-'+edge+'.json'))).matches,true);
   const calls=readFileSync(join(f.home,'calls'),'utf8');assert.match(calls,/lock-acquire wfd-test/);assert.match(calls,/--lock-owner wfd-test close-app/);assert.match(calls,/lock-release wfd-test/);
  }finally{if(worker.exitCode===null){worker.kill('SIGTERM');await done;}}
 });
@@ -156,7 +157,7 @@ test('清理取证异常仍精确放锁；已失败的清理可重入且不重�
  const f=fixture(),dir=start(f);
  const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
 e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
-p=r.phone_module.Phone(d,e);calls=[];owner=[e['run_id']]
+p=r.phone_module.Phone(d,e);p.check_roots('preflight-start',establish=True);calls=[];owner=[e['run_id']]
 p.owner=lambda:owner[0]
 def ctl(*args):
  calls.append(args)
@@ -322,14 +323,14 @@ assert all(x['outcome']=='fail' for x in r.io.read(d/'shell-cleanup.json')['fact
 `);assert.equal(result.status,0,result.stderr+result.stdout);
 });
 test('真实执行包和run根stat前后绑定，路径同名替换inode拒绝且清理仍精确放锁',()=>{
- for(const target of ['run','package']){
+ for(const target of ['run','package','evidence']){
   const f=fixture(),dir=start(f);
   const result=python(f,`import shutil
 d=pathlib.Path(${JSON.stringify(dir)})
 `.trimStart()+`
 e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
 p=r.phone_module.Phone(d,e);p.check_roots('preflight-start',establish=True);p.check_roots('preflight-end')
-root=d if ${JSON.stringify(target)}=='run' else r.HERE
+root={'run':d,'package':r.HERE,'evidence':d/'evidence'}[${JSON.stringify(target)}]
 old=root.with_name(root.name+'-old');root.rename(old);shutil.copytree(old,root)
 try:p.check_roots('cleanup-start');raise AssertionError('same path different inode accepted')
 except ValueError as error:assert 'root identity' in str(error)

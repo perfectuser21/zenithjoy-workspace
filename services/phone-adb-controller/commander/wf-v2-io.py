@@ -13,7 +13,7 @@ import urllib.request
 PROTOCOL = 'commander-v2'
 HERE = Path(__file__).resolve().parent
 FILES = ['wf-launch.sh', 'wf-status.sh', 'wf-agent-run.sh', 'wf-agent-lib.py',
-         'wf-agent-handoff.py', 'wf-v2.py', 'wf-v2-io.py', 'wf-v2-phone.py',
+         'wf-agent-handoff.py', 'wf-v2.py', 'wf-v2-io.py', 'wf-v2-phone.py', 'wf-v2-shell.py',
          'wf-report.py', 'workflow-contracts.json', 'AGENTS.md']
 
 

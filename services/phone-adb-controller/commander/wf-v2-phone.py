@@ -17,11 +17,15 @@ def load(name):
 
 io = load('wf-v2-io')
 lib = load('wf-agent-lib')
+shell = load('wf-v2-shell')
 
 
 class Phone:
     def __init__(self, directory, envelope):
         self.directory = directory
+        self.envelope = envelope
+        self.stage = 'preflight'
+        self.control_receipts = []
         self.run = envelope['run_id']
         self.resource = envelope['contract']['resources']
         self.host = self.resource['machine']
@@ -36,12 +40,47 @@ class Phone:
             raise ValueError('invalid registered phone resource')
         self.root = '/private/tmp/openclaw-phone/evidence/' + self.profile
 
+    def check_roots(self, label, establish=False):
+        roots = {}
+        for name, path in [('commander', Path(__file__).parent), ('run', self.directory), ('evidence', self.directory / 'evidence')]:
+            real = path.resolve(strict=True)
+            stat = real.stat()
+            if not real.is_dir():
+                raise ValueError('root identity is not a directory: ' + name)
+            roots[name] = {'realpath': str(real), 'st_dev': stat.st_dev, 'st_ino': stat.st_ino}
+        baseline = self.directory / 'root-identity.json'
+        if establish and not baseline.exists():
+            io.write(baseline, roots)
+        matches = baseline.exists() and io.read(baseline) == roots
+        io.write(self.directory / (label.split('-')[0] + '-root-' + label.split('-')[-1] + '.json'),
+                 {'observed_at': shell.now(), 'roots': roots, 'matches': matches})
+        if not matches:
+            raise ValueError('root identity changed or missing')
+
     def ssh(self, command):
         budget = self.deadline - time.time()
         if budget <= 0:
             raise ValueError('phone operation budget exhausted')
-        result = subprocess.run(['ssh', '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', self.host, command],
-                                capture_output=True, timeout=min(25, budget))
+        receipt = self.directory / 'controller-receipts' / self.stage / str(time.time_ns())
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        meta = {'host': self.host, 'command': command, 'started_at': shell.now()}
+        try:
+            result = subprocess.run(['ssh', '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', self.host, command],
+                                    capture_output=True, timeout=min(25, budget))
+            stdout, stderr = result.stdout, getattr(result, 'stderr', b'')
+            meta.update(returncode=result.returncode)
+        except subprocess.TimeoutExpired as error:
+            stdout, stderr = error.stdout or b'', error.stderr or b''
+            meta.update(timed_out=True)
+            raise
+        finally:
+            for suffix, content in [('stdout', locals().get('stdout', b'')), ('stderr', locals().get('stderr', b''))]:
+                path = receipt.with_suffix('.' + suffix)
+                path.write_bytes(content)
+                self.control_receipts.append(path)
+            meta['ended_at'] = shell.now()
+            io.write(receipt.with_suffix('.json'), meta)
+            self.control_receipts.append(receipt.with_suffix('.json'))
         if result.returncode:
             raise ValueError('phone controller operation failed')
         return result.stdout
@@ -58,11 +97,18 @@ class Phone:
         return found.group(1) if found else 'unknown'
 
     def prepare(self):
+        self.stage = 'preflight'
+        return shell.execute(self, 'preflight', self._prepare)
+
+    def _prepare(self):
         self.deadline = self.execution_deadline
+        self.check_roots('preflight-start', establish=True)
         value = self.ctl('preflight')
+        (self.directory / 'preflight-controller.log').write_text(value)
         if 'serial=' + self.serial not in value or 'state=device' not in value:
             raise ValueError('phone unavailable')
         owner = self.owner()
+        (self.directory / 'preflight-owner.log').write_text(owner)
         if owner == 'free':
             self.ctl('lock-acquire', self.run)
         elif owner != self.run:
@@ -71,9 +117,11 @@ class Phone:
             raise ValueError('phone lock readback mismatch')
         self.ctl('--lock-owner', self.run, 'open-app')
         account = self.ctl('--lock-owner', self.run, 'account-current', self.run + '-preflight-account')
+        (self.directory / 'preflight-account.log').write_text(account)
         nick = re.search(r'^nickname=(.*)$', account, re.M)
         if not nick or nick.group(1) != self.account:
             raise ValueError('account mismatch or unavailable')
+        self.check_roots('preflight-end')
         io.write(self.directory / 'preflight.json', dict(serial=self.serial, owner=self.run, account=nick.group(1)))
 
     def refresh(self):
@@ -81,9 +129,14 @@ class Phone:
         self.ctl('lock-refresh', self.run)
 
     def cleanup(self):
+        self.stage = 'cleanup'
+        return shell.execute(self, 'cleanup', self._cleanup)
+
+    def _cleanup(self):
         self.deadline = self.cleanup_deadline
         ok, owner, paths, failures = False, 'unknown', {}, []
         try:
+            self.check_roots('cleanup-start')
             owner = self.owner()
             # 已释放的失败清理可在剩余预算内精确重领，仅做清理，不跑prepare/业务。
             if owner == 'free' and (self.directory / 'cleanup-owner.json').exists():
@@ -112,6 +165,11 @@ class Phone:
             except Exception as error:
                 owner = 'unknown'
                 failures.append('release readback: ' + str(error))
+        try:
+            self.check_roots('cleanup-end')
+        except Exception as error:
+            ok = False
+            failures.append(str(error))
         evidence = list(paths.values())
         evidence += [str(self.directory / name) for name in ('cleanup-release.log', 'cleanup-lock-readback.json') if (self.directory / name).exists()]
         receipt = dict(completed=ok and owner == 'free', evidence=evidence, lock_status=owner,
