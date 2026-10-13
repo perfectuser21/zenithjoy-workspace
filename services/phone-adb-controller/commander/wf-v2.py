@@ -322,8 +322,8 @@ def worker(directory):
             receipt = io.read(stop_path)
             binding = io.read(directory / 'agent-binding.json')
             stopped = stopped or (receipt.get('runId') == binding['child_run_id'] and receipt.get('endedAt') is not None)
-        if not (directory / 'spawn-claimed.json').exists() and not (directory / 'agent-binding.json').exists():
-            with io.lock(directory / '.launch.lock'):
+        with io.lock(directory / '.launch.lock'):
+            if not (directory / 'spawn-claimed.json').exists() and not (directory / 'agent-binding.json').exists():
                 io.write(directory / 'handoff-closed.json', {'reason': str(error)})
                 stopped = True
         if stopped:
