@@ -6,6 +6,17 @@ QV_EID="$TAG-v$VID-${MODE:-identity}"
 qv_nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] || /bin/sleep "$1"; }
 qv_log(){ print -u2 -r -- "[queue-video] $*"; }
 qv_field(){ print -r -- "$1" | sed -n "s/^$2=//p" | head -1; }
+qv_confirm_nickname(){
+  # 只解XML字符实体；不裁空白/删emoji/变体符，不替代控制器鲜证与实际ID核验。
+  node - "$QV_DIR/nickname-match-lib.js" "$1" "$2" "${3:-}" <<'JS'
+const {decodeXmlEntities}=require(process.argv[2]);
+const encoding=process.argv[5];
+if(!['xml_decoded','xml_raw'].includes(encoding))process.exit(1);
+const observed=encoding==='xml_raw'?decodeXmlEntities(process.argv[3]):process.argv[3],expected=decodeXmlEntities(process.argv[4]);
+if(!observed||!expected||observed!==expected)process.exit(1);
+process.stdout.write(observed);
+JS
+}
 qv_quote(){ local q=\' s="$1"; s="${s//$q/$q\\$q$q}"; print -rn -- "'$s'"; }
 qv_remote(){
   local sub="$1" args="" a; shift
@@ -276,7 +287,7 @@ except Exception: print("medium")' "$count")"
         identity_started="$(date +%s)"
         identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$QV_EID-person$total-t$attempt" </dev/null)" || identity=""
         onick="$(qv_field "$identity" nickname)"
-        [[ "$onick" == "$nick" ]] && break
+        onick="$(qv_confirm_nickname "$onick" "$nick" "$(qv_field "$identity" nickname_encoding)")" && break
         identity=""
         (( attempt < 3 )) && qv_relocate_comment "$nick" "$body" || break
       done

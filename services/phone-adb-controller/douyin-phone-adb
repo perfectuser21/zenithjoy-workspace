@@ -2340,10 +2340,12 @@ read_commenter_identity() {
   # 第三条确定性回退：树里存在与期望昵称**逐字相等**的文本节点，即昵称已核验
   # （-F 定字面匹配，昵称含正则元字符也安全）。
   # 回退路也要认两种形式：树里可能存实体、也可能存解码后的字符
+  local nickname_encoding=xml_decoded
   if [[ -z "$observed_nickname" ]]; then
     if /usr/bin/grep -qF "text=\"$expected_nickname\"" "$profile_xml" \
        || /usr/bin/grep -qF "text=\"$(normalize_nickname "$expected_nickname")\"" "$profile_xml"; then
       observed_nickname="$expected_nickname"
+      nickname_encoding=xml_raw
     fi
   fi
   # 两边都归一到「解码后」那一侧再比（见 normalize_nickname 的注释）。
@@ -2382,6 +2384,7 @@ read_commenter_identity() {
     print -- "comment_evidence=$before_xml"
   fi
   print -- "nickname=$observed_nickname"
+  print -- "nickname_encoding=$nickname_encoding"
   print -- "douyin_id=$observed_id"
   print -- "account_type=$account_type"
   print -- "profile_ip=${profile_ip:-}"
