@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const message='明示fake批准正文';
@@ -79,7 +79,7 @@ out.write_text('<hierarchy>'+xml+'</hierarchy>')
   const script=`set -eu; setopt EXTENDED_GLOB\nADB=${JSON.stringify(adb)}; SERIAL=fake; MAX_X=1200; MAX_Y=2664; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; EVIDENCE_ROOT=${JSON.stringify(d)}; PYTHON_BIN=${JSON.stringify(python)}; TEXT_INPUT_FOCUS_HELPER=${JSON.stringify(new URL('../text-input-focus.py',import.meta.url).pathname)}\n`+
    ['require_uint','require_evidence_id','require_account_id','node_center','_foreground_is_exact_douyin','_verify_private_message_delta'].map(fn).join('\n')+'\n'+send+`\ndie(){ print -u2 -- "$1"; exit 2; }; wait_ms(){ :; }; ensure_feed(){ :; }; read_current_account(){ print douyin_id=sender123; }; foreground_package(){ \"$ADB\" -s \"$SERIAL\" shell fake-foreground; }; ui_evidence(){ "$PYTHON_BIN" ${JSON.stringify(dump)} "$1"; }; _ui_evidence_wave(){ ui_evidence "$1"; }; snapshot_evidence(){ print ${JSON.stringify(join(d,'fake.png'))}; }; print_jpg_line(){ :; }; send_private_message sender123 target456 ${JSON.stringify(Buffer.from(message).toString('base64'))} focus-case https://v.douyin.com/fake/`;
   const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:10000});
-  return {...r,typed: (()=>{try{return readFileSync(join(d,'focus-case-typed.xml'),'utf8');}catch{return '';}})(),calls:readFileSync(join(d,'calls'),'utf8').trim().split('\n').map(JSON.parse),state:JSON.parse(readFileSync(state))};
+  return {...r,proof_files:readdirSync(d),typed: (()=>{try{return readFileSync(join(d,'focus-case-typed.xml'),'utf8');}catch{return '';}})(),calls:readFileSync(join(d,'calls'),'utf8').trim().split('\n').map(JSON.parse),state:JSON.parse(readFileSync(state))};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
 test('真实私信函数IME布局变化后用fresh坐标入焦再输入，保持正文与增量核验',()=>{
@@ -103,4 +103,8 @@ test('typed正文扩展只接受同chat唯一focused字段与exact正文，不�
 });
 test('即使focus正确，正文不精确也绝不点击发送',()=>{
  const r=dmFocusFlow('wrong_text');assert.notEqual(r.status,0);assert.match(r.stderr,/did not exactly match approved text/);assert.equal(r.state.sent,false);assert.ok(!r.calls.some(a=>a.join(' ')==='input tap 1100 1666'));
+});
+
+test('两次未入焦恢复的IME前树逐round独享保留，不覆盖第一现场',()=>{
+ const r=dmFocusFlow('no_focus');assert.notEqual(r.status,0);assert.ok(r.proof_files.includes('focus-case-ime-ready-1.xml'));assert.ok(r.proof_files.includes('focus-case-ime-ready-2.xml'));assert.ok(r.proof_files.includes('focus-case-input-focus-1.xml'));assert.ok(r.proof_files.includes('focus-case-input-focus-2.xml'));assert.equal(r.state.sent,false);
 });

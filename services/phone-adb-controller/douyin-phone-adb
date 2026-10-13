@@ -2258,10 +2258,11 @@ send_private_message() {
   cur_ime_now="$("$ADB" -s "$SERIAL" shell settings get secure default_input_method | tr -d '\r')"
   [[ "$cur_ime_now" == *adbkeyboard* ]] || die "AdbIME 切换未生效(当前仍为 $cur_ime_now),后续输入必然失败"
   # IME切换会改变布局/焦点。不得再次点切换前的旧坐标，也不点空会话风险菜单。
-  local ime_ready_xml="$EVIDENCE_ROOT/${evidence_id}-ime-ready.xml" input_focus_xml input_focus_ok=0 input_focus_round input_fg
+  local ime_ready_xml input_focus_xml input_focus_ok=0 input_focus_round input_fg
   for input_focus_round in 1 2; do
     input_fg="$(foreground_package)"; _foreground_is_exact_douyin "$input_fg" || die "private-message foreground changed before input focus"
-    ui_evidence "${evidence_id}-ime-ready" >/dev/null
+    ime_ready_xml="$EVIDENCE_ROOT/${evidence_id}-ime-ready-$input_focus_round.xml"
+    ui_evidence "${evidence_id}-ime-ready-$input_focus_round" >/dev/null
     input_fg="$(foreground_package)"; _foreground_is_exact_douyin "$input_fg" || die "private-message foreground changed during input focus"
     "$PYTHON_BIN" "$TEXT_INPUT_FOCUS_HELPER" douyin-dm-locate "$chat_xml" "$ime_ready_xml" >/dev/null || die "private-message native input context changed after IME"
     input_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/msg_et"[^>]*>' "$ime_ready_xml")"
