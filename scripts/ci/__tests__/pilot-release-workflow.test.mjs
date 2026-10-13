@@ -4,7 +4,8 @@ import {existsSync,readFileSync} from 'node:fs';
 import YAML from 'yaml';
 import {validatePatrolCaller} from '../implementation-patrol-scope.mjs';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
-const revision='7633e537a72a93ce8680f020ef073d424c2e90b2';
+// Cecelia PR #6407 的实际 squash 合并提交；不能固定已删除开发分支中的中途提交。
+const revision='744e8d9ceb0543eaf541795cd1a805f77d2c922f';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
 test('完整发布caller名称与路径固定，仅main push/手动触发，不借PR影响结果',()=>{
  const w=config();assert.equal(w.name,'Pilot release verification');
@@ -12,7 +13,7 @@ test('完整发布caller名称与路径固定，仅main push/手动触发，不�
  assert.equal(w.on.push.paths,undefined);assert.equal(w.concurrency,undefined);
  assert.equal(w.jobs.verify.if,"github.ref == 'refs/heads/main'");
 });
-test('完整发布只传四项固定来源输入，工具uses与tooling_revision同一40位SHA',()=>{
+test('完整发布固定实际合并SHA，工具uses与tooling_revision同源且只传四项输入',()=>{
  const j=config().jobs.verify;
  assert.equal(j.uses,`perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@${revision}`);
  assert.deepEqual(j.with,{source_repo:'perfectuser21/zenithjoy-workspace',scope:'zenithjoy',head_revision:'${{ github.sha }}',tooling_revision:revision});
