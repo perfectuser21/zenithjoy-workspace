@@ -17,7 +17,7 @@ function fixture(t){
  const token=join(home,'token');writeFileSync(token,'fixture-token-never-log',{mode:0o600});
  const env={...process.env,HOME:home,WF_V2_NO_WORKER:'1',WF_INTERNAL_TOKEN_FILE:token,WF_BRAIN_URL:'http://127.0.0.1:1'};
  const run=join(home,'wf-agent-runs',e.run_id);
- const call=(command,data)=>spawnSync('python3',[join(dir,'wf-v2.py'),command,run],{env,encoding:'utf8',input:data&&JSON.stringify(data)});
+ const call=(command,data)=>spawnSync('python3',[join(dir,'wf-v2.py'),command,command==='status'?e.run_id:run],{env,encoding:'utf8',input:data&&JSON.stringify(data)});
  let r=spawnSync('python3',[join(dir,'wf-v2-io.py'),'manifest',dir,JSON.stringify({'release-test':{workflow_key:e.workflow_key,snapshot_sha256:definition.snapshot_sha256}})],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
  r=spawnSync('bash',[join(dir,'wf-launch.sh'),'--envelope',file,'--parent-session','agent:work-commander:feedback'],{env,encoding:'utf8'});assert.equal(r.status,0,r.stdout+r.stderr);
  const asyncCall=command=>new Promise((resolve,reject)=>{const p=spawn('python3',[join(dir,'wf-v2.py'),command,run],{env});let stdout='',stderr='';p.stdout.on('data',x=>stdout+=x);p.stderr.on('data',x=>stderr+=x);p.on('error',reject);p.on('exit',status=>resolve({status,stdout,stderr}));});
