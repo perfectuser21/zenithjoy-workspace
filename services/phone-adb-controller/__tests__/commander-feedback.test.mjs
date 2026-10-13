@@ -82,3 +82,10 @@ test('skipped 必须有真实非空 skip_reason，缺失或非法不占seq',t=>{
  for(const reason of [undefined,null,'','   ',true,{}]){const e=fact();e.data.outcome='skipped';if(reason!==undefined)e.data.evidence.skip_reason=reason;assert.notEqual(f.call('event',e).status,0);assert.equal(readFileSync(path,'utf8'),before);}
  const e=fact();e.data.outcome='skipped';e.data.evidence.skip_reason='条件分支未进入，原始检查见报告';assert.equal(f.call('event',e).status,0);
 });
+
+test('额外声明冻结身份必须匹配，server-only绑定不可自报，错误零入队',t=>{
+ const f=fixture(t),path=join(f.run,'events.json'),before=readFileSync(path,'utf8');
+ for(const key of ['run_id','workflow_id','activity_id','reference_id','workflow_definition_version_id','activity_definition_version_id','attempt_key','identity_protocol','run_binding_id']){const e=fact();e.data[key]='different';assert.notEqual(f.call('event',e).status,0,key);assert.equal(readFileSync(path,'utf8'),before);}
+ const e=fact();e.data.evidence.runtime_snapshot_sha256='0'.repeat(64);assert.notEqual(f.call('event',e).status,0);assert.equal(readFileSync(path,'utf8'),before);
+ const valid=fact();valid.data.run_id=f.e.run_id;valid.data.identity_protocol=2;valid.data.shell_fact_id='custom-original-id';assert.equal(f.call('event',valid).status,0);assert.equal(read(path).at(-1).data.shell_fact_id,'custom-original-id');
+});
