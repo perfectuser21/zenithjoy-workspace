@@ -356,7 +356,35 @@ test('MMV gateway_exec结构化env示例可执行、无损落盘且拒绝覆盖�
  const result=JSON.parse(first.stdout);assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
  assert.equal(execute(f.envelope).status,0);assert.notEqual(execute({...f.envelope,input:{changed:true}}).status,0);
  assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
+ const dir=start(f),request=JSON.parse(readFileSync(join(dir,'agent-request.json')));assert.equal(request.execution_location.tool,'gateway_exec');assert.equal(request.execution_location.host,'mmv');assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/模型本机不是MMV/);
  assert.ok(skill.includes('gateway_process'));assert.ok(skill.includes('WF_BINDING_JSON'));assert.ok(skill.includes('模型本机'));
  const special=readFileSync(join(source,'skills/wf-douyin_video_publish/SKILL.md'),'utf8');
  assert.match(special,/version: 0\.1\.2/);assert.match(special,/multi-platform-publish/);assert.doesNotMatch(special,/android-douyin-private-video|45 分钟|wf-status\.sh mmv/);
+});
+test('阶段原子回执后崩溃可恢复同次shell事实：不重复设备、不新编时间或证据',()=>{
+ for(const key of ['preflight','cleanup']){
+  const f=fixture(),dir=start(f);const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)});key=${JSON.stringify(key)}
+e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
+path={'reference_id':'ref','activity_id':'act','activity_definition_version_id':'version'}
+e['definition']['expected_path']=[path,dict(path,step_id='step')];e['activity_bindings']=[dict(path,key=key,steps=[{'key':'check','step_id':'step'}])]
+r.io.write(d/'envelope.json',e);p=r.phone_module.Phone(d,e);shell=r.phone_module.shell;calls=[]
+def completed():
+ calls.append('actual-device');(d/(key+'-original.log')).write_text('actual original')
+ shell.commit_receipt(p,key,{'completed':True,'evidence':[str(d/(key+'-original.log'))]})
+ raise SystemExit('worker died after durable phone phase receipt')
+try:shell.execute(p,key,completed)
+except SystemExit:pass
+receipt=r.io.read(d/(key+'.json'));assert receipt['_shell']['ended_at']
+assert not r.io.read(d/('shell-'+key+'.json'))['terminal']
+new=r.phone_module.Phone(d,e);shell.recover(new,key);shell.recover(new,key)
+facts=[x for x in r.io.read(d/'events.json') if x['type']=='activity_completed'];assert len(facts)==2
+for fact in facts:
+ assert fact['data']['started_at']==receipt['_shell']['started_at']
+ assert fact['data']['ended_at']==receipt['_shell']['ended_at']
+ assert fact['data']['outcome']=='pass'
+ assert any(pathlib.Path(x['path']).read_text()=='actual original' for x in fact['data']['evidence']['files'] if x['path'].endswith('.log'))
+assert calls==['actual-device']
+assert shell.execute(new,key,lambda:(_ for _ in ()).throw(AssertionError('device repeated')))['completed'] is True
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+ }
 });
