@@ -120,7 +120,16 @@ class Methods(unittest.TestCase):
   safety='services/phone-adb-controller/commander/wf-v2-phone.py';raw=(self.runtime/'wf-v2-phone.py').read_bytes()
   self.assertNotEqual((self.runtime/'wf-report.py').read_bytes(),self.code)
   self.repack({PATH:self.code,safety:raw});self.attest()
+  # 当前supervisor的真实meta闭包明确绑定该安全code，聚合业务helper不混入安全集合。
+  binding=dict(self.binding,path=safety,digest='sha256:'+digest(raw),status='verified',scope='activity',field='implementation')
+  self.supervisor['payload']['activities'][0]['payload']['implementation_bindings']=[binding]
+  self.supervisor['payload']['components']=[{'kind':'repo','repo':REPO,'revision':'a'*40},{k:binding[k] for k in ('kind','repo','path','revision','digest')}]
+  self.supervisor['manifest_sha256']=digest({k:self.supervisor[k] for k in ('environment','target','payload')})
   result=self.io.ready(self.envelope);self.assertTrue(result['ready'])
+  self.supervisor['payload']['activities'][0]['payload']['implementation_bindings']=[]
+  self.supervisor['manifest_sha256']=digest({k:self.supervisor[k] for k in ('environment','target','payload')})
+  with self.assertRaises(ValueError):self.io.ready(self.envelope)
+
  def test_historical_business_skill_with_bare_global_command_is_rejected_mechanically(self):
   path='skills/business/SKILL.md';raw=b'---\nname: business\nversion: 1.0.0\n---\n```sh\npython3 ~/.openclaw/commander/not-frozen.py\n```\n'
   self.repack({path:raw})
@@ -130,6 +139,13 @@ class Methods(unittest.TestCase):
   m=self.method_module()
   with self.assertRaisesRegex(ValueError,'unsupported_method_skill'):m.dependencies(self.manifest,self.root)
   with self.assertRaisesRegex(ValueError,'unsupported_method_skill'):m.manifest_for(self.method)
+ def test_safety_skill_context_alone_cannot_be_a_business_method(self):
+  path='services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md';self.repack({path:(self.runtime/'skills/workflow-commander/SKILL.md').read_bytes()})
+  for rows in (self.manifest['bindings'],self.method['payload']['components'],self.a['payload']['implementation_bindings']):
+   for b in rows:
+    if b.get('path')==path:b['kind']='skill'
+  self.a['payload']['implementation_bindings'][0]['field']='implementation_bindings'
+  with self.assertRaises(ValueError):self.method_module().manifest_for(self.method)
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
   golden=json.loads((SOURCE/'__tests__/fixtures/commander-method-brain.json').read_text())
