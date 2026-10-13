@@ -85,3 +85,13 @@ test('完整原sender拥有480s子预算，但仍夹紧本activity剩余且不�
  }finally{f.clean();}
  }
 });
+test('冻结rate合同不得绕过手机已有更低live cap，原调参文件保持原字节',async()=>{
+ const f=fixture();try{
+ const cfgDir=join(f.env.HOME,'bin-harvest/config');mkdirSync(cfgDir,{recursive:true});
+ const raw=JSON.stringify({[f.env.P]:{mode:'daily_step',start_date:'2026-10-13',base_per_day:1,step_per_day:0,ceiling_per_day:1}});
+ writeFileSync(join(cfgDir,'dm-rate-ramp.json'),raw);writeFileSync(join(f.env.HOME,'bin-harvest/state',`dm-count-${f.env.P}-${legacyDay()}.txt`),'1');
+ const h=createHandlers({root:f.dir,...f});await assert.rejects(h.preflight(),/日发送上限/);
+ assert.equal(readFileSync(join(cfgDir,'dm-rate-ramp.json'),'utf8'),raw);
+ assert.ok(!f.events.some(e=>e.request?.op==='claim_outreach'||e.args?.includes('private-message-send')));
+ }finally{f.clean();}
+});
