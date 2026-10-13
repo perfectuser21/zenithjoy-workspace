@@ -25,3 +25,8 @@ test('新互关/限流提示如实归类，不声称送达',()=>{
  assert.equal(check(node(message,true),node('',true)+node('暂无法给对方发送消息'),'after').stdout.trim(),'restricted');
  assert.equal(check(node(message,true),node('',true)+node('给陌生人发送消息过于频繁'),'after').stdout.trim(),'rate_limited');
 });
+test('二次fresh风险XML能覆盖延迟互关提示，读不到不能把首帧气泡当最终发送',()=>{
+ assert.equal(check(node(message,true),node('',true)+node(message),'risk').stdout.trim(),'sent');
+ assert.equal(check(node(message,true),node('',true)+node(message)+node('暂无法给对方发送消息'),'risk').stdout.trim(),'restricted');
+ assert.notEqual(check(node(message,true),'','risk').status,0);
+});
