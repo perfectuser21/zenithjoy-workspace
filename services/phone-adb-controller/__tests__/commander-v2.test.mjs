@@ -357,7 +357,7 @@ test('MMV gateway_exec结构化env示例可执行、无损落盘且拒绝覆盖�
  assert.equal(execute(f.envelope).status,0);assert.notEqual(execute({...f.envelope,input:{changed:true}}).status,0);
  assert.notEqual(execute({...f.envelope,recovery:{max_attempts:true}}).status,0,'JSON boolean must not equal number');
  assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
- const dir=start(f),request=JSON.parse(readFileSync(join(dir,'agent-request.json')));assert.equal(request.execution_location.tool,'gateway_exec');assert.equal(request.execution_location.host,'mmv');assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/模型本机不是MMV/);
+ f.file=result.envelope_path;const dir=start(f),request=JSON.parse(readFileSync(join(dir,'agent-request.json')));assert.equal(request.execution_location.tool,'gateway_exec');assert.equal(request.execution_location.host,'mmv');assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/模型本机不是MMV/);
  assert.ok(skill.includes('gateway_process'));assert.ok(skill.includes('WF_BINDING_JSON'));assert.ok(skill.includes('模型本机'));
  const special=readFileSync(join(source,'skills/wf-douyin_video_publish/SKILL.md'),'utf8');
  assert.match(special,/version: 0\.1\.2/);assert.match(special,/multi-platform-publish/);assert.doesNotMatch(special,/android-douyin-private-video|45 分钟|wf-status\.sh mmv/);

@@ -6,6 +6,7 @@ import {homedir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
+import {methodObservation,METHOD_PROTOCOL} from './method-definition.mjs';
 import {atomic} from './runtime-outbox.mjs';
 import {deploymentTarget} from './runtime-host.mjs';
 export {deploymentTarget} from './runtime-host.mjs';
@@ -26,17 +27,20 @@ export async function observeDeployment(o){
  if(!/^[a-zA-Z0-9._-]+$/.test(o.host))throw Error('非法部署机器');
  const endpoint=`${o.brainUrl.replace(/\/$/,'')}/api/brain/releases/${encodeURIComponent(o.releaseId)}`;
  const release=(await o.request(endpoint))?.release;
- if(!release||release.id!==o.releaseId||release.environment!==o.environment||release.target!==o.host)throw Error('release部署目标不匹配');
+ if(!release||release.id!==o.releaseId||release.environment!==o.environment||release.target!==(o.methodTarget||o.host))throw Error('release部署目标不匹配');
  if(release.manifest_sha256!==digest({environment:release.environment,target:release.target,payload:release.payload}))throw Error('release摘要不符');
  const observed=await o.collect(o.manifest);
  if(!observed.observed_hostname||deploymentTarget(observed.observed_hostname)!==o.host)throw Error('实际机器身份与部署目标不匹配');
- const components=actualComponents(release,observed,o.manifest);
+ const method=o.methodTarget?methodObservation(release,observed,o.methodHome):null;
+ const target=method?.target||o.host;
+ const manifest=method?.manifest||o.manifest;
+ const components=actualComponents(release,observed,manifest);
  if(!components.length)throw Error('release组件不能为空');
  mkdirSync(o.stateDir,{recursive:true,mode:0o700});
- const key=digest({release_id:o.releaseId,host:o.host,attempt_key:o.attemptKey});
+ const key=digest({release_id:o.releaseId,host:target,attempt_key:o.attemptKey});
  const file=join(o.stateDir,`${key}.request.json`),blocked=join(o.stateDir,`${key}.blocked.json`);
  if(existsSync(blocked))throw Error('部署观测冲突blocked');
- let record={endpoint:`${endpoint}/observations`,body:{event_key:`${o.attemptKey}:${o.host}`,attempt_key:o.attemptKey,environment:o.environment,target:o.host,components,collector:o.collector,observed_at:new Date().toISOString(),evidence_ref:`deployment-sha256:${digest(observed)}`}};
+ let record={endpoint:`${endpoint}/observations`,body:{event_key:`${o.attemptKey}:${target}`,attempt_key:o.attemptKey,environment:o.environment,target,components,collector:o.collector,observed_at:new Date().toISOString(),evidence_ref:method?METHOD_PROTOCOL+':'+JSON.stringify(Object.fromEntries(Object.entries(method.metadata).sort(([a],[b])=>a<b?-1:a>b?1:0))):`deployment-sha256:${digest(observed)}`}};
  if(existsSync(file)){
   const previous=JSON.parse(readFileSync(file,'utf8'));
   if(previous.endpoint!==record.endpoint||digest({...previous.body,observed_at:null})!==digest({...record.body,observed_at:null}))throw Error('部署观测请求已固定，内容冲突');
@@ -51,7 +55,7 @@ export async function observeDeployment(o){
  const gate=await o.request(`${endpoint}/gate`);
  if(!gate.deployed||!gate.actual_matches||gate.current_observation_id!==id)throw Error('部署观测未通过当前release门禁');
  atomic(join(o.stateDir,`${key}.ack.json`),{observation,gate});
- return {...o.manifest,release_id:o.releaseId,observation_id:id,environment:o.environment,target:o.host};
+ return {...manifest,release_id:o.releaseId,observation_id:id,environment:o.environment,target};
 }
 async function request(url,body){
  const headers={'Content-Type':'application/json'};

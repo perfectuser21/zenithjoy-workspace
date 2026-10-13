@@ -15,7 +15,7 @@ PROTOCOL = 'commander-v2'
 HERE = Path(__file__).resolve().parent
 FILES = ['wf-launch.sh', 'wf-status.sh', 'wf-agent-run.sh', 'wf-agent-lib.py',
          'wf-agent-handoff.py', 'wf-v2.py', 'wf-v2-io.py', 'wf-v2-phone.py', 'wf-v2-shell.py',
-         'wf-report.py', 'workflow-contracts.json', 'AGENTS.md']
+         'wf-report.py', 'wf-method.py', 'workflow-contracts.json', 'AGENTS.md']
 
 
 def canonical(value):
@@ -68,7 +68,33 @@ def manifest(directory, releases):
     return result
 
 
+def brain_read(path):
+    import shlex
+    cache = Path(os.environ.get('WF_INTERNAL_TOKEN_FILE', Path.home() / '.credentials/cecelia-internal.env'))
+    mode = cache.stat()
+    if stat.S_IMODE(mode.st_mode) != 0o600 or mode.st_uid != os.getuid():
+        raise ValueError('internal credential cache permissions invalid')
+    raw = cache.read_text().strip()
+    if 'WF_INTERNAL_TOKEN_FILE' in os.environ:
+        token = raw
+    else:
+        values = [line.partition('=')[2] for line in raw.splitlines() if line.partition('=')[0].strip() == 'CECELIA_INTERNAL_TOKEN']
+        token = shlex.split(values[-1])[0] if values else ''
+    if not token or '\n' in token or '\r' in token or not path.startswith('/api/brain/releases/'):
+        raise ValueError('invalid internal release query')
+    req = urllib.request.Request(os.environ.get('WF_BRAIN_URL', 'http://localhost:5221').rstrip('/') + path,
+                                 headers={'Authorization': 'Bearer ' + token})
+    with urllib.request.urlopen(req, timeout=10) as response:
+        return json.load(response)
+
+
 def ready(query):
+    if 'method_selection' in query:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('commander_method', HERE / 'wf-method.py')
+        method = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(method)
+        return method.verify(query, ready, brain_read, HERE)
     if (HERE / '.deploying').exists():
         raise ValueError('deployment in progress')
     deployed = read(HERE / 'runtime-manifest.json')

@@ -20,7 +20,7 @@ export function bindingComponents(definitions,sha){
  }
  return [...entries.values()].sort((a,b)=>`${a.kind}:${a.path||''}`.localeCompare(`${b.kind}:${b.path||''}`));
 }
-function checkScope(e,scope,sha){
+export function checkScope(e,scope,sha){
  const {snapshot:s,report:r,receipt:c}=e||{};
  need(s?.scope===scope&&s.repo===DEPLOY_REPO&&s.revision===sha&&s.status==='verified'&&Array.isArray(s.gaps)&&!s.gaps.length,'缺同SHA完整'+scope+'快照');
  const {snapshot_sha256,...body}=s;need(snapshot_sha256===digest(body),'快照摘要不符');
@@ -35,7 +35,7 @@ function checkScope(e,scope,sha){
  for(const a of r.required_assertions)need(c.assertions.some(v=>v.assertion_ref===a.assertion_ref&&v.source_repo===DEPLOY_REPO&&v.source_revision===sha&&v.exit_code===0&&!v.error&&!v.signal&&/^[a-f0-9]{64}$/.test(v.test_sha256||'')&&same(v.source_bindings,a.source_bindings)),'完整receipt断言失败');
  return defs;
 }
-function subset(definitions,workflows){
+export function subset(definitions,workflows){
  const refs=workflows.flatMap(w=>w.payload.activities||[]),ids=new Set(refs.map(r=>r.activity_version_id));
  const activities=definitions.activities.filter(a=>ids.has(a.id));
  need(ids.size&&activities.length===ids.size&&refs.every(r=>activities.some(a=>a.id===r.activity_version_id&&a.activity_id===r.activity_id&&a.payload.activity_id===r.activity_id)),'活动依赖闭包缺失');return{workflows,activities};

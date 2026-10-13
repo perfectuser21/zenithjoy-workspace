@@ -1,0 +1,11 @@
+# 当前监督器与历史业务方法的组合身份
+
+GP-Anchor: line01/android_worker_publish keep-green
+
+同一物理MMV上的方法包必须有独立release target与完整业务workflow闭包；不能把旧report helper当成当前Supervisor聚合release的安全代码，也不能用曾经部署代替当前gate。业务版本来自正式独立验收，CI与安装ACK只说明源码及部署符合声明。
+
+组合摘要必须沿Brain既有Node canonical语义：数字形键、指数、负零和UTF-16键排序不能用Python json.dumps近似。运行端调用同一Node语义，永久黄金样例核manifest、resolved bindings、composition及input。方法包内相对依赖实际执行，放置全局同名污染物不能填补缺失绑定；标准库依赖只准当前声明的静态子集，不声称Python沙箱。
+
+恢复有两个不同时间点：旧attempt核验只判断已发生的副作用及当前runner机械隔离保证，不要求未来目录先存在。新attempt起跑才创建独享目录，拒run根软链接、既有业务artifact及原run复用；正式输入文件保存在独立wf-agent-inputs目录。原失败证据hash必须保持。业务helper只读实际run持久信封及input/contract，不能接复制改写的信封。
+
+本次隔离测试和正式CI不等同真实业务首通；生产基线、方法选择资格和最终独立验收由主控按正式运行账确认。
