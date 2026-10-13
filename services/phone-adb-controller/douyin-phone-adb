@@ -2091,11 +2091,52 @@ switch_account() {
   print -- "$verified"
 }
 
+_verify_private_message_delta() {
+  "$PYTHON_BIN" - "$1" "$2" "$3" "$4" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+before_path, after_path, message, phase = sys.argv[1:]
+def nodes(path):
+    root = ET.parse(path).getroot()
+    if root.tag != 'hierarchy':
+        raise ValueError('missing hierarchy')
+    return list(root.iter('node'))
+def is_input(node):
+    return node.get('resource-id') == 'com.ss.android.ugc.aweme:id/msg_et' and node.get('class') == 'android.widget.EditText'
+def bubbles(rows):
+    return [n for n in rows if n.get('text') == message and not is_input(n)]
+try:
+    before = nodes(before_path)
+    inputs = [n for n in before if is_input(n)]
+    if len(inputs) != 1 or inputs[0].get('text') != message or bubbles(before):
+        raise ValueError('typed input not unique or historical same-text bubble exists')
+    if phase == 'before':
+        print('ready')
+    elif phase in ('after', 'risk'):
+        after = nodes(after_path)
+        text = '\n'.join(n.get('text', '') + ' ' + n.get('content-desc', '') for n in after)
+        if '给陌生人发送消息过于频繁' in text or '今日私信次数' in text:
+            print('rate_limited')
+        elif '暂无法给对方发送消息' in text or ('互相关注' in text and '发送消息' in text):
+            print('restricted')
+        else:
+            remaining = [n for n in after if is_input(n)]
+            if len(remaining) != 1 or remaining[0].get('text', '') == message or len(bubbles(after)) != 1:
+                raise ValueError('new non-input bubble and cleared input not verified')
+            print('sent')
+    else:
+        raise ValueError('invalid phase')
+except Exception as error:
+    print('PRIVATE_MESSAGE_DELTA_UNVERIFIED: ' + str(error), file=sys.stderr)
+    sys.exit(2)
+PY
+}
+
 send_private_message() {
   local expected_account_id target_douyin_id message_b64 evidence_id profile_url message current current_id
   local search_xml user_tab_line user_tab_center user_tab_x user_tab_y users_xml follow_line follow_bounds fx1 fy1 fx2 fy2 target_x target_y
   local profile_xml target_id_line observed_target_id dm_line dm_center dm_x dm_y chat_xml input_line input_center input_x input_y
-  local typed_xml typed_value before_path send_line send_center send_x send_y sent_xml sent_path
+  local typed_xml typed_value before_path send_line send_center send_x send_y sent_xml sent_path send_outcome risk_xml risk_outcome send_fg risk_fg
   expected_account_id="$1"
   target_douyin_id="$2"
   message_b64="$3"
@@ -2225,20 +2266,41 @@ send_private_message() {
   ui_evidence "${evidence_id}-typed" >/dev/null
   typed_value="$(/usr/bin/xmllint --xpath 'string(//node[@resource-id="com.ss.android.ugc.aweme:id/msg_et"]/@text)' "$typed_xml" 2>/dev/null || true)"
   [[ "$typed_value" == "$message" ]] || die "private-message text readback did not exactly match approved text"
+  _verify_private_message_delta "$typed_xml" "$typed_xml" "$message" before >/dev/null || die "private-message old bubble or unknown typed proof prevents send"
   before_path="$(snapshot_evidence "${evidence_id}-before-send")"
   send_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="发送"[^>]*>' "$typed_xml" | /usr/bin/head -1 || true)"
   [[ -n "$send_line" && "$send_line" == *'clickable="true"'* ]] || die "verified send action was not found after exact text readback"
   send_center="$(node_center "$send_line")" || die "send action bounds could not be parsed"
   read send_x send_y <<< "$send_center"
+  send_fg="$(foreground_package)"
+  _foreground_is_exact_douyin "$send_fg" || die "private-message foreground changed before send"
+  print -- "$send_fg" > "$EVIDENCE_ROOT/${evidence_id}-send-foreground.txt"
+  chmod 600 "$EVIDENCE_ROOT/${evidence_id}-send-foreground.txt"
   "$ADB" -s "$SERIAL" shell input tap "$send_x" "$send_y"
   wait_ms 1200
   restore_ime
   trap - EXIT INT TERM
   sent_xml="$EVIDENCE_ROOT/${evidence_id}-sent.xml"
   ui_evidence "${evidence_id}-sent" >/dev/null
-  /usr/bin/grep -F "text=\"$message\"" "$sent_xml" >/dev/null || die "send outcome is unknown because the exact sent bubble was not readable"
+  send_outcome="$(_verify_private_message_delta "$typed_xml" "$sent_xml" "$message" after)" || die "send outcome is unknown because a new sent bubble was not verified"
+  # 限制提示可能晚于首帧气泡，二次fresh读取失败不得宣布成功。
+  wait_ms 1200
+  risk_fg="$(foreground_package)"; _foreground_is_exact_douyin "$risk_fg" || die "private-message foreground changed before fresh risk proof"
+  risk_xml="$EVIDENCE_ROOT/${evidence_id}-risk.xml"
+  ui_evidence "${evidence_id}-risk" >/dev/null
+  risk_fg="$(foreground_package)"; _foreground_is_exact_douyin "$risk_fg" || die "private-message foreground changed during fresh risk proof"
+  print -- "$risk_fg" > "$EVIDENCE_ROOT/${evidence_id}-risk-foreground.txt"
+  chmod 600 "$EVIDENCE_ROOT/${evidence_id}-risk-foreground.txt"
+  risk_outcome="$(_verify_private_message_delta "$typed_xml" "$risk_xml" "$message" risk)" || die "fresh private-message risk proof is unknown"
+  [[ "$risk_outcome" == rate_limited || "$send_outcome" == rate_limited ]] && send_outcome=rate_limited
+  [[ "$send_outcome" != rate_limited && "$risk_outcome" == restricted ]] && send_outcome=restricted
   sent_path="$(snapshot_evidence "${evidence_id}-sent")"
-  print -- "send_status=sent"
+  print -- "send_status=$send_outcome"
+  print -- "message_delta_verified=true"
+  print -- "typed_ui_evidence=$typed_xml"
+  print -- "risk_ui_evidence=$risk_xml"
+  print -- "send_foreground_evidence=$EVIDENCE_ROOT/${evidence_id}-send-foreground.txt"
+  print -- "risk_foreground_evidence=$EVIDENCE_ROOT/${evidence_id}-risk-foreground.txt"
   print -- "sender_douyin_id=$expected_account_id"
   print -- "target_douyin_id=$target_douyin_id"
   print -- "message_sha256=$(print -n -- "$message" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"

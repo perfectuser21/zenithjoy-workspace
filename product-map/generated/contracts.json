@@ -32,12 +32,12 @@
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "ef8ad51b91004ee7f114f8ad43dcc5937391c2e00e29a681eb4e90cc26bb376f",
+      "sha256": "ac4a03c72e3616c9548021352b58b6bbcf387f76567767fc8d68ec66e4177408",
       "activities": {
-        "preflight": "9fb87480337db3cc3794d20e43fbcecef38a1f6252b63a96e29b53b22b7c8882",
-        "send_dm": "387d4d52fe6652b51a5de74a322ed15fd019d55c8c731ca99e32a67909f661ce",
-        "write_back": "28d9758f8c0b30a450813a5b8fa0a1e44c2ad76f750b1d74e5987268a23be1c7",
-        "cleanup": "f9be72b6e0f4ef5381b43bb2cb2c55f8b9ded9d0039d5b8cc4cef9153acd066b"
+        "preflight": "78143b031174e66648b386559121dd5e22f85fe64de8808d9d02f2d34fd2e580",
+        "send_dm": "bfd62bf8796e11ab162b0e778ad83d65273ab2e1097ab28da03bfe7c956405f8",
+        "write_back": "5de1d74eddc262d4073d7b392e12c50eb14aee7a806a5c5f5dcac3a0e6945d00",
+        "cleanup": "32cff9610a238f70cffbbc6be2eee493fcf03f749c12ac396444a539ed668402"
       }
     },
     "douyin_video_discovery": {
