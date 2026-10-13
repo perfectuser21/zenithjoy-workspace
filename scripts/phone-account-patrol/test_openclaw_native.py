@@ -436,6 +436,23 @@ class ContinuousRecoveryTests(unittest.TestCase):
             receipt = json.loads(attempt['result']['script']['stdout']);receipt['evidence'] = evidence;attempt['result']['script']['stdout'] = json.dumps(receipt)
             self.cycle();self.assertEqual(self.demands()[0]['status'], 'blocked')
 
+    def test_real_infra_qiumi_leader_is_not_misidentified_as_frozen_script_batch(self):
+        leader = copy.deepcopy(self.leader)
+        leader.update(id=LEADER, created_at='2026-10-12T14:00:04.659Z', status='completed_no_pr')
+        leader['payload'].update(runtime_requires_llm=True, recurring_task_id=SCHEDULE, recurring_slot='2026-10-12T14:00:00.000Z')
+        self.tasks[LEADER] = leader
+        self.cycle()
+        self.assertEqual(len(self.demands()), 1);self.assertEqual(len(self.attempts()), 1)
+        self.assertEqual(self.demands()[0]['payload']['origin_batch_task_id'], BATCH)
+        self.assertEqual(self.tasks[LEADER]['task_type'], 'qiumi_task')
+
+    def test_matching_script_batch_wrong_frozen_identity_is_still_rejected(self):
+        for key, wrong in [('source_revision', 'f' * 40), ('cmd', 'echo forged'), ('runtime_requires_llm', True)]:
+            original = copy.deepcopy(self.tasks[BATCH]['payload']);self.tasks[BATCH]['payload'][key] = wrong
+            with self.subTest(key=key), self.assertRaises(ValueError):self.cycle()
+            self.tasks[BATCH]['payload'] = original
+        self.assertEqual(self.posts, [])
+
     def test_existing_closed_manual_demand_is_not_recreated(self):
         self.cycle();demand = self.demands()[0];self.tasks[demand['id']]['status'] = 'completed_no_pr'
         self.current += dt.timedelta(days=1);self.cycle();self.assertEqual(len(self.demands()), 1);self.assertEqual(len(self.attempts()), 1)
