@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "bilibili_video_publish",
   "brain_workflow_key": "bilibili_video_publish.android",
-  "contract_sha256": "102836070bbc766cf9a6f599c1bbd101e3f175f0d65a401acb56d87dfddc4088",
+  "contract_sha256": "2c274970fb0a8bfcbebd24a7aed2ce6343ab77775136044b0b6451c3cb7051c3",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -14,7 +14,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*preflight*original.json",
+        "glob": "shell-evidence/preflight/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1
@@ -90,7 +90,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*cleanup*original.json",
+        "glob": "shell-evidence/cleanup/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1

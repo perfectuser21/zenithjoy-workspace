@@ -15,7 +15,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -71,7 +71,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -86,17 +86,193 @@
       "brain_workflow_key": "douyin_video_publish.android",
       "commander_skill": {
         "name": "wf-douyin_video_publish",
-        "version": "0.1.1"
+        "version": "0.1.2"
+      },
+      "agent": "skill-factory",
+      "skill": "multi-platform-publish",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "body",
+          "media_path",
+          "media_sha256",
+          "allow_discard_existing_draft",
+          "authorized",
+          "privacy",
+          "content_type"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string"
+          },
+          "media_path": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "media_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "allow_discard_existing_draft": {
+            "type": "boolean"
+          },
+          "authorized": {
+            "const": true
+          },
+          "privacy": {
+            "const": "private"
+          },
+          "content_type": {
+            "const": "video"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "publication",
+          "privacy",
+          "readback",
+          "media_sha256",
+          "evidence"
+        ],
+        "properties": {
+          "publication": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "platform",
+              "account",
+              "title",
+              "body"
+            ],
+            "properties": {
+              "platform": {
+                "const": "douyin"
+              },
+              "account": {
+                "const": "Ai办公室"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "body": {
+                "type": "string"
+              },
+              "work_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "privacy": {
+            "const": "private"
+          },
+          "media_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "readback": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "account_verified",
+              "content_verified",
+              "private_verified"
+            ],
+            "properties": {
+              "account_verified": {
+                "const": true
+              },
+              "content_verified": {
+                "const": true
+              },
+              "private_verified": {
+                "const": true
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "resources": {
+        "machine": "xian-m4",
+        "profile": "xiaolongxia",
+        "device_serial": "ANGYVB4311010223",
+        "account_ref": "Ai办公室"
+      },
+      "recovery": {
+        "max_attempts": 1,
+        "improvement_after_failures": 5,
+        "total_timeout_sec": 2400,
+        "cleanup_timeout_sec": 300,
+        "retry_safe": false,
+        "retry_on": []
+      },
+      "verification": {
+        "required": true,
+        "criteria": [
+          "独立读取本人发布后的实屏原件，核对输入标题正文、私密权限、实际视频；work_id能读取则保留，不能读取用本人作品入口及原件定位，不伪造ID",
+          "prepare保存源文件SHA256实际命令原件，独立核验重算并与输入media_sha256对照；输出media_sha256与其一致",
+          "外壳preflight/cleanup原生stat记录Commander执行包根及本run证据根的realpath/st_dev/st_ino，前后须保持；根换址或替换即拒绝，原件在对应阶段root-start/root-end回执",
+          "delivery后独立读取Brain设备锁free响应并归档，不能拿cleanup执行时仍由Brain持有的租约伪报free",
+          "仅以上冻结合同条款与原件作为判据，业务报告额外自述不自动增列验收项"
+        ]
       },
       "activities": [
         {
           "key": "preflight",
           "order": 1,
           "from": "douyin_video_publish",
+          "steps": [
+            {
+              "key": "preflight_evidence",
+              "name": "controller预检设备在线、本人账号与声明一致、run同owner控制器锁读回；原始预检与账号回执完整，执行包根和run证据根真实路径/dev/inode前后相同",
+              "order": 1,
+              "reads": [
+                "PublishRequest.task_id"
+              ],
+              "writes": [
+                "PublishContext.task_id"
+              ],
+              "check": "controller预检设备在线、本人账号与声明一致、run同owner控制器锁读回；原始预检与账号回执完整，执行包根和run证据根真实路径/dev/inode前后相同",
+              "implementation": {
+                "status": "implemented",
+                "ref": "services/phone-adb-controller/commander/wf-v2-phone.py + wf-v2-shell.py"
+              },
+              "uses_llm": false,
+              "dod": {
+                "mode": "checkpoint",
+                "readback": {
+                  "type": "evidence",
+                  "glob": "shell-evidence/preflight/*/attempt.json",
+                  "expect": {
+                    "op": ">=",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -107,6 +283,36 @@
           "key": "prepare",
           "order": 2,
           "from": "douyin_video_publish",
+          "steps": [
+            {
+              "key": "prepare_evidence",
+              "name": "原标题正文素材逐字和hash准确、私密/音乐定位及当日余量符合",
+              "order": 1,
+              "reads": [
+                "PublishContext.task_id"
+              ],
+              "writes": [
+                "PublishDraft.task_id"
+              ],
+              "check": "原标题正文素材逐字和hash准确、私密/音乐定位及当日余量符合",
+              "implementation": {
+                "status": "missing",
+                "ref": "Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现"
+              },
+              "uses_llm": false,
+              "dod": {
+                "mode": "checkpoint",
+                "readback": {
+                  "type": "evidence",
+                  "glob": "*prepare*original.json",
+                  "expect": {
+                    "op": ">=",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
           "by": "agent",
           "readback": {
             "type": "evidence",
@@ -121,6 +327,36 @@
           "key": "publish",
           "order": 3,
           "from": "douyin_video_publish",
+          "steps": [
+            {
+              "key": "publish_evidence",
+              "name": "原outward账本最多1次attempt，不重复点发表；提交时间和receipt保真",
+              "order": 1,
+              "reads": [
+                "PublishDraft.task_id"
+              ],
+              "writes": [
+                "PublishSubmission.task_id"
+              ],
+              "check": "原outward账本最多1次attempt，不重复点发表；提交时间和receipt保真",
+              "implementation": {
+                "status": "missing",
+                "ref": "Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现"
+              },
+              "uses_llm": false,
+              "dod": {
+                "mode": "checkpoint",
+                "readback": {
+                  "type": "evidence",
+                  "glob": "*publish*original.json",
+                  "expect": {
+                    "op": ">=",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
           "by": "agent",
           "readback": {
             "type": "evidence",
@@ -135,6 +371,36 @@
           "key": "verify",
           "order": 4,
           "from": "douyin_video_publish",
+          "steps": [
+            {
+              "key": "verify_evidence",
+              "name": "正确目标本人作品入口（能取则附work_id）/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run",
+              "order": 1,
+              "reads": [
+                "PublishSubmission.task_id"
+              ],
+              "writes": [
+                "PublishEvidence.task_id"
+              ],
+              "check": "正确目标本人作品入口（能取则附work_id）/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run",
+              "implementation": {
+                "status": "missing",
+                "ref": "Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现"
+              },
+              "uses_llm": false,
+              "dod": {
+                "mode": "checkpoint",
+                "readback": {
+                  "type": "evidence",
+                  "glob": "*verify*original.json",
+                  "expect": {
+                    "op": ">=",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
           "by": "agent",
           "readback": {
             "type": "evidence",
@@ -149,10 +415,40 @@
           "key": "cleanup",
           "order": 5,
           "from": "douyin_video_publish",
+          "steps": [
+            {
+              "key": "cleanup_evidence",
+              "name": "原launcher桌面原件、应用关闭、sameowner controller释放及free读回；执行包根和run证据根真实路径/dev/inode前后相同，Brain锁由delivery后独立核验",
+              "order": 1,
+              "reads": [
+                "PublishEvidence.task_id"
+              ],
+              "writes": [
+                "PublishCleanup.task_id"
+              ],
+              "check": "原launcher桌面原件、应用关闭、sameowner controller释放及free读回；执行包根和run证据根真实路径/dev/inode前后相同，Brain锁由delivery后独立核验",
+              "implementation": {
+                "status": "implemented",
+                "ref": "services/phone-adb-controller/commander/wf-v2-phone.py + wf-v2-shell.py"
+              },
+              "uses_llm": false,
+              "dod": {
+                "mode": "checkpoint",
+                "readback": {
+                  "type": "evidence",
+                  "glob": "shell-evidence/cleanup/*/attempt.json",
+                  "expect": {
+                    "op": ">=",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ],
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -174,7 +470,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -230,7 +526,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -252,7 +548,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -308,7 +604,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -330,7 +626,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -386,7 +682,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -408,7 +704,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -464,7 +760,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -486,7 +782,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -542,7 +838,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -564,7 +860,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*preflight*original.json",
+            "glob": "shell-evidence/preflight/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1
@@ -620,7 +916,7 @@
           "by": "shell",
           "readback": {
             "type": "evidence",
-            "glob": "*cleanup*original.json",
+            "glob": "shell-evidence/cleanup/*/attempt.json",
             "expect": {
               "op": ">=",
               "value": 1

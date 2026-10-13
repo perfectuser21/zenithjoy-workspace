@@ -2,7 +2,7 @@
 // commands retain the existing record-only stub; only this pair is executed and verified.
 import {appendFileSync,copyFileSync,existsSync,mkdirSync,readFileSync,unlinkSync,writeFileSync} from 'node:fs';
 import {basename,join,resolve} from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {spawnSync,spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 const self=fileURLToPath(import.meta.url);
@@ -76,6 +76,11 @@ if(process.argv[1]&&resolve(process.argv[1])===self){
   const [command,root,mode,...args]=process.argv.slice(2);
   if(command==='prepare')prepare(root);
   else if(command==='verify')console.log(JSON.stringify(verify(root)));
+  else if(command==='transport'&&mode==='ssh'&&args.at(-1)?.startsWith('python3 -u -c ')){
+   // 执行真实内核部署锁与流式握手，HOME指向隔离远端目录。
+   const child=spawn('sh',['-c',args.at(-1)],{stdio:'inherit',env:{...process.env,HOME:paths(resolve(root)).home}});
+   process.exitCode=await new Promise(r=>child.on('close',r));
+  }
   else if(command==='transport'){const r=transport(root,mode,args);process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status;}
   else throw Error('unknown fixture operation');
  }catch(e){console.error(e.message);process.exitCode=2;}

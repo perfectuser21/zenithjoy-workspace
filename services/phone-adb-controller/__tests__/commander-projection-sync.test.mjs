@@ -83,12 +83,12 @@ test("cmdr-escort.txt：注销权只归 run 收尾 + 心跳条款仍在；cmdr-s
   assert.equal(spawnSync(ZSH || "zsh", ["-n", join(SRC, "escort-claude-escalation.sh")], { encoding: "utf8" }).status, 0, "唤起词脚本必须过 zsh -n");
 });
 
-test("真身同步：COMMANDER.md / AGENTS.md / SKILL.md 平滑收工带 stop 文件写法", () => {
+test("真身同步：历史 COMMANDER 保留 stop 文件，新通用 Commander 使用绑定 child 终止读回", () => {
   const law = read("COMMANDER.md");
   assert.match(law, /wf-runs\/<TAG>\.stop/, "宪法平滑收工定义必须写明 stop 文件入口");
   assert.match(law, /平滑收工[^\n]*(放锁)[^\n]*(落池)[^\n]*(回桌面)[^\n]*(finalize)/, "四步定义行保持不动（commander-positioning 守卫）");
-  assert.match(read("commander/AGENTS.md"), /\.stop/, "AGENTS.md 三档表平滑收工带 stop 写法");
-  assert.match(read("commander/skills/workflow-commander/SKILL.md"), /\.stop/, "SKILL.md 三档行平滑收工带 stop 写法");
+  assert.match(read("commander/AGENTS.md"), /agent\.wait/, "正式 Commander 按官方 child 监督");
+  assert.match(read("commander/skills/workflow-commander/SKILL.md"), /sessions\.abort[^\n]*终态读回独立/, "正式收尾取消与终态确认独立");
 });
 
 // ── ② stop 文件机制 ──

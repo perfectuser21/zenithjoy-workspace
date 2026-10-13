@@ -44,10 +44,13 @@ test("远程执行块调用 deploy.sh 和 drift-check.sh", () => {
   assert.match(yamlText, /services\/phone-adb-controller\/drift-check\.sh/, "必须调用现有 drift-check.sh 做后验");
 });
 
-test("远程执行块 source 了工作区干净判定 lib 并在不干净时 exit 非零", () => {
+test("远程执行块 source 固定SHA lib并使用独立checkout，原仓不reset", () => {
   const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
   assert.match(yamlText, /deploy-phone-adb-remote-lib\.sh/, "必须 source Task 1 写的判定 lib，不能内联重复逻辑");
-  assert.match(yamlText, /check_clean_checkout/, "必须调用 check_clean_checkout 函数");
+  assert.match(yamlText, /prepare_deployment_checkout "\$REPO" "\$DEPLOY_SHA"/);
+  assert.match(yamlText, /cd "\$DEPLOY_CHECKOUT"/);
+  assert.doesNotMatch(yamlText, /reset --hard|CURRENT_BRANCH=/);
+  assert.ok(yamlText.indexOf('rev-parse origin/main')<yamlText.indexOf('source "$LIB_TMP"'));
 });
 
 test("成功和失败都调用 notify-bark.js 通知", () => {

@@ -11,6 +11,16 @@
 # 日志行（wf-status.sh 读）: WF_RUN_STARTED / preflight ok|fail / agent running / cleanup lock_status=… / WF_RUN_RESULT {json} / WF_RUN_FINISHED
 set -uo pipefail
 
+if [[ "${1:-}" == "--ready" || "${1:-}" == "--envelope" ]]; then
+  exec python3 "$(cd "$(dirname "$0")" && pwd)/wf-v2.py" launch "$@"
+fi
+
+# 旧入口同样持部署admission锁；必须保留到当前外壳收尾。
+ADMISSION_HERE="$(cd "$(dirname "$0")" && pwd)"
+if ! python3 "$ADMISSION_HERE/wf-v2-io.py" admitted "${WF_LEGACY_ADMISSION_FD:-}" 2>/dev/null; then
+  exec python3 "$ADMISSION_HERE/wf-v2-io.py" legacy "$0" "$@"
+fi
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="${WF_AGENT_LIB:-$HERE/wf-agent-lib.py}"
 HANDOFF="$HERE/wf-agent-handoff.py"

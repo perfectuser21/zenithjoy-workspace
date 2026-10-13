@@ -7270,3 +7270,34 @@ agent_suite:
   status: active
   product: AI员工
   note: "104四活动与原Feishu订单接口/永久预留/新私信气泡真实代码回归；夹具明示fake，首条真发送另验收"
+- id: commander-v2-runtime
+  path: services/phone-adb-controller/__tests__/commander-v2.test.mjs
+  type: unit
+  ci: L2
+  status: active
+  product: 多平台发布
+  note: "通用Commander正式入口、冻结输入、恢复和部署整包握手；GP-Anchor: line01/android_worker_publish keep-green"
+
+- id: commander-v2-report
+  path: services/phone-adb-controller/__tests__/commander-report.test.mjs
+  type: unit
+  ci: L2
+  status: active
+  product: 多平台发布
+  note: "通用Commander非手机报告原始来源/JSON/CSV独立核验；GP-Anchor: line01/android_worker_publish keep-green"
+
+- id: phone-deploy-evidence-scope
+  path: .github/workflows/scripts/__tests__/phone-deploy-evidence.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: 多平台发布
+  note: "部署只消费同run同SHA的zenithjoy及commander-generic双scope artifact；缺任一/错scope/旧名回退、重复/过期/fork均拒绝；既有ci-l3-code OpenClaw Scripts Test执行，GP-Anchor: line01/android_worker_publish keep-green"
+
+- id: commander-unified-deployment
+  path: services/phone-adb-controller/__tests__/deployment-unified.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: 多平台发布
+  note: "7+4完整release、两scope联合覆盖、实装跨host原件、共享锁及唯一MMV ACK；自动prepare与Commander smoke执行，GP-Anchor: line01/android_worker_publish keep-green"

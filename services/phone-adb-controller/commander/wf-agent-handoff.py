@@ -93,7 +93,20 @@ def complete(directory, incoming):
         if load(path) == incoming:
             return
         raise ValueError('completion already recorded')
-    ensure_open(directory, request)
+    if (directory / 'handoff-closed.json').exists() or (directory / 'delivery.json').exists():
+        raise ValueError('handoff already closed')
+    if request.get('protocol') == 'commander-v2' and time.time() >= request['expires_at']:
+        terminal = load(directory / 'agent-terminal.json')
+        ended = terminal.get('endedAt')
+        if isinstance(ended, (int, float)):
+            ended = ended / 1000 if ended > 100000000000 else ended
+        else:
+            from datetime import datetime
+            ended = datetime.fromisoformat(str(ended).replace('Z', '+00:00')).timestamp()
+        if terminal.get('runId') != binding['child_run_id'] or ended > request['expires_at']:
+            raise ValueError('late child completion outside frozen execution budget')
+    else:
+        ensure_open(directory, request)
     text = incoming['result']
     (directory / 'agent.log').write_text(text)
     delivery = lib.parse_delivery(text)
@@ -124,16 +137,22 @@ def rpc(method, payload, timeout=20):
     return json.loads(result.stdout)
 
 
-def await_result(directory):
+def await_result(directory, once=False):
     # 不持文件锁等待网络，否则会阻塞外壳续租/超时检查；完成时重新校验全部身份。
     binding = load(directory / 'agent-binding.json')
     request = request_at(directory)
     validate_identity(request, binding)
     while True:
         remaining = request['expires_at'] - time.time()
-        if remaining <= 0:
+        if remaining <= 0 and request.get('protocol') != 'commander-v2':
             raise ValueError('child await expired')
-        seconds = min(60, remaining)
+        seconds = max(1, min(30, remaining))
+        if request.get('protocol') == 'commander-v2':
+            from datetime import datetime
+            cleanup_end = datetime.fromisoformat(load(directory / 'envelope.json')['cleanup_deadline_at'].replace('Z', '+00:00')).timestamp()
+            seconds = min(seconds, cleanup_end - time.time() - 7)
+            if seconds <= 0:
+                raise ValueError('official await cleanup budget exhausted')
         terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(seconds * 1000)), seconds + 5)
         if terminal.get('runId') != binding['child_run_id']:
             raise ValueError('official terminal run mismatch')
@@ -141,6 +160,8 @@ def await_result(directory):
             break
         if terminal.get('status') not in ('pending', 'timeout'):
             raise ValueError('official terminal receipt missing')
+        if once:
+            return None
         if terminal['status'] == 'pending':
             time.sleep(1)  # 服务端排队未进入可等待run，限制重试速率
     receipt = terminal.get('terminalReceipt') or {}
@@ -168,9 +189,26 @@ def stop(directory):
         return 0
     binding = load(binding_path)
     params = dict(key=binding['child_session_key'], runId=binding['child_run_id'])
-    abort = rpc('sessions.abort', params)
-    write(directory / 'child-abort.json', abort)
-    terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=10000))
+    if request_at(directory).get('protocol') == 'commander-v2':
+        from datetime import datetime
+        end = datetime.fromisoformat(load(directory / 'envelope.json')['cleanup_deadline_at'].replace('Z', '+00:00')).timestamp()
+    else:
+        end = time.time() + 44.1
+    # rpc子进程硬超时还要+2秒；先为独立读回保留完整的RPC+进程退出预算。
+    left = end - time.time()
+    readback_reserve = min(12, max(2.5, left / 2))
+    abort_timeout = min(20, left - readback_reserve - 2.05)
+    try:
+        if abort_timeout <= 0:
+            raise ValueError('insufficient abort budget; reserved official readback')
+        abort = rpc('sessions.abort', params, abort_timeout)
+        write(directory / 'child-abort.json', abort)
+    except Exception as error:
+        write(directory / 'child-abort-error.json', {'reason': str(error)})
+    timeout = min(10, end - time.time() - 2.05)
+    if timeout <= 0:
+        raise ValueError('official stop readback budget exhausted; termination unknown')
+    terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(min(10, timeout) * 1000)), timeout)
     write(directory / 'child-stop-readback.json', terminal)
     if terminal.get('runId') != binding['child_run_id'] or terminal.get('endedAt') is None or terminal.get('status') not in ('ok', 'error', 'timeout'):
         raise ValueError('child termination unconfirmed; retain controller lock')

@@ -58,13 +58,38 @@ push_atomic() {
 }
 
 # Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
-# （任务 c0fe7e30：Commander 件不进 release manifest，单独下发不影响两机执行包的对账）
+# Commander与旧MMV包共享完整release；--commander-only仍须真实核对其它已安装组件。
+commander_admission() {
+  # 在途外壳保留原版本；整套文件和skills同步完成才发布新manifest。
+  if ! ssh mmv python3 <<'PYADMISSION'
+import fcntl,json,pathlib,subprocess,sys
+root=pathlib.Path.home()/'.openclaw/commander'
+root.mkdir(parents=True,exist_ok=True)
+with open(root/'.admission.lock','a') as guard:
+    try:
+        fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(3)
+    active=subprocess.run(['pgrep','-f','[w]f-agent-run.sh|[w]f-v2.py worker'],stdout=subprocess.DEVNULL).returncode==0
+    for path in (pathlib.Path.home()/'wf-agent-runs').glob('*/runtime.json'):
+        state=json.loads(path.read_text())
+        active=active or state.get('execution_stopped') is not True or state.get('phase')!='awaiting_verify' or not (path.parent/'delivery.json').exists()
+    if active:
+        sys.exit(3)
+    (root/'.deploying').touch()
+PYADMISSION
+  then
+    echo "  ❌ Commander仍有在途执行，拒绝覆盖其运行包"; FAILED=1; return
+  fi
+}
+
 deploy_commander() {
+  # 已由统一入口取得部署锁与admission；失败时.deploying保留。
   # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
   echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
   ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
   # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json; do
+  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-v2-shell.py wf-report.py; do
     if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
     case "$f" in
       *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
@@ -79,6 +104,11 @@ deploy_commander() {
     fi
     rm -f /tmp/deploy-err-$$
   done
+  for contract in "$D"/commander/contracts/*.json; do
+    [[ -f "$contract" ]] || continue
+    ssh mmv "mkdir -p ~/.openclaw/commander/contracts"
+    push_atomic "$contract" mmv "~/.openclaw/commander/contracts" "$(basename "$contract")"
+  done
   # 通用 skill workflow-commander + 各 workflow 陪跑 skill wf-<能力>（决策 26df670a：合同 commander_skill 指向它们，Commander 按字段自加载）
   CMDR_SKILLS=()
   for sk in "$D"/commander/skills/*/SKILL.md; do
@@ -86,6 +116,8 @@ deploy_commander() {
     _name="$(basename "$(dirname "$sk")")"
     ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name"
     push_atomic "$sk" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name" SKILL.md
+    ssh mmv "mkdir -p ~/.openclaw/commander/skills/$_name"
+    push_atomic "$sk" mmv "~/.openclaw/commander/skills/$_name" SKILL.md
     CMDR_SKILLS+=("$_name")
     echo "  ✅ skills/$_name/SKILL.md"
   done
@@ -131,18 +163,34 @@ PYREMOTE
   # 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
   if [[ -s "$D/commander/AGENTS.md" ]]; then
     push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
+    push_atomic "$D/commander/AGENTS.md" mmv "~/.openclaw/commander" AGENTS.md
     echo "  ✅ commander/AGENTS.md → work-commander 工作区"
   else
     echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
   fi
+  if [[ "$FAILED" == 0 ]]; then
+    # 元数据文件仅含已验证release映射，不含token；未提供映射则v2不ready。
+    local manifest_tmp
+    manifest_tmp="$(mktemp -d)"
+    python3 - "$D/commander" "${WF_COMMANDER_RELEASES_FILE:-}" "$manifest_tmp" <<'PYMANIFEST'
+import importlib.util,json,pathlib,sys
+root=pathlib.Path(sys.argv[1])
+spec=importlib.util.spec_from_file_location('commander_io',root/'wf-v2-io.py')
+io=importlib.util.module_from_spec(spec);spec.loader.exec_module(io)
+releases=json.load(open(sys.argv[2])) if sys.argv[2] else {}
+files=io.components(root)
+io.write(pathlib.Path(sys.argv[3])/'runtime-manifest.json',dict(protocol=io.PROTOCOL,files=files,runtime_snapshot_sha256=io.digest(files),releases=releases))
+PYMANIFEST
+    if [[ $? == 0 ]]; then
+      push_atomic "$manifest_tmp/runtime-manifest.json" mmv "~/.openclaw/commander" runtime-manifest.json
+      if ! ssh mmv "python3 ~/.openclaw/commander/wf-v2-io.py verify"; then FAILED=1; fi
+      # 唯一聚合观测和所有本机视图ACK落地之前保留.deploying，禁止新run。
+    else FAILED=1; fi
+    rm -rf "$manifest_tmp"
+  fi
 }
 
-if [[ "${1:-}" == "--commander-only" ]]; then
-  deploy_commander
-  if [[ "$FAILED" == "1" ]]; then echo "⚠️ Commander 入口部署有失败项，见上方 ❌"; exit 1; fi
-  echo "✅ Commander 入口已部署(mmv)"
-  exit 0
-fi
+
 
 MMV_JS_FILES=(
   push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
@@ -227,18 +275,37 @@ for f in "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[
   [[ " ${MMV_RUNTIME_FILES[*]-} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
 done
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
+# 所有入口都必须带完整、正式回读的目标计划；空map不能覆盖已有ready身份。
+: "${WF_COMMANDER_RELEASES_FILE:?必须提供完整Commander release映射}" "${WF_DEPLOY_PLAN_FILE:?必须提供统一部署计划}"
+node "$D/deployment-targets.mjs" "$WF_DEPLOY_PLAN_FILE" "$(git rev-parse HEAD)"
+# Actions和人工入口共享内核租锁；FD身份被核验，部署终止自然释放。
+if [[ -z "${WF_DEPLOY_LOCK_FD:-}" ]]; then
+  exec python3 "$D/deployment-guard.py" bash "$PWD/deploy.sh" "$@"
+fi
+python3 "$D/deployment-guard.py" check
+
 DEPLOY_MANIFEST=$(mktemp)
-OBSERVED_MANIFEST=$(mktemp)
 MMV_MANIFEST=$(mktemp)
-MMV_OBSERVED_MANIFEST=$(mktemp)
-trap 'rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST" "$MMV_MANIFEST" "$MMV_OBSERVED_MANIFEST"' EXIT
+trap 'rm -f "$DEPLOY_MANIFEST" "$MMV_MANIFEST"' EXIT
 : "${WF_RELEASE_IDS:?必须提供全部部署目标的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" > "$MMV_MANIFEST"
-node "$D/deployment-preflight.mjs" "$DEPLOY_MANIFEST"
+node "$D/deployment-targets.mjs" "$WF_DEPLOY_PLAN_FILE" "$(git rev-parse HEAD)"
 # Reject incomplete/legacy input sources before any remote mutation. The paired revision
 # protects only deployments using this script; older deployment writers must adopt it too.
 python3 "$D/input-runtime-release.py" source-info "$D/douyin-phone-adb" "$D/text-input-focus.py" >/dev/null
+
+commander_admission
+[[ "$FAILED" == 0 ]] || exit 1
+
+if [[ "${1:-}" == "--commander-only" ]]; then
+  deploy_commander
+  [[ "$FAILED" == 0 ]] || exit 1
+  node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
+  ssh mmv "rm -f ~/.openclaw/commander/.deploying"
+  echo "✅ Commander与既有本机视图已绑定同一正式release/ACK"
+  exit 0
+fi
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -454,13 +521,7 @@ if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
   exit 1
 fi
-# MMV服务目录实读同SHA完整包，再采独立runner真实hostname并绑定MMV正式release。
-ssh mmv "cd ~/.openclaw/leadgen-scripts && node deployment-manifest.mjs collect . -" < "$MMV_MANIFEST" > "$MMV_OBSERVED_MANIFEST"
-node "$D/deployment-release.mjs" mmv "$MMV_MANIFEST" > "$MMV_OBSERVED_MANIFEST"
-push_atomic "$MMV_OBSERVED_MANIFEST" mmv "~/.openclaw/leadgen-scripts" deployment-manifest.json
-push_atomic "$MMV_OBSERVED_MANIFEST" mmv "~/bin-harvest" deployment-manifest.json
-for host in xian-m4; do
-  node "$D/deployment-release.mjs" "$host" "$DEPLOY_MANIFEST" > "$OBSERVED_MANIFEST"
-  push_atomic "$OBSERVED_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json
-done
-echo "✅ 全部同步完成(mmv + xian-m4,控制器覆盖两个执行路径),每个文件都过了语法检查。"
+# 完整安装实读后：先xian ACK，后唯一MMV聚合ACK；旧本机视图不含远端files。
+node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
+ssh mmv "rm -f ~/.openclaw/commander/.deploying"
+echo "✅ 同一目标完整release已部署，旧运行包与Commander共享正式观测。"

@@ -172,7 +172,15 @@ test('四手机只在M4：全部device部署循环仅M4，MMV评分仍正式发�
  const {DEPLOY_HOSTS}=await implementation();assert.deepEqual(DEPLOY_HOSTS,['xian-m4','mmv']);
  const deploy=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
  const loops=[...deploy.matchAll(/^for host in ([^;]+); do$/gm)].map(m=>m[1]);
- assert.ok(loops.length>=3,'设备脚本、控制器及manifest发布必须有真实循环');
+ assert.ok(loops.length>=2,'设备脚本与控制器必须有真实循环');
  assert.deepEqual(loops,Array(loops.length).fill('xian-m4'));
- assert.match(deploy,/node "\$D\/deployment-release\.mjs" mmv/);
+ assert.match(deploy,/node "\$D\/deployment-unified-observe\.mjs"/);
+});
+
+test('手机部署固定zenithjoy scope，snapshot或report冒用commander均拒绝',async()=>{
+ const {validateDeploymentEvidence}=await implementation();
+ for(const [field,error] of [['snapshot',/快照来源/],['report',/CI来源/]]){
+  const f=fixture();f.bundle[field].scope='commander-generic';
+  assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,()=>bytes),error);
+ }
 });

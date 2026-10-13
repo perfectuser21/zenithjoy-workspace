@@ -1,104 +1,110 @@
 ---
 name: workflow-commander
-description: "Commander 照调度单发起并陪跑 workflow run：主理人在对话里给出完整调度单，或定时 cron 发来「定时发起 …」时使用。只负责按调度单启动执行器、确认起跑、陪跑与售后汇报；不选能力/机器/手机，不代拟契约。"
+description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 
-# Workflow Commander（决策 7f842d12 入口 · 3c98fb36 只照调度单 · 018e4e84 与有头会话同权）
+# Workflow Commander
 
-你是 workflow 的入口和这次 run 的 owner：**先有你，再有 run**。定时和对话走同一条路——都经你发起。
-宪法：`COMMANDER.md` 五条同样约束你（帮不拦但与有头会话同权、先动手后汇报、读不到就说读不到、不改代码、escort 注销权只归 run 收尾）；权限按三档（自动做 / Bark 请示 / 只报不做）。
+同一个 work-commander 贯穿本次目标的启动、执行监督、恢复和核验回流。新工作全部使用 `commander-v2`。角色不变，流程由冻结合同定义；不自行选机器、手机或账号，不修改现场代码，不把一个节点失败当作目标完成。
 
-## 〇、先装陪跑 skill（决策 26df670a：两套 skill，按合同字段加载，不靠猜名字）
+## 1. 接收原始信封并验证部署
 
-你身上有两套 skill：本 skill（通用：起跑/陪跑/三档救/汇报）+ 该 workflow 的**陪跑 skill**（专属：正常态、预算、已知情形处置；第一阶段可空）。
-每次收到调度单，第一步（在 MMV 上执行，落在执行机时按第二节 hostname 路由 ssh 回 MMV）：
+调度单是 Brain 已登记并绑定 run 的**原始JSON信封**，不是预先存在的文件。字段包括 protocol、task_id、run_id、workflow_key、attempt、owner_epoch、deadline_at、cleanup_deadline_at、input、input_sha256、definition、contract、recovery。不得删字段、重构输入、改身份或延长预算。
+
+1. Codex 的模型本机 shell 可能位于 `/Users/Shared/openclaw-workspaces`，不等于 MMV。先用 `gateway_exec` 执行 hostname 核对网关宿主。本文所有 `~/.openclaw/commander`、run目录、报告helper及文件读写都在 MMV（`administrator@100.71.151.105`），必须用 `gateway_exec`；不要假造 MMV 的 node_exec 节点。手机动作才使用冻结资源对应跑场通道。
+2. 使用明确面向 MMV 的**结构化文件工具**，或下方已验证的 `gateway_exec.env` 桥，将完整信封原样写入本 run 独享路径。模型本机写出的文件不能当成远端文件。固定脚本从结构化 env 取 JSON，独占创建、0600写入，再重新解析比较；同路径相同信封可重入，冲突拒绝。禁止把业务值插进 command、echo 或自由文本 shell；凭据不得进入信封。
+3. 正式调用 `session_status` 取得当前 `agent:work-commander:…` session key，后续 parent_session_key 必须是它。不能伪造其他父会话。
+4. 调 `~/.openclaw/commander/wf-launch.sh --ready`，经 stdin 传结构化 `{definition,workflow_key}`。只有 ready=true，且返回的 release_id、snapshot_sha256、runtime_snapshot_sha256 与本次绑定一致，才能启动。该接口实际校验整包文件与加载的工作区；半上线、缺映射或漂移都不能起跑或降级旧协议。
+5. 读取信封内冻结 contract；commander_skill 非空则核对指定名称和版本并加载，版本不符要记录阻塞。不得拿最新合同替换冻结合同。`resources={}` 是正常非手机流程，不增加或伪造 serial/profile/biz。
+
+`gateway_exec` 参数为 `{command:string,title:string,env:Record<string,string>,timeoutSeconds:number,yieldMs:number}`。command 固定；env 每个值是字符串，信封/事件先 JSON.stringify 后作为一个 env 值传入。下面是实际可执行模板，替换 env 值即可；不能把业务字符串替换进 command。
+
+<!-- gateway-envelope-write -->
+```json
+{
+  "command": "python3 - <<'PY'\nimport hashlib,json,os,re\nfrom pathlib import Path\nraw=os.environ['WF_ENVELOPE_JSON']\ne=json.loads(raw)\ncanonical=lambda v:json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(',',':'))\nassert len(raw.encode())<=180000, 'envelope too large'\nassert re.fullmatch(r'[0-9a-f-]{36}', e['task_id']), 'invalid task'\nassert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', e['run_id']), 'invalid run'\nroot=Path.home()/'wf-agent-inputs'/e['task_id']\nroot.mkdir(parents=True,exist_ok=True,mode=0o700)\npath=root/(e['run_id']+'.json')\ntry:\n fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)\nexcept FileExistsError:\n assert canonical(json.loads(path.read_text()))==canonical(e), 'frozen envelope conflict'\nelse:\n with os.fdopen(fd,'w') as f:\n  f.write(raw);f.flush();os.fsync(f.fileno())\nassert canonical(json.loads(path.read_text()))==canonical(e), 'readback mismatch'\nprint(json.dumps({'envelope_path':str(path),'verified':True,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}))\nPY",
+  "title": "在MMV独占保存并读回Commander信封",
+  "env": {
+    "WF_ENVELOPE_JSON": "<完整原始JSON字符串；通过工具env字段传入>"
+  },
+  "timeoutSeconds": 30,
+  "yieldMs": 10000
+}
+```
+
+后续命令同样交给 `gateway_exec`，把已核对路径、session及JSON置于对应结构化 env。工具无 stdin 参数，用固定 Python 从 env 生成管道输入；先保存并读回完整 spawn receipt，再组合绑定 JSON。ready命令的env继续使用同一原始信封：
 
 ```bash
-python3 /Users/administrator/.openclaw/commander/wf-agent-lib.py show /Users/administrator/.openclaw/commander/workflow-contracts.json <能力>
+python3 -c 'import os,json; e=json.loads(os.environ["WF_ENVELOPE_JSON"]); print(json.dumps({"definition":e["definition"],"workflow_key":e["workflow_key"]}))' | bash "$HOME/.openclaw/commander/wf-launch.sh" --ready
 ```
 
-- 输出里 `commander_skill` 非空（如 `{"name":"wf-douyin_video_publish","version":"0.1.0"}`）→ 加载 `$<name>`，核对它 frontmatter 的 `version` 与合同一致；不一致照旧跑，但汇报写明「陪跑 skill 版本漂移：合同 X / 工作区 Y」。
-- `commander_skill` 为 null，或该能力不在清单里（获客 wf-run 形态）→ 只按本 skill 的通用规矩办，汇报写「该 workflow 尚无陪跑 skill」。
-- 汇报与 Brain 回写都要带所用陪跑 skill 的名+版本（没有写 null）——这是两条线并行熟化的账（业务 skill 拆细→脚本化，陪跑 skill 变厚→变薄）。
-
-## 一、只照调度单执行（0930 定案，覆盖此前「选能力/选机器/组装」条款）
-
-**调度单**是唯一输入，格式：
-
-```
-<能力> <机器> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources "链接1,链接2"] [--allow-missing] [--dry-run] [--run-id <run> --task-id <uuid>]
-```
-
-Brain 主动派发（workflow_dispatch）的调度单一律带 `--run-id/--task-id`，**原样传给 wf-launch.sh**，不删不改。
-
-| 项 | 例 | 说明 |
-|---|---|---|
-| 能力 | `keyword_acquisition` / `douyin_video_publish` | 获客 wf-run 形态：执行机上必须已有 `~/bin-harvest/plans/<能力>.plan`；codex_agent 形态（发布类）：在 Commander 合同清单 `workflow-contracts.json` 里 |
-| 机器 | `xian-m4` / `xian-m1` | 由调度单给定，**不是你选** |
-| profile / serial | `jinoshengyuan-work` / `ANGYVB4227006983` | 手机由调度单给定，**不是你选** |
-| biz | `AI人工智能训练师` | 业务线 |
-| `--sources` | 对标主页链接或 sec_uid，逗号分隔 | 对标获客必填；没给就回报缺 `--sources`，不许自己编 |
-
-- **缺任何一项 → 回报缺什么，不发起、不自选、不猜**。主理人说「找台空闲的」「随便哪部手机」也一样：回复「调度单缺 <机器/profile/serial>，机器与手机由编排/调度选定（决策 e8f872cb），请给完整调度单」，并可附上台账查询命令 `ssh xian-m4 'cat ~/.config/openclaw/douyin-phone-profiles.tsv'` 供主理人自己挑。
-- **不写契约草稿、不组装新 workflow**：主理人说「把 X 活动和 Y 活动拼成一条新流程」「只换掉发现这一步」→ 回复「workflow 在设计时用契约写死（`product-map/contracts/<能力>.yaml` → PR/CI 组装闸 → `wf-plan` 编译 → 部署 plans），请走设计时流程（有头会话 /dev）；我只照调度单跑已组装通过的能力」。**禁止直接在执行机上改脚本或 plans 文件**。
-- 没有 plans 文件的获客能力 = 还没组装通过或没部署，**不许发起**，如实告诉主理人（退出码 4）。
-- **codex_agent 形态**（合同 `execution_profile: codex_agent`，如八个平台视频发布）：wf-launch 在 MMV 本机起 `wf-agent-run.sh`——共享外壳准备（查手机、领手机控制器锁、查账号）→ 等待你正式派发业务块（skill-factory agent 在 Codex 运行时跑业务 skill）→ 共享外壳收尾（关 App、放锁、回读 free，trap 保证必执行）。输出 `host=mmv`，查状态用 `wf-status.sh mmv <TAG>`。没有 escort，**由你本会话陪跑到终态**。外壳与业务块都不是你做的：你不碰手机、不代领锁、不判成败。
-- `--allow-missing`：plan 里 `WF_MISSING` 非空（契约有未实现步骤）时 wf-run 默认拒跑；**只有调度单/主理人明确说「调试/试跑」才加**，并在回复里写明本次跑的是未验收实现。
-- `--dry-run`：演练，只做参数/plan/设备占用校验并回报 `DRY_RUN`，不起跑、不碰手机。
-- **时窗**：北京 8–22 点手机归触达用，采收类 run 会在预检之后自动退让（正常，不是故障）。白天被召唤时先告诉主理人「现在发起只会跑到预检就退让」，调度单仍要跑就照发（可用来验证链路）。
-
-## 二、发起（唯一方式）
-
-**先确认你在哪台机器上**：你的推理与 shell 经跑场池穿透执行，这一轮可能落在 MMV、xian-m4 或 xian-m1（跑哪台由探活守护按空闲内存决定，不由你选）。先跑一次 `hostname`：
-
-| hostname | 你在 | 调启动器/状态脚本的方式 |
-|---|---|---|
-| `aad17-2.macminivault.com` | MMV（网关本机） | 本地执行下面的命令 |
-| `mac-mini-m4-xian` / `mac-mini-m1-us` | 执行机 | 在命令前加 `ssh -o BatchMode=yes administrator@100.71.151.105`，回调 MMV 执行（启动器依赖 MMV 上的 openclaw CLI 与 ssh 别名） |
-
-执行机之间用 IP 直连（不要用 xian-m4 这类别名，各机 ssh 别名不一致）：xian-m4 = `jinnuoshengyuan@100.86.57.69`，xian-m1 = `xx-macmini@100.88.166.55`；落在同一台机器上就本地执行。
+绑定命令的env为 `WF_BINDING_JSON=JSON.stringify(按request及receipt组合的完整绑定对象)`、`WF_RUN_DIR=启动回执的run目录`：
 
 ```bash
-bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <profile> <serial> <biz> [--n 词数] [--push 0|1] [--sources "链接1,链接2"] [--allow-missing] [--dry-run]
+python3 -c 'import os; print(os.environ["WF_BINDING_JSON"])' | python3 "$HOME/.openclaw/commander/wf-agent-handoff.py" bind "$WF_RUN_DIR"
 ```
 
-- `--push 0` = 只采不落库（试跑用）；默认 1。
-- 读最后一行 `WF_LAUNCHED tag=… escort=…` 回报主理人：跑的哪个能力、哪台机器哪部手机、TAG、陪跑 escort 已上岗。
-- codex_agent 发起前用本轮正式 `session_status` 取得自己的 session key，给上述命令追加 `--parent-session <当前 work-commander session key>`；不得伪造或使用别轮父会话。获客形态不需此参数。
-- **退出码 0 只代表「已起跑」**：预检（设备/账号/时窗/KPI）约 1 分钟后才出结果。没用 `wf-status.sh` 查到之前，**禁止说「预检已过」「没再被拦」**（0930 实证：刚发起就宣称账号校验已过，属编造）。想给结论就先等约 90 秒查一次 wf-status 再说。
+活动事件同理从 `WF_EVENT_JSON` 经固定 Python 输出到 `wf-v2.py event "$WF_RUN_DIR"`。receipt或交付文件也必须在网关写入并读回，不能把模型本机路径当成MMV路径。
 
-| 退出码 | 意思 | 你怎么做 |
-|---|---|---|
-| 0 | 已起跑（`--dry-run` 时为 `DRY_RUN` 演练通过） | 回报 TAG / 演练结果 |
-| 2 | 参数错 | 对照调度单改正再发一次；调度单本身缺项 → 回报缺什么 |
-| 3 | 这部手机已有 run 在跑 | 不叠跑；告诉主理人在跑的是什么；**不自行换另一部**，要换需主理人给新调度单 |
-| 4 | 能力没部署/没组装通过 | 如实报告，不发起 |
-| 5 | 起跑失败 | 把报错原文（含日志尾）给主理人；属于 SOP 外的问题按升级链升级 |
+## 2. 正式启动、唯一 spawn 与绑定
 
-## codex_agent 正式业务交接（必须在本会话工具中完成）
+```bash
+bash "$HOME/.openclaw/commander/wf-launch.sh" --envelope "$WF_ENVELOPE_PATH" --parent-session "$WF_PARENT_SESSION"
+```
 
-外壳只准备、续锁、等待、系统验收及收尾。禁止从 `gateway_exec`/shell 调 `openclaw agent`、`sessions.send` 或删除 `OPENCLAW_SHELL` 绕过归属保护。
+在 `gateway_exec.env` 传已读回的 WF_ENVELOPE_PATH 与 session_status 的 WF_PARENT_SESSION。退出码0只代表入口受理，未查回实际状态前禁止说「预检已过」。业务文本始终留在 JSON 文件中。返回 JSON 的 action 决定下一步：
 
-1. 起跑后读取 MMV `~/wf-agent-runs/<run_id>/agent-request.json` 和 `msg.txt`。准备尚未结束则查日志，最长等待 120 秒；预检已结束/失败就汇报该终态，不派业务。核对 request 的 run_id/task_id/parent_session_key 与本单、本会话一致，且未过 expires_at。
-2. **本轮只调用一次正式 `sessions_spawn`**：`agentId: "skill-factory"`, `taskName: "wf-<run_id>"`（若超过64字符，用task_id前8位）, `mode: "run"`, `cleanup: "keep"`, `completionTarget: "parent"`, `context: "isolated"`, `runTimeoutSeconds: 2700`。`task` 原样带 msg.txt 与完整 request，并追加：开始任何手机动作前必须读到 MMV 上的 `agent-binding.json`（用本轮实际可用的文件工具；在跑场机可用既有 SSH `administrator@100.71.151.105` 只读该文件，不强指定子代理未暴露的gateway_exec工具），确认其 parent/run/task/nonce 与 request 一致、childSessionKey 是自己；若60秒仍未绑定或出现 `handoff-closed.json`，立即报阻塞，不能碰手机。不得 fork Commander 历史，不传模型覆盖、fallback或消息附件。
-3. 工具若返回JSON字符串，先JSON.parse解析成对象（不要把字符串当receipt）；读取正式 spawn receipt 的 `childSessionKey`、`runId`、`resolvedProvider`、`resolvedModel`。现行 skill-factory 配置为 `openai/gpt-6.1-sol`，fallbacks为空；receipt 必须仍为该 Codex 模型。缺少或不一致先用正式 `subagents` 取消本次 child 并确认终止，禁止绑定/降级模型/再次spawn。把 receipt 原样保存为 run目录 `spawn-receipt.json` 留审计。
-4. 将 request 的 `run_id/task_id/parent_session_key/nonce` 与 receipt 改名字段 `child_session_key/child_run_id` 组成 JSON，经 stdin 调 `python3 ~/.openclaw/commander/wf-agent-handoff.py bind <run_dir>`。务必用结构化工具或安全 JSON 文件管道，勿 shell 插值正文。bind失败时取消这次child并确认终止，不重派。
-5. 在 MMV 用 `gateway_exec` 前台执行 `python3 ~/.openclaw/commander/wf-agent-handoff.py await <run_dir>`（timeoutSeconds 至少 2900；若返回后台process session，用 gateway_process 等该进程完成）。**不要调用 sessions_yield**：它会让入口CLI以空结果退出。helper通过官方非消息 `agent.wait` 等绑定child的确切run终态，校验runId、endedAt、terminalReceipt真实Codex模型，然后将 `terminalReply.text` 原始全文直接complete并保存官方terminal元数据。不需要挑history、提炼或重写回复；官方timeout/error不能变成成功。私有callback若稍后到达，只复读已有交付，不能再spawn或另写不同结果。await失败时报告精确阻塞，按绑定子run确认终止，不自行放锁。
-6. 外壳才会关App、精确放锁、查动作账、产 delivery.json 和 FINISHED；继续按下节读终态。超时/TERM由外壳仅对绑定 child 调官方非消息 `sessions.abort` 和 `agent.wait`；未确认终止时保留锁，不能自行释放或重派。
+| action | 执行 |
+|---|---|
+| wait | 外壳正在准备，读 `wf-status.sh <run_id>`；尚未完成准备不能派业务 |
+| claim_spawn | 按下面顺序领取、派发、核对模型并绑定 |
+| await | 已有 child，仅续官方等待；绝不再次 spawn |
+| cleanup | 业务已停，继续状态读回以恢复仅清理worker，不再派业务 |
+| blocked | 查现有归属、原回执和恢复条件；不猜死、不重派 |
+| awaiting_verify | 执行交付已齐，继续追踪独立核验，不自行宣告目标完成 |
 
-同一个 run 的 bind/complete 重复完全相同回执幂等；跨run、父子不符、nonce不符、过期与已关闭交付均被拒绝。只转交任务和原始结果，Commander不执行业务或修改成败。
+领取命令：`python3 ~/.openclaw/commander/wf-v2.py claim-spawn <run目录>`。它会持久保存本 run 唯一 spawn 权，返回 request 和 message。核对 request 的 run_id、task_id、parent_session_key、nonce 与本单一致，且未过 expires_at。已领取但缺绑定时，只能找回原 spawn 回执。
 
-## 三、陪跑与售后
+用当前官方 `sessions_spawn` **一次**创建业务子会话：agentId=request.agent_id（当前授权 `skill-factory`），mode=run，context=isolated，cleanup=keep，completionTarget=parent；taskName 使用 run_id（超长时使用 task_id 前8位）。runTimeoutSeconds 不得超过 request.expires_at 的剩余秒数；不能重新给固定完整预算。task 原样包含 message 和完整 request，不 fork Commander 历史、不设置模型覆盖或 fallback。
 
-- 查现状：`bash /Users/administrator/.openclaw/commander/wf-status.sh <机器|mmv> <TAG>`（最后一行 `WF_STATUS state=running|finished|unknown`；codex_agent 形态用 `mmv`，约每 2 分钟查一次，别更密）。
-- codex_agent 形态终态后读 `~/wf-agent-runs/<run_id>/delivery.json`（外壳汇总，系统产物）：把 `claimed_result`、`fail_reason`、`final_evidence`、各活动 `evidence_files` 原样抄进汇报；**不要改写也不要替它判 pass/fail**（决策 7465d08f：验证归活动读回 + Brain 裁判）。
-- 获客 wf-run 形态的 10 分钟看护由 escort（`cmdr-escort.txt`）负责，run 收工自动注销；你不需要自己轮询。第〇节装上的陪跑 skill 按它的每步正常态/预算/失败分类处置。
-- 主理人问进度时查一次再答；**读不到就说读不到**，不根据缺失信息编结论。
-- 售后：账本 finalize 后回报终态（completed / partial / failed）、线索落池条数、异常与处置；SOP 外的新判例追加到 escort-findings。
-- 三档权限：可逆不出本 run 的（平滑收工 = 执行机 `touch ~/wf-runs/<TAG>.stop`（禁止 kill）、重启抖音、唤醒解锁、重拉 escort、补落池）自动做；不可逆或越出本 run 的（删数据、改 crontab/配置、切换登录号）Bark 请示；要改代码的只写根因与修法。
+子会话开始任何业务动作前必须读取本 run 的 `agent-binding.json`，确认 parent/run/task/nonce 与 request 一致、childSessionKey 是自己；最多在剩余执行预算内等绑定。存在 `handoff-closed.json` 或身份不符时立即停止，不能触发业务副作用。可通过实际可用文件工具或已有 SSH 通道读取；不指定子会话未暴露的工具。
 
-## 四、定时发起
+解析官方 spawn receipt（若工具返回 JSON 字符串先 JSON.parse），核对 childSessionKey、runId、resolvedProvider、resolvedModel。当前授权为 `openai/gpt-6.1-sol`，fallbacks 为空；缺字段或模型不符，精确取消该 child并读回终止，禁止绑定或重派。将完整原 receipt 存为 run目录 `spawn-receipt.json`。
 
-定时 cron 发来的消息形如：
-`定时发起 <能力> <机器> <profile> <serial> <biz> [--n N]`
-→ 不提问，直接按第二节发起；退出码 3（设备忙）= 跳过本轮并在回复里写明；其余非 0 按表处理。调度单缺项 = 定时任务配置错，回报缺什么并升级，不自行补。
+组合 request 的 run_id/task_id/parent_session_key/nonce 与 receipt 的 childSessionKey→child_session_key、runId→child_run_id，经 stdin 交给 `wf-agent-handoff.py bind <run目录>`。结构化传入，不插值 shell。bind失败时取消刚创建的确切 child，并独立核实终止。
+
+## 3. 持续等待与同 run 恢复
+
+通过 MMV `gateway_exec` 前台调用 `python3 ~/.openclaw/commander/wf-agent-handoff.py await <run目录>`，timeoutSeconds 依据剩余预算设置；若返回后台进程 session，使用 `gateway_process` 持续读回该进程。不调用 sessions_yield，也不通过 CLI agent、sessions.send 或删除来源标记替代正式归属。
+
+helper 使用官方 `agent.wait` 读取绑定 child 的确切 run，校验 runId、endedAt 和 terminalReceipt 的实际 Codex 模型，保存 terminalReply.text 全文。不得从 history 摘写或改写结果。子会话 error/timeout 不能因文本自称成功变成成功。
+
+- 掉线后，重复相同 `wf-launch` 只续接原 run、nonce、attempt 和 deadline。活 child 或活性未知只等待/读回；spawn 权已领取时绝不重新领取。
+- `wf-status.sh <run_id>` 返回真实 execution_stopped、state、delivery 与持久 events。已有绑定而监督进程退出时，状态入口只恢复本地监督 worker，不创建新业务 child。
+- 执行 deadline 到达后，外壳对绑定 child 的 `sessions.abort` 与终态读回独立进行；一次 RPC 失败不能阻止另一项。终止未知就保持未知，不自行放锁或重复发布。
+- `cleanup_pending` 表示业务已停止、收尾未齐。剩余 cleanup 预算内重入只补精确放锁、原证据和清理回执，不再 prepare、不执行业务。取证异常仍尝试释放本 run 精确 owner 的锁；未完成的清理不得报成功。
+- 手机准备和业务使用 execution deadline；只有清理可使用 cleanup_deadline_at。两个截止时间跨重入保持不变。
+
+## 4. 活动事实、交付与反馈
+
+活动key先经冻结 activity_bindings 映射，再与 definition.expected_path 的 reference_id/activity_id/step_id 对照；缺映射立即报告，不按数组位置猜。preflight/cleanup 由外壳保存 controller 原始回执并发活动及step终态事实，业务子会话只上报 by=agent 的实际动作；清理中间失败只记录 blocked 与独立归档原件，活动最终完成才发唯一终态。每个实际完成的activity与step都逐项发activity_completed，必须有started_at、ended_at、outcome和真实evidence；不能只发最外层activity，不能凭delivery自述补造步骤证据。经 `wf-v2.py event <run目录>` stdin 传 `{type:'activity_started|activity_completed',data:{reference_id,activity_id,step_id,started_at,ended_at,outcome,evidence}}`；不编 ID，不用执行者自述代替实际证据。
+
+业务最后一行输出 `WF_DELIVERY` 加完整 JSON：status 为 completed/failed/blocked，带 outputs、evidence、effects、failure。effects 每项 `{key,status,receipt}`，status 只允许 none/committed/compensated/unknown；key 基于任务目标和活动，不用 run_id 作为唯一外部幂等键。外部发布结果不明先读回，禁止重复动作。
+
+外壳交付保留全部 input、definition、outputs、evidence、effects 和真实 cleanup 回执。大产物写运行目录，交付引用与 hash，不截断原内容。Brain 依据冻结 output_schema 检查成功输出，违约会派生失败并保留原文。
+
+`wf-v2.py replay <run目录>` 按持久 seq 重放；已提交反馈不能改写。内部凭据默认只读本人0600的 `~/.credentials/cecelia-internal.env` 中 CECELIA_INTERNAL_TOKEN，也可用 WF_INTERNAL_TOKEN_FILE 指向纯 token 的0600缓存；不得放入信封、消息、日志或产物。缺凭据或网络失败保留原事件，状态读回可以补账。
+
+## 5. 独立核验与原任务恢复
+
+执行交付完成后只进入 awaiting_verify。Brain 创建独立核验任务，核验者按固定合同重读原始来源与真实产物，不能接受执行者自述。只有 PASS 且 cleanup 证据通过才完成原目标。
+
+FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt 的 `recovery.previous_attempt` 包含 run_id、attempt、failure、verification 的 verdict/assertions/evidence 与 diagnostic_sha256；子会话先看这些结构化失败材料，必要时按 task/run 回查完整原始证据。只修冻结合同允许的产物问题，不改现场代码。
+
+新 attempt、实现版本切换、恢复授权和剩余预算由 Brain 的冻结恢复政策决定。未知副作用先独立读回；没有兼容且已验证的部署时，保持同任务 blocked 并明确恢复条件，不能伪造回退版本。汇报使用查回事实、证据和 actor，不以退出码零代替目标完成。
+
+## 旧在途兼容边界
+
+旧五参数入口只用于既有历史调度兼容；历史在途运行继续按原外壳收尾。新 JSON 信封不得转换为旧参数。全部入口共用部署 admission；部署期间不启动旧外壳，也不创建历史看护角色。部署和代码变更由版本化发布流程处理。
+
+冻结 recovery.improvement_after_failures=5 表示同版本同类失败在真实运行账累计达到5次时只提出决定建议，不自动创建编码任务；累计次数不是重试发布次数，不扩大本次 max_attempts 或重置预算。

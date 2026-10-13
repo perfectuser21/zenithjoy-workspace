@@ -17,6 +17,16 @@
 # 退出码: 0 已起跑 / 2 参数错 / 3 设备忙(已有 run 在跑) / 4 能力未部署到执行机 / 5 起跑失败
 set -uo pipefail
 
+if [[ "${1:-}" == "--ready" || "${1:-}" == "--envelope" ]]; then
+  exec python3 "$(cd "$(dirname "$0")" && pwd)/wf-v2.py" launch "$@"
+fi
+
+# 旧入口同样持部署admission锁；必须保留到当前外壳收尾。
+ADMISSION_HERE="$(cd "$(dirname "$0")" && pwd)"
+if ! python3 "$ADMISSION_HERE/wf-v2-io.py" admitted "${WF_LEGACY_ADMISSION_FD:-}" 2>/dev/null; then
+  exec python3 "$ADMISSION_HERE/wf-v2-io.py" legacy "$0" "$@"
+fi
+
 OPENCLAW="${OPENCLAW:-openclaw}"
 SSH_OPTS=(-o ConnectTimeout=20 -o BatchMode=yes)
 # 陪跑不投递飞书（决策 c7ff6e02）：运行记录进 Brain runs → Notion「最近执行」
@@ -80,13 +90,15 @@ if [[ "$EXEC_PROFILE" == codex_agent ]]; then
   # 外壳必须拥有独立 session/进程组，才能继续执行业务和自己的 trap 收尾。
   python3 - "$HOME/wf-logs/$TAG.out" "$AGENT_RUNNER" "$CAP" "$HOST" "$PROFILE" "$SERIAL" "$BIZ" --tag "$TAG" --run-id "$RUN_ID" --task-id "$TASK_ID" --parent-session "$PARENT_SESSION" <<'PY' \
     || die 5 "MMV 独立会话外壳启动失败"
+import os
 import subprocess
 import sys
 
 with open(sys.argv[1], "wb") as log:
     subprocess.Popen(["bash", *sys.argv[2:]], stdin=subprocess.DEVNULL,
                      stdout=log, stderr=subprocess.STDOUT,
-                     start_new_session=True, close_fds=True)
+                     start_new_session=True, close_fds=True,
+                     pass_fds=(int(os.environ['WF_LEGACY_ADMISSION_FD']),))
 PY
   sleep "$START_WAIT"
   grep -q WF_RUN_STARTED "$HOME/wf-logs/$TAG.out" 2>/dev/null \

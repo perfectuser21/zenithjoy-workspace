@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "toutiao_video_publish",
   "brain_workflow_key": "toutiao_video_publish.android",
-  "contract_sha256": "f1dfaf97a101c1cb5844c7f744248e6e2c07df54c979bc523f908e403d6dbdb8",
+  "contract_sha256": "8d9d28be9087b8405ef8b7f2b2aee56172c2e469f69754f9d0f4e1b3fd92497e",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -14,7 +14,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*preflight*original.json",
+        "glob": "shell-evidence/preflight/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1
@@ -90,7 +90,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "*cleanup*original.json",
+        "glob": "shell-evidence/cleanup/*/attempt.json",
         "expect": {
           "op": ">=",
           "value": 1
