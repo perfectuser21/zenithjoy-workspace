@@ -4675,8 +4675,10 @@ agent_suite:
     path: sprints/06282255-line02-company-profile-collect/tests/company-profile-and-line02.test.ts
     type: integration
     ci: L3
-    status: active
+    status: deprecated
+    superseded_by: [company-profile-config, company-profile-scratch, line02-account-status-regression]
     product: 智能获客
+    deprecation_reason: "旧公司合同允许不受信租户头、空白成功和无CAS写入；被认证租户与版本安全合同取代，原文不改，Line02账号断言已永久迁移"
     note: "Sprint 合约验收测试：GET/PUT company-profile + GET account-status + collect/start 主账号检查 + collect/:task_id 6字段 + terminal→stage_1_done（PR #949）。"
 
   - id: api-route-company-profile-unit
@@ -4685,7 +4687,7 @@ agent_suite:
     ci: L3
     status: active
     product: 智能获客
-    note: "路由存在性检查：GET 200 + PUT 无 company_name 返 400（test-pairing 配套 company-profile.ts，PR #949）。"
+    note: "认证公司路由缺租户GET/PUT均拒绝，安全合同取代旧空白成功（test-pairing 配套 company-profile.ts，PR #949）。"
 
   - id: api-route-line02-unit
     path: apps/api/src/routes/line02.test.ts
@@ -7397,3 +7399,27 @@ agent_suite:
   status: active
   product: AI员工
   note: "安装前核验真实PG配置schema，空配置不报业务绿"
+
+- id: company-profile-validation
+  path: apps/api/src/routes/company-profile-validation.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司种子导入与API启用校验跨模块合同；原跨Base目标保留、禁止新借用与账号自证核验"
+
+- id: line02-account-status-regression
+  path: apps/api/src/routes/line02-account-status-regression.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 智能获客
+  note: "原0628不可变合同中有效的Line02账号状态验收永久迁移；响应形状、账号映射及无租户行为保留"
+
+- id: structured-workbench-startup-diagnostics
+  path: .github/workflows/scripts/__tests__/structured-workbench-startup-diagnostics.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实fail/start_api错误路径在fixture stdout重定向后仍保留stderr；不修改健康判据和40秒预算"

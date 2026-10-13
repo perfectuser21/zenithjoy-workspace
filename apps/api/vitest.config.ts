@@ -34,7 +34,9 @@ export default defineConfig({
       // 注：fr1-fr5 是 supertest 集成测试，需要真实 DB，由 test:sprint script 单独跑，不进 L3 CI
       // '../../sprints/07212317-android-signal-reporting/tests/**/*.test.ts',
     ],
-    exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
+    // 0628公司旧合同保留原文供历史审阅；认证租户/CAS安全合同已取代其空白200与无版本写入。
+    // company-profile-config、company-profile-scratch及line02-account-status-regression接替全部有效验收。
+    exclude: ['../../sprints/06282255-line02-company-profile-collect/tests/company-profile-and-line02.test.ts', 'node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

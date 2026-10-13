@@ -9,22 +9,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import pool from '../../../apps/api/src/db/connection';
 
 const TEST_TENANT = '2ac0aa4a-99f4-470a-aed7-c3a9fe03149b';
 const OTHER_TENANT = '00000000-0000-0000-0000-000000000001';
 
 vi.mock('../../../apps/api/src/db/connection', () => ({
   default: {
-    query: vi.fn().mockImplementation(async (sql: string, args: any[]) => ({ rows: sql.includes('tenant_company_profiles') && args?.[0] === TEST_TENANT ? [{ company_id:'company-a',tenant_id:TEST_TENANT, company_name:'甲公司', config_version:1, config_status:'draft', config_owner:'', runtime_config:{},wiki:{},source_evidence:[] }] : [], rowCount:1 })),
-    connect: vi.fn(),
+    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
   },
 }));
 
 vi.mock('../../../apps/api/src/middleware/tenant-context', () => ({
-  tenantContext: (req: any, _res: any, next: any) => {
-    req.tenantId = req.headers['x-test-tenant-id']; req.tenantRole='owner'; req.feishuUserId='actor'; next();
-  },
   tenantContextOptional: (req: any, _res: any, next: any) => {
     const t = req.headers['x-tenant-id'] || req.headers['x-test-tenant-id'] || '';
     if (typeof t === 'string' && t.length > 0) req.tenantId = t;
@@ -32,7 +27,6 @@ vi.mock('../../../apps/api/src/middleware/tenant-context', () => ({
   },
 }));
 
-beforeEach(() => { vi.mocked(pool.connect).mockResolvedValue({query:pool.query,release:vi.fn()} as any); });
 async function buildApp() {
   const app = express();
   app.use(express.json());
@@ -64,26 +58,27 @@ describe('GET /api/company-profile', () => {
     const app = await buildApp();
     const res = await request(app)
       .get('/api/company-profile')
-      .set('x-test-tenant-id', TEST_TENANT);
+      .set('X-Tenant-Id', TEST_TENANT);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(typeof res.body.data.company_name).toBe('string');
   });
 
-  it('[Step1-c] 缺公司映射返回404明确错误', async () => {
+  it('[Step1-c] 首次访问（无记录）返回 200 + company_name 为空串（非 404）', async () => {
     const app = await buildApp();
     const res = await request(app)
       .get('/api/company-profile')
-      .set('x-test-tenant-id', OTHER_TENANT);
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('COMPANY_MAPPING_MISSING');
+      .set('X-Tenant-Id', OTHER_TENANT);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.company_name).toBe('');
   });
 
   it('[Step1-b] data 包含 products / qa_list 数组字段', async () => {
     const app = await buildApp();
     const res = await request(app)
       .get('/api/company-profile')
-      .set('x-test-tenant-id', TEST_TENANT);
+      .set('X-Tenant-Id', TEST_TENANT);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data.products)).toBe(true);
     expect(Array.isArray(res.body.data.qa_list)).toBe(true);
@@ -95,9 +90,8 @@ describe('PUT /api/company-profile', () => {
     const app = await buildApp();
     const res = await request(app)
       .put('/api/company-profile')
-      .set('x-test-tenant-id', TEST_TENANT)
+      .set('X-Tenant-Id', TEST_TENANT)
       .send({
-        expected_version: 1,
         company_name: 'Smoke 公司',
         city: '西安',
         industry: '餐饮',
@@ -111,14 +105,14 @@ describe('PUT /api/company-profile', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.updated).toBe(true);
-    expect(res.body.data.config_version).toBe(2);
+    expect(Object.keys(res.body.data)).toEqual(['updated']);
   });
 
   it('[Error-b] 缺 company_name 返回 400', async () => {
     const app = await buildApp();
     const res = await request(app)
       .put('/api/company-profile')
-      .set('x-test-tenant-id', TEST_TENANT)
+      .set('X-Tenant-Id', TEST_TENANT)
       .send({});
     expect(res.status).toBe(400);
   });
@@ -127,8 +121,8 @@ describe('PUT /api/company-profile', () => {
     const app = await buildApp();
     const res = await request(app)
       .put('/api/company-profile')
-      .set('x-test-tenant-id', TEST_TENANT)
-      .send({ company_name: 'X', expected_version:1 });
+      .set('X-Tenant-Id', TEST_TENANT)
+      .send({ company_name: 'X' });
     expect(res.status).toBe(200);
     expect(res.body.data.ok).toBeUndefined();
     expect(res.body.data.saved).toBeUndefined();

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
 const mocks = vi.hoisted(() => ({ query: vi.fn(), release: vi.fn(), connect: vi.fn() }));
 vi.mock('../db/connection', () => ({ default: { query: mocks.query, connect: mocks.connect } }));
 vi.mock('../middleware/tenant-context', () => ({
-  tenantContext: (req: any, _res: any, next: any) => { req.tenantId = req.headers['x-test-tenant']; req.tenantRole = req.headers['x-test-role'] || 'owner'; req.feishuUserId = 'actor'; next(); },
-  tenantContextOptional: (req: any, _res: any, next: any) => { req.tenantId = req.headers['x-tenant-id']; next(); },
+  tenantContext: (req: Request, _res: Response, next: NextFunction) => { req.tenantId = req.header('x-test-tenant'); req.tenantRole = req.header('x-test-role') || 'owner'; req.feishuUserId = 'actor'; next(); },
+  tenantContextOptional: (req: Request, _res: Response, next: NextFunction) => { req.tenantId = req.header('x-tenant-id'); next(); },
 }));
 import { companyProfileRouter } from './company-profile';
 const app = express(); app.use(express.json()); app.use('/profile', companyProfileRouter);
@@ -25,30 +25,31 @@ describe('公司Wiki统一配置租户与版本合同', () => {
   it('草稿保存递增版本并写版本快照与变更留痕', async () => { const r = await request(app).put('/profile').set('x-test-tenant','tenant-a').send({ company_name:'新甲', expected_version:2 }); expect(r.status).toBe(200); expect(r.body.data.config_version).toBe(3); expect(mocks.query.mock.calls.some(([sql])=>String(sql).includes('company_config_versions'))).toBe(true); expect(mocks.release).toHaveBeenCalled(); });
   const complete = () => ({ ...row, config_status:'confirmed', config_owner:'负责人', source_evidence:{base:'base-a',source_company_key:'a'}, wiki:{markdown:'# 甲',products:[{id:'product-a',name:'课程'}],audiences:[{id:'audience-a',name:'学员'}]}, runtime_config:{routing:{line_key:'line-a',profiles:['profile-a'],feishu_base:'base-a'},language:'zh-CN',timezone:'Asia/Shanghai',search_strategy:{keywords:[{word:'课程',enabled:true}]},video_judgment:{instructions:'判断目标画像'},comment_scoring:{criteria:{A:'高意向',B:'相关讨论',C:'画像互动',不相关:'跑题'},confidence_threshold:0.6},policy_id:'policy-a',product_ids:['product-a'],platform_accounts:[{id:'account-a',source:{base:'base-a'},fields:{手机Profile:'profile-a'}}]} });
   it.each([
-    ['空视频规则', (x:any)=>{x.runtime_config.video_judgment.instructions='';}],
-    ['缺评论档位', (x:any)=>{delete x.runtime_config.comment_scoring.criteria.C;}],
-    ['评论阈值超界', (x:any)=>{x.runtime_config.comment_scoring.confidence_threshold=2;}],
-    ['缺产品身份', (x:any)=>{delete x.wiki.products[0].id;}],
-    ['缺画像', (x:any)=>{x.wiki.audiences=[];}],
-    ['产品引用串公司', (x:any)=>{x.runtime_config.product_ids=['other-product'];}],
-    ['非法语言', (x:any)=>{x.runtime_config.language='not a locale';}],
-    ['非法时区', (x:any)=>{x.runtime_config.timezone='Nowhere/Never';}],
-    ['无效关键词', (x:any)=>{x.runtime_config.search_strategy.keywords[0].word='';}],
-    ['关键词开关不是布尔', (x:any)=>{x.runtime_config.search_strategy.keywords[0].enabled='是';}],
+    ['空视频规则', (x: ReturnType<typeof complete>)=>{x.runtime_config.video_judgment.instructions='';}],
+    ['缺评论档位', (x: ReturnType<typeof complete>)=>{delete (x.runtime_config.comment_scoring.criteria as Record<string, unknown>).C;}],
+    ['评论阈值超界', (x: ReturnType<typeof complete>)=>{x.runtime_config.comment_scoring.confidence_threshold=2;}],
+    ['缺产品身份', (x: ReturnType<typeof complete>)=>{delete (x.wiki.products[0] as Record<string, unknown>).id;}],
+    ['缺画像', (x: ReturnType<typeof complete>)=>{x.wiki.audiences=[];}],
+    ['产品引用串公司', (x: ReturnType<typeof complete>)=>{x.runtime_config.product_ids=['other-product'];}],
+    ['非法语言', (x: ReturnType<typeof complete>)=>{x.runtime_config.language='not a locale';}],
+    ['非法时区', (x: ReturnType<typeof complete>)=>{x.runtime_config.timezone='Nowhere/Never';}],
+    ['无效关键词', (x: ReturnType<typeof complete>)=>{x.runtime_config.search_strategy.keywords[0].word='';}],
+    ['关键词开关不是布尔', (x: ReturnType<typeof complete>)=>{(x.runtime_config.search_strategy.keywords[0] as {enabled:unknown}).enabled='是';}],
   ])('启用拦截%s', async (_name, mutate) => { const bad=complete(); mutate(bad); mocks.query.mockResolvedValue({rows:[bad]}); const r=await request(app).put('/profile').set('x-test-tenant','tenant-a').send({expected_version:2,config_status:'enabled'}); expect(r.status).toBe(400); expect(mocks.query.mock.calls.some(([sql])=>String(sql).startsWith('UPDATE'))).toBe(false); });
   it('完整核心结构可启用，未实证账号不冒充启用', async()=>{mocks.query.mockResolvedValue({rows:[complete()]});const r=await request(app).put('/profile').set('x-test-tenant','tenant-a').send({expected_version:2,config_status:'enabled'}); expect(r.status).toBe(200);});
   it.each([
-    ['路由串公司', (x:any)=>{x.runtime_config.routing.line_key='other-line';}],
-    ['Profile串公司', (x:any)=>{x.runtime_config.routing.profiles=['other-profile'];}],
-    ['账号串公司', (x:any)=>{x.runtime_config.platform_accounts[0].fields.手机Profile='other-profile';}],
-    ['已有id添加别公司抖音号', (x:any)=>{x.runtime_config.platform_accounts[0].douyin_id='foreign-douyin';}],
-    ['已有id添加别公司设备串号', (x:any)=>{x.runtime_config.platform_accounts[0].device_serial='foreign-device';}],
-    ['未核验账号禁止开启', (x:any)=>{x.runtime_config.platform_accounts[0].enabled=true;}],
-    ['设备串公司', (x:any)=>{x.runtime_config.platform_accounts[0].fields.ADB序列号='other-device';}],
-    ['伪造账号核验', (x:any)=>{x.runtime_config.platform_accounts[0].verification_status='verified';}],
-    ['飞书来源串公司', (x:any)=>{x.wiki.products[0].source={base:'other-base'};}],
+    ['路由串公司', (x: ReturnType<typeof complete>)=>{x.runtime_config.routing.line_key='other-line';}],
+    ['Profile串公司', (x: ReturnType<typeof complete>)=>{x.runtime_config.routing.profiles=['other-profile'];}],
+    ['账号串公司', (x: ReturnType<typeof complete>)=>{x.runtime_config.platform_accounts[0].fields.手机Profile='other-profile';}],
+    ['已有id添加别公司抖音号', (x: ReturnType<typeof complete>)=>{(x.runtime_config.platform_accounts[0] as Record<string,unknown>).douyin_id='foreign-douyin';}],
+    ['已有id添加别公司设备串号', (x: ReturnType<typeof complete>)=>{(x.runtime_config.platform_accounts[0] as Record<string,unknown>).device_serial='foreign-device';}],
+    ['未核验账号禁止开启', (x: ReturnType<typeof complete>)=>{(x.runtime_config.platform_accounts[0] as Record<string,unknown>).enabled=true;}],
+    ['设备串公司', (x: ReturnType<typeof complete>)=>{(x.runtime_config.platform_accounts[0].fields as Record<string,unknown>).ADB序列号='other-device';}],
+    ['伪造账号核验', (x: ReturnType<typeof complete>)=>{(x.runtime_config.platform_accounts[0] as Record<string,unknown>).verification_status='verified';}],
+    ['飞书来源串公司', (x: ReturnType<typeof complete>)=>{(x.wiki.products[0] as Record<string,unknown>).source={base:'other-base'};}],
   ])('草稿仍拒绝身份变更：%s',async(_name,mutate)=>{const previous=complete();mocks.query.mockResolvedValue({rows:[previous]});const changed=structuredClone(previous);mutate(changed);const r=await request(app).put('/profile').set('x-test-tenant','tenant-a').send({expected_version:2,config_status:'draft',runtime_config:changed.runtime_config,wiki:changed.wiki});expect(r.status).toBe(400);});
   it('确认后编辑正文自动降草稿，不能沿用旧确认',async()=>{mocks.query.mockResolvedValue({rows:[complete()]});const r=await request(app).put('/profile').set('x-test-tenant','tenant-a').send({expected_version:2,wiki:{...complete().wiki,markdown:'# 改稿'}});expect(r.status).toBe(200);expect(r.body.data.profile.config_status).toBe('draft');});
+  it('旧档案未登记账号时，Web不能凭空创建已核验账号',async()=>{const r=await request(app).put('/profile').set('x-test-tenant','tenant-a').send({expected_version:2,runtime_config:{platform_accounts:[{id:'invented-account',verification_status:'verified',enabled:true}]}});expect(r.status).toBe(400);});
   it('Web不能伪造映射读回证据冒充同步成功', async () => { const r = await request(app).put('/profile').set('x-test-tenant','tenant-a').send({ company_name:'甲', expected_version:2, runtime_config:{sync_mappings:{notion:{status:'verified',last_verified_version:3,readback_evidence:'fake'}}} }); expect(r.status).toBe(400); expect(r.body.error.code).toBe('READONLY_SYNC_MAPPING'); });
   it('保存事务失败回滚且不返回成功', async () => { mocks.query.mockImplementation(async (sql:string)=>{ if(sql.includes('company_config_versions')) throw new Error('write fail'); return {rows:[row]}; }); const r = await request(app).put('/profile').set('x-test-tenant','tenant-a').send({company_name:'甲',expected_version:2}); expect(r.status).toBe(500); expect(mocks.query.mock.calls.some(([sql])=>sql==='ROLLBACK')).toBe(true); expect(mocks.release).toHaveBeenCalled(); });
   it('未确认草稿与缺运行规则不能启用', async () => { const r = await request(app).put('/profile').set('x-test-tenant','tenant-a').send({ company_name:'甲', expected_version:2, config_status:'enabled' }); expect(r.status).toBe(400); });

@@ -27,7 +27,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO_ROOT"
 
-fail() { echo "❌ FAIL: $*"; exit 1; }
+fail() { echo "❌ FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ✅ $*"; }
 
 SPRINT_DIR="sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff"
@@ -705,7 +705,7 @@ start_api() {
     kill -0 "$API_PID" 2>/dev/null || break
     sleep 1
   done
-  [ "$up" = "1" ] || { tail -30 "$log"; fail "apps/api 未在 40s 内就绪（端口 ${port}）"; }
+  [ "$up" = "1" ] || { tail -30 "$log" >&2; fail "apps/api 未在 40s 内就绪（端口 ${port}）"; }
 }
 
 login_cookie() {
