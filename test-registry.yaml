@@ -6454,13 +6454,13 @@ agent_suite:
     product: 员工知识中枢
     note: "documents 路由表(test-pairing)：树/搜索/CRUD/移动/软删/还原/导出/可见性/@提及端点齐、router 前挂限流+documentAuthGuard。"
 
-  - id: collab-notes-collab-ws-mount-pairing
+  - id: collab-ws-seed-race
     path: apps/api/src/services/collab-ws.test.ts
     type: unit
     ci: L3
     status: active
     product: 员工知识中枢
-    note: "collab-ws 挂载(test-pairing)：attachCollabWS 返回 noServer WebSocketServer、注册 upgrade 监听器。真握手/CV 由合同真 ws 测试覆盖。"
+    note: "保留挂载2例并新增真实HTTP/WS/Yjs/CV首帧/shared-seed/断连队列4例；deferred无sleep，SQL/授权隔离，原真PG与浏览器强合同不变。"
 
   - id: collab-notes-provider-pairing
     path: apps/staff-hub/src/lib/collabProvider.test.ts
