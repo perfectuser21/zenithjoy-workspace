@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """手机共享外壳：沿用控制器精确owner锁、账号核验、桌面原证据与锁读回。"""
+import hashlib
 import importlib.util
 from pathlib import Path
 import re
@@ -85,13 +86,21 @@ class Phone:
             raise ValueError('phone controller operation failed')
         return result.stdout
 
+    def identity(self):
+        return {key: self.envelope[key] for key in ('run_id', 'task_id', 'attempt', 'owner_epoch')}
+
     def ctl(self, *args):
+        if args not in (('preflight',), ('lock-status',)):
+            # 必须先fsync，再发送：进程死于RPC响应前也不能把未知副作用当成无动作。
+            intent = self.directory / 'phone-action-intent.json'
+            if not intent.exists():
+                io.write(intent, dict(self.identity(), args=list(args), at=shell.now()))
         command = 'export PATH="$HOME/.local/bin:$PATH"; ' + shlex.join(['douyin-phone-adb', '--profile', self.profile, *args])
         return self.ssh(command).decode()
 
     def owner(self):
         value = self.ctl('lock-status')
-        if value.startswith('lock=free'):
+        if value.strip() == 'lock=free':
             return 'free'
         found = re.search(r'owner=([^\s]+)', value)
         return found.group(1) if found else 'unknown'
@@ -103,7 +112,22 @@ class Phone:
     def _prepare(self):
         self.deadline = self.execution_deadline
         self.check_roots('preflight-start', establish=True)
-        value = self.ctl('preflight')
+        # 正证只来自这一代协议、这一run的首次preflight；旧状态缺文件不构成证明。
+        boundary = self.directory / 'preflight-no-resource.json'
+        state = io.read(self.directory / 'shell-preflight.json')
+        eligible = state['attempt'] == 1 and not boundary.exists() and not (self.directory / 'phone-action-intent.json').exists()
+        try:
+            value = self.ctl('preflight')
+        except ValueError:
+            if eligible and self.control_receipts:
+                meta = io.read(self.control_receipts[-1])
+                if meta.get('returncode', 0) != 0 and not meta.get('timed_out'):
+                    files = [{'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+                             for path in self.control_receipts]
+                    io.write(boundary, dict(self.identity(), shell_attempt=state['attempt'],
+                             started_at=state['started_at'], roots=io.read(self.directory / 'root-identity.json'),
+                             resource=self.resource, files=files, boundary='controller-preflight-failed-before-acquire'))
+            raise
         (self.directory / 'preflight-controller.log').write_text(value)
         if 'serial=' + self.serial not in value or 'state=device' not in value:
             raise ValueError('phone unavailable')
@@ -132,8 +156,54 @@ class Phone:
         self.stage = 'cleanup'
         return shell.execute(self, 'cleanup', self._cleanup)
 
+    def no_resource_cleanup(self):
+        directory = self.directory
+        proof_path = directory / 'preflight-no-resource.json'
+        if not proof_path.exists() or (directory / 'phone-action-intent.json').exists():
+            return None
+        proof = io.read(proof_path)
+        if any(proof.get(k) != v for k, v in self.identity().items()) or proof.get('resource') != self.resource:
+            return None
+        state = io.read(directory / 'shell-preflight.json')
+        if not state.get('terminal') or not state.get('error') or state['attempt'] != proof.get('shell_attempt') or state['started_at'] != proof.get('started_at'):
+            return None
+        if proof.get('boundary') != 'controller-preflight-failed-before-acquire' or proof.get('roots') != io.read(directory / 'root-identity.json'):
+            return None
+        archive = directory / 'shell-evidence' / 'preflight' / str(state['attempt'])
+        archived = {hashlib.sha256(p.read_bytes()).hexdigest() for p in archive.iterdir() if p.is_file()}
+        originals = proof.get('files', []) + [{'path': str(proof_path), 'sha256': hashlib.sha256(proof_path.read_bytes()).hexdigest()}]
+        if len(proof.get('files', [])) != 3:
+            return None
+        for original in originals:
+            if hashlib.sha256(Path(original['path']).read_bytes()).hexdigest() != original['sha256'] or original['sha256'] not in archived:
+                return None
+        with io.lock(directory / '.launch.lock'):
+            # 与claim同锁重查并封闭，free查询和最终回执都在同一入场临界区。
+            if any((directory / name).exists() for name in ('spawn-claimed.json', 'agent-binding.json', 'phone-action-intent.json')):
+                return None
+            self.check_roots('cleanup-start')
+            owner = self.owner()
+            if owner != 'free':
+                return None
+            self.check_roots('cleanup-end')
+            if not (directory / 'handoff-closed.json').exists():
+                io.write(directory / 'handoff-closed.json', dict(self.identity(), reason='preflight failed before resource acquisition'))
+            readback = directory / 'cleanup-lock-readback.json'
+            io.write(readback, dict(self.identity(), owner=owner, observed_at=shell.now()))
+            evidence = [str(proof_path), str(archive / 'attempt.json'), str(readback)]
+            evidence += [str(p) for p in self.control_receipts]
+            return shell.commit_receipt(self, 'cleanup', dict(completed=True, mode='no-resource',
+                device_actions='none', diagnostic_actions='controller preflight may refresh adb',
+                lock_status=owner, evidence=evidence, failure=None))
+
     def _cleanup(self):
         self.deadline = self.cleanup_deadline
+        try:
+            receipt = self.no_resource_cleanup()
+            if receipt is not None:
+                return receipt
+        except Exception:
+            pass  # 缺失/篡改/未知证据不能证明无资源；继续原精确owner清理路径。
         ok, owner, paths, failures = False, 'unknown', {}, []
         try:
             self.check_roots('cleanup-start')
