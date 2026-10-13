@@ -116,7 +116,7 @@ FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt �
 python3 -c 'import os; print(os.environ["WF_METHOD_REQUEST_JSON"])' | python3 "$HOME/.openclaw/commander/wf-method.py" execute "$WF_METHOD_ENVELOPE"
 ```
 
-只读skill仅从resolved_bindings中的绝对路径读取，不加载global同名skill。首版仅接纳可机械固定依赖的Python方法及明确相对链接的skill；动态装载、缺依赖、未知路径、不同安全代码或包漂移直接拒绝，不临时补依赖。方法相同字节只能称历史版本选择，不声称算法回退奏效。
+首版仅接纳可机械固定依赖的Python业务方法。contract.skill非空、业务skill执行入口以及任何非安全业务skill绑定均明确拒绝：Markdown链接齐全不能证明裸命令已冻结。包中当前安全skill只作为摘要比对的只读上下文，仍加载当前Commander，绝不执行历史副本或global同名业务skill。支持的Python静态子集禁止动态装载、反射、os间接执行与搜索路径篡改；这不是任意Python沙箱。缺依赖、未知路径、不同安全代码或包漂移直接拒绝，不临时补依赖。方法相同字节只能称历史版本选择，不声称算法回退奏效。
 
 original_goal_definition固定最初run/release、目标、输入摘要、完整恢复政策及原两截止时间。selected业务合同只负责所选完整方法，不混拼活动；原input/output/验收/资源/副作用授权不变。selection_receipt保留上一失败run和候选业务PASS及独立核验身份。独立核验同时检查原目标与所选方法；需要历史helper时用当前 `wf-method.py resolve` stdin `{source_path}` 先读回唯一真实绑定，再按核验独立预算运行其verify，禁止核验阶段collect或重发业务。方法失配不能改回当前helper凑PASS。
 

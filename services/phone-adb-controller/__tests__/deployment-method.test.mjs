@@ -42,3 +42,15 @@ test('历史方法正式prepare保留完整Pilot计划；独立target安装观�
  for(const mutate of [e=>e.receipt.assertions=[],e=>e.report.assertion_source='historical_cache',e=>e.snapshot.definitions.activities.pop()]){const bad=structuredClone(bundle);mutate(bad);await assert.rejects(prepareMethodRelease({evidence:bad,sha,workflowKey:'workflow_report.internal',runId:123,readFile:()=>bytes,request}));}
  assert.equal(posts.length,2);
 });
+
+test('发布准备器同样拒业务skill和仅安全上下文，不给不支持候选创建方法身份',async()=>{
+ const {methodManifest,methodComponents}=await import('../method-definition.mjs');
+ const full=fixture().commander.snapshot.definitions,w=full.workflows.find(x=>x.payload.key==='workflow_report.internal');
+ const defs={workflows:[w],activities:full.activities.filter(a=>w.payload.activities.some(r=>r.activity_version_id===a.id))};
+ for(const path of ['skills/business/SKILL.md','services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md']){
+  const copy=structuredClone(defs),b=copy.activities[0].payload.implementation_bindings[0];Object.assign(b,{kind:'skill',path,field:'implementation_bindings'});
+  assert.throws(()=>methodManifest({payload:{...copy,components:methodComponents(copy,sha)}}));
+ }
+ const copy=structuredClone(defs);copy.workflows[0].payload.contract.skill='global-business-skill';
+ assert.throws(()=>methodManifest({payload:{...copy,components:methodComponents(copy,sha)}}),/unsupported_method_skill/);
+});

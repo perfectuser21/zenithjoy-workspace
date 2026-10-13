@@ -54,6 +54,7 @@ def manifest_for(release):
     workflow = rows[0]
     source = dict(repo=workflow['source_repo'], revision=workflow['source_commit'])
     need(source['repo'] == REPO and re.fullmatch('[a-f0-9]{40}', source['revision']), 'unsupported fixed source')
+    need(not workflow['payload'].get('contract', {}).get('skill'), 'unsupported_method_skill: business skill entry is not admitted')
     refs = workflow['payload']['activities']
     activities = payload['activities']
     need(refs and len(activities) == len({r['activity_version_id'] for r in refs}) and
@@ -62,8 +63,10 @@ def manifest_for(release):
     for activity in activities:
         need(activity['source_repo'] == source['repo'] and activity['source_commit'] == source['revision'], 'mixed source revisions')
         need(any(r['activity_version_id'] == activity['id'] and r['activity_id'] == activity['activity_id'] for r in refs), 'activity identity mismatch')
+        need(not activity['payload'].get('contract', {}).get('skill'), 'unsupported_method_skill: activity skill entry')
         values = activity['payload'].get('implementation_bindings', [])
-        need(any(b.get('scope') == 'activity' and b.get('kind') in ('code', 'skill') and b.get('status') == 'verified' for b in values), 'activity entry not frozen')
+        need(all(b.get('kind') != 'skill' or (is_safety(b.get('path') or '') and b.get('field') == 'implementation_bindings') for b in values), 'unsupported_method_skill: business skill execution closure')
+        need(any(b.get('scope') == 'activity' and b.get('kind') == 'code' and b.get('status') == 'verified' for b in values), 'activity entry not frozen')
         for binding in values:
             if binding.get('kind') == 'raw' and binding.get('status') == 'unresolved':
                 continue
@@ -72,9 +75,11 @@ def manifest_for(release):
             need(row['kind'] in ('code', 'skill') and binding.get('status') == 'verified' and row['repo'] == source['repo']
                  and row['revision'] == source['revision'] and re.fullmatch('sha256:[a-f0-9]{64}', row['digest'] or ''), 'unverified source binding')
             safe_path(row['path'])
+            need(row['kind'] != 'skill' or (is_safety(row['path']) and binding.get('field') == 'implementation_bindings'), 'unsupported_method_skill: undeclared business skill execution closure')
             need(row['path'] not in bindings or bindings[row['path']] == row, 'ambiguous source path')
             bindings[row['path']] = row
     rows = ordered(list(bindings.values()))
+    need(any(b['kind'] == 'code' and not is_safety(b['path']) for b in rows), 'method requires executable business code, not only safety context')
     need(rows and ordered(payload['components']) == ordered([dict(kind='repo', **source), *rows]), 'release components differ from full frozen closure')
     return dict(protocol=PROTOCOL, workflow=dict(key=workflow['payload']['key'], workflow_id=workflow['workflow_id'],
                 workflow_definition_version_id=workflow['id'], snapshot_sha256=workflow['payload_sha256']), source=source, bindings=rows)
@@ -109,13 +114,7 @@ def dependencies(manifest, root):
         if is_safety(binding['path']):
             continue  # 安全底座只比较当前实物字节，永不执行包内副本。
         path = binding['path']; raw = read_regular(root, path)
-        if binding['kind'] == 'skill':
-            for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', raw.decode()):
-                if target.startswith(('https://', 'http://', '#')):
-                    continue
-                relative = os.path.normpath(str(Path(path).parent / target))
-                safe_path(relative); need(relative in paths, 'skill relative dependency is not frozen')
-            continue
+        need(binding['kind'] != 'skill', 'unsupported_method_skill: only current safety skill bytes are read-only context')
         # 首版可机械核闭包的Python方法；其它语言/动态装载不能冒充已隔离。
         need(path.endswith('.py'), 'method language has no closed dependency admission')
         tree = ast.parse(raw.decode())
@@ -206,6 +205,19 @@ def is_safety(path):
         'services/phone-adb-controller/douyin-phone-adb', 'services/phone-adb-controller/text-input-focus.py')
 
 
+def safety_closure(release, workflow):
+    ids = {r['activity_version_id'] for r in workflow['payload']['activities']}
+    rows = [a for a in release['payload']['activities'] if a['id'] in ids]
+    need(ids and len(rows) == len(ids), 'current meta safety closure is incomplete')
+    result = set()
+    for activity in rows:
+        for b in activity['payload'].get('implementation_bindings', []):
+            if b.get('status') == 'verified' and b.get('kind') in ('code', 'skill'):
+                repo = b.get('repo') or b.get('raw', {}).get('repo') or activity['source_repo']
+                result.add((b['kind'], repo, b['path'], b['digest']))
+    return result
+
+
 def safety_bytes(path, here, resources):
     if path.startswith(PREFIX):
         return read_regular(here, path[len(PREFIX):])
@@ -245,7 +257,8 @@ def verify(query, base_ready, request, here):
     supervisor = selection['supervisor_definition']
     current = base_ready({'workflow_key': 'workflow_commander.internal', 'definition': supervisor})
     supervisor_release, _ = gate(request, supervisor, 'mmv')
-    release_row(supervisor_release, supervisor, 'workflow_commander.internal')
+    meta = release_row(supervisor_release, supervisor, 'workflow_commander.internal')
+    current_safety = safety_closure(supervisor_release, meta)
     definition = query['definition']; info = selection['method_instance']
     release, observation = gate(request, definition, info['target'])
     row = release_row(release, definition, query['workflow_key'])
@@ -257,6 +270,7 @@ def verify(query, base_ready, request, here):
     check_goal(query, original, row['payload']['contract'])
     for binding in manifest['bindings']:
         if is_safety(binding['path']):
+            need(tuple(binding[k] for k in ('kind', 'repo', 'path', 'digest')) in current_safety, 'safety binding is not in current meta closure')
             need('sha256:' + digest(safety_bytes(binding['path'], here, row['payload']['contract'].get('resources', {}))) == binding['digest'], 'historical safety shell differs from current bytes')
     actual = collect(manifest, Path.home())['method_instance']
     ref = observation.get('evidence_ref', '')
@@ -281,15 +295,12 @@ def execution_context(envelope, directory):
         rows = [b for b in bindings if b['path'] == source and not is_safety(source)]
         need(len(rows) == 1, 'legacy helper reference has no unique frozen business binding')
         aliases['~/.openclaw/commander/' + name] = rows[0]
-    skill = envelope['contract'].get('skill')
-    if skill:
-        skills = [b for b in bindings if b['kind'] == 'skill' and b['path'].endswith('/' + skill + '/SKILL.md') and not is_safety(b['path'])]
-        need(len(skills) == 1, 'business skill has no unique frozen package binding')
+    need(not envelope['contract'].get('skill'), 'unsupported_method_skill: business skill entry is not admitted')
     instruction = ('本次method_selection已冻结历史完整业务方法。当前Commander/安全外壳/全局workspace保持当前版。'
                    '先读method-context.json；业务helper必须经当前 python3 ~/.openclaw/commander/wf-method.py execute '
                    + str(directory / 'envelope.json') + '，stdin传{source_path:冻结repo相对path,args:字符串数组}，JSON经gateway_exec.env固定脚本管道。'
                    '原合同旧~/.openclaw/commander/helper路径仅按legacy_helper_bindings唯一映射，不能直接执行当前helper。'
-                   'skill仅从resolved_bindings绝对路径读取，禁止加载全局同名skill。原目标/input/output/副作用授权和两截止时间不可变。'
+                   '业务skill入口或未声明执行依赖在首版拒绝；当前安全skill仅作摘要对照，不能加载历史副本或全局同名业务skill。原目标/input/output/副作用授权和两截止时间不可变。'
                    '没有受信完整方法、依赖缺失或双gate失配就失败，不按活动混拼版本；同字节只称历史版本选择。')
     return dict(protocol=PROTOCOL, method_selection=selection, legacy_helper_bindings=aliases,
                 execution=dict(host='mmv', tool='gateway_exec', envelope_path=str(directory / 'envelope.json')),
