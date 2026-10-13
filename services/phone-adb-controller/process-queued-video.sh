@@ -28,8 +28,9 @@ if [[ "$MODE" == identity ]]; then
 elif [[ "$MODE" == qualification ]]; then
   qv_qualify
 else
-  QV_RESCANS=0
+  QV_RESCANS=0; QV_AVATAR_RECOVERIES=0
   qv_collect; rc=$?
   print -- "RESCAN\t$VID\t$QV_RESCANS"
+  print -- "AVATAR_RECOVERY\t$VID\t$QV_AVATAR_RECOVERIES"
   exit "$rc"
 fi

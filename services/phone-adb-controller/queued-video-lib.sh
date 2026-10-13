@@ -160,8 +160,13 @@ except Exception: print("pending")')"
 }
 # 失败恢复后，不沿用此前屏幕坐标：重新核验视频，并读取当前屏找到同条评论。
 qv_relocate_comment(){
-  local nick="$1" body="$2" raw ln
-  QV_RESCANS=$(( ${QV_RESCANS:-0} + 1 ))
+  local nick="$1" body="$2" raw ln purpose="${3:-identity}"
+  case "$purpose" in
+    identity) QV_RESCANS=$(( ${QV_RESCANS:-0} + 1 ));;
+    avatar) QV_AVATAR_RECOVERIES=$(( ${QV_AVATAR_RECOVERIES:-0} + 1 ));;
+    *) return 1;;
+  esac
+  qv_log "comment_relocation kind=$purpose row=$QV_ROW evidence=$QV_EID-rescan-$QV_ROW"
   "$C" --profile "$P" back </dev/null >/dev/null || return 1
   qv_verify_video "$QV_EID-recovery-$QV_ROW" || return 1
   "$C" --profile "$P" open-comments "$QV_EID-reopen-$QV_ROW" </dev/null >/dev/null || return 1
@@ -252,7 +257,7 @@ except Exception: print("medium")' "$count")"
         # 已明确不可操作的同昵称+全文只在再次空坐标时略过，不挡后续完整新树。
         [[ -z "${unavailable_avatar[$nick$'\t'$body]:-}" ]] || continue
         local relocate_rc=0
-        qv_relocate_comment "$nick" "$body" || relocate_rc=$?
+        qv_relocate_comment "$nick" "$body" avatar || relocate_rc=$?
         (( relocate_rc == 0 || relocate_rc == 2 )) || { qv_log "avatar_recovery_failed row=$total"; return 6; }
         tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
         x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"

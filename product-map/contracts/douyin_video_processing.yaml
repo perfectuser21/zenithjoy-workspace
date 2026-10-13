@@ -969,8 +969,8 @@ activities:
         reads:
           - Video.video_url
         writes: []
-        check: 每张卡片处理完 back-to-results 一次做对（Activity=搜索结果页且搜索框=本词）；走了兜底重搜（deeplink 重发搜索+重扫卡片）算一次没做对。0930 决策
-          f425e3fd：此前不是步骤，三次修复都没有格子能变红；cmd09300230 批 134/134 走兜底、跑 6 小时
+        check: 新0102保留身份错位兜底率质量代理。rescan_rate/identity_rescan_rate仅为真实身份失败重定位调用数除以合格视频数，
+          正常空头像恢复另如实计avatar_recovery_count，不计为身份错位；原0.3阈值不变。此代理不构成搜索结果页实际归位证据。
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh collection.return_to_results（原约束保留，真PG/证据读回）
