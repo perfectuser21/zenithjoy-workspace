@@ -99,10 +99,20 @@ function parseExclude(arg) {
 // 缺 last_modified_time 不猜（返回 false）。
 function isStaleInflight(item, nowMs, ttlMs) {
   const it = item || {};
+  if (/^\[104 prepared:[A-Za-z0-9_-]{1,64}:[a-f0-9]{40}\]/.test(txt((it.fields || {})['回复结果']))) return false;
   if (txt((it.fields || {})["状态"]) !== "触达中") return false;
   const t = Number(it.last_modified_time);
   if (!Number.isFinite(t) || !t) return false;
   return nowMs - t > ttlMs;
+}
+
+function recipientReserved(records, id) {
+  return reservedRecipientSet(records).has(String(id||'').toLowerCase());
+}
+function reservedRecipientSet(records) {
+  return new Set(records.filter(r=>['触达中','已触达'].includes(txt(r.fields?.['状态']))||
+    /^\[104 (?:prepared|sent|restricted|rate_limited):[A-Za-z0-9_-]{1,64}:[a-f0-9]{40}\]/.test(txt(r.fields?.['回复结果'])))
+    .map(r=>extractLead(r.fields).dyid.toLowerCase()).filter(Boolean));
 }
 
 // 预写「触达中」后回读校验：状态/实际分发号/话术ID 三项须与预写一致。
@@ -118,4 +128,5 @@ function verifyClaim(fields, expect) {
 module.exports = {
   extractLead, isValidDyid, classifyPending, requeueTransientFields, restrictedFields, TRANSIENT_MARK,
   txt, GRADE_ORDER, leadGrade, gradeRank, gradeAllowed, pickSender, parseExclude, isStaleInflight, verifyClaim,
+  recipientReserved,reservedRecipientSet,
 };

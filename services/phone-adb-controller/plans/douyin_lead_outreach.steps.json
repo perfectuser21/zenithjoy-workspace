@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_lead_outreach",
   "brain_workflow_key": "douyin_lead_outreach",
-  "contract_sha256": "ef8ad51b91004ee7f114f8ad43dcc5937391c2e00e29a681eb4e90cc26bb376f",
+  "contract_sha256": "ac4a03c72e3616c9548021352b58b6bbcf387f76567767fc8d68ec66e4177408",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -168,11 +168,11 @@
       "at": "send_dm",
       "mode": "checkpoint",
       "readback": {
-        "type": "log",
-        "regex": "单#[0-9]+:",
+        "type": "metric",
+        "ref": "metrics.orders_prepared",
         "expect": {
           "op": ">=",
-          "ref": "metrics.orders_picked"
+          "value": 1
         }
       },
       "usage": {
@@ -187,11 +187,11 @@
       "at": "send_dm",
       "mode": "checkpoint",
       "readback": {
-        "type": "log",
-        "regex": "✅ 单#[0-9]+ 送达|仅互关限制",
+        "type": "metric",
+        "ref": "metrics.message_delta_verified",
         "expect": {
-          "op": ">=",
-          "ref": "metrics.messages_sent"
+          "op": "==",
+          "value": 1
         }
       },
       "usage": {
@@ -206,14 +206,19 @@
       "at": "send_dm",
       "mode": "checkpoint",
       "readback": {
-        "type": "none"
+        "type": "metric",
+        "ref": "metrics.delivery_result_verified",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
       },
       "usage": {
         "workflow_key": "douyin_lead_outreach",
         "slot_key": "send_dm",
         "sequence_no": 2
       },
-      "reason": "送达核验在 private-message-send 现场读气泡与提示文案，结果只体现在 ✅/⚠️/🚦 分支；聊天界面没有持久化产物，事后读不回对方是否可收"
+      "reason": "发送前无同正文历史气泡，发送后新增气泡或明确限制；原始XML留存。不宣称对方送达。"
     },
     {
       "key": "douyin_lead_outreach.write_back.write_back_result",

@@ -6,6 +6,7 @@ import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSe
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput,safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
+import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
 
@@ -64,12 +65,12 @@ export function parseCollection(result,videoId,{allowPartial=false}={}) {
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
-  const state={profile,line,run};
+  const state={profile,line,run,source_commit:sourceCommit};
   const recordDiagnostic=value=>{
     const file=join(env.WFR_RUN_DIR,'activity.log');
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
@@ -102,11 +103,10 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
   const preflight=async()=>{
-    if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'){
+    if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND!=='1'){
       const flag=join(env.HOME,`bin-harvest/state/dm-paused-${profile}.flag`);
       if(existsSync(flag))return {status:'paused',reason:'私信暂停标记生效',sent:0};
-      // 私信须另有用户授权及完整队列回写，本次恢复验收始终保持暂停。
-      return {status:'paused',reason:'本次获客恢复验收保持私信暂停',sent:0};
+      return {status:'paused',reason:'本批私信未授权，保持暂停',sent:0};
     }
     const device=await checked('adb',['-s',serial,'get-state']);
     if(device.trim()!=='device')throw Error('设备未在线');
@@ -126,7 +126,8 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     const id=account.match(/^douyin_id=(.+)$/m)?.[1]?.trim();
     const registry=readFileSync(env.DOUYIN_ACCOUNT_REGISTRY||join(env.HOME,'.config/openclaw/douyin-account-routes.tsv'),'utf8');
     if(!id||!registry.split('\n').some(s=>{const f=s.split('\t');return f[0]===profile&&f[1]===id;}))throw Error('当前账号未在本profile注册');
-    state.account=id;return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id};
+    state.account=id;const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
+    return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,...outreachProof};
   };
   const getDiscovery=async()=>{
     if(discovery)return discovery;
@@ -244,6 +245,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     }
     return {consumed,status:h.receipt.status,receipt:h.receipt,sha256:h.sha256};
   };
+  const outreach=createOutreachHandlers({env,state,phone,queue:(op,fields)=>(rpc({kind:'outreach',request:{op,line,run,limit:Number(env.LEADGEN_LIMIT||1),...fields}})).then(r=>r.result),rpc});
   return {state,preflight,
     source:async()=>(await getDiscovery()).source(),
     dedup:intake,
@@ -348,8 +350,9 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     mark_leads:async()=>{const r=await queue('mark_leads');const readback=await queue('mark_readback',{ids:r.ids,lead_ids:r.lead_ids});
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-mark_leads-readback.json`),JSON.stringify(readback));
       return {...r,mark_leads_readback_failures:readback.failures};},
-    send_dm:async()=>{throw Error('本次私信保持暂停');},write_back:async()=>{throw Error('没有发送事实，不能回写发送成功');},
+    send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false;
+      try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}
       if(!locked&&failures.length===0)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
       if(locked){try{const refreshed=await phone('lock-refresh',run);if(!refreshed.startsWith('lock=refreshed'))throw Error('锁所有权不可确认');
@@ -400,7 +403,7 @@ async function main(){
     const verified=probes.length>0&&probes.every(p=>p.pass===true)&&local.every(r=>r.steps.length===expected.length&&r.steps.every(s=>s.pass===true));
     return {verified,metrics,probes,step_dod:local};
   };
-  const handlers=createHandlers({root,env,rpc});
+  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit});
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
     const budget=Number(activity.budget?.max_duration_s||120);
     const requested=activity.key==='collect_videos'?Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||budget):budget;

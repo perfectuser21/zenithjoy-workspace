@@ -46,6 +46,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
     if (actual !== file.sha256) throw Error('RPC_SOURCE_BYTES_MISMATCH');
   }
   for (const path of ['queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
+    'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/dm-rate-ramp.json',
     'leadgen-db-connect.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
     'verify-step.mjs','step-judge.mjs','checks/probes-lib.js','checks/schema.json',
@@ -60,6 +61,8 @@ export async function handleRpc(input, deps = {}) {
   (deps.verify || verifyRpcSource)(input.source);
   let pool;
   try {
+    if(input.kind==='outreach')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit})};
+    if(input.kind==='outreach_policy')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachPolicy(input)};
     if(input.kind==='resolve_share_link')return {ok:true,result:await resolveCopiedShareLink(input.url,{execute:deps.resolveExec||exec})};
     if (input.kind === 'commander') {
       const { openRouterCommander } = await import('./activity-commander.mjs');

@@ -23,7 +23,9 @@ function fakeOriginalOrders(){
 }
 test('真实原订单adapter同recipient两个大小写别名、两个run竞争仅领一单',async()=>{
  const f=fakeOriginalOrders();try{
- const a=await queueRequest({...f.input,op:'claim_outreach'},f.deps);assert.equal(a.length,1);
+ const raced=await Promise.allSettled([queueRequest({...f.input,op:'claim_outreach'},f.deps),queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps)]);
+ assert.equal(raced.filter(r=>r.status==='fulfilled').flatMap(r=>r.value).length,1);
+ for(const r of raced.filter(r=>r.status==='rejected'))assert.match(r.reason.message,/领单锁忙/);
  const b=await queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps);assert.equal(b.length,0);
  assert.equal(f.rows.filter(r=>r.fields['状态']==='触达中').length,1);
  }finally{f.clean();}

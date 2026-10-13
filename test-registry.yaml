@@ -7246,3 +7246,27 @@ agent_suite:
   status: active
   product: 多平台发布
   note: "任务 c0fe7e30：合同 commander_skill（可空/wf-<能力>/semver/陪跑 skill 在仓且版本一致）与 Commander 运行时合同清单 workflow-contracts.json 一致；GP-Anchor: line01/android_worker_publish keep-green"
+
+- id: leadgen-104-outreach-walking-skeleton
+  path: services/phone-adb-controller/__tests__/outreach-walking-skeleton.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "104四活动与原Feishu订单接口/永久预留/新私信气泡真实代码回归；夹具明示fake，首条真发送另验收"
+
+- id: leadgen-104-outreach-queue-boundary
+  path: services/phone-adb-controller/__tests__/outreach-queue-boundary.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "104四活动与原Feishu订单接口/永久预留/新私信气泡真实代码回归；夹具明示fake，首条真发送另验收"
+
+- id: leadgen-104-private-message-delta
+  path: services/phone-adb-controller/__tests__/private-message-delta.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "104四活动与原Feishu订单接口/永久预留/新私信气泡真实代码回归；夹具明示fake，首条真发送另验收"

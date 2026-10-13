@@ -23,7 +23,7 @@ const SENDERS = [
   { profile: "legacy", id: "44997267357", label: "小号2 人工智能小诺考评" },
 ];
 function argValue(name) { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; }
-(async () => {
+require('./leadgen-outreach-orders.js').withOrderLock(ROUTE.key,async () => {
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
   const tok = (await tr.json()).tenant_access_token;
   const H = { Authorization: "Bearer " + tok, "Content-Type": "application/json" };
@@ -39,6 +39,9 @@ function argValue(name) { const i = process.argv.indexOf(name); return i > 0 ? p
 
   if (MODE === "done") {
     const [,,, rid, result, noteB64] = process.argv;
+    const protectedRow=await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${rid}`,{headers:H})).json();
+    if(protectedRow.code!==0)throw Error('order readback unavailable');
+    if(/^\[104 prepared:/.test(txt(protectedRow.data?.record?.fields?.['回复结果'])))throw Error('104 prepared order requires its own exact receipt');
     const note = noteB64 ? Buffer.from(noteB64, "base64").toString() : "";
     const now = new Date(Date.now()+8*3600e3).toISOString().replace("T"," ").slice(0,16)+"(UTC+8)";
     let fields;
@@ -114,7 +117,8 @@ function argValue(name) { const i = process.argv.indexOf(name); return i > 0 ? p
   if (gated) console.error("gated_no_link=" + gated);
   // 触达等级门槛(决策 67762358): 只触达路由表 outreachGrades 里的等级；被滤掉的线索保持「待触达」不动。
   const beforeGrade = pending.length;
-  pending = pending.filter(r => lib.gradeAllowed(lib.leadGrade(r.fields), ROUTE.outreachGrades));
+  const reserved=lib.reservedRecipientSet(leads);
+  pending = pending.filter(r => lib.gradeAllowed(lib.leadGrade(r.fields), ROUTE.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
   if (beforeGrade - pending.length) console.error("grade_filtered=" + (beforeGrade - pending.length));
   if (!pending.length) { console.log("NO_PENDING"); return; }
   const gradeOf = r => lib.gradeRank(lib.leadGrade(r.fields));
@@ -169,4 +173,4 @@ function argValue(name) { const i = process.argv.indexOf(name); return i > 0 ? p
   }
   console.log(JSON.stringify({ rid: pick.record_id, nick, dyid, profile_url: lead.profileUrl, ver, script_id: txt(sc.fields["话术ID"]),
     msg_b64: Buffer.from(msg).toString("base64"), profile: sender.profile, sender_id: sender.id, seq: sent + 1, dup: Number(pick.fields["重复命中次数"])||0 }));
-})();
+}).catch(()=>{console.error('OUTREACH_ORDER_OPERATION_FAILED');process.exitCode=1;});
