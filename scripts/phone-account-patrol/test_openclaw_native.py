@@ -440,8 +440,9 @@ class ContinuousRecoveryTests(unittest.TestCase):
         leader = copy.deepcopy(self.leader)
         leader.update(id=LEADER, created_at='2026-10-12T14:00:04.659Z', status='completed_no_pr')
         leader['payload'].update(runtime_requires_llm=True, recurring_task_id=SCHEDULE, recurring_slot='2026-10-12T14:00:00.000Z')
-        self.tasks[LEADER] = leader
-        self.cycle()
+        self.tasks[LEADER] = leader;self.tasks[BATCH]['parent_task_id'] = LEADER
+        try:self.cycle()
+        except ValueError as error:self.fail('已验证infra领跑者不应按script批次校验：' + str(error))
         self.assertEqual(len(self.demands()), 1);self.assertEqual(len(self.attempts()), 1)
         self.assertEqual(self.demands()[0]['payload']['origin_batch_task_id'], BATCH)
         self.assertEqual(self.tasks[LEADER]['task_type'], 'qiumi_task')

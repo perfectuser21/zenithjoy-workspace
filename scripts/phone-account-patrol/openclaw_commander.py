@@ -275,6 +275,14 @@ def formal_phones(tasks, schedule, deployment):
         p = batch.get('payload') or {}
         if p.get('recurring_task_id') != deployment['schedule_id'] or p.get('workflow_id') != deployment['batch_workflow_id']:
             continue
+        if batch.get('task_type') == 'qiumi_task':
+            route = p.get('qiumi_route')
+            if (batch.get('project_id') != deployment['project_id'] or p.get('qiumi_department') != 'infra'
+                    or not isinstance(route, dict) or route.get('source') != 'explicit'
+                    or p.get('phone_source_revision') != PHONE_SOURCE_REVISION or p.get('runtime_requires_llm') is not True
+                    or not re.fullmatch(r'[0-9a-f]{40}', p.get('source_revision') or '')):
+                raise ValueError('正式infra编排记录身份不一致')
+            continue
         slot = timestamp(p.get('recurring_slot'));local = slot.astimezone(zoneinfo.ZoneInfo('Asia/Shanghai'))
         if timestamp(batch['created_at']) < activated or (local.hour, local.minute, local.second, local.microsecond) != (22, 0, 0, 0):continue
         if batch.get('task_type') != 'script_run' or p.get('source_revision') != PHONE_SOURCE_REVISION or p.get('cmd') != command or p.get('runtime_requires_llm') is not False:
