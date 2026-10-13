@@ -97,7 +97,10 @@ test('反馈断网后按原seq重放，0600凭据仅存在Authorization头',asyn
 });
 test('v2手机共享控制器外壳：精确owner、官方child停止后桌面原件与放锁读回',async()=>{
  const {spawn}=await import('node:child_process');const {existsSync}=await import('node:fs');
- const f=fixture();f.envelope.contract.resources={machine:'xian-m4',profile:'test',device_serial:'ABC123',account_ref:'授权测试'};writeFileSync(f.file,JSON.stringify(f.envelope));
+ const f=fixture();f.envelope.contract.resources={machine:'xian-m4',profile:'test',device_serial:'ABC123',account_ref:'授权测试'};
+ f.envelope.activity_bindings=['preflight','prepare','cleanup'].map((key,i)=>({key,reference_id:'reference-'+i,activity_id:'activity-'+i,activity_definition_version_id:'version-'+i,steps:[{key:key+'_evidence',step_id:'step-'+i}]}));
+ f.envelope.definition.expected_path=f.envelope.activity_bindings.flatMap(({steps,key,...binding})=>[{...binding,required:true},...steps.map(step=>({...binding,step_id:step.step_id,required:true}))]);
+ writeFileSync(f.file,JSON.stringify(f.envelope));
  const dir=start(f);const ssh=join(f.home,'ssh');
  writeFileSync(ssh,`#!/usr/bin/env python3
 import sys,os,pathlib,shlex
@@ -128,6 +131,12 @@ else:print('ok')
   for(let i=0;i<70&&!existsSync(join(dir,'agent-request.json'));i++)await new Promise(r=>setTimeout(r,50));
   assert.equal(existsSync(join(dir,'agent-request.json')),true);helper(f,'claim-spawn',dir);bind(f,dir);assert.equal(await done,0);
   const status=JSON.parse(f.call('wf-status.sh',[f.envelope.run_id]).stdout);assert.equal(status.delivery.status,'completed');assert.equal(status.delivery.cleanup.completed,true);assert.equal(existsSync(join(f.home,'owner')),false);
+  const shellFacts=status.events.filter(x=>x.type==='activity_completed');
+  assert.equal(shellFacts.length,4,'shell must record activity plus step for preflight and cleanup');
+  assert.deepEqual(new Set(shellFacts.map(x=>x.data.reference_id)),new Set(['reference-0','reference-2']));
+  for(const fact of shellFacts){assert.equal(fact.data.outcome,'pass');assert.ok(fact.data.started_at&&fact.data.ended_at);assert.ok(fact.data.evidence.files.every(x=>existsSync(x.path)));}
+  assert.match(readFileSync(join(dir,'preflight-controller.log'),'utf8'),/serial=ABC123/);
+  assert.match(readFileSync(join(dir,'preflight-account.log'),'utf8'),/nickname=授权测试/);
   const calls=readFileSync(join(f.home,'calls'),'utf8');assert.match(calls,/lock-acquire wfd-test/);assert.match(calls,/--lock-owner wfd-test close-app/);assert.match(calls,/lock-release wfd-test/);
  }finally{if(worker.exitCode===null){worker.kill('SIGTERM');await done;}}
 });
@@ -241,4 +250,26 @@ assert r.io.read(d/'delivery.json')['cleanup']['completed'] is True
 assert sum(x['type']=='delivery' for x in r.io.read(d/'events.json'))==1
 assert (d/'agent-request.json').read_bytes()==request
 `);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('abort真实耗满分配预算后仍保留官方终态读回时间',()=>{
+ const f=fixture(),dir=start(f);helper(f,'claim-spawn',dir);const receipt=bind(f,dir);
+ const cli=join(f.home,'openclaw');writeFileSync(cli,`#!/usr/bin/env python3
+import json,sys,time,pathlib,os
+method=sys.argv[3]
+with open(pathlib.Path(os.environ['HOME'])/'rpc-calls','a') as f:f.write(method+'\\n')
+if method=='sessions.abort':time.sleep(60)
+else:print(json.dumps({'runId':${JSON.stringify(receipt.child_run_id)},'endedAt':1,'status':'error'}))
+`,{mode:0o755});f.env.OPENCLAW=cli;
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');from datetime import datetime,timezone
+e['cleanup_deadline_at']=datetime.fromtimestamp(time.time()+5.5,timezone.utc).isoformat();r.io.write(d/'envelope.json',e)
+r.handoff.stop(d)
+assert r.io.read(d/'child-stop-readback.json')['endedAt']==1
+`);assert.equal(result.status,0,result.stderr+result.stdout);assert.deepEqual(readFileSync(join(f.home,'rpc-calls'),'utf8').trim().split('\n'),['sessions.abort','agent.wait']);
+});
+test('部署准入拒绝业务已停但cleanup_pending且无delivery的包',()=>{
+ const f=fixture(),dir=start(f);writeFileSync(join(dir,'runtime.json'),JSON.stringify({phase:'cleanup_pending',execution_stopped:true}));
+ const deploy=readFileSync(resolve('services/phone-adb-controller/deploy.sh'),'utf8');const script=deploy.split("<<'PYADMISSION'\n")[1].split('\nPYADMISSION')[0];
+ writeFileSync(join(f.home,'pgrep'),'#!/bin/sh\nexit 1\n',{mode:0o755});f.env.PATH=f.home+':'+process.env.PATH;
+ const result=spawnSync('python3',['-c',script],{env:f.env,encoding:'utf8'});assert.notEqual(result.status,0,'cleanup pending deployment was admitted');assert.equal(existsSync(join(f.home,'.openclaw/commander/.deploying')),false);
 });

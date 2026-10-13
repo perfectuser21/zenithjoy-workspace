@@ -66,3 +66,14 @@ test('commander/workflow-contracts.json 与合同一致（gen --check）', () =>
   const file = JSON.parse(readFileSync(new URL('../../../services/phone-adb-controller/commander/workflow-contracts.json', import.meta.url), 'utf8'));
   assert.ok(file.contracts[DOUYIN]);
 });
+
+test('原抖音合同升级v2：冻结私密视频输入、手机资源、一次预算与实际输出',()=>{
+ const spec=commanderContractsSpec(fresh()).contracts.douyin_video_publish;
+ assert.equal(spec.skill,'multi-platform-publish');assert.equal(spec.agent,'skill-factory');
+ assert.deepEqual(spec.resources,{machine:'xian-m4',profile:'xiaolongxia',device_serial:'ANGYVB4311010223',account_ref:'Ai办公室'});
+ assert.equal(spec.recovery.max_attempts,1);assert.equal(spec.recovery.retry_safe,false);assert.equal(spec.recovery.total_timeout_sec,2400);assert.equal(spec.recovery.cleanup_timeout_sec,300);
+ for(const field of ['title','body','media_path','media_sha256','allow_discard_existing_draft','authorized','privacy','content_type'])assert.ok(spec.input_schema.required.includes(field),field);
+ assert.equal(spec.input_schema.properties.privacy.const,'private');assert.equal(spec.input_schema.properties.content_type.const,'video');assert.equal(spec.input_schema.properties.authorized.const,true);
+ for(const field of ['publication','privacy','readback','media_sha256','evidence'])assert.ok(spec.output_schema.required.includes(field),field);
+ assert.equal(spec.output_schema.properties.publication.required.includes('work_id'),false);
+});
