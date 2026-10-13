@@ -1,0 +1,80 @@
+{
+  "key": "workflow_commander.internal",
+  "name": "Commander 通用执行与恢复",
+  "capability_id": "0c1f70f1-b061-4118-b741-8a31c1791c68",
+  "channel": "internal",
+  "form": "orchestration",
+  "version": "2.0.0",
+  "runtime": {
+    "skill_id": "12a55e87-5d74-4669-9677-e121863d1af6",
+    "entrypoint": "Brain workflow_dispatch → OpenClaw work-commander → wf-launch.sh --envelope"
+  },
+  "description": "所有业务流程共用的Commander运行协议。Brain固定业务合同与任务身份，Commander加载本流程的skill实现，运行事实保留在业务task/run及活动反馈中。这里登记共享执行实现，不额外新建一套业务任务或运行账。",
+  "input_schema": {
+    "type": "object",
+    "required": ["task_id", "run_id", "workflow_key", "input", "definition"],
+    "properties": {
+      "task_id": {"type": "string"},
+      "run_id": {"type": "string"},
+      "workflow_key": {"type": "string"},
+      "input": {},
+      "definition": {"type": "object"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["task_id", "run_id", "outputs", "evidence", "cleanup"],
+    "properties": {
+      "task_id": {"type": "string"},
+      "run_id": {"type": "string"},
+      "outputs": {"type": "object"},
+      "evidence": {"type": "array"},
+      "cleanup": {"type": "object"}
+    }
+  },
+  "resources": {},
+  "recovery": {"max_attempts": 1, "total_timeout_sec": 2400, "cleanup_timeout_sec": 300, "retry_safe": false, "retry_on": []},
+  "activities": [
+    {
+      "key": "context",
+      "name": "取得版本固定的执行上下文",
+      "executor_kind": "code",
+      "inputs": ["definition", "workflow_input", "task_id"],
+      "outputs": ["envelope", "runtime_ready"],
+      "acceptance": ["部署文件摘要与固定版本一致", "实际输入摘要一致", "未就绪时不领业务资源"],
+      "implementation": {"kind": "code", "ref": "services/phone-adb-controller/commander/wf-v2-io.py", "version": "2.0.0", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2-io.py", "revision": "contract"},
+      "steps": [
+        {"key": "ready", "name": "读回整套部署及固定定义身份", "order": 1, "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "runtime-manifest.json", "expect": {"op": ">=", "value": 1}}}}
+      ]
+    },
+    {
+      "key": "execution",
+      "name": "形成可恢复的业务执行记录",
+      "executor_kind": "agent",
+      "inputs": ["envelope", "child_binding"],
+      "outputs": ["activity_events", "business_outputs"],
+      "acceptance": ["只启动一个已绑定业务子会话", "掉线恢复同run且不重置预算", "未知副作用不重复执行", "失败不现场修改代码"],
+      "implementation": {"kind": "code", "ref": "services/phone-adb-controller/commander/wf-v2.py", "version": "2.0.0", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2.py", "revision": "contract"},
+      "implementation_bindings": [
+        {"kind": "skill", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md", "revision": "contract"},
+        {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-agent-handoff.py", "revision": "contract"}
+      ],
+      "steps": [
+        {"key": "bound_child", "name": "取得唯一官方子会话并续接等待", "order": 1, "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "agent-binding.json", "expect": {"op": ">=", "value": 1}}}},
+        {"key": "feedback", "name": "持久化并幂等回传本次活动事实", "order": 2, "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "events.json", "expect": {"op": ">=", "value": 1}}}}
+      ]
+    },
+    {
+      "key": "delivery",
+      "name": "交付完整产物与独立核验所需证据",
+      "executor_kind": "code",
+      "inputs": ["business_outputs", "child_terminal"],
+      "outputs": ["delivery", "cleanup"],
+      "acceptance": ["确认官方child终止再收尾", "输入输出与固定定义无损保留", "交付回到Brain等待独立核验，不自行完成父任务"],
+      "implementation": {"kind": "code", "ref": "services/phone-adb-controller/commander/wf-v2.py", "version": "2.0.0", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2.py", "revision": "contract"},
+      "steps": [
+        {"key": "handoff", "name": "保留终态与核验交接，允许回执重放", "order": 1, "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "delivery.json", "expect": {"op": ">=", "value": 1}}}}
+      ]
+    }
+  ]
+}

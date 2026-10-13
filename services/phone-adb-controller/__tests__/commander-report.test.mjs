@@ -14,16 +14,26 @@ def fetch(path):
  calls.append(path)
  return {'id':request['task_ids'][0],'status':'completed','title':'真实任务'}
 with tempfile.TemporaryDirectory() as tmp:
- result=m.collect(request,pathlib.Path(tmp),fetch)
+ tmp=pathlib.Path(tmp).resolve()
+ result=m.collect(request,tmp,fetch)
  assert result['status']=='completed'
  report=json.loads(pathlib.Path(result['outputs']['json_path']).read_text())
  assert report['input']==request
  assert len(calls)==1
  assert m.verify(request,pathlib.Path(tmp),fetch)['verdict']=='PASS'
  assert len(calls)==2, '核验必须重新读取来源'
+ assert m.collect(request,tmp,fetch)==result, '同输入重入复用既有产物'
  report['rows'][0]['status']='failed'
  pathlib.Path(result['outputs']['json_path']).write_text(json.dumps(report))
  assert m.verify(request,pathlib.Path(tmp),fetch)['verdict']=='FAIL'
+ try: m.collect(request,tmp,fetch)
+ except ValueError: pass
+ else: raise AssertionError('恢复不得覆盖旧失败证据')
+with tempfile.TemporaryDirectory() as tmp:
+ tmp=pathlib.Path(tmp).resolve()
+ result=m.collect(request,tmp,fetch)
+ def unavailable(path): raise OSError('来源离线')
+ assert m.verify(request,tmp,unavailable)['verdict']=='INCONCLUSIVE'
 for bad in [{'task_ids':['../../secret'],'release_ids':[]},{'task_ids':[],'release_ids':[]},{**request,'brain_url':'https://outside.invalid'}]:
  try: m.validate_input(bad)
  except ValueError: pass

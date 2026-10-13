@@ -1,0 +1,93 @@
+{
+  "key": "workflow_report.internal",
+  "name": "任务与部署回执核对报告",
+  "capability_id": "5b6d89cf-d972-4ef4-902e-c0f595f29465",
+  "channel": "internal",
+  "form": "report",
+  "version": "1.0.0",
+  "runtime": {
+    "skill_id": "12a55e87-5d74-4669-9677-e121863d1af6",
+    "entrypoint": "wf-launch.sh --envelope"
+  },
+  "execution_profile": "codex_agent",
+  "agent": "skill-factory",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "anyOf": [
+      {"required": ["task_ids"], "properties": {"task_ids": {"type": "array", "minItems": 1}}},
+      {"required": ["release_ids"], "properties": {"release_ids": {"type": "array", "minItems": 1}}}
+    ],
+    "properties": {
+      "task_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$"}},
+      "release_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$"}},
+      "label": {"type": "string", "maxLength": 2000},
+      "tags": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 200}}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["json_path", "csv_path", "manifest_path", "json_sha256", "csv_sha256"],
+    "properties": {
+      "json_path": {"type": "string", "minLength": 1},
+      "csv_path": {"type": "string", "minLength": 1},
+      "manifest_path": {"type": "string", "minLength": 1},
+      "json_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+      "csv_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    }
+  },
+  "resources": {},
+  "recovery": {
+    "max_attempts": 2,
+    "total_timeout_sec": 1200,
+    "cleanup_timeout_sec": 120,
+    "retry_safe": true,
+    "retry_on": ["execution_failed", "verification_failed"]
+  },
+  "verification": {
+    "independent": true,
+    "instructions": "独立核验必须重新从 Brain 读取指定来源。使用本次 input.json 和 outputs 指向的报告目录调用 python3 ~/.openclaw/commander/wf-report.py verify --input <绝对输入路径> --output-dir <报告目录>。实际结果 PASS 且 input_sha256、definition、run、attempt 全部匹配才通过，不接受执行者自述。cleanup 断言核对官方 child 已终止且本流程手机资源为空。"
+  },
+  "activities": [
+    {
+      "key": "report",
+      "name": "形成可独立核验的运行核对报告",
+      "executor_kind": "agent",
+      "description": "执行 python3 ~/.openclaw/commander/wf-report.py collect --input <本次input.json绝对路径> --output-dir <本次运行目录/report>。使用实际输入文件，不重写用户输入，不改任务状态，不调用手机。把命令返回的 outputs/evidence 完整写入本次交付；不要自行宣布独立验收 PASS。",
+      "inputs": ["task_ids", "release_ids", "label", "tags"],
+      "outputs": ["json_path", "csv_path", "manifest_path", "json_sha256", "csv_sha256"],
+      "acceptance": ["JSON完整保留实际输入", "CSV与JSON行一致", "来源来自Brain正式只读接口", "文件真实存在且摘要匹配", "重入不覆盖旧失败证据"],
+      "budget": {"max_duration_s": 600, "heartbeat_s": 30},
+      "steps": [
+        {
+          "key": "sources",
+          "name": "取得指定任务与发布版本的真实读回",
+          "order": 1,
+          "reads": ["ReportRequest.task_ids", "ReportRequest.release_ids"],
+          "writes": ["ReportArtifact.sources"],
+          "check": "report.json 中每个来源身份均与指定查询范围相同",
+          "uses_llm": false,
+          "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "report/report.json", "expect": {"op": ">=", "value": 1}}}
+        },
+        {
+          "key": "artifacts",
+          "name": "形成输入无损且摘要一致的JSON和CSV",
+          "order": 2,
+          "reads": ["ReportArtifact.sources"],
+          "writes": ["ReportArtifact.json_path", "ReportArtifact.csv_path"],
+          "check": "独立verify重新读取来源并核对输入、JSON、CSV和清单摘要",
+          "uses_llm": false,
+          "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "report/report-manifest.json", "expect": {"op": ">=", "value": 1}}}
+        }
+      ],
+      "implementation": {
+        "kind": "code",
+        "ref": "services/phone-adb-controller/commander/wf-report.py",
+        "version": "1.0.0",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/phone-adb-controller/commander/wf-report.py",
+        "revision": "contract"
+      }
+    }
+  ]
+}
