@@ -5,7 +5,7 @@ import { readFrozen } from './runtime-definition.mjs';
 
 export const RPC_FILES = ['queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
   'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
-  'leadgen-db-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
+  'leadgen-db-lib.js', 'company-config-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
   'judge-jev.js', 'judge-comment.js', 'qualify-video.js', 'transcribe-qwen-audio.js',
   'line-routes.js', 'stats-line.js', 'next-keywords.js', 'keyword-enabled-lib.js',
   'verify-step.mjs', 'step-judge.mjs', 'checks/probes-lib.js', 'checks/schema.json',

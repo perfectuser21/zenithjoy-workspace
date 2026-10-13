@@ -24,13 +24,8 @@ const acc = cfg.channels.feishu.accounts[ROUTE.account];
 const B = ROUTE.base, POOL = ROUTE.pool, LEADS = ROUTE.lead;
 console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL + " LEADS=" + LEADS);
 
-// ⚠️ 跟judge-video.js里的TARGET_PROFILES是同一份数据,暂时各自维护一份(两个PR互相独立
-// 开工,合并顺序未定);后续两个PR都进main之后应该抽成共享的target-profiles.js,避免两处
-// 各自维护容易漂移。
-const TARGET_PROFILES = {
-  jinuo: "AI人工智能训练师考证意向人群:关注AI技能证书、求职提升、培训报名的用户",
-  yuesheng: "悦升云端目标客户:企业级AI部署决策者/OPC小微主体主/AI办公入门学习者",
-};
+const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
+const { configEvidence } = require('./judge-video.js');
 
 async function feishu(path, method, body, tok) {
   const r = await fetch("https://open.feishu.cn/open-apis/bitable/v1/apps/" + B + path,
@@ -40,11 +35,15 @@ async function feishu(path, method, body, tok) {
 function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : String(v || ""); }
 
 (async () => {
+  const runId = process.argv[3];
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(runId || '')) throw Error('COMPANY_RUN_REQUIRED');
+  const pool = require('./leadgen-db-connect.js').getPool();
+  let snapshot;
+  try { snapshot = await freezeCompanyConfig(pool, { lineHint: LINE, runId, step: '103' }); }
+  finally { await pool.end(); }
+  const targetProfile = configTargetProfile(snapshot, '103');
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
   const tok = (await tr.json()).tenant_access_token;
-
-  const targetProfile = TARGET_PROFILES[ROUTE.key];
-  if (!targetProfile) { console.error("sort-comments: 未配置" + ROUTE.key + "的目标客户画像,退出"); process.exit(1); }
 
   // 扫池取「待分拣」行
   let pt = "", pend = [];
@@ -62,7 +61,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   // 机器可读统计行（batch2.sh 取最后一行写 scoring 账本工件）；grades 只数判定成功的评论
   let judged = 0, moved = 0, failed = 0, duped = 0, parked = 0;
   const grades = { A: 0, B: 0, C: 0, 不相关: 0 };
-  const stats = () => statsLine("SORT_STATS", { pending: pend.length, judged, moved, duped, failed, parked, grades });
+  const stats = () => statsLine("SORT_STATS", { pending: pend.length, judged, moved, duped, failed, parked, grades, config: configEvidence(snapshot, runId) });
   if (!pend.length) { console.log(stats()); return; }
 
   // 0922真机实证: 悦升「采集时间」是日期型(type 5),金诺是文本——写死字符串会在悦升侧
@@ -94,7 +93,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
     const videoCaption = txt(f["来源视频"]);
     let verdict;
     try {
-      verdict = await judgeComment(comment, videoCaption, targetProfile);
+      verdict = await judgeComment(comment, videoCaption, targetProfile, { scoringRules: snapshot.runtime_config.comment_scoring });
     } catch (e) {
       failed++;
       console.error(`  判定失败 id=${row.id}: ${String(e.message || e).slice(0, 120)}(留在待分拣,下一轮重试)`);

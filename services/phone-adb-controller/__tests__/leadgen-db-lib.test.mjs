@@ -72,7 +72,7 @@ test("markVideoJudgment: verdict非法值拒绝写库(不能有pending/uncertain
 test("markVideoJudgment: matched/rejected合法写入", async () => {
   const pool = fakePool([{ rows: [] }]);
   await markVideoJudgment(pool, { lineKey: "jinuo", videoId: "v1", verdict: "matched", reason: "画像匹配", transcript: "转写文案" });
-  assert.deepEqual(pool.calls[0].params, ["jinuo", "v1", "matched", "画像匹配", "转写文案"]);
+  assert.deepEqual(pool.calls[0].params, ["jinuo", "v1", "matched", "画像匹配", "转写文案", "null"]);
 });
 
 test("markVideoJudgment: reason为空/null拒绝写库(0929修复——之前matched可以悄悄落NULL)", () => {

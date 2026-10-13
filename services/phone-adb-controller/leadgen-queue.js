@@ -1,7 +1,8 @@
 // 四流程持久队列入口；仅在mmv运行，设备端通过JSON stdin调用，不传递凭据。
 'use strict';
 const db = require('./leadgen-db-lib.js');
-const { resolveLine } = require('./judge-video.js');
+const { resolveLine, configEvidence } = require('./judge-video.js');
+const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
 const { judgeComment } = require('./judge-comment.js');
 
 async function transaction(pool, fn) {
@@ -34,18 +35,23 @@ async function validateHistoryRows(client,lineKey,input,old,deps) {
 
 async function queueRequest(pool, input, deps = { judgeComment }) {
   deps={judgeComment,...deps};
-  const { lineKey, targetProfile } = resolveLine(input.line);
+  const { lineKey } = resolveLine(input.line);
   const { op, run } = input;
   const sourceRun=input.source_run??null;
-  if(sourceRun!==null&&!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun))throw Error('上游运行号无效');
-  if (!/^[a-zA-Z0-9_-]{1,120}$/.test(run || '')) throw Error('缺有效运行号');
+  if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
   const videoIds=input.video_ids===undefined?null:input.video_ids;
   if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
   if(Object.hasOwn(input,'prefer_matched')&&(op!=='claim_videos'||typeof input.prefer_matched!=='boolean'||input.prefer_matched===true&&(!sourceRun||videoIds===null)))throw Error('采样优先必须真boolean及明确上游VID范围');
+  if(op==='company_config') {
+    if (!['101','102','103','104'].includes(String(input.step))) throw Error('COMPANY_STEP_INVALID');
+    const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:String(input.step)});
+    return {...configEvidence(snapshot,run),...(String(input.step)==='104'?{runtime_config:snapshot.runtime_config}:{})};
+  }
   if(op==='inspect_videos'){
     if(videoIds===null)throw Error('缺明确视频ID清单');
-    return (await pool.query('SELECT video_id,line_key,judgment_status,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
+    return (await pool.query('SELECT video_id,line_key,judgment_status,judgment_config,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
   }
   if(op==='sample_readback'){
     if(!sourceRun||!/^\d{16,24}$/.test(input.video_id||'')||typeof input.video_url!=='string')throw Error('采样读回缺明确上游或视频身份');
@@ -81,18 +87,24 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return db.discoverVideo(pool, { lineKey, videoId: row.video_id, videoUrl: row.video_url, title: row.title, keyword: row.keyword, harvestBatch: run });
   }
   if (op === 'claim_videos') {
+    let evidence=null;
+    if (input.config_required === true) {
+      const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'102'});
+      evidence=configEvidence(snapshot,run);
+    }
+    const policyFilter=evidence?"(judgment_status<>'rejected' OR judgment_config IS NULL OR COALESCE(judgment_config->>'company_id','')<>$7 OR COALESCE(judgment_config->>'version','')<>$8)":"judgment_status<>'rejected'";
     const priority=input.prefer_matched===true?"CASE WHEN judgment_status='matched' THEN 0 ELSE 1 END":"CASE WHEN judgment_status='pending' THEN 0 ELSE 1 END";
     return transaction(pool, async client => {
       // 待采的已合格视频也入队；上次崩溃的租约15分钟后可重领，活动内调用续期。
       const result = await client.query(`WITH pending AS (
-        SELECT id FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND judgment_status<>'rejected'
+        SELECT id FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND ${policyFilter}
         AND ($6::text[] IS NOT NULL OR $5::text IS NULL OR harvest_batch=$5)
         AND ($6::text[] IS NULL OR video_id=ANY($6::text[]))
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
         ORDER BY ${priority}, discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         UPDATE zenithjoy.leadgen_videos v SET process_status=$3,harvest_batch=$4,updated_at=now()
-        FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun, videoIds]);
+        FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun, videoIds, ...(evidence?[evidence.company_id,String(evidence.version)]:[])]);
       return result.rows;
     });
   }
@@ -187,6 +199,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     });
   }
   if (op === 'score') {
+    const snapshot = await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool, { lineHint: input.line, runId: run, sourceRun, step: '103' });
+    const targetProfile = configTargetProfile(snapshot, '103');
+    const evidence = configEvidence(snapshot, run);
+
     let scored = 0;const ids=[];
     for (let n = 0; n < limit; n++) {
       const result = await transaction(pool, async client => {
@@ -196,20 +212,20 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           ORDER BY collected_at LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun])).rows;
         if (!rows.length) return false;
         const row = rows[0];
-        const verdict = await deps.judgeComment(row.comment_body, row.source_video, targetProfile);
+        const verdict = await deps.judgeComment(row.comment_body, row.source_video, targetProfile, { scoringRules: snapshot.runtime_config.comment_scoring });
         if (!['相关', '不相关'].includes(verdict.relevance)
             || verdict.relevance === '相关' && !['A', 'B', 'C'].includes(verdict.grade)) throw Error('评论判定缺合法终态');
         // 保留待分拣，交下一活动标记人；模型异常回滚，下一轮仍可重判。
         await client.query(`UPDATE zenithjoy.leadgen_comments SET relevance=$2,intent_grade=$3,
-          judgment_reason=$4,updated_at=now() WHERE id=$1`, [row.id, verdict.relevance,
-          verdict.relevance === '相关' ? verdict.grade : null, verdict.reason]);
+          judgment_reason=$4,judgment_config=$5::jsonb,updated_at=now() WHERE id=$1`, [row.id, verdict.relevance,
+          verdict.relevance === '相关' ? verdict.grade : null, verdict.reason, JSON.stringify(evidence)]);
         return row.id;
       });
       if (!result) break;
       scored++;
       ids.push(result);
     }
-    return { scored, ids };
+    return { scored, ids, config: evidence };
   }
   if (op === 'mark_leads') {
     let marked = 0, created = 0, repeats = 0;const ids=[],lead_ids=[];

@@ -4675,8 +4675,10 @@ agent_suite:
     path: sprints/06282255-line02-company-profile-collect/tests/company-profile-and-line02.test.ts
     type: integration
     ci: L3
-    status: active
+    status: deprecated
+    superseded_by: [company-profile-config, company-profile-scratch, line02-account-status-regression]
     product: 智能获客
+    deprecation_reason: "旧公司合同允许不受信租户头、空白成功和无CAS写入；被认证租户与版本安全合同取代，原文不改，Line02账号断言已永久迁移"
     note: "Sprint 合约验收测试：GET/PUT company-profile + GET account-status + collect/start 主账号检查 + collect/:task_id 6字段 + terminal→stage_1_done（PR #949）。"
 
   - id: api-route-company-profile-unit
@@ -4685,7 +4687,7 @@ agent_suite:
     ci: L3
     status: active
     product: 智能获客
-    note: "路由存在性检查：GET 200 + PUT 无 company_name 返 400（test-pairing 配套 company-profile.ts，PR #949）。"
+    note: "认证公司路由缺租户GET/PUT均拒绝，安全合同取代旧空白成功（test-pairing 配套 company-profile.ts，PR #949）。"
 
   - id: api-route-line02-unit
     path: apps/api/src/routes/line02.test.ts
@@ -6258,6 +6260,14 @@ agent_suite:
     product: 员工知识中枢
     note: "路③ 看板纯逻辑(test-pairing)：resolveDropPatch 映射被拖那一行(非 rows[0]，变异 A24-drag-wrong-row 注入点)、拖到未分组列清空该格、groupRowsByField 三态未分组。smoke --a24-pure-only 也跑本文件。"
 
+  - id: workbench-view-prefs-save-ordering
+    path: apps/staff-hub/src/pages/WorkbenchTablePage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "真实页面组件 + deferred mock patchView：跨字段旧响应不覆盖后改隐藏列；同字段连续操作串行发出并保最后选择；失败不能被无关成功清提示、明确重试发送完整未保存配置；切视图读回保留原视图pending/failed输入；跨表路由拒绝旧activation/view/row响应倒灌，同view activation也串行真实保存。CI .github/workflows/e2e-knowledge-hub-path3.yml 段2c实际调用 .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a24-pure-only，显式Vitest执行本文件与原workbenchKanban.test.ts；真实 API/PG 响应顺序另外由隔离浏览器验收。"
+
   - id: workbench-views-e2e-golden-path
     path: apps/staff-hub/e2e/structured-workbench-views.spec.ts
     type: e2e
@@ -6452,13 +6462,13 @@ agent_suite:
     product: 员工知识中枢
     note: "documents 路由表(test-pairing)：树/搜索/CRUD/移动/软删/还原/导出/可见性/@提及端点齐、router 前挂限流+documentAuthGuard。"
 
-  - id: collab-notes-collab-ws-mount-pairing
+  - id: collab-ws-seed-race
     path: apps/api/src/services/collab-ws.test.ts
     type: unit
     ci: L3
     status: active
     product: 员工知识中枢
-    note: "collab-ws 挂载(test-pairing)：attachCollabWS 返回 noServer WebSocketServer、注册 upgrade 监听器。真握手/CV 由合同真 ws 测试覆盖。"
+    note: "保留挂载2例并新增真实HTTP/WS/Yjs/CV首帧/shared-seed/断连队列4例；deferred无sleep，SQL/授权隔离，原真PG与浏览器强合同不变。"
 
   - id: collab-notes-provider-pairing
     path: apps/staff-hub/src/lib/collabProvider.test.ts
@@ -7341,3 +7351,115 @@ agent_suite:
   status: active
   product: 多平台发布
   note: "GP-Anchor: line01/android_worker_publish keep-green；完整方法真实安装/正式入口/闭包/旧当前外壳不变，隔离fixture"
+
+- id: company-wiki-import
+  path: apps/api/scripts/company-wiki-import.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-projection-adapters
+  path: apps/api/scripts/company-projection-adapters.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-profile-config
+  path: apps/api/src/routes/company-profile-config.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-profile-page-config
+  path: apps/dashboard/src/pages/CompanyProfilePage.config.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config
+  path: services/phone-adb-controller/__tests__/company-config.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config-postgres
+  path: services/phone-adb-controller/__tests__/company-config-postgres.test.mjs
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config-runtime
+  path: services/phone-adb-controller/__tests__/company-config-runtime.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config-sync
+  path: services/phone-adb-controller/__tests__/company-config-sync.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-profile-scratch
+  path: apps/api/src/routes/company-profile-scratch.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "真实scratch公司Wiki、API、浏览器保存与冻结版本闭环"
+
+- id: company-config-readiness
+  path: services/phone-adb-controller/__tests__/company-config-readiness.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "安装前核验真实PG配置schema，空配置不报业务绿"
+
+- id: company-profile-validation
+  path: apps/api/src/routes/company-profile-validation.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司种子导入与API启用校验跨模块合同；原跨Base目标保留、禁止新借用与账号自证核验"
+
+- id: line02-account-status-regression
+  path: apps/api/src/routes/line02-account-status-regression.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 智能获客
+  note: "原0628不可变合同中有效的Line02账号状态验收永久迁移；响应形状、账号映射及无租户行为保留"
+
+- id: structured-workbench-startup-diagnostics
+  path: .github/workflows/scripts/__tests__/structured-workbench-startup-diagnostics.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实fail/start_api错误路径在fixture stdout重定向后仍保留stderr；不修改健康判据和40秒预算"
+
+- id: paired-deploy-smoke-company-readiness
+  path: services/phone-adb-controller/__tests__/paired-deploy-smoke.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "明示fake SSH PG catalog输入经真实readiness；缺schema/无效JSON先于admission及安装拒绝，配套CAS安装须真实字节读回"

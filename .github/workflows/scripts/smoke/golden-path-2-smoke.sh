@@ -2071,6 +2071,12 @@ else
 fi
 ok "Step 40 ✅ 认人不被名字写法绊倒（实体/已解码算同一人，不同的人仍判不同）"
 
+# Step 41：101-104消费同公司的冻结版本，缺映射不能沿用硬编码画像。
+node --test services/phone-adb-controller/__tests__/company-config.test.mjs \
+  services/phone-adb-controller/__tests__/company-config-runtime.test.mjs \
+  || fail "Step 41 公司配置隔离、版本冻结或真实判断请求回归失败" 41
+ok "Step 41 ✅ 公司资料与规则版本随运行留证，缺项明确阻断"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \

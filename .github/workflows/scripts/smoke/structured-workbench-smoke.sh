@@ -27,7 +27,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO_ROOT"
 
-fail() { echo "❌ FAIL: $*"; exit 1; }
+fail() { echo "❌ FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ✅ $*"; }
 
 SPRINT_DIR="sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff"
@@ -212,6 +212,11 @@ run_static_inv() {
 }
 
 run_static() {
+  # 启动失败必须保留真实日志，包含 stdout 被 fixture 重定向的路径。
+  # 先执行错误路径回归，避免后续数据库启动失败时丢失诊断证据。
+  node --test \
+    "$REPO_ROOT/.github/workflows/scripts/__tests__/structured-workbench-startup-diagnostics.test.mjs" \
+    || fail "启动失败诊断回归未过"
   run_a2
   run_a35
   run_a33
@@ -705,7 +710,7 @@ start_api() {
     kill -0 "$API_PID" 2>/dev/null || break
     sleep 1
   done
-  [ "$up" = "1" ] || { tail -30 "$log"; fail "apps/api 未在 40s 内就绪（端口 ${port}）"; }
+  [ "$up" = "1" ] || { tail -30 "$log" >&2; fail "apps/api 未在 40s 内就绪（端口 ${port}）"; }
 }
 
 login_cookie() {
@@ -1736,10 +1741,18 @@ run_view_delete() {
 }
 
 run_a24_pure() {
-  echo "== A24 拖卡纯函数：resolveDropPatch 映射被拖那一行（staff-hub 单测，不碰 DB/服务）=="
-  ( cd apps/staff-hub && npx vitest run src/lib/workbenchKanban.test.ts --reporter=dot ) \
-    >/tmp/wb-c-a24.log 2>&1 || { tail -20 /tmp/wb-c-a24.log; fail "拖卡纯函数单测未过（A24-drag-wrong-row 应让它红）"; }
-  echo "✅ A24 拖卡纯函数通过"
+  echo "== A24 拖卡纯函数 + 视图偏好组件回归（deferred mock patchView，不碰 DB/服务）=="
+  (
+    cd apps/staff-hub &&
+    npx vitest run \
+      src/lib/workbenchKanban.test.ts \
+      src/pages/WorkbenchTablePage.test.tsx \
+      --reporter=dot
+  ) >/tmp/wb-c-a24.log 2>&1 || {
+    tail -20 /tmp/wb-c-a24.log
+    fail "拖卡纯函数或视图偏好保存回归未过"
+  }
+  echo "✅ A24 拖卡纯函数和视图偏好保存回归通过"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

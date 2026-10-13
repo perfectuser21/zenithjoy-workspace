@@ -5,22 +5,23 @@
 //   配合douyin-phone-adb的record-start/record-stop/record-extract-audio)产出音频文件后,
 //   生成这份清单交给本脚本处理。本脚本自己不碰ADB/真机,只负责"转写+判定+写库"这一段。
 //
-// ⚠️ 目标客户画像(TARGET_PROFILES)目前是写死在本文件里的占位值,后续要不要挪到飞书
-// 配置表(像GOLD/JUNK_WORDS现在也是写死在sort-comments.js里一样)由主理人后续拍板。
 "use strict";
 const fs = require("fs");
+const { randomUUID } = require("crypto");
 const { routeOf } = require("./line-routes.js");
 const { shouldSkipCheapGate, resolveTranscriptSource } = require("./judge-video-lib.js");
+const { freezeCompanyConfig, configTargetProfile } = require("./company-config-lib.js");
 
-const TARGET_PROFILES = {
-  jinuo: "AI人工智能训练师考证意向人群:关注AI技能证书、求职提升、培训报名的用户",
-  yuesheng: "悦升云端目标客户:企业级AI部署决策者/OPC小微主体主/AI办公入门学习者",
-};
+function configEvidence(snapshot, runId) {
+  return { company_id: snapshot.company_id, tenant_id: snapshot.tenant_id, version: snapshot.version,
+    product_ids: snapshot.product_ids, policy_id: snapshot.policy_id, run_id: runId };
+}
 
 // 生产依赖惰性加载:单测经 deps 注入假实现,不触发 pg / 网络模块。
 function defaultDeps() {
   const db = require("./leadgen-db-lib.js");
   return {
+    freezeCompanyConfig,
     listPendingVideos: db.listPendingVideos,
     markVideoJudgment: db.markVideoJudgment,
     markVideoJudgeError: db.markVideoJudgeError,
@@ -40,10 +41,10 @@ function defaultDeps() {
 //   no_source        既无转写也无标题 → pending
 //   judge_error      判定 API 故障(JudgeApiError 口径:OpenRouter 402/429/网络) → pending,judgment_reason 记「判定异常(待重判)」
 //   judged           正常判定 → matched/rejected(已写库)
-async function judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, pool, deps = defaultDeps(), cheapGate = true }) {
+async function judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, pool, deps = defaultDeps(), cheapGate = true, configEvidence }) {
   if (cheapGate && shouldSkipCheapGate(video)) {
     const reason = "V2便宜闸:零评论";
-    await deps.markVideoJudgment(pool, { lineKey, videoId: video.video_id, verdict: "rejected", reason });
+    await deps.markVideoJudgment(pool, { configEvidence, lineKey, videoId: video.video_id, verdict: "rejected", reason });
     return { outcome: "rejected", reason, kind: "cheap_gate" };
   }
   const src = resolveTranscriptSource(video, manifestEntry);
@@ -59,7 +60,7 @@ async function judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, poo
       // 直接判rejected，不再无限期占pending队列重试；其余(网络/超时/鉴权)仍留pending重试。
       if (e.emptyTranscript) {
         const reason = "转写为空(死寂/静音音频)";
-        await deps.markVideoJudgment(pool, { lineKey, videoId: video.video_id, verdict: "rejected", reason });
+        await deps.markVideoJudgment(pool, { configEvidence, lineKey, videoId: video.video_id, verdict: "rejected", reason });
         return { outcome: "rejected", reason, kind: "empty_transcript" };
       }
       // 转写调用本身失败(网络/超时/鉴权)先跳过,留pending,下一轮重试,不误判成rejected
@@ -84,7 +85,7 @@ async function judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, poo
     return { outcome: "pending", reason, kind: "judge_error" };
   }
   await deps.markVideoJudgment(pool, {
-    lineKey, videoId: video.video_id, verdict: verdict.verdict, reason: verdict.reason, transcript,
+    configEvidence, lineKey, videoId: video.video_id, verdict: verdict.verdict, reason: verdict.reason, transcript,
   });
   return { outcome: verdict.verdict === "matched" ? "matched" : "rejected", reason: verdict.reason, kind: "judged" };
 }
@@ -95,21 +96,23 @@ async function judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, poo
 // 入口一律经 routeOf() 归一:profile 名、路由键、业务线名都认;认不出就抛错,不猜。
 function resolveLine(lineHint) {
   const lineKey = routeOf(lineHint).key;
-  const targetProfile = TARGET_PROFILES[lineKey];
-  if (!targetProfile) throw new Error(`judge-video: 未配置line_key=${lineKey}的目标客户画像`);
-  return { lineKey, targetProfile };
+  return { lineKey };
 }
 
 // 批量重判(8bb3af55 之后不再挂在 batch2.sh 落池之后跑——那时评论早已采完;保留给人工/补判扫 pending 池用)
-async function runJudgeVideo({ lineHint, manifest = [], pool, deps = defaultDeps() }) {
-  const { lineKey, targetProfile } = resolveLine(lineHint);
+async function runJudgeVideo({ lineHint, runId, manifest = [], pool, deps = defaultDeps() }) {
+  const { lineKey } = resolveLine(lineHint);
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(runId || "")) throw Error("缺有效运行号 COMPANY_RUN_REQUIRED");
+  const snapshot = await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool, { lineHint, runId, step: "102" });
+  const targetProfile = configTargetProfile(snapshot, "102");
+  const evidence = configEvidence(snapshot, runId);
   const manifestByVideoId = new Map(manifest.map((m) => [m.videoId, m]));
 
   const pending = await deps.listPendingVideos(pool, lineKey, 200);
 
-  const stats = { pending: pending.length, skipped: 0, matched: 0, rejected: 0, noSource: 0, judgeError: 0 };
+  const stats = { config: evidence, pending: pending.length, skipped: 0, matched: 0, rejected: 0, noSource: 0, judgeError: 0 };
   for (const video of pending) {
-    const r = await judgeOneVideo({ video, manifestEntry: manifestByVideoId.get(video.video_id), lineKey, targetProfile, pool, deps });
+    const r = await judgeOneVideo({ video, manifestEntry: manifestByVideoId.get(video.video_id), lineKey, targetProfile, pool, deps, configEvidence: evidence });
     if (r.kind === "cheap_gate") stats.skipped++;
     else if (r.kind === "no_source") stats.noSource++;
     else if (r.kind === "judge_error") stats.judgeError++;
@@ -131,7 +134,8 @@ async function main() {
   const { getPool } = require("./leadgen-db-connect.js");
   const pool = getPool();
   try {
-    await runJudgeVideo({ lineHint, manifest, pool });
+    const stats = await runJudgeVideo({ lineHint, runId: process.argv[4] || `judge-${randomUUID()}`, manifest, pool });
+    console.log(JSON.stringify({ config: stats.config }));
   } finally {
     await pool.end().catch(() => {});
   }
@@ -144,4 +148,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, runJudgeVideo, judgeOneVideo, resolveLine, defaultDeps, TARGET_PROFILES };
+module.exports = { main, runJudgeVideo, judgeOneVideo, resolveLine, defaultDeps, configEvidence };

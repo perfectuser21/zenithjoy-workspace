@@ -1,45 +1,33 @@
-// next-keywords.js <业务线> <数量> —— 从「关键词配置」表自动出词单(24×7 采收的自动扳机)
-// 选词策略: 仅启用词;按 (有效线索数 / max(1,已测轮次)) 效率降序 + 最久未测优先轮换;
-// 输出纯文本词单(一行一词),供 M4/M1 夜间采收 cron 直接消费。表是 SSOT: 改表=改策略。
-const fs = require("fs");
-// 判定抽到 keyword-enabled-lib.js：本文件顶层读凭据 + 顶层发网络请求，
-// 不能被测试 require（第一版这么做，CI 直接 ENOENT 报红）。
-const { isKeywordEnabled, keywordMatchesBiz } = require("./keyword-enabled-lib.js");
-const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
-const acc = cfg.channels.feishu.accounts.jinoshengyuan;
-const BIZ = process.argv[2] || "AI人工智能训练师";
-const N = parseInt(process.argv[3] || "6", 10);
-const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", KW = "tbleP4LgzkcwAhiZ";
-function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (v && v.name) ? v.name : String(v || ""); }
-
-
-(async () => {
-  const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
-  const tok = (await tr.json()).tenant_access_token;
-  const H = { Authorization: "Bearer " + tok };
-  const rows = []; let pt = "";
-  do {
-    const r = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${KW}/records?page_size=100${pt?"&page_token="+pt:""}`, { headers: H })).json();
-    rows.push(...(r.data.items || []));
-    pt = r.data.has_more ? r.data.page_token : "";
-  } while (pt);
-  const cand = rows.map(r => {
-    const f = r.fields;
-    return {
-      word: txt(f["抖音获客-关键词配置"]),
-      enabled: txt(f["是否启用"]),
-      biz: txt(f["业务线"]),
-      leads: Number(f["有效线索数"]) || 0,
-      videos: Number(f["搜索视频数"]) || 0,
-      lastTest: txt(f["最后测试时间"]),
-    };
-  }).filter(k => k.word && isKeywordEnabled(k.enabled) && keywordMatchesBiz(k.biz, BIZ));
-  // 效率分 = 线索数/轮次近似(视频数/4≈轮次); 未测词(lastTest空)优先探索
-  cand.sort((a, b) => {
-    const ea = a.videos ? a.leads / (a.videos / 4) : (a.lastTest ? 0 : 99);
-    const eb = b.videos ? b.leads / (b.videos / 4) : (b.lastTest ? 0 : 99);
-    if (eb !== ea) return eb - ea;
-    return (a.lastTest || "").localeCompare(b.lastTest || ""); // 最久未测优先
-  });
-  cand.slice(0, N).forEach(k => console.log(k.word));
-})();
+// 101关键词来自已启用公司配置；冻结后本次运行不会随配置修改而漂移。
+'use strict';
+const { freezeCompanyConfig } = require('./company-config-lib.js');
+const { isKeywordEnabled } = require('./keyword-enabled-lib.js');
+const { configEvidence } = require('./judge-video.js');
+function selectCompanyKeywords(snapshot, limit) {
+  const strategy = snapshot.runtime_config?.search_strategy;
+  if (!Array.isArray(strategy?.keywords)) throw Error('COMPANY_SEARCH_KEYWORDS_REQUIRED');
+  const words = strategy.keywords.filter(k => typeof k === 'string' || k.enabled === true || isKeywordEnabled(k.enabled))
+    .map(k => typeof k === 'string' ? k : k.word).filter(w => typeof w === 'string' && w.trim());
+  if (!words.length) throw Error('COMPANY_SEARCH_KEYWORDS_REQUIRED');
+  return [...new Set(words)].slice(0, Math.max(1, Math.min(12, Number(limit) || 2)));
+}
+async function companyKeywords(pool, { lineHint, runId, limit, keywords }, deps = {}) {
+  const requestedLimit = limit === undefined ? 2 : Number(limit);
+  if (!Number.isSafeInteger(requestedLimit)) throw Error('COMPANY_SEARCH_LIMIT_INVALID');
+  const normalizedLimit = Math.max(1,Math.min(12,requestedLimit));
+  if (keywords !== undefined && (!Array.isArray(keywords) || !keywords.length || keywords.length > 100 || keywords.some(w => typeof w !== 'string' || !w.trim() || w.length > 200))) throw Error('COMPANY_TASK_KEYWORDS_INVALID');
+  const taskKeywords = keywords === undefined ? null : [...new Set(keywords.map(w=>w.trim()))];
+  const snapshot = await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool, { lineHint, runId, taskInputs: {keywords:taskKeywords,limit:normalizedLimit}, step: '101' });
+  const selected = taskKeywords || selectCompanyKeywords(snapshot, normalizedLimit);
+  return { keywords: selected, config: {...configEvidence(snapshot, runId), keyword_source: keywords === undefined ? 'company_config' : 'task', keywords: selected} };
+}
+async function main() {
+  const pool = require('./leadgen-db-connect.js').getPool();
+  try {
+    const result = await companyKeywords(pool, { lineHint: process.argv[2], limit: process.argv[3], runId: process.argv[4] });
+    for (const word of result.keywords) console.log(word);
+    console.error(JSON.stringify({ config: result.config }));
+  } finally { await pool.end(); }
+}
+if (require.main === module) main().catch(error => { console.error(error.code || error.message); process.exitCode = 1; });
+module.exports = { companyKeywords, selectCompanyKeywords };
