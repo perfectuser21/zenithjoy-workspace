@@ -4,6 +4,12 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 node --test "$ROOT/services/phone-adb-controller/__tests__/company-config.test.mjs"
 node --test "$ROOT/apps/api/scripts/company-wiki-import.test.mjs" "$ROOT/apps/api/scripts/company-projection-adapters.test.mjs" "$ROOT/services/phone-adb-controller/__tests__/company-config-sync.test.mjs"
 cd "$ROOT"
+# 真实渲染公司页面，覆盖深色父背景下的文字/标签/来源及读取状态。
+# JSDom只mock API数据，真实组件以computed前景和逐祖先RGBA背景计算对比度。
+npm test \
+  --workspace @zenithjoy/dashboard \
+  -- \
+  --run src/pages/CompanyProfilePage.config.test.tsx
 node --input-type=module <<'JS'
 import {spawnSync} from 'node:child_process';
 let scratch=process.env.COMPANY_CONFIG_SCRATCH_URL;
