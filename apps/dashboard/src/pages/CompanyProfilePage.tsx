@@ -12,6 +12,11 @@ const EMPTY: CompanyProfile = {
 const TABS = ['基础信息', '产品与价值', '目标客群', '公司Wiki与配置'] as const;
 type TabKey = (typeof TABS)[number];
 
+const contentStyle = {
+  maxWidth: 720, margin: '0 auto', padding: '24px 16px',
+  backgroundColor: '#fff', color: '#111827', borderRadius: 12,
+} as const;
+
 export default function CompanyProfilePage() {
   const [form, setForm] = useState<CompanyProfile>({ ...EMPTY });
   const formRef = useRef<CompanyProfile>({ ...EMPTY });
@@ -123,15 +128,15 @@ export default function CompanyProfilePage() {
       await handleBlur();
     } catch (error) { showToast(error instanceof SyntaxError ? 'JSON 格式错误，请修正后保存' : String(error), false); }
   };
-  if (loading) return <div>正在读取公司资料...</div>;
-  if (loadError) return <div><div role="alert">{loadError}</div><button onClick={() => void reloadProfile()}>重新读取公司资料</button></div>;
+  if (loading) return <div style={contentStyle}>正在读取公司资料...</div>;
+  if (loadError) return <div style={contentStyle}><div role="alert">{loadError}</div><button onClick={() => void reloadProfile()}>重新读取公司资料</button></div>;
   const statusLabels = { draft: '草稿', confirmed: '已确认', enabled: '已启用' };
   const mappingLabels: Record<string, string> = { unmapped: '未接通', source_retained: '保留飞书来源，尚未同步', verified: '已读回核验', pending: '当前版本待读回', conflict: '回写冲突待确认', mismatch: '读回不一致', failed: '同步失败' };
-  const inputStyle = { width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6 };
+  const inputStyle = { width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, backgroundColor: '#fff', color: '#111827' };
   const labelSpanStyle = { display: 'block', marginBottom: 4, fontSize: 13, color: '#555' } as const;
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={contentStyle}>
       <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24 }}>公司信息与Wiki · {form.company_name}</h1>
       <p>版本 {form.config_version ?? 0} · {statusLabels[form.config_status ?? 'draft']} · 负责人：{form.config_owner || '待指定'}</p>
       <p>公司ID：{form.company_id || '未映射'}</p>
@@ -140,7 +145,7 @@ export default function CompanyProfilePage() {
       {toast && (
         <div data-testid="save-toast" style={{
           position: 'fixed', top: 20, right: 20,
-          background: toastOk ? '#333' : '#e53e3e',
+          background: toastOk ? '#333' : '#b91c1c',
           color: '#fff', padding: '10px 20px', borderRadius: 8, zIndex: 9999,
         }}>{toast}</div>
       )}
@@ -310,7 +315,7 @@ export default function CompanyProfilePage() {
         <div>飞书：{mappingLabels[form.sync_status?.feishu?.status ?? 'unmapped'] ?? '未接通'}</div>
         <div>来源与确认状态<pre data-testid="company-source-evidence" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(form.source_evidence ?? [], null, 2)}</pre></div>
       </div>}
-      {saving && <div style={{ marginTop: 16, fontSize: 13, color: '#888' }}>保存中...</div>}
+      {saving && <div style={{ marginTop: 16, fontSize: 13, color: '#555' }}>保存中...</div>}
     </div>
   );
 }
