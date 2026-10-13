@@ -12,7 +12,7 @@ test('拒绝PR/fork/错workflow/非主线/旧SHA/未成功run，接受主线push
  for(const change of [{event:'pull_request'},{head_repository:{id:2,full_name:repo}},{head_branch:'feature'},{path:'.github/workflows/other.yml'},{conclusion:'failure'},{head_sha:'b'.repeat(40)},{status:'in_progress'}])assert.throws(()=>validateSourceRun({...run(),...change},sha));
 });
 test('固定同run SHA artifact；过期/重复/不同run与fork来源均拒绝',async()=>{
- const {selectArtifact}=await implementation();const name=`pilot-release-verification-${sha}`;
+ const {selectArtifact}=await implementation();const name=`pilot-release-verification-zenithjoy-${sha}`;
  const good={id:55,name,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}};
  assert.equal(selectArtifact([good],name,run()).id,55);
  for(const items of [[good,good],[{...good,expired:true}],[{...good,workflow_run:{...good.workflow_run,id:43}}],[{...good,workflow_run:{...good.workflow_run,head_repository_id:2}}],[]])assert.throws(()=>selectArtifact(items,name,run()));
@@ -23,13 +23,25 @@ test('真实ZIP只读取固定JSON，不释放旁带代码或路径',async()=>{
  assert.deepEqual(readArtifactJson(readFileSync(join(dir,'bundle.zip')),'head.json'),{snapshot:{revision:'fixed'}});
  assert.throws(()=>readArtifactJson(readFileSync(join(dir,'bundle.zip')),'receipt.json'));
 });
-test('下载入口只取同run完整三份JSON且原始数据不作为代码执行',async()=>{
+test('双scope成功run只下载zenithjoy完整JSON，不取commander或旧无scope产物',async()=>{
  const {downloadDeploymentEvidence}=await implementation();const dir=mkdtempSync(join(tmpdir(),'phone-evidence-download-'));
- for(const [name,data] of Object.entries({'head.json':{snapshot:{revision:sha}},'report.json':{purpose:'release_verification'},'receipt.json':{verdict:'PASS'}}))writeFileSync(join(dir,name),JSON.stringify(data));
+ for(const [name,data] of Object.entries({'head.json':{snapshot:{revision:sha,scope:'zenithjoy'}},'report.json':{purpose:'release_verification',scope:'zenithjoy'},'receipt.json':{verdict:'PASS'}}))writeFileSync(join(dir,name),JSON.stringify(data));
  execFileSync('zip',['-q','bundle.zip','head.json','report.json','receipt.json'],{cwd:dir});const requests=[];
- const github=async(path,binary)=>{requests.push(path);if(path.endsWith('/zip')){assert.equal(binary,true);return readFileSync(join(dir,'bundle.zip'));}
-  if(path.includes('/artifacts?'))return {total_count:1,artifacts:[{id:55,name:`pilot-release-verification-${sha}`,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}}]};
+ const github=async(path,binary)=>{requests.push(path);if(path.endsWith('/zip')){assert.equal(path,`repos/${repo}/actions/artifacts/55/zip`);assert.equal(binary,true);return readFileSync(join(dir,'bundle.zip'));}
+  if(path.includes('/artifacts?'))return {total_count:3,artifacts:['commander-generic-','', 'zenithjoy-'].map((scope,index)=>({id:[56,57,55][index],name:`pilot-release-verification-${scope}${sha}`,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}}))};
   return path.includes('/git/ref/')?{object:{sha}}:run();};
  const result=await downloadDeploymentEvidence('42',github);assert.equal(result.run.sha,sha);assert.equal(result.receipt.verdict,'PASS');assert.equal(result.snapshot.revision,sha);
  assert.deepEqual(requests,[`repos/${repo}/actions/runs/42`,`repos/${repo}/git/ref/heads/main`,`repos/${repo}/actions/runs/42/artifacts?per_page=100`,`repos/${repo}/actions/artifacts/55/zip`]);
+});
+
+test('缺唯一zenithjoy scope产物时拒绝下载，不回退旧名或commander',async()=>{
+ const {downloadDeploymentEvidence}=await implementation();
+ for(const scopes of [[''],['commander-generic-'],['','commander-generic-'],['zenithjoy-','zenithjoy-']]){
+  const requests=[];const github=async path=>{requests.push(path);
+   if(path.includes('/artifacts?'))return {total_count:scopes.length,artifacts:scopes.map((scope,index)=>({id:55+index,name:`pilot-release-verification-${scope}${sha}`,expired:false,workflow_run:{id:42,head_branch:'main',head_sha:sha,repository_id:1,head_repository_id:1}}))};
+   if(path.endsWith('/zip'))throw Error('unexpected artifact download');
+   return path.includes('/git/ref/')?{object:{sha}}:run();};
+  await assert.rejects(downloadDeploymentEvidence('42',github),/artifact缺失\/歧义/);
+  assert.equal(requests.some(path=>path.endsWith('/zip')),false);
+ }
 });
