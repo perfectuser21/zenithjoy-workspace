@@ -22,7 +22,7 @@ function fixture(){
   if(op==='release_outreach')return {result:{released:0}};
   if(body.kind==='outreach_policy')return {result:{line_key:'jinuo',profile:env.P,sender_douyin_id:'langzi63485',daily_cap:60,order_limit:1,template:{id:order.script_id,version:'B',message:order.message}}};
   throw Error('unexpected fake RPC '+JSON.stringify(body));};
- const execute=async(cmd,args)=>{events.push({cmd,args});let stdout='';
+ const execute=async(cmd,args,opts)=>{events.push({cmd,args,opts});let stdout='';
   const action=args.find(x=>['preflight','lock-acquire','lock-refresh','lock-release','account-current','close-app','return-safe-desktop','private-message-send','ui-evidence'].includes(x));
   if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
   if(action==='preflight')stdout='serial=FAKE6983\n';
@@ -73,4 +73,15 @@ test('真实发送后write回复丢失，仅独立原订单读回恢复，不再
  await h.preflight();await h.send_dm();const back=await h.write_back();assert.equal(back.outreach_readback_failures,0);
  assert.equal(f.events.filter(e=>e.args?.includes('private-message-send')).length,1);
  }finally{f.clean();}
+});
+test('完整原sender拥有480s子预算，但仍夹紧本activity剩余且不改变普通命令120s',async()=>{
+ for(const remaining of [null,45000]){
+ const f=fixture();try{const h=createHandlers({root:f.dir,...f});await h.preflight();
+ if(remaining!==null)h.state.budgetDeadline=Date.now()+remaining;
+ await h.send_dm();const send=f.events.find(e=>e.args?.includes('private-message-send'));
+ if(remaining===null){assert.equal(send.opts.maxDurationS,480);assert.equal(send.opts.timeoutMs,480000);}
+ else {assert.ok(send.opts.timeoutMs>0&&send.opts.timeoutMs<=remaining);}
+ assert.ok(f.events.filter(e=>e.args?.includes('close-app')).every(e=>e.opts.timeoutMs<=120000));
+ }finally{f.clean();}
+ }
 });
