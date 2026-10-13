@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -18,13 +18,18 @@ function fixture(t){
  const files={};
  for(const name of RPC_FILES){const p=join(dir,'runtime',name);mkdirSync(dirname(p),{recursive:true});writeFileSync(p,'explicit frozen dependency fixture\n');files['runtime/'+name]=digest(readFileSync(p));}
  const body={deployment:{source_commit:'a'.repeat(40)},files};writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
- writeFileSync(join(dir,'leadgen-rpc.mjs'),`import{readFileSync,writeFileSync}from'node:fs';const body=JSON.parse(readFileSync(0,'utf8'));writeFileSync(${JSON.stringify(capture)},JSON.stringify(body));process.stdout.write(JSON.stringify({ok:true,result:{kind:'explicit-test-rpc',request:body.request}}));`);
- return{capture,run:args=>spawnSync(process.execPath,[CLIENT,...args],{encoding:'utf8',timeout:3000,env:{...process.env,WFR_RUN_DIR:dir,WF_HOME:dir,LEADGEN_LOCAL_RPC:'1'}})};
+ const bin=join(dir,'bin');mkdirSync(bin);const ssh=join(bin,'ssh');
+ writeFileSync(ssh,`#!/usr/bin/env node\nconst fs=require('node:fs');const body=JSON.parse(fs.readFileSync(0,'utf8'));fs.writeFileSync(${JSON.stringify(capture)},JSON.stringify({...body,sshArgs:process.argv.slice(2)}));process.stdout.write(JSON.stringify({ok:true,result:{kind:'explicit-test-rpc',request:body.request}}));`);chmodSync(ssh,0o755);
+ return{capture,run:args=>spawnSync(process.execPath,[CLIENT,...args],{encoding:'utf8',timeout:3000,env:{...process.env,PATH:bin+':'+process.env.PATH,WFR_RUN_DIR:dir,WF_HOME:dir,LEADGEN_LOCAL_RPC:'0'}})};
 }
 test('102真实取链批次CLI完整转发run/sourceRun与原判断输入',t=>{
  const c=fixture(t),r=c.run(BASE);assert.equal(r.status,0,r.stdout+r.stderr);
  const b=JSON.parse(readFileSync(c.capture,'utf8'));assert.equal(b.kind,'qualify');assert.deepEqual(b.request,{line:'AI人工智能训练师',run:RUN,sourceRun:SOURCE,videoId:'7637880891511528896',audio:`/tmp/qv-${RUN}-7637880891511528896.wav`,cmd:'judge'});
  assert.equal(b.source.commit,'a'.repeat(40));assert.equal(b.source.files.length,RPC_FILES.length);
+ assert.ok(b.sshArgs.includes('mmv'));assert.match(b.sshArgs.at(-1),/node leadgen-rpc\.mjs/);
+});
+test('qv独立判断的显式空上游仍原样转发，不杜撰来源',t=>{
+ const c=fixture(t),r=c.run(BASE.map((x,i)=>i===7?'':x));assert.equal(r.status,0,r.stdout+r.stderr);assert.equal(JSON.parse(readFileSync(c.capture,'utf8')).request.sourceRun,'');
 });
 test('102独立判断保留可选上游语义，仍转发本run',t=>{
  const c=fixture(t),args=BASE.filter((_,i)=>![6,7].includes(i)),r=c.run(args);assert.equal(r.status,0,r.stdout+r.stderr);const b=JSON.parse(readFileSync(c.capture,'utf8'));assert.equal(b.request.run,RUN);assert.equal(b.request.sourceRun,undefined);
@@ -35,7 +40,7 @@ for(const [label,args] of [
  ['run选项串',BASE.map((x,i)=>i===5?'--help':x)],
  ['run路径穿越',BASE.map((x,i)=>i===5?'../run':x)],
  ['run超长',BASE.map((x,i)=>i===5?'r'.repeat(121):x)],
- ['缺上游值',BASE.map((x,i)=>i===7?'':x)],
+ ['缺上游值',BASE.filter((_,i)=>i!==7)],
  ['坏上游',BASE.map((x,i)=>i===7?'../source':x)],
  ['上游等于本run',BASE.map((x,i)=>i===7?RUN:x)],
  ['重复run',[...BASE,'--run','different-run']],
