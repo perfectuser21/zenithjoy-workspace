@@ -146,11 +146,12 @@ class Methods(unittest.TestCase):
     if b.get('path')==path:b['kind']='skill'
   self.a['payload']['implementation_bindings'][0]['field']='implementation_bindings'
   with self.assertRaises(ValueError):self.method_module().manifest_for(self.method)
- def test_nested_skill_entries_are_rejected_and_default_recovery_is_not_budget_drift(self):
+ def test_nested_skill_entries_are_rejected(self):
   m=self.method_module()
   for contract in [{'steps':[{'skill':'hidden'}]},{'implementation':{'kind':'skill'}},{'runtime':{'kind':'skill'}},{'activities':[{'steps':[{'implementation':{'kind':'skill'}}]}]}]:
    release=copy.deepcopy(self.method);release['payload']['activities'][0]['payload']['steps']=[{'contract':contract}]
    with self.assertRaisesRegex(ValueError,'unsupported_method_skill'):m.manifest_for(release)
+ def test_default_recovery_is_normalized_without_extending_original_budget(self):
   partial={'max_attempts':2,'retry_safe':True,'retry_on':['verification_failed']}
   self.contract['recovery']=copy.deepcopy(partial);self.original['payload']['workflows'][0]['payload']['contract']['recovery']=copy.deepcopy(partial)
   goal=self.envelope['method_selection']['original_goal_definition'];goal['contract']['recovery']=copy.deepcopy(partial)
