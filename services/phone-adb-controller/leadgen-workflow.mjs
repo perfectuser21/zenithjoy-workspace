@@ -98,7 +98,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     const ownerArgs=['close-app','return-safe-desktop'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
-      command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:{});
+      command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{});
   };
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
