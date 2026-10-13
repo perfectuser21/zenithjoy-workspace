@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""原生 OpenClaw infra 工具：只登记代码任务、只读复核，不调用模型或手机。"""
+"""原生 infra 调度、只读复核与持续恢复；手机动作只交给冻结runner。"""
 import argparse
+import fcntl
+import hashlib
+import os
+import subprocess
 import datetime as dt
 import importlib.util
 import json
@@ -17,9 +21,9 @@ SPEC.loader.exec_module(bridge)
 STATE = bridge.STATE
 
 
-def api(path, body=None):
+def api(path, body=None, method=None):
     request = urllib.request.Request(bridge.API + path, data=json.dumps(body, ensure_ascii=False).encode() if body is not None else None,
-                                     headers={'Content-Type': 'application/json'})
+                                     headers={'Content-Type': 'application/json'}, method=method)
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
 
@@ -155,6 +159,7 @@ def inspect(review_id, batch_id, deployment, state, call=None, current=None):
                 'leader_task_id': parent['id'], 'source_revision': bridge.PHONE_SOURCE_REVISION,
                 'batch_status': batch['status'], 'batch_run_id': (batch.get('result') or {}).get('script', {}).get('run_id') or batch['payload'].get('script_run_id'),
                 'batch_exit_code': (batch.get('result') or {}).get('script', {}).get('exit_code'), 'children': children}
+    snapshot['recovery_demands'] = bridge.recovery_snapshots(bridge.task_rows(call, deployment['project_id']))
     bridge.save(state, 'native-review-' + review_id + '.json', snapshot)
     return snapshot
 
@@ -191,27 +196,119 @@ def resolve_task(session_key, deployment, call=None):
     return found[0]
 
 
+def execution_task(script):
+    path = pathlib.Path(script or '')
+    match = re.fullmatch('script-(' + bridge.UUID + ')-a[1-9][0-9]*\\.sh', path.name)
+    if not path.is_absolute() or '..' in path.parts or not match:
+        raise ValueError('入口没有真实中央 script_run 身份')
+    return match.group(1)
+
+
+def maintain(task_id, deployment, state, call=None, current=None, run=None):
+    call = call or api;run = run or subprocess.run;current = current or dt.datetime.now(dt.timezone.utc)
+    parent = bridge.read_task(call, task_id);p = parent.get('payload') or {}
+    if (parent.get('task_type') != 'script_run' or parent.get('status') != 'in_progress' or parent.get('project_id') != deployment['project_id']
+            or p.get('workflow_id') != bridge.MAINTENANCE_WORKFLOW_ID or p.get('runtime_requires_llm') is not False
+            or not re.fullmatch(r'[0-9a-f]{40}', p.get('source_revision', ''))):
+        raise ValueError('持续维护不是正式中央维护代码任务')
+    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (state / 'native-maintenance.lock').open('a') as lock:
+        os.fchmod(lock.fileno(), 0o600)
+        try:fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:return {'status': 'busy', 'maintenance_task_id': task_id, 'legacy_health': None, 'recovery': {'demands': []}}
+        command = ['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'monitor']
+        try:legacy = run(command, capture_output=True, text=True, timeout=450)
+        except (subprocess.TimeoutExpired, OSError):legacy = subprocess.CompletedProcess(command, -1, '', '')
+        legacy_failed = bool(legacy.returncode)
+        health = None
+        for line in reversed(legacy.stdout.splitlines()):
+            try:health = json.loads(line)
+            except ValueError:continue
+            if isinstance(health, dict) and health.get('maintenance_owner') == '主理人' and 'status' in health:break
+            health = None
+        if health is None or legacy_failed:
+            health = {'status': 'unknown', 'reason': 'legacy_monitor_failed', 'exit_code': legacy.returncode};legacy_failed = True
+        path = pathlib.Path(__file__).resolve();digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        recovery = bridge.recover(call, deployment, current, path, digest, p['source_revision'])
+        value = {'status': 'partial_failure' if legacy_failed else 'observed', 'actor': 'OpenClaw:infra', 'maintenance_task_id': task_id, 'legacy_health': health, 'recovery': recovery}
+        bridge.save(state, 'native-maintenance-' + task_id + '.json', value)
+        return value
+
+
+def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
+    call = call or api;run = run or subprocess.run;task_id = execution_task(script)
+    demand = bridge.read_task(call, demand_id);scope = bridge.demand_scope(demand, deployment)
+    receipt = {'task_id': task_id, 'serial': serial, 'source_revision': bridge.PHONE_SOURCE_REVISION, 'actor': 'phone-account-patrol-recovery'}
+    if demand['status'] in bridge.CLOSED:return dict(receipt, status='stopped', reason='demand_closed'), 0
+    task = bridge.read_task(call, task_id);p = task.get('payload') or {}
+    digest = hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
+    expected = ['/usr/bin/python3', str(pathlib.Path(__file__).resolve()), 'recovery-phone', '--demand-task-id', demand_id, '--serial', serial, '--execution-script', '$0']
+    if (shlex.split(p.get('cmd') or '') != expected or p.get('host') != 'mmv' or p.get('recovery_demand_id') != demand_id
+            or type(p.get('recovery_generation')) is not int or p['recovery_generation'] < 1 or p.get('recurring_task_id') is not None
+            or p.get('original_schedule_id') != scope['original_schedule_id'] or p.get('original_slot') != scope['original_slot']
+            or demand['status'] != 'blocked' or task.get('parent_task_id') != demand_id or task.get('status') != 'in_progress'
+            or task.get('task_type') != 'script_run' or task.get('project_id') != deployment['project_id']
+            or p.get('original_scope') != scope or p.get('phone_serial') != serial or serial != scope['phone_serial']
+            or p.get('source_revision') != bridge.PHONE_SOURCE_REVISION or p.get('workflow_id') != deployment['single_workflow_id']
+            or p.get('control_sha256') != digest or p.get('runtime_requires_llm') is not False):
+        raise ValueError('recovery_identity_mismatch')
+    phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]
+    if len(phones) != 1 or phones[0].get('host') != 'xian-m4':raise ValueError('recovery_identity_mismatch')
+    if not phones[0].get('enabled'):return dict(receipt, status='stopped', reason='device_disabled'), 0
+    rows = bridge.task_rows(call, deployment['project_id'])
+    if any(t['id'] != task_id and t.get('task_type') == 'script_run' and (t.get('payload') or {}).get('phone_serial') == serial
+           and t['status'] in bridge.ACTIVE for t in rows):return dict(receipt, status='deferred', reason='device_has_other_task'), 0
+    # 尽可能贴近真实手机入口再次读取取消；不抢设备锁，冻结控制器负责最后的原生锁仲裁。
+    fresh = bridge.read_task(call, demand_id)
+    if fresh['status'] in bridge.CLOSED:return dict(receipt, status='stopped', reason='demand_closed'), 0
+    if fresh['status'] != 'blocked' or bridge.demand_scope(fresh, deployment) != scope:raise ValueError('recovery_identity_mismatch')
+    phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]
+    if len(phones) != 1 or phones[0].get('host') != 'xian-m4':raise ValueError('recovery_identity_mismatch')
+    if not phones[0].get('enabled'):return dict(receipt, status='stopped', reason='device_disabled'), 0
+    output = run(['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'phone', '--serial', serial, '--execution-script', script],
+                 capture_output=True, text=True, timeout=1150)
+    if output.returncode:
+        return dict(receipt, status='failed', reason='frozen_phone_failed', exit_code=output.returncode), output.returncode
+    for line in reversed(output.stdout.splitlines()):
+        try:value = json.loads(line)
+        except ValueError:continue
+        if isinstance(value, dict) and value.get('task_id') == task_id and value.get('serial') == serial and value.get('source_revision') == bridge.PHONE_SOURCE_REVISION:
+            return value, 0
+    raise ValueError('冻结手机运行没有同身份回执')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['enqueue', 'inspect', 'resolve-task'])
+    parser.add_argument('mode', choices=['enqueue', 'inspect', 'resolve-task', 'maintain', 'recovery-phone'])
     parser.add_argument('--leader-task-id')
     parser.add_argument('--review-leader-task-id')
     parser.add_argument('--batch-task-id')
     parser.add_argument('--session-key')
+    parser.add_argument('--execution-script')
+    parser.add_argument('--demand-task-id')
+    parser.add_argument('--serial')
     args = parser.parse_args(argv)
+    execution_id = None
     try:
+        if args.mode in ['maintain', 'recovery-phone']:execution_id = execution_task(args.execution_script)
         deployment = bridge.load_deployment(STATE)
-        if args.mode == 'resolve-task':
+        if args.mode == 'maintain':
+            value = maintain(execution_id, deployment, STATE)
+        elif args.mode == 'recovery-phone':
+            value, code = recovery_phone(args.execution_script, bridge.uuid(args.demand_task_id), args.serial, deployment)
+            print(json.dumps(value, ensure_ascii=False));return code
+        elif args.mode == 'resolve-task':
             value = {'leader_task_id': resolve_task(args.session_key, deployment)}
         elif args.mode == 'enqueue':
             value = enqueue(bridge.uuid(args.leader_task_id), deployment, STATE)
         else:
             value = inspect(bridge.uuid(args.review_leader_task_id), args.batch_task_id, deployment, STATE)
         print(json.dumps(value, ensure_ascii=False))
-        return 0
+        return 1 if value.get('status') == 'partial_failure' else 0
     except Exception as error:
-        print(json.dumps({'status': 'failed', 'actor': 'OpenClaw:infra', 'reason': 'missing_launch' if str(error) == 'missing_launch' else 'native_validation_failed',
-                          'error_type': type(error).__name__}, ensure_ascii=False))
+        print(json.dumps({'status': 'failed', 'actor': 'OpenClaw:infra', 'reason': 'recovery_identity_mismatch' if args.mode == 'recovery-phone' and isinstance(error, ValueError) else ('missing_launch' if str(error) == 'missing_launch' else 'native_validation_failed'),
+                          'error_type': type(error).__name__, 'task_id': execution_id,
+                          'serial': args.serial if args.mode == 'recovery-phone' else None}, ensure_ascii=False))
         return 1
 
 
