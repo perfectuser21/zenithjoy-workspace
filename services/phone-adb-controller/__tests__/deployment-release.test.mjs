@@ -35,8 +35,9 @@ test('deploy入口发布新模块且必须在观测回读后才原子发布manif
  const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
  const files=source.match(/DEVICE_NODE_FILES=\(([^)]+)\)/s)[1];
  for(const name of ['runtime-binding.mjs','runtime-release.mjs','deployment-manifest.mjs'])assert.ok(files.includes(name),`部署漏发${name}`);
- assert.match(source,/deployment-release\.mjs/);assert.ok(source.lastIndexOf('deployment-release.mjs')<source.lastIndexOf('deployment-manifest.json'));
- assert.match(source,/push_atomic "\$OBSERVED_MANIFEST"/);
+ assert.match(source,/deployment-unified-observe\.mjs/);
+ const coordinator=readFileSync(new URL('../deployment-unified-observe.mjs',import.meta.url),'utf8');
+ assert.ok(coordinator.indexOf('await observeDeployment')<coordinator.indexOf("await publish('xian-m4'"));
 });
 
 test('四流程正式部署覆盖 RPC 固定依赖、四新计划和 MMV 同 SHA 实测 manifest',async()=>{
@@ -52,9 +53,7 @@ test('四流程正式部署覆盖 RPC 固定依赖、四新计划和 MMV 同 SHA
  for(const key of ['keyword_acquisition','benchmark_link_acquisition'])assert.ok(array('DEVICE_PLAN_FILES').includes(`plans/${key}.plan`),'退役入口需覆盖历史plan flag');
  assert.match(source,/deployment-manifest\.mjs.*MMV_RUNTIME_FILES/);
  assert.match(source,/MMV_RUNTIME_FILES=/);
- assert.ok(source.indexOf('deployment-release.mjs" mmv')<source.indexOf('"$MMV_OBSERVED_MANIFEST" mmv'));
- assert.match(source,/push_atomic "\$MMV_OBSERVED_MANIFEST" mmv/);
- assert.match(source,/deployment-release\.mjs" mmv "\$MMV_MANIFEST"/,'MMV必须采实机字节并由Brain正式观测，不能借device release');
+ assert.match(source,/deployment-unified-observe\.mjs" "\$WF_DEPLOY_PLAN_FILE" "\$DEPLOY_MANIFEST" "\$MMV_MANIFEST"/,'MMV与device各自实读并共享目标内唯一ACK');
 });
 
 test('RPC 声明覆盖所有本地静态依赖，防远端部署漏传递依赖',async()=>{

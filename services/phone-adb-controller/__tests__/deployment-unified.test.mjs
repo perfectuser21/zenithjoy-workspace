@@ -33,3 +33,22 @@ test('真实commander-only无正式map在任何ssh副作用前拒绝',()=>{
  const result=spawnSync('bash',[new URL('../deploy.sh',import.meta.url).pathname,'--commander-only'],{env:{...process.env,PATH:dir+':'+process.env.PATH,WF_COMMANDER_RELEASES_FILE:'',WF_DEPLOY_PLAN_FILE:''},encoding:'utf8'});
  assert.notEqual(result.status,0);assert.equal(existsSync(marker),false,'缺map已经触及远端');
 });
+
+test('真实HTTP xian→唯一MMV观测，旧两root只收到同ACK本机视图',async t=>{
+ const {createServer}=await import('node:http');const {brainRequest}=await import('../deployment-preflight.mjs');const {observeUnified}=await import('../deployment-unified-observe.mjs');
+ const folder=mkdtempSync(join(tmpdir(),'unified-http-'));const local={schema_version:1,source_repo:repo,source_commit:sha,files:[{path:'services/phone-adb-controller/a.sh',deployed_path:'a.sh',content_sha256:digest(bytes)}]};
+ const extra={kind:'code',repo,revision:sha,path:'services/phone-adb-controller/commander/wf-report.py',digest:'sha256:'+digest(bytes)};
+ const releases={};for(const [target,id]of [['xian-m4',uuid(10)],['mmv',uuid(11)]]){const r={id,target,environment:'production',payload:{components:[{kind:'repo',repo,revision:sha},{kind:'code',repo,revision:sha,path:local.files[0].path,digest:'sha256:'+digest(bytes)},...(target==='mmv'?[extra]:[])]}};r.manifest_sha256=digest({environment:r.environment,target,payload:r.payload});releases[id]=r;}
+ const observations=new Map(),posts=[],published=[];
+ const server=createServer(async(req,res)=>{assert.equal(req.headers.authorization,'Bearer fixture-token');const parts=req.url.split('/'),id=parts[4];let value;
+  if(req.method==='POST'){let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw);posts.push(body);value={observation:{id:'obs-'+id,release_id:id,payload:body}};observations.set(id,value.observation);}
+  else if(req.url.endsWith('/gate'))value={deployed:true,actual_matches:true,current_observation_id:observations.get(id).id};
+  else if(req.url.includes('/observations/'))value={observation:observations.get(id)};else value={release:releases[id]};res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(value));});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
+ const base=`http://127.0.0.1:${server.address().port}`,plan={source_repo:repo,source_commit:sha,releases:{mmv:releases[uuid(11)]},release_ids:{'xian-m4':uuid(10),mmv:uuid(11)}};
+ const result=await observeUnified({plan,xianManifest:local,mmvManifest:local,options:{environment:'production',collector:'fixture',attemptKey:'same-deploy',brainUrl:base,stateDir:folder,request:brainRequest(base,'fixture-token')},collectXian:async m=>({...m,observed_hostname:'mac-mini-m4-xian'}),collectMmv:async(m,ack)=>{assert.equal(published[0].manifest.observation_id,ack.observation_id);return{...m,observed_hostname:'aad17-2'};},publish:async(host,path,manifest)=>published.push({host,path,manifest})});
+ assert.deepEqual(posts.map(p=>p.target),['xian-m4','mmv']);assert.equal(published.length,3);assert.equal(published[1].manifest.observation_id,published[2].manifest.observation_id);assert.deepEqual(result.mmv.files,local.files);assert.equal(posts[1].components.length,3);
+});
+
+test('部署锁与真实安装采集Python回归',()=>{
+ const result=spawnSync('python3',[new URL('./deployment-installed.test.py',import.meta.url).pathname],{encoding:'utf8'});assert.equal(result.status,0,result.stdout+'\n'+result.stderr);
+});
