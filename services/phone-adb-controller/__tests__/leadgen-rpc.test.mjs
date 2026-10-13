@@ -17,6 +17,7 @@ test('跨机RPC核对所有27依赖固定字节，缺依赖/篡改/旧版均拒�
   assert.throws(()=>verifyRpcSource({...f.source,commit:'b'.repeat(40)},f.options),/REVISION_MISMATCH/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='step-judge.mjs')},f.options),/DEPENDENCY_MISSING/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='queued-comment-history.js')},f.options),/DEPENDENCY_MISSING/);
+  assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='nickname-match-lib.js')},f.options),/DEPENDENCY_MISSING:nickname-match-lib/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.map((r,i)=>i===0?{...r,sha256:'b'.repeat(64)}:r)},f.options),/BYTES_MISMATCH/);
 });
 test('非法路径不能被RPC读取为凭据',()=>{
