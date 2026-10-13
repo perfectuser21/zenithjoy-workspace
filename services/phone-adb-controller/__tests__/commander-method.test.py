@@ -111,6 +111,9 @@ class Methods(unittest.TestCase):
   with self.assertRaises(ValueError):m.read_bound_envelope(copied,self.io)
   self.io.write(directory/'input.json',{'changed':True})
   with self.assertRaises(ValueError):m.read_bound_envelope(directory/'envelope.json',self.io)
+  self.envelope['input']={'value':True};self.envelope['input_sha256']=m.digest(self.envelope['input'])
+  self.io.write(directory/'envelope.json',self.envelope);self.io.write(directory/'input.json',{'value':1})
+  with self.assertRaises(ValueError):m.read_bound_envelope(directory/'envelope.json',self.io)
  def test_indirect_global_command_and_dynamic_import_routes_are_not_admitted(self):
   sources=[b'import os; os.system("true")',b'from os import system as call; call("true")',b'import os; os.popen("true").read()',b'import runpy; runpy.run_path("/current/helper.py")',b'import os; f=getattr(os,"system");f("true")',b'import sys;sys.path.append("/current");import json']
   for raw in sources:
