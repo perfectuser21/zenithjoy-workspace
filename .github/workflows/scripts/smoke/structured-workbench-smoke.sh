@@ -212,6 +212,11 @@ run_static_inv() {
 }
 
 run_static() {
+  # 启动失败必须保留真实日志，包含 stdout 被 fixture 重定向的路径。
+  # 先执行错误路径回归，避免后续数据库启动失败时丢失诊断证据。
+  node --test \
+    "$REPO_ROOT/.github/workflows/scripts/__tests__/structured-workbench-startup-diagnostics.test.mjs" \
+    || fail "启动失败诊断回归未过"
   run_a2
   run_a35
   run_a33
