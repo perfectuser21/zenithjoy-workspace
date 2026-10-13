@@ -13,7 +13,9 @@
 // title/keyword 走 base64:经 ssh 远端 shell 传中文与引号不必再转义。
 "use strict";
 const { statsLine } = require("./stats-line.js");
-const { judgeOneVideo, resolveLine, defaultDeps } = require("./judge-video.js");
+const { judgeOneVideo, resolveLine, defaultDeps, configEvidence } = require("./judge-video.js");
+
+const { freezeCompanyConfig, configTargetProfile } = require("./company-config-lib.js");
 
 const TAG = { discover: "QUAL_DISCOVER", judge: "QUAL_RESULT", collected: "QUAL_COLLECTED" };
 const errMsg = (e) => String((e && e.message) || e).slice(0, 200);
@@ -32,16 +34,20 @@ function parseArgs(argv) {
 
 async function discover(args, pool, deps, lineKey) {
   try {
-    return await deps.discoverVideo(pool, {
+    const result = await deps.discoverVideo(pool, {
       lineKey, videoId: args.videoId, videoUrl: args.videoUrl || null, title: args.title || "",
       keyword: args.keyword || null, harvestBatch: args.batch || null,
     });
+    const snapshot = await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool, {lineHint:args.line,runId:args.run||args.batch,sourceRun:args.sourceRun,step:'102'});
+    const video = await deps.getVideo(pool,lineKey,args.videoId);
+    const same=video?.judgment_config?.company_id===snapshot.company_id&&video?.judgment_config?.version===snapshot.version;
+    return {...result,status:same?result.status:'pending',config:configEvidence(snapshot,args.run||args.batch)};
   } catch (e) {
     return { status: "error", error: errMsg(e) };
   }
 }
 
-async function judge(args, pool, deps, lineKey, targetProfile) {
+async function judge(args, pool, deps, lineKey, targetProfile, snapshot, runId) {
   let video;
   try {
     video = await deps.getVideo(pool, lineKey, args.videoId);
@@ -49,13 +55,14 @@ async function judge(args, pool, deps, lineKey, targetProfile) {
     return { verdict: "pending", kind: "db_error", error: errMsg(e) };
   }
   if (!video) return { verdict: "pending", kind: "not_discovered", reason: "视频未落库(discover 没成功),本轮不采" };
-  if (video.judgment_status === "matched" || video.judgment_status === "rejected") {
-    return { verdict: video.judgment_status, kind: "cached", reason: video.judgment_reason || "" };
+  if ((video.judgment_status === "matched" || video.judgment_status === "rejected")
+      && video.judgment_config?.company_id === snapshot.company_id && video.judgment_config?.version === snapshot.version) {
+    return { verdict: video.judgment_status, kind: "cached", reason: video.judgment_reason || "", config: configEvidence(snapshot, runId) };
   }
   try {
     const manifestEntry = args.audio ? { videoId: args.videoId, audioPath: args.audio } : undefined;
-    const r = await judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, pool, deps, cheapGate: false });
-    return { verdict: r.outcome, kind: r.kind, reason: r.reason || "" };
+    const r = await judgeOneVideo({ video, manifestEntry, lineKey, targetProfile, pool, deps, cheapGate: false, configEvidence: configEvidence(snapshot, runId) });
+    return { verdict: r.outcome, kind: r.kind, reason: r.reason || "", config: configEvidence(snapshot, runId) };
   } catch (e) {
     // 写库失败/判定器内部异常:库里没落下 matched 就不许采
     return { verdict: "pending", kind: "error", error: errMsg(e) };
@@ -80,7 +87,12 @@ async function runQualify({ cmd, args, pool, deps = defaultDeps() }) {
   }
   if (!args.videoId) return { verdict: "pending", status: "error", error: "缺 --video-id" };
   if (cmd === "discover") return discover(args, pool, deps, line.lineKey);
-  if (cmd === "judge") return judge(args, pool, deps, line.lineKey, line.targetProfile);
+  if (cmd === "judge") {
+    const runId = args.run || args.batch;
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(runId || "")) throw Error("缺有效运行号 COMPANY_RUN_REQUIRED");
+    const snapshot = await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool, { lineHint: args.line, runId, sourceRun: args.sourceRun, step: "102" });
+    return judge(args, pool, deps, line.lineKey, configTargetProfile(snapshot, "102"), snapshot, runId);
+  }
   return collected(args, pool, deps, line.lineKey);
 }
 

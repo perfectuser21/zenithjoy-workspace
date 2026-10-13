@@ -7317,3 +7317,83 @@ agent_suite:
   status: active
   product: 多平台发布
   note: "离线预检无资源收尾、发送前durable intent及crash/owner/证据/spawn竞态拒绝误判；ci-l3-code OpenClaw Scripts Test；GP-Anchor: line01/android_worker_publish keep-green"
+
+- id: company-wiki-import
+  path: apps/api/scripts/company-wiki-import.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-projection-adapters
+  path: apps/api/scripts/company-projection-adapters.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-profile-config
+  path: apps/api/src/routes/company-profile-config.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-profile-page-config
+  path: apps/dashboard/src/pages/CompanyProfilePage.config.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config
+  path: services/phone-adb-controller/__tests__/company-config.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config-postgres
+  path: services/phone-adb-controller/__tests__/company-config-postgres.test.mjs
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config-runtime
+  path: services/phone-adb-controller/__tests__/company-config-runtime.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-config-sync
+  path: services/phone-adb-controller/company-config-sync.test.js
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+
+- id: company-profile-scratch
+  path: apps/api/src/routes/company-profile-scratch.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "真实scratch公司Wiki、API、浏览器保存与冻结版本闭环"
+
+- id: company-config-readiness
+  path: services/phone-adb-controller/__tests__/company-config-readiness.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "安装前核验真实PG配置schema，空配置不报业务绿"

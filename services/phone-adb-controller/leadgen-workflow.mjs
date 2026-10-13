@@ -108,6 +108,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       if(existsSync(flag))return {status:'paused',reason:'私信暂停标记生效',sent:0};
       return {status:'paused',reason:'本批私信未授权，保持暂停',sent:0};
     }
+    if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach') {
+      state.company_config=await queue('company_config',{step:'104'});
+      const account=state.company_config?.runtime_config?.platform_accounts?.find(a=>a.profile===profile&&a.verification_status==='verified'&&a.enabled===true);
+      if(!account||account.device_serial!==serial||!account.douyin_id)throw Error(`COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: profile=${profile} expected=${account?.device_serial||'missing'} actual=${serial}`);
+      state.company_config.expected_sender=account.douyin_id;
+      appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
+    }
     const device=await checked('adb',['-s',serial,'get-state']);
     if(device.trim()!=='device')throw Error('设备未在线');
     const target=await phone('preflight');
@@ -126,18 +133,24 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     const id=account.match(/^douyin_id=(.+)$/m)?.[1]?.trim();
     const registry=readFileSync(env.DOUYIN_ACCOUNT_REGISTRY||join(env.HOME,'.config/openclaw/douyin-account-routes.tsv'),'utf8');
     if(!id||!registry.split('\n').some(s=>{const f=s.split('\t');return f[0]===profile&&f[1]===id;}))throw Error('当前账号未在本profile注册');
-    state.account=id;const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
+    state.account=id;
+    if(state.company_config&&state.company_config.expected_sender!==id)throw Error('COMPANY_ACCOUNT_IDENTITY_MISMATCH');
+    const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
     return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,...outreachProof};
   };
   const getDiscovery=async()=>{
     if(discovery)return discovery;
-    const sources=env.LEADGEN_SOURCES_FILE?readFileSync(env.LEADGEN_SOURCES_FILE,'utf8').split('\n').filter(Boolean)
-      :(await rpc({kind:'keywords',line,count:2})).result;
+    const requested=env.LEADGEN_SOURCES_FILE?readFileSync(env.LEADGEN_SOURCES_FILE,'utf8').split('\n').filter(Boolean):undefined;
+    const keywordResult=await rpc({kind:'keywords',line,run,limit:2,keywords:requested});
+    const sources=keywordResult.result;
+    if(keywordResult.config)appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(keywordResult.config)+'\n',{mode:0o600});
     discovery=createDiscoveryHandlers({phone,execute:bounded,queue,profile,run,root,
       sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,budgetDeadline:()=>state.budgetDeadline||0});
     return discovery;
   };
   const intake=async()=>{
+    state.companyConfig=await queue('company_config',{step:'102'});
+    appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.companyConfig)+'\n',{mode:0o600});
     const sourceRun=env.LEADGEN_SOURCE_RUN;
     if(!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun||''))throw Error('102缺有效上游101运行号');
     const upstreamDir=resolve(env.WFR_RUN_DIR,'..',`douyin_video_discovery-${sourceRun}`);
@@ -187,7 +200,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     const skipped=[],eligible=[];
     for(const v of input.videos){const row=rows.find(r=>r.video_id===v.videoId);
       if(!['pending','matched','rejected'].includes(row.judgment_status)||typeof row.process_status!=='string')throw Error('PG视频状态缺合法终态');
-      const reason=row.judgment_status==='rejected'?'rejected':row.process_status==='评论已采'?'completed':fulfilled.has(v.videoId)?'sample_fulfilled':ownNames.has(normalize(v.author))?'own':null;
+      const currentPolicy=row.judgment_config?.company_id===state.companyConfig.company_id&&row.judgment_config?.version===state.companyConfig.version;
+      const reason=row.judgment_status==='rejected'&&currentPolicy?'rejected':row.process_status==='评论已采'?'completed':fulfilled.has(v.videoId)?'sample_fulfilled':ownNames.has(normalize(v.author))?'own':null;
       if(reason)skipped.push({video_id:v.videoId,reason});else eligible.push(v.videoId);
     }
     state.intakeVideoIds=eligible;
@@ -257,12 +271,14 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         ...(readbackFailures?{status:'partial'}:{}),
         ...(result.failures.length||result.known_gaps.some(g=>g.kind!=='candidate_disappeared'||result.stop_reason!=='limit_reached')?{status:'partial'}:{})};},
     qualification:async()=>{
+      if(!state.companyConfig)state.companyConfig=await queue('company_config',{step:'102'});
+      if(!state.companyConfig?.company_id||!state.companyConfig.version)throw Error('COMPANY_CONFIG_RECEIPT_MISSING');
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
-      leased=await queue('claim_videos',{...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(sampleInput?{prefer_matched:true}:{})});
+      leased=await queue('claim_videos',{config_required:true,...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(sampleInput?{prefer_matched:true}:{})});
       state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
       const failures=[];qualified=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0;
       for(const v of leased){await queue('renew_video',{video_id:v.video_id});
-        if(v.judgment_status==='matched'){
+        if(state.companyConfig&&v.judgment_status==='matched'&&v.judgment_config?.company_id===state.companyConfig?.company_id&&v.judgment_config?.version===state.companyConfig?.version){
           const identity=await videoAction('identity',v);
           if(identity.code===0)qualified.push(v);else failures.push({video_id:v.video_id,code:identity.code,reason:identity.stderr.slice(-500)});
           continue;

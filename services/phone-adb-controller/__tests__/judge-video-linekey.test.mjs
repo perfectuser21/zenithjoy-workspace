@@ -9,7 +9,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import judgeVideo from "../judge-video.js";
 
-const { runJudgeVideo, TARGET_PROFILES } = judgeVideo;
+import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
+const runJudgeVideo = args => judgeVideo.runJudgeVideo({...args,runId:'test-run',deps:{freezeCompanyConfig:freezeFixture,...args.deps}});
 
 function fakeDeps({ pending = [], verdict = { verdict: "matched", reason: "jev:matched(confidence=0.9)" } } = {}) {
   const calls = { list: [], mark: [], judge: [] };
@@ -37,7 +38,7 @@ for (const [hint, key] of [
     const { calls, deps } = fakeDeps({ pending: [{ video_id: "v1", title: "AI训练师证书怎么考", comment_count: 3 }] });
     const stats = await runJudgeVideo({ lineHint: hint, manifest: [], pool: {}, deps });
     assert.equal(calls.list[0].lineKey, key, "查 pending 必须用路由键(库里 line_key 存的是路由键)");
-    assert.equal(calls.judge[0].profile, TARGET_PROFILES[key], "画像必须按路由键取");
+    assert.match(calls.judge[0].profile, new RegExp(`测试画像-${key}`), "画像必须按路由键取");
     assert.equal(calls.mark[0].lineKey, key, "写库必须用路由键");
     assert.equal(stats.matched, 1);
   });

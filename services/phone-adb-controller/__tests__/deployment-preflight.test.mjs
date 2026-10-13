@@ -184,3 +184,18 @@ test('手机部署固定zenithjoy scope，snapshot或report冒用commander均拒
   assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,()=>bytes),error);
  }
 });
+test('新公司配置模块发布缺数据库readiness证据必须拒绝安装',async()=>{
+ const {preflightDeploymentReleases}=await implementation(),f=fixture();
+ f.manifest.files.push({path:'services/phone-adb-controller/company-config-lib.js',content_sha256:'c'.repeat(64)});
+ const request=async path=>({release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')});
+ await assert.rejects(()=>preflightDeploymentReleases({manifest:f.manifest,environment:'production',releaseIds:{'xian-m4':vid[0],'mmv':vid[2]},request}),/COMPANY_READINESS_REQUIRED/);
+});
+test('新公司发布schema失败阻断，schema通过但draft按disabled回执不报业务绿',async()=>{
+ const {preflightDeploymentReleases}=await implementation(),f=fixture();
+ f.manifest.files.push({path:'services/phone-adb-controller/company-config-lib.js',content_sha256:'c'.repeat(64)});
+ const request=async path=>({release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')});
+ const args={manifest:f.manifest,environment:'production',releaseIds:{'xian-m4':vid[0],'mmv':vid[2]},request};
+ await assert.rejects(()=>preflightDeploymentReleases({...args,companyReadiness:async()=>{throw Error('COMPANY_SCHEMA_NOT_READY')}}),/COMPANY_SCHEMA_NOT_READY/);
+ const releases=await preflightDeploymentReleases({...args,companyReadiness:async()=>({schema_verified:true,business_runtime_status:'disabled',gaps:[{code:'COMPANY_CONFIG_NOT_ENABLED'}]})});
+ assert.equal(releases.company_readiness.business_runtime_status,'disabled');assert.equal(releases.company_readiness.gaps.length,1);
+});

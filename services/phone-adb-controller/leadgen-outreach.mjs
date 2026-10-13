@@ -3,6 +3,7 @@ import {join,basename,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
+const {routeOf}=createRequire(import.meta.url)('./line-routes.js');
 const {computeDailyCap}=createRequire(import.meta.url)('./dm-rate-ramp-lib.js');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -28,10 +29,16 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
  const preflight=async()=>{
   risk();if(Number(env.LEADGEN_LIMIT)!==1)throw Error('首版104必须显式单条范围');
   if(!/^[a-f0-9]{40}$/.test(state.source_commit||''))throw Error('触达正式来源证明缺失');
+  const config=state.company_config;
+  if(!config?.company_id||!config.version)throw Error('COMPANY_CONFIG_RECEIPT_MISSING');
+  const route=routeOf(line),contact=config.runtime_config?.contact_rules;
+  if(contact?.ssot!=='feishu'||contact.feishu_base!==route.base||contact.orders_table!==route.lead||contact.approved_scripts_table!==route.script)throw Error('COMPANY_OUTREACH_SOURCE_MISMATCH');
+  const sender=config.runtime_config?.platform_accounts?.find(a=>a.profile===profile&&a.verification_status==='verified'&&a.enabled===true);
+  if(sender?.douyin_id!==state.account||sender.device_serial!==env.SERIAL)throw Error(`COMPANY_ACCOUNT_IDENTITY_MISMATCH: profile=${profile} expected_device=${sender?.device_serial||'missing'} actual_device=${env.SERIAL||'missing'} expected_sender=${sender?.douyin_id||'missing'} actual_sender=${state.account||'missing'}`);
   policy=(await rpc({kind:'outreach_policy',line,profile,sender_douyin_id:state.account})).result;
   if(policy?.profile!==profile||policy.sender_douyin_id!==state.account||!Number.isSafeInteger(policy.daily_cap)||policy.daily_cap<1||!policy.template?.message)throw Error('触达账号或批准话术配置缺失');
   if(count().value>=cap())throw Error('账号日发送上限生效');
-  return {outreach_policy_verified:1,send_authorized:1};
+  return {outreach_policy_verified:1,send_authorized:1,company_config:{company_id:config.company_id,tenant_id:config.tenant_id,version:config.version,product_ids:config.product_ids,policy_id:config.policy_id,script_id:policy.template.id,script_version:policy.template.version,sender_douyin_id:state.account}};
  };
  const send_dm=async()=>{
   risk();if(!policy||!state.account)throw Error('触达尚未通过账号及批准话术预检');
@@ -88,7 +95,7 @@ if actual!=expected: raise ValueError('outcome mismatch')
 print('verified')`,target,order.message,outcome],{encoding:'utf8',timeout:5000,maxBuffer:4096});
   if(verify.status!==0||verify.stdout.trim()!=='verified')throw Error('归档私信原始证明独立核验失败');
   if(outcome==='rate_limited')writeFileSync(join(stateDir,`dm-halt-${profile}-${day()}.txt`),eid,{mode:0o600});
-  receipt={version:1,source_commit:state.source_commit,line:policy.line_key,run,profile,id:order.id,sender_douyin_id:state.account,target_douyin_id:order.douyin_id,profile_url:order.profile_url,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),outcome,delivery_verified:false,message_delta_verified:true,raw_evidence:stored,typed_evidence_file:stored.typed.file,typed_evidence_sha256:stored.typed.sha256,evidence_file:stored.sent.file,evidence_sha256:stored.sent.sha256};
+  receipt={version:1,company_config:{company_id:state.company_config.company_id,tenant_id:state.company_config.tenant_id,version:state.company_config.version,product_ids:state.company_config.product_ids,policy_id:state.company_config.policy_id},source_commit:state.source_commit,line:policy.line_key,run,profile,id:order.id,sender_douyin_id:state.account,target_douyin_id:order.douyin_id,profile_url:order.profile_url,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),outcome,delivery_verified:false,message_delta_verified:true,raw_evidence:stored,typed_evidence_file:stored.typed.file,typed_evidence_sha256:stored.typed.sha256,evidence_file:stored.sent.file,evidence_sha256:stored.sent.sha256};
   writeFileSync(join(env.WFR_RUN_DIR,`${run}-outreach-receipt.json`),JSON.stringify(receipt),{mode:0o600});
   return {sent:outcome==='sent'?1:0,messages_sent:outcome==='sent'?1:0,orders_prepared:1,attempted:1,outcome,message_delta_verified:1,delivery_result_verified:1,messages_sent_while_paused:0,delivery_verified:false};
  };

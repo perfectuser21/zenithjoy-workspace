@@ -26,9 +26,9 @@ test('业务线精确匹配（去首尾空格），子串不算', () => {
   assert.equal(keywordMatchesBiz('企业AI办公', '悦升云端'), false);
 });
 
-test('next-keywords.js 用的是精确匹配，不再有双向 includes', () => {
-  const src = readFileSync(new URL('../next-keywords.js', import.meta.url), 'utf8');
-  assert.match(src, /keywordMatchesBiz\(k\.biz, BIZ\)/);
-  assert.doesNotMatch(src, /BIZ\.includes\(k\.biz\)/);
-  assert.doesNotMatch(src, /k\.biz\.includes\(BIZ\)/);
+test('101关键词仅来自已冻结公司配置，不借用另一公司词表', async () => {
+  const {createRequire}=await import('node:module');
+  const {selectCompanyKeywords}=createRequire(import.meta.url)('../next-keywords.js');
+  assert.deepEqual(selectCompanyKeywords({runtime_config:{search_strategy:{keywords:[{word:'悦升专属',enabled:true},{word:'停用词',enabled:false}]}}},6),['悦升专属']);
+  assert.throws(()=>selectCompanyKeywords({runtime_config:{search_strategy:{}}},6),/COMPANY_SEARCH_KEYWORDS_REQUIRED/);
 });

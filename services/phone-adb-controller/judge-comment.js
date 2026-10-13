@@ -17,8 +17,14 @@ const DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const COMMANDER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const JEV_MODEL = "typesafe/jev-1.13"; // 0923真机核对过,真实可用
 const COMMANDER_MODEL = "google/gemini-2.5-flash";
-const CONFIDENCE_THRESHOLD = 0.6; // 低于此值视为"拿不准",转复核官(与judge-jev.js同一阈值口径)
 const GRADES = ["A", "B", "C", "不相关"];
+function validateScoringRules(rules) {
+  if (!rules || !GRADES.every(g => typeof rules.criteria?.[g] === 'string' && rules.criteria[g].trim())
+      || !Number.isFinite(rules.confidence_threshold) || rules.confidence_threshold < 0 || rules.confidence_threshold > 1) {
+    throw Error('COMPANY_COMMENT_SCORING_REQUIRED');
+  }
+  return rules;
+}
 
 function resolveOpenRouterKey(env = process.env) {
   if (env.OPENROUTER_API_KEY) return env.OPENROUTER_API_KEY;
@@ -35,7 +41,8 @@ function resolveOpenRouterKey(env = process.env) {
 // 主判:调Jev的Decisions端点,choice题型四选一(A/B/C/不相关)。
 // confidence低于阈值,或response格式不对(answers.grade缺失/choice不在四档内) → 当UNCERTAIN
 // 处理,转复核官,不直接判死。
-async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = defaultHttpPost, apiKey, env } = {}) {
+async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = defaultHttpPost, apiKey, env, scoringRules } = {}) {
+  const rules = validateScoringRules(scoringRules);
   const key = apiKey || resolveOpenRouterKey(env);
   if (!key) throw new JudgeApiError("judgePrimary: 找不到OPENROUTER_API_KEY", { stage: "jev" });
   const resp = await callOpenRouter(
@@ -49,12 +56,7 @@ async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = d
         grade: {
           type: "choice",
           instructions: "这条评论按意向从强到弱分档",
-          criteria: {
-            A: "主动问价/问报名/求资料/明确求助(高意向)",
-            B: "表达兴趣/相关讨论但没有明确行动意图(中意向)",
-            C: "纯寒暄/表情互动,但确实是画像内人群(低意向,不是垃圾,不要丢)",
-            "不相关": "同行企业号/广告引流号/完全跑题",
-          },
+          criteria: rules.criteria,
         },
       },
     },
@@ -64,7 +66,7 @@ async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = d
   if (!ans || !GRADES.includes(ans.choice)) {
     return { grade: "UNCERTAIN", reason: "parse_fallback" };
   }
-  if ((ans.confidence ?? 0) < CONFIDENCE_THRESHOLD) {
+  if ((ans.confidence ?? 0) < rules.confidence_threshold) {
     return { grade: "UNCERTAIN", reason: `低置信度(${ans.confidence})` };
   }
   return { grade: ans.choice, reason: ans.choice === "不相关" ? `confidence=${ans.confidence}` : null };
@@ -76,7 +78,8 @@ async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = d
 // 0929: 调用失败/错误体(402余额/429限流/网络)不是"存疑",是 API 故障——抛 JudgeApiError,
 // sort-comments.js 计入「判定异常N条(留待分拣)」,池行保持待分拣,下轮重判,不静默降 C 档。这一段走普通chat completions,
 // 跟Jev的Decisions端点无关,不受本次API修正影响。
-async function judgeCommander(comment, videoCaption, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env } = {}) {
+async function judgeCommander(comment, videoCaption, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env, scoringRules } = {}) {
+  const rules = validateScoringRules(scoringRules);
   const key = apiKey || resolveOpenRouterKey(env);
   if (!key) throw new JudgeApiError("judgeCommander: 找不到OPENROUTER_API_KEY", { stage: "commander" });
   const prompt = `你是评论意向分档的复核官。主判对下面这条评论拿不准,现在交给你终审。
@@ -91,6 +94,7 @@ ${videoCaption || "(无)"}
 评论原文:
 ${comment}
 
+评分规则:${JSON.stringify(rules.criteria)}
 主判为什么拿不准:${primaryReason || "未知"}
 
 请严格只回一个词:A 或 B 或 C 或 不相关`;
@@ -130,5 +134,4 @@ module.exports = {
   JEV_MODEL,
   COMMANDER_MODEL,
   DECISIONS_ENDPOINT,
-  CONFIDENCE_THRESHOLD,
 };

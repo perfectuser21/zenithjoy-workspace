@@ -12,8 +12,10 @@ import assert from "node:assert/strict";
 import qualify from "../qualify-video.js";
 import judgeVideo from "../judge-video.js";
 
-const { runQualify, parseArgs } = qualify;
-const { judgeOneVideo, TARGET_PROFILES } = judgeVideo;
+import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
+const {parseArgs}=qualify;
+const runQualify = args => qualify.runQualify({...args,args:{run:'test-run',...args.args},deps:{freezeCompanyConfig:freezeFixture,...args.deps}});
+const { judgeOneVideo } = judgeVideo;
 
 function fakeDeps(over = {}) {
   const calls = { discover: [], get: [], mark: [], judgeErr: [], collected: [], transcribe: [], judge: [] };
@@ -38,10 +40,12 @@ test("parseArgs: --k v 形式，title/keyword 走 base64 防 ssh 引号", () => 
   assert.equal(a.title, "标题'引号");
 });
 
-test("discover: 候选落库带路由键/本批 batch/关键词，回报已有判定状态", async () => {
+test("discover: 候选落库带路由键/本批 batch/关键词，无版本旧判定返回pending重判", async () => {
   const { calls, deps } = fakeDeps({ discoverVideo: async (_p, row) => { calls.discover.push(row); return { status: "rejected", has_transcript: true, inserted: false }; } });
   const out = await runQualify({ cmd: "discover", args: { line: "jinoshengyuan-work", videoId: "v1", videoUrl: "https://v.douyin.com/x", title: "t", keyword: "AI证书", batch: "auto09292200" }, pool: {}, deps });
-  assert.deepEqual(out, { status: "rejected", has_transcript: true, inserted: false });
+  assert.equal(out.status,"pending");
+  assert.equal(out.has_transcript,true);
+  assert.equal(out.config.version,1);
   assert.equal(calls.discover[0].lineKey, "jinuo", "库里 line_key 存路由键");
   assert.equal(calls.discover[0].harvestBatch, "auto09292200");
   assert.equal(calls.discover[0].keyword, "AI证书");
@@ -61,7 +65,7 @@ test("judge: 有音频 → 转写后判定，写库，回报 matched；采集前
   assert.deepEqual(calls.transcribe, ["/tmp/a.wav"]);
   assert.equal(calls.mark[0].verdict, "matched");
   assert.equal(calls.mark[0].transcript, "口播转写文案");
-  assert.equal(calls.judge[0].profile, TARGET_PROFILES.jinuo);
+  assert.match(calls.judge[0].profile, /测试画像-jinuo/);
 });
 
 test("judge: 无音频 → 退回标题判定（title_only），不转写", async () => {
@@ -94,7 +98,7 @@ test("judge: 转写调用失败（网络/超时）→ pending 留待重判；空
 });
 
 test("judge: 已判过的视频（matched/rejected）直接回报库里的结论，不重复花钱", async () => {
-  const { calls, deps } = fakeDeps({ getVideo: async () => ({ video_id: "v1", title: "t", judgment_status: "rejected", judgment_reason: "jev:不相关" }) });
+  const { calls, deps } = fakeDeps({ getVideo: async () => ({ video_id: "v1", title: "t", judgment_status: "rejected", judgment_config:{company_id:"fake-jinuo",version:1}, judgment_reason: "jev:不相关" }) });
   const out = await runQualify({ cmd: "judge", args: { line: "jinuo", videoId: "v1", audio: "/tmp/a.wav" }, pool: {}, deps });
   assert.deepEqual({ verdict: out.verdict, reason: out.reason }, { verdict: "rejected", reason: "jev:不相关" });
   assert.equal(calls.transcribe.length + calls.judge.length + calls.mark.length, 0);

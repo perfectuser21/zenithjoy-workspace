@@ -3,7 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import request from 'supertest';
 
 vi.mock('../middleware/tenant-context', () => ({
-  tenantContextOptional: (req: Request, _res: Response, next: NextFunction) => {
+  tenantContext: (req: Request, _res: Response, next: NextFunction) => {
     req.tenantId = undefined;
     next();
   },
@@ -20,19 +20,19 @@ function buildApp() {
 }
 
 describe('company-profile router', () => {
-  it('GET /api/company-profile returns 200 with success field', async () => {
+  it('GET /api/company-profile 缺租户返回403', async () => {
     const app = buildApp();
     const res = await request(app).get('/api/company-profile');
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
   });
 
-  it('PUT /api/company-profile without company_name returns 400', async () => {
+  it('PUT /api/company-profile 缺租户不允许保存', async () => {
     const app = buildApp();
     const res = await request(app)
       .put('/api/company-profile')
       .set('Content-Type', 'application/json')
       .send({});
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(403);
   });
 });

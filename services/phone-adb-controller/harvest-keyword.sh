@@ -254,7 +254,7 @@ while (( i < ${#CARD_ARR[@]} )); do
     continue
   fi
   # 先判后采①: 候选落库(pending) + 取缓存判定——以前判过的 rejected 不再录不再判,matched 直接采
-  QD="$(qual_remote discover --line "$LINE" --video-id "$VID" --video-url "$VURL" --title-b64 "$(b64 "$TITLE")" --keyword-b64 "$(b64 "$KWTXT")" --batch "$HBATCH")"
+  QD="$(qual_remote discover --line "$LINE" --video-id "$VID" --video-url "$VURL" --title-b64 "$(b64 "$TITLE")" --keyword-b64 "$(b64 "$KWTXT")" --batch "$HBATCH" --source-run "${LEADGEN_SOURCE_RUN:-}")"
   QV="$(qual_field "$QD" status)"; QSRC=cached; QR=""
   case "$QV" in
     matched|rejected) log "  已判定过($QV),沿用库里结论,不重录不重判";;
@@ -333,7 +333,7 @@ while (( i < ${#CARD_ARR[@]} )); do
       if scp -o ConnectTimeout=20 -o BatchMode=yes "$AUDIO_PATH" "mmv:$RAUD" </dev/null >/dev/null 2>&1; then QAUD=(--audio "$RAUD")
       else log "  音频传 mmv 失败,本视频退回标题判定"; fi
     fi
-    QR="$(qual_remote judge --line "$LINE" --video-id "$VID" "${QAUD[@]}")"
+    QR="$(qual_remote judge --line "$LINE" --run "$HBATCH" --source-run "${LEADGEN_SOURCE_RUN:-}" --video-id "$VID" "${QAUD[@]}")"
     QV="$(qual_field "$QR" verdict)"
     [[ -n "$QV" ]] || { QV=pending; QR="判定无回话(ssh不通): ${QR:-空}"; }
   fi

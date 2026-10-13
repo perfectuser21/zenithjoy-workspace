@@ -9,23 +9,33 @@ const EMPTY: CompanyProfile = {
   customer_portrait: '', qa_list: [],
 };
 
-const TABS = ['基础信息', '产品与价值', '目标客群'] as const;
+const TABS = ['基础信息', '产品与价值', '目标客群', '公司Wiki与配置'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function CompanyProfilePage() {
   const [form, setForm] = useState<CompanyProfile>({ ...EMPTY });
   const formRef = useRef<CompanyProfile>({ ...EMPTY });
   const [activeTab, setActiveTab] = useState<TabKey>('基础信息');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [runtimeText, setRuntimeText] = useState('{}');
+  const saveLock = useRef(false);
+  const savedForm = useRef<CompanyProfile>({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [toastOk, setToastOk] = useState(true);
 
-  useEffect(() => {
-    getCompanyProfile().then(data => {
+  const reloadProfile = useCallback(() => {
+    setLoading(true);
+    setLoadError('');
+    return getCompanyProfile().then(data => {
       formRef.current = data;
+      savedForm.current = data;
       setForm(data);
-    }).catch(() => {});
+      setRuntimeText(JSON.stringify(data.runtime_config ?? {}, null, 2));
+    }).catch(error => setLoadError(error instanceof Error ? error.message : '公司资料读取失败')).finally(() => setLoading(false));
   }, []);
+  useEffect(() => { void reloadProfile(); }, [reloadProfile]);
 
   const showToast = (msg: string, ok = true) => {
     setToast(msg);
@@ -34,15 +44,30 @@ export default function CompanyProfilePage() {
   };
 
   const handleBlur = useCallback(async () => {
-    const current = formRef.current;
-    if (!current.company_name) return;
+    let current = formRef.current;
+    const previous = savedForm.current;
+    const changed = ['company_name', 'city', 'industry', 'description', 'products', 'key_advantages', 'customer_problem', 'customer_portrait', 'qa_list', 'wiki', 'runtime_config', 'source_evidence'].some(key => JSON.stringify(current[key as keyof CompanyProfile]) !== JSON.stringify(previous[key as keyof CompanyProfile]));
+    if (changed && current.config_status === previous.config_status && ['confirmed', 'enabled'].includes(previous.config_status ?? '')) {
+      current = { ...current, config_status: 'draft' };
+      formRef.current = current;
+      setForm(current);
+    }
+    if (!current.company_name || saveLock.current) return;
+    saveLock.current = true;
     setSaving(true);
     try {
-      await updateCompanyProfile(current);
+      const result = await updateCompanyProfile(current);
+      if (result?.profile) {
+        savedForm.current = result.profile;
+        // 保留保存期间继续输入的内容，只更新版本及系统状态。
+        formRef.current = { ...formRef.current, config_version: result.config_version, config_status: result.profile.config_status, sync_status: result.profile.sync_status };
+        setForm({ ...formRef.current });
+      }
       showToast('已保存 ✓');
-    } catch {
-      showToast('保存失败，请重试', false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存失败，请重试', false);
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }, []);
@@ -90,12 +115,27 @@ export default function CompanyProfilePage() {
     setForm({ ...formRef.current });
   };
 
+  const saveConfig = async () => {
+    try {
+      const parsed: unknown = JSON.parse(runtimeText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('运行配置必须为 JSON 对象');
+      setField('runtime_config', parsed as Record<string, unknown>);
+      await handleBlur();
+    } catch (error) { showToast(error instanceof SyntaxError ? 'JSON 格式错误，请修正后保存' : String(error), false); }
+  };
+  if (loading) return <div>正在读取公司资料...</div>;
+  if (loadError) return <div><div role="alert">{loadError}</div><button onClick={() => void reloadProfile()}>重新读取公司资料</button></div>;
+  const statusLabels = { draft: '草稿', confirmed: '已确认', enabled: '已启用' };
+  const mappingLabels: Record<string, string> = { unmapped: '未接通', source_retained: '保留飞书来源，尚未同步', verified: '已读回核验', pending: '当前版本待读回', conflict: '回写冲突待确认', mismatch: '读回不一致', failed: '同步失败' };
   const inputStyle = { width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6 };
   const labelSpanStyle = { display: 'block', marginBottom: 4, fontSize: 13, color: '#555' } as const;
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24 }}>公司信息</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24 }}>公司信息与Wiki · {form.company_name}</h1>
+      <p>版本 {form.config_version ?? 0} · {statusLabels[form.config_status ?? 'draft']} · 负责人：{form.config_owner || '待指定'}</p>
+      <p>公司ID：{form.company_id || '未映射'}</p>
+      <button disabled={saving} onClick={() => void reloadProfile()}>重新读取公司资料</button>
 
       {toast && (
         <div data-testid="save-toast" style={{
@@ -166,6 +206,11 @@ export default function CompanyProfilePage() {
       {/* Tab 2 — 产品与价值 */}
       {activeTab === '产品与价值' && (
         <div>
+          {Array.isArray(form.wiki?.products) && form.wiki.products.map((product, i) => <article key={product.id ?? i} style={{ padding: 12, marginBottom: 12, border: '1px solid #ddd', borderRadius: 6 }}>
+            <strong>{product.name}</strong>
+            <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(product.fields ?? product, null, 2)}</pre>
+            <small>来源：{JSON.stringify(product.source ?? {})}</small>
+          </article>)}
           <div style={{ marginBottom: 16 }}>
             <span style={labelSpanStyle}>主营产品</span>
             {(form.products as string[]).map((p, i) => (
@@ -211,6 +256,11 @@ export default function CompanyProfilePage() {
       {/* Tab 3 — 目标客群 */}
       {activeTab === '目标客群' && (
         <div>
+          {Array.isArray(form.wiki?.audiences) && form.wiki.audiences.map((audience, i) => <article key={audience.id ?? i} style={{ padding: 12, marginBottom: 12, border: '1px solid #ddd', borderRadius: 6 }}>
+            <strong>{audience.name}</strong>
+            <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(audience.fields ?? audience, null, 2)}</pre>
+            <small>来源：{JSON.stringify(audience.source ?? {})}</small>
+          </article>)}
           <label style={{ display: 'block', marginBottom: 16 }}>
             <span style={labelSpanStyle}>客户画像描述</span>
             <textarea value={form.customer_portrait}
@@ -240,6 +290,26 @@ export default function CompanyProfilePage() {
         </div>
       )}
 
+      {activeTab === '公司Wiki与配置' && <div style={{ display: 'grid', gap: 16 }}>
+        {form.wiki?.verification_status === 'source_preserved_pending_owner_review' && <p>资料状态：保留原始来源，事实声明及AI初稿仍待负责人核对。运行配置启用不代表资料已独立核验。</p>}
+        {Array.isArray(form.wiki?.conflicts) && form.wiki.conflicts.length > 0 && <div role="note">资料冲突：{form.wiki.conflicts.length} 项待确认<pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(form.wiki.conflicts, null, 2)}</pre></div>}
+        <label>公司Wiki Markdown
+          <textarea aria-label="公司Wiki Markdown" rows={16} style={inputStyle} value={form.wiki?.markdown ?? ''}
+            onChange={e => setField('wiki', { ...form.wiki, markdown: e.target.value })} />
+        </label>
+        <label>运行配置 JSON
+          <textarea aria-label="运行配置 JSON" rows={16} style={inputStyle} value={runtimeText} onChange={e => setRuntimeText(e.target.value)} />
+        </label>
+        <label>配置负责人<input aria-label="配置负责人" style={inputStyle} value={form.config_owner ?? ''} onChange={e => setField('config_owner', e.target.value)} /></label>
+        <label>配置状态<select aria-label="配置状态" style={inputStyle} value={form.config_status ?? 'draft'} onChange={e => setField('config_status', e.target.value as CompanyProfile['config_status'])}>
+          <option value="draft">草稿</option><option value="confirmed">确认</option><option value="enabled">启用</option>
+        </select></label>
+        <p>确认后才可启用；账号、设备及触达缺项由对应执行步骤拦截。版本冲突请重新读取并核对改动。</p>
+        <button disabled={saving} onClick={() => void saveConfig()}>保存配置</button>
+        <div>Notion：{mappingLabels[form.sync_status?.notion?.status ?? 'unmapped'] ?? '未接通'}</div>
+        <div>飞书：{mappingLabels[form.sync_status?.feishu?.status ?? 'unmapped'] ?? '未接通'}</div>
+        <div>来源与确认状态<pre data-testid="company-source-evidence" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(form.source_evidence ?? [], null, 2)}</pre></div>
+      </div>}
       {saving && <div style={{ marginTop: 16, fontSize: 13, color: '#888' }}>保存中...</div>}
     </div>
   );

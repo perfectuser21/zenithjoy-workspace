@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
-const { queueRequest } = require('../leadgen-queue.js');
+import {freezeFixture} from './company-config-fixture.mjs';
+const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
 
 function fakePool(responses) {
   const calls = [];

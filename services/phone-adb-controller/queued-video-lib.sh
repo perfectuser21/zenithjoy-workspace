@@ -148,7 +148,7 @@ PYRECORD
       audio_args=(--audio "$remote")
     else qv_log 'audio_upload_failed'; print -- "QUAL\t$VID\tpending\taudio_upload_failed"; return 5; fi
   fi
-  result="$(qv_remote judge --line "$LINE" --video-id "$VID" "${audio_args[@]}")" || result=""
+  result="$(qv_remote judge --line "$LINE" --run "$TAG" --source-run "${LEADGEN_SOURCE_RUN:-}" --video-id "$VID" "${audio_args[@]}")" || result=""
   verdict="$(print -r -- "$result" | python3 -c 'import json,sys
 try:
  rows=[s for s in sys.stdin.read().splitlines() if s.startswith("QUAL_RESULT ")]

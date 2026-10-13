@@ -15,6 +15,7 @@ function fixture(){
  const env={HOME:dir,WFR_RUN_DIR:dir,P:'jinoshengyuan-work',SERIAL:'FAKE6983',WFR_TAG:'fake104',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',LEADGEN_LIMIT:'1',DOUYIN_ACCOUNT_REGISTRY:registry,PHONE_EVIDENCE_ROOT:join(dir,'fake-evidence')};
  const order={id:'recFAKEONLY123',line_key:'jinuo',douyin_id:'1873867835',profile_url:'https://v.douyin.com/FAKEONLY/',script_id:'fake-approved-B',script_version:'B',message:'测试批准正文',sender_douyin_id:'langzi63485'};
  const rpc=async body=>{events.push(body);const op=body.request?.op;
+  if(op==='company_config')return {result:{company_id:'fake-jinuo',tenant_id:'tenant-jinuo',version:1,product_ids:['fake-product'],policy_id:'fake-policy',runtime_config:{contact_rules:{ssot:'feishu',feishu_base:'GNuwbzY0da8GP0sv6MGcOTu9ntd',orders_table:'tblTLFj69CflUqSr',approved_scripts_table:'tblZZWdv0YUNojqI'},platform_accounts:[{profile:env.P,douyin_id:'langzi63485',device_serial:env.SERIAL,verification_status:'verified',enabled:true}]}}};
   if(op==='claim_outreach')return {result:[order]};
   if(op==='prepare_outreach')return {result:{prepared:true,order}};
   if(op==='write_outreach')return {result:{written:true,id:order.id}};

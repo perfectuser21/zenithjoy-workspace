@@ -16,7 +16,7 @@ test('实际进程超时保留安全首因，跨chunk凭据和长图片不得进
 function setup(execute){
  const d=mkdtempSync(join(tmpdir(),'search-budget-fake-'));const registry=join(d,'accounts');writeFileSync(registry,'yueshengyun-work\t37358506855\n');
  const env={HOME:d,WFR_RUN_DIR:d,P:'yueshengyun-work',SERIAL:'fake-white',WFR_TAG:'fake-run',DOUYIN_ACCOUNT_REGISTRY:registry,LEADGEN_LINE:'悦升云端',LEADGEN_SOURCES_FILE:join(d,'sources'),WF_RUN_MAX_SECONDS:'3600',LEADGEN_SORT:'comprehensive',LEADGEN_TIME_LAYER:'unlimited'};writeFileSync(env.LEADGEN_SOURCES_FILE,'AI\n');
- const h=createHandlers({root:d,env,rpc:async()=>{throw Error('no queue writes');},execute:async(c,a,o)=>{
+ const h=createHandlers({root:d,env,rpc:async(body)=>{if(body.kind==='keywords')return {result:body.keywords,config:{company_id:'fake-yuesheng',version:1}};throw Error('no queue writes');},execute:async(c,a,o)=>{
   const s=a.join(' ');if(s.includes('search-video-tab')||s.includes('open-search'))return execute(c,a,o);
   let stdout=s.includes('get-state')?'device\n':s.includes('preflight')?'serial=fake-white\n':s.includes('lock-acquire')?'lock=acquired\n':s.includes('lock-refresh')?'lock=refreshed\n':s.includes('telephony.registry')?'mCallState=0\n':s.includes('account-current')?'douyin_id=37358506855\n':'';
   return {code:0,stdout,stderr:''};
