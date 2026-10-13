@@ -495,3 +495,30 @@ for(const fault of ['none','mixed_3new_2history','legacy_hyphen','wrong_run','wr
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+for(const mode of ['avatar','identity','missing_avatar','malformed_avatar'])test('真实collection解析分类恢复计数及正式探针/部署Step '+mode,async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs'),createHandlers=withCompanyFixture(rawCreateHandlers),{judgeSteps}=await import('../step-judge.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'categorized-rescan-'));
+ try{
+  const f=await sampleFixture(dir),n=5,identity=mode==='identity'?2:0;
+  const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{
+   if(q.op==='inspect_videos')return {result:[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待判定'}]};
+   if(q.op==='claim_videos')return {result:[{video_id:f.videoId,video_url:f.url,judgment_status:'matched'}]};
+   if(q.op==='renew_video'||q.op==='release_video')return {result:{}};
+   if(q.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:f.env.WFR_TAG,source_run:f.source,video_id:f.videoId,video_url:f.url,rows:[]}};
+   if(q.op==='collect_partial')return {result:{comments:n,inserted:n,history_verified:0,coverage:n}};
+   if(q.op==='comment_history_readback')return {result:{verified:true,video_id:f.videoId,ids:[],history_verified:0}};
+   if(q.op==='sample_readback')return {result:{verified:true,video_id:f.videoId,coverage:n,rows:q.rows.map((r,i)=>({...r,id:'id'+i}))}};
+   throw Error('unexpected '+q.op);
+  },execute:async(c,a)=>{
+   if(a[1]==='identity')return {code:0,stdout:'',stderr:''};
+   const rows=Array.from({length:5},(_,i)=>`LEAD\t昵称\tperson${i}\tpersonal\t全文${i}\t今天\t陕西\tAI\tAI\t西安\thttps://www.douyin.com/user/u\t${f.url}`).join('\n');
+   return {code:0,stdout:rows+`\nCOLLECTION\t${f.videoId}\tsampled\t5\t5\t5\nRESCAN\t${f.videoId}\t${identity}\n`+(mode==='missing_avatar'?'':`AVATAR_RECOVERY\t${f.videoId}\t${mode==='malformed_avatar'?'unknown':2}\n`),stderr:''};
+  }});
+  await h.dedup();await h.qualification();const out=await h.collection();
+  if(mode.includes('avatar')&&mode!=='avatar'){assert.equal(out.status,'partial');assert.equal(out.videos_sampled,0);assert.match(out.failures[0].reason,/头像恢复/);return;}
+  assert.equal(out.comments_inserted,5);assert.equal(out.avatar_recovery_count,2);assert.equal(out.identity_rescan_count,identity);assert.equal(out.rescan_count,identity);assert.equal(out.rescan_rate,identity);
+  const spec=JSON.parse(readFileSync('services/phone-adb-controller/plans/douyin_video_processing.steps.json','utf8'));const step=spec.steps.find(s=>s.key.endsWith('.return_to_results'));const result=judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{metrics:out}});assert.equal(result.steps[0].pass,mode==='avatar');
+  const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-video-processing.yaml','utf8')),probe=checks.probes.find(p=>p.key==='coll_rescan_rate');assert.equal(probe.expect.value,0.3);assert.equal(probe.probe.ref,'metrics.rescan_rate');assert.equal(out.rescan_rate<=probe.expect.value,mode==='avatar');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

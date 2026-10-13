@@ -14,14 +14,14 @@ test('真实HTTP: receipt断线留pending，重启flush字节不变，ack后sent
  const server=createServer((req,res)=>{let body='';req.on('data',b=>body+=b);req.on('end',()=>{bodies.push(body);assert.equal(req.headers.authorization,'Bearer fixture-token');if(mode==='drop')return req.socket.destroy();res.writeHead(mode==='conflict'?409:200,{'Content-Type':'application/json'});res.end('{"inserted":1}');});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  const env={WFR_RUN_DIR:dir,WFR_RUN_ID:'http-run',WFR_ATTEMPT:'a1',BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-token'};
- const art=join(dir,'artifact.json');writeFileSync(art,JSON.stringify({observed_at:new Date().toISOString(),metrics:{rescan_count:2,rescan_rate:0.5}}));
+ const art=join(dir,'artifact.json');writeFileSync(art,JSON.stringify({observed_at:new Date().toISOString(),metrics:{rescan_count:2,rescan_rate:0.5,avatar_recovery_count:2}}));
  assert.equal((await invoke(env,'mark-start','collection','1')).code,0);
  assert.equal((await invoke(env,'span','collection','completed','1',art,'word')).code,0);
  const files=()=>readdirSync(join(dir,'outbox')).filter(n=>n.endsWith('.json')).map(n=>JSON.parse(readFileSync(join(dir,'outbox',n),'utf8')));
  assert.equal(files()[0].state,'pending');const first=files()[0];
  writeFileSync(art,JSON.stringify({observed_at:'changed',metrics:{}}));mode='ok';await invoke(env,'flush');
  assert.equal(files()[0].state,'sent');assert.equal(bodies[0],bodies[1]);
- const span=JSON.parse(bodies[1])[0];assert.equal(span.evidence.workflow_definition_version_id,'workflow-version');assert.equal(span.evidence.reference_id,'reference-3');assert.equal(span.attempts,3);
+ const span=JSON.parse(bodies[1])[0];assert.equal(span.evidence.workflow_definition_version_id,'workflow-version');assert.equal(span.evidence.reference_id,'reference-3');assert.equal(span.attempts,5);assert.equal(span.evidence.avatar_recovery_count,2);assert.equal(span.evidence.identity_rescan_count,2);
  await invoke(env,'mark-start','collection','1');mode='conflict';await invoke(env,'span','collection','failed','1',art,'word');
  assert.equal(files().find(f=>f.event_id!==first.event_id).state,'blocked');
  assert.equal(new Set(files().map(f=>f.occurrence_key)).size,2);

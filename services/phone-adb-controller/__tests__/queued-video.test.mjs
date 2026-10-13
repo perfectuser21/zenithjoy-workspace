@@ -104,7 +104,7 @@ case "$3" in
  open-video) if [[ -n "$AFTER_CARD_OPEN_FAIL" && "$5" == *after-card* ]];then exit 4;fi;rm -f "$CARD_STATE"; print 'video_id=${vid}';;
  current-video-link) if [[ "$4" == *recovery* && -n "$CLIPPED_WRONG_VID" ]];then print content_type=video;print video_id=7646309328911907196;exit 0;fi;if [[ "$4" == *after-card* ]];then [[ -z "$AFTER_CARD_LINK_FAIL" ]] || exit 1;[[ -z "$AFTER_CARD_NOTE" ]] || export CONTENT_TYPE=note;fi;if [[ -f "$CARD_STATE" ]];then print -u2 'NOT_ON_VIDEO_DETAIL';exit 1;fi;print "content_type=\${CONTENT_TYPE:-video}";if [[ -n "$DRIFT_AFTER_CARD" && "$(grep -c '^current-video-link$' "$CALLS")" -gt 1 ]]; then print 'video_id=7646309328911907196';else print "video_id=\${OBSERVED_ID:-${vid}}";fi;;
  open-comments) if [[ "$4" == *after-card* && -n "$AFTER_CARD_COMMENTS_FAIL" ]];then exit 6;fi;if [[ -n "$NO_COMMENTS" ]]; then print 'reason=no_comments_on_this_video'; else print 'comments_opened=1'; print "comment_count=\${FIXTURE_COMMENT_COUNT:-1}"; fi;;
- collect-comments) if [[ -n "$CLIPPED_FIRST" ]];then
+ collect-comments) if [[ -n "$CLIPPED_TWO" ]];then for j in 1 2;do print "甲\\t裁切$j\\t今天\\t北京\\treader\\ttap= \\tb64=55Sy";done;for j in {1..5};do print "甲\\t合法$j\\t今天\\t北京\\treader\\ttap=900 $((300+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;if [[ -n "$CLIPPED_FIRST" ]];then
 if [[ "$4" == *rescan* && -n "$CLIPPED_COLLECT_FAIL" ]];then exit 2;fi
 if [[ "$4" == *rescan* && -n "$CLIPPED_NOT_FOUND" ]];then print 'exhausted=0';exit 0;fi
 if [[ "$4" == *rescan* && -n "$CLIPPED_RECOVERS" ]];then xy='700 800';else xy=' ';fi
@@ -349,4 +349,8 @@ test('空tap恢复实际VID漂移必须失败，不能成为候选skip',()=>{
 });
 test('仅持续空头像候选不循环恢复、不计配额、不冒充全量采完',()=>{
  const r=run('collection',{CLIPPED_FIRST:'1',CLIPPED_ONLY:'1',LEADGEN_COMMENT_LIMIT:'1',LEADGEN_SOURCE_RUN:'source101'});assert.equal(r.status,7,r.stderr);assert.equal(r.calls.filter(x=>x==='back').length,1);assert.equal(r.stdout.split('COMMENT_SKIP').length-1,1);assert.doesNotMatch(r.stdout,/LEAD|sampled/);assert.match(r.stdout,/COLLECTION\t\d+\tpartial\t0/);assert.ok(r.calls.filter(x=>x==='collect-comments').length<=5);
+});
+
+test('完整采集两裁切恢复加五条真实身份评论分别统计，正常恢复不充身份重扫',()=>{
+ const r=run('collection',{CLIPPED_TWO:'1',LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.split('LEAD\t').length-1,5);assert.equal(r.stdout.split('COMMENT_SKIP').length-1,2);assert.match(r.stdout,/COLLECTION\t\d+\tsampled\t5\t5\t5/);assert.match(r.stdout,/RESCAN\t7646309328911907195\t0/);assert.match(r.stdout,/AVATAR_RECOVERY\t7646309328911907195\t2/);assert.equal(r.calls.filter(x=>x==='back').length,2);assert.equal(r.calls.filter(x=>x==='commenter-identity').length,5);
 });
