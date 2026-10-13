@@ -170,7 +170,9 @@ qv_relocate_comment(){
     [[ "$(print -r -- "$ln" | cut -f1)" == "$nick" && "$(print -r -- "$ln" | cut -f2)" == "$body" ]] || continue
     QV_LINE="$ln"; return 0
   done
-  return 1
+  # 只有back/实际VID复核/评论重开/新树读取均成功，才是目标不在新屏。
+  # rc1仍为取证或上下文失败，绝不可当成可安全跳过的候选。
+  return 2
 }
 qv_history_prepare(){
   typeset -gA QV_HISTORY_ROWS QV_HISTORY_USED
@@ -193,7 +195,7 @@ qv_collect(){
   local budget
   budget="$(qv_collection_budget)" || return 2
   local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 covered=0 identity_started own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
-  local -A seen emitted
+  local -A seen emitted unavailable_avatar
   local sampling=0
   if (( ${+LEADGEN_COMMENT_LIMIT} )); then sampling=1; cap="$LEADGEN_COMMENT_LIMIT"; fi
   opened="$("$C" --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || {
@@ -243,6 +245,25 @@ except Exception: print("medium")' "$count")"
       (( own_rc != 0 )) || { [[ "$author" == author ]] && return 8; continue; }
       [[ "$author" != author ]] || continue
       QV_LINE="$line"; identity=""
+      tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
+      x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
+      if [[ -z "$x" && -z "$y" && -n "$nickb64" ]]; then
+        # 仅空头像坐标：不猜坐标；新鲜上下文成功后最多重定位一次。
+        # 已明确不可操作的同昵称+全文只在再次空坐标时略过，不挡后续完整新树。
+        [[ -z "${unavailable_avatar[$nick$'\t'$body]:-}" ]] || continue
+        local relocate_rc=0
+        qv_relocate_comment "$nick" "$body" || relocate_rc=$?
+        (( relocate_rc == 0 || relocate_rc == 2 )) || { qv_log "avatar_recovery_failed row=$total"; return 6; }
+        tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
+        x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
+        if (( relocate_rc == 2 )) || [[ -z "$x" && -z "$y" && -n "$nickb64" ]]; then
+          unavailable_avatar[$nick$'\t'$body]=1
+          print -- "COMMENT_SKIP\t$VID\tavatar_unavailable\t$QV_EID-rescan-$QV_ROW"
+          qv_log "comment_skipped row=$total reason=avatar_unavailable evidence=$QV_EID-rescan-$QV_ROW"
+          # 恢复已改变屏位；不能点原raw剩余旧坐标，下一轮重新collect。
+          exhausted=0; break
+        fi
+      fi
       for attempt in 1 2 3; do
         tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
         x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
