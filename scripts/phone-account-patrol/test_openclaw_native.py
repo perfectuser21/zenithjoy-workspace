@@ -296,7 +296,7 @@ class ContinuousRecoveryTests(unittest.TestCase):
             'stdout': json.dumps({'task_id': task['id'], 'status': outcome, 'serial': 'phone-a',
                 'source_revision': native.bridge.PHONE_SOURCE_REVISION, 'checked_at': checked or self.current.isoformat(), 'workflow_id': SINGLE,
                 'states': {'抖音': '已登录', '小红书': '已登录', '微信': '已登录', '快手': '已登录', '今日头条': '已登录', '知乎': '待确认', '微博': '已登录', 'B站': '已登录', '视频号': '待确认'},
-                'evidence': ['/private/observation.json', '/private/publish.json', '/private/mirror.json', 'xian-m4:/private/evidence']})}}
+                'evidence': ['/private/' + task['id'] + '.observation.json', '/private/' + task['id'] + '.publish.json', '/private/' + task['id'] + '.mirror.json', 'xian-m4:/private/evidence/central-' + task['id']]})}}
 
     def test_failed_previous_day_creates_blocked_demand_and_real_code_attempt(self):
         result = self.cycle();demand = self.demands()[0];attempt = self.attempts()[0]
@@ -418,6 +418,23 @@ class ContinuousRecoveryTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, forbidden)
             attempt['payload'] = original
+
+    def test_closed_demand_handoff_has_complete_schema_without_synthesized_repair(self):
+        self.cycle();attempt = self.attempts()[0];self.current += dt.timedelta(minutes=45);self.complete_phone(attempt);self.cycle()
+        handoff = self.demands()[0]['result']['handoff']
+        for key in ['title', 'verdict', 'done', 'not_done', 'artifacts', 'data_sources', 'decision_refs', 'initiative_id', 'journey_id', 'created_at']:
+            self.assertIn(key, handoff)
+        self.assertEqual(handoff['schema_version'], 1)
+        self.assertEqual(handoff['next_steps'], [{'kind': 'note', 'title': '需求已满足，无下一步'}])
+        self.assertEqual(set(handoff['artifacts']), {'pr_urls', 'sprint_dir', 'branch', 'docs'})
+        self.assertEqual(self.demands()[0]['result']['recovery']['actor'], 'OpenClaw:infra')
+
+    def test_empty_or_other_task_evidence_does_not_satisfy_demand(self):
+        for evidence in [[None, None, None, None], ['', '', '', ''],
+                ['/private/other.observation.json', '/private/other.publish.json', '/private/other.mirror.json', 'xian-m4:/private/evidence']]:
+            self.setUp();self.cycle();attempt = self.attempts()[0];self.current += dt.timedelta(minutes=45);self.complete_phone(attempt)
+            receipt = json.loads(attempt['result']['script']['stdout']);receipt['evidence'] = evidence;attempt['result']['script']['stdout'] = json.dumps(receipt)
+            self.cycle();self.assertEqual(self.demands()[0]['status'], 'blocked')
 
     def test_existing_closed_manual_demand_is_not_recreated(self):
         self.cycle();demand = self.demands()[0];self.tasks[demand['id']]['status'] = 'completed_no_pr'

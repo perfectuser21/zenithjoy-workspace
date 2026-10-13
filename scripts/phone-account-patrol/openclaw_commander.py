@@ -196,7 +196,11 @@ def phone_completion(task, serial, deployment, after, by_id=None, current=None, 
         return None
     names = ['抖音', '小红书', '微信', '快手', '今日头条', '知乎', '微博', 'B站', '视频号']
     states = receipt.get('states') or {}
-    if any(states.get(name) not in ['已登录', '未登录', '未安装', '待确认'] for name in names) or not isinstance(receipt.get('evidence'), list) or len(receipt['evidence']) < 4:return None
+    evidence = receipt.get('evidence')
+    if (any(states.get(name) not in ['已登录', '未登录', '未安装', '待确认'] for name in names)
+            or not isinstance(evidence, list) or len(evidence) < 4 or any(not isinstance(e, str) or not e.strip() for e in evidence)
+            or any(not any(pathlib.PurePosixPath(e).name == task['id'] + suffix for e in evidence)
+                   for suffix in ['.observation.json', '.publish.json', '.mirror.json'])):return None
     try:
         checked = timestamp(receipt.get('checked_at'))
         if checked < max(timestamp(after), timestamp(task.get('created_at'))) or checked > (current or dt.datetime.now(dt.timezone.utc)) + dt.timedelta(seconds=30):return None
@@ -224,12 +228,22 @@ def patch_recovery(call, demand, progress, status=None):
         if status == 'completed_no_pr':
             body['result']['handoff'] = {'schema_version': 1, 'task_id': demand['id'], 'actor': 'OpenClaw:infra',
                 'summary': '手机巡查需求凭真实运行证据结清；原失败历史保留', 'facts': [progress],
-                'evidence': [progress['satisfied_by_task_id'], progress['satisfied_by_run_id']], 'next_steps': []}
+                'evidence': [progress['satisfied_by_task_id'], progress['satisfied_by_run_id']],
+                'title': demand.get('title') or '手机持续巡查需求', 'verdict': 'completed',
+                'done': ['凭规范Run、退出码0及完整巡查证据结清原需求，失败历史保留'], 'not_done': [],
+                'artifacts': {'pr_urls': [], 'sprint_dir': None, 'branch': None, 'docs': ['scripts/phone-account-patrol/RUNBOOK.md']},
+                'data_sources': ['Brain tasks/' + progress['satisfied_by_task_id'], 'Brain task_runs/' + progress['satisfied_by_run_id']],
+                'decision_refs': [], 'initiative_id': demand.get('initiative_id'), 'journey_id': demand.get('journey_id'),
+                'created_at': progress['last_checked_at'], 'next_steps': [{'kind': 'note', 'title': '需求已满足，无下一步'}]}
     call('tasks/' + demand['id'], body, 'PATCH')
     fresh = read_task(call, demand['id'])
     if (fresh.get('payload') != demand.get('payload') or (fresh.get('result') or {}).get('recovery') != progress
             or status and fresh.get('status') != status):
         raise ValueError('需求进度没有真正写入中央 result')
+    if status == 'completed_no_pr':
+        handoff = (fresh.get('result') or {}).get('handoff') or {}
+        if handoff.get('synthesized') is True or handoff.get('next_steps') != body['result']['handoff']['next_steps']:
+            raise ValueError('中央完成handoff未保留真实交接，禁止宣称结清')
     return fresh
 
 

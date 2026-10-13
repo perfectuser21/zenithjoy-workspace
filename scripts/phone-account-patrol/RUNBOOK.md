@@ -18,7 +18,7 @@ enqueue、inspect 与 resolve-task 不调用模型、OpenClaw CLI 或手机。�
 
 本机私有证据：`native-launch-<leader>.json`、`native-openclaw.latest.json`、`native-review-<review>.json`，权限 600。领跑源码 `source_revision` 与手机固定源 `phone_source_revision` 分别登记；正式代码批次的 `source_revision` 为冻结手机源。代码批次复制已核验领跑任务的定时计划与时段，既有 runner monitor 可读到实际代码批次。中央 registry 是调度和部署真身，Notion 页面为查看入口。
 
-`openclaw_commander.py` 保留为共享真实性验证库，仅提供冻结八文件哈希、UUID、真实父子/设备/来源核验与私有原子保存。部署 native helper 时共享库必须在同一目录，手机固定 release 不改。
+`openclaw_commander.py` 保留为共享真实性验证库，提供冻结八文件哈希、UUID、真实父子/设备/来源核验、私有原子保存及中央恢复需求协调（POST/PATCH）；不启动Agent或直接操作手机。部署 native helper 时共享库必须在同一目录，手机固定 release 不改。
 
 ## 正式登记与执行
 
