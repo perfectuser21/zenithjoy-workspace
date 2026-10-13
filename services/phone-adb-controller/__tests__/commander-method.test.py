@@ -89,8 +89,24 @@ class Methods(unittest.TestCase):
    core.failed_delivery(directory,self.envelope,'child_blocked: unavailable_tool')
    delivery=self.io.read(directory/'delivery.json');self.assertEqual(delivery['status'],'failed')
    self.assertEqual(delivery['failure'],'child_blocked: unavailable_tool');self.assertEqual(delivery['definition'],self.envelope['definition']);self.assertEqual(delivery['input'],self.envelope['input'])
+ def test_new_attempt_directory_conflict_or_alias_never_overwrites_original_evidence(self):
+  self.attest();self.envelope['definition']['runtime_snapshot_sha256']=self.io.ready(self.envelope)['runtime_snapshot_sha256']
+  core=load(self.runtime/'wf-v2.py','fixture_isolation');core.io=self.io
+  runs=self.home/'wf-agent-runs';runs.mkdir();old=runs/'wfd-failed';old.mkdir();evidence=old/'report.json';evidence.write_bytes(b'original failure evidence')
+  original=digest(evidence.read_bytes());new=runs/self.envelope['run_id'];file=self.home/'envelope.json';self.io.write(file,self.envelope)
+  with patch.dict(os.environ,WF_V2_NO_WORKER='1'):
+   new.symlink_to(old)
+   with self.assertRaises(ValueError):core.launch(str(file),'agent:work-commander:method-fixture')
+   self.assertEqual(digest(evidence.read_bytes()),original);self.assertFalse((old/'agent-request.json').exists());new.unlink()
+   new.mkdir();(new/'unexpected.json').write_text('preexisting artifact')
+   with self.assertRaises(ValueError):core.launch(str(file),'agent:work-commander:method-fixture')
+   self.assertFalse((new/'agent-request.json').exists());self.assertEqual((new/'unexpected.json').read_text(),'preexisting artifact')
+   shutil.rmtree(new);core.launch(str(file),'agent:work-commander:method-fixture')
+   self.assertNotEqual(new.resolve(),old.resolve());self.assertEqual(digest(evidence.read_bytes()),original)
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
+  golden=json.loads((SOURCE/'__tests__/fixtures/commander-method-brain.json').read_text())
+  for value,sha in [('manifest','manifest_sha256'),('resolved_bindings','resolved_bindings_sha256'),('composition','runtime_snapshot_sha256'),('input','input_sha256')]:self.assertEqual(m.digest(golden[value]),golden[sha])
   for row in json.loads((SOURCE/'__tests__/fixtures/commander-method-digests.json').read_text()):self.assertEqual(m.digest(json.loads(row['input'])),row['sha256'])
   for value in (float('nan'),float('inf'),-float('inf')):
    with self.assertRaises(ValueError):m.digest({'number':value})
