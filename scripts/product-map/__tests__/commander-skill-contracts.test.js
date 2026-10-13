@@ -77,3 +77,11 @@ test('原抖音合同升级v2：冻结私密视频输入、手机资源、一次
  for(const field of ['publication','privacy','readback','media_sha256','evidence'])assert.ok(spec.output_schema.required.includes(field),field);
  assert.equal(spec.output_schema.properties.publication.required.includes('work_id'),false);
 });
+
+test('冻结业务合同累计5次同类失败提出改进建议，不扩大单次执行尝试',()=>{
+ const douyin=commanderContractsSpec(fresh()).contracts.douyin_video_publish;
+ const report=JSON.parse(readFileSync(new URL('../../../services/phone-adb-controller/commander/contracts/workflow-report.json',import.meta.url),'utf8'));
+ assert.equal(douyin.recovery.improvement_after_failures,5);assert.equal(douyin.recovery.max_attempts,1);
+ assert.equal(report.recovery.improvement_after_failures,5);assert.equal(report.recovery.max_attempts,2);
+ assert.deepEqual(errorsOf(fresh()),[]);
+});
