@@ -3,6 +3,9 @@
 # 用法: wf-status.sh <host> <TAG>     host=xian-m4/xian-m1（获客 wf-run 形态）或 mmv（codex_agent 形态，MMV 本机外壳 runner）
 # 输出: 起跑日志尾 + 采收日志里本 TAG 的最近行 + 最后一行 WF_STATUS state=running|finished|unknown
 set -uo pipefail
+if [[ $# -eq 1 ]]; then
+  exec python3 "$(cd "$(dirname "$0")" && pwd)/wf-v2.py" status "$1"
+fi
 [[ $# -eq 2 ]] || { echo "用法: wf-status.sh <host> <TAG>" >&2; exit 2; }
 HOST="$1"; TAG="$2"
 [[ "$HOST" == "xian-m4" || "$HOST" == "xian-m1" || "$HOST" == "mmv" ]] || { echo "host 只允许 xian-m4 / xian-m1 / mmv" >&2; exit 2; }

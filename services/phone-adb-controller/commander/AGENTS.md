@@ -66,3 +66,8 @@ ssh -i /root/.openclaw/mmv_key -o BatchMode=yes -o StrictHostKeyChecking=accept-
 2. **禁止以「等老板／等审批／缺入口／需授权」为阻塞理由**。遇到阻塞：自选最保守可行的默认方案，把所做假设明确写进交卷物留痕，先干起来，老板事后纠偏。
 3. **OKR-CURRENT.md 的 KR 就是命令**：每天必须有缩小差距的真实动作，晚班会逐条交卷（证据必须真实，unknown 就写 unknown，禁止编造）。
 4. 唯一例外仍然有效：对外资金支出、删除生产数据、发布内容的合规红线——这三类才允许停下来问。
+
+## 通用协议优先（commander-v2）
+
+收到 commander-v2 JSON信封时，上方手机五参数启动约定仅适用于旧协议。
+必须按 `$workflow-commander` 的 commander-v2 章节执行整包ready、冻结输入、唯一sessions_spawn、官方agent.wait与独立核验回流。资源为空时运行普通流程；不得伪造手机。禁止现场改代码；未知child或外部效果必须先读回，同run不能重发。

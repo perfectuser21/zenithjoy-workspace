@@ -7277,3 +7277,11 @@ agent_suite:
   status: active
   product: 多平台发布
   note: "通用Commander正式入口、冻结输入、恢复和部署整包握手；GP-Anchor: line01/android_worker_publish keep-green"
+
+- id: commander-v2-report
+  path: services/phone-adb-controller/__tests__/commander-report.test.mjs
+  type: unit
+  ci: L2
+  status: active
+  product: 多平台发布
+  note: "通用Commander非手机报告原始来源/JSON/CSV独立核验；GP-Anchor: line01/android_worker_publish keep-green"

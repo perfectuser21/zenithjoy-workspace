@@ -60,11 +60,28 @@ push_atomic() {
 # Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
 # （任务 c0fe7e30：Commander 件不进 release manifest，单独下发不影响两机执行包的对账）
 deploy_commander() {
+  # 在途外壳保留原版本；整套文件和skills同步完成才发布新manifest。
+  if ! ssh mmv python3 <<'PYADMISSION'
+import fcntl,json,pathlib,subprocess,sys
+root=pathlib.Path.home()/'.openclaw/commander'
+root.mkdir(parents=True,exist_ok=True)
+with open(root/'.admission.lock','a') as guard:
+    fcntl.flock(guard,fcntl.LOCK_EX)
+    active=subprocess.run(['pgrep','-f','[w]f-agent-run.sh|[w]f-v2.py worker'],stdout=subprocess.DEVNULL).returncode==0
+    for path in (pathlib.Path.home()/'wf-agent-runs').glob('*/runtime.json'):
+        active=active or json.loads(path.read_text()).get('execution_stopped') is not True
+    if active:
+        sys.exit(3)
+    (root/'.deploying').touch()
+PYADMISSION
+  then
+    echo "  ❌ Commander仍有在途执行，拒绝覆盖其运行包"; FAILED=1; return
+  fi
   # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
   echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
   ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
   # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json; do
+  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-report.py; do
     if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
     case "$f" in
       *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
@@ -79,6 +96,11 @@ deploy_commander() {
     fi
     rm -f /tmp/deploy-err-$$
   done
+  for contract in "$D"/commander/contracts/*.json; do
+    [[ -f "$contract" ]] || continue
+    ssh mmv "mkdir -p ~/.openclaw/commander/contracts"
+    push_atomic "$contract" mmv "~/.openclaw/commander/contracts" "$(basename "$contract")"
+  done
   # 通用 skill workflow-commander + 各 workflow 陪跑 skill wf-<能力>（决策 26df670a：合同 commander_skill 指向它们，Commander 按字段自加载）
   CMDR_SKILLS=()
   for sk in "$D"/commander/skills/*/SKILL.md; do
@@ -86,6 +108,8 @@ deploy_commander() {
     _name="$(basename "$(dirname "$sk")")"
     ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name"
     push_atomic "$sk" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name" SKILL.md
+    ssh mmv "mkdir -p ~/.openclaw/commander/skills/$_name"
+    push_atomic "$sk" mmv "~/.openclaw/commander/skills/$_name" SKILL.md
     CMDR_SKILLS+=("$_name")
     echo "  ✅ skills/$_name/SKILL.md"
   done
@@ -131,9 +155,31 @@ PYREMOTE
   # 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
   if [[ -s "$D/commander/AGENTS.md" ]]; then
     push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
+    push_atomic "$D/commander/AGENTS.md" mmv "~/.openclaw/commander" AGENTS.md
     echo "  ✅ commander/AGENTS.md → work-commander 工作区"
   else
     echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
+  fi
+  if [[ "$FAILED" == 0 ]]; then
+    # 元数据文件仅含已验证release映射，不含token；未提供映射则v2不ready。
+    local manifest_tmp
+    manifest_tmp="$(mktemp -d)"
+    python3 - "$D/commander" "${WF_COMMANDER_RELEASES_FILE:-}" "$manifest_tmp" <<'PYMANIFEST'
+import importlib.util,json,pathlib,sys
+root=pathlib.Path(sys.argv[1])
+spec=importlib.util.spec_from_file_location('commander_io',root/'wf-v2-io.py')
+io=importlib.util.module_from_spec(spec);spec.loader.exec_module(io)
+releases=json.load(open(sys.argv[2])) if sys.argv[2] else {}
+files=io.components(root)
+io.write(pathlib.Path(sys.argv[3])/'runtime-manifest.json',dict(protocol=io.PROTOCOL,files=files,runtime_snapshot_sha256=io.digest(files),releases=releases))
+PYMANIFEST
+    if [[ $? == 0 ]]; then
+      push_atomic "$manifest_tmp/runtime-manifest.json" mmv "~/.openclaw/commander" runtime-manifest.json
+      if ssh mmv "python3 ~/.openclaw/commander/wf-v2-io.py verify"; then
+        ssh mmv "rm -f ~/.openclaw/commander/.deploying"
+      else FAILED=1; fi
+    else FAILED=1; fi
+    rm -rf "$manifest_tmp"
   fi
 }
 

@@ -288,9 +288,11 @@ export function commanderContractsSpec(ctx) {
       execution_profile: doc.execution_profile,
       brain_workflow_key: doc.brain_workflow_key,
       commander_skill: doc.commander_skill ?? null,
+      ...Object.fromEntries(['agent', 'skill', 'input_schema', 'output_schema', 'resources', 'recovery', 'verification', 'implementation']
+        .filter((key) => doc[key] !== undefined).map((key) => [key, doc[key]])),
       activities: acts.map((a) => {
         const rb = (a.steps || []).map((s) => s.dod?.readback).find((r) => r && r.type === 'evidence') || null;
-        return { key: a.key, order: a.order, from: a.from, by: SHELL_ACTIVITIES.includes(a.key) ? 'shell' : 'agent', readback: rb };
+        return { key: a.key, order: a.order, from: a.from, ...(doc.input_schema ? { description: a.description, steps: a.steps } : {}), by: SHELL_ACTIVITIES.includes(a.key) ? 'shell' : 'agent', readback: rb };
       }),
     };
   }

@@ -17,6 +17,10 @@
 # 退出码: 0 已起跑 / 2 参数错 / 3 设备忙(已有 run 在跑) / 4 能力未部署到执行机 / 5 起跑失败
 set -uo pipefail
 
+if [[ "${1:-}" == "--ready" || "${1:-}" == "--envelope" ]]; then
+  exec python3 "$(cd "$(dirname "$0")" && pwd)/wf-v2.py" launch "$@"
+fi
+
 OPENCLAW="${OPENCLAW:-openclaw}"
 SSH_OPTS=(-o ConnectTimeout=20 -o BatchMode=yes)
 # 陪跑不投递飞书（决策 c7ff6e02）：运行记录进 Brain runs → Notion「最近执行」

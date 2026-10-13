@@ -102,3 +102,17 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 定时 cron 发来的消息形如：
 `定时发起 <能力> <机器> <profile> <serial> <biz> [--n N]`
 → 不提问，直接按第二节发起；退出码 3（设备忙）= 跳过本轮并在回复里写明；其余非 0 按表处理。调度单缺项 = 定时任务配置错，回报缺什么并升级，不自行补。
+
+## commander-v2：冻结合同的通用闭环（优先于上方旧版五参数约定）
+
+本节适用于调度单 `protocol=commander-v2`。同一个 work-commander 负责启动、执行监督、恢复和核验回流；不另起 escort。不修改现场代码，不替换本次冻结合同，不把节点失败直接当作目标完成。
+
+1. Brain 已先登记 task/run，并将 JSON 信封写到绝对路径。先用 `wf-launch.sh --ready`，stdin 传 `{definition,workflow_key}`。只有实际整包 hash 与已部署 release 匹配且 ready=true 才能启动。任一文件或skill漂移都拒绝起跑；未知协议不能降级旧五参数路径。
+2. 调用 `wf-launch.sh --envelope <绝对路径> --parent-session <当前官方父session>`。读取返回 JSON 的 action。完整输入只读 run目录 `input.json`，固定合同读 `contract.json`，不把中文/换行/引号拼接到 shell。非手机 `resources={}` 不传、不伪造 serial/profile/biz。
+3. action=claim_spawn 时，先调用 `python3 ~/.openclaw/commander/wf-v2.py claim-spawn <run目录>`，原子领取唯一 spawn 权。成功返回完整 request/message，使用当前官方 `sessions_spawn`：runtime=subagent、mode=run、agentId=request.agent_id、task=message，模型使用已配置的 Codex。原始返回 childSessionKey/runId 与 request 的 run_id/task_id/parent_session_key/nonce 组合，经 stdin 交给 `wf-agent-handoff.py bind <run目录>`。禁止 CLI 消息替代正式子会话。
+4. action=await 时仅调用 `wf-agent-handoff.py await <run目录>` 或读取 `wf-status.sh <run_id>`；既有 child 无论仍活还是未知都不得再次 spawn。spawn已领取但丢失回执时，用官方会话记录找回同一 child并绑定；确认不了归属就保留 blocked 与恢复条件，不凭pid重跑。重新收到同信封只续接原run、原nonce、原deadline。
+5. `wf-status.sh <run_id>` 输出真实 execution_stopped、delivery 与原序 events。`wf-v2.py replay <run目录>`按持久seq重放，网络故障不丢事件。内部凭据默认只读本人0600的 `~/.credentials/cecelia-internal.env` 中 `CECELIA_INTERNAL_TOKEN`，也可用 `WF_INTERNAL_TOKEN_FILE` 指向纯token的0600安全缓存，不放入信封、消息、日志或产物。活动事件通过 `wf-v2.py event <run目录>` stdin `{type:'activity_started|activity_completed',data:{reference_id,activity_id,step_id,started_at,ended_at,outcome,evidence}}` 上报；ID从信封definition.expected_path读取，不自造。
+6. delivery.status 仅 completed/failed/blocked；delivery 必须完整保留 outputs/evidence/effects 与 input/definition，外壳负责真实 cleanup 回执。effect 的 key 用任务目标/活动，status只能 none/committed/compensated/unknown。外部发布结果不明时先读回，禁止重复动作。产物过大写run目录，交付引用及hash，不能截断输入输出。
+7. 执行结束只进入 awaiting_verify；由 Brain 创建独立核验任务。核验者重读固定来源与产物，不能接受执行者自述。FAIL/INCONCLUSIVE 返回断言、证据与修复条件，仍在原task闭环。新attempt只能由Brain按冻结recovery预算授权；Commander不得改epoch、延期、扩大权限、伪造兼容旧版本或自行重跑副作用。PASS且cleanup证据通过才完成目标。
+
+整包部署封签由 deploy.sh 生成 runtime-manifest.json，必须核对真实release元数据。缺已验证实现时记录阻塞事实与恢复条件，维护同一任务，不现场改代码。

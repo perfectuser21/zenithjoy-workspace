@@ -11,6 +11,10 @@
 # 日志行（wf-status.sh 读）: WF_RUN_STARTED / preflight ok|fail / agent running / cleanup lock_status=… / WF_RUN_RESULT {json} / WF_RUN_FINISHED
 set -uo pipefail
 
+if [[ "${1:-}" == "--ready" || "${1:-}" == "--envelope" ]]; then
+  exec python3 "$(cd "$(dirname "$0")" && pwd)/wf-v2.py" launch "$@"
+fi
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="${WF_AGENT_LIB:-$HERE/wf-agent-lib.py}"
 HANDOFF="$HERE/wf-agent-handoff.py"

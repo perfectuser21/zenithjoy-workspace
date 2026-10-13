@@ -7,6 +7,25 @@
   "additionalProperties": false,
   "required": ["version", "capability", "name", "workflow", "brain_workflow_key", "source_repo", "checks", "trigger_inputs", "activities"],
   "properties": {
+    "agent": { "type": "string", "enum": ["skill-factory"] },
+    "skill": { "type": "string", "minLength": 1 },
+    "input_schema": { "type": "object" },
+    "output_schema": { "type": "object" },
+    "resources": { "type": "object", "additionalProperties": false, "properties": {
+      "device_serial": { "type": "string", "minLength": 1 },
+      "machine": { "type": "string", "enum": ["xian-m1", "xian-m4"] },
+      "profile": { "type": "string", "minLength": 1 },
+      "account_ref": { "type": "string", "minLength": 1 }
+    }, "dependentRequired": { "device_serial": ["machine", "profile", "account_ref"], "machine": ["device_serial"], "profile": ["device_serial"], "account_ref": ["device_serial"] } },
+    "recovery": { "type": "object", "additionalProperties": false, "properties": {
+      "max_attempts": { "type": "integer", "minimum": 1 },
+      "total_timeout_sec": { "type": "integer", "minimum": 1 },
+      "cleanup_timeout_sec": { "type": "integer", "minimum": 1 },
+      "retry_safe": { "type": "boolean" },
+      "retry_on": { "type": "array", "items": { "enum": ["execution_failed", "verification_failed"] } }
+    } },
+    "verification": { "type": "object" },
+    "implementation": { "type": "object" },
     "execution_profile": { "type": "string", "enum": ["codex_agent"] },
     "commander_skill": {
       "description": "决策 2186700a / 26df670a：该 workflow 的 Commander 陪跑 skill（名+版本）；第一阶段可空（null）。work-commander 按调度单 workflow_key 读此字段自加载，汇报与账本记录所用版本。",
