@@ -1741,10 +1741,18 @@ run_view_delete() {
 }
 
 run_a24_pure() {
-  echo "== A24 拖卡纯函数：resolveDropPatch 映射被拖那一行（staff-hub 单测，不碰 DB/服务）=="
-  ( cd apps/staff-hub && npx vitest run src/lib/workbenchKanban.test.ts --reporter=dot ) \
-    >/tmp/wb-c-a24.log 2>&1 || { tail -20 /tmp/wb-c-a24.log; fail "拖卡纯函数单测未过（A24-drag-wrong-row 应让它红）"; }
-  echo "✅ A24 拖卡纯函数通过"
+  echo "== A24 拖卡纯函数 + 视图偏好组件回归（deferred mock patchView，不碰 DB/服务）=="
+  (
+    cd apps/staff-hub &&
+    npx vitest run \
+      src/lib/workbenchKanban.test.ts \
+      src/pages/WorkbenchTablePage.test.tsx \
+      --reporter=dot
+  ) >/tmp/wb-c-a24.log 2>&1 || {
+    tail -20 /tmp/wb-c-a24.log
+    fail "拖卡纯函数或视图偏好保存回归未过"
+  }
+  echo "✅ A24 拖卡纯函数和视图偏好保存回归通过"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -6266,7 +6266,7 @@ agent_suite:
     ci: L3
     status: active
     product: 员工知识中枢
-    note: "真实页面组件 + deferred mock patchView：跨字段旧响应不覆盖后改隐藏列；同字段连续操作串行发出并保最后选择；失败不能被无关成功清提示、明确重试发送完整未保存配置；切视图读回保留原视图pending/failed输入；跨表路由拒绝旧activation/view/row响应倒灌，同view activation也串行真实保存。staff-hub 默认 Vitest src/**/*test 实际执行；真实 API/PG 响应顺序另外由隔离浏览器验收。"
+    note: "真实页面组件 + deferred mock patchView：跨字段旧响应不覆盖后改隐藏列；同字段连续操作串行发出并保最后选择；失败不能被无关成功清提示、明确重试发送完整未保存配置；切视图读回保留原视图pending/failed输入；跨表路由拒绝旧activation/view/row响应倒灌，同view activation也串行真实保存。CI .github/workflows/e2e-knowledge-hub-path3.yml 段2c实际调用 .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a24-pure-only，显式Vitest执行本文件与原workbenchKanban.test.ts；真实 API/PG 响应顺序另外由隔离浏览器验收。"
 
   - id: workbench-views-e2e-golden-path
     path: apps/staff-hub/e2e/structured-workbench-views.spec.ts
