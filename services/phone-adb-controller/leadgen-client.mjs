@@ -148,11 +148,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     }else{
     if (process.argv[2] !== 'qualify' || process.argv[3] !== 'judge') throw Error('未知调用');
     const args = {};
+    const options = { '--line': 'line', '--run': 'run', '--source-run': 'sourceRun', '--video-id': 'videoId', '--audio': 'audio' };
     for (let n = 4; n < process.argv.length; n += 2) {
-      const key = ({ '--line': 'line', '--video-id': 'videoId', '--audio': 'audio' })[process.argv[n]];
-      if (!key || !process.argv[n + 1]) throw Error('调用参数无效');
+      if (!Object.hasOwn(options, process.argv[n])) throw Error('调用参数无效');
+      const key = options[process.argv[n]];
+      const value = process.argv[n + 1];
+      if (!key || value === undefined || value.startsWith('--') || (!value && key !== 'sourceRun') || Object.hasOwn(args, key)) throw Error('调用参数无效');
       args[key] = process.argv[n + 1];
     }
+    const validRun = value => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(value || '');
+    if (!validRun(args.run) || (args.sourceRun && (!validRun(args.sourceRun) || args.sourceRun === args.run))) throw Error('运行身份参数无效');
     const rpc = createRpc({ frozen: readFrozen(process.env.WFR_RUN_DIR), local: process.env.LEADGEN_LOCAL_RPC === '1' });
     const { result } = await rpc({ kind: 'qualify', request: { ...args, cmd: 'judge' } });
     process.stdout.write(`QUAL_RESULT ${JSON.stringify(result)}\n`);
