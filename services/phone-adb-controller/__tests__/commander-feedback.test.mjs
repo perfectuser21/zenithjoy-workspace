@@ -36,7 +36,7 @@ test('非法活动在分seq前拒绝，原产物/预算不变，同attempt纠正
  assert.notEqual(f.call('event',{type:'activity_completed',data:[]}).status,0);
  const r=f.call('event',fact());assert.equal(r.status,0,r.stdout+r.stderr);assert.equal(JSON.parse(r.stdout).seq,read(events).length);
  assert.equal(readFileSync(join(f.run,'envelope.json'),'utf8'),frozen);assert.equal(readFileSync(artifact,'utf8'),'original report\n');
- for(const outcome of ['fail','skipped','unknown']){const e=fact();e.data.outcome=outcome;assert.equal(f.call('event',e).status,0);}
+ for(const outcome of ['fail','skipped','unknown']){const e=fact();e.data.outcome=outcome;if(outcome==='skipped')e.data.evidence.skip_reason='冻结合同条件未满足，未执行该步';assert.equal(f.call('event',e).status,0);}
  const started={type:'activity_started',data:{reference_id:'ref',step_id:null,started_at:'2026-10-13T10:00:00Z',outcome:'unknown',evidence:{}}};assert.equal(f.call('event',started).status,0);
  assert.match(readFileSync(join(f.run,'msg.txt'),'utf8'),/pass\|fail\|skipped\|unknown/);
 });
@@ -75,4 +75,10 @@ test('正式拒收原件与ACK同次持久，duplicate保留拒收；ACK绝不�
  let r=await f.asyncCall('replay');assert.notEqual(r.status,0);assert.equal(existsSync(join(f.run,'feedback-ack.json')),false);
  mode='duplicate';r=await f.asyncCall('replay');assert.notEqual(r.status,0);let result=JSON.parse(r.stdout);assert.equal(result.replayed,true);assert.equal(result.pending,0);assert.deepEqual(result.rejected,[rejection]);assert.deepEqual(read(join(f.run,'feedback-ack.json')),{seq:1,rejected:[rejection]});
  r=await f.asyncCall('replay');assert.notEqual(r.status,0);assert.deepEqual(JSON.parse(r.stdout).rejected,[rejection]);assert.deepEqual(JSON.parse(f.call('status').stdout).feedback.rejected,[rejection]);assert.equal(read(path)[0].data.outcome,'completed');
+});
+
+test('skipped 必须有真实非空 skip_reason，缺失或非法不占seq',t=>{
+ const f=fixture(t),path=join(f.run,'events.json'),before=readFileSync(path,'utf8');
+ for(const reason of [undefined,null,'','   ',true,{}]){const e=fact();e.data.outcome='skipped';if(reason!==undefined)e.data.evidence.skip_reason=reason;assert.notEqual(f.call('event',e).status,0);assert.equal(readFileSync(path,'utf8'),before);}
+ const e=fact();e.data.outcome='skipped';e.data.evidence.skip_reason='条件分支未进入，原始检查见报告';assert.equal(f.call('event',e).status,0);
 });
