@@ -90,4 +90,29 @@ class GuardTests(unittest.TestCase):
     guard.guarded([sys.executable,'-c',"import time;from pathlib import Path;time.sleep(2);Path("+repr(str(marker))+").write_text('unexpected')"],transport=transport)
    self.assertFalse(marker.exists())
 
+ def test_guard_termination_stops_child_before_releasing_remote_lock(self):
+  import subprocess,sys,os,signal,time
+  guard=module('deployment-guard')
+  for signum in (signal.SIGTERM,signal.SIGHUP):
+   with self.subTest(signal=signum),tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp);started=home/'started';marker=home/'forbidden';driver=home/'driver.py'
+    child_code="import os,time;from pathlib import Path;Path("+repr(str(started))+").write_text(str(os.getpid()));time.sleep(1.2);Path("+repr(str(marker))+").write_text('unexpected')"
+    guard_path=Path(guard.__file__)
+    driver.write_text("import importlib.util,sys;spec=importlib.util.spec_from_file_location('guard',"+repr(str(guard_path))+");g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g);sys.exit(g.guarded([sys.executable,'-c',"+repr(child_code)+"],transport=[sys.executable,'-u','-c',g.SERVER]))")
+    proc=subprocess.Popen([sys.executable,str(driver)],env=dict(os.environ,HOME=tmp),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    child_pid=None
+    try:
+     deadline=time.monotonic()+5
+     while not started.exists() and time.monotonic()<deadline:time.sleep(.02)
+     self.assertTrue(started.exists());child_pid=int(started.read_text());proc.send_signal(signum);proc.wait(timeout=7)
+     time.sleep(1.4)
+     self.assertFalse(marker.exists(),'guard已退出但部署子进程继续写入')
+     retry=subprocess.run([sys.executable,'-u','-c',guard.SERVER],input=b'',capture_output=True,env=dict(os.environ,HOME=tmp),timeout=5)
+     self.assertEqual(retry.returncode,0,retry.stderr)
+    finally:
+     if proc.poll() is None:proc.kill();proc.wait()
+     if child_pid:
+      try:os.killpg(child_pid,signal.SIGKILL)
+      except ProcessLookupError:pass
+
 if __name__=='__main__':unittest.main()
