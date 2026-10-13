@@ -51,6 +51,7 @@ test('发布准备器同样拒业务skill和仅安全上下文，不给不支持
   const copy=structuredClone(defs),b=copy.activities[0].payload.implementation_bindings[0];Object.assign(b,{kind:'skill',path,field:'implementation_bindings'});
   assert.throws(()=>methodManifest({payload:{...copy,components:methodComponents(copy,sha)}}));
  }
+ for(const contract of [{steps:[{skill:'hidden'}]},{implementation:{kind:'skill'}},{runtime:{kind:'skill'}}]){const copy=structuredClone(defs);copy.activities[0].payload.steps=[{contract}];assert.throws(()=>methodManifest({payload:{...copy,components:methodComponents(copy,sha)}}),/unsupported_method_skill/);}
  const copy=structuredClone(defs);copy.workflows[0].payload.contract.skill='global-business-skill';
  assert.throws(()=>methodManifest({payload:{...copy,components:methodComponents(copy,sha)}}),/unsupported_method_skill/);
 });

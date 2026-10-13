@@ -6,15 +6,16 @@ const need=(v,m)=>{if(!v)throw Error('方法包: '+m);};
 const same=(a,b)=>digest(a)===digest(b);
 export const orderBindings=rows=>[...rows].sort((a,b)=>{for(const k of ['kind','repo','path','revision','digest']){const n=Buffer.compare(Buffer.from(a[k]||''),Buffer.from(b[k]||''));if(n)return n;}return 0;});
 export const safetyBinding=p=>(p.startsWith('services/phone-adb-controller/commander/')&&p.split('/').at(-1)!=='wf-report.py'&&(/^(wf-v2|wf-agent|wf-launch|wf-status|wf-method)/.test(p.split('/').at(-1))||p.includes('/skills/workflow-commander/')))||['services/phone-adb-controller/douyin-phone-adb','services/phone-adb-controller/text-input-focus.py'].includes(p);
+const executionSkill=c=>c&&(c.skill||c.implementation?.kind==='skill'||c.runtime?.kind==='skill'||(c.activities??[]).some(executionSkill)||(c.steps??[]).some(executionSkill));
 export function methodManifest(release){
  const p=release.payload;need(p.workflows?.length===1,'必须唯一完整业务Workflow');const w=p.workflows[0];
  need(w.payload.key!=='workflow_commander.internal'&&w.source_repo===DEPLOY_REPO&&/^[a-f0-9]{40}$/.test(w.source_commit),'方法来源无效');
- need(!w.payload.contract?.skill,'unsupported_method_skill: business skill entry');
+ need(!executionSkill(w.payload.contract),'unsupported_method_skill: business skill entry');
  const refs=w.payload.activities,ids=new Set(refs.map(r=>r.activity_version_id)),rows=p.activities;
  need(ids.size&&rows.length===ids.size&&new Set(rows.map(a=>a.id)).size===ids.size&&refs.every(r=>rows.some(a=>a.id===r.activity_version_id&&a.activity_id===r.activity_id)),'活动闭包不完整');
  const bindings=new Map();
  for(const a of rows){
-  need(!a.payload.contract?.skill,'unsupported_method_skill: activity skill entry');
+  need(![a.payload.contract,...(a.payload.steps??[]).map(s=>s.contract)].some(executionSkill),'unsupported_method_skill: activity skill entry');
   need(a.source_repo===w.source_repo&&a.source_commit===w.source_commit,'跨版本活动拼装');const values=a.payload.implementation_bindings||[];
   need(values.every(b=>b.kind!=='skill'||(safetyBinding(b.path||'')&&b.field==='implementation_bindings')),'unsupported_method_skill: business skill execution closure');
   need(values.some(b=>b.scope==='activity'&&b.kind==='code'&&b.status==='verified'),'缺冻结入口');

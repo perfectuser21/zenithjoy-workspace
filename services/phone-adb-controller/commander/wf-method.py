@@ -47,6 +47,25 @@ def safe_path(path):
     return path
 
 
+def execution_skill(contract):
+    if not isinstance(contract, dict):
+        return False
+    return bool(contract.get('skill') or any(isinstance(contract.get(k), dict) and contract[k].get('kind') == 'skill' for k in ('implementation', 'runtime')) or
+                any(execution_skill(c) for k in ('activities', 'steps') for c in contract.get(k, [])))
+
+
+def recovery_policy(raw):
+    need(raw is None or isinstance(raw, dict), 'invalid original recovery policy')
+    policy = dict(raw or {})
+    for name, default, maximum in [('max_attempts', 1, 10), ('total_timeout_sec', 2400, 14400), ('cleanup_timeout_sec', 300, 1800)]:
+        if policy.get(name) is None: policy[name] = default
+        need(type(policy[name]) is int and 0 < policy[name] <= maximum, 'original recovery budget out of bounds')
+    need(policy['total_timeout_sec'] + policy['cleanup_timeout_sec'] <= 14400, 'original total budget out of bounds')
+    if 'improvement_after_failures' in policy:
+        need(type(policy['improvement_after_failures']) is int and 0 < policy['improvement_after_failures'] <= 100, 'invalid improvement threshold')
+    return policy
+
+
 def manifest_for(release):
     payload = release['payload']
     rows = payload['workflows']
@@ -54,7 +73,7 @@ def manifest_for(release):
     workflow = rows[0]
     source = dict(repo=workflow['source_repo'], revision=workflow['source_commit'])
     need(source['repo'] == REPO and re.fullmatch('[a-f0-9]{40}', source['revision']), 'unsupported fixed source')
-    need(not workflow['payload'].get('contract', {}).get('skill'), 'unsupported_method_skill: business skill entry is not admitted')
+    need(not execution_skill(workflow['payload'].get('contract')), 'unsupported_method_skill: business skill entry is not admitted')
     refs = workflow['payload']['activities']
     activities = payload['activities']
     need(refs and len(activities) == len({r['activity_version_id'] for r in refs}) and
@@ -63,7 +82,7 @@ def manifest_for(release):
     for activity in activities:
         need(activity['source_repo'] == source['repo'] and activity['source_commit'] == source['revision'], 'mixed source revisions')
         need(any(r['activity_version_id'] == activity['id'] and r['activity_id'] == activity['activity_id'] for r in refs), 'activity identity mismatch')
-        need(not activity['payload'].get('contract', {}).get('skill'), 'unsupported_method_skill: activity skill entry')
+        need(not any(execution_skill(c) for c in [activity['payload'].get('contract'), *(s.get('contract') for s in activity['payload'].get('steps', []))]), 'unsupported_method_skill: activity or step skill entry')
         values = activity['payload'].get('implementation_bindings', [])
         need(all(b.get('kind') != 'skill' or (is_safety(b.get('path') or '') and b.get('field') == 'implementation_bindings') for b in values), 'unsupported_method_skill: business skill execution closure')
         need(any(b.get('scope') == 'activity' and b.get('kind') == 'code' and b.get('status') == 'verified' for b in values), 'activity entry not frozen')
@@ -232,7 +251,7 @@ def check_goal(query, original, candidate):
     selection = query['method_selection']; goal = selection['original_goal_definition']
     need(isinstance(goal.get('original_run_id'), str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', goal['original_run_id']), 'original run identity missing')
     row = release_row(original, goal, query['workflow_key'])
-    need(row['payload']['contract'] == goal['contract'] and goal['recovery'] == goal['contract']['recovery'], 'original goal was altered')
+    need(digest(row['payload']['contract']) == digest(goal['contract']) and digest(goal['recovery']) == digest(recovery_policy(goal['contract'].get('recovery'))), 'original goal was altered')
     for name in ('key', 'capability_id', 'input_schema', 'output_schema', 'resources', 'verification', 'recovery'):
         need(goal['contract'].get(name) == candidate.get(name), 'incompatible original contract: ' + name)
     def activities(contract):
@@ -240,8 +259,10 @@ def check_goal(query, original, candidate):
     need(activities(goal['contract']) == activities(candidate), 'activity acceptance or step contract changed')
     for key in ('input_sha256', 'deadline_at', 'cleanup_deadline_at'):
         need(key in goal and (key not in query or query[key] == goal[key]), 'original input/budget changed')
+    if 'input' in query:
+        need(digest(query['input']) == goal['input_sha256'], 'original input bytes changed')
     if 'contract' in query:
-        need(query['contract'] == candidate, 'selected execution contract changed')
+        need(digest(query['contract']) == digest(candidate), 'selected execution contract changed')
     need('attempt' not in query or 1 < query['attempt'] <= goal['recovery']['max_attempts'], 'original attempt budget exceeded')
     need(goal['recovery'].get('retry_safe') is True, 'original recovery disallows method selection')
     receipt = selection['selection_receipt']
@@ -338,9 +359,9 @@ def read_bound_envelope(path, io):
     need(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', envelope.get('run_id', '')), 'invalid run identity')
     directory = Path.home().resolve() / 'wf-agent-runs' / envelope['run_id']
     need(path == directory / 'envelope.json' and directory.resolve() == directory, 'method must use actual run envelope, not a copy')
-    need(json.loads(read_regular(directory, 'envelope.json')) == envelope, 'persisted envelope drift')
-    need(json.loads(read_regular(directory, 'input.json')) == envelope['input'] and digest(envelope['input']) == envelope['input_sha256'], 'persisted original input drift')
-    need(json.loads(read_regular(directory, 'contract.json')) == envelope['contract'], 'persisted selected contract drift')
+    need(digest(json.loads(read_regular(directory, 'envelope.json'))) == digest(envelope), 'persisted envelope drift')
+    need(digest(json.loads(read_regular(directory, 'input.json'))) == envelope['input_sha256'] == digest(envelope['input']), 'persisted original input drift')
+    need(digest(json.loads(read_regular(directory, 'contract.json'))) == digest(envelope['contract']), 'persisted selected contract drift')
     return envelope
 
 
