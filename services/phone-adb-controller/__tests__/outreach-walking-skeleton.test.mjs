@@ -13,7 +13,7 @@ function fixture(){
  const stateDir=join(dir,'bin-harvest/state');mkdirSync(stateDir,{recursive:true});
  const events=[];
  const env={HOME:dir,WFR_RUN_DIR:dir,P:'jinoshengyuan-work',SERIAL:'FAKE6983',WFR_TAG:'fake104',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',LEADGEN_LIMIT:'1',DOUYIN_ACCOUNT_REGISTRY:registry,PHONE_EVIDENCE_ROOT:join(dir,'fake-evidence')};
- const order={id:'e92b90f1-19d1-4121-a434-96e0ee46a493',line_key:'jinuo',douyin_id:'1873867835',profile_url:'https://v.douyin.com/FAKEONLY/',script_id:'fake-approved-B',script_version:'B',message:'测试批准正文',sender_douyin_id:'langzi63485'};
+ const order={id:'recFAKEONLY123',line_key:'jinuo',douyin_id:'1873867835',profile_url:'https://v.douyin.com/FAKEONLY/',script_id:'fake-approved-B',script_version:'B',message:'测试批准正文',sender_douyin_id:'langzi63485'};
  const rpc=async body=>{events.push(body);const op=body.request?.op;
   if(op==='claim_outreach')return {result:[order]};
   if(op==='prepare_outreach')return {result:{prepared:true,order}};
@@ -29,12 +29,15 @@ function fixture(){
   if(action?.startsWith('lock-'))stdout='lock='+({'lock-acquire':'acquired','lock-refresh':'refreshed','lock-release':'released'}[action])+'\n';
   if(action==='account-current')stdout='douyin_id=langzi63485\n';
   if(action==='private-message-send'){
-   const base=join(env.PHONE_EVIDENCE_ROOT,env.P);mkdirSync(base,{recursive:true});const raw=join(base,'fake104-a2-dm-1-sent-ui.xml');
-   writeFileSync(raw,'<hierarchy><node text="测试批准正文" class="android.widget.TextView"/></hierarchy>');const typed=join(base,'fake104-a2-dm-1-typed.xml');writeFileSync(typed,'<hierarchy><node text="测试批准正文" class="android.widget.EditText"/></hierarchy>');
-   stdout='send_status=sent\nmessage_delta_verified=true\nsender_douyin_id=langzi63485\ntarget_douyin_id=1873867835\nmessage_sha256='+createHash('sha256').update(order.message).digest('hex')+'\nsent_ui_evidence='+raw+'\ntyped_ui_evidence='+typed+'\n';
+   const base=join(env.PHONE_EVIDENCE_ROOT,env.P);mkdirSync(base,{recursive:true});const raw=join(base,'fake104-a2-dm-1-sent.xml');
+   const input=text=>`<node text="${text}" class="android.widget.EditText" resource-id="com.ss.android.ugc.aweme:id/msg_et"/>`;
+   const sent='<hierarchy>'+input('')+'<node text="测试批准正文" class="android.widget.TextView"/></hierarchy>';
+   writeFileSync(raw,sent);const typed=join(base,'fake104-a2-dm-1-typed.xml');writeFileSync(typed,'<hierarchy>'+input(order.message)+'</hierarchy>');
+   const risk=join(base,'fake104-a2-dm-1-risk.xml');writeFileSync(risk,sent);const fg=join(base,'fake104-a2-dm-1-send-foreground.txt'),rfg=join(base,'fake104-a2-dm-1-risk-foreground.txt');writeFileSync(fg,'mCurrentFocus com.ss.android.ugc.aweme/FakeChatActivity');writeFileSync(rfg,'mCurrentFocus com.ss.android.ugc.aweme/FakeChatActivity');
+   stdout='send_status=sent\nmessage_delta_verified=true\nsender_douyin_id=langzi63485\ntarget_douyin_id=1873867835\nmessage_sha256='+createHash('sha256').update(order.message).digest('hex')+'\nsent_ui_evidence='+raw+'\ntyped_ui_evidence='+typed+'\nrisk_ui_evidence='+risk+'\nsend_foreground_evidence='+fg+'\nrisk_foreground_evidence='+rfg+'\n';
   }
   return {code:0,stdout,stderr:''};};
- return {dir,env,events,order,rpc,execute,clean:()=>rmSync(dir,{recursive:true,force:true})};
+ return {dir,env,events,order,rpc,execute,sourceCommit:'f'.repeat(40),clean:()=>rmSync(dir,{recursive:true,force:true})};
 }
 const legacyDay=()=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(x=>x.type===k).value).join('');};
 for(const stateFile of ['halt','count'])test('104遵守已有YYYYMMDD '+stateFile+'文件，不能绕过旧风控/额度',async()=>{
@@ -62,5 +65,12 @@ test('104准备提交回执丢失必须不发，清场不得把可能prepared订
  await h.preflight();await assert.rejects(h.send_dm(),/reply lost/);await h.cleanup();
  assert.equal(f.events.filter(e=>e.args?.includes('private-message-send')).length,0);
  assert.ok(!f.events.some(e=>e.request?.op==='release_outreach'&&e.request.release_prepared===true));
+ }finally{f.clean();}
+});
+test('真实发送后write回复丢失，仅独立原订单读回恢复，不再次调用sender',async()=>{
+ const f=fixture();try{const h=createHandlers({root:f.dir,...f,rpc:async b=>{
+  if(b.request?.op==='write_outreach'){await f.rpc(b);throw Error('fake write commit reply lost');}return f.rpc(b);}});
+ await h.preflight();await h.send_dm();const back=await h.write_back();assert.equal(back.outreach_readback_failures,0);
+ assert.equal(f.events.filter(e=>e.args?.includes('private-message-send')).length,1);
  }finally{f.clean();}
 });
