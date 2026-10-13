@@ -67,6 +67,28 @@ class Methods(unittest.TestCase):
   self.io.write(self.root/'method-manifest.json',self.manifest)
   self.instance={'physical_host':'mmv','target':'mmv--method--'+mh,'method_root':str(self.root),'manifest_sha256':mh,'resolved_bindings':[dict(b,absolute_path=str(self.root/b['path'])) for b in bindings]}
   self.envelope['method_selection']['method_instance']=self.instance;self.method['target']=self.instance['target']
+ def test_launch_claim_and_child_request_use_method_context_and_preserve_original_failure(self):
+  self.attest();core=load(self.runtime/'wf-v2.py','fixture_core');core.io=self.io
+  file=self.home/'method-envelope.json';self.io.write(file,self.envelope)
+  with patch.dict(os.environ,WF_V2_NO_WORKER='1'):
+   with self.assertRaises(ValueError):core.launch(str(file),'agent:work-commander:method-fixture')
+   self.assertFalse((self.home/'wf-agent-runs'/self.envelope['run_id']).exists())
+   self.envelope['definition']['runtime_snapshot_sha256']=self.io.ready(self.envelope)['runtime_snapshot_sha256']
+   self.io.write(file,self.envelope);result=core.launch(str(file),'agent:work-commander:method-fixture')
+   self.assertEqual(result['action'],'claim_spawn');directory=self.home/'wf-agent-runs'/self.envelope['run_id']
+   request=self.io.read(directory/'agent-request.json');context=self.io.read(directory/'method-context.json')
+   self.assertEqual(context['method_selection'],self.envelope['method_selection']);self.assertEqual(context['execution']['tool'],'gateway_exec')
+   self.assertEqual(request['execution_location']['method_context'],str(directory/'method-context.json'))
+   message=(directory/'msg.txt').read_text();self.assertIn('wf-method.py execute',message);self.assertIn('不要求业务子会话调用session_status',message)
+   core.launch(str(file),'agent:work-commander:method-fixture');self.assertEqual(self.io.read(directory/'agent-request.json'),request)
+   previous=self.gates[uid(10)]['deployed'];self.gates[uid(10)]['deployed']=False
+   with self.assertRaises(ValueError):core.claim(directory)
+   self.assertFalse((directory/'spawn-claimed.json').exists());self.gates[uid(10)]['deployed']=previous
+   claim=core.claim(directory);self.assertEqual(claim['request']['nonce'],request['nonce'])
+   with self.assertRaises(ValueError):core.claim(directory)
+   core.failed_delivery(directory,self.envelope,'child_blocked: unavailable_tool')
+   delivery=self.io.read(directory/'delivery.json');self.assertEqual(delivery['status'],'failed')
+   self.assertEqual(delivery['failure'],'child_blocked: unavailable_tool');self.assertEqual(delivery['definition'],self.envelope['definition']);self.assertEqual(delivery['input'],self.envelope['input'])
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
   for row in json.loads((SOURCE/'__tests__/fixtures/commander-method-digests.json').read_text()):self.assertEqual(m.digest(json.loads(row['input'])),row['sha256'])
