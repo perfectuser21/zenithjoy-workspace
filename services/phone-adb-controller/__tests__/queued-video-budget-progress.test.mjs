@@ -28,7 +28,7 @@ case 'lock-refresh':console.log('lock=refreshed owner=budget-progress');break;
 case 'current-video-link':console.log('content_type=video\\nvideo_id=${vid}');break;
 case 'open-comments':{const f=p.join(d,'opens');let n=fs.existsSync(f)?+fs.readFileSync(f):0;fs.writeFileSync(f,String(++n));if(n===2&&process.env.CONTINUE_BUDGET!=='1')fs.writeFileSync(p.join(d,'clock'),'479');console.log('comments_opened=1\\ncomment_count=68');break;}
 case 'collect-comments':{const f=p.join(d,'collects');let n=fs.existsSync(f)?+fs.readFileSync(f):0;fs.writeFileSync(f,String(++n));if(n===2&&process.env.CONTINUE_BUDGET!=='1')fs.writeFileSync(p.join(d,'clock'),'500');console.log('甲\\t如何报名\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy\\n甲\\t费用咨询\\t今天\\t北京\\treader\\ttap=300 200\\tb64=55Sy\\nexhausted=0');break;}
-case 'commenter-identity':console.log('nickname=甲\\ndouyin_id=person123\\naccount_type=personal');break;
+case 'commenter-identity':console.log('nickname=甲\\nnickname_encoding=xml_decoded\\ndouyin_id=person123\\naccount_type=personal');break;
 case 'commenter-card-link':console.log('profile_url=https://v.douyin.com/person123/');break;
 }
 `,{mode:0o755});
@@ -105,7 +105,7 @@ case 'lock-refresh':console.log('lock=refreshed');break;
 case 'current-video-link':console.log('content_type=video\\nvideo_id=${vid}');break;
 case 'open-comments':console.log('comments_opened=1\\ncomment_count=68');break;
 case 'collect-comments':console.log('甲\\t报名\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy\\n甲\\t费用\\t今天\\t北京\\treader\\ttap=300 200\\tb64=55Sy');break;
-case 'commenter-identity':fs.writeFileSync(p.join(d,'clock'),'500');console.log('nickname=甲\\ndouyin_id=own123\\naccount_type=personal');break;
+case 'commenter-identity':fs.writeFileSync(p.join(d,'clock'),'500');console.log('nickname=甲\\nnickname_encoding=xml_decoded\\ndouyin_id=own123\\naccount_type=personal');break;
 }
 `,{mode:0o755});
   const r=spawnSync('zsh',[join(root,'process-queued-video.sh'),'collection','work',vid,'https://www.douyin.com/video/'+vid,'','','own-budget','jinuo'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,OWN_ACCOUNTS_CONF:join(d,'own.json'),ROW_BUDGET_DIR:d,PATH:d+':'+process.env.PATH,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_COLLECTION_SECONDS:'480'},encoding:'utf8',timeout:7000});
