@@ -66,7 +66,7 @@ class Methods(unittest.TestCase):
    p=self.root/path;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(raw)
   self.io.write(self.root/'method-manifest.json',self.manifest)
   self.instance={'physical_host':'mmv','target':'mmv--method--'+mh,'method_root':str(self.root),'manifest_sha256':mh,'resolved_bindings':[dict(b,absolute_path=str(self.root/b['path'])) for b in bindings]}
-  self.envelope['method_selection']['method_instance']=self.instance;self.method['target']=self.instance['target']
+  self.envelope['method_selection']['method_instance']=self.instance;self.method['target']=self.instance['target'];self.method['manifest_sha256']=digest({k:self.method[k] for k in ('environment','target','payload')})
  def test_launch_claim_and_child_request_use_method_context_and_preserve_original_failure(self):
   self.attest();core=load(self.runtime/'wf-v2.py','fixture_core');core.io=self.io
   file=self.home/'method-envelope.json';self.io.write(file,self.envelope)
@@ -111,6 +111,16 @@ class Methods(unittest.TestCase):
   with self.assertRaises(ValueError):m.read_bound_envelope(copied,self.io)
   self.io.write(directory/'input.json',{'changed':True})
   with self.assertRaises(ValueError):m.read_bound_envelope(directory/'envelope.json',self.io)
+ def test_indirect_global_command_and_dynamic_import_routes_are_not_admitted(self):
+  sources=[b'import os; os.system("true")',b'from os import system as call; call("true")',b'import os; os.popen("true").read()',b'import runpy; runpy.run_path("/current/helper.py")',b'import os; f=getattr(os,"system");f("true")',b'import sys;sys.path.append("/current");import json']
+  for raw in sources:
+   self.repack({PATH:raw})
+   with self.assertRaises(ValueError):self.attest()
+ def test_different_historical_business_bytes_with_identical_current_safety_are_admitted(self):
+  safety='services/phone-adb-controller/commander/wf-v2-phone.py';raw=(self.runtime/'wf-v2-phone.py').read_bytes()
+  self.assertNotEqual((self.runtime/'wf-report.py').read_bytes(),self.code)
+  self.repack({PATH:self.code,safety:raw});self.attest()
+  result=self.io.ready(self.envelope);self.assertTrue(result['ready'])
  def test_brain_canonical_golden_numbers_keys_and_unicode(self):
   m=self.method_module()
   golden=json.loads((SOURCE/'__tests__/fixtures/commander-method-brain.json').read_text())
