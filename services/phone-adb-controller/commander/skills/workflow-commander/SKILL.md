@@ -94,7 +94,9 @@ helper 使用官方 `agent.wait` 读取绑定 child 的确切 run，校验 runId
 
 外壳交付保留全部 input、definition、outputs、evidence、effects 和真实 cleanup 回执。大产物写运行目录，交付引用与 hash，不截断原内容。Brain 依据冻结 output_schema 检查成功输出，违约会派生失败并保留原文。
 
-`wf-v2.py replay <run目录>` 按持久 seq 重放；已提交反馈不能改写。内部凭据默认只读本人0600的 `~/.credentials/cecelia-internal.env` 中 CECELIA_INTERNAL_TOKEN，也可用 WF_INTERNAL_TOKEN_FILE 指向纯 token 的0600缓存；不得放入信封、消息、日志或产物。缺凭据或网络失败保留原事件，状态读回可以补账。
+活动 `outcome` 只允许 `pass|fail|skipped|unknown`，`completed` 是事件类型而非结果。时间必须是实际发生的带时区 ISO 时间，结束不得早于开始；完成事件的 evidence 为非空对象。入口在分配 seq 前校验冻结路径及这些字段。若未入队而被拒，可依据原产物在同 task/run/attempt 纠正字段重报，不能重新执行业务或覆盖原产物。
+
+`wf-v2.py replay <run目录>` 按持久 seq 重放，返回真实 `ack_seq/pending/failed_seq/error/rejected`；pending、运输错误或正式拒收时 CLI 非零。后台运输错误只保留待传记录，不触发第二份业务失败交付。`replayed:true` 仅说明传输队列已收到确认，ACK 不代表业务成功：Brain 的 `rejected` 会与 ACK 原子保留并出现在 status.feedback，必须按正式失败/独立核验接续，不能抹去拒收。已持久反馈不能改写、改序号或将 completed 自动转成 pass。内部凭据默认只读本人0600的 `~/.credentials/cecelia-internal.env` 中 CECELIA_INTERNAL_TOKEN，也可用 WF_INTERNAL_TOKEN_FILE 指向纯 token 的0600缓存；不得放入信封、消息、日志或产物。缺凭据或网络失败保留原事件，状态读回可以补账。
 
 ## 5. 独立核验与原任务恢复
 

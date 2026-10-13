@@ -9,3 +9,5 @@ GP-Anchor: line01/android_worker_publish keep-green
 恢复有两个不同时间点：旧attempt核验只判断已发生的副作用及当前runner机械隔离保证，不要求未来目录先存在。新attempt起跑才创建独享目录，拒run根软链接、既有业务artifact及原run复用；正式输入文件保存在独立wf-agent-inputs目录。原失败证据hash必须保持。业务helper只读实际run持久信封及input/contract，不能接复制改写的信封。
 
 本次隔离测试和正式CI不等同真实业务首通；生产基线、方法选择资格和最终独立验收由主控按正式运行账确认。
+
+反馈有三层不同事实：本地持久入队、Brain收到原件、业务事实被接受。分配seq前须验证活动字段，不能让outcome=completed永久堵队；重放不能把任何2xx当ACK，必须校验accepted/duplicate与精确seq。正式rejected附原件hash及白名单字段，与ACK同次持久，ACK不得解释为业务成功。运输结果必须与worker业务异常通道隔离，否则HTTP失败会误造新的失败交付。原队列不靠就地修值修复。

@@ -286,6 +286,7 @@ try:r.phone_module.shell.execute(p,'preflight',fail);raise AssertionError('missi
 except ValueError as error:assert 'binding' in str(error)
 assert calls==[]
 e['activity_bindings']=[dict(path,key='preflight',steps=[{'key':'check','step_id':'step'}])]
+r.io.write(d/'envelope.json',e)
 for i in range(2):
  try:r.phone_module.shell.execute(p,'preflight',fail);raise AssertionError('failed preflight replay became success')
  except ValueError as error:assert 'real preflight failure' in str(error)
@@ -299,6 +300,7 @@ test('cleanup中间失败只记blocked且原件不可覆盖；最终唯一pass�
  const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
 e=r.io.read(d/'envelope.json');path={'reference_id':'ref','activity_id':'act','activity_definition_version_id':'version'}
 e['definition']['expected_path']=[path,dict(path,step_id='step')];e['activity_bindings']=[dict(path,key='cleanup',steps=[{'key':'check','step_id':'step'}])]
+r.io.write(d/'envelope.json',e)
 class Phone:directory=d;envelope=e;cleanup_deadline=time.time()+30;control_receipts=[]
 p=Phone();calls=[]
 def clean():

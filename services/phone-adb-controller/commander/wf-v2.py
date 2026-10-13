@@ -110,6 +110,7 @@ def make_request(directory, envelope, parent):
         '\n' + method_instruction + '\n不要求业务子会话调用session_status；仅使用实际暴露且执行目标所需的工具，绑定文件与官方receipt确认归属。上次因未暴露工具失败时先读previous_attempt，不重复附加无关工具要求。'
         '\n按照合同skill与activities执行；原样保留所有输入字段，仅为contract中by=agent的业务activity/step上报（preflight与cleanup由外壳负责，不能代补）；每个真实完成的activity/step，用activity_bindings按key定位并对照definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
         '\n手机资源由外壳领锁/收尾，业务全程精确使用run_id作lock-owner，不另领或释放锁。'
+        '\n活动 outcome 只允许 pass|fail|skipped|unknown；completed 是事件类型，不是 outcome。started_at/ended_at 用真实带时区ISO时间；completed 的 evidence 必须为非空对象。event 被拒且未分seq时可依据同一真实产物纠正字段后重报；已持久事件不得改写。'
         '\n外部副作用幂等key用task_id与activity，不用run_id；未知副作用先读回，不重复发布。'
         '\n最后一行：WF_DELIVERY {"status":"completed|failed|blocked","outputs":{},"evidence":[],"effects":[],"failure":null}'
         '\n上次失败结构化上下文见信封recovery.previous_attempt（run_id、attempt、failure、verification.assertions/evidence、diagnostic_sha256）；先核对证据，原始记录按task/run只读回查。\n核验失败的断言与证据见信封recovery；只在冻结恢复合同允许范围修复产物，不现场修代码。\n', encoding='utf-8')
@@ -121,6 +122,7 @@ def current(directory):
     result = dict(protocol=io.PROTOCOL, run_id=env['run_id'], state=state['phase'],
                   execution_stopped=state.get('execution_stopped', False),
                   deadline_at=env['deadline_at'], cleanup_deadline_at=env['cleanup_deadline_at'])
+    result['feedback'] = io.feedback_status(directory)
     for name, field in [('delivery.json', 'delivery'), ('events.json', 'events')]:
         if (directory / name).exists():
             result[field] = io.read(directory / name)
@@ -405,8 +407,7 @@ def main():
     elif command == 'claim-spawn':
         result = claim(Path(sys.argv[2]))
     elif command == 'replay':
-        io.replay(Path(sys.argv[2]))
-        result = {'replayed': True}
+        result = io.replay(Path(sys.argv[2]))
     elif command == 'event':
         event = json.load(sys.stdin)
         if event.get('type') not in ('activity_started', 'activity_completed'):
@@ -415,6 +416,8 @@ def main():
     else:
         raise ValueError('unknown operation')
     print(json.dumps(result, ensure_ascii=False))
+    if command == 'replay' and (not result['replayed'] or result.get('error') or result.get('rejected')):
+        sys.exit(2)
 
 
 if __name__ == '__main__':
