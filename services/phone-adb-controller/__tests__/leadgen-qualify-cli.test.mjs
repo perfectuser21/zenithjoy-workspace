@@ -1,4 +1,4 @@
-// 真实CLI→显式本地RPC替身：只核参数传输及拒绝边界，不声称调用模型/数据库/手机。
+// 真实CLI→显式SSH/RPC替身：只核参数传输及拒绝边界，不声称调用模型/数据库/手机。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
@@ -36,6 +36,8 @@ test('102独立判断保留可选上游语义，仍转发本run',t=>{
 });
 for(const [label,args] of [
  ['未知flag',[...BASE,'--unknown','x']],
+ ['未知继承属性constructor',[...BASE,'constructor','x']],
+ ['未知继承属性__proto__',[...BASE,'__proto__','x']],
  ['缺run',BASE.filter((_,i)=>![4,5].includes(i))],
  ['run选项串',BASE.map((x,i)=>i===5?'--help':x)],
  ['run路径穿越',BASE.map((x,i)=>i===5?'../run':x)],
