@@ -57,6 +57,43 @@ class Methods(unittest.TestCase):
   ref='commander-method-v1:'+canonical({k:observed['method_instance'][k] for k in ('physical_host','method_root','manifest_sha256','resolved_bindings_sha256','installation_sha256')})
   self.observations[uid(30)]['evidence_ref']=ref
   return observed
+ def repack(self, files):
+  bindings=[dict(self.binding,path=path,digest='sha256:'+digest(raw)) for path,raw in sorted(files.items())]
+  self.manifest['bindings']=bindings;self.method['payload']['components']=[{'kind':'repo','repo':REPO,'revision':'a'*40},*bindings]
+  self.a['payload']['implementation_bindings']=[dict(b,status='verified',scope='activity') for b in bindings]
+  mh=digest(self.manifest);self.root=self.home/'.local/share/zenithjoy/commander-methods'/mh;self.root.mkdir(parents=True)
+  for path,raw in files.items():
+   p=self.root/path;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(raw)
+  self.io.write(self.root/'method-manifest.json',self.manifest)
+  self.instance={'physical_host':'mmv','target':'mmv--method--'+mh,'method_root':str(self.root),'manifest_sha256':mh,'resolved_bindings':[dict(b,absolute_path=str(self.root/b['path'])) for b in bindings]}
+  self.envelope['method_selection']['method_instance']=self.instance;self.method['target']=self.instance['target']
+ def test_brain_canonical_golden_numbers_keys_and_unicode(self):
+  m=self.method_module()
+  for row in json.loads((SOURCE/'__tests__/fixtures/commander-method-digests.json').read_text()):self.assertEqual(m.digest(json.loads(row['input'])),row['sha256'])
+  for value in (float('nan'),float('inf'),-float('inf')):
+   with self.assertRaises(ValueError):m.digest({'number':value})
+ def test_relative_dependency_is_frozen_and_global_pollution_cannot_fill_a_gap(self):
+  entry=b'import method_helper,json\nprint(json.dumps({"value":method_helper.VALUE}))\n';helper=PATH.rsplit('/',1)[0]+'/method_helper.py'
+  self.repack({PATH:entry,helper:b'VALUE="frozen dependency"\n'});self.attest()
+  poison=self.home/'global';poison.mkdir();(poison/'method_helper.py').write_text('VALUE="global poison"')
+  self.envelope['definition']['runtime_snapshot_sha256']=self.io.ready(self.envelope)['runtime_snapshot_sha256']
+  with patch.dict(os.environ,PYTHONPATH=str(poison)):
+   result=self.method_module().execute(self.envelope,{'source_path':PATH,'args':[]},self.io.ready)
+   self.assertEqual(json.loads(result['stdout'])['value'],'frozen dependency')
+  self.repack({PATH:entry});self.attest();self.envelope['definition']['runtime_snapshot_sha256']=None
+  with patch.dict(os.environ,PYTHONPATH=str(poison)):
+   with self.assertRaises(ValueError):self.io.ready(self.envelope)
+ def test_parent_symlink_and_current_workspace_drift_are_rejected(self):
+  self.attest();parent=self.root.parent;backup=parent.with_name('saved');parent.rename(backup);parent.symlink_to(backup)
+  with self.assertRaises(ValueError):self.io.ready(self.envelope)
+  parent.unlink();backup.rename(parent)
+  (self.home/'openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander/SKILL.md').write_text('polluted workspace')
+  with self.assertRaises(ValueError):self.io.ready(self.envelope)
+ def test_different_safety_shell_and_ambiguous_binding_are_rejected(self):
+  self.repack({PATH:self.code,'services/phone-adb-controller/commander/wf-v2-phone.py':b'old unsafe shell'});self.attest()
+  with self.assertRaises(ValueError):self.io.ready(self.envelope)
+  r=copy.deepcopy(self.method);b=copy.deepcopy(r['payload']['activities'][0]['payload']['implementation_bindings'][0]);b['digest']='sha256:'+'0'*64;r['payload']['activities'][0]['payload']['implementation_bindings'].append(b)
+  with self.assertRaises(ValueError):self.method_module().manifest_for(r)
  def test_current_ready_cannot_load_independent_method_without_new_protocol(self):
   # old ready误把旧business release当当前bundle release；新ready应分别核两套实物。
   self.attest();result=self.io.ready(self.envelope)
