@@ -160,6 +160,8 @@ def validate_fact(envelope, kind, data):
         raise ValueError('activity_started cannot claim ended_at')
     if not isinstance(data.get('evidence'), dict) or (kind == 'activity_completed' and not data['evidence']):
         raise ValueError('evidence must be an object; completed fact requires evidence')
+    if data['outcome'] == 'skipped' and (not isinstance(data['evidence'].get('skip_reason'), str) or not data['evidence']['skip_reason'].strip()):
+        raise ValueError('skipped requires non-empty evidence.skip_reason')
     if 'model' in data and (not isinstance(data['model'], str) or not data['model'].strip() or len(data['model']) > 200):
         raise ValueError('model must be a non-empty bounded string')
 
