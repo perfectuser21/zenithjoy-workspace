@@ -131,3 +131,19 @@ test('根目录漂移不接受no-resource证据',()=>scenario(`
 fail_prepare();old=d/'old-evidence';(d/'evidence').rename(old);(d/'evidence').mkdir()
 assert p.cleanup()['completed'] is False
 `));
+
+
+test('worker失败收尾在launch锁内重查claim，不能把并发已领单的child当作停止',()=>scenario(`
+from contextlib import contextmanager
+original_lock=r.io.lock
+@contextmanager
+def race_lock(path,*args,**kwargs):
+ with original_lock(path,*args,**kwargs):
+  if path.name=='.launch.lock':r.io.write(d/'spawn-claimed.json',{'nonce':'concurrent-claim'})
+  yield
+r.io.lock=race_lock
+r.worker(d)
+assert not (d/'handoff-closed.json').exists(),'worker closed handoff after concurrent spawn claim'
+assert not (d/'delivery.json').exists() and not (d/'cleanup.json').exists()
+assert r.io.read(d/'runtime.json')['execution_stopped'] is False
+`));
