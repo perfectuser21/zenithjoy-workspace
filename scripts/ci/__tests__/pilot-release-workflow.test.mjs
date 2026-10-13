@@ -18,6 +18,17 @@ test('完整发布只传四项固定来源输入，工具uses与tooling_revision
  assert.deepEqual(j.with,{source_repo:'perfectuser21/zenithjoy-workspace',scope:'zenithjoy',head_revision:'${{ github.sha }}',tooling_revision:revision});
  assert.equal(j['continue-on-error'],undefined);assert.equal(j.needs,'caller-contract');
 });
+test('通用Commander复用完整发布验证并保留原zenithjoy范围',()=>{
+ const w=config(),j=w.jobs['verify-commander'];
+ assert.ok(j,'commander-generic须有独立完整发布验证');
+ assert.equal(j.if,"github.ref == 'refs/heads/main'");
+ assert.equal(j.needs,'caller-contract');
+ assert.equal(j.uses,w.jobs.verify.uses);
+ assert.deepEqual(j.with,{...w.jobs.verify.with,scope:'commander-generic'});
+ assert.deepEqual(j.secrets,w.jobs.verify.secrets);
+ assert.equal(j['continue-on-error'],undefined);
+ assert.equal(w.jobs.verify.with.scope,'zenithjoy');
+});
 test('发布caller只传三项显式secret，保read权限和实际main拒绝闸',()=>{
  const w=config();assert.deepEqual(w.permissions,{contents:'read',actions:'read'});
  assert.deepEqual(w.jobs.verify.secrets,{TS_AUTHKEY:'${{ secrets.TS_AUTHKEY }}',CECELIA_INTERNAL_TOKEN:'${{ secrets.CECELIA_INTERNAL_TOKEN }}',BRAIN_DEPLOY_URL:'${{ secrets.BRAIN_DEPLOY_URL }}'});
