@@ -125,7 +125,8 @@ test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目
   };
   const expected = arr("MMV_JS_FILES").length + arr("MMV_TOPLEVEL_FILES").length + arr("MMV_PROBE_FILES").length + arr("MMV_BIN_FILES").length
     + (arr("DEVICE_SH_FILES").length + arr("DEVICE_NODE_FILES").length + arr("DEVICE_PLAN_FILES").length
-      + arr("DEVICE_CTL_FILES").length * arr("DEVICE_CTL_DIRS").length);
+      + arr("DEVICE_CTL_FILES").length * arr("DEVICE_CTL_DIRS").length)
+    + (deploy.includes("RELEASE_EVIDENCE_FILES=(") ? arr("RELEASE_EVIDENCE_FILES").length * 3 : 0);
   assert.equal(lines.length, expected);
   assert.ok(lines.every(line=>!line.startsWith('xian-m1 ')));
   for (const want of [
@@ -232,4 +233,26 @@ test('默认只对账M4与MMV，零手机的M1离线不告警也不访问',()=>{
   assert.equal(c.barks().length,0);
   assert.doesNotMatch(readFileSync(join(c.fake,'ssh-calls.log'),'utf8'),/^xian-m1 /m);
  }finally{c.cleanup();}
+});
+
+// 新SQL附件使用真实Git源字节；三个执行副本进入原drift路径，缺失/篡改都必须拒绝。
+test("固定源SQL附件三副本均参与真实drift，缺失或篡改拒绝", () => {
+ const c=setup();
+ try {
+  const source="apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql";
+  const destination="release-evidence/20261014_130000_leadgen_outreach_bridge.sql";
+  const data=readFileSync(join(SRC,"../..",source));
+  const path=join(c.repo,source);mkdirSync(dirname(path),{recursive:true});writeFileSync(path,data);
+  writeFileSync(join(c.repo,"services/phone-adb-controller/deploy.sh"),MINI_DEPLOY+`\nRELEASE_EVIDENCE_FILES=(\n ${source}=${destination}\n)\n`);
+  git(c.repo,"add",".");git(c.repo,"-c","user.email=t@t","-c","user.name=t","commit","--no-verify","-qm","SQL evidence");
+  const targets=[["mmv",`bin-harvest/${destination}`],["mmv",`.openclaw/leadgen-scripts/${destination}`],["xian-m4",`bin-harvest/${destination}`]];
+  for(const [host,path] of targets)c.put(host,path,data);
+  assert.equal(c.run({DRIFT_DEVICE_HOSTS:"xian-m4"}).status,0);
+  for(const [host,path] of targets){
+   const actual=join(c.fake,"hosts",host,path);rmSync(actual);
+   assert.equal(c.run({DRIFT_DEVICE_HOSTS:"xian-m4"}).status,1);
+   c.put(host,path,"tampered");assert.equal(c.run({DRIFT_DEVICE_HOSTS:"xian-m4"}).status,1);
+   c.put(host,path,data);assert.equal(c.run({DRIFT_DEVICE_HOSTS:"xian-m4"}).status,0);
+  }
+ } finally {c.cleanup();}
 });

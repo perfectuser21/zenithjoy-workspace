@@ -52,9 +52,27 @@ push_atomic() {
   scp -q -p "$src" "$host:$tmp"
   if [[ "$mode" == "x" ]]; then
     ssh "$host" "chmod +x $tmp && mv -f $tmp $rdir/$name"
+  elif [[ "$mode" == "evidence" ]]; then
+    ssh "$host" "chmod 600 $tmp && mv -f $tmp $rdir/$name"
   else
     ssh "$host" "mv -f $tmp $rdir/$name"
   fi
+}
+
+# 固定源SQL仅作非执行验收附件；三份真实文件均由原collector读回。
+deploy_release_evidence() {
+  local mapping source destination host base expected actual target
+  for mapping in "${RELEASE_EVIDENCE_FILES[@]}"; do
+    source="${mapping%%=*}"; destination="${mapping#*=}"
+    expected="$(python3 -c 'import json,sys; rows=[e for e in json.load(open(sys.argv[1]))["files"] if e["path"]==sys.argv[2] and e["deployed_path"]==sys.argv[3]]; assert len(rows)==1; print(rows[0]["content_sha256"])' "$DEPLOY_MANIFEST" "$source" "$destination")"
+    for target in 'xian-m4|~/bin-harvest' 'mmv|~/bin-harvest' 'mmv|~/.openclaw/leadgen-scripts'; do
+      host="${target%%|*}"; base="${target#*|}"
+      ssh "$host" "python3 -c 'import pathlib,sys; home=pathlib.Path.home(); p=pathlib.Path(sys.argv[1]).expanduser(); parts=p.relative_to(home).parts; current=home; exec(\"for part in parts:\n current=current/part\n assert not current.is_symlink()\n current.mkdir(exist_ok=True)\")' $base/release-evidence"
+      push_atomic "$REPO_ROOT/$source" "$host" "$base/release-evidence" "${destination##*/}" evidence
+      actual="$(ssh "$host" "python3 -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]).expanduser(); assert not p.is_symlink(); print(hashlib.sha256(p.read_bytes()).hexdigest())' $base/$destination")"
+      [[ "$actual" == "$expected" ]] || { echo "SQL验收附件读回不符: $host/$destination" >&2; return 1; }
+    done
+  done
 }
 
 # Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
@@ -275,6 +293,12 @@ MMV_RUNTIME_FILES=()
 for f in "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${MMV_JS_FILES[@]}" "${MMV_PROBE_FILES[@]}"; do
   [[ " ${MMV_RUNTIME_FILES[*]-} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
 done
+RELEASE_EVIDENCE_FILES=(
+  apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql=release-evidence/20261014_130000_leadgen_outreach_bridge.sql
+)
+RELEASE_EVIDENCE_ARGS=()
+for mapping in "${RELEASE_EVIDENCE_FILES[@]}"; do RELEASE_EVIDENCE_ARGS+=("--repository-file=$mapping"); done
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 # 所有入口都必须带完整、正式回读的目标计划；空map不能覆盖已有ready身份。
 : "${WF_COMMANDER_RELEASES_FILE:?必须提供完整Commander release映射}" "${WF_DEPLOY_PLAN_FILE:?必须提供统一部署计划}"
@@ -289,8 +313,8 @@ DEPLOY_MANIFEST=$(mktemp)
 MMV_MANIFEST=$(mktemp)
 trap 'rm -f "$DEPLOY_MANIFEST" "$MMV_MANIFEST"' EXIT
 : "${WF_RELEASE_IDS:?必须提供全部部署目标的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
-node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
-node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" > "$MMV_MANIFEST"
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${RELEASE_EVIDENCE_ARGS[@]}" > "$DEPLOY_MANIFEST"
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" "${RELEASE_EVIDENCE_ARGS[@]}" > "$MMV_MANIFEST"
 node "$D/deployment-targets.mjs" "$WF_DEPLOY_PLAN_FILE" "$(git rev-parse HEAD)"
 # Reject incomplete/legacy input sources before any remote mutation. The paired revision
 # protects only deployments using this script; older deployment writers must adopt it too.
@@ -300,6 +324,7 @@ python3 "$D/input-runtime-release.py" source-info "$D/douyin-phone-adb" "$D/text
 node "$D/company-config-readiness.mjs"
 commander_admission
 [[ "$FAILED" == 0 ]] || exit 1
+deploy_release_evidence
 
 if [[ "${1:-}" == "--commander-only" ]]; then
   deploy_commander
