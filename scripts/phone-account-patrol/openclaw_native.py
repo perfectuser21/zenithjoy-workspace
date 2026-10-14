@@ -278,7 +278,7 @@ def maintain(task_id, deployment, state, call=None, current=None, run=None):
     if (parent.get('task_type') != 'script_run' or parent.get('status') != 'in_progress' or parent.get('project_id') != deployment['project_id']
             or p.get('workflow_id') != bridge.MAINTENANCE_WORKFLOW_ID or p.get('runtime_requires_llm') is not False
             or not re.fullmatch(r'[0-9a-f]{40}', p.get('source_revision', ''))
-            or (re.fullmatch(r'[0-9a-f]{40}', path.parent.name) and p['source_revision'] != path.parent.name)):
+            or path != bridge.CONTROL_RELEASES / p['source_revision'] / 'openclaw_native.py'):
         raise ValueError('持续维护不是正式中央维护代码任务')
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (state / 'native-maintenance.lock').open('a') as lock:
@@ -327,7 +327,7 @@ def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
             or p.get('original_scope') != scope or p.get('phone_serial') != serial or serial != scope['phone_serial']
             or p.get('source_revision') != deployment['source_revision'] or p.get('workflow_id') != deployment['single_workflow_id']
             or p.get('control_sha256') != digest or not re.fullmatch(r'[0-9a-f]{40}', p.get('control_source_revision') or '')
-            or (re.fullmatch(r'[0-9a-f]{40}', control_path.parent.name) and p['control_source_revision'] != control_path.parent.name)
+            or control_path != bridge.CONTROL_RELEASES / p['control_source_revision'] / 'openclaw_native.py'
             or p.get('runtime_requires_llm') is not False):
         raise ValueError('recovery_identity_mismatch')
     phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]

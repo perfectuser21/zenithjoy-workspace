@@ -11,6 +11,7 @@ import re
 import tempfile
 
 STATE = pathlib.Path.home() / '.local/share/phone-account-patrol'
+CONTROL_RELEASES = pathlib.Path.home() / '.local/share/infra-workflow-commander/releases'
 API = 'http://localhost:5221/api/brain/'
 PHONE_SOURCE_REVISION = '864154c57e88e8085d2add741a79103a28891a44'
 MAINTENANCE_WORKFLOW_ID = 'e4d2030f-129f-4668-95dd-4a6d880493a8'
@@ -225,8 +226,9 @@ def trusted_phone(task, serial, deployment, by_id, wrapper_path):
     path = pathlib.Path(argv[1])
     if not wrapper_path or path.name != 'openclaw_native.py' or not path.is_absolute() or path.is_symlink():return False
     current = pathlib.Path(wrapper_path)
+    if current.parent.parent != CONTROL_RELEASES:return False
     allowed = (path == current and re.fullmatch(r'[0-9a-f]{40}', p.get('control_source_revision') or '')
-               and (not re.fullmatch(r'[0-9a-f]{40}', current.parent.name) or current.parent.name == p['control_source_revision']))
+               and current.parent.name == p['control_source_revision'])
     allowed = allowed or (path.parent.parent == current.parent.parent and path.parent.name == LEGACY_CONTROL_REVISION
               and p.get('control_source_revision') == LEGACY_CONTROL_REVISION and p.get('control_sha256') == LEGACY_CONTROL_SHA256)
     try:

@@ -30,6 +30,12 @@ class NativeCommanderTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.state = pathlib.Path(self.temp.name)
+        controller = self.state / 'controllers' / ('a' * 40) / 'openclaw_native.py'
+        controller.parent.mkdir(parents=True);controller.write_bytes(pathlib.Path(__file__).with_name('openclaw_native.py').read_bytes())
+        original_file = native.__file__;native.__file__ = str(controller)
+        self.addCleanup(setattr, native, '__file__', original_file)
+        original_root = native.bridge.CONTROL_RELEASES;native.bridge.CONTROL_RELEASES = (self.state / 'controllers').resolve()
+        self.addCleanup(setattr, native.bridge, 'CONTROL_RELEASES', original_root)
         self.deployment = {'release': '/fixed/release', 'source_revision': native.bridge.PHONE_SOURCE_REVISION,
                            'project_id': PROJECT, 'batch_workflow_id': WORKFLOW, 'single_workflow_id': SINGLE, 'schedule_id': SCHEDULE}
         self.leader = {'id': LEADER, 'task_type': 'qiumi_task', 'status': 'in_progress', 'project_id': PROJECT,
@@ -221,6 +227,14 @@ class NativeCommanderTests(unittest.TestCase):
 
 
 class ContinuousRecoveryTests(unittest.TestCase):
+    def test_unversioned_current_wrapper_cannot_self_attest_with_task_hash(self):
+        self.cycle();demand = self.demands()[0];attempt = self.attempts()[0];attempt['status'] = 'in_progress'
+        loose = self.state / 'unversioned' / 'openclaw_native.py';loose.parent.mkdir();loose.write_text('unversioned controller')
+        loose = loose.resolve()
+        attempt['payload'].update(cmd='/usr/bin/python3 ' + str(loose) + ' recovery-phone --demand-task-id ' + demand['id'] + ' --serial phone-a --execution-script "$0"',control_sha256=hashlib.sha256(loose.read_bytes()).hexdigest())
+        with patch.object(native, '__file__', str(loose)), self.assertRaises(ValueError):
+            native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, lambda *a, **k: self.fail('未验真入口不应运行手机'))
+
     def test_old_phone_demand_continues_with_new_control_without_rewriting_identity(self):
         old = '4f899cab6425341646e27c5fca20979b8ac42be7'
         legacy = dict(self.deployment, source_revision=old, release='/fixed/old')
@@ -254,7 +268,7 @@ class ContinuousRecoveryTests(unittest.TestCase):
 
     def test_historical_wrapper_proof_requires_original_control_revision_path_and_bytes(self):
         self.cycle();attempt = self.attempts()[0];self.complete_phone(attempt)
-        root = self.state / 'controllers';old = root / native.bridge.LEGACY_CONTROL_REVISION / 'openclaw_native.py';new = root / ('c' * 40) / 'openclaw_native.py'
+        root = (self.state / 'controllers').resolve();old = root / native.bridge.LEGACY_CONTROL_REVISION / 'openclaw_native.py';new = root / ('c' * 40) / 'openclaw_native.py'
         old.parent.mkdir(parents=True);new.parent.mkdir(parents=True);old.write_text('frozen old controller');new.write_text('new controller')
         attempt['payload'].update(cmd='/usr/bin/python3 ' + str(old) + ' recovery-phone --demand-task-id ' + self.demands()[0]['id'] + ' --serial phone-a --execution-script "$0"',
             control_sha256=hashlib.sha256(old.read_bytes()).hexdigest(), control_source_revision=native.bridge.LEGACY_CONTROL_REVISION)
