@@ -18,6 +18,11 @@ spec.loader.exec_module(runner)
 
 
 class FailureEvidenceTests(unittest.TestCase):
+    def test_deeply_nested_diagnostic_cannot_break_failure_reporting(self):
+        cleaned = runner.safe_error_text('[' * 2000 + '0' + ']' * 2000)
+        self.assertIn('OMITTED', cleaned)
+        self.assertLess(len(cleaned), 2000)
+
     def test_preflight_adb_error_retains_device_error_and_checks_runner_hash(self):
         spec = importlib.util.spec_from_file_location('failure_preflight', ROOT / 'preflight.py')
         preflight = importlib.util.module_from_spec(spec); spec.loader.exec_module(preflight)
