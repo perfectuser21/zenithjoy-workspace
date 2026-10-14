@@ -1,0 +1,283 @@
+{
+  "key": "phone-account-patrol-maintenance",
+  "name": "手机账号巡查运行维护检查",
+  "capability_id": "2173a385-a743-41f3-bb7d-d0e4b1d51d4e",
+  "channel": "Brain",
+  "form": "运行维护检查",
+  "version": "0.1.1",
+  "runtime": {
+    "skill_id": "23656d5a-6d61-4f7e-82a1-b8ace4e7669e",
+    "entrypoint": "/usr/bin/python3 /Users/administrator/.local/share/infra-workflow-commander/releases/f38c5a5635d2f57554efcfee4b09163d10cfe39b/openclaw_native.py maintain --execution-script \"$0\"",
+    "script": {
+      "host": "mmv",
+      "cwd": null,
+      "env": {},
+      "commands": [
+        "/usr/bin/python3 /Users/administrator/.local/share/infra-workflow-commander/releases/f38c5a5635d2f57554efcfee4b09163d10cfe39b/openclaw_native.py maintain --execution-script \"$0\""
+      ]
+    }
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "phone_serial": {
+        "type": "string"
+      },
+      "source_revision": {
+        "const": "f38c5a5635d2f57554efcfee4b09163d10cfe39b"
+      },
+      "phone_source_revision": {
+        "const": "864154c57e88e8085d2add741a79103a28891a44"
+      },
+      "control_source_revision": {
+        "const": "f38c5a5635d2f57554efcfee4b09163d10cfe39b"
+      }
+    }
+  },
+  "verification": {
+    "assertions": [
+      "正式定义与实际代码来源分开追溯",
+      "执行前绑定冻结定义及可信部署版本",
+      "旧记录不由当前定义覆盖",
+      "维护核验实际current864部署，并由f38控制器执行；不声称维护固定使用旧4f"
+    ]
+  },
+  "activities": [
+    {
+      "key": "scheduled-slot-evidence",
+      "name": "核对正式计划与实际批次",
+      "executor_kind": "code",
+      "acceptance": [
+        "从中央正式计划与真实批次任务核对巡查时段",
+        "保留时区及原始计划身份，不以排队等同手机完成"
+      ],
+      "implementation": {
+        "kind": "code",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "scripts/phone-account-patrol/openclaw_native.py",
+        "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+        "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_native.py",
+        "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+        "digest": "sha256:51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/dispatch.py",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/dispatch.py",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:ea60ff9e538aa77f991d5f234d47cb392a2613ead560c0963d5949d53a1694de"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/preflight.py",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/preflight.py",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:c89d4dcc6ec3523af9423d4daa8995a0ae5e3243da49058bb9d823729dc7d9e7"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/deploy.py",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/deploy.py",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:09e2365f689cfe96f7fc58742f4f75cf8b92bb90ae6a0bd5136c4a36c36cc24a"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/collector.py",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/collector.py",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/ocr.swift",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/ocr.swift",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:89431efae1526a56b9e5164cee7293f4ea877f6d4ca61f1b76b05f48d3291005"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/publish.mjs",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/publish.mjs",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:528daa587ceba84348723fbf24a7169645462a71a1378407910ed0d2b5daf6bf"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/mirror.mjs",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/mirror.mjs",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:a628a9406528a24de126a9cafdc63c17a9f9f8e0d82d1b2dd41a94a3efc8ebb0"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/runner.py",
+          "revision": "864154c57e88e8085d2add741a79103a28891a44",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/runner.py",
+          "version": "864154c57e88e8085d2add741a79103a28891a44",
+          "digest": "sha256:026e94011162a4e42e7e07edf4c5b04f28796067dae3161e5ce185c4bd53e16e"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/openclaw_commander.py",
+          "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_commander.py",
+          "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+          "digest": "sha256:35c2f039f62dd19fb7f7241acef342aafd1d88733531c76f28fc076ee5a9f271"
+        }
+      ],
+      "steps": [
+        {
+          "key": "execute-and-readback",
+          "name": "核对正式计划与实际批次并核对真实回执",
+          "reads": [
+            "中央任务输入及固定代码版本"
+          ],
+          "writes": [
+            "运行证据与实际状态"
+          ],
+          "implementation": {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "scripts/phone-account-patrol/openclaw_native.py",
+            "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+            "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_native.py",
+            "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+            "digest": "sha256:51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213"
+          },
+          "on_fail": "abort",
+          "dod": {
+            "mode": "checkpoint",
+            "readback": {
+              "type": "json",
+              "source": "task.result",
+              "assertions": [
+                "从中央正式计划与真实批次任务核对巡查时段",
+                "保留时区及原始计划身份，不以排队等同手机完成"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "phone-run-assessment",
+      "name": "核对逐手机执行回执",
+      "executor_kind": "code",
+      "acceptance": [
+        "根据真实手机运行结果维护补查需求",
+        "旧需求固定原手机版本，失败、等待和成功分开记录"
+      ],
+      "implementation": {
+        "kind": "code",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "scripts/phone-account-patrol/openclaw_native.py",
+        "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+        "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_native.py",
+        "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+        "digest": "sha256:51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213"
+      },
+      "steps": [
+        {
+          "key": "execute-and-readback",
+          "name": "核对逐手机执行回执并核对真实回执",
+          "reads": [
+            "中央任务输入及固定代码版本"
+          ],
+          "writes": [
+            "运行证据与实际状态"
+          ],
+          "implementation": {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "scripts/phone-account-patrol/openclaw_native.py",
+            "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+            "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_native.py",
+            "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+            "digest": "sha256:51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213"
+          },
+          "on_fail": "abort",
+          "dod": {
+            "mode": "checkpoint",
+            "readback": {
+              "type": "json",
+              "source": "task.result",
+              "assertions": [
+                "根据真实手机运行结果维护补查需求",
+                "旧需求固定原手机版本，失败、等待和成功分开记录"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "maintenance-attention",
+      "name": "登记维护异常与检查记录",
+      "executor_kind": "code",
+      "acceptance": [
+        "在正式需求账中保存补查进度和证据",
+        "不伪造外部通知或业务成功；本运行由中央执行器独立记账"
+      ],
+      "implementation": {
+        "kind": "code",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "scripts/phone-account-patrol/openclaw_native.py",
+        "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+        "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_native.py",
+        "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+        "digest": "sha256:51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213"
+      },
+      "steps": [
+        {
+          "key": "execute-and-readback",
+          "name": "登记维护异常与检查记录并核对真实回执",
+          "reads": [
+            "中央任务输入及固定代码版本"
+          ],
+          "writes": [
+            "运行证据与实际状态"
+          ],
+          "implementation": {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "scripts/phone-account-patrol/openclaw_native.py",
+            "revision": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+            "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_native.py",
+            "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
+            "digest": "sha256:51f8ac3ff9f339536f2c07739c683b90e0811d7c2b99b31ad18b84ec0bc78213"
+          },
+          "on_fail": "abort",
+          "dod": {
+            "mode": "checkpoint",
+            "readback": {
+              "type": "json",
+              "source": "task.result",
+              "assertions": [
+                "在正式需求账中保存补查进度和证据",
+                "不伪造外部通知或业务成功；本运行由中央执行器独立记账"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
