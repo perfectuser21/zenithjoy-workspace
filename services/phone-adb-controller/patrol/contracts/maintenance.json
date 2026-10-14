@@ -82,15 +82,6 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
-          "path": "scripts/phone-account-patrol/deploy.py",
-          "revision": "864154c57e88e8085d2add741a79103a28891a44",
-          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/deploy.py",
-          "version": "864154c57e88e8085d2add741a79103a28891a44",
-          "digest": "sha256:09e2365f689cfe96f7fc58742f4f75cf8b92bb90ae6a0bd5136c4a36c36cc24a"
-        },
-        {
-          "kind": "code",
-          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "scripts/phone-account-patrol/collector.py",
           "revision": "864154c57e88e8085d2add741a79103a28891a44",
           "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/collector.py",
