@@ -52,3 +52,27 @@ test('正式manifest调用、GP早期守卫及drift都必须包含同一附件�
  const smoke=readFileSync(new URL('../../../scripts/smoke/leadgen-split-smoke.sh',import.meta.url),'utf8');assert.ok(smoke.indexOf('deployment-release-evidence.test.mjs')<smoke.indexOf('env -u HOME'));
  const drift=readFileSync(new URL('../drift-check.sh',import.meta.url),'utf8');assert.match(drift,/parse_array RELEASE_EVIDENCE_FILES/);assert.ok(drift.includes('release-evidence'));
 });
+
+function attachmentPython(){
+ const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const section=source.slice(source.indexOf('deploy_release_evidence() {'),source.indexOf('# Commander 入口'));
+ const matches=[...section.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1]);
+ assert.equal(matches.length,3);
+ // remote snippets are nested in ssh's double-quoted shell argument: reproduce that quote decoding.
+ return matches.map((code,i)=>i===0?code:code.replaceAll('\\"','"'));
+}
+test('Python优化模式下真实清单Python仍拒绝缺失及重复SQL行',t=>{
+ const {root,commit}=fixture(t);const file=join(root,'manifest.json');const good=deploymentManifest(root,[],{commit,repositoryFiles:entries});const code=attachmentPython()[0];
+ const invoke=()=>spawnSync('python3',['-O','-c',code,file,sql,deployed],{encoding:'utf8',env:{...process.env,PYTHONOPTIMIZE:'1'}});
+ writeFileSync(file,JSON.stringify(good));assert.equal(invoke().status,0);
+ for(const rows of [[],[...good.files,...good.files]]){writeFileSync(file,JSON.stringify({...good,files:rows}));assert.notEqual(invoke().status,0,'优化模式不得接受0或2条匹配行');}
+});
+test('Python优化模式下真实remote目录及读回Python均拒绝软链接',t=>{
+ const {root}=fixture(t);const home=join(root,'home');mkdirSync(home);const outside=join(root,'outside');mkdirSync(outside);symlinkSync(outside,join(home,'bin-harvest'));
+ const codes=attachmentPython();const env={...process.env,HOME:home,PYTHONOPTIMIZE:'1'};
+ const directory=spawnSync('python3',['-O','-c',codes[1],join(home,'bin-harvest/release-evidence')],{encoding:'utf8',env});
+ assert.notEqual(directory.status,0,'优化模式不得穿过父目录软链接');assert.equal(existsSync(join(outside,'release-evidence')),false);
+ const actual=join(home,'actual.sql');writeFileSync(actual,bytes);const link=join(home,'linked.sql');symlinkSync(actual,link);
+ const readback=p=>spawnSync('python3',['-O','-c',codes[2],p],{encoding:'utf8',env});
+ assert.equal(readback(actual).status,0);assert.notEqual(readback(link).status,0,'优化模式不得接受叶文件软链接');
+});

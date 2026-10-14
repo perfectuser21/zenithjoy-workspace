@@ -64,12 +64,12 @@ deploy_release_evidence() {
   local mapping source destination host base expected actual target
   for mapping in "${RELEASE_EVIDENCE_FILES[@]}"; do
     source="${mapping%%=*}"; destination="${mapping#*=}"
-    expected="$(python3 -c 'import json,sys; rows=[e for e in json.load(open(sys.argv[1]))["files"] if e["path"]==sys.argv[2] and e["deployed_path"]==sys.argv[3]]; assert len(rows)==1; print(rows[0]["content_sha256"])' "$DEPLOY_MANIFEST" "$source" "$destination")"
+    expected="$(python3 -c 'import json,sys; rows=[e for e in json.load(open(sys.argv[1]))["files"] if e["path"]==sys.argv[2] and e["deployed_path"]==sys.argv[3]]; exec("if len(rows)!=1:\n raise ValueError()"); print(rows[0]["content_sha256"])' "$DEPLOY_MANIFEST" "$source" "$destination")"
     for target in 'xian-m4|~/bin-harvest' 'mmv|~/bin-harvest' 'mmv|~/.openclaw/leadgen-scripts'; do
       host="${target%%|*}"; base="${target#*|}"
-      ssh "$host" "python3 -c 'import pathlib,sys; home=pathlib.Path.home(); p=pathlib.Path(sys.argv[1]).expanduser(); parts=p.relative_to(home).parts; current=home; exec(\"for part in parts:\n current=current/part\n assert not current.is_symlink()\n current.mkdir(exist_ok=True)\")' $base/release-evidence"
+      ssh "$host" "python3 -c 'import pathlib,sys; home=pathlib.Path.home(); p=pathlib.Path(sys.argv[1]).expanduser(); parts=p.relative_to(home).parts; current=home; exec(\"for part in parts:\n current=current/part\n if current.is_symlink(): raise ValueError()\n current.mkdir(exist_ok=True)\")' $base/release-evidence"
       push_atomic "$REPO_ROOT/$source" "$host" "$base/release-evidence" "${destination##*/}" evidence
-      actual="$(ssh "$host" "python3 -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]).expanduser(); assert not p.is_symlink(); print(hashlib.sha256(p.read_bytes()).hexdigest())' $base/$destination")"
+      actual="$(ssh "$host" "python3 -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]).expanduser(); exec(\"if p.is_symlink():\n raise ValueError()\"); print(hashlib.sha256(p.read_bytes()).hexdigest())' $base/$destination")"
       [[ "$actual" == "$expected" ]] || { echo "SQL验收附件读回不符: $host/$destination" >&2; return 1; }
     done
   done
