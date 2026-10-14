@@ -133,3 +133,9 @@ test('bridge同company不同tenant/原policy版本也不得发布，不能只比
  const r=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',limit:1},{client:{all:async()=>[],fields:async()=>[{field_name:'采集时间',type:1}],post:async()=>{posts++;}},lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:3,tenant_id:'differentTenant',policy_id:'differentPolicy'})});
  assert.equal(posts,0);assert.equal(r.verified,false);
 });
+
+test('资格unknown旧意图不能重复占满异步领取上限并饿死新pending，attempted仍可GET恢复',async()=>{
+ const row=pendingBridge();row.state='unknown';row.qualification_status='unknown';let selected='';const pool={query:async sql=>{if(sql.includes('SELECT *')){selected=sql;return {rows:[]};}return {rows:[],rowCount:1};}};
+ await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'next103',limit:2},{lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',policy_id:'policy3',version:3})});
+ assert.ok(!/state IN \('pending','attempted','unknown'\)/.test(selected),'资格unknown已真实hold，不可再次占原领取窗口');assert.match(selected,/CASE WHEN state='pending' THEN 0/);assert.match(selected,/'attempted'/);
+});
