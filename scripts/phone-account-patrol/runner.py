@@ -23,14 +23,23 @@ ALL_PLATFORMS = PLATFORMS + ['视频号']
 SSH = ['/usr/bin/ssh', '-o', 'BatchMode=yes', '-o', 'ControlMaster=no', '-o', 'ControlPath=none', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2']
 
 
-def safe_error_text(value, limit=2000):
+def safe_error_text(value, limit=2000, _depth=0):
     text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value or '')
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if text.lstrip().startswith(('{', '[')) and len(text) <= 100000:
+        try:
+            structured = json.loads(text)
+        except ValueError:
+            pass
+        else:
+            text = json.dumps(safe_error_value(structured, _depth + 1), ensure_ascii=False)
     for key, secret in os.environ.items():
         if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
             text = text.replace(secret, '[REDACTED]')
     text = re.sub(r'(?i)("[^"\n]{0,100}(?:password|token|secret|api[_-]?key|authorization)[^"\n]{0,100}"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
-    text = re.sub(r'''(?i)([\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}\s*=\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
-    text = re.sub(r"(?i)([\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}\s*=\s*)'(?:\\.|[^'\\])*'", r"\1'[REDACTED]'", text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)'(?:\\.|[^'\\])*' ''', r"\1'[REDACTED]'", text, flags=re.X)
     text = re.sub(r'(?im)^(\s*(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+', r'\1[REDACTED]', text)
     text = re.sub(r'(?i)((?:Bearer|Basic)\s+)[^\s"\']+', r'\1[REDACTED]', text)
     text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
@@ -39,12 +48,14 @@ def safe_error_text(value, limit=2000):
     return text[:limit]
 
 
-def safe_error_value(value):
+def safe_error_value(value, _depth=0):
+    if _depth > 6:
+        return '[TRUNCATED]'
     if isinstance(value, dict):
-        return {k: '[REDACTED]' if re.search(r'password|token|secret|api.?key|authorization', k, re.I) else safe_error_value(v) for k, v in value.items()}
+        return {k: '[REDACTED]' if re.search(r'password|token|secret|api.?key|authorization', k, re.I) else safe_error_value(v, _depth + 1) for k, v in value.items()}
     if isinstance(value, list):
-        return [safe_error_value(v) for v in value[:20]]
-    return safe_error_text(value) if isinstance(value, str) else value
+        return [safe_error_value(v, _depth + 1) for v in value[:20]]
+    return safe_error_text(value, _depth=_depth + 1) if isinstance(value, str) else value
 
 
 class PatrolFailure(RuntimeError):
