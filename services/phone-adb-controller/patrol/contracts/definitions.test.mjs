@@ -61,3 +61,30 @@ for(const name of files)test(`正式${name}定义完整绑定真实固定字节�
  for(const file of ['openclaw_native.py','openclaw_commander.py'])expected.add(`${control}:scripts/phone-account-patrol/${file}`);
  assert.deepEqual([...sources].sort(),[...expected].sort(),'绑定须精确等于实际部署的运行代码闭包');
 });
+
+// 新回归契约验证旧固定代码，保留历史用例，拒绝把运行代码换成HEAD。
+test('跨Python回归契约保留历史用例并在真实固定代码上执行',()=>{
+ const program=`import ast,hashlib,pathlib,subprocess,sys,tempfile,tarfile,io,shutil,os
+root=pathlib.Path(sys.argv[1]); revision='864154c57e88e8085d2add741a79103a28891a44'
+fixture=root/'services/phone-adb-controller/patrol/contracts/regression/test_failure_evidence.py'
+source=fixture.read_bytes()
+old=subprocess.check_output(['git','show',revision+':scripts/phone-account-patrol/test_failure_evidence.py'],cwd=root)
+def cases(raw):
+ tree=ast.parse(raw); klass=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='FailureEvidenceTests'); return {n.name:n for n in klass.body if isinstance(n,ast.FunctionDef) and n.name.startswith('test_')}
+prior,current=cases(old),cases(source)
+assert set(prior)<=set(current),'不可删除或跳过原用例'
+for name,node in prior.items():
+ if name!='test_deeply_nested_diagnostic_cannot_break_failure_reporting': assert ast.dump(node)==ast.dump(current[name]),'无关原用例被改变: '+name
+assert len(current)>=len(prior)+3,'须确定性覆盖两解析分支与错误输出反例'
+with tempfile.TemporaryDirectory(prefix='portable-failure-contract-') as directory:
+ archive=subprocess.check_output(['git','archive',revision,'scripts/phone-account-patrol'],cwd=root)
+ subprocess.run(['tar','-x','-C',directory],input=archive,check=True)
+ target=pathlib.Path(directory)/'scripts/phone-account-patrol'
+ code=['runner.py','collector.py','dispatch.py','preflight.py','publish.mjs','ocr.swift','mirror.mjs']
+ before={name:hashlib.sha256((target/name).read_bytes()).hexdigest() for name in code}
+ (target/'test_failure_evidence.py').write_bytes(source)
+ subprocess.run(['python3','-m','unittest','test_failure_evidence'],cwd=target,check=True,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'})
+ assert before=={name:hashlib.sha256((target/name).read_bytes()).hexdigest() for name in code},'回归不得改运行字节'
+`;
+ execFileSync('python3',['-c',program,root.pathname],{encoding:'utf8',stdio:'pipe'});
+});
