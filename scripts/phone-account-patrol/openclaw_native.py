@@ -21,6 +21,26 @@ SPEC.loader.exec_module(bridge)
 STATE = bridge.STATE
 
 
+def safe_error_text(value, limit=2000):
+    text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value or '')
+    for key, secret in os.environ.items():
+        if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
+            text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'(?i)(Bearer\s+)[^\s"\']+', r'\1[REDACTED]', text)
+    text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
+    text = re.sub(r'(https?://[^\s?]+\?)[^\s"\']+', r'\1[REDACTED]', text)
+    return text[:limit]
+
+
+def safe_failure(value):
+    # Only transport the public error contract, never arbitrary nested data.
+    failure = {k: safe_error_text(value[k], 1000 if k == 'message' else 2000) for k in
+               ['stage', 'code', 'message', 'host', 'stderr', 'stdout', 'error_type'] if isinstance(value.get(k), str)}
+    failure['exit_code'] = value.get('exit_code') if type(value.get('exit_code')) is int else None
+    failure['evidence'] = [safe_error_text(v, 500) for v in value.get('evidence', [])[:10] if isinstance(v, str)] if isinstance(value.get('evidence'), list) else []
+    return failure
+
+
 def api(path, body=None, method=None):
     request = urllib.request.Request(bridge.API + path, data=json.dumps(body, ensure_ascii=False).encode() if body is not None else None,
                                      headers={'Content-Type': 'application/json'}, method=method)
@@ -136,7 +156,7 @@ def inspect(review_id, batch_id, deployment, state, call=None, current=None):
         children.append({'task_id': task['id'], 'serial': task['payload']['phone_serial'], 'status': task['status'],
                          'run_id': script.get('run_id') or task['payload'].get('script_run_id'), 'exit_code': script.get('exit_code'),
                          'business_status': result.get('status') if result else 'unknown',
-                         'business_receipt': {k: result[k] for k in ['task_id', 'status', 'serial', 'phone', 'checked_at', 'states'] if k in result} if result else None})
+                         'business_receipt': {k: (safe_failure(result[k]) if k == 'failure' else result[k]) for k in ['task_id', 'run_id', 'status', 'serial', 'phone', 'checked_at', 'states', 'failure'] if k in result} if result else None})
     batch_script = (batch.get('result') or {}).get('script') or {}
     batch_exit = batch_script.get('exit_code')
     nonzero_exit = lambda value: type(value) is int and value != 0
@@ -265,10 +285,26 @@ def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
     phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]
     if len(phones) != 1 or phones[0].get('host') != 'xian-m4':raise ValueError('recovery_identity_mismatch')
     if not phones[0].get('enabled'):return dict(receipt, status='stopped', reason='device_disabled'), 0
-    output = run(['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'phone', '--serial', serial, '--execution-script', script],
-                 capture_output=True, text=True, timeout=1150)
+    receipt.update(run_id=pathlib.Path(script).stem, workflow_id=deployment['single_workflow_id'])
+    try:
+        output = run(['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'phone', '--serial', serial, '--execution-script', script],
+                     capture_output=True, text=True, timeout=1150)
+    except subprocess.TimeoutExpired as error:
+        return dict(receipt, status='failed', failure={'stage': 'phone_subprocess', 'code': 'phone_subprocess_timeout',
+            'message': '单手机执行超时', 'exit_code': None, 'timeout_sec': 1150,
+            'stdout': safe_error_text(error.output), 'stderr': safe_error_text(error.stderr), 'evidence': []}), 1
     if output.returncode:
-        return dict(receipt, status='failed', reason='frozen_phone_failed', exit_code=output.returncode), output.returncode
+        for line in reversed(output.stdout.splitlines()):
+            try: value = json.loads(line)
+            except ValueError: continue
+            if (isinstance(value, dict) and value.get('status') == 'failed' and value.get('task_id') == task_id
+                    and value.get('serial') == serial and value.get('workflow_id') == deployment['single_workflow_id']
+                    and value.get('source_revision') == bridge.PHONE_SOURCE_REVISION and value.get('run_id') == receipt['run_id']
+                    and isinstance(value.get('failure'), dict)):
+                return dict(receipt, status='failed', failure=safe_failure(value['failure'])), output.returncode
+        return dict(receipt, status='failed', reason='frozen_phone_failed', failure={
+            'stage': 'phone_subprocess', 'code': 'phone_subprocess_failed', 'message': '单手机子进程失败，详见原始错误',
+            'exit_code': output.returncode, 'stdout': safe_error_text(output.stdout), 'stderr': safe_error_text(output.stderr), 'evidence': []}), output.returncode
     for line in reversed(output.stdout.splitlines()):
         try:value = json.loads(line)
         except ValueError:continue
