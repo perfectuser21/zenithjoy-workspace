@@ -21,3 +21,10 @@ test('独立native验收拒绝非bool video证明和跨公司profile，即使UID
  assert.throws(()=>validateEvidence({...e,video_identity:{...e.video_identity,verified:'false'}},scope),/RECIPIENT_/);
  assert.throws(()=>validateEvidence({...e,scope:{...e.scope,profile:'yueshengyun-work'}},scope),/RECIPIENT_/);
 }));
+
+test('原r7真实fhn回复元数据正文在content-desc：同一原生评论卡精准昵称+全文才通过',()=>{
+ const a11y=returned.replace(`<node package="${pkg}" text="在哪里报名"/>`,`<node package="${pkg}" class="android.widget.FrameLayout" resource-id="${pkg}:id/fhn" text="" content-desc="本人,在哪里报名,09-27, · 山东,回复 按钮,"/>`);
+ const {parseNative}=createRequire(import.meta.url)('../queued-recipient-evidence.js');
+ assert.equal(parseNative(profile,a11y,{nickname:'本人',douyinId:'person987',commentBody:'在哪里报名'}).returned_comment_verified,true);
+ for(const wrong of [a11y.replace('本人,在哪里报名,','邻居,在哪里报名,'),a11y.replace('本人,在哪里报名,','本人,在哪里报名呢,'),a11y.replace('id/fhn','id/video_desc')])assert.throws(()=>parseNative(profile,wrong,{nickname:'本人',douyinId:'person987',commentBody:'在哪里报名'}),/RECIPIENT_/);
+});
