@@ -89,6 +89,7 @@
     "scripts/phone-account-patrol/implementation-contract.json",
     "scripts/phone-account-patrol/implementation-regression.test.mjs",
     "scripts/phone-account-patrol/test_runner.py",
+    "scripts/phone-account-patrol/test_failure_evidence.py",
     "scripts/phone-account-patrol/test_identity.py",
     "scripts/phone-account-patrol/SKILL.md",
     "scripts/phone-account-patrol/RUNBOOK.md",
