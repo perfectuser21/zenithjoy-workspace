@@ -374,3 +374,10 @@ for(const [name,expected,observed,ok,encoding] of [
  if(ok){assert.ok(r.stdout.includes(`LEAD\t${encoding==='xml_raw'?'小幸运🍒':observed}\tperson123\t`));assert.equal(r.calls.filter(x=>x==='commenter-identity').length,1);assert.match(r.stdout,/RESCAN\t7646309328911907195\t0/);}
  else{assert.ok(!r.stdout.includes('LEAD\t'));assert.ok(!r.calls.includes('commenter-card-link'));}
 });
+
+test('新LEAD必须同时生产独立recipient证据标记，缺原生原件明确unknown且不改12列',()=>{
+ const r=run('collection');assert.equal(r.status,0,r.stderr);
+ const lead=r.stdout.split('\n').find(s=>s.startsWith('LEAD\t'));assert.equal(lead.split('\t').length,12);
+ assert.match(r.stdout,/RECIPIENT_UNKNOWN\t7646309328911907195\tperson123\t[a-f0-9]{64}\tnative_profile_missing/);
+ assert.deepEqual(r.calls.slice(0,4),['lock-refresh','open-video','current-video-link','open-comments']);
+});
