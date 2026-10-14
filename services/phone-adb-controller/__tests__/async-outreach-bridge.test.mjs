@@ -118,3 +118,12 @@ test('bridge独立PG读回确认已落实处置，缺行/仍attempted/篡改payl
  assert.equal((await queueRequest(pool,input)).verified,true);
  for(const change of [{rows:[]},{rows:[{...row,state:'attempted'}]},{rows:[{...row,payload_sha256:'0'.repeat(64)}]}])assert.equal((await queueRequest({query:async()=>change},input)).verified,false);
 });
+
+test('Postgres JSONB键序重排后payload/fields语义相同仍应独立验收，值变化仍拒绝',()=>{
+ const {nativeIntent,fieldsMatch,buildOrderFields}=require('../leadgen-outreach-bridge.js'),{routeOf}=require('../line-routes.js');const row=pendingBridge();
+ const reorder=v=>Array.isArray(v)?v.map(reorder):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).reverse().map(([k,x])=>[k,reorder(x)])):v;
+ row.fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:1}]);row.fields_sha256=require('crypto').createHash('sha256').update(JSON.stringify(row.fields)).digest('hex');
+ row.payload=reorder(row.payload);row.fields=reorder(row.fields);
+ assert.equal(nativeIntent(row).target_douyin_id,'person987');assert.equal(fieldsMatch(row,{fields:structuredClone(row.fields)}),true);
+ row.payload.nickname='别人';assert.throws(()=>nativeIntent(row),/BRIDGE_/);
+});
