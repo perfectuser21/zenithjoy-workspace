@@ -55,6 +55,16 @@ class FailureEvidenceTests(unittest.TestCase):
             self.assertEqual(caught.exception.failure['code'], 'adb_unreachable')
             self.assertEqual(json.loads((pathlib.Path(directory) / 'task-a.preflight.json').read_text()), check)
 
+    def test_ssh_255_cannot_be_reclassified_from_partial_preflight_stdout(self):
+        check = {'ok': False, 'serial': 'phone-a', 'checks': {'adb_online': False}}
+        output = subprocess.CompletedProcess([], 255, json.dumps(check), 'connection reset')
+        with patch.object(runner, 'api', return_value={'phones': [{'serial': 'phone-a', 'enabled': True, 'host': 'xian-m4'}]}), \
+                patch.object(runner.subprocess, 'run', return_value=output):
+            with self.assertRaises(runner.PatrolFailure) as caught:
+                runner.phone_run('phone-a', 'task-a', {'remote_release': '/fixed'})
+        self.assertEqual(caught.exception.failure['code'], 'remote_execution_failed')
+        self.assertIn('connection reset', caught.exception.failure['stderr'])
+
     def test_failure_receipt_has_attempt_identity_and_redacted_bounded_logs(self):
         task = '11111111-1111-4111-8111-111111111111'
         error = runner.PatrolFailure('collect', 'remote_execution_failed', '远端失败', stderr='Authorization: Bearer SECRET\npassword=PASS\n' + 'x' * 12000)
