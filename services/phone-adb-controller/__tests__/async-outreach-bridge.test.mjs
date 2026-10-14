@@ -92,3 +92,11 @@ test('未知POST读回须核持久fields hash，篡改expected payload不能假c
  const {fieldsMatch,buildOrderFields}=require('../leadgen-outreach-bridge.js'),{routeOf}=require('../line-routes.js');const row=pendingBridge();row.fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:1}]);row.fields_sha256='0'.repeat(64);
  assert.equal(fieldsMatch(row,{record_id:'recABC123456',fields:structuredClone(row.fields)}),false);
 });
+
+test('桥接HTTP分页有本RPC总截止，过期后不能继续请求或POST，原orderClient默认不改',async()=>{
+ const {orderClient}=require('../leadgen-outreach-orders.js');let calls=0;
+ const fetcher=async(_url,opts)=>{calls++;assert.ok(opts.signal);return {ok:true,json:async()=>({code:0,tenant_access_token:'fake-token',data:{items:[],has_more:true,page_token:'next'}})};};
+ const route=require('../line-routes.js').routeOf('jinuo'),client=await orderClient(route,{deadlineAt:Date.now()+10000,fetcher,read:()=>JSON.stringify({[route.account]:{appId:'fake',appSecret:'fake'}})});
+ await assert.rejects(client.all({deadlineAt:Date.now()-1}),/BRIDGE_DEADLINE/);
+ assert.equal(calls,1,'已截止不允许任何新分页请求');
+});
