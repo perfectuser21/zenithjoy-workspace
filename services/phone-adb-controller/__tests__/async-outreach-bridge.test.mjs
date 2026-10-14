@@ -100,3 +100,14 @@ test('桥接HTTP分页有本RPC总截止，过期后不能继续请求或POST，
  await assert.rejects(client.all({deadlineAt:Date.now()-1}),/BRIDGE_DEADLINE/);
  assert.equal(calls,1,'已截止不允许任何新分页请求');
 });
+
+test('103桥接必须核本run冻结公司版本，旧资格不能POST新版本订单',async()=>{
+ const row=pendingBridge(),pool=bridgeStore(row);let posts=0;
+ const r=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'new103',limit:1},{client:{all:async()=>[],fields:async()=>[{field_name:'采集时间',type:1}],post:async()=>{posts++;}},lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:4})});
+ assert.equal(posts,0);assert.equal(r.verified,false);assert.equal(r.unknown,1);
+});
+test('103标人独立读回必须核真实comment→lead outbox，缺意图不能宣称verified',async()=>{
+ const calls=[],pool={query:async(sql,args)=>{calls.push({sql,args});if(sql.includes('leadgen_comments'))return {rows:[{id:cid,relevance:'相关',intent_grade:'A',process_status:'已分拣'}]};if(sql.includes('leadgen_leads'))return {rows:[{id:lid}]};return {rows:[]};}};
+ const r=await queueRequest(pool,{op:'mark_readback',line:'jinuo',run:'score103',ids:[cid],lead_ids:[lid]});
+ assert.equal(r.verified,false);assert.ok(r.failures>0);assert.ok(calls.some(c=>c.sql.includes('leadgen_bridge_outbox')));
+});
