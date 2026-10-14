@@ -1,0 +1,120 @@
+{
+  "workflow_key": "douyin_lead_outreach",
+  "full_flow_entry": "leadgen-run.sh",
+  "single_activity_public_entry_available": false,
+  "raw_queue_cli_authorized": false,
+  "source_scope": "当前已发布成熟代码调用说明；不是本版Skill运行PASS",
+  "public_entry": {
+    "skill": "douyin-leadgen-104",
+    "classification": "PUBLIC_FULL_FROZEN_WORKFLOW_CLI",
+    "host": "xian-m4 当前公司verified发送profile/serial/账号",
+    "runner": "$PHONE_RUNNER",
+    "argv": [
+      "douyin_lead_outreach",
+      "$PROFILE",
+      "$SERIAL",
+      "$LINE",
+      "$RUN_TAG"
+    ],
+    "command_template": "env -u LEADGEN_SOURCE_RUN -u LEADGEN_COMMENT_LIMIT LEADGEN_LIMIT=1 LEADGEN_SEND=1 WF_RUN_MAX_SECONDS=\"$RUN_SECONDS\" /bin/zsh \"$PHONE_RUNNER\" douyin_lead_outreach \"$PROFILE\" \"$SERIAL\" \"$LINE\" \"$RUN_TAG\"",
+    "preconditions": [
+      "当前task真实发送授权持续有效；公司104 enabled/账号verified/current profile-serial-id匹配",
+      "批准话术由正式outreach_policy读取，设备不能自拟message/template",
+      "原永久pause/当日halt/额度生效；没有授权的绕flag动作不允许",
+      "canonical订单完整历史及PGconfirmed+passed/currentCompanyVersion/桥接marker全字段相符",
+      "唯一run tag<=64、同run/source订单锁、手机锁；发送前准备未知绝不重试"
+    ],
+    "outputs": [
+      "split-result四activity，sent与outcome分别核，completed不等于sent",
+      "outreach-receipt.json + outreach-evidence五原件SHA/typed/sent/risk/two foreground",
+      "write_back-readback.json原Feishu订单写回核验",
+      "cleanup只释放未prepare的本run claimed订单；prepared或发后未知保持保留",
+      "delivery_verified=false：不推断送达/已读"
+    ],
+    "independence": "不需要103 tag或同轮score；ready空队列记send_dm/write_back skipped，不能算发送1。"
+  },
+  "guards": [
+    "先正规登记认领当前任务并取中央serial lease；leadgen-run内会取本地phone锁但不替中央lease",
+    "RUN_TAG统一建议仅字母数字下划线短横线且1..64，四flow均唯一，不用另tag重复未知外部动作",
+    "入口自己准备正式plan、完整发布字节和run-definition、POST/GET /runs/{run_id}/definition取得真实attempt ACK，随后只exec该runDir/runtime字节",
+    "WFR_RUN_DIR由入口生成：${WFR_HOME:-$HOME/.config/zenithjoy}/ledger/<flow>-<tag>；正式实际runID为<flow>-<tag>__aN；不要手写a1或伪ACK",
+    "readFrozen/readBinding/run_id/runtime执行文件/Company frozen config必须全核；WFR_*或LEADGEN_LOCAL_RPC不得伪造绕宿主",
+    "默认无任务数量/预算不可自行用样本1/5当产能；各env取当前任务/Company配置，参考shell变量只是占位",
+    "source部署/定义gate失败阻断；未登记Skill首跑只能显式称headed Skill first run，不将缺code/release gate降成可运行"
+  ],
+  "restricted_entries": [
+    {
+      "entry": "leadgen-client.mjs createRpc()/rpcSource()",
+      "classification": "INTERNAL_LIBRARY",
+      "protocol": "{kind,request,source:{commit,files:[path,sha256]}} source由readFrozen固定闭包自动生成；不要手造source或deps mocks",
+      "safe_use": "仅已冻结且readBinding与当前attempt匹配的正式调用器；现无稳定Agent逐Activity救场CLI"
+    },
+    {
+      "entry": "leadgen-rpc.mjs stdin CLI",
+      "classification": "INTERNAL_PEER_TRANSPORT",
+      "wire_template": {
+        "kind": "queue|outreach|qualify|verify|keywords|commander|resolve_share_link|outreach_policy",
+        "request": "op-specific original shape",
+        "source": "自动rpcSource(frozen)不可手写"
+      },
+      "guards": "实际MMV manifest source_commit+每依赖SHA及闭包先验证；再公司/run/row契约。不是供Agent自由构造并绕整workflow的公开业务入口。"
+    },
+    {
+      "entry": "leadgen-queue.js stdin CLI",
+      "classification": "LOW_LEVEL_UNGUARDED_FOR_SOURCE_NO_AGENT_DIRECT_CALL",
+      "command_shape": "node leadgen-queue.js < input.json（源码确有main，不能说不存在）",
+      "reason": "直接getPool/queueRequest，不做verifyRpcSource/run_binding/全workflow Commander；即使能执行，也不得给Agent任意直写PG。"
+    },
+    {
+      "entry": "leadgen-outreach-orders.js outreachRequest()/orderClient()/withOrderLock()",
+      "classification": "INTERNAL_CJS_ONLY_NO_CLI",
+      "reason": "必须通过已核RPC/outreach状态机；不能import()+GET/PUT或构造receipt另开发送路径。"
+    },
+    {
+      "entry": "leadgen-queue.js transaction()/queueRequest()及leadgen-db-lib各写方法",
+      "classification": "INTERNAL_FUNCTIONS",
+      "reason": "只由正式受校验调用器事务使用，不接手工pool/deps/SQL/测试mock或手改业务状态。"
+    }
+  ],
+  "known_gaps": [
+    "现CLI可启动旧合同Code四flow，不自动证明新Skill0.1.0所有实屏指标/ordinary/deep/auto/可中断逐Activity救场合同已实现。",
+    "没有公开的Activity resume/受控Agent单步queue或104写回救场CLI；现有安全方法是完整已冻结run和由原状态机执行；若需Agent接手但无法安全交接，按Skill BLOCKED，不直接import内部函数。",
+    "104原private-message-send虽是controller动作，不是公开可独立绕prepared调用的业务发送入口；不能用旧tick或裸phone命令替104。"
+  ],
+  "state_machine": [
+    {
+      "step": "policy/preflight",
+      "wire": "kind=outreach_policy {line,profile,sender_douyin_id}; queue company_config(step104)",
+      "writes": "无领单，先核公司/账号/approved template/暂停/额度。"
+    },
+    {
+      "step": "claim",
+      "wire": "kind=outreach request{op:claim_outreach,line,run,limit:1,profile,sender_douyin_id}",
+      "return": "[]或唯一{id,line_key,douyin_id,profile_url,sender_douyin_id,script_id,script_version,message}",
+      "durable": "line order锁，Feishu原行状态触达中+批准正文+实际分发号+回复结果[104 claim:run:source]，PUT后GET完全一致。未知停止，不另领/另发。"
+    },
+    {
+      "step": "prepare",
+      "wire": "kind=outreach request{op:prepare_outreach,line,run,id,profile,sender_douyin_id,script_id,script_version,message_sha256,target_douyin_id,profile_url}",
+      "durable": "先消费一次尝试额度，当前handler即设置prepared=true；后端核原行claim marker及全部身份/批准正文哈希，再写[104 prepared:run:source]并GET确认。此后准备结果未知也保持不可重发。",
+      "return": "{prepared:true,order:{id}}；回执未知或不匹配立即停止，禁止重发/放回待触达。"
+    },
+    {
+      "step": "send",
+      "entry": "只由原104handler在prepare明确通过后调用frozen controller private-message-send(sender,target,base64approved,eid,profile_url)",
+      "guard": "fresh native目标/sender/focus/正文；单次tap；五原始工件同eid/路径/sha、归档typed/sent/risk/foreground独立解析；消息delta真实，旧bubble不算新",
+      "return": "sent/restricted/rate_limited，delivery_verified false；过程未知保prepared，不重发。"
+    },
+    {
+      "step": "receipt/writeback",
+      "wire": "kind=outreach {op:write_outreach,line,run,id,receipt:本run真实outreach-receipt.json}然后outreach_readback同receipt",
+      "durable": "须原prepared marker+sender/target/profileURL/approved text hash匹配；sent写已触达/已发送，其余受阻/失败；GET核字段",
+      "unknown_recovery": "write reply未知先outreach_readback；当前handler支持recovered_write_reply，不重复phone发送。无真实receipt无法安全补写，保持未决。"
+    },
+    {
+      "step": "cleanup",
+      "wire": "release_outreach仅本run尚未prepared claim marker",
+      "durable": "prepared/已发/未知不得回队列；closeApp安全桌面/释自己的phone lock和中央lease；不得移别人pause或锁。"
+    }
+  ]
+}

@@ -52,7 +52,7 @@ md5_stdin() {
 list_targets() {
   local deploy f h d
   deploy="$(git -C "$REPO" show "$REF:$SUBDIR/deploy.sh" 2>/dev/null)" || { log "读不到 $REF:$SUBDIR/deploy.sh"; return 2; }
-  local -a js top probe sh node plan ctl dirs evidence
+  local -a js top probe sh node plan ctl dirs evidence rpc_probe
   read -ra js <<< "$(parse_array MMV_JS_FILES <<< "$deploy")"
   read -ra top <<< "$(parse_array MMV_TOPLEVEL_FILES <<< "$deploy")"
   read -ra probe <<< "$(parse_array MMV_PROBE_FILES <<< "$deploy")"
@@ -60,6 +60,7 @@ list_targets() {
   read -ra sh <<< "$(parse_array DEVICE_SH_FILES <<< "$deploy")"
   read -ra node <<< "$(parse_array DEVICE_NODE_FILES <<< "$deploy")"
   read -ra plan <<< "$(parse_array DEVICE_PLAN_FILES <<< "$deploy")"
+  read -ra rpc_probe <<< "$(parse_array DEVICE_RPC_PROBE_FILES <<< "$deploy")"
   read -ra ctl <<< "$(parse_array DEVICE_CTL_FILES <<< "$deploy")"
   read -ra dirs <<< "$(parse_array DEVICE_CTL_DIRS <<< "$deploy")"
   read -ra evidence <<< "$(parse_array RELEASE_EVIDENCE_FILES <<< "$deploy")"
@@ -77,8 +78,13 @@ list_targets() {
   for f in ${top[@]+"${top[@]}"}; do echo "$MMV_HOST .openclaw/$f $f"; done
   for f in ${probe[@]+"${probe[@]}"}; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
   for f in ${mbin[@]+"${mbin[@]}"}; do echo "$MMV_HOST bin/$f $f"; done
+  # 嵌套探针与配套Skill与正式manifest同步，MMV两个执行路径均核对。
+  for f in ${rpc_probe[@]+"${rpc_probe[@]}"}; do
+    echo "$MMV_HOST bin-harvest/$f $f"
+    echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"
+  done
   for h in "${DEVICE_HOSTS[@]}"; do
-    for f in "${sh[@]}" ${node[@]+"${node[@]}"} ${plan[@]+"${plan[@]}"}; do echo "$h bin-harvest/$f $f"; done
+    for f in "${sh[@]}" ${node[@]+"${node[@]}"} ${plan[@]+"${plan[@]}"} ${rpc_probe[@]+"${rpc_probe[@]}"}; do echo "$h bin-harvest/$f $f"; done
     for f in "${ctl[@]}"; do
       for d in "${dirs[@]}"; do echo "$h $d/$f $f"; done
     done

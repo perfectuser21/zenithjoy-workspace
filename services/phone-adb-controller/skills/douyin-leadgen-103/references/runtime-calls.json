@@ -1,0 +1,89 @@
+{
+  "workflow_key": "douyin_comment_scoring",
+  "full_flow_entry": "leadgen-run.sh",
+  "single_activity_public_entry_available": false,
+  "raw_queue_cli_authorized": false,
+  "source_scope": "当前已发布成熟代码调用说明；不是本版Skill运行PASS",
+  "public_entry": {
+    "skill": "douyin-leadgen-103",
+    "classification": "PUBLIC_FULL_FROZEN_WORKFLOW_CLI",
+    "host": "MMV；profile=mmv-scoring，serial=none固定",
+    "runner": "实际已验证MMV deployment root中的leadgen-run.sh；正式包两个目录~/bin-harvest和~/.openclaw/leadgen-scripts均须各自manifest字节通过，不能借用手机profile",
+    "argv": [
+      "douyin_comment_scoring",
+      "mmv-scoring",
+      "none",
+      "$LINE",
+      "$RUN_TAG"
+    ],
+    "command_template": "env -u LEADGEN_SOURCE_RUN -u LEADGEN_COMMENT_LIMIT LEADGEN_LIMIT=\"$COMMENT_BATCH_LIMIT\" LEADGEN_SEND=0 WF_RUN_MAX_SECONDS=\"$RUN_SECONDS\" /bin/zsh \"$MMV_RUNNER\" douyin_comment_scoring mmv-scoring none \"$LINE\" \"$RUN_TAG\"",
+    "batch_scope": "未限定批次时显式移除继承SOURCE_RUN；任务明确限定则另设真实102tag，保持原约束",
+    "queue_semantics": [
+      "score按line+待分拣+relevance NULL，事务FOR UPDATE SKIP LOCKED逐条真实模型判定/保存",
+      "mark_leads按line+待分拣+relevance非NULL，同事务line advisory锁/原PGlead upsert/recipient独立资格/outbox/已分拣",
+      "mark活动正常调用bridge_outreach+bridge_readback；外部POST先持久attempted，未知只GET读回，不重复POST"
+    ],
+    "constraints": {
+      "COMMENT_BATCH_LIMIT": "语法允许单次1..50；当前mark逐人最长15秒、queue RPC预算180秒，首次验收取5条，运行建议不超过10条；不能为空队列冒scored样本",
+      "no_phone": "本flow只有scoring/mark_leads，不补手机preflight/cleanup；可与102实际并发"
+    },
+    "outputs": [
+      "scoring-readback.json、mark_leads-readback.json、bridge-readback.json",
+      "实际scored/marked/created/repeats/recipient_calls/passed/excluded/unknown",
+      "PG正确grade/reason与outbox真实state/Feishu recordID；仅confirmed+passed+同CompanyVersion可给104"
+    ],
+    "forbidden": [
+      "直接改grade或reason制造合格",
+      "把旧raw缺UID/主页/证据的PGlead冒ready",
+      "绕bridge另运行push-leads重复外部POST"
+    ]
+  },
+  "guards": [
+    "先正规登记认领当前任务；103固定MMV/serial=none，不取手机中央lease或本地phone锁。只有101、102、104手机流程才取对应真实serial lease。",
+    "RUN_TAG统一建议仅字母数字下划线短横线且1..64，四flow均唯一，不用另tag重复未知外部动作",
+    "入口自己准备正式plan、完整发布字节和run-definition、POST/GET /runs/{run_id}/definition取得真实attempt ACK，随后只exec该runDir/runtime字节",
+    "WFR_RUN_DIR由入口生成：${WFR_HOME:-$HOME/.config/zenithjoy}/ledger/<flow>-<tag>；正式实际runID为<flow>-<tag>__aN；不要手写a1或伪ACK",
+    "readFrozen/readBinding/run_id/runtime执行文件/Company frozen config必须全核；WFR_*或LEADGEN_LOCAL_RPC不得伪造绕宿主",
+    "默认无任务数量/预算不可自行用样本1/5当产能；各env取当前任务/Company配置，参考shell变量只是占位",
+    "source部署/定义gate失败阻断；未登记Skill首跑只能显式称headed Skill first run，不将缺code/release gate降成可运行"
+  ],
+  "restricted_entries": [
+    {
+      "entry": "leadgen-client.mjs createRpc()/rpcSource()",
+      "classification": "INTERNAL_LIBRARY",
+      "protocol": "{kind,request,source:{commit,files:[path,sha256]}} source由readFrozen固定闭包自动生成；不要手造source或deps mocks",
+      "safe_use": "仅已冻结且readBinding与当前attempt匹配的正式调用器；现无稳定Agent逐Activity救场CLI"
+    },
+    {
+      "entry": "leadgen-rpc.mjs stdin CLI",
+      "classification": "INTERNAL_PEER_TRANSPORT",
+      "wire_template": {
+        "kind": "queue|outreach|qualify|verify|keywords|commander|resolve_share_link|outreach_policy",
+        "request": "op-specific original shape",
+        "source": "自动rpcSource(frozen)不可手写"
+      },
+      "guards": "实际MMV manifest source_commit+每依赖SHA及闭包先验证；再公司/run/row契约。不是供Agent自由构造并绕整workflow的公开业务入口。"
+    },
+    {
+      "entry": "leadgen-queue.js stdin CLI",
+      "classification": "LOW_LEVEL_UNGUARDED_FOR_SOURCE_NO_AGENT_DIRECT_CALL",
+      "command_shape": "node leadgen-queue.js < input.json（源码确有main，不能说不存在）",
+      "reason": "直接getPool/queueRequest，不做verifyRpcSource/run_binding/全workflow Commander；即使能执行，也不得给Agent任意直写PG。"
+    },
+    {
+      "entry": "leadgen-outreach-orders.js outreachRequest()/orderClient()/withOrderLock()",
+      "classification": "INTERNAL_CJS_ONLY_NO_CLI",
+      "reason": "必须通过已核RPC/outreach状态机；不能import()+GET/PUT或构造receipt另开发送路径。"
+    },
+    {
+      "entry": "leadgen-queue.js transaction()/queueRequest()及leadgen-db-lib各写方法",
+      "classification": "INTERNAL_FUNCTIONS",
+      "reason": "只由正式受校验调用器事务使用，不接手工pool/deps/SQL/测试mock或手改业务状态。"
+    }
+  ],
+  "known_gaps": [
+    "现CLI可启动旧合同Code四flow，不自动证明新Skill0.1.0所有实屏指标/ordinary/deep/auto/可中断逐Activity救场合同已实现。",
+    "没有公开的Activity resume/受控Agent单步queue或104写回救场CLI；现有安全方法是完整已冻结run和由原状态机执行；若需Agent接手但无法安全交接，按Skill BLOCKED，不直接import内部函数。",
+    "104原private-message-send虽是controller动作，不是公开可独立绕prepared调用的业务发送入口；不能用旧tick或裸phone命令替104。"
+  ]
+}

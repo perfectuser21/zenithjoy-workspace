@@ -283,7 +283,21 @@ DEVICE_SH_FILES=(
 # 同一 RPC 源文件在设备冻结、MMV执行；不能依赖未登记的远端副本。
 RPC_FILES=(outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js verify-step.mjs step-judge.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
 DEVICE_NODE_FILES=(outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-client.mjs leadgen-workflow.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
-DEVICE_RPC_PROBE_FILES=(verify-step.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml)
+# 探针与配套Skill同属需保留嵌套路径的发布文件；设备/MMV均采集实际字节。
+DEVICE_RPC_PROBE_FILES=(verify-step.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml
+  skills/douyin-leadgen-101/SKILL.md
+  skills/douyin-leadgen-101/references/reuse-map.json
+  skills/douyin-leadgen-101/references/runtime-calls.json
+  skills/douyin-leadgen-102/SKILL.md
+  skills/douyin-leadgen-102/references/reuse-map.json
+  skills/douyin-leadgen-102/references/runtime-calls.json
+  skills/douyin-leadgen-103/SKILL.md
+  skills/douyin-leadgen-103/references/reuse-map.json
+  skills/douyin-leadgen-103/references/runtime-calls.json
+  skills/douyin-leadgen-104/SKILL.md
+  skills/douyin-leadgen-104/references/reuse-map.json
+  skills/douyin-leadgen-104/references/runtime-calls.json
+)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
 DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/douyin_video_discovery.plan plans/douyin_video_processing.plan plans/douyin_comment_scoring.plan plans/douyin_lead_outreach.plan plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)

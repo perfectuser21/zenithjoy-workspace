@@ -2,6 +2,9 @@
 version: 1
 capability: keyword_acquisition
 contract_key: douyin_comment_scoring
+commander_skill:
+  name: wf-douyin_comment_scoring
+  version: 0.1.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -94,6 +97,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md
+        revision: contract
+        name: douyin-leadgen-103
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
@@ -307,6 +316,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md
+        revision: contract
+        name: douyin-leadgen-103
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs

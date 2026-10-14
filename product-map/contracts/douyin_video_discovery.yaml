@@ -1,6 +1,9 @@
 version: 1
 capability: keyword_acquisition
 contract_key: douyin_video_discovery
+commander_skill:
+  name: wf-douyin_video_discovery
+  version: 0.1.0
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -131,6 +134,12 @@ activities:
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-101/SKILL.md
+        revision: contract
+        name: douyin-leadgen-101
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
