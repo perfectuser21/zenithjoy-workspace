@@ -29,3 +29,11 @@ test('103标记/outbox插入失败必须原评论与lead事务整体回滚，不
  const pool=markPool({failOutbox:true});await assert.rejects(queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},{freezeCompanyConfig:freezeFixture}),/outbox unavailable/);
  assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));assert.ok(!pool.calls.some(c=>c.sql==='COMMIT'));
 });
+
+test('103桥接资格必须独立使用native主页+V3，不能只沿用personal/A等级',async()=>{
+ const {enqueueBridge}=require('../leadgen-outreach-bridge.js');let called=0;const client={query:async()=>({rows:[]})};
+ const row={id:cid,line_key:'jinuo',nickname:'机构样本',douyin_id:'fixtureOrg',comment_body:'在哪里报名',intent_grade:'A',account_type:'personal',recipient_evidence:{version:1,fixture_native:true}};
+ const result=await enqueueBridge(client,{lineKey:'jinuo',run:'score103',sourceRun:'source102',comment:row,lead:{id:lid},config:{version:3}},
+  {qualifyRecipient:async(comment,config)=>{called++;assert.equal(comment.intent_grade,'A');assert.equal(config.version,3);return {status:'excluded',reason:'原V3同行机构排除'};}});
+ assert.equal(called,1,'不能忽略新的独立资格输入');assert.equal(result.qualification.status,'excluded');assert.equal(row.intent_grade,'A','不得改原评分');
+});
