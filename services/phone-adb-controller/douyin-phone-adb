@@ -3834,9 +3834,35 @@ if [[ "$command" == (tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   fi
 fi
 
+# 新Commander冻结policy的所有命令共用持久epoch/截止时间闸；旧无policy任务保持原合同。
+COMMANDER_POLICY="$LOCK_ROOT/${SERIAL}.commander.json"
+COMMANDER_ACTIONS="${0:A:h}/wf-v2-actions.py"
+[[ -f "$COMMANDER_ACTIONS" ]] || COMMANDER_ACTIONS="${0:A:h}/commander/wf-v2-actions.py"
+if [[ "$command" == (lock-acquire|lock-refresh|lock-release|lock-release-exact) && -z "$LOCK_OWNER" ]]; then
+  LOCK_OWNER="${2:-}"
+fi
+if [[ -f "$COMMANDER_POLICY" && "$command" != (commander-bind|commander-fence|commander-readback|commander-inspect|lock-status|runtime-contract|status|diagnose|outward-ledger) ]]; then
+  _policy_relevant=0
+  "$PYTHON_BIN" "$COMMANDER_ACTIONS" relevant-policy "$COMMANDER_POLICY" "$LOCK_DIR/owner" "$LOCK_OWNER" || _policy_relevant=$?
+  (( _policy_relevant <= 1 )) || die 'Commander policy unreadable; device writes refused'
+  if (( _policy_relevant == 0 )); then
+  [[ -n "$LOCK_OWNER" ]] || die 'Commander execution requires exact owner; no device action permitted'
+  [[ "${WF_COMMANDER_OWNER_EPOCH:-}" == <-> ]] || die 'Commander execution owner_epoch missing'
+  _gate_args=("$COMMANDER_POLICY" "$LOCK_OWNER" "$WF_COMMANDER_OWNER_EPOCH" "$command" "${WF_COMMANDER_ACTION_KEY:-}")
+  if [[ -z "${WF_COMMANDER_GATE_FD:-}" ]]; then
+    _gate_command=("$@")
+    [[ -z "$OUTWARD_ACTION" ]] || _gate_command+=(--outward "$OUTWARD_ACTION")
+    (( ! OUTWARD_ALLOW_REPEAT )) || _gate_command+=(--allow-repeat)
+    exec "$PYTHON_BIN" "$COMMANDER_ACTIONS" controller-guard "${_gate_args[@]}" /bin/zsh "${0:A}" --profile "$PROFILE" --lock-owner "$LOCK_OWNER" "${_gate_command[@]}"
+  fi
+  "$PYTHON_BIN" "$COMMANDER_ACTIONS" controller-check "${_gate_args[@]}" || die 'Commander execution authority revoked'
+  fi
+fi
+
+
 # 独立只读任务：在同一flock内检查原owner并执行整个命令，锁操作不能插队。
 # media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
-if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
+if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap|lock-acquire|lock-refresh|lock-release|lock-release-exact|commander-bind|commander-fence|commander-readback|commander-inspect) ]]; then
   case "$command" in
     open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop) ;;
     *) die 'required lock owner is supported only for standalone read commands';;
@@ -3861,7 +3887,12 @@ if [[ "$command" == close-app && -z "$LOCK_OWNER" ]]; then
   [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock requires explicit owner cleanup'
 fi
 
+
 case "$command" in
+  commander-bind|commander-fence|commander-readback|commander-inspect)
+    [[ -n "$LOCK_OWNER" ]] || die 'Commander policy requires --lock-owner RUN'
+    "$PYTHON_BIN" "${0:A:h}/phone-lock-helper.py" commander-policy "${command#commander-}" "$COMMANDER_POLICY" "$LOCK_DIR/owner" "$LOCK_OWNER"
+    ;;
   runtime-contract)
     [[ "$#" == 1 ]] || die 'usage: runtime-contract'
     "$PYTHON_BIN" "${0:A:h}/phone-lock-helper.py" runtime-contract "${0:A}" "${0:A:h}/phone-lock-lib.sh" "${0:A:h}/phone-lock-helper.py"

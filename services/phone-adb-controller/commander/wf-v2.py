@@ -112,6 +112,8 @@ def make_request(directory, envelope, parent):
         '\n手机资源由外壳领锁/收尾，业务全程精确使用run_id作lock-owner，不另领或释放锁。'
         '\n活动 outcome 只允许 pass|fail|skipped|unknown；activity_completed 是事件类型，completed 仅是 delivery.status，不是 outcome。started_at/ended_at 用真实带时区ISO时间；completed 的 evidence 必须为非空对象，skipped 必须有非空字符串 evidence.skip_reason。event 被拒且未分seq时可依据同一真实产物纠正字段后重报；已持久事件不得改写。'
         '\n外部副作用幂等key用task_id与activity，不用run_id；未知副作用先读回，不重复发布。'
+        '\n含activity_bindings[].implementations时先经 wf-v2-gateway.py primary <本run/envelope.json> stdin {reference_id,args}执行唯一冻结Code；Code失败后仅经takeover stdin {reference_id}取得已正式独立验证的同业务Skill路径，不自行加载全局同名Skill。takeover失败即保留阻塞，不降旧版。'
+        '\n含contract.action_bindings的手机命令带 --lock-owner 原run及结构化env WF_COMMANDER_OWNER_EPOCH=原owner_epoch；对外点击还必须WF_COMMANDER_ACTION_KEY=冻结effects.key，并用--outward匹配冻结action。不得用--allow-repeat绕动作账。发布点击成功仍结果未知，先wf-v2-gateway.py readback stdin {key}取得已冻结作品读回；无读回helper保留unknown。'
         '\n最后一行：WF_DELIVERY {"status":"completed|failed|blocked","outputs":{},"evidence":[],"effects":[],"failure":null}'
         '\n上次失败结构化上下文见信封recovery.previous_attempt（run_id、attempt、failure、verification.assertions/evidence、diagnostic_sha256）；先核对证据，原始记录按task/run只读回查。\n核验失败的断言与证据见信封recovery；只在冻结恢复合同允许范围修复产物，不现场修代码。\n', encoding='utf-8')
 
@@ -193,6 +195,8 @@ def launch_locked(path, parent):
             (directory / 'evidence').mkdir(exist_ok=True)
             io.write(directory / 'runtime.json', dict(phase='preparing', execution_stopped=False, parent=parent))
             io.emit(directory, 'started', {'definition': envelope['definition']})
+        if envelope['contract'].get('action_bindings') and not (directory / 'delivery.json').exists():
+            module('wf-v2-actions').ActionStore(envelope).admit()
         if not envelope['contract'].get('resources') and not (directory / 'delivery.json').exists():
             make_request(directory, envelope, parent)
         start_worker(directory)
@@ -221,6 +225,14 @@ def claim(directory):
 def finalize(directory, envelope, phone):
     completion = io.read(directory / 'agent-completion.json')
     agent = io.read(directory / 'agent-delivery.json')
+    if envelope['contract'].get('action_bindings'):
+        module('wf-v2-actions').ActionStore(envelope).close('official child terminal', stopped=True)
+        if phone:
+            phone.deadline = phone.cleanup_deadline
+            phone.stage = 'cleanup'
+            receipt = phone.policy('fence', stopped=True)
+            if receipt.get('execution_fenced') is not True:
+                raise ValueError('phone execution fencing unconfirmed')
     cleanup_path = directory / 'cleanup.json'
     if cleanup_path.exists() and io.read(cleanup_path).get('completed') is True:
         cleanup = io.read(cleanup_path)
@@ -246,6 +258,13 @@ def finalize(directory, envelope, phone):
                     effects=agent.get('effects', []), cleanup=cleanup, status=status,
                     failure=agent.get('failure') if status == 'completed' else (agent.get('failure') or 'execution_failed'),
                     agent_delivery=agent)
+    if envelope['contract'].get('action_bindings'):
+        records = module('wf-v2-actions').ActionStore(envelope).state()['actions']
+        if phone:
+            records.update(phone.policy('inspect'))
+        delivery['effects'] = [{'key': a['key'], 'status': records.get(a['key'], {}).get('status', 'none'),
+                               'receipt': records.get(a['key'], {'not_attempted': True})}
+                              for a in envelope['contract']['action_bindings']]
     if len(io.canonical(delivery)) > 200000:
         original = directory / 'agent-delivery.json'
         delivery['outputs'] = {'artifact': str(original), 'sha256': __import__('hashlib').sha256(original.read_bytes()).hexdigest()}
@@ -364,6 +383,13 @@ def worker(directory):
                 stopped = True
         if stopped:
             io.write(directory / 'execution-failure.json', {'reason': str(error)})
+        if envelope['contract'].get('action_bindings'):
+            module('wf-v2-actions').ActionStore(envelope).close(str(error), stopped=stopped)
+            if phone:
+                try:
+                    phone.policy('fence', stopped=stopped)
+                except Exception as fencing_error:
+                    io.write(directory / 'execution-fence-error.json', {'reason': str(fencing_error)})
         if stopped and phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
             try:
                 io.write(directory / 'cleanup.json', phone.cleanup())

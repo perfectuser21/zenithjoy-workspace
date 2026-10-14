@@ -4,3 +4,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../../.."
 node --test services/phone-adb-controller/__tests__/commander-method.test.mjs services/phone-adb-controller/__tests__/deployment-method.test.mjs services/phone-adb-controller/__tests__/commander-feedback.test.mjs
+node --test services/phone-adb-controller/__tests__/commander-actions.test.mjs

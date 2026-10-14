@@ -67,7 +67,7 @@ class Phone:
         meta = {'host': self.host, 'command': command, 'started_at': shell.now()}
         try:
             result = subprocess.run(['ssh', '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', self.host, command],
-                                    capture_output=True, timeout=min(25, budget))
+                                    capture_output=True, timeout=min(280, budget))
             stdout, stderr = result.stdout, getattr(result, 'stderr', b'')
             meta.update(returncode=result.returncode)
         except subprocess.TimeoutExpired as error:
@@ -95,8 +95,18 @@ class Phone:
             intent = self.directory / 'phone-action-intent.json'
             if not intent.exists():
                 io.write(intent, dict(self.identity(), args=list(args), at=shell.now()))
-        command = 'export PATH="$HOME/.local/bin:$PATH"; ' + shlex.join(['douyin-phone-adb', '--profile', self.profile, *args])
+        if self.envelope['contract'].get('action_bindings'):
+            command_env = 'WF_COMMANDER_OWNER_EPOCH=' + str(self.envelope['owner_epoch']) + ' '
+        else:
+            command_env = ''
+        command = 'export PATH="$HOME/.local/bin:$PATH"; ' + command_env + shlex.join(['douyin-phone-adb', '--profile', self.profile, *args])
         return self.ssh(command).decode()
+
+    def policy(self, mode, stopped=False, key=None):
+        payload = self.envelope if mode == 'bind' else dict(self.identity(), execution_stopped=stopped, key=key)
+        command = 'export PATH="$HOME/.local/bin:$PATH"; printf %s ' + shlex.quote(json.dumps(payload, ensure_ascii=False)) + ' | ' + shlex.join(
+            ['douyin-phone-adb', '--profile', self.profile, '--lock-owner', self.run, 'commander-' + mode])
+        return json.loads(self.ssh(command).decode())
 
     def owner(self):
         value = self.ctl('lock-status')
@@ -139,6 +149,10 @@ class Phone:
             raise ValueError('phone busy')
         if self.owner() != self.run:
             raise ValueError('phone lock readback mismatch')
+        if self.envelope['contract'].get('action_bindings'):
+            policy = self.policy('bind')
+            if any(policy.get(k) != self.envelope[k] for k in ('task_id', 'run_id', 'owner_epoch')):
+                raise ValueError('phone Commander policy readback mismatch')
         self.ctl('--lock-owner', self.run, 'open-app')
         account = self.ctl('--lock-owner', self.run, 'account-current', self.run + '-preflight-account')
         (self.directory / 'preflight-account.log').write_text(account)

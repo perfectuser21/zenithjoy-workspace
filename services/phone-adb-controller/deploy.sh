@@ -89,7 +89,7 @@ deploy_commander() {
   echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
   ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
   # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-v2-shell.py wf-report.py wf-method.py; do
+  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-v2-shell.py wf-report.py wf-method.py wf-v2-actions.py wf-v2-gateway.py; do
     if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
     case "$f" in
       *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
@@ -247,7 +247,7 @@ MMV_PROBE_FILES=(
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
   phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
-  bypass-report.sh
+  bypass-report.sh commander/wf-v2-actions.py
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
@@ -458,9 +458,13 @@ for host in xian-m4; do
   for f in "${DEVICE_CTL_FILES[@]}"; do
     [[ "$f" != "douyin-phone-adb" && "$f" != "text-input-focus.py" ]] || continue
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
+    _ctl_name="$(basename "$f")"
     for dir in "${DEVICE_CTL_DIRS[@]}"; do
-      ssh "$host" "mkdir -p ~/$dir"
-      push_atomic "$D/$f" "$host" "~/$dir" "$f" x
+      _ctl_dest="~/$dir"
+      _ctl_sub="$(dirname "$f")"
+      [[ "$_ctl_sub" == "." ]] || _ctl_dest="$_ctl_dest/$_ctl_sub"
+      ssh "$host" "mkdir -p $_ctl_dest"
+      push_atomic "$D/$f" "$host" "$_ctl_dest" "$_ctl_name" x
       ssh "$host" "chmod +x ~/$dir/$f"
       if [[ "$f" == *.py ]]; then
         _ctl_check="/opt/homebrew/bin/python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/$dir/$f"

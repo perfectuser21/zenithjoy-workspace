@@ -17,6 +17,8 @@ deploy.sh 同步到 MMV `~/openclaw-root/workspaces-root/clawd-work-commander/AG
 
 - 手机准备/业务使用execution deadline，清理使用cleanup deadline；失败取证仍尝试精确owner放锁。
 - 清理未齐时只补清理和回执，不重复业务；未知副作用先读回，不重复发布。
+- 显式 primary_implementation 可运行独立Skill；implementations 配对经 wf-v2-gateway.py primary 执行Code，失败仅经takeover读取已正式独立核验的同业务Skill。救场PASS不能授权独立Skill资格。历史method_selection仍按原受限Python通道。
+- contract.action_bindings 的手机执行必须通过持久任务动作账及controller epoch闸；所有手机命令明确原owner/epoch，对外点击额外使用冻结action key。结果未知禁止重放，即使--allow-repeat也不能放行。闭合policy后的裸调用拒绝；新任务须显式新owner。
 - 原始input/output、活动证据、定义与反馈seq完整保留；凭据仅安全缓存引用，不进信封或日志。
 - 执行结束只awaiting_verify，独立核验PASS且cleanup证据通过才完成目标。核验失败材料从recovery.previous_attempt读取，恢复由冻结合同控制。
 - 不修改现场代码，不自行切账号、扩大权限、改配置或伪造兼容版本。超范围或未验证实现保留同任务阻塞事实与恢复条件。

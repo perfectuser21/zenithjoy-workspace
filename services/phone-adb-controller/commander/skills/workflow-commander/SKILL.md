@@ -1,6 +1,6 @@
 ---
 name: workflow-commander
-version: 2.1.0
+version: 2.2.0
 description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 
@@ -121,6 +121,20 @@ python3 -c 'import os; print(os.environ["WF_METHOD_REQUEST_JSON"])' | python3 "$
 首版仅接纳可机械固定依赖的Python业务方法。contract.skill非空、业务skill执行入口以及任何非安全业务skill绑定均明确拒绝：Markdown链接齐全不能证明裸命令已冻结。包中当前安全skill只作为摘要比对的只读上下文，仍加载当前Commander，绝不执行历史副本或global同名业务skill。支持的Python静态子集禁止动态装载、反射、os间接执行与搜索路径篡改；这不是任意Python沙箱。缺依赖、未知路径、不同安全代码或包漂移直接拒绝，不临时补依赖。方法相同字节只能称历史版本选择，不声称算法回退奏效。
 
 original_goal_definition固定最初run/release、目标、输入摘要、完整恢复政策及原两截止时间。selected业务合同只负责所选完整方法，不混拼活动；原input/output/验收/资源/副作用授权不变。selection_receipt保留上一失败run和候选业务PASS及独立核验身份。独立核验同时检查原目标与所选方法；需要历史helper时用当前 `wf-method.py resolve` stdin `{source_path}` 先读回唯一真实绑定，再按核验独立预算运行其verify，禁止核验阶段collect或重发业务。方法失配不能改回当前helper凑PASS。
+
+## 同业务Code与Skill、持久动作与执行撤销
+
+共享信封v1使用冻结 `activity_bindings[].primary_implementation` 或 `implementations`，实现身份为 `{kind,id,version,digest}`，环境为 `contract.environment={id,fingerprint}`。单Skill显式声明可先独立运行，不能默认加载全局同名Skill。配对Code入口用 `python3 ~/.openclaw/commander/wf-v2-gateway.py primary <实际run/envelope.json>`，stdin `{reference_id,args}`；Code非零/异常会机械保留正式fail，退出0只记unknown。业务结果只有冻结只读probe实际读回后才能新记观察事实；不以退出码授权PASS。
+
+Code失败后 `takeover` stdin `{reference_id}` 返回唯一Skill来源。资格只从Brain正式独立核验任务读回：官方模型运输、原业务任务/run/定义、同业务要求、Skill摘要与当前冻结环境一致，且为Skill `primary` PASS；救场或Code整体PASS不能作资格。当前源码字节不符、没有独立证明、存在unknown动作时拒绝接手，不自动降到旧Skill/Code。Skill实际业务事实用 `record` stdin `{reference_id,kind:"skill",outcome,observed,started_at,ended_at,step_id?}`，角色由机械上下文决定；Code原失败永久保留。
+
+有 `contract.action_bindings` 时，手机外壳安装冻结policy。每条控制器命令都带 `--lock-owner` 原run以及结构化环境 `WF_COMMANDER_OWNER_EPOCH`；对外点击还带 `WF_COMMANDER_ACTION_KEY` 的稳定任务key及匹配 `--outward` 动作。任务动作账先持久unknown意图再点击，同key未知或已提交都不会重新点击，`--allow-repeat`不能覆盖。放弃旧稿须输入布尔true与 `{object:{task_id,account_ref},action:"discard_existing_draft",scope:{visibility:"private",purpose:"acceptance",content_ref},grant_ref}` 完全匹配；缺字段不能默认授权。
+
+点击成功仍须 `wf-v2-gateway.py readback <实际envelope>` stdin `{key}`。只运行冻结 `action.readback={path,digest,args}`；缺helper则保留unknown，不能把截图或点击退出0当作品成功。probe可提供 `activity_facts` 的真实观察，角色/实现/环境由外壳绑定，不接受stdin自报Code PASS。生产业务helper尚未冻结时，不宣称新组合业务验收通过。
+
+`fence` stdin `{task_id,run_id,owner_epoch,reason}` 撤销任务动作与设备policy，回传真实 `execution_fenced`、官方 `execution_stopped` 与清理状态。不能从已取消RPC推断已停，未知时保留锁。新attempt须独立run、下一epoch和attempt，同任务输入/授权/合同/业务定义/总执行与收尾期限不变；远端fence与动作账同步，unknown须先读回。policy闭合且锁释放后，裸控制器也不能恢复发布权；新legacy任务必须明确新owner领锁。
+
+本轮新增的是冻结信封消费者，不读写C版本组合表，不恢复暂停任务。所有新版业务、真机、部署和独立核验结果分别记账。
 
 ## 旧在途兼容边界
 
