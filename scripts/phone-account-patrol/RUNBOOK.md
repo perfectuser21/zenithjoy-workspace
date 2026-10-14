@@ -91,3 +91,21 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 新版本的单手机失败回执包含任务、Run、设备、流程与源码身份，以及failure.stage/code/message/exit_code、脱敏限长的stdout/stderr和证据路径。ADB自检明确不可达时显示adb_unreachable及实际ADB错误；SSH非零/超时保留远端阶段，不能仅凭退出码猜手机离线。preflight失败JSON在判失败之前按Run保存，失败仍非零；补查只透传同任务/设备/版本/Run的失败回执。历史缺证据仍未知，不用新结果填旧Run。
 
 发布时先验证新release全量8文件与commander冻结指纹，保留旧release；现有排队/运行任务与恢复需求不得静默换源码。正式切换需先处理旧版在途需求，再按真实部署注册及任务模板切换新源码和控制器，检查新Run的失败详情及Notion回读。仅PR、CI或本地fixture通过不代表已经生产生效。
+
+## 失败证据修复验收约定
+
+
+GP-Anchor: none(infra)
+
+已授权当前Codex直接修复Issue2b2ef1fa。保留同任务/Run/设备/版本错误，从SSH/ADB自检经补查及Brain至Notion。旧历史不伪造原因，不改重试与锁。
+
+## 测试策略
+先以远端非零、超时、自检失败JSON、秘密脱敏及跨attempt回执失败测试复现，再修实现；Brain端独立测试提取/结算/正文投影。对错误路径使用隔离fixture，不断开生产手机。发布按正式流水线；未正式页面读回不得称端到端完成。
+
+## 验收
+- 失败仍非零，成功/延后原有语义保持。
+- 自检ADB不可达有具体证据，SSH255不猜ADB。
+- stderr/stdout脱敏限长，超时部分日志保留。
+- 当前task/Run/设备/来源严格一致才透传错误。
+- 新release不可变且全量验签，旧版本不覆盖。
+- Run与Workflow正文显示阶段、原因和证据，真实Notion读回。
