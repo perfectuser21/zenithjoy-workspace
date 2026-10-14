@@ -28,9 +28,9 @@ def safe_error_text(value, limit=2000):
     for key, secret in os.environ.items():
         if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
             text = text.replace(secret, '[REDACTED]')
-    text = re.sub(r'(?i)("[^"\n]*(?:password|token|secret|api[_-]?key|authorization)[^"\n]*"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
-    text = re.sub(r'''(?i)([\w-]*(?:password|token|secret|api[_-]?key|authorization)[\w-]*\s*=\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
-    text = re.sub(r"(?i)([\w-]*(?:password|token|secret|api[_-]?key|authorization)[\w-]*\s*=\s*)'(?:\\.|[^'\\])*'", r"\1'[REDACTED]'", text)
+    text = re.sub(r'(?i)("[^"\n]{0,100}(?:password|token|secret|api[_-]?key|authorization)[^"\n]{0,100}"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)([\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}\s*=\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
+    text = re.sub(r"(?i)([\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}\s*=\s*)'(?:\\.|[^'\\])*'", r"\1'[REDACTED]'", text)
     text = re.sub(r'(?im)^(\s*(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+', r'\1[REDACTED]', text)
     text = re.sub(r'(?i)((?:Bearer|Basic)\s+)[^\s"\']+', r'\1[REDACTED]', text)
     text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
@@ -219,6 +219,8 @@ def phone_run(serial, task_id, deployment, attempt_run_id=None):
     try:
         check = json.loads(ssh(phone['host'], '/opt/homebrew/bin/python3 ' + shlex.quote(remote + '/preflight.py') + ' --serial ' + shlex.quote(serial), stage='preflight'))
     except PatrolFailure as error:
+        if error.failure.get('exit_code') != 1:
+            raise
         try:
             check = json.loads(error.failure['stdout'])
         except (ValueError, TypeError):
@@ -231,7 +233,10 @@ def phone_run(serial, task_id, deployment, attempt_run_id=None):
             detail = check.get('failure') or {}
             code = detail.get('code') if detail.get('code') in ['adb_unreachable', 'adb_check_timeout', 'adb_check_failed'] else 'adb_unreachable'
             failed = PatrolFailure('preflight', code, detail.get('message') or 'ADB无法连接设备：' + serial,
-                                  host=phone['host'], exit_code=detail.get('exit_code'), stderr=detail.get('stderr', error.failure['stderr']))
+                                  host=phone['host'], exit_code=detail.get('exit_code'), stderr=detail.get('stderr', error.failure['stderr']),
+                                  stdout=detail.get('stdout', ''), timeout_sec=detail.get('timeout_sec'))
+            if isinstance(detail.get('error_type'), str):
+                failed.failure['error_type'] = safe_error_text(detail['error_type'], 128)
             failed.failure['evidence'] = [str(STATE / preflight_name)]
             raise failed from error
         raise error

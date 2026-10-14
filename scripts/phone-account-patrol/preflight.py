@@ -4,7 +4,6 @@ import hashlib
 import json
 import pathlib
 import subprocess
-from runner import safe_error_text
 
 def main():
     parser = argparse.ArgumentParser()
@@ -15,9 +14,16 @@ def main():
     failure = None
     try:
         manifest = json.loads((root / 'deployment.json').read_text())
-        checks['source_version'] = all(hashlib.sha256((root / n).read_bytes()).hexdigest() == h for n, h in manifest['sha256'].items() if n != 'runner.py')
+        checks['source_version'] = all(hashlib.sha256((root / n).read_bytes()).hexdigest() == h for n, h in manifest['sha256'].items())
     except Exception:
         checks['source_version'] = False
+    if not checks['source_version']:
+        print(json.dumps({'ok': False, 'serial': args.serial, 'checks': checks,
+                          'failure': {'stage': 'preflight', 'code': 'source_version_mismatch',
+                                      'message': '部署文件版本不一致，未执行设备检查', 'exit_code': None}}, ensure_ascii=False))
+        return 1
+    # Import only after checking the complete immutable release, including runner.
+    from runner import safe_error_text
     checks['ocr'] = (pathlib.Path.home() / '.local/share/phone-account-patrol/ocr').is_file()
     checks['device_lock_controller'] = (pathlib.Path.home() / '.local/bin/douyin-phone-adb').is_file()
     try:
@@ -35,6 +41,7 @@ def main():
         checks['adb_online'] = False
         failure = {'stage': 'preflight', 'code': 'adb_check_timeout' if isinstance(error, subprocess.TimeoutExpired) else 'adb_check_failed',
                    'message': safe_error_text(str(error)), 'error_type': type(error).__name__, 'exit_code': None,
+                   'timeout_sec': error.timeout if isinstance(error, subprocess.TimeoutExpired) else None,
                    'stdout': safe_error_text(getattr(error, 'output', None)), 'stderr': safe_error_text(getattr(error, 'stderr', None))}
     if not all(checks.values()) and failure is None:
         failure = {'stage': 'preflight', 'code': 'prerequisite_failed', 'message': '自检未通过：' + ', '.join(k for k, v in checks.items() if not v), 'exit_code': None}
