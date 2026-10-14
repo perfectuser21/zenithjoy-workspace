@@ -50,9 +50,10 @@ function capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,ni
  const raw={profile:read(profilePath,profileEid+'-profile.xml'),returned:read(returnedPath,profileEid+'-returned.xml')};
  const vf=path.join(runDir,run+'-identity-'+videoId+'.json'),st=fs.lstatSync(vf);
  if(st.isSymbolicLink()||!st.isFile()||st.mtimeMs<Number(started)*1000||path.dirname(fs.realpathSync(vf))!==fs.realpathSync(runDir))throw Error('RECIPIENT_VIDEO_FILE_INVALID');
- const e={version:1,status:'verified',scope,raw,sha256:Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,hash(v)])),video_identity:JSON.parse(fs.readFileSync(vf,'utf8')),observed_at:new Date().toISOString()};
+ const receiptId=crypto.randomUUID();
+ const e={version:1,receipt_id:receiptId,status:'verified',scope,raw,sha256:Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,hash(v)])),video_identity:JSON.parse(fs.readFileSync(vf,'utf8')),observed_at:new Date().toISOString()};
  validateEvidence(e,{...scope,comment_body:commentBody});
- const file=path.join(runDir,profileEid+'-recipient.json');fs.writeFileSync(file,JSON.stringify(e),{flag:'wx',mode:0o600});
+ const file=path.join(runDir,profileEid+'-recipient-'+receiptId+'.json');fs.writeFileSync(file,JSON.stringify(e),{flag:'wx',mode:0o600});
  return {file,sha256:hash(fs.readFileSync(file)),body_sha256:scope.comment_body_sha256};
 }
 if(require.main===module){try{

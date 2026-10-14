@@ -76,6 +76,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
     if(!st.isFile()||st.isSymbolicLink()||(st.mode&0o777)!==0o600||st.size>10*1024*1024||realpathSync(resolve(join(f[4],'..')))!==realpathSync(recipientScope.runDir))throw Error('recipient私有工件越界');
     const bytes=readFileSync(f[4]);if(createHash('sha256').update(bytes).digest('hex')!==f[5])throw Error('recipient私有工件hash不符');
     const evidence=JSON.parse(bytes),scope={line_key:recipientScope.lineKey,run:recipientScope.run,douyin_id:row.douyinId,nickname:row.nickname,comment_body:row.commentBody,comment_body_sha256:bodyHash,video_url:row.sourceVideoUrl};
+    if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(evidence.receipt_id||'')||resolve(f[4])!==resolve(recipientScope.runDir,`${evidence.scope.profile_eid}-recipient-${evidence.receipt_id}.json`))throw Error('recipient工件独享命名不符');
     recipientProof.validateEvidence(evidence,scope);
     if(evidence.scope.profile!==recipientScope.profile||evidence.scope.video_id!==videoId||evidence.scope.source_run!==(recipientScope.sourceRun||null))throw Error('recipient采集profile或VID错位');
     row.recipientEvidence=evidence;
