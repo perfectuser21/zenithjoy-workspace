@@ -232,6 +232,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     }
     return { scored, ids, config: evidence };
   }
+  if(op==='bridge_readback')return require('./leadgen-outreach-bridge.js').readbackBridge(pool,input);
   if(op==='bridge_outreach')return require('./leadgen-outreach-bridge.js').bridgeOutreach(pool,input,deps);
   if (op === 'mark_leads') {
     const bridgeConfig=await (deps.freezeCompanyConfig||freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'103'});

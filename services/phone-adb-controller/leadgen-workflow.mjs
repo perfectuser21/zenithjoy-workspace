@@ -390,7 +390,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       const remaining=state.budgetDeadline?state.budgetDeadline-Date.now():180000;
       if(remaining<=15000)throw Error('EXECUTION_DEADLINE: 桥接剩余预算不足');
       const bridge=await queue('bridge_outreach',{remaining_ms:Math.min(165000,remaining-15000)});
-      return {...r,bridge,mark_leads_readback_failures:readback.failures,...(bridge.verified===false?{status:'partial'}:{})};},
+      const bridgeReadback=await queue('bridge_readback',{ids:bridge.ids||[]});
+      writeFileSync(join(env.WFR_RUN_DIR,`${run}-bridge-readback.json`),JSON.stringify(bridgeReadback),{mode:0o600});
+      return {...r,bridge,mark_leads_readback_failures:readback.failures,bridge_readback_failures:bridgeReadback.failures+(bridge.verified===false?1:0),...(bridge.verified===false||!bridgeReadback.verified?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false;
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}

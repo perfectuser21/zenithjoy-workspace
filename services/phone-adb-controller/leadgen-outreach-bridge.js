@@ -100,3 +100,17 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
  }
 }
 module.exports.eligibleOrders=eligibleOrders;
+
+async function readbackBridge(pool,input){
+ const route=routeOf(input.line),ids=input.ids;
+ if(!Array.isArray(ids)||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>!/^[-a-zA-Z0-9]{1,80}$/.test(id)))throw Error('BRIDGE_READBACK_IDS_INVALID');
+ const rows=ids.length?(await pool.query('SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND id=ANY($2::uuid[])',[route.key,ids])).rows:[];
+ const failures=ids.filter(id=>{const found=rows.filter(r=>r.id===id);if(found.length!==1)return true;const row=found[0],p=row.payload;
+  if(!p||row.line_key!==route.key||p.line_key!==route.key||digest(p)!==row.payload_sha256||!['confirmed','protected','excluded','unknown'].includes(row.state)||p.qualification?.status!==row.qualification_status)return true;
+  if(row.state==='confirmed'){try{nativeIntent(row);}catch{return true;}if(!/^rec[A-Za-z0-9]{6,40}$/.test(row.feishu_record_id||'')||!row.fields||digest(row.fields)!==row.fields_sha256)return true;}
+  if(row.state==='excluded'&&row.qualification_status!=='excluded')return true;
+  return false;
+ }).length;
+ return {verified:failures===0,failures,ids,states:Object.fromEntries(rows.map(r=>[r.id,r.state]))};
+}
+module.exports.readbackBridge=readbackBridge;

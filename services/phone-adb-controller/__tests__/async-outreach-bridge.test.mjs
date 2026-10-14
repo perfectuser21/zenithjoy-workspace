@@ -61,7 +61,7 @@ function bridgeStore(row){
 }
 test('103正常mark活动须消费durable bridge，不等待104 preflight',async()=>{
  const {createHandlers}=await import(process.env.BRIDGE_WORKFLOW_MODULE||'../leadgen-workflow.mjs');const d=mkdtempSync(join(tmpdir(),'async-mark-'));
- try{const calls=[];const h=createHandlers({root:d,env:{P:'legacy',SERIAL:'mock',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',WFR_RUN_DIR:d,WF_HOME:d,HOME:d},rpc:async b=>{calls.push(b.request.op);return {result:b.request.op==='mark_leads'?{marked:1,ids:[cid],lead_ids:[lid]}:b.request.op==='mark_readback'?{verified:true,failures:0}:{published:1,unknown:0,verified:true}};}});
+ try{const calls=[];const h=createHandlers({root:d,env:{P:'legacy',SERIAL:'mock',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',WFR_RUN_DIR:d,WF_HOME:d,HOME:d},rpc:async b=>{calls.push(b.request.op);return {result:b.request.op==='mark_leads'?{marked:1,ids:[cid],lead_ids:[lid]}:b.request.op==='mark_readback'?{verified:true,failures:0}:{published:1,unknown:0,verified:true,failures:0,ids:[]}};}});
  await h.mark_leads();assert.ok(calls.includes('bridge_outreach'),'103仍只写PG，104原飞书表没有生产者');
  }finally{rmSync(d,{recursive:true,force:true});}
 });
