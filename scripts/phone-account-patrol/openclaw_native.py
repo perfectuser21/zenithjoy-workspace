@@ -25,6 +25,8 @@ def safe_error_text(value, limit=2000, _depth=0):
     text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value or '')
     if _depth > 6:
         return '[TRUNCATED]'
+    if len(text) > 1000000:
+        return '[LOG OMITTED: exceeds diagnostic safety limit]'
     if text.lstrip().startswith(('{', '[')) and len(text) <= 100000:
         try:
             structured = json.loads(text)
@@ -32,6 +34,23 @@ def safe_error_text(value, limit=2000, _depth=0):
             pass
         else:
             text = json.dumps(safe_error_value(structured, _depth + 1), ensure_ascii=False)
+    # Structured output can be surrounded by plain console lines or prefixes.
+    decoder = json.JSONDecoder()
+    pieces, cursor = [], 0
+    for attempt, marker in enumerate(re.finditer(r'[\{\[]', text)):
+        if marker.start() < cursor:
+            continue
+        if attempt >= 128:
+            pieces.append('[REMAINING LOG OMITTED]'); cursor = len(text); break
+        try:
+            value, end = decoder.raw_decode(text, marker.start())
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(value, (dict, list)):
+            pieces.extend([text[cursor:marker.start()], json.dumps(safe_error_value(value, _depth + 1), ensure_ascii=False)])
+            cursor = end
+    if pieces:
+        text = ''.join(pieces) + text[cursor:]
     for key, secret in os.environ.items():
         if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
             text = text.replace(secret, '[REDACTED]')
