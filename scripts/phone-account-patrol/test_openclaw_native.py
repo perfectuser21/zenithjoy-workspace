@@ -221,6 +221,26 @@ class NativeCommanderTests(unittest.TestCase):
 
 
 class ContinuousRecoveryTests(unittest.TestCase):
+    def test_failed_phone_receipt_survives_recovery_without_losing_reason(self):
+        self.cycle(); demand = self.demands()[0]; attempt = self.attempts()[0]
+        attempt['status'] = 'in_progress'
+        script = '/tmp/script-' + attempt['id'] + '-a1.sh'
+        receipt = {'status': 'failed', 'task_id': attempt['id'], 'run_id': pathlib.Path(script).stem,
+                   'serial': 'phone-a', 'workflow_id': SINGLE, 'source_revision': native.bridge.PHONE_SOURCE_REVISION,
+                   'failure': {'stage': 'preflight', 'code': 'adb_unreachable', 'message': 'ADB无法连接设备',
+                               'stderr': 'device phone-a not found', 'exit_code': 1, 'evidence': []}}
+        output = subprocess.CompletedProcess([], 1, json.dumps(receipt), 'failed')
+        value, code = native.recovery_phone(script, demand['id'], 'phone-a', self.deployment, self.call, lambda *a, **k: output)
+        self.assertEqual(value['failure']['code'], 'adb_unreachable')
+        self.assertEqual(value['run_id'], pathlib.Path(script).stem)
+        self.assertEqual(code, 1)
+        for key, bad in [('task_id', CHILD), ('serial', 'foreign'), ('run_id', pathlib.Path(script).stem[:-1] + '2'), ('source_revision', 'wrong')]:
+            wrong = dict(receipt, **{key: bad})
+            value, code = native.recovery_phone(script, demand['id'], 'phone-a', self.deployment, self.call,
+                lambda *a, **k: subprocess.CompletedProcess([], 1, json.dumps(wrong), 'real error'))
+            self.assertEqual(value['failure']['code'], 'phone_subprocess_failed')
+            self.assertNotEqual(value['failure']['code'], 'adb_unreachable')
+
     def setUp(self):
         NativeCommanderTests.setUp(self)
         self.current = dt.datetime(2026, 10, 13, 3, 30, tzinfo=dt.timezone.utc)
