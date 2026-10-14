@@ -45,3 +45,10 @@ test('真实RPC CLI历史短链调用不自import死锁，缺helper源字节在P
  const before=readFileSync(queries,'utf8');assert.ok(before.split('\n').filter(Boolean).map(sql=>JSON.parse(sql)).every(sql=>sql.startsWith('SELECT')));
  const bad=invoke({...input,source:{...input.source,files:input.source.files.filter(f=>f.path!=='queued-comment-history.js')}});assert.equal(bad.status,1);assert.match(bad.stdout,/RPC_SOURCE_DEPENDENCY_MISSING:queued-comment-history.js/);assert.equal(readFileSync(queries,'utf8'),before,'未核来源不可触PG');
 });
+
+test('异步桥/native资格新增依赖必须同source闭包，缺任一helper在业务SQL前拒绝',async()=>{
+ const names=['queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js'];
+ for(const name of names){const f=fixture();let used=false;const source={...f.source,files:f.source.files.filter(r=>r.path!==name)};
+ await assert.rejects(handleRpc({kind:'queue',source,request:{op:'bridge_outreach',line:'jinuo',run:'score103'}},{verify:s=>verifyRpcSource(s,f.options),pool:{query:async()=>{used=true;return {rows:[]};}}}),/DEPENDENCY_MISSING/);
+ assert.equal(used,false);}
+});
