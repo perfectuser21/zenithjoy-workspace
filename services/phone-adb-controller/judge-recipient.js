@@ -4,7 +4,7 @@ const {validateEvidence,hash}=require('./queued-recipient-evidence.js');
 const {configTargetProfile}=require('./company-config-lib.js');
 const {callOpenRouter,defaultHttpPost}=require('./judge-jev.js');
 const {resolveOpenRouterKey,JEV_MODEL,DECISIONS_ENDPOINT}=require('./judge-comment.js');
-async function qualifyRecipient(comment,snapshot,{httpPost=defaultHttpPost,apiKey,env=process.env}={}){
+async function qualifyRecipient(comment,snapshot,{httpPost=(url,body,key)=>defaultHttpPost(url,body,key,{signal:AbortSignal.timeout(15000)}),apiKey,env=process.env}={}){
  let parsed;
  try{parsed=validateEvidence(comment.recipient_evidence,{line_key:comment.line_key,run:comment.harvest_batch,douyin_id:comment.douyin_id,nickname:comment.nickname,video_url:comment.source_video_url,comment_body:comment.comment_body,comment_body_sha256:hash(comment.comment_body)});}
  catch {return {status:'unknown',reason:'native_profile_proof_missing_or_invalid'};}
