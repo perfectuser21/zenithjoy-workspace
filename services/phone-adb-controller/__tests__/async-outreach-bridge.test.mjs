@@ -37,3 +37,34 @@ test('103桥接资格必须独立使用native主页+V3，不能只沿用personal
   {qualifyRecipient:async(comment,config)=>{called++;assert.equal(comment.intent_grade,'A');assert.equal(config.version,3);return {status:'excluded',reason:'原V3同行机构排除'};}});
  assert.equal(called,1,'不能忽略新的独立资格输入');assert.equal(result.qualification.status,'excluded');assert.equal(row.intent_grade,'A','不得改原评分');
 });
+
+import {mkdtempSync,mkdirSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+function pendingBridge(){
+ const p={version:1,line_key:'jinuo',run:'score103',source_run:'source102',comment_id:cid,lead_id:lid,target_douyin_id:'person987',nickname:'待核个人',comment_body:'在哪里报名',profile_url:'https://www.douyin.com/user/person987',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',intent_grade:'A',judgment_reason:'原分档',qualification:{status:'passed',company_id:'company1',company_version:3}};
+ return {id:cid,line_key:'jinuo',payload:p,payload_sha256:require('crypto').createHash('sha256').update(JSON.stringify(p)).digest('hex'),qualification_status:'passed',state:'pending',created_at:'2026-10-14T00:00:00Z'};
+}
+function bridgeStore(row){
+ const calls=[];return {calls,async query(sql,args){calls.push({sql,args});
+  if(/SELECT \* FROM zenithjoy.leadgen_bridge_outbox/.test(sql))return {rows:[row]};
+  if(/SET state='attempted'/.test(sql)){row.state='attempted';row.fields=JSON.parse(args[2]);return {rows:[row],rowCount:1};}
+  if(/SET state='confirmed'/.test(sql)){row.state='confirmed';row.feishu_record_id=args[2];return {rows:[row],rowCount:1};}
+  return {rows:[],rowCount:1};
+ }};
+}
+test('103正常mark活动须消费durable bridge，不等待104 preflight',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');const d=mkdtempSync(join(tmpdir(),'async-mark-'));
+ try{const calls=[];const h=createHandlers({root:d,env:{P:'legacy',SERIAL:'mock',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',WFR_RUN_DIR:d},rpc:async b=>{calls.push(b.request.op);return {result:b.request.op==='mark_leads'?{marked:1,ids:[cid],lead_ids:[lid]}:b.request.op==='mark_readback'?{verified:true,failures:0}:{published:1,unknown:0,verified:true}};}});
+ await h.mark_leads();assert.ok(calls.includes('bridge_outreach'),'103仍只写PG，104原飞书表没有生产者');
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+test('桥接POST前durable attempted；响应未知仅GET匹配marker/UID/payload，重放不能POST第二次',async()=>{
+ const row=pendingBridge(),pool=bridgeStore(row),events=[],remote=[];let posts=0;
+ const api={all:async()=>{events.push('get');return remote;},fields:async()=>[{field_name:'采集时间',type:1}],post:async fields=>{posts++;events.push('post');assert.equal(row.state,'attempted');remote.push({record_id:'recABC123456',fields});throw Error('HTTP response unknown');}};
+ const opts={client:api,lock:async(_line,fn)=>fn()};
+ const first=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',limit:1},opts);
+ assert.equal(posts,1);assert.ok(pool.calls.some(c=>/SET state='attempted'/.test(c.sql)));
+ const second=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103retry',limit:1},opts);
+ assert.equal(posts,1,'未知结果不能盲POST重发');assert.equal(row.state,'confirmed');assert.equal(second.published,1);
+});
