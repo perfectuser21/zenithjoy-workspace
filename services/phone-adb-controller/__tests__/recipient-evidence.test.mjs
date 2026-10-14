@@ -17,6 +17,14 @@ test('实际物理原件capture产生私有工件并可独立验同UID/返回全
 test('capture未知或非法started不能绕过新鲜mtime，真实未知VID bool不能冒verified',()=>scoped(f=>{
  assert.throws(()=>capture({...f.args,started:'unknown'}),/RECIPIENT_/);
 }));
+test('运行号作为字面身份：正则元字符不能令另一运行的profile通过绑定',()=>scoped(f=>{
+ const e=JSON.parse(readFileSync(capture(f.args).file));
+ e.scope.run='source.102';
+ e.scope.profile_eid='sourceX102-v'+vid+'-collection-person1-t1';
+ e.scope.video_identity_eid='source.102-v'+vid+'-collection-after-card1';
+ e.video_identity.evidence_id=e.scope.video_identity_eid;
+ assert.throws(()=>validateEvidence(e,{...e.scope,comment_body:'在哪里报名'}),/RECIPIENT_PAIR_INVALID/);
+}));
 test('独立native验收拒绝非bool video证明和跨公司profile，即使UID/nickname正确',()=>scoped(f=>{const e=JSON.parse(readFileSync(capture(f.args).file)),scope={...e.scope,comment_body:'在哪里报名'};
  assert.throws(()=>validateEvidence({...e,video_identity:{...e.video_identity,verified:'false'}},scope),/RECIPIENT_/);
  assert.throws(()=>validateEvidence({...e,scope:{...e.scope,profile:'yueshengyun-work'}},scope),/RECIPIENT_/);
