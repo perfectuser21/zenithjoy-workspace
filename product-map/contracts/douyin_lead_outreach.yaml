@@ -182,6 +182,10 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-bridge.js
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/outreach-order-lock.py
+        revision: contract
     steps:
       - key: acquire_device_lock
         name: 拿设备锁

@@ -252,6 +252,8 @@ activities:
     preconditions:
       - 评论 process_status=待分拣
       - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
+      - 同line原锁目录使用内核advisory
+        guard与私有owner/PID；只在同机确证死者后恢复，活owner/权限未知/旧无owner目录不清理，不按TTL抢锁
     postconditions:
       - probe: pool_advanced
         asserts: 认领ID在PG独立读回，评论完成必须以线索已落实为前提
@@ -292,6 +294,10 @@ activities:
         target: 原Feishu line-routes线索表
         description: 本103 mark活动消费durable
           outbox；原fields/1Pcache/orderLock复用，attempted先持久再单POST，全池UID+nick去重不修改protected/已发；未知仅GET读回
+      - kind: external_visible
+        target: OpenRouter /api/alpha/decisions（typesafe/jev-1.13）
+        description: 独立recipient资格判定会外发完整native主页text/content-desc、原评论/来源标题、原grade及冻结公司V3产品/人群/criteria/audiences；原grade不改变。每次实际调用model_call_count及服务可返回的model_response_id进入PG
+          outbox资格回执；缺proof/key为0，故障调用1且unknown不ready，不借其他模型generation冒本调用。
     invokers:
       - code
       - agent
@@ -340,6 +346,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/outreach-order-lock.py
         revision: contract
     model:
       - provider: openrouter
