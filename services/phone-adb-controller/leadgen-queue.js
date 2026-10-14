@@ -243,6 +243,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           nickname: row.nickname, douyinId: row.douyin_id, profileUrl: row.profile_url,
           commentBody: row.comment_body, sourceVideo: row.source_video,
           aiJudgmentReason: `[${row.intent_grade}] ${row.judgment_reason || ''}` });
+        if(lead)await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead});
         await db.markCommentJudgment(client, { lineKey, dedupKey: row.dedup_key,
           relevance: row.relevance, intentGrade: row.intent_grade, reason: row.judgment_reason });
         return { lead, id:row.id };
