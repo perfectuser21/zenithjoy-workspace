@@ -221,6 +221,30 @@ class NativeCommanderTests(unittest.TestCase):
 
 
 class ContinuousRecoveryTests(unittest.TestCase):
+    def test_old_phone_demand_continues_with_new_control_without_rewriting_identity(self):
+        old = '4f899cab6425341646e27c5fca20979b8ac42be7'
+        legacy = dict(self.deployment, source_revision=old, release='/fixed/old')
+        self.tasks[BATCH]['payload'].update(source_revision=old, cmd='/usr/bin/python3 /fixed/old/runner.py batch --execution-script "$0"')
+        self.tasks[CHILD]['payload']['source_revision'] = old
+        original = copy.deepcopy(self.tasks[CHILD])
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy, create=True):
+            self.cycle()
+        demand, attempt = self.demands()[0], self.attempts()[0]
+        self.assertEqual(demand['payload']['phone_source_revision'], old)
+        self.assertEqual(attempt['payload']['source_revision'], old)
+        self.assertEqual(attempt['payload']['control_source_revision'], 'a' * 40)
+        self.assertEqual(self.tasks[CHILD], original)
+        attempt['status'] = 'in_progress'
+        output = subprocess.CompletedProcess([], 0, json.dumps({'task_id': attempt['id'], 'serial': 'phone-a', 'source_revision': old, 'status': 'deferred'}), '')
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy, create=True):
+            value, _ = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, lambda *a, **k: output)
+        self.assertEqual(value['source_revision'], old)
+
+    def test_unknown_phone_revision_fails_before_creating_any_recovery(self):
+        self.tasks[CHILD]['payload']['source_revision'] = 'f' * 40
+        with self.assertRaises(ValueError): self.cycle()
+        self.assertEqual(self.posts, [])
+
     def test_failed_phone_receipt_survives_recovery_without_losing_reason(self):
         self.cycle(); demand = self.demands()[0]; attempt = self.attempts()[0]
         attempt['status'] = 'in_progress'
