@@ -65,3 +65,37 @@ test('大证据可使用60秒上传预算，整体剩余预算更小时必须收
   else{const timing=JSON.parse(readFileSync(trace));assert.equal(timing.binary_stdin,true);assert.equal(timing.stdin_sha256,createHash('sha256').update(JSON.stringify(body)).digest('hex'));assert.ok(timing.stdin_bytes>152352);assert.ok(timing.maxTime<=60);if(remaining===120000)assert.ok(timing.maxTime>8,'大证据不能仍限制8秒');else assert.ok(timing.maxTime<=2,'上传不得超出整轮余量');assert.equal(event.state,'sent');}
  }
 });
+
+const mmvId='ed3555dc-4777-446c-bdf0-d928d6a08ef1';
+const mmvInventory=()=>[{id:mmvId,status:'active',metadata:{tailscale_ip:'100.71.151.105',public_ip:'38.23.47.81'}}];
+test('正式MMV路由默认TS，显式public只选择同一登记机器并保HostKeyAlias',async()=>{
+ const {selectMmvTransport}=await import('../runtime-receipts.mjs');
+ assert.equal(typeof selectMmvTransport,'function');
+ const rows=mmvInventory(),before=JSON.stringify(rows);
+ const expected={machine_id:mmvId,ssh_hostname:'100.71.151.105',ssh_hostkey_alias:'38.23.47.81'};
+ assert.deepEqual(selectMmvTransport(rows),expected);
+ assert.deepEqual(selectMmvTransport({machines:rows},'tailscale'),expected);
+ assert.deepEqual(selectMmvTransport(rows,'public'),{...expected,ssh_hostname:'38.23.47.81'});
+ assert.equal(JSON.stringify(rows),before,'不得修改中央登记对象或已冻结路由');
+});
+test('MMV路由非法模式/非唯一或非active登记/缺地址均拒绝，不回退猜IP',async()=>{
+ const {selectMmvTransport}=await import('../runtime-receipts.mjs');
+ assert.equal(typeof selectMmvTransport,'function');
+ for(const mode of ['','auto','PUBLIC','38.23.47.81','public '])assert.throws(()=>selectMmvTransport(mmvInventory(),mode));
+ for(const rows of [[],[{...mmvInventory()[0],id:'another-host'}],mmvInventory().map(m=>({...m,status:'offline'})),[...mmvInventory(),...mmvInventory()]]){
+  for(const mode of ['tailscale','public'])assert.throws(()=>selectMmvTransport(rows,mode));
+ }
+ for(const field of ['tailscale_ip','public_ip'])for(const value of [undefined,'','999.23.47.81','38.23.47.81;echo bad','host.invalid']){
+  const rows=mmvInventory();rows[0].metadata[field]=value;
+  for(const mode of ['tailscale','public'])assert.throws(()=>selectMmvTransport(rows,mode));
+ }
+});
+test('真实prepare CLI消费路由env，非法模式在冻结/绑定前拒绝',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'runtime-mmv-route-')),bin=join(dir,'bin');mkdirSync(bin);
+ const curl=join(bin,'curl');
+ writeFileSync(curl,`#!${process.execPath}\nprocess.stdout.write(${JSON.stringify(JSON.stringify(mmvInventory())+'\n200')});\n`);chmodSync(curl,0o700);
+ const result=await invoke({WFR_RUN_DIR:dir,WF_BRAIN_WORKFLOW:'douyin_video_processing',WF_MMV_SSH_ROUTE:'auto',BRAIN_URL:'http://fixture.invalid',PATH:bin+':'+process.env.PATH},'prepare');
+ assert.equal(result.code,1);assert.match(result.err,/WF_MMV_SSH_ROUTE仅允许tailscale或public/);
+ assert.equal(existsSync(join(dir,'run-definition.json')),false);
+ assert.equal(existsSync(join(dir,'run-bindings')),false);
+});

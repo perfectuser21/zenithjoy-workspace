@@ -27,9 +27,11 @@ fi
 export WF_HOME="${0:A:h}" WF_DEPLOYMENT_ROOT="${0:A:h}"
 export WFR_RUN_ID="$WF_ARG_CAP-$WFR_TAG"
 export WFR_RUN_DIR="${WFR_HOME:-$HOME/.config/zenithjoy}/ledger/$WFR_RUN_ID"
+requested_brain_url="${BRAIN_URL:-}"
 if [[ -r "$HOME/.credentials/brain.env" ]]; then
   set -a; source "$HOME/.credentials/brain.env"; set +a
 fi
+if [[ -n "$requested_brain_url" ]]; then export BRAIN_URL="$requested_brain_url"; fi
 export WF_PLAN_PATH="$WF_HOME/plans/$WF_ARG_CAP.plan"
 [[ -r "$WF_PLAN_PATH" ]] || { print -u2 '正式发布计划缺失'; exit 1; }
 source "$WF_PLAN_PATH"
