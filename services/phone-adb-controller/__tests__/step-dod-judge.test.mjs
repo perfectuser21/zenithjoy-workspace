@@ -230,3 +230,35 @@ test("接线守卫：批次/收工/触达三处给裁判读回上下文；部署
   }
   assert.match(dep.slice(dep.indexOf("MMV_PROBE_FILES=(")), /step-judge\.mjs step-dod\.json step-dod-stats\.mjs/);
 });
+
+// 新正式102 r3：原件评论4头与真实输入树，不把正文评论文本当面板。
+const PROCESS_SPEC_PATH=join(SRC,'plans','douyin_video_processing.steps.json');
+function processCommentPanelJudgment(xml,{scoped=true,tag='headerProof'}={}) {
+ const d=mkdtempSync(join(tmpdir(),'comment-header-'));
+ const name=scoped?`${tag}-v7674939415818521875-collection-comments-panel.xml`:`${tag}-collection-comments-panel.xml`;
+ writeFileSync(join(d,name),xml);
+ const all=JSON.parse(readFileSync(PROCESS_SPEC_PATH,'utf8'));
+ const step=all.steps.find(s=>s.key==='douyin_video_processing.collection.open_comment_section');
+ return judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{tag,evidenceDir:d,metrics:{videos_processed:1}}}).steps[0];
+}
+const POI_COMMENT_FIXTURE=join(HERE,'fixtures','comment-panel','poi-header-861.xml');
+test('正式102真实评论 n头原件通过；无需降videos_processed阈值',()=>{
+ const original=readFileSync(process.env.COMMENT_PANEL_REAL_XML||POI_COMMENT_FIXTURE,'utf8');
+ const result=processCommentPanelJudgment(original);
+ assert.deepEqual([result.observed,result.pass],[1,true]);
+});
+test('正式102正文评论 n、地点点评、缺输入框、错包不得冒评论header',()=>{
+ const original=readFileSync(POI_COMMENT_FIXTURE,'utf8');
+ for(const wrong of [original.replace('text="评论 4"','text="评论 4"').replace('resource-id="com.ss.android.ugc.aweme:id/ez-"','resource-id="com.ss.android.ugc.aweme:id/comment_body"'),original.replace('text="评论 4"','text="点评 4"'),original.replace('class="android.widget.EditText"','class="android.widget.TextView"'),original.replaceAll('com.ss.android.ugc.aweme','com.ss.android.ugc.aweme.evil')]){
+  const r=processCommentPanelJudgment(wrong);assert.deepEqual([r.observed,r.pass],[0,false]);
+ }
+});
+test('正式102缺本run逐VID scope不能用面板通过，不改独立实际VID门禁',()=>{
+ const r=processCommentPanelJudgment(readFileSync(POI_COMMENT_FIXTURE,'utf8'),{scoped:false});
+ assert.deepEqual([r.observed,r.pass],[0,false]);
+});
+
+test('正式102旧真实n条评论header继续通过',()=>{
+ const r=processCommentPanelJudgment(readFileSync(join(HERE,'fixtures','comment-panel','legacy-header-861.xml'),'utf8'));
+ assert.deepEqual([r.observed,r.pass],[1,true]);
+});
