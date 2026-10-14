@@ -292,6 +292,7 @@ except Exception: print("medium")' "$count")"
         (( attempt < 3 )) && qv_relocate_comment "$nick" "$body" || break
       done
       [[ -n "$identity" ]] || { qv_log "identity_unconfirmed row=$total"; return 6; }
+      local recipient_profile_eid="$QV_EID-person$total-t$attempt"
       oid="$(qv_field "$identity" douyin_id)"; atype="$(qv_field "$identity" account_type)"; ip="$(qv_field "$identity" profile_ip)"
       if [[ -z "$oid" && "$(qv_field "$identity" profile_status)" == unavailable && "$(qv_field "$identity" unavailable_reason)" == account_deregistered ]]; then
         local unavailable_proof unavailable_eid="$QV_EID-person$total-t$attempt" unavailable_root="${DOUYIN_PHONE_TMP_ROOT:-/private/tmp/openclaw-phone}/evidence/$P" unavailable_file
@@ -336,6 +337,7 @@ except Exception: print("medium")' "$count")"
       DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-after-card$total-open" </dev/null >/dev/null || return 4
       DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-after-card$total" || return 4
       "$C" --profile "$P" open-comments "$QV_EID-after-card$total-comments" </dev/null >/dev/null || return 6
+      node "$QV_DIR/queued-recipient-evidence.js" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL" "$P" "$oid" "$onick" "$body" "$identity_started" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$recipient_profile_eid" "$QV_EID-after-card$total" || return 8
       emitted[$oid$'\t'$body]=1; covered=$((covered+1))
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
       # 名片返回后页面重排；下一条重新collect，绝不沿用旧坐标。

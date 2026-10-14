@@ -188,6 +188,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       let inserted = 0;
       for (const comment of input.comments || []) {
         if (!comment.nickname || !comment.commentBody) throw Error('评论身份或正文缺失');
+        if(comment.recipientEvidence?.status==='verified'){
+          const e=comment.recipientEvidence;
+          if(e.scope?.video_id!==input.video_id||e.scope?.profile&&!require('./line-routes.js').routeOf(lineKey).profiles.includes(e.scope.profile))throw Error('recipient采集归属错误');
+          require('./queued-recipient-evidence.js').validateEvidence(e,{line_key:lineKey,run,douyin_id:comment.douyinId,nickname:comment.nickname,comment_body:comment.commentBody,comment_body_sha256:require('./queued-recipient-evidence.js').hash(comment.commentBody),video_url:comment.sourceVideoUrl});
+        }
         const result = await db.upsertComment(client, { ...comment, lineKey, harvestBatch: run });
         if (result.inserted) inserted++;
       }

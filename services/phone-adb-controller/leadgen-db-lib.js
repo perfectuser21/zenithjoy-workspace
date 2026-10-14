@@ -132,19 +132,19 @@ async function upsertComment(pool, row) {
   const {
     lineKey, harvestBatch = null, keyword = null, sourceVideo = null, sourceVideoUrl = null,
     commentBody = "", nickname = "", douyinId = null, profileUrl = null, accountType = null,
-    commentTime = null, profileIp = null, region = null,
+    commentTime = null, profileIp = null, region = null, recipientEvidence = undefined,
   } = row;
   if (!lineKey) throw new Error("upsertComment: lineKey 必填");
   const dedupKey = commentDedupKey(nickname, douyinId, commentBody);
   const res = await pool.query(
     `INSERT INTO zenithjoy.leadgen_comments
        (line_key, dedup_key, harvest_batch, keyword, source_video, source_video_url,
-        comment_body, nickname, douyin_id, profile_url, account_type, comment_time, profile_ip, region)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        comment_body, nickname, douyin_id, profile_url, account_type, comment_time, profile_ip, region${recipientEvidence!==undefined?', recipient_evidence':''})
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14${recipientEvidence!==undefined?', $15::jsonb':''})
      ON CONFLICT (line_key, dedup_key) DO NOTHING
      RETURNING id`,
     [lineKey, dedupKey, harvestBatch, keyword, sourceVideo, sourceVideoUrl,
-     commentBody, nickname, douyinId, profileUrl, accountType, commentTime, profileIp, region]
+     commentBody, nickname, douyinId, profileUrl, accountType, commentTime, profileIp, region,...(recipientEvidence!==undefined?[JSON.stringify(recipientEvidence)]:[])]
   );
   return { inserted: res.rows.length > 0, id: res.rows[0] ? res.rows[0].id : null, dedupKey };
 }
