@@ -28,8 +28,13 @@ def safe_error_text(value, limit=2000):
     for key, secret in os.environ.items():
         if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
             text = text.replace(secret, '[REDACTED]')
-    text = re.sub(r'(?i)(Bearer\s+)[^\s"\']+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?i)("[^"\n]*(?:password|token|secret|api[_-]?key|authorization)[^"\n]*"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)([\w-]*(?:password|token|secret|api[_-]?key|authorization)[\w-]*\s*=\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
+    text = re.sub(r"(?i)([\w-]*(?:password|token|secret|api[_-]?key|authorization)[\w-]*\s*=\s*)'(?:\\.|[^'\\])*'", r"\1'[REDACTED]'", text)
+    text = re.sub(r'(?im)^(\s*(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?i)((?:Bearer|Basic)\s+)[^\s"\']+', r'\1[REDACTED]', text)
     text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
+    text = re.sub(r'(https?://)[^/\s@]+@', r'\1[REDACTED]@', text)
     text = re.sub(r'(https?://[^\s?]+\?)[^\s"\']+', r'\1[REDACTED]', text)
     return text[:limit]
 
