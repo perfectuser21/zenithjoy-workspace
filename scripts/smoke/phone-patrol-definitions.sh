@@ -27,7 +27,7 @@ for revision in sorted(phone|control):
         path=pathlib.Path(folder)/'scripts/phone-account-patrol'
         runtime_before={name:digest((path/name).read_bytes()) for name in protected[revision]}
         if revision=='864154c57e88e8085d2add741a79103a28891a44':
-            test_path='services/phone-adb-controller/patrol/contracts/regression/test_failure_evidence.py'
+            test_path='services/phone-adb-controller/patrol/contracts/regression/failure-evidence.py.fixture'
             contract=subprocess.check_output(['git','show',definition_revision+':'+test_path],cwd=root)
             assert contract==(root/test_path).read_bytes(),'测试契约必须等于固定D字节'
             historical=(path/'test_failure_evidence.py').read_bytes()

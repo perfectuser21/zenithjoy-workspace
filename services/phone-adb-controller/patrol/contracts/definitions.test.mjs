@@ -69,7 +69,7 @@ for(const name of files)test(`正式${name}定义完整绑定真实固定字节�
 test('跨Python回归契约保留历史用例并在真实固定代码上执行',()=>{
  const program=`import ast,hashlib,pathlib,subprocess,sys,tempfile,tarfile,io,shutil,os
 root=pathlib.Path(sys.argv[1]); revision='864154c57e88e8085d2add741a79103a28891a44'
-fixture=root/'services/phone-adb-controller/patrol/contracts/regression/test_failure_evidence.py'
+fixture=root/'services/phone-adb-controller/patrol/contracts/regression/failure-evidence.py.fixture'
 source=fixture.read_bytes()
 old=subprocess.check_output(['git','show',revision+':scripts/phone-account-patrol/test_failure_evidence.py'],cwd=root)
 def cases(raw):
