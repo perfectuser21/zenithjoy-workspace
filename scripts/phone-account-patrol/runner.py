@@ -239,7 +239,13 @@ def phone_run(serial, task_id, deployment, attempt_run_id=None):
                 failed.failure['error_type'] = safe_error_text(detail['error_type'], 128)
             failed.failure['evidence'] = [str(STATE / preflight_name)]
             raise failed from error
-        raise error
+        detail = check.get('failure') or {}
+        code = 'source_version_mismatch' if detail.get('code') == 'source_version_mismatch' else 'prerequisite_failed'
+        failed = PatrolFailure('preflight', code, detail.get('message') or '设备运行前自检失败',
+                              host=phone['host'], exit_code=error.failure['exit_code'],
+                              stdout=error.failure['stdout'], stderr=error.failure['stderr'])
+        failed.failure['evidence'] = [str(STATE / preflight_name)]
+        raise failed from error
     save(preflight_name, safe_error_value(check))
     save('phone-' + serial + '.preflight.json', check)
     if not check.get('ok'):
