@@ -82,3 +82,12 @@ test('104旧personal/A飞书待触达行缺独立native资格不能领取，prot
   {sourceCommit:'a'.repeat(40),client,lock:async(_line,fn)=>fn(),eligibleOrders:async()=>[],policy:async()=>({template:{id:'approved',version:'B',message:'你好'}})});
  assert.deepEqual(result,[]);assert.equal(puts,0);assert.equal(row.fields['状态'],'待触达');
 });
+
+test('同昵称旧PGlead UID不同不能把comment→lead别名冒成ready身份',()=>{
+ const {nativeIntent}=require('../leadgen-outreach-bridge.js');const row=pendingBridge();row.payload.lead_identity={id:lid,line_key:'jinuo',douyin_id:'other987'};row.payload_sha256=require('crypto').createHash('sha256').update(JSON.stringify(row.payload)).digest('hex');
+ assert.throws(()=>nativeIntent(row),/BRIDGE_/);
+});
+test('未知POST读回须核持久fields hash，篡改expected payload不能假confirmed',()=>{
+ const {fieldsMatch,buildOrderFields}=require('../leadgen-outreach-bridge.js'),{routeOf}=require('../line-routes.js');const row=pendingBridge();row.fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:1}]);row.fields_sha256='0'.repeat(64);
+ assert.equal(fieldsMatch(row,{record_id:'recABC123456',fields:structuredClone(row.fields)}),false);
+});
