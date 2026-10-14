@@ -17,7 +17,7 @@ function fakeOriginalOrders(){
  const rows=['ABC123','abc123'].map((id,i)=>({record_id:'recFAKEONLY12'+i,fields:{'状态':'待触达','发送状态':'未发送','抖音号':id,'主页链接':'https://v.douyin.com/FAKEONLY/','AI判断理由':'[A]','抖音昵称':'fake'+i}}));
  const client={all:async()=>structuredClone(rows),get:async id=>structuredClone(rows.find(r=>r.record_id===id)),put:async(id,fields)=>{Object.assign(rows.find(r=>r.record_id===id).fields,fields);}};
  const message='明确fake审批正文',digest=createHash('sha256').update(message).digest('hex');
- const deps={sourceCommit:source,client,policy:async()=>({template:{id:'fake-B',version:'B',message,message_sha256:digest}}),lock:(line,fn)=>orders.withOrderLock(line,fn,{directory})};
+ const deps={sourceCommit:source,client,eligibleOrders:async(_route,rows)=>rows.map(r=>r.record_id),policy:async()=>({template:{id:'fake-B',version:'B',message,message_sha256:digest}}),lock:(line,fn)=>orders.withOrderLock(line,fn,{directory})};
  const input={line:'jinuo',run:'fake104',profile:'jinoshengyuan-work',sender_douyin_id:'langzi63485',limit:1};
  return {rows,deps,input,source,digest,clean:()=>rmSync(directory,{recursive:true,force:true})};
 }

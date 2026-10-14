@@ -3,9 +3,12 @@
 const crypto=require('node:crypto');
 async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},deps={}){
  if(!lead?.id||!comment?.id||comment.line_key!==lineKey)throw Error('BRIDGE_IDENTITY_INVALID');
- const qualification=await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config);
+ const mapped=(await client.query('SELECT id,line_key,douyin_id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND id=$2',[lineKey,lead.id])).rows;
+ const leadIdentity=mapped.length===1?mapped[0]:null;
+ let qualification=await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config);
  if(!['passed','excluded','unknown'].includes(qualification?.status))throw Error('BRIDGE_QUALIFICATION_INVALID');
- const intent={version:1,line_key:lineKey,run,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,
+ if(qualification.status==='passed'&&(!leadIdentity||leadIdentity.id!==lead.id||leadIdentity.line_key!==lineKey||leadIdentity.douyin_id!==comment.douyin_id))qualification={...qualification,status:'unknown',reason:'lead_identity_mapping_unverified'};
+ const intent={version:1,line_key:lineKey,run,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
    target_douyin_id:comment.douyin_id,nickname:comment.nickname,comment_body:comment.comment_body,
    profile_url:comment.profile_url,source_video:comment.source_video,source_video_url:comment.source_video_url,
    intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
@@ -25,12 +28,13 @@ function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`
 function nativeIntent(row){
  const p=row.payload;
  if(!p||row.line_key!==p.line_key||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
+ if(!p.lead_identity||p.lead_identity.id!==p.lead_id||p.lead_identity.line_key!==p.line_key||p.lead_identity.douyin_id!==p.target_douyin_id)throw Error('BRIDGE_LEAD_IDENTITY_INVALID');
  if(!p.profile_url||!/^https:\/\/(?:www|v)\.douyin\.com\/[A-Za-z0-9._/-]+$/.test(p.profile_url))throw Error('BRIDGE_PROFILE_LINK_MISSING');
  evidence.validateEvidence(p.recipient_evidence,{line_key:p.line_key,run:p.comment_run,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body:p.comment_body,comment_body_sha256:evidence.hash(p.comment_body),video_url:p.source_video_url});
  return p;
 }
 function fieldsMatch(row,record){
- const expected=row.fields;if(!expected||!record?.fields||txt(record.fields['合规核验状态'])!==bridgeMarker(row)||txt(record.fields['抖音号']).toLowerCase()!==String(row.payload.target_douyin_id).toLowerCase())return false;
+ const expected=row.fields;if(!expected||digest(expected)!==row.fields_sha256||!record?.fields||txt(record.fields['合规核验状态'])!==bridgeMarker(row)||txt(record.fields['抖音号']).toLowerCase()!==String(row.payload.target_douyin_id).toLowerCase())return false;
  return Object.entries(expected).every(([k,v])=>txt(record.fields[k])===String(v));
 }
 function buildOrderFields(row,route,types){
@@ -52,7 +56,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
     result[excluded?'excluded':'unknown']++;continue;
    }
-   try{nativeIntent(row);}catch{result.unknown++;continue;}
+   try{nativeIntent(row);}catch{result.unknown++;result.verified=false;continue;}
    if(!api)api=await outreach.orderClient(route);
    let all;try{all=await api.all();}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));
@@ -67,7 +71,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
    let fields;try{fields=buildOrderFields(row,route,await api.fields());}catch{result.unknown++;result.verified=false;continue;}
    const stored=await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='attempted',fields=$3::jsonb,fields_sha256=$4,attempted_at=now(),updated_at=now() WHERE line_key=$1 AND id=$2 AND state IN ('pending','unknown') AND attempted_at IS NULL RETURNING *",[route.key,row.id,JSON.stringify(fields),digest(fields)]);
    if(stored.rowCount!==1)throw Error('BRIDGE_ATTEMPT_NOT_PERSISTED');
-   row.fields=fields;row.state='attempted';
+   row.fields=fields;row.fields_sha256=digest(fields);row.state='attempted';
    try{await api.post(fields);}catch{await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET last_error=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,'post_outcome_unknown']);}
    let back;try{back=(await api.all()).filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));}catch{back=[];}
    if(back.length===1&&fieldsMatch(row,back[0])){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='confirmed',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,back[0].record_id]);result.published++;}
@@ -78,8 +82,8 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
 }
 module.exports={enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fieldsMatch,buildOrderFields};
 async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
- let owned=false;if(!pool){pool=require('./leadgen-db-connect.js').getPool();owned=true;}
- try{
+ if(!pool)throw Error('BRIDGE_PG_AUTHORITY_MISSING');
+ {
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,step:'104'});
   const ids=all.map(r=>r.record_id);if(ids.length>3000)throw Error('BRIDGE_ORDER_SCOPE_EXCEEDED');
   const rows=ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
@@ -90,6 +94,6 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
    const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
   }catch{/* 旧/错scope/缺native证明均不ready，不改原记录。 */}}
   return allowed;
- }finally{if(owned)await pool.end();}
+ }
 }
 module.exports.eligibleOrders=eligibleOrders;

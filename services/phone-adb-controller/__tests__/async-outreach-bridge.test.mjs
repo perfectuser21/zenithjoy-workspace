@@ -12,6 +12,7 @@ function markPool({failOutbox=false}={}) {
   if(/SELECT \* FROM zenithjoy.leadgen_comments/.test(sql))return {rows:[comment]};
   if(/SELECT id, dup_hit_count/.test(sql))return {rows:[]};
   if(/INSERT INTO zenithjoy.leadgen_leads/.test(sql))return {rows:[{id:lid}]};
+  if(/SELECT id,line_key,douyin_id FROM zenithjoy.leadgen_leads/.test(sql))return {rows:[{id:lid,line_key:'jinuo',douyin_id:'person987'}]};
   if(/INSERT INTO zenithjoy.leadgen_bridge_outbox/.test(sql)){if(failOutbox)throw Error('outbox unavailable');return {rows:[{id:cid}]};}
   return {rows:[],rowCount:1};
  },release(){calls.push({sql:'RELEASE'});}};
@@ -42,7 +43,7 @@ import {mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 function pendingBridge(){
- const p={version:1,line_key:'jinuo',run:'score103',source_run:'source102',comment_id:cid,lead_id:lid,target_douyin_id:'person987',nickname:'待核个人',comment_body:'在哪里报名',profile_url:'https://www.douyin.com/user/person987',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',intent_grade:'A',judgment_reason:'原分档',qualification:{status:'passed',company_id:'company1',company_version:3}};
+ const p={version:1,line_key:'jinuo',run:'score103',source_run:'source102',comment_id:cid,lead_id:lid,lead_identity:{id:lid,line_key:'jinuo',douyin_id:'person987'},target_douyin_id:'person987',nickname:'待核个人',comment_body:'在哪里报名',profile_url:'https://www.douyin.com/user/person987',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',intent_grade:'A',judgment_reason:'原分档',qualification:{status:'passed',company_id:'company1',company_version:3}};
  const pkg='com.ss.android.ugc.aweme',vid='7637880891511528896',prefix='source102-v'+vid+'-collection';
  const profile=`<hierarchy><node package="${pkg}" text="待核个人" content-desc="待核个人，复制名字和修改备注"/><node package="${pkg}" text="抖音号：person987"/><node package="${pkg}" text="普通职员，想学习AI考证"/></hierarchy>`;
  const returned=`<hierarchy><node package="${pkg}" class="android.widget.TextView" resource-id="${pkg}:id/title" text="4条评论"/><node package="${pkg}" class="android.widget.EditText" resource-id="${pkg}:id/ety"/><node package="${pkg}" text="待核个人"/><node package="${pkg}" text="在哪里报名"/></hierarchy>`;
@@ -53,7 +54,7 @@ function pendingBridge(){
 function bridgeStore(row){
  const calls=[];return {calls,async query(sql,args){calls.push({sql,args});
   if(/SELECT \* FROM zenithjoy.leadgen_bridge_outbox/.test(sql))return {rows:[row]};
-  if(/SET state='attempted'/.test(sql)){row.state='attempted';row.fields=JSON.parse(args[2]);return {rows:[row],rowCount:1};}
+  if(/SET state='attempted'/.test(sql)){row.state='attempted';row.fields=JSON.parse(args[2]);row.fields_sha256=args[3];return {rows:[row],rowCount:1};}
   if(/SET state='confirmed'/.test(sql)){row.state='confirmed';row.feishu_record_id=args[2];return {rows:[row],rowCount:1};}
   return {rows:[],rowCount:1};
  }};

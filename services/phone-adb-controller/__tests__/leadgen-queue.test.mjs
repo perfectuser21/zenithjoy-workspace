@@ -68,9 +68,9 @@ test('评论评分模型失败留在待评分队列，不降成C档', async () =
 
 test('标记人的更新与评论完成状态原子提交，已有已触达人只增加重复标记', async () => {
   const pool = fakePool([
-    { rows: [] }, { rows: [{ id: 'c1', dedup_key: '甲|id|报名', nickname: '甲', douyin_id: 'id',
+    { rows: [] }, { rows: [{ id: 'c1', line_key:'jinuo', dedup_key: '甲|id|报名', nickname: '甲', douyin_id: 'id',
       comment_body: '如何报名', source_video: '培训', relevance: '相关', intent_grade: 'A' }] },
-    { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, { rows: [] },
+    { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, {rows:[{id:'l1',line_key:'jinuo',douyin_id:'id'}]}, { rows: [] }, {rows:[]},
   ]);
   const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 });
   assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'] });
