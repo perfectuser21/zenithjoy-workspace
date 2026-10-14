@@ -149,6 +149,21 @@ class ActionsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             store.record_execution('publish', 'code', 'pass', {'value': 1})
 
+    def test_policy_recovery_cannot_change_frozen_goal_input_or_total_budget(self):
+        policy = self.home / 'policy.json'
+        actions.install_policy(policy, self.envelope)
+        actions.close_policy(policy, stopped=True)
+        for mutate in [lambda e: e.update(deadline_at=time.time() + 1000),
+                       lambda e: e['input']['authorization']['scope'].update(visibility='public'),
+                       lambda e: e['definition'].update(snapshot_sha256='changed'),
+                       lambda e: e['contract']['environment'].update(fingerprint='changed'),
+                       lambda e: e.update(run_id='run-1')]:
+            candidate = copy.deepcopy(self.envelope)
+            candidate.update(run_id='run-2', owner_epoch=2, attempt=2)
+            mutate(candidate)
+            with self.assertRaises(ValueError):
+                actions.install_policy(policy, candidate)
+
     def test_gate_refuses_late_controller_even_if_original_device_owner_remains(self):
         policy = self.home / 'policy.json'
         actions.install_policy(policy, self.envelope)
@@ -165,7 +180,8 @@ class ActionsTest(unittest.TestCase):
         registry.write_text('p1\tSER1\tMODEL\t1199\t2663\n')
         adb = self.home / 'adb'
         log = self.home / 'adb.log'
-        adb.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_ADB_LOG"\ncase "$*" in *get-state*) echo device;; *"getprop ro.product.model"*) echo MODEL;; *"dumpsys window"*) echo "mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}";; *" pull "*) for last; do :; done; printf PNGDATA > "$last";; esac\nexit 0\n')
+        work = self.home / 'external-work.json'
+        adb.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_ADB_LOG"\ncase "$*" in *get-state*) echo device;; *"getprop ro.product.model"*) echo MODEL;; *"dumpsys window"*) echo "mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}";; *"shell input tap"*) printf \'{"work_id":"work-1","privacy":"private"}\' > "$TEST_WORK";; *" pull "*) for last; do :; done; printf PNGDATA > "$last";; esac\nexit 0\n')
         adb.chmod(0o755)
         sips = self.home / 'sips'
         sips.write_text('#!/bin/sh\nfor last; do :; done\nprintf jpg > "$last"\n')
@@ -176,13 +192,15 @@ class ActionsTest(unittest.TestCase):
         (lock / 'owner').write_text('run-1\n')
         (lock / 'acquired_at').write_text(str(int(time.time())))
         policy = tmp / 'locks/SER1.commander.json'
+        helper = HERE / '__tests__/fixtures/commander-work-readback.py'
+        self.envelope['contract']['action_bindings'][0]['readback'] = {'path': '__tests__/fixtures/commander-work-readback.py', 'digest': hashlib.sha256(helper.read_bytes()).hexdigest(), 'args': [str(work)]}
         actions.install_policy(policy, self.envelope)
         env = dict(os.environ, HOME=str(self.home), DOUYIN_PHONE_REGISTRY=str(registry), DOUYIN_PHONE_TMP_ROOT=str(tmp),
                    DOUYIN_ADB_BIN=str(adb), DOUYIN_PYTHON_BIN=sys.executable, TEST_ADB_LOG=str(log),
-                   DOUYIN_SIPS_BIN=str(sips), WF_COMMANDER_ACTION_KEY='task-1:publish')
-        def call(owner, epoch, command='back', args=()):
+                   DOUYIN_SIPS_BIN=str(sips), WF_COMMANDER_ACTION_KEY='task-1:publish', TEST_WORK=str(work))
+        def call(owner, epoch, command='back', args=(), payload=None):
             return subprocess.run(['zsh', str(HERE / 'douyin-phone-adb'), '--profile', 'p1', '--lock-owner', owner, command, *args],
-                                  env=dict(env, WF_COMMANDER_OWNER_EPOCH=str(epoch)), capture_output=True, text=True, timeout=5)
+                                  env=dict(env, WF_COMMANDER_OWNER_EPOCH=str(epoch)), input=json.dumps(payload) if payload else None, capture_output=True, text=True, timeout=5)
         stale = call('run-1', 2, 'tap-evidence', ('--outward', 'publish', '10', '20', 'run-1-01-publish', '0'))
         self.assertNotEqual(stale.returncode, 0, stale.stdout + stale.stderr)
         self.assertFalse(log.exists(), 'stale child reached ADB')
@@ -195,20 +213,23 @@ class ActionsTest(unittest.TestCase):
         repeated = call('run-1', 1, 'tap-evidence', (*args, '--allow-repeat'))
         self.assertNotEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
         self.assertEqual(log.read_text().count('shell input tap'), 1)
-        self.store.readback('task-1:publish', lambda: {'status': 'committed', 'receipt': {'work_id': 'work-1'}})
+        identity = {'task_id': 'task-1', 'run_id': 'run-1', 'owner_epoch': 1}
+        readback = call('run-1', 1, 'commander-readback', payload=dict(identity, key='task-1:publish'))
+        self.assertEqual(readback.returncode, 0, readback.stdout + readback.stderr)
+        self.assertEqual(json.loads(readback.stdout)['receipt']['work_id'], 'work-1')
         before = log.read_bytes()
         actions.close_policy(policy, stopped=False)
         late = call('run-1', 1, 'open-app')
         self.assertNotEqual(late.returncode, 0, late.stdout + late.stderr)
         self.assertEqual(log.read_bytes(), before, 'late controller wrote device after quarantine')
         self.assertEqual((lock / 'owner').read_text(), 'run-1\n')
-        self.store.close('official stopped', stopped=True)
         next_env = copy.deepcopy(self.envelope)
         next_env.update(run_id='run-2', owner_epoch=2, attempt=2)
-        actions.close_policy(policy, stopped=True)
-        actions.install_policy(policy, next_env)
+        fence = call('run-1', 1, 'commander-fence', payload=dict(identity, execution_stopped=True))
+        self.assertEqual(fence.returncode, 0, fence.stdout + fence.stderr)
         (lock / 'owner').write_text('run-2\n')
-        actions.ActionStore(next_env, self.home).admit()
+        rebound = call('run-2', 2, 'commander-bind', payload=next_env)
+        self.assertEqual(rebound.returncode, 0, rebound.stdout + rebound.stderr)
         replay = call('run-2', 2, 'tap-evidence', args)
         self.assertEqual(replay.returncode, 0, replay.stdout + replay.stderr)
         self.assertEqual(log.read_text().count('shell input tap'), 1, 'new run re-published instead of using work readback')
