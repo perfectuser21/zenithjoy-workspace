@@ -44,3 +44,13 @@ test('发布协议断言在现有PR检查和自身main检查永久执行，旧�
  assert.ok(legacy.on.pull_request);assert.match(legacy.jobs.impact.uses,/\/implementation-impact.yml@[a-f0-9]{40}$/);
  assert.equal(validatePatrolCaller(legacy),true,'独立Pilot协议守卫也拒绝禁用旧caller，避免自检job关闭后失声');
 });
+test('巡查定义有独立完整发布证明，保留现有范围且不以影响N/A冒充通过',()=>{
+ const w=config(),j=w.jobs['verify-patrol-definitions'];
+ assert.ok(j,'cecelia-device-patrol-definitions须有独立完整发布验证');
+ assert.equal(j.if,"github.ref == 'refs/heads/main'");
+ assert.equal(j.needs,'caller-contract');
+ assert.equal(j.uses,w.jobs.verify.uses);
+ assert.deepEqual(j.with,{...w.jobs.verify.with,scope:'cecelia-device-patrol-definitions'});
+ assert.deepEqual(j.secrets,w.jobs.verify.secrets);
+ assert.equal(j['continue-on-error'],undefined);
+});
