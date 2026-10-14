@@ -111,10 +111,14 @@ function setup() {
 }
 
 test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目录/账本/SOP 都在)", () => {
-  const r = spawnSync("bash", [SCRIPT, "--list"], {
-    encoding: "utf8",
-    env: { ...process.env, DRIFT_REPO: join(SRC, "..", ".."), DRIFT_REF: "HEAD", DRIFT_SKIP_FETCH: "1" },
-  });
+  // Pilot不继承HOME；只读夹具使用自己的状态目录，不借开发机配置。
+  const stateDir = mkdtempSync(join(tmpdir(), "drift-list-state-"));
+  const env = { ...process.env, DRIFT_REPO: join(SRC, "..", ".."), DRIFT_REF: "HEAD", DRIFT_SKIP_FETCH: "1", DRIFT_STATE_DIR: stateDir };
+  delete env.HOME;
+  let r;
+  try {
+    r = spawnSync("bash", [SCRIPT, "--list"], { encoding: "utf8", env, timeout: 60000 });
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
   assert.equal(r.status, 0, r.stderr);
   const lines = r.stdout.split("\n").filter(Boolean);
   // --list读取DRIFT_REF=HEAD；期望也取同一固定commit，避免把未提交工作树与HEAD混比。
