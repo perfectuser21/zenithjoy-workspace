@@ -2,6 +2,11 @@
 # 四新流程Activity/Step正式发布回归：真实运行node:test，不把该套件误当Vitest。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# 取链预算与正式路由先快速阻断：传输夹具不冒真实业务成功，正式入口仍核凭据/冻结。
+node --test --test-name-pattern='真实26.511秒|正式MMV路由|MMV路由非法|真实prepare CLI消费路由env|正式入口加载凭据后保留' \
+ services/phone-adb-controller/__tests__/leadgen-client.test.mjs \
+ services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
+ services/phone-adb-controller/__tests__/split-workflows.test.mjs
 # 先运行实际部署语法命令，防止混合列表中的Python锁文件被Node校验到正式部署才失败。
 node --test services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs services/phone-adb-controller/__tests__/deployment-release-evidence.test.mjs
 # 配套Skill的源绑定、完整分发与漂移覆盖必须先通过；不冒作实际接手验收。
