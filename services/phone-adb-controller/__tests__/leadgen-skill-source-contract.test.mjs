@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import yaml from 'js-yaml';
+import {parse} from 'yaml';
 
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const flows=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'];
 const numbers={douyin_video_discovery:'101',douyin_video_processing:'102',douyin_comment_scoring:'103',douyin_lead_outreach:'104'};
 const sharedOwner='douyin_video_processing';
-function document(key){return yaml.load(readFileSync(root+'product-map/contracts/'+key+'.yaml','utf8'));}
+function document(key){return parse(readFileSync(root+'product-map/contracts/'+key+'.yaml','utf8'));}
 
 test('四首版Skill存在、身份可解析，原Activity及代码绑定保留',()=>{
   for(const flow of flows){
@@ -26,7 +26,7 @@ test('四首版Skill存在、身份可解析，原Activity及代码绑定保留'
       assert.equal(binding.revision,'contract');
       assert.ok(binding.path.startsWith('services/phone-adb-controller/skills/'));
       const text=readFileSync(root+binding.path,'utf8');
-      const front=yaml.load(text.match(/^---\n([\s\S]*?)\n---/)[1]);
+      const front=parse(text.match(/^---\n([\s\S]*?)\n---/)[1]);
       assert.equal(binding.name,front.name);
       assert.equal(binding.version,front.metadata.version);
     }
