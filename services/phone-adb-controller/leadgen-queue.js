@@ -228,6 +228,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return { scored, ids, config: evidence };
   }
   if (op === 'mark_leads') {
+    const bridgeConfig=await (deps.freezeCompanyConfig||freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'103'});
     let marked = 0, created = 0, repeats = 0;const ids=[],lead_ids=[];
     for (let n = 0; n < limit; n++) {
       const result = await transaction(pool, async client => {
@@ -243,7 +244,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           nickname: row.nickname, douyinId: row.douyin_id, profileUrl: row.profile_url,
           commentBody: row.comment_body, sourceVideo: row.source_video,
           aiJudgmentReason: `[${row.intent_grade}] ${row.judgment_reason || ''}` });
-        if(lead)await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead});
+        if(lead)await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead,config:bridgeConfig},deps);
         await db.markCommentJudgment(client, { lineKey, dedupKey: row.dedup_key,
           relevance: row.relevance, intentGrade: row.intent_grade, reason: row.judgment_reason });
         return { lead, id:row.id };
