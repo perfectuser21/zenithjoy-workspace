@@ -44,7 +44,10 @@ for(const name of files)test(`正式${name}定义完整绑定真实固定字节�
  const control='f38c5a5635d2f57554efcfee4b09163d10cfe39b';
  const phone=d.runtime.script.commands.find(c=>c.includes('/phone-account-patrol/'))?.match(/releases\/([a-f0-9]{40})\//)?.[1]??d.input_schema.properties.phone_source_revision.const;
  assert.ok([legacy,diagnostic].includes(phone));
- const requiredPhoneVersions=new Set([phone,...(name==='single'?[diagnostic]:[])]);
+ const phoneSchema=d.input_schema.properties.phone_source_revision;
+ const phoneVersions=Object.hasOwn(phoneSchema,'const')?[phoneSchema.const]:phoneSchema.enum;
+ assert.ok(Array.isArray(phoneVersions)&&phoneVersions.length>0&&phoneVersions.every(v=>[legacy,diagnostic].includes(v)));
+ const requiredPhoneVersions=new Set([...phoneVersions,...(name==='single'?[diagnostic]:[])]);
  const expected=new Set();
  for(const revision of requiredPhoneVersions){
    const installed=deploymentFiles(revision);
@@ -87,4 +90,15 @@ with tempfile.TemporaryDirectory(prefix='portable-failure-contract-') as directo
  assert before=={name:hashlib.sha256((target/name).read_bytes()).hexdigest() for name in code},'回归不得改运行字节'
 `;
  execFileSync('python3',['-c',program,root.pathname],{encoding:'utf8',stdio:'pipe'});
+});
+
+for(const name of ['single','batch'])test(`${name}默认当前864并精确兼容旧4f入口`,()=>{
+ const d=JSON.parse(readFileSync(new URL(`${name}.json`,import.meta.url)));
+ const old='4f899cab6425341646e27c5fca20979b8ac42be7',current='864154c57e88e8085d2add741a79103a28891a44',control='f38c5a5635d2f57554efcfee4b09163d10cfe39b';
+ const command=revision=>`/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/${revision}/runner.py ${name==='single'?'phone --serial {{phone_serial}}':'batch'} --execution-script "$0"`;
+ assert.equal(d.runtime.entrypoint,command(current));
+ assert.deepEqual(d.input_schema.properties.phone_source_revision,{enum:[old,current]});
+ assert.deepEqual(d.input_schema.properties.source_revision,{enum:name==='single'?[old,current,control]:[old,current]});
+ assert.deepEqual(d.input_schema.properties.control_source_revision,{const:control});
+ assert.deepEqual(d.runtime.script.commands,[command(current),command(old),...(name==='single'?[`/usr/bin/python3 /Users/administrator/.local/share/infra-workflow-commander/releases/${control}/openclaw_native.py recovery-phone --demand-task-id {{recovery_demand_id}} --serial {{phone_serial}} --execution-script "$0"`]:[])]);
 });
