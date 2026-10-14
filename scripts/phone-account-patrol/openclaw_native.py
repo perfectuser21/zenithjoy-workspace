@@ -370,8 +370,54 @@ def maintain(task_id, deployment, state, call=None, current=None, run=None):
         return value
 
 
-def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
+def legacy_preflight_probe(receipt, control_revision, run):
+    """新版只读观察不替换旧执行版本，也不推断旧运行的历史根因。"""
+    remote = '/Users/jinnuoshengyuan/.local/share/phone-account-patrol/releases/' + bridge.PHONE_SOURCE_REVISION
+    command = ['/usr/bin/ssh', '-o', 'BatchMode=yes', '-o', 'ControlMaster=no', '-o', 'ControlPath=none',
+               '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2',
+               '-o', 'ProxyJump=none', '-o', 'ProxyCommand=none', 'xian-m4',
+               '/opt/homebrew/bin/python3 ' + shlex.quote(remote + '/preflight.py') + ' --serial ' + shlex.quote(receipt['serial'])]
+    check = None;ok = False
+    try:
+        output = run(command, capture_output=True, text=True, timeout=60)
+        failure = {'code': 'ssh_connection_failed' if output.returncode == 255 else 'preflight_response_invalid',
+                   'message': '新版远端自检未返回可信同设备结果', 'exit_code': output.returncode,
+                   'stdout': output.stdout, 'stderr': output.stderr}
+        try:
+            check = json.loads(output.stdout) if len(output.stdout) <= 100000 else None
+        except (ValueError, RecursionError):
+            check = None
+        if output.returncode in [0, 1] and isinstance(check, dict) and check.get('serial') == receipt['serial']:
+            checks = check.get('checks') or {};detail = check.get('failure')
+            required = ['source_version', 'ocr', 'device_lock_controller', 'pillow', 'adb_online']
+            ok = output.returncode == 0 and check.get('ok') is True and isinstance(checks, dict) and all(checks.get(k) is True for k in required)
+            if not ok and check.get('ok') is False and isinstance(checks, dict) and isinstance(detail, dict):
+                code = detail.get('code')
+                if ((code == 'adb_unreachable' and checks.get('source_version') is True and checks.get('adb_online') is False and type(detail.get('exit_code')) is int)
+                        or code in ['source_version_mismatch', 'prerequisite_failed', 'adb_check_timeout', 'adb_check_failed']):
+                    failure.update(detail, stdout=output.stdout, stderr=str(output.stderr or '') + '\n' + str(detail.get('stderr') or ''))
+    except (subprocess.TimeoutExpired, OSError) as error:
+        failure = {'code': 'preflight_timeout' if isinstance(error, subprocess.TimeoutExpired) else 'ssh_launch_failed',
+                   'message': str(error), 'exit_code': None, 'error_type': type(error).__name__,
+                   'timeout_sec': 60 if isinstance(error, subprocess.TimeoutExpired) else None,
+                   'stdout': getattr(error, 'output', None), 'stderr': getattr(error, 'stderr', None)}
+    prefix = '旧runner尚未启动；新版补查前自检（诊断source=' + bridge.PHONE_SOURCE_REVISION + '）'
+    path = STATE / (receipt['run_id'] + '.legacy-preflight.json')
+    failure.update(stage='legacy_pre_execution_preflight', host='xian-m4',
+                   message=prefix + '：' + str(failure.get('message') or ''), evidence=[str(path), prefix])
+    failure = safe_failure(failure)
+    proof = dict(receipt, stage='legacy_pre_execution_preflight', diagnostic_source_revision=bridge.PHONE_SOURCE_REVISION,
+                 phone_source_revision=receipt['source_revision'], control_source_revision=control_revision,
+                 observed_at=dt.datetime.now(dt.timezone.utc).isoformat(), status='passed' if ok else 'failed',
+                 observation=safe_error_value(check), failure=None if ok else failure,
+                 transport={k: failure.get(k) for k in ['stdout', 'stderr', 'exit_code']})
+    bridge.save(STATE, path.name, proof)
+    return None if ok else failure
+
+
+def recovery_phone(script, demand_id, serial, deployment, call=None, run=None, _legacy_probed=False):
     call = call or api;run = run or subprocess.run;task_id = execution_task(script)
+    current_deployment = deployment
     demand = bridge.read_task(call, demand_id)
     revision = bridge.phone_revision(demand, deployment)
     if revision != deployment['source_revision']:
@@ -407,7 +453,12 @@ def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
     phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]
     if len(phones) != 1 or phones[0].get('host') != 'xian-m4':raise ValueError('recovery_identity_mismatch')
     if not phones[0].get('enabled'):return dict(receipt, status='stopped', reason='device_disabled'), 0
-    receipt.update(run_id=pathlib.Path(script).stem, workflow_id=deployment['single_workflow_id'])
+    receipt.update(run_id=pathlib.Path(script).stem, workflow_id=deployment['single_workflow_id'], control_source_revision=p['control_source_revision'])
+    if revision == bridge.LEGACY_PHONE_REVISION and not _legacy_probed:
+        failure = legacy_preflight_probe(receipt, p['control_source_revision'], run)
+        if failure:return dict(receipt, status='failed', failure=failure), 1
+        # 自检耗时期间可能取消、停用或有其他在途任务；完整重读全部既有守卫。
+        return recovery_phone(script, demand_id, serial, current_deployment, call, run, _legacy_probed=True)
     try:
         output = run(['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'phone', '--serial', serial, '--execution-script', script],
                      capture_output=True, text=True, timeout=1150)
@@ -424,9 +475,12 @@ def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
                     and value.get('source_revision') == deployment['source_revision'] and value.get('run_id') == receipt['run_id']
                     and isinstance(value.get('failure'), dict)):
                 return dict(receipt, status='failed', failure=safe_failure(value['failure'])), output.returncode
+        legacy = revision == bridge.LEGACY_PHONE_REVISION
+        message = '旧版运行未保存内部失败详情；先前新版自检不是本次运行失败根因' if legacy else '单手机子进程失败，详见原始错误'
+        evidence = [str(STATE / (receipt['run_id'] + '.legacy-preflight.json')), '仅起跑前观察；诊断source=' + bridge.PHONE_SOURCE_REVISION] if legacy else []
         return dict(receipt, status='failed', reason='frozen_phone_failed', failure={
-            'stage': 'phone_subprocess', 'code': 'phone_subprocess_failed', 'message': '单手机子进程失败，详见原始错误',
-            'exit_code': output.returncode, 'stdout': safe_error_text(output.stdout), 'stderr': safe_error_text(output.stderr), 'evidence': []}), output.returncode
+            'stage': 'phone_subprocess', 'code': 'legacy_failure_detail_unavailable' if legacy else 'phone_subprocess_failed', 'message': message,
+            'exit_code': output.returncode, 'stdout': safe_error_text(output.stdout), 'stderr': safe_error_text(output.stderr), 'evidence': evidence}), output.returncode
     for line in reversed(output.stdout.splitlines()):
         try:value = json.loads(line)
         except ValueError:continue

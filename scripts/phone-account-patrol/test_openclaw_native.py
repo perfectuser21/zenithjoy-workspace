@@ -304,17 +304,31 @@ class ContinuousRecoveryTests(unittest.TestCase):
 
     def test_legacy_probe_transport_dependency_and_identity_failures_never_guess_adb(self):
         for probe in [self.probe_output(returncode=255), self.probe_output('prerequisite_failed'),
-                      self.probe_output(serial='foreign'), subprocess.TimeoutExpired(['ssh'],60,stderr='timed out')]:
+                      self.probe_output('source_version_mismatch'), self.probe_output('adb_check_timeout'),
+                      self.probe_output(serial='foreign'), subprocess.CompletedProcess([],1,'not JSON','dependency missing'),
+                      subprocess.TimeoutExpired(['ssh'],60,stderr='timed out')]:
             value, code, commands = self.legacy_execution(probe)
             self.assertEqual(len(commands),1);self.assertNotEqual(code,0)
             self.assertNotEqual(value['failure']['code'],'adb_unreachable')
             self.setUp()
 
     def test_legacy_probe_success_rechecks_cancellation_or_enabled_before_old_runner(self):
-        for change in [lambda demand:demand.update(status='cancelled'), lambda demand:setattr(self,'serial_enabled',False)]:
+        for change, expected in [(lambda demand:demand.update(status='cancelled'),'stopped'),
+                                 (lambda demand:setattr(self,'serial_enabled',False),'stopped'),
+                                 (lambda demand:self.tasks[CHILD].update(status='in_progress'),'deferred')]:
             value, code, commands = self.legacy_execution(self.probe_output(None, returncode=0),change)
-            self.assertEqual(len(commands),1);self.assertEqual(value['status'],'stopped');self.assertEqual(code,0)
+            self.assertEqual(len(commands),1);self.assertEqual(value['status'],expected);self.assertEqual(code,0)
             self.setUp()
+
+    def test_current_phone_does_not_duplicate_its_own_preflight(self):
+        self.cycle();demand, attempt = self.demands()[0],self.attempts()[0];attempt['status']='in_progress'
+        commands=[]
+        def execute(command, **kwargs):
+            commands.append(command)
+            return subprocess.CompletedProcess([],1,'','runtime failure')
+        value, code = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment,self.call,execute)
+        self.assertEqual(len(commands),1);self.assertEqual(commands[0][0],'/usr/bin/python3')
+        self.assertEqual(value['failure']['code'],'phone_subprocess_failed')
 
     def test_successful_probe_does_not_claim_later_legacy_failure_root_cause(self):
         value, code, commands = self.legacy_execution(self.probe_output(None, returncode=0))
@@ -338,11 +352,14 @@ class ContinuousRecoveryTests(unittest.TestCase):
         attempt['status'] = 'in_progress'
         output = subprocess.CompletedProcess([], 0, json.dumps({'task_id': attempt['id'], 'serial': 'phone-a', 'source_revision': old, 'status': 'deferred'}), '')
         commands = []
-        def execute(command, **kwargs):commands.append(command);return output
-        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy, create=True):
+        def execute(command, **kwargs):
+            commands.append(command)
+            return self.probe_output(None, returncode=0) if command[0] == '/usr/bin/ssh' else output
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy, create=True), patch.object(native, 'STATE', self.state):
             value, _ = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, execute)
         self.assertEqual(value['source_revision'], old)
-        self.assertEqual(commands[0][1], '/fixed/old/runner.py')
+        self.assertEqual(commands[0][0], '/usr/bin/ssh')
+        self.assertEqual(commands[1][1], '/fixed/old/runner.py')
         # 新版成功不能拿来冒充旧需求的同版本完成证据。
         self.complete_phone(attempt)
         with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy):self.cycle()

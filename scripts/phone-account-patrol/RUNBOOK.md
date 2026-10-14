@@ -118,3 +118,7 @@ GP-Anchor: none(infra)
 切换前通过正式 API 暂停原领跑、结果复核、30 分钟维护三个 recurring 入口，不新增 timer；等待已有 queued/in_progress 编排、单手机、补查和执行 reservation 自然结束，再读回确认静默窗口。过去某时点零在途不能作为现在的保证。窗口内保留旧 release，验证新八文件及控制器后原子更新 current 指针，完整读回并更新原三个 template 和两个 registry 元数据；原 cron、timezone、activated_at 保留。模板与元数据接口是整对象替换，必须在新鲜读回对象上合并，不能丢无关字段。
 
 指针、模板、registry 及无在途检查一致后，恢复原三个计划并读回下一时刻。任一验真失败时保持入口暂停，原子恢复旧指针及切换前完整模板/registry，再核对旧代码后恢复原计划；不取消任务、不清设备锁、不修改历史 payload 或 Run。若已有新版本任务进入执行，先保持静默并等待其自然终结，不能以回滚重写其冻结身份。
+
+旧版需求的后续generation保留4f冻结执行源码。通过现有任务/需求/手机/控制器身份与取消、启用、占用守卫后，控制器仅调用864固定release的远端preflight一次；它只读ADB与依赖，不操作UI、不获取或释放锁、不重试。按真实attempt Run保存独立脱敏限长的`.legacy-preflight.json`，注明观察时间、诊断source864、实际phone source4f和当前control source。自检失败的Run明确“旧runner尚未启动；新版补查前自检”，不启动旧runner；只有自检明确返回ADB不可达才标ADB错误，SSH、依赖、版本和超时各自区分。
+
+自检成功后完整重读取消、启用及同手机占用守卫，再启动原版runner；新864任务不重复增加自检。起跑前观察不能证明随后旧版中途失败的根因，旧runner未留内部证据时明确“旧版运行未保存内部失败详情”，仅引用独立前置观察，不回填历史、不声称全部legacy错误已详解。此最窄修复保留现有aux模块职责，`openclaw_native.py`暂超dev建议的500行soft-split阈值（不是硬门禁）；未扩展源文件白名单、未压缩逻辑凑行数。
