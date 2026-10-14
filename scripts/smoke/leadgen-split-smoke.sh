@@ -2,6 +2,8 @@
 # 四新流程Activity/Step正式发布回归：真实运行node:test，不把该套件误当Vitest。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# 先运行实际部署语法命令，防止混合列表中的Python锁文件被Node校验到正式部署才失败。
+node --test services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs
 # 正式Pilot不继承HOME；测试须自建隔离目录，不能依赖开发机个人配置。
 env -u HOME node --test --test-name-pattern='init: 额外导出|init\(preflight\) 就上报一条 span' \
  services/phone-adb-controller/__tests__/workflow-result.test.mjs \
@@ -12,7 +14,9 @@ node --test --test-name-pattern='原候选|出现消失候选|真实workflow包�
  services/phone-adb-controller/__tests__/leadgen-workflow.test.mjs \
  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
-node --test services/phone-adb-controller/__tests__/outreach-walking-skeleton.test.mjs \
+node --test services/phone-adb-controller/__tests__/async-outreach-bridge.test.mjs \
+ services/phone-adb-controller/__tests__/recipient-evidence.test.mjs \
+ services/phone-adb-controller/__tests__/outreach-walking-skeleton.test.mjs \
  services/phone-adb-controller/__tests__/outreach-queue-boundary.test.mjs \
  services/phone-adb-controller/__tests__/private-message-delta.test.mjs \
  scripts/product-map/__tests__/leadgen-split-contracts.test.js \
@@ -36,6 +40,7 @@ node --test services/phone-adb-controller/__tests__/outreach-walking-skeleton.te
  services/phone-adb-controller/__tests__/leadgen-queue.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-rpc.test.mjs \
  services/phone-adb-controller/__tests__/runtime-definition.test.mjs \
+ services/phone-adb-controller/__tests__/step-dod-judge.test.mjs \
  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
  services/phone-adb-controller/__tests__/workflow-result.test.mjs \
  services/phone-adb-controller/__tests__/workflow-result-span.test.mjs \

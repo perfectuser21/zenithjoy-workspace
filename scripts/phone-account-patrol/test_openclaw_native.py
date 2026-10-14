@@ -26,10 +26,25 @@ ROUTING = '99999999-9999-4999-8999-999999999999'
 
 
 class NativeCommanderTests(unittest.TestCase):
+    def test_failure_marks_local_clipping_and_preserves_upstream_truncation(self):
+        for value in [{'message':'m'*1001}, {'stdout':'o'*2001}, {'stderr':'e'*2001},
+                      {'evidence':['proof']*11}, {'evidence':['p'*501]}]:
+            with self.subTest(field=list(value)):
+                failure=native.safe_failure(value)
+                self.assertTrue(failure['truncated'])
+        self.assertTrue(native.safe_failure({'message':'short','truncated':True})['truncated'])
+        self.assertFalse(native.safe_failure({'message':'short','evidence':['proof']})['truncated'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.state = pathlib.Path(self.temp.name)
+        controller = self.state / 'controllers' / ('a' * 40) / 'openclaw_native.py'
+        controller.parent.mkdir(parents=True);controller.write_bytes(pathlib.Path(__file__).with_name('openclaw_native.py').read_bytes())
+        original_file = native.__file__;native.__file__ = str(controller)
+        self.addCleanup(setattr, native, '__file__', original_file)
+        original_root = native.bridge.CONTROL_RELEASES;native.bridge.CONTROL_RELEASES = (self.state / 'controllers').resolve()
+        self.addCleanup(setattr, native.bridge, 'CONTROL_RELEASES', original_root)
         self.deployment = {'release': '/fixed/release', 'source_revision': native.bridge.PHONE_SOURCE_REVISION,
                            'project_id': PROJECT, 'batch_workflow_id': WORKFLOW, 'single_workflow_id': SINGLE, 'schedule_id': SCHEDULE}
         self.leader = {'id': LEADER, 'task_type': 'qiumi_task', 'status': 'in_progress', 'project_id': PROJECT,
@@ -221,6 +236,209 @@ class NativeCommanderTests(unittest.TestCase):
 
 
 class ContinuousRecoveryTests(unittest.TestCase):
+    def test_nonformal_canary_candidate_and_pre_activation_phones_do_not_block_partition(self):
+        for index, shape in enumerate([
+            {'task_type':'script_run','status':'cancelled','created_at':'2026-10-12T08:41:27Z','parent_task_id':None,'payload':{'workflow_id':WORKFLOW,'source_revision':'2'*40,'recurring_task_id':ROUTING,'recurring_slot':'2026-10-12T08:41:00Z'}},
+            {'task_type':'script_run','status':'completed','created_at':'2026-10-10T09:47:14Z','parent_task_id':ROUTING,'payload':{'workflow_id':SINGLE,'source_revision':'6'*40,'phone_serial':'phone-a'}},
+            {'task_type':'script_run','status':'paused','created_at':'2026-10-10T09:05:40Z','parent_task_id':ROUTING,'payload':{'workflow_id':SINGLE,'source_revision':'1'*40,'phone_serial':'phone-a'}}]):
+            task = dict(shape,id=str(uuid_module.UUID(int=500+index)),project_id=PROJECT)
+            self.tasks[task['id']] = task
+        self.cycle();self.assertEqual(len(self.demands()),1);self.assertEqual(len(self.attempts()),1)
+
+    def test_formal_child_missing_workflow_cannot_escape_unknown_source_guard(self):
+        self.tasks[CHILD]['payload'].pop('workflow_id')
+        self.tasks[CHILD]['payload']['source_revision']='f'*40
+        with self.assertRaises(ValueError):self.cycle()
+        self.assertEqual(self.posts,[])
+
+    def test_formal_demand_parent_cannot_hide_behind_foreign_origin_pointers(self):
+        self.cycle();demand = self.demands()[0]
+        demand['payload'].update(origin_task_id=REVIEW, origin_batch_task_id=REVIEW, phone_source_revision='f'*40)
+        self.posts.clear()
+        with self.assertRaises(ValueError):native.recovery_partition(list(self.tasks.values()), self.call('recurring-tasks')[0], self.deployment)
+        self.assertEqual(self.posts,[])
+
+    def test_formal_attempt_cannot_hide_as_attention_record(self):
+        self.cycle();attempt = self.attempts()[0]
+        attempt['payload'].update(recovery_attention=True, phone_source_revision='f'*40)
+        self.posts.clear()
+        with self.assertRaises(ValueError):self.cycle()
+        self.assertEqual(self.posts,[])
+
+    def test_unversioned_current_wrapper_cannot_self_attest_with_task_hash(self):
+        self.cycle();demand = self.demands()[0];attempt = self.attempts()[0];attempt['status'] = 'in_progress'
+        loose = self.state / 'unversioned' / 'openclaw_native.py';loose.parent.mkdir();loose.write_text('unversioned controller')
+        loose = loose.resolve()
+        attempt['payload'].update(cmd='/usr/bin/python3 ' + str(loose) + ' recovery-phone --demand-task-id ' + demand['id'] + ' --serial phone-a --execution-script "$0"',control_sha256=hashlib.sha256(loose.read_bytes()).hexdigest())
+        with patch.object(native, '__file__', str(loose)), self.assertRaises(ValueError):
+            native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, lambda *a, **k: self.fail('未验真入口不应运行手机'))
+
+    def legacy_execution(self, probe, after_probe=None):
+        old = native.bridge.LEGACY_PHONE_REVISION
+        legacy = dict(self.deployment, source_revision=old, release='/fixed/old')
+        self.tasks[BATCH]['payload'].update(source_revision=old, cmd='/usr/bin/python3 /fixed/old/runner.py batch --execution-script "$0"')
+        self.tasks[CHILD]['payload']['source_revision'] = old
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy):self.cycle()
+        demand, attempt = self.demands()[0], self.attempts()[0];attempt['status'] = 'in_progress'
+        commands = []
+        def execute(command, **kwargs):
+            commands.append(command)
+            if command[0] == '/usr/bin/ssh':
+                if after_probe:after_probe(demand)
+                if isinstance(probe, Exception):raise probe
+                return probe
+            return subprocess.CompletedProcess([], 255, '', 'legacy runner failure')
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy), patch.object(native, 'STATE', self.state):
+            value, code = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, execute)
+        return value, code, commands
+
+    def probe_output(self, code='adb_unreachable', serial='phone-a', returncode=1):
+        checks = dict(source_version=True, ocr=True, device_lock_controller=True, pillow=True, adb_online=code is None)
+        return subprocess.CompletedProcess([], returncode, json.dumps({'ok':code is None, 'serial':serial, 'checks':checks,
+            'failure':{'code':code,'message':'device not found; password="fake secret"','stderr':'offline','exit_code':1} if code else None}), '')
+
+    def test_legacy_adb_probe_records_distinct_diagnostic_identity_without_starting_old_runner(self):
+        value, code, commands = self.legacy_execution(self.probe_output())
+        self.assertEqual(len(commands),1);self.assertEqual(commands[0][0],'/usr/bin/ssh')
+        self.assertIn(native.bridge.PHONE_SOURCE_REVISION, commands[0][-1])
+        self.assertEqual(value['failure']['stage'],'legacy_pre_execution_preflight')
+        self.assertEqual(value['failure']['code'],'adb_unreachable');self.assertNotEqual(code,0)
+        self.assertIn('旧runner尚未启动',value['failure']['message'])
+        self.assertIn(native.bridge.PHONE_SOURCE_REVISION,value['failure']['message'])
+        self.assertNotIn('fake secret',json.dumps(value));self.assertEqual(value['source_revision'],native.bridge.LEGACY_PHONE_REVISION)
+        proof = json.loads(next(self.state.glob('*.legacy-preflight.json')).read_text())
+        self.assertEqual(proof['run_id'],value['run_id']);self.assertEqual(proof['diagnostic_source_revision'],native.bridge.PHONE_SOURCE_REVISION)
+        self.assertEqual(proof['phone_source_revision'],native.bridge.LEGACY_PHONE_REVISION)
+        self.assertEqual(proof['control_source_revision'],'a'*40);self.assertIn('observed_at',proof)
+
+    def test_legacy_probe_transport_dependency_and_identity_failures_never_guess_adb(self):
+        for probe in [self.probe_output(returncode=255), self.probe_output('prerequisite_failed'),
+                      self.probe_output('source_version_mismatch'), self.probe_output('adb_check_timeout'),
+                      self.probe_output(serial='foreign'), subprocess.CompletedProcess([],1,'not JSON','dependency missing'),
+                      subprocess.TimeoutExpired(['ssh'],60,stderr='timed out')]:
+            value, code, commands = self.legacy_execution(probe)
+            self.assertEqual(len(commands),1);self.assertNotEqual(code,0)
+            self.assertNotEqual(value['failure']['code'],'adb_unreachable')
+            self.setUp()
+
+    def test_legacy_probe_timeout_preserves_and_redacts_partial_bytes_logs(self):
+        error = subprocess.TimeoutExpired(['ssh'],60,output=b'partial device response password="fake secret"',stderr=b'partial SSH stderr')
+        value, code, commands = self.legacy_execution(error)
+        failure=value['failure']
+        self.assertEqual(len(commands),1);self.assertNotEqual(code,0)
+        self.assertEqual(failure['code'],'preflight_timeout');self.assertEqual(failure['timeout_sec'],60)
+        self.assertIsNone(failure['exit_code']);self.assertTrue(failure['evidence'])
+        self.assertIn('partial device response',failure.get('stdout',''))
+        self.assertIn('partial SSH stderr',failure.get('stderr',''))
+        self.assertNotIn('fake secret',json.dumps(value))
+
+    def test_legacy_probe_timeout_keeps_original_bytes_or_string_clipping_flag(self):
+        for output in [b'partial '+b'x'*2100, 'partial '+'x'*2100]:
+            value, _, _ = self.legacy_execution(subprocess.TimeoutExpired(['ssh'],60,output=output,stderr=None))
+            self.assertTrue(value['failure']['truncated'])
+            self.assertLessEqual(len(value['failure']['stdout']),2000)
+            self.assertEqual(value['failure']['stderr'],'')
+            self.setUp()
+
+    def test_legacy_probe_success_rechecks_cancellation_or_enabled_before_old_runner(self):
+        for change, expected in [(lambda demand:demand.update(status='cancelled'),'stopped'),
+                                 (lambda demand:setattr(self,'serial_enabled',False),'stopped'),
+                                 (lambda demand:self.tasks[CHILD].update(status='in_progress'),'deferred')]:
+            value, code, commands = self.legacy_execution(self.probe_output(None, returncode=0),change)
+            self.assertEqual(len(commands),1);self.assertEqual(value['status'],expected);self.assertEqual(code,0)
+            self.setUp()
+
+    def test_current_phone_does_not_duplicate_its_own_preflight(self):
+        self.cycle();demand, attempt = self.demands()[0],self.attempts()[0];attempt['status']='in_progress'
+        commands=[]
+        def execute(command, **kwargs):
+            commands.append(command)
+            return subprocess.CompletedProcess([],1,'','runtime failure')
+        value, code = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment,self.call,execute)
+        self.assertEqual(len(commands),1);self.assertEqual(commands[0][0],'/usr/bin/python3')
+        self.assertEqual(value['failure']['code'],'phone_subprocess_failed')
+
+    def test_successful_probe_does_not_claim_later_legacy_failure_root_cause(self):
+        value, code, commands = self.legacy_execution(self.probe_output(None, returncode=0))
+        self.assertEqual(len(commands),2);self.assertEqual(commands[1][1],'/fixed/old/runner.py')
+        self.assertEqual(value['failure']['code'],'legacy_failure_detail_unavailable')
+        self.assertIn('不是',value['failure']['message']);self.assertNotEqual(code,0)
+
+    def test_old_phone_demand_continues_with_new_control_without_rewriting_identity(self):
+        old = '4f899cab6425341646e27c5fca20979b8ac42be7'
+        legacy = dict(self.deployment, source_revision=old, release='/fixed/old')
+        self.tasks[BATCH]['payload'].update(source_revision=old, cmd='/usr/bin/python3 /fixed/old/runner.py batch --execution-script "$0"')
+        self.tasks[CHILD]['payload']['source_revision'] = old
+        original = copy.deepcopy(self.tasks[CHILD])
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy, create=True):
+            self.cycle()
+        demand, attempt = self.demands()[0], self.attempts()[0]
+        self.assertEqual(demand['payload']['phone_source_revision'], old)
+        self.assertEqual(attempt['payload']['source_revision'], old)
+        self.assertEqual(attempt['payload']['control_source_revision'], 'a' * 40)
+        self.assertEqual(self.tasks[CHILD], original)
+        attempt['status'] = 'in_progress'
+        output = subprocess.CompletedProcess([], 0, json.dumps({'task_id': attempt['id'], 'serial': 'phone-a', 'source_revision': old, 'status': 'deferred'}), '')
+        commands = []
+        def execute(command, **kwargs):
+            commands.append(command)
+            return self.probe_output(None, returncode=0) if command[0] == '/usr/bin/ssh' else output
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy, create=True), patch.object(native, 'STATE', self.state):
+            value, _ = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, execute)
+        self.assertEqual(value['source_revision'], old)
+        self.assertEqual(commands[0][0], '/usr/bin/ssh')
+        self.assertEqual(commands[1][1], '/fixed/old/runner.py')
+        # 新版成功不能拿来冒充旧需求的同版本完成证据。
+        self.complete_phone(attempt)
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy):self.cycle()
+        self.assertEqual(demand['status'], 'blocked')
+        fixed = copy.deepcopy(demand['payload']);demand['status'] = 'completed_no_pr'
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy):
+            result = self.cycle()
+        self.assertEqual(demand['payload'], fixed)
+        self.assertEqual(len({x['demand_task_id'] for x in result['recovery']['demands']}), len(result['recovery']['demands']))
+
+    def test_historical_wrapper_proof_requires_original_control_revision_path_and_bytes(self):
+        self.cycle();attempt = self.attempts()[0];self.complete_phone(attempt)
+        root = (self.state / 'controllers').resolve();old = root / native.bridge.LEGACY_CONTROL_REVISION / 'openclaw_native.py';new = root / ('c' * 40) / 'openclaw_native.py'
+        old.parent.mkdir(parents=True);new.parent.mkdir(parents=True);old.write_text('frozen old controller');new.write_text('new controller')
+        attempt['payload'].update(cmd='/usr/bin/python3 ' + str(old) + ' recovery-phone --demand-task-id ' + self.demands()[0]['id'] + ' --serial phone-a --execution-script "$0"',
+            control_sha256=hashlib.sha256(old.read_bytes()).hexdigest(), control_source_revision=native.bridge.LEGACY_CONTROL_REVISION)
+        proof = lambda: native.bridge.phone_completion(attempt, 'phone-a', self.deployment, self.child['created_at'], self.tasks, self.current, new)
+        with patch.object(native.bridge, 'LEGACY_CONTROL_SHA256', hashlib.sha256(old.read_bytes()).hexdigest()):
+            self.assertIsNotNone(proof())
+            attempt['payload']['control_source_revision'] = 'd' * 40
+            self.assertIsNone(proof())
+            attempt['payload']['control_source_revision'] = native.bridge.LEGACY_CONTROL_REVISION;old.write_text('changed after frozen receipt')
+            self.assertIsNone(proof())
+            attempt['payload']['control_sha256'] = hashlib.sha256(old.read_bytes()).hexdigest()
+            self.assertIsNone(proof(), '任务自报hash与磁盘同时改写仍不得冒充已提交控制器')
+
+    def test_unknown_phone_revision_fails_before_creating_any_recovery(self):
+        self.tasks[CHILD]['payload']['source_revision'] = 'f' * 40
+        with self.assertRaises(ValueError): self.cycle()
+        self.assertEqual(self.posts, [])
+
+    def test_failed_phone_receipt_survives_recovery_without_losing_reason(self):
+        self.cycle(); demand = self.demands()[0]; attempt = self.attempts()[0]
+        attempt['status'] = 'in_progress'
+        script = '/tmp/script-' + attempt['id'] + '-a1.sh'
+        receipt = {'status': 'failed', 'task_id': attempt['id'], 'run_id': pathlib.Path(script).stem,
+                   'serial': 'phone-a', 'workflow_id': SINGLE, 'source_revision': native.bridge.PHONE_SOURCE_REVISION,
+                   'failure': {'stage': 'preflight', 'code': 'adb_unreachable', 'message': 'ADB无法连接设备',
+                               'stderr': 'device phone-a not found', 'exit_code': 1, 'evidence': []}}
+        output = subprocess.CompletedProcess([], 1, json.dumps(receipt), 'failed')
+        value, code = native.recovery_phone(script, demand['id'], 'phone-a', self.deployment, self.call, lambda *a, **k: output)
+        self.assertEqual(value['failure']['code'], 'adb_unreachable')
+        self.assertEqual(value['run_id'], pathlib.Path(script).stem)
+        self.assertEqual(code, 1)
+        for key, bad in [('task_id', CHILD), ('serial', 'foreign'), ('run_id', pathlib.Path(script).stem[:-1] + '2'), ('source_revision', 'wrong')]:
+            wrong = dict(receipt, **{key: bad})
+            value, code = native.recovery_phone(script, demand['id'], 'phone-a', self.deployment, self.call,
+                lambda *a, **k: subprocess.CompletedProcess([], 1, json.dumps(wrong), 'real error'))
+            self.assertEqual(value['failure']['code'], 'phone_subprocess_failed')
+            self.assertNotEqual(value['failure']['code'], 'adb_unreachable')
+
     def setUp(self):
         NativeCommanderTests.setUp(self)
         self.current = dt.datetime(2026, 10, 13, 3, 30, tzinfo=dt.timezone.utc)

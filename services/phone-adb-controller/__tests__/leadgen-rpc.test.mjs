@@ -17,6 +17,7 @@ test('跨机RPC核对所有27依赖固定字节，缺依赖/篡改/旧版均拒�
   assert.throws(()=>verifyRpcSource({...f.source,commit:'b'.repeat(40)},f.options),/REVISION_MISMATCH/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='step-judge.mjs')},f.options),/DEPENDENCY_MISSING/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='queued-comment-history.js')},f.options),/DEPENDENCY_MISSING/);
+  assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='nickname-match-lib.js')},f.options),/DEPENDENCY_MISSING:nickname-match-lib/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.map((r,i)=>i===0?{...r,sha256:'b'.repeat(64)}:r)},f.options),/BYTES_MISMATCH/);
 });
 test('非法路径不能被RPC读取为凭据',()=>{
@@ -43,4 +44,11 @@ test('真实RPC CLI历史短链调用不自import死锁，缺helper源字节在P
  const r=invoke(input);assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);const result=JSON.parse(r.stdout);assert.equal(result.ok,true);assert.equal(result.result.rows.length,1);assert.equal(result.result.url_proofs[0].video_id,vid);
  const before=readFileSync(queries,'utf8');assert.ok(before.split('\n').filter(Boolean).map(sql=>JSON.parse(sql)).every(sql=>sql.startsWith('SELECT')));
  const bad=invoke({...input,source:{...input.source,files:input.source.files.filter(f=>f.path!=='queued-comment-history.js')}});assert.equal(bad.status,1);assert.match(bad.stdout,/RPC_SOURCE_DEPENDENCY_MISSING:queued-comment-history.js/);assert.equal(readFileSync(queries,'utf8'),before,'未核来源不可触PG');
+});
+
+test('异步桥/native资格新增依赖必须同source闭包，缺任一helper在业务SQL前拒绝',async()=>{
+ const names=['queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js'];
+ for(const name of names){const f=fixture();let used=false;const source={...f.source,files:f.source.files.filter(r=>r.path!==name)};
+ await assert.rejects(handleRpc({kind:'queue',source,request:{op:'bridge_outreach',line:'jinuo',run:'score103'}},{verify:s=>verifyRpcSource(s,f.options),pool:{query:async()=>{used=true;return {rows:[]};}}}),/DEPENDENCY_MISSING/);
+ assert.equal(used,false);}
 });

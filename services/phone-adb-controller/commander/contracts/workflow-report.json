@@ -4,7 +4,7 @@
   "capability_id": "5b6d89cf-d972-4ef4-902e-c0f595f29465",
   "channel": "internal",
   "form": "report",
-  "version": "1.0.3",
+  "version": "1.0.11",
   "runtime": {
     "skill_id": "12a55e87-5d74-4669-9677-e121863d1af6",
     "entrypoint": "wf-launch.sh --envelope"

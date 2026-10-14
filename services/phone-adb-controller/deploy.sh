@@ -200,6 +200,7 @@ MMV_JS_FILES=(
   fetch-seen-videos.js fetch-seen-titles.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
   own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
   stats-line.js notify-bark.js push-stats-lib.js
+  outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js
   queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs
   leadgen-outreach-orders.js
   pg-notion-mirror-lib.js leadgen-notion-mirror.js
@@ -262,8 +263,8 @@ DEVICE_SH_FILES=(
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 # 同一 RPC 源文件在设备冻结、MMV执行；不能依赖未登记的远端副本。
-RPC_FILES=(queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js verify-step.mjs step-judge.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
-DEVICE_NODE_FILES=(queued-comment-history.js leadgen-client.mjs leadgen-workflow.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
+RPC_FILES=(outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js verify-step.mjs step-judge.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
+DEVICE_NODE_FILES=(outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-client.mjs leadgen-workflow.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
 DEVICE_RPC_PROBE_FILES=(verify-step.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
@@ -313,7 +314,11 @@ echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS
 for f in "${MMV_JS_FILES[@]}"; do
   if [[ ! -s "$D/$f" ]]; then echo "  ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
   push_atomic "$D/$f" mmv "~/.openclaw/leadgen-scripts" "$f"
-  if ssh mmv "node -c ~/.openclaw/leadgen-scripts/$f" 2>/tmp/deploy-err-$$; then
+  case "$f" in
+    *.py) _chk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/.openclaw/leadgen-scripts/$f";;
+    *) _chk="node -c ~/.openclaw/leadgen-scripts/$f";;
+  esac
+  if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
     echo "  ✅ $f"
   else
     echo "  ❌ $f 语法检查失败: $(cat /tmp/deploy-err-$$ | head -3)"
@@ -399,8 +404,11 @@ for host in xian-m4; do
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
-    if [[ "$f" == *.json ]]; then _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
-    else _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f"; fi
+    case "$f" in
+      *.py) _nchk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/bin-harvest/$f";;
+      *.json) _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
+      *) _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
+    esac
     if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else

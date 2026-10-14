@@ -245,7 +245,7 @@ test('采集组合预算包含重新打开核验和本身480秒采集，但不�
      if(b.request.op==='collect'){stored.push(b.request.video_id);return {result:{comments:0,inserted:0,history_verified:0,coverage:0}};}return {result:{}};},
     execute:async(c,a,o)=>{if(a[1]==='identity')return {code:0,stdout:'',stderr:''};
      assert.equal(a[1],'collection');timeouts.push(o.timeoutMs);if(o.timeoutMs<800000)throw Error('EXECUTION_DEADLINE');
-     return {code:0,stdout:`COLLECTION\t${videoId}\tno_comments\t0\nRESCAN\t${videoId}\t0\n`,stderr:''};}});
+     return {code:0,stdout:`COLLECTION\t${videoId}\tno_comments\t0\nRESCAN\t${videoId}\t0\nAVATAR_RECOVERY\t${videoId}\t0\n`,stderr:''};}});
    h.state.budgetDeadline=Date.now()+1800000;await h.qualification();h.state.budgetDeadline=Date.now()+remaining;
    const r=await h.collection();assert.equal(r.collected,remaining===7200000?1:0);assert.deepEqual(stored,remaining===7200000?[videoId]:[]);
    assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);assert.ok(timeouts[0]<=960000);
@@ -361,7 +361,7 @@ test('历史输入逐VID局部绑定，scope失败不假报通过；无qualified
    throw Error('unexpected '+q.op);
   },execute:async(c,a,o)=>{actions.push({args:a,env:o.env});if(a[1]==='identity'){assert.equal(o.env.QUEUED_COMMENT_HISTORY_FILE,'');return {code:0,stdout:'',stderr:''};}
    assert.equal(o.env.QUEUED_COMMENT_HISTORY_FILE,join(dir,'history-run-history-'+a[3]+'.json'));
-   return {code:0,stdout:`COLLECTION\t${a[3]}\tcollected\t0\nRESCAN\t${a[3]}\t0\n`,stderr:''};}});
+   return {code:0,stdout:`COLLECTION\t${a[3]}\tcollected\t0\nRESCAN\t${a[3]}\t0\nAVATAR_RECOVERY\t${a[3]}\t0\n`,stderr:''};}});
   await h.qualification();const r=await h.collection();
   assert.equal(r.status,'partial');assert.equal(r.history_required_count,2);assert.equal(r.history_scoped_count,1);assert.equal(r.history_consumption_count,1);assert.equal(r.history_failures,1);
   assert.equal(r.history_scope_verified,0);assert.equal(r.history_consumption_readback,0);assert.equal(actions.filter(a=>a.args[1]==='collection').length,1);
@@ -396,7 +396,7 @@ for(const mode of ['quota','footer','bad_pg','fake_footer','budget'])test('真�
    if(a[1]==='identity')return {code:0,stdout:'',stderr:''};assert.equal(o.env.LEADGEN_COMMENT_LIMIT,'5');
    const rows=Array.from({length:n},(_,i)=>`LEAD\t昵称\tperson${i}\tpersonal\t完整正文${i}\t今天\t陕西\tAI\tAI\t西安\thttps://www.douyin.com/user/u\t${f.url}`).join('\n');
    const marker=mode==='budget'?`partial\t${n}`:mode==='footer'?`collected\t${n}\t${n}\t5\tfooter=1`:mode==='fake_footer'?`collected\t${n}`:`sampled\t${n}\t5\t5`;
-   return {code:mode==='budget'?7:0,stdout:rows+`\nCOLLECTION\t${f.videoId}\t${marker}\nRESCAN\t${f.videoId}\t0\n`,stderr:''};
+   return {code:mode==='budget'?7:0,stdout:rows+`\nCOLLECTION\t${f.videoId}\t${marker}\nRESCAN\t${f.videoId}\t0\nAVATAR_RECOVERY\t${f.videoId}\t0\n`,stderr:''};
   }});
   await h.dedup();await h.qualification();const out=await h.collection();
   if(mode==='bad_pg'||mode==='fake_footer'||mode==='budget'){assert.equal(out.status,'partial');assert.deepEqual(out.fulfilled_sample_video_ids,[]);}
@@ -434,14 +434,14 @@ for(const config of [{budget:undefined,max:960},{budget:'1620',max:2100},{budget
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),{digest}=await import('../runtime-definition.mjs');const dir=mkdtempSync(join(tmpdir(),'collection-explicit-budget-'));
  try{const f=await sampleFixture(dir);if(config.budget){f.env.QUEUED_VIDEO_COLLECTION_SECONDS=config.budget;const file=join(f.current,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(readFileSync(file));body.sampling_input.collection_budget_s=Number(config.budget);writeFileSync(file,JSON.stringify({...body,snapshot_sha256:digest(body)}));}
  Object.assign(f.env,{WF_RUN_MAX_SECONDS:'3600',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)-(config.globalNear?3598:0))});const actions=[],requests=[];
- const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{requests.push(q);if(q.op==='inspect_videos')return {result:[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待采评论'}]};if(q.op==='claim_videos')return {result:[{video_id:f.videoId,video_url:f.url,judgment_status:'matched'}]};if(q.op==='renew_video')return {result:{renewed:true}};if(q.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:f.env.WFR_TAG,source_run:f.source,video_id:f.videoId,video_url:f.url,rows:[]}};if(q.op==='collect')return {result:{comments:0,inserted:0,history_verified:0,coverage:0}};if(q.op==='comment_history_readback')return {result:{verified:true,video_id:f.videoId,ids:[],history_verified:0}};if(q.op==='sample_readback')return {result:{verified:true,video_id:f.videoId,coverage:0,rows:[]}};throw Error('unexpected '+q.op);},execute:async(c,a,o)=>{actions.push({a,o});return {code:0,stdout:a[1]==='identity'?'':`COLLECTION\t${f.videoId}\tno_comments\t0\nRESCAN\t${f.videoId}\t0\n`,stderr:''};}});
+ const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{requests.push(q);if(q.op==='inspect_videos')return {result:[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待采评论'}]};if(q.op==='claim_videos')return {result:[{video_id:f.videoId,video_url:f.url,judgment_status:'matched'}]};if(q.op==='renew_video')return {result:{renewed:true}};if(q.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:f.env.WFR_TAG,source_run:f.source,video_id:f.videoId,video_url:f.url,rows:[]}};if(q.op==='collect')return {result:{comments:0,inserted:0,history_verified:0,coverage:0}};if(q.op==='comment_history_readback')return {result:{verified:true,video_id:f.videoId,ids:[],history_verified:0}};if(q.op==='sample_readback')return {result:{verified:true,video_id:f.videoId,coverage:0,rows:[]}};throw Error('unexpected '+q.op);},execute:async(c,a,o)=>{actions.push({a,o});return {code:0,stdout:a[1]==='identity'?'':`COLLECTION\t${f.videoId}\tno_comments\t0\nRESCAN\t${f.videoId}\t0\nAVATAR_RECOVERY\t${f.videoId}\t0\n`,stderr:''};}});
  await h.dedup();await h.qualification();h.state.budgetDeadline=Date.now()+7200*1000;await h.collection();const a=actions.find(a=>a.a[1]==='collection');assert.equal(a.o.maxDurationS,config.max);assert.equal(a.o.env.QUEUED_VIDEO_COLLECTION_SECONDS,config.budget||'480');assert.ok(a.o.timeoutMs<=config.max*1000);if(config.globalNear)assert.ok(a.o.timeoutMs<=2000,'实际global剩余不能被7200 Activity替代');
  const proof=JSON.parse(readFileSync(join(f.current,'process102-collection-budget-readback.json')));assert.equal(proof.collection_budget_s,Number(config.budget||480));assert.equal(proof.action_max_duration_s,config.max);assert.equal(proof.sampling_input?.collection_budget_s,config.budget?Number(config.budget):undefined);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 test('非法collection预算在RPC和手机动作之前拒绝',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);for(const value of ['0','-1','6721','abc','1.5','0480',''])assert.throws(()=>createHandlers({root:'/tmp',env:{HOME:'/tmp',QUEUED_VIDEO_COLLECTION_SECONDS:value},rpc:async()=>{throw Error('不可RPC');},execute:async()=>{throw Error('不可phone');}}),/采集.*预算/);});
 test('仅真实冻结采样intake才给claim matched优先flag',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'sample-claim-priority-'));try{const f=await sampleFixture(dir),qs=[];const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{qs.push(q);return {result:q.op==='inspect_videos'?[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待采评论'}]:[]};}});await h.dedup();await h.qualification();const q=qs.find(q=>q.op==='claim_videos');assert.equal(q.prefer_matched,true);assert.equal(q.source_run,f.source);assert.deepEqual(q.video_ids,[f.videoId]);}finally{rmSync(dir,{recursive:true,force:true});}});
-test('真实videoAction显式1620必须突破旧960但不越过截止',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'budget-action-red-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let seen;const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'budget-test',P:'work',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source101',QUEUED_VIDEO_COLLECTION_SECONDS:'1620',WF_RUN_MAX_SECONDS:'3600'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:q.op==='comment_history'?{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'budget-test',source_run:'source101',video_id:vid,video_url:url,rows:[]}:q.op==='collect'?{comments:0,inserted:0,history_verified:0,coverage:0}:q.op==='comment_history_readback'?{verified:true,video_id:vid,ids:[],history_verified:0}:{}}),execute:async(c,a,o)=>{if(a[1]==='collection'){seen=o;return {code:0,stdout:`COLLECTION\t${vid}\tno_comments\t0\nRESCAN\t${vid}\t0\n`,stderr:''};}return {code:0,stdout:'',stderr:''};}});await h.qualification();await h.collection();assert.equal(seen.maxDurationS,2100,'原960秒进程上限与显式1620软预算冲突');assert.equal(seen.env.QUEUED_VIDEO_COLLECTION_SECONDS,'1620');}finally{rmSync(dir,{recursive:true,force:true});}});
+test('真实videoAction显式1620必须突破旧960但不越过截止',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'budget-action-red-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let seen;const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'budget-test',P:'work',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source101',QUEUED_VIDEO_COLLECTION_SECONDS:'1620',WF_RUN_MAX_SECONDS:'3600'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:q.op==='comment_history'?{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'budget-test',source_run:'source101',video_id:vid,video_url:url,rows:[]}:q.op==='collect'?{comments:0,inserted:0,history_verified:0,coverage:0}:q.op==='comment_history_readback'?{verified:true,video_id:vid,ids:[],history_verified:0}:{}}),execute:async(c,a,o)=>{if(a[1]==='collection'){seen=o;return {code:0,stdout:`COLLECTION\t${vid}\tno_comments\t0\nRESCAN\t${vid}\t0\nAVATAR_RECOVERY\t${vid}\t0\n`,stderr:''};}return {code:0,stdout:'',stderr:''};}});await h.qualification();await h.collection();assert.equal(seen.maxDurationS,2100,'原960秒进程上限与显式1620软预算冲突');assert.equal(seen.env.QUEUED_VIDEO_COLLECTION_SECONDS,'1620');}finally{rmSync(dir,{recursive:true,force:true});}});
 test('collection到实际global截止不再renew/history/phone，不假完成',async()=>{const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'collection-expired-')),vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;try{let phase='qualification';const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'expired',P:'work',LEADGEN_LINE:'jinuo',WF_RUN_MAX_SECONDS:'3600',QUEUED_VIDEO_COLLECTION_SECONDS:'1620'};const h=createHandlers({root:dir,env,rpc:async({request:q})=>{if(phase==='collection')throw Error('expired must not RPC');return {result:q.op==='claim_videos'?[{video_id:vid,video_url:url,judgment_status:'matched'}]:{}};},execute:async()=>{assert.equal(phase,'qualification');return {code:0,stdout:'',stderr:''};}});await h.qualification();phase='collection';env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000)-3601);h.state.budgetDeadline=Date.now()+7200000;const r=await h.collection();assert.equal(r.status,'partial');assert.equal(r.videos_collected,0);assert.match(r.failures[0].reason,/EXECUTION_DEADLINE/);}finally{rmSync(dir,{recursive:true,force:true});}});
 
 test('无本轮播放证明的静音录制不得经PG业务拒绝，cleanup释放视频租约',async()=>{
@@ -482,7 +482,7 @@ for(const fault of ['none','mixed_3new_2history','legacy_hyphen','wrong_run','wr
    const key=Buffer.from(JSON.stringify([row.douyin_id,row.comment_body])).toString('base64');
    let extra='';
    if(mixed){const second=historyRows[1],eid2=`${run}-v${vid}-collection-person1-t1`;writeFileSync(join(dir,eid2+'-history-readback.json'),JSON.stringify({...proof,...second,identity_eid:eid2}),{mode:0o600});extra=`HISTORY\t${vid}\t${second.id}\t${Buffer.from(JSON.stringify([second.douyin_id,second.comment_body])).toString('base64')}\t${eid2}\t${sha}\n`+Array.from({length:3},(_,i)=>`LEAD\t模拟昵称\tmock_new${i}\tpersonal\t模拟新评论${i}\t今天\t陕西\tAI\tAI\t西安\thttps://www.douyin.com/user/mock${i}\t${url}\n`).join('');}
-   return {code:0,stdout:extra+`HISTORY\t${vid}\t${row.id}\t${key}\t${eid}\t${fault==='wrong_sha'?'0'.repeat(64):sha}\nCOLLECTION\t${vid}\tcollected\t${mixed?3:0}\nRESCAN\t${vid}\t0\n`,stderr:''};
+   return {code:0,stdout:extra+`HISTORY\t${vid}\t${row.id}\t${key}\t${eid}\t${fault==='wrong_sha'?'0'.repeat(64):sha}\nCOLLECTION\t${vid}\tcollected\t${mixed?3:0}\nRESCAN\t${vid}\t0\nAVATAR_RECOVERY\t${vid}\t0\n`,stderr:''};
   }});
   await h.qualification();const out=await h.collection();
   if(['none','mixed_3new_2history','legacy_hyphen'].includes(fault)){
@@ -493,5 +493,32 @@ for(const fault of ['none','mixed_3new_2history','legacy_hyphen','wrong_run','wr
    assert.equal(out.status,'partial');assert.equal(out.history_failures,1);assert.equal(out.history_consumption_readback,0);assert.equal(out.videos_collected,0);
    assert.equal(calls.some(q=>q.op==='collect'),fault==='pg_readback','invalid proof must fail before collect RPC');
   }
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+for(const mode of ['avatar','identity','missing_avatar','malformed_avatar'])test('真实collection解析分类恢复计数及正式探针/部署Step '+mode,async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs'),createHandlers=withCompanyFixture(rawCreateHandlers),{judgeSteps}=await import('../step-judge.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'categorized-rescan-'));
+ try{
+  const f=await sampleFixture(dir),n=5,identity=mode==='identity'?2:0;
+  const h=createHandlers({root:dir,env:f.env,rpc:async({request:q})=>{
+   if(q.op==='inspect_videos')return {result:[{video_id:f.videoId,line_key:'jinuo',judgment_status:'matched',process_status:'待判定'}]};
+   if(q.op==='claim_videos')return {result:[{video_id:f.videoId,video_url:f.url,judgment_status:'matched'}]};
+   if(q.op==='renew_video'||q.op==='release_video')return {result:{}};
+   if(q.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:f.env.WFR_TAG,source_run:f.source,video_id:f.videoId,video_url:f.url,rows:[]}};
+   if(q.op==='collect_partial')return {result:{comments:n,inserted:n,history_verified:0,coverage:n}};
+   if(q.op==='comment_history_readback')return {result:{verified:true,video_id:f.videoId,ids:[],history_verified:0}};
+   if(q.op==='sample_readback')return {result:{verified:true,video_id:f.videoId,coverage:n,rows:q.rows.map((r,i)=>({...r,id:'id'+i}))}};
+   throw Error('unexpected '+q.op);
+  },execute:async(c,a)=>{
+   if(a[1]==='identity')return {code:0,stdout:'',stderr:''};
+   const rows=Array.from({length:5},(_,i)=>`LEAD\t昵称\tperson${i}\tpersonal\t全文${i}\t今天\t陕西\tAI\tAI\t西安\thttps://www.douyin.com/user/u\t${f.url}`).join('\n');
+   return {code:0,stdout:rows+`\nCOLLECTION\t${f.videoId}\tsampled\t5\t5\t5\nRESCAN\t${f.videoId}\t${identity}\n`+(mode==='missing_avatar'?'':`AVATAR_RECOVERY\t${f.videoId}\t${mode==='malformed_avatar'?'unknown':2}\n`),stderr:''};
+  }});
+  await h.dedup();await h.qualification();const out=await h.collection();
+  if(mode.includes('avatar')&&mode!=='avatar'){assert.equal(out.status,'partial');assert.equal(out.videos_sampled,0);assert.match(out.failures[0].reason,/头像恢复/);return;}
+  assert.equal(out.comments_inserted,5);assert.equal(out.avatar_recovery_count,2);assert.equal(out.identity_rescan_count,identity);assert.equal(out.rescan_count,identity);assert.equal(out.rescan_rate,identity);
+  const spec=JSON.parse(readFileSync('services/phone-adb-controller/plans/douyin_video_processing.steps.json','utf8'));const step=spec.steps.find(s=>s.key.endsWith('.return_to_results'));const result=judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{metrics:out}});assert.equal(result.steps[0].pass,mode==='avatar');
+  const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-video-processing.yaml','utf8')),probe=checks.probes.find(p=>p.key==='coll_rescan_rate');assert.equal(probe.expect.value,0.3);assert.equal(probe.probe.ref,'metrics.rescan_rate');assert.equal(out.rescan_rate<=probe.expect.value,mode==='avatar');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

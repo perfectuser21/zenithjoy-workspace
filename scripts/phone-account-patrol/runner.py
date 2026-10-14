@@ -23,6 +23,81 @@ ALL_PLATFORMS = PLATFORMS + ['视频号']
 SSH = ['/usr/bin/ssh', '-o', 'BatchMode=yes', '-o', 'ControlMaster=no', '-o', 'ControlPath=none', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2']
 
 
+def safe_error_text(value, limit=2000, _depth=0):
+    text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value or '')
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if len(text) > 1000000:
+        return '[LOG OMITTED: exceeds diagnostic safety limit]'
+    if text.lstrip().startswith(('{', '[')) and len(text) <= 100000:
+        try:
+            structured = json.loads(text)
+        except RecursionError:
+            return '[LOG OMITTED: diagnostic nesting exceeds safety limit]'
+        except ValueError:
+            pass
+        else:
+            text = json.dumps(safe_error_value(structured, _depth + 1), ensure_ascii=False)
+    # Structured output can be surrounded by plain console lines or prefixes.
+    decoder = json.JSONDecoder()
+    pieces, cursor = [], 0
+    for attempt, marker in enumerate(re.finditer(r'[\{\[]', text)):
+        if marker.start() < cursor:
+            continue
+        if attempt >= 128:
+            pieces.append('[REMAINING LOG OMITTED]'); cursor = len(text); break
+        try:
+            value, end = decoder.raw_decode(text, marker.start())
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(value, (dict, list)):
+            pieces.extend([text[cursor:marker.start()], json.dumps(safe_error_value(value, _depth + 1), ensure_ascii=False)])
+            cursor = end
+    if pieces:
+        text = ''.join(pieces) + text[cursor:]
+    for key, secret in os.environ.items():
+        if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
+            text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'(?i)("[^"\n]{0,100}(?:password|token|secret|api[_-]?key|authorization)[^"\n]{0,100}"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)'(?:\\.|[^'\\])*' ''', r"\1'[REDACTED]'", text, flags=re.X)
+    text = re.sub(r'(?im)^(\s*(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?i)((?:Bearer|Basic)\s+)[^\s"\']+', r'\1[REDACTED]', text)
+    text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
+    text = re.sub(r'(https?://)[^/\s@]+@', r'\1[REDACTED]@', text)
+    text = re.sub(r'(https?://[^\s?]+\?)[^\s"\']+', r'\1[REDACTED]', text)
+    return text[:limit]
+
+
+def safe_error_value(value, _depth=0):
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if isinstance(value, dict):
+        return {k: '[REDACTED]' if re.search(r'password|token|secret|api.?key|authorization', k, re.I) else safe_error_value(v, _depth + 1) for k, v in value.items()}
+    if isinstance(value, list):
+        return [safe_error_value(v, _depth + 1) for v in value[:20]]
+    return safe_error_text(value, _depth=_depth + 1) if isinstance(value, str) else value
+
+
+class PatrolFailure(RuntimeError):
+    def __init__(self, stage, code, message, *, host=None, exit_code=None, stdout='', stderr='', timeout_sec=None):
+        super().__init__(safe_error_text(message, 1000))
+        self.failure = {'stage': stage, 'code': code, 'message': str(self), 'host': host,
+                        'exit_code': exit_code, 'stdout': safe_error_text(stdout), 'stderr': safe_error_text(stderr),
+                        'timeout_sec': timeout_sec, 'evidence': [],
+                        'truncated': len(str(stdout or '')) > 2000 or len(str(stderr or '')) > 2000}
+
+
+def failure_receipt(error, task_id, serial, deployment, script=None):
+    failure = dict(error.failure) if isinstance(error, PatrolFailure) else {
+        'stage': 'phone_execution', 'code': 'execution_failed', 'message': safe_error_text(str(error), 1000),
+        'error_type': type(error).__name__, 'exit_code': None, 'evidence': []}
+    run_id = pathlib.Path(script).stem if script and task_from_script(script) == task_id else None
+    return {'status': 'failed', 'task_id': task_id, 'run_id': run_id, 'serial': serial,
+            'workflow_id': deployment['single_workflow_id'], 'source_revision': deployment['source_revision'],
+            'checked_at': now(), 'actor': 'phone-account-patrol', 'failure': failure}
+
+
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -116,13 +191,18 @@ def outcome(results):
     return 'completed', 0
 
 
-def ssh(host, command, *, input=None, timeout=60):
+def ssh(host, command, *, input=None, timeout=60, stage='remote_execution'):
     if host not in ['xian-m4', 'xian-m1', 'us-vps']:
         raise ValueError('设备宿主尚无验收过的连接配置')
     extra = ['-o', 'ProxyJump=none', '-o', 'ProxyCommand=none'] if host.startswith('xian-') else []
-    result = subprocess.run(SSH + extra + [host, command], input=input, text=True, capture_output=True, timeout=timeout)
+    try:
+        result = subprocess.run(SSH + extra + [host, command], input=input, text=True, capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        raise PatrolFailure(stage, 'remote_timeout', '远端步骤超时：' + host, host=host,
+                            stdout=error.output, stderr=error.stderr, timeout_sec=timeout) from error
     if result.returncode:
-        raise RuntimeError('远端步骤失败：' + host + '，退出码 ' + str(result.returncode))
+        raise PatrolFailure(stage, 'remote_execution_failed', '远端步骤失败：' + host + '，退出码 ' + str(result.returncode),
+                            host=host, exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr)
     return result.stdout
 
 
@@ -156,7 +236,7 @@ def sync_mirror(max_attempts=3):
     raise RuntimeError('没有执行设备页面镜子同步')
 
 
-def phone_run(serial, task_id, deployment):
+def phone_run(serial, task_id, deployment, attempt_run_id=None):
     phones = api('phone-registry')['phones']
     selected = [p for p in phones if p['serial'] == serial and p.get('enabled')]
     if len(selected) != 1:
@@ -166,13 +246,44 @@ def phone_run(serial, task_id, deployment):
         raise ValueError('当前部署仅验收 M4；设备迁移后应重新部署验收')
     runid = 'central-' + task_id
     remote = deployment['remote_release']
+    preflight_name = (attempt_run_id or task_id) + '.preflight.json'
     # 检查同版本依赖、ADB和OCR；不进入应用、不获取或抢占设备锁。
-    check = json.loads(ssh(phone['host'], '/opt/homebrew/bin/python3 ' + shlex.quote(remote + '/preflight.py') + ' --serial ' + shlex.quote(serial)))
+    try:
+        check = json.loads(ssh(phone['host'], '/opt/homebrew/bin/python3 ' + shlex.quote(remote + '/preflight.py') + ' --serial ' + shlex.quote(serial), stage='preflight'))
+    except PatrolFailure as error:
+        if error.failure.get('exit_code') != 1:
+            raise
+        try:
+            check = json.loads(error.failure['stdout'])
+        except (ValueError, TypeError):
+            raise error
+        if not isinstance(check, dict) or check.get('serial') != serial or check.get('ok') is not False or not isinstance(check.get('checks'), dict):
+            raise error
+        check = safe_error_value(check)
+        save(preflight_name, check)
+        if check['checks'].get('adb_online') is False:
+            detail = check.get('failure') or {}
+            code = detail.get('code') if detail.get('code') in ['adb_unreachable', 'adb_check_timeout', 'adb_check_failed'] else 'adb_unreachable'
+            failed = PatrolFailure('preflight', code, detail.get('message') or 'ADB无法连接设备：' + serial,
+                                  host=phone['host'], exit_code=detail.get('exit_code'), stderr=detail.get('stderr', error.failure['stderr']),
+                                  stdout=detail.get('stdout', ''), timeout_sec=detail.get('timeout_sec'))
+            if isinstance(detail.get('error_type'), str):
+                failed.failure['error_type'] = safe_error_text(detail['error_type'], 128)
+            failed.failure['evidence'] = [str(STATE / preflight_name)]
+            raise failed from error
+        detail = check.get('failure') or {}
+        code = 'source_version_mismatch' if detail.get('code') == 'source_version_mismatch' else 'prerequisite_failed'
+        failed = PatrolFailure('preflight', code, detail.get('message') or '设备运行前自检失败',
+                              host=phone['host'], exit_code=error.failure['exit_code'],
+                              stdout=error.failure['stdout'], stderr=error.failure['stderr'])
+        failed.failure['evidence'] = [str(STATE / preflight_name)]
+        raise failed from error
+    save(preflight_name, safe_error_value(check))
     save('phone-' + serial + '.preflight.json', check)
     if not check.get('ok'):
         raise RuntimeError('设备运行前自检失败；详见 preflight 证据')
     command = '/opt/homebrew/bin/python3 ' + shlex.quote(remote + '/dispatch.py') + ' ' + shlex.quote(serial) + ' ' + shlex.quote(phone['profile']) + ' ' + shlex.quote(runid)
-    output = ssh(phone['host'], command, timeout=650)
+    output = ssh(phone['host'], command, timeout=650, stage='collect')
     candidates = [json.loads(line) for line in output.splitlines() if line.startswith('{') and '"results"' in line]
     if not candidates:
         raise RuntimeError('巡查没有返回有效结果')
@@ -184,7 +295,7 @@ def phone_run(serial, task_id, deployment):
                 'schedule_status': 'active' if schedule['is_active'] else 'paused', 'recurring_task_id': schedule['id'],
                 'phones': {phone['nickname']: observation}}
     source = (ROOT / 'publish.mjs').read_text().replace('__INPUT__', json.dumps(incoming, ensure_ascii=False))
-    output = ssh('us-vps', 'docker exec -i -w /app cecelia-node-brain node --input-type=module', input=source, timeout=200)
+    output = ssh('us-vps', 'docker exec -i -w /app cecelia-node-brain node --input-type=module', input=source, timeout=200, stage='publish')
     reports = [json.loads(line) for line in output.splitlines() if line.startswith('{') and '"published"' in line]
     if not reports or len(reports[-1]['published']) != 1:
         raise RuntimeError('账号台账写回缺少确认回执')
@@ -327,12 +438,21 @@ def main():
     if not args.serial:
         raise ValueError('单手机流程必须明确设备标识')
     save('phone-' + args.serial + '.latest.json', {'status': 'in_progress', 'task_id': task_id, 'serial': args.serial, 'started_at': now()})
-    return phone_run(args.serial, task_id, deployment)
+    try:
+        return phone_run(args.serial, task_id, deployment, pathlib.Path(args.execution_script).stem if args.execution_script else None)
+    except Exception as error:
+        receipt = failure_receipt(error, task_id, args.serial, deployment, args.execution_script)
+        evidence = str(STATE / ((receipt['run_id'] or task_id) + '.failure.json'))
+        receipt['failure']['evidence'].append(evidence)
+        save(pathlib.Path(evidence).name, receipt)
+        print(json.dumps(receipt, ensure_ascii=False))
+        print(receipt['failure']['message'], file=sys.stderr)
+        return 1
 
 
 if __name__ == '__main__':
     try:
         sys.exit(main())
     except Exception as error:
-        print(json.dumps({'status': 'failed', 'actor': 'phone-account-patrol', 'error': str(error)[:300]}, ensure_ascii=False), file=sys.stderr)
+        print(json.dumps({'status': 'failed', 'actor': 'phone-account-patrol', 'error': safe_error_text(str(error), 300)}, ensure_ascii=False), file=sys.stderr)
         sys.exit(1)

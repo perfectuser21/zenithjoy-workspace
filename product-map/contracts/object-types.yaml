@@ -3,7 +3,8 @@ types:
   Device:
     identity:
       - serial
-    source_of_truth: adb 设备 + douyin-phone-adb 锁目录 /private/tmp/openclaw-phone/locks/<serial>.lock
+    source_of_truth: adb 设备 + douyin-phone-adb 锁目录
+      /private/tmp/openclaw-phone/locks/<serial>.lock
     fields:
       - serial
       - host
@@ -15,7 +16,8 @@ types:
     identity:
       - platform
       - profile
-    source_of_truth: services/phone-adb-controller/config/own-accounts.json + douyin-phone-adb 账号 TSV
+    source_of_truth: services/phone-adb-controller/config/own-accounts.json +
+      douyin-phone-adb 账号 TSV
     fields:
       - platform
       - profile
@@ -24,8 +26,8 @@ types:
       - logged_in
       - dm_paused
       - daily_cap
-    note: profile 如 jinoshengyuan-work/legacy（line-routes.js:18）；sender_id = 抖音号（next-outreach.js:103-105）；熔断 =
-      state/dm-paused-<profile>.flag
+    note: profile 如 jinoshengyuan-work/legacy（line-routes.js:18）；sender_id =
+      抖音号（next-outreach.js:103-105）；熔断 = state/dm-paused-<profile>.flag
   Keyword:
     identity:
       - line_key
@@ -36,7 +38,8 @@ types:
       - word
       - business_line
       - effective_leads
-    note: word = 列「抖音获客-关键词配置」（next-keywords.js:29）；effective_leads = 列「有效线索数」（update-keyword-stats.js:79）
+    note: word = 列「抖音获客-关键词配置」（next-keywords.js:29）；effective_leads =
+      列「有效线索数」（update-keyword-stats.js:79）
   BenchmarkAccount:
     identity:
       - platform
@@ -51,7 +54,8 @@ types:
     identity:
       - line_key
       - video_id
-    source_of_truth: pg zenithjoy.leadgen_videos（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28-45，UNIQUE(line_key,
+    source_of_truth: pg
+      zenithjoy.leadgen_videos（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28-45，UNIQUE(line_key,
       video_id)）
     fields:
       - line_key
@@ -85,18 +89,31 @@ types:
       - relevance
       - intent_grade
       - promoted
-    note: dedup_key = nick|dyid|正文前20字（push-raw-comments.js:43）；process_status 待分拣/已分拣；promoted = 列「进入最终线索」
+      - recipient_evidence
+    note: dedup_key = nick|dyid|正文前20字（push-raw-comments.js:43）；process_status
+      待分拣/已分拣；promoted = 列「进入最终线索」
   CommentSampleRequest:
-    identity: [run_tag, source_run]
-    source_of_truth: 用户下一轮采样配置LEADGEN_COMMENT_LIMIT，经runtime-receipts prepare纳入本run run-definition sampling_input和snapshot_sha256；102启动核对冻结请求
-    fields: [run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s]
+    identity: [ run_tag, source_run ]
+    source_of_truth: 用户下一轮采样配置LEADGEN_COMMENT_LIMIT，经runtime-receipts prepare纳入本run
+      run-definition sampling_input和snapshot_sha256；102启动核对冻结请求
+    fields:
+      [
+        run_tag,
+        source_run,
+        profile,
+        serial,
+        line,
+        comment_limit,
+        collection_budget_s
+      ]
     note: 可选整数1..50，每合格视频按实际verified历史+新distinct评论覆盖计配额；未设置保留原large50/medium全采。collection_budget_s仅显式QUEUED_VIDEO_COLLECTION_SECONDS时冻结，整数1..6720；缺省480不新增字段，进程缺省上限960，显式预算加480收尾且受Activity和真实全局剩余时间夹紧。quota_reached不等于全footer，不标PG评论已采，不把历史当新评分样本。
   HistoricalComment:
     identity:
       - line_key
       - video_id
       - id
-    source_of_truth: 只读PG zenithjoy.leadgen_comments；comment_history核本run matched租约及line+VID+精确URL唯一归属；旧source_video只用于至多1000行/4短链候选筛选，既有受信只读HEAD实际VID相同才证旧URL映射；私有0600本RUN_DIR工件
+    source_of_truth: 只读PG zenithjoy.leadgen_comments；comment_history核本run
+      matched租约及line+VID+精确URL唯一归属；旧source_video只用于至多1000行/4短链候选筛选，既有受信只读HEAD实际VID相同才证旧URL映射；私有0600本RUN_DIR工件
     fields:
       - id
       - line_key
@@ -153,7 +170,8 @@ types:
       - metrics
       - stop_reason
       - all_results_scanned
-    note: run_tag = auto%m%d%H%M（harvest-cron.sh:50）= leadgen_videos.harvest_batch = 评论池「运行批次」
+    note: run_tag = auto%m%d%H%M（harvest-cron.sh:50）= leadgen_videos.harvest_batch =
+      评论池「运行批次」
   SearchRequest:
     identity:
       - keywords
@@ -173,68 +191,128 @@ types:
 
   PublishRequest:
     identity:
-    - task_id
+      - task_id
     source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
     fields:
-    - task_id
-    - platform
-    - content_type
-    - account
-    - title
-    - body
-    - media_sha256
-    - authorized
+      - task_id
+      - platform
+      - content_type
+      - account
+      - title
+      - body
+      - media_sha256
+      - authorized
   PublishContext:
     identity:
-    - task_id
+      - task_id
     source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
     fields:
-    - task_id
-    - run_id
-    - serial
-    - owner
-    - account
-    - source_verified
+      - task_id
+      - run_id
+      - serial
+      - owner
+      - account
+      - source_verified
   PublishDraft:
     identity:
-    - task_id
+      - task_id
     source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
     fields:
-    - task_id
-    - run_id
-    - title
-    - body
-    - media_sha256
-    - privacy
-    - fields_exact
+      - task_id
+      - run_id
+      - title
+      - body
+      - media_sha256
+      - privacy
+      - fields_exact
   PublishSubmission:
     identity:
-    - task_id
+      - task_id
     source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
     fields:
-    - task_id
-    - run_id
-    - attempt_count
-    - submitted_at
-    - receipt_path
+      - task_id
+      - run_id
+      - attempt_count
+      - submitted_at
+      - receipt_path
   PublishEvidence:
     identity:
-    - task_id
+      - task_id
     source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
     fields:
-    - task_id
-    - run_id
-    - work_id
-    - actual_privacy
-    - effect_status
-    - strict_status
+      - task_id
+      - run_id
+      - work_id
+      - actual_privacy
+      - effect_status
+      - strict_status
   PublishCleanup:
     identity:
-    - task_id
+      - task_id
     source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
     fields:
-    - task_id
-    - run_id
-    - launcher
-    - controller_free
-    - brain_free
+      - task_id
+      - run_id
+      - launcher
+      - controller_free
+      - brain_free
+  NativeRecipientEvidence:
+    identity:
+      - line_key
+      - run_tag
+      - video_id
+      - douyin_id
+      - body_sha256
+    source_of_truth: 102锁内原生profile/returned XML和actualVID sidecar；私有0600本RUN_DIR
+      JSON原件经hash/scope读回，PG Comment.recipient_evidence保存同一冻结快照
+    fields:
+      - line_key
+      - run_tag
+      - source_run
+      - video_id
+      - video_url
+      - douyin_id
+      - nickname
+      - body_sha256
+      - status
+      - raw_sha256
+      - recipient_evidence
+      - comment_encoding
+      - receipt_id
+    note: 可选；缺原件unknown。fresh本profile/返回同nick全文、actualVID成对才verified；不是account_type或原grade；历史无原件不得补造。
+      本producer正文xml_raw仅解码一层；canonical正文不解，缺来源marker拒绝；每attempt独享receipt_id，正文须同一fhn评论卡精确昵称+全文，不允许全局拼接。
+  RecipientQualification:
+    identity:
+      - line_key
+      - comment_id
+    source_of_truth: 103同一冻结公司V3 criteria/audiences与可信原生主页的独立模型资格；PG
+      outbox.payload.qualification
+    fields:
+      - line_key
+      - comment_id
+      - status
+      - company_id
+      - company_version
+      - native_profile_sha256
+      - reason
+      - tenant_id
+      - policy_id
+    note: passed/excluded/unknown独立原intent_grade。原排除信号优先，机构/已考仅分享无新需求按原规则排除；缺语义/模型不可达unknown不ready；不新增业务阈值。
+  OutreachBridgeIntent:
+    identity:
+      - line_key
+      - comment_id
+    source_of_truth: PG zenithjoy.leadgen_bridge_outbox，comment→实际lead身份映射与已分拣同事务；原飞书线索字段投影
+    fields:
+      - line_key
+      - comment_id
+      - lead_id
+      - run_tag
+      - source_run
+      - qualification_status
+      - state
+      - payload_sha256
+      - fields_sha256
+      - feishu_record_id
+    note: 同line原orderLock；全池UID+nick去重，旧已发/protected不改。POST前持久attempted；响应未知后仅GET
+      marker+UID+全字段读回，永不盲POST重试。JSONB规范化哈希；原grade及评分不改。

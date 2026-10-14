@@ -3,7 +3,7 @@
 // harvest-keyword.sh 在执行机(xian-m4/M1)上逐视频经 ssh 到 mmv 调本脚本(PG 与模型凭据只在 mmv):
 //   node qualify-video.js discover  --line L --video-id V [--video-url U] [--title-b64 B] [--keyword-b64 K] [--batch T]
 //     → 候选视频落 leadgen_videos(pending/待判定,本批 harvest_batch/keyword),回报已有判定当缓存
-//   node qualify-video.js judge     --line L --video-id V [--audio /tmp/x.wav]
+//   node qualify-video.js judge     --line L --run R [--source-run R101] --video-id V [--audio /tmp/x.wav]
 //     → 转写+判定单个视频并写库(已判过的直接回报库里结论,不重复花钱)
 //   node qualify-video.js collected --line L --video-id V --count N
 //     → 采完评论标 process_status=评论已采(只写给 matched 视频)

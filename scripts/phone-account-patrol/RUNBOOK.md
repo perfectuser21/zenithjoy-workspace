@@ -75,7 +75,7 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 
 沿用原30分钟维护计划，目标入口为 openclaw_native.py maintain --execution-script "$0"，不新增有效 timer。是否正式启用以中央计划和registry读回确认。maintain保留冻结runner monitor的原批次健康，并独立推进持续恢复；原monitor故障显示partial_failure，仍尝试读取中央需求，不伪称健康。
 
-每个未完成正式手机任务对应中央 blocked project需求，blocked_until为空；维护负责人主理人，commander为OpenClaw:infra。固定原任务/批次/计划/slot/serial/source放payload，变量仅进result.recovery。完整分页读取activated_at之后的正式22点slot，跨日持续；旧failed任务和Run不改。结清或取消需求不重建；后续正式巡查或已授权人工补查可凭真实完成证据覆盖旧需求。
+每个未完成正式手机任务对应中央 blocked project需求，blocked_until为空；维护负责人主理人，commander为OpenClaw:infra。固定原任务/批次/计划/slot/serial/source放payload，变量仅进result.recovery。完整分页读取activated_at之后的正式22点slot，跨日持续；旧failed任务和Run不改。 恢复先按同项目、原正式计划、启用时间、北京时间22点整的批次与真实祖先链定界，再认证手机版本；其他计划的试跑、无正式祖先的候选及启用前人工记录只保留台账。正式祖先下的缺字段、流程冲突或未知源码版本仍拒绝，不靠源码白名单筛走异常；范围外同手机在途脚本仍阻止补查抢占设备。结清或取消需求不重建；后续正式巡查或已授权人工补查可凭真实完成证据覆盖旧需求。
 
 补查是需求下独立script_run，稳定需求+generation幂等，POST丢回执先读中央记录，不盲重建。新任务只用original_schedule_id/original_slot，不带主计划recurring_task_id。同设备已有正式/恢复任务时延后；退避15/30/60分钟后每小时继续，由实际30分钟维护轮检查到期。超过3次真实失败只登记一条blocked人工维护任务，需求仍未完成。设备停用、需求明确终止时停止；当前身份、指纹或迁移不符合合同则待维护，不盲执行。
 
@@ -84,3 +84,41 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 只有正式冻结手机子任务或核验过的补查任务，具备规范Run、exit0、完整九平台及写回/镜子证据、同serial/source/workflow和真实时间窗口，才结清completed_no_pr。原需求时间取原任务/slot，且不早于被采用成功任务created_at；不会因晚建账强制重复已完成人工补查。不同slot的后继证据记明实际task/run/slot，inspect追加recovery_demands但不覆盖原children和原failure。
 
 私有native-maintenance-<任务ID>.json只是执行回执，需求真身始终是中央Tasks。正式入口、真实补查及取消守卫仍须部署后验收，不以静态回归替代。
+
+
+## 失败原因与每次尝试证据
+
+新版本的单手机失败回执包含任务、Run、设备、流程与源码身份，以及failure.stage/code/message/exit_code、脱敏限长的stdout/stderr和证据路径。ADB自检明确不可达时显示adb_unreachable及实际ADB错误；SSH非零/超时保留远端阶段，不能仅凭退出码猜手机离线。preflight失败JSON在判失败之前按Run保存，失败仍非零；补查只透传同任务/设备/版本/Run的失败回执。历史缺证据仍未知，不用新结果填旧Run。
+
+发布时先验证新release全量8文件与commander冻结指纹，保留旧release；现有排队/运行任务与恢复需求不得静默换源码。正式切换需先处理旧版在途需求，再按真实部署注册及任务模板切换新源码和控制器，检查新Run的失败详情及Notion回读。仅PR、CI或本地fixture通过不代表已经生产生效。
+
+## 失败证据修复验收约定
+
+
+GP-Anchor: none(infra)
+
+已授权当前Codex直接修复Issue2b2ef1fa。保留同任务/Run/设备/版本错误，从SSH/ADB自检经补查及Brain至Notion。旧历史不伪造原因，不改重试与锁。
+
+## 测试策略
+先以远端非零、超时、自检失败JSON、秘密脱敏及跨attempt回执失败测试复现，再修实现；Brain端独立测试提取/结算/正文投影。对错误路径使用隔离fixture，不断开生产手机。发布按正式流水线；未正式页面读回不得称端到端完成。
+
+## 验收
+- 失败仍非零，成功/延后原有语义保持。
+- 自检ADB不可达有具体证据，SSH255不猜ADB。
+- stderr/stdout脱敏限长，超时部分日志保留。
+- 当前task/Run/设备/来源严格一致才透传错误。
+- 新release不可变且全量验签，旧版本不覆盖。
+- Run与Workflow正文显示阶段、原因和证据，真实Notion读回。
+### 冻结版本切换与历史恢复
+
+修复版手机候选固定 `864154c57e88e8085d2add741a79103a28891a44` 的八文件指纹，是否已切换以当前部署指针和中央 registry 读回为准；历史只额外认可已验收 `4f899cab6425341646e27c5fca20979b8ac42be7` 的独立八文件指纹。历史 manifest 必须匹配同一 project、schedule 和 Workflow，且逐文件验真，不依赖可变 manifest 自证。未知版本直接报错，不能跳过需求。
+
+同一 `native-maintenance.lock` 内分别推进两个已认证版本的需求。旧需求、旧 Run、原始范围不改写；新 generation 使用原需求的手机源码和新版控制器，退避和设备仲裁保持原口径。旧控制器完成证明仅接受冻结的 `22d20ba53b7d33f595be0984b790fe77921c0917` 路径及已提交字节 SHA256 `988f3f65522dbc9a0f33cf3161ca58e08981b6713e185972eb5d499dce58b596`，任务自报哈希与磁盘内容同时改变仍不可信。
+
+切换前通过正式 API 暂停原领跑、结果复核、30 分钟维护三个 recurring 入口，不新增 timer；等待已有 queued/in_progress 编排、单手机、补查和执行 reservation 自然结束，再读回确认静默窗口。过去某时点零在途不能作为现在的保证。窗口内保留旧 release，验证新八文件及控制器后原子更新 current 指针，完整读回并更新原三个 template 和两个 registry 元数据；原 cron、timezone、activated_at 保留。模板与元数据接口是整对象替换，必须在新鲜读回对象上合并，不能丢无关字段。
+
+指针、模板、registry 及无在途检查一致后，恢复原三个计划并读回下一时刻。任一验真失败时保持入口暂停，原子恢复旧指针及切换前完整模板/registry，再核对旧代码后恢复原计划；不取消任务、不清设备锁、不修改历史 payload 或 Run。若已有新版本任务进入执行，先保持静默并等待其自然终结，不能以回滚重写其冻结身份。
+
+旧版需求的后续generation保留4f冻结执行源码。通过现有任务/需求/手机/控制器身份与取消、启用、占用守卫后，控制器仅调用864固定release的远端preflight一次；它只读ADB与依赖，不操作UI、不获取或释放锁、不重试。按真实attempt Run保存独立脱敏限长的`.legacy-preflight.json`，注明观察时间、诊断source864、实际phone source4f和当前control source。自检失败的Run明确“旧runner尚未启动；新版补查前自检”，不启动旧runner；只有自检明确返回ADB不可达才标ADB错误，SSH、依赖、版本和超时各自区分。
+
+自检成功后完整重读取消、启用及同手机占用守卫，再启动原版runner；新864任务不重复增加自检。起跑前观察不能证明随后旧版中途失败的根因，旧runner未留内部证据时明确“旧版运行未保存内部失败详情”，仅引用独立前置观察，不回填历史、不声称全部legacy错误已详解。此最窄修复保留现有aux模块职责，`openclaw_native.py`暂超dev建议的500行soft-split阈值（不是硬门禁）；未扩展源文件白名单、未压缩逻辑凑行数。

@@ -191,11 +191,9 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: >
-      0930 决策 f425e3fd：归位一次做对率（精益 %C&A 的补）。采集里每张卡片处理完 back-to-results 走了兜底重搜（harvest-keyword.sh 日志「归位触发兜底重搜」）=
-      一次没做对；rescan_rate = 兜底次数 / 本词打开的作品数（batch2.sh:17 word_rescan_metrics 从本词日志段算，写进 collection 工件； 归位本体
-      harvest-keyword.sh back_to_results_and_maybe_rescan → douyin-phone-adb:371 back_to_results）。 cmd09300230
-      批 134/134 走兜底、12 词跑 6 小时只出 4 条线索，而 delivery/scoring 的结果探针全绿—— 过程病结果探针看不见，这条补的就是过程指标。超 0.3 判该词 collection
-      失败（fail_stage，不停跑）。
+      新0102保留身份错位兜底率门槛：rescan_count/identity_rescan_count仅统计真实身份核验失败后的重定位调用；
+      rescan_rate/identity_rescan_rate = 身份重定位调用数 / 合格视频数。正常空头像取证只计avatar_recovery_count，
+      仍保真实VID与评论面板重验。此指标是归位过程质量代理，不构成搜索结果页实际归位证据；原0.3阈值不变。
   - key: comments_readback
     stage: collection
     journey_cell: stage:collection

@@ -38,8 +38,8 @@ test('真实prepareDefinitionFreeze读取Commander全部固定源码并产出绑
  assert.equal(proof.source.commit,revision);assert.equal(proof.bindings.size,doc.activities.length);
  for(const rows of proof.bindings.values())assert.ok(rows.length&&rows.every(b=>b.status==='verified'));
 });
-test('已登记报告升至1.0.3后可按本次固定源码重新冻结',async()=>{
- const doc=definition('workflow-report');assert.equal(doc.version,'1.0.3');
+test('已登记报告升至1.0.11后可按本次固定源码重新冻结',async()=>{
+ const doc=definition('workflow-report');assert.equal(doc.version,'1.0.11');
  const proof=await prepareDefinitionFreeze(doc,{readFile});
  assert.equal(proof.source.commit,revision);assert.equal(proof.bindings.size,doc.activities.length);
 });

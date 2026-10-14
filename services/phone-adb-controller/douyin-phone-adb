@@ -2257,13 +2257,31 @@ send_private_message() {
   "$ADB" -s "$SERIAL" shell ime set com.android.adbkeyboard/.AdbIME >/dev/null
   cur_ime_now="$("$ADB" -s "$SERIAL" shell settings get secure default_input_method | tr -d '\r')"
   [[ "$cur_ime_now" == *adbkeyboard* ]] || die "AdbIME 切换未生效(当前仍为 $cur_ime_now),后续输入必然失败"
-  "$ADB" -s "$SERIAL" shell input tap "$input_x" "$input_y"
-  wait_ms 300
+  # IME切换会改变布局/焦点。不得再次点切换前的旧坐标，也不点空会话风险菜单。
+  local ime_ready_xml input_focus_xml input_focus_ok=0 input_focus_round input_fg
+  for input_focus_round in 1 2; do
+    input_fg="$(foreground_package)"; _foreground_is_exact_douyin "$input_fg" || die "private-message foreground changed before input focus"
+    ime_ready_xml="$EVIDENCE_ROOT/${evidence_id}-ime-ready-$input_focus_round.xml"
+    ui_evidence "${evidence_id}-ime-ready-$input_focus_round" >/dev/null
+    input_fg="$(foreground_package)"; _foreground_is_exact_douyin "$input_fg" || die "private-message foreground changed during input focus"
+    "$PYTHON_BIN" "$TEXT_INPUT_FOCUS_HELPER" douyin-dm-locate "$chat_xml" "$ime_ready_xml" >/dev/null || die "private-message native input context changed after IME"
+    input_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/msg_et"[^>]*>' "$ime_ready_xml")"
+    input_center="$(node_center "$input_line")" || die "private-message fresh input bounds could not be parsed"
+    read input_x input_y <<< "$input_center"
+    "$ADB" -s "$SERIAL" shell input tap "$input_x" "$input_y"
+    wait_ms 300
+    input_focus_xml="$EVIDENCE_ROOT/${evidence_id}-input-focus-$input_focus_round.xml"
+    ui_evidence "${evidence_id}-input-focus-$input_focus_round" >/dev/null
+    input_fg="$(foreground_package)"; _foreground_is_exact_douyin "$input_fg" || die "private-message foreground changed after input focus"
+    if "$PYTHON_BIN" "$TEXT_INPUT_FOCUS_HELPER" douyin-dm-focused "$chat_xml" "$input_focus_xml" >/dev/null; then input_focus_ok=1; break; fi
+  done
+  (( input_focus_ok )) || die "private-message intended input focus could not be verified"
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$message_b64" >/dev/null
   wait_ms 700
   typed_xml="$EVIDENCE_ROOT/${evidence_id}-typed.xml"
   ui_evidence "${evidence_id}-typed" >/dev/null
+  "$PYTHON_BIN" "$TEXT_INPUT_FOCUS_HELPER" douyin-dm-focused "$chat_xml" "$typed_xml" >/dev/null || die "private-message typed focus or native context changed"
   typed_value="$(/usr/bin/xmllint --xpath 'string(//node[@resource-id="com.ss.android.ugc.aweme:id/msg_et"]/@text)' "$typed_xml" 2>/dev/null || true)"
   [[ "$typed_value" == "$message" ]] || die "private-message text readback did not exactly match approved text"
   _verify_private_message_delta "$typed_xml" "$typed_xml" "$message" before >/dev/null || die "private-message old bubble or unknown typed proof prevents send"
@@ -2340,10 +2358,12 @@ read_commenter_identity() {
   # 第三条确定性回退：树里存在与期望昵称**逐字相等**的文本节点，即昵称已核验
   # （-F 定字面匹配，昵称含正则元字符也安全）。
   # 回退路也要认两种形式：树里可能存实体、也可能存解码后的字符
+  local nickname_encoding=xml_decoded
   if [[ -z "$observed_nickname" ]]; then
     if /usr/bin/grep -qF "text=\"$expected_nickname\"" "$profile_xml" \
        || /usr/bin/grep -qF "text=\"$(normalize_nickname "$expected_nickname")\"" "$profile_xml"; then
       observed_nickname="$expected_nickname"
+      nickname_encoding=xml_raw
     fi
   fi
   # 两边都归一到「解码后」那一侧再比（见 normalize_nickname 的注释）。
@@ -2382,6 +2402,7 @@ read_commenter_identity() {
     print -- "comment_evidence=$before_xml"
   fi
   print -- "nickname=$observed_nickname"
+  print -- "nickname_encoding=$nickname_encoding"
   print -- "douyin_id=$observed_id"
   print -- "account_type=$account_type"
   print -- "profile_ip=${profile_ip:-}"
@@ -3507,7 +3528,7 @@ ti_restore_ime() {
 }
 
 text_input() {
-  # INPUT_RUNTIME_REVISION=2
+  # INPUT_RUNTIME_REVISION=3
   local text bytes eid before_xml field typed_xml typed_value enable_out cur b64 restored=1 standard_selection="" standard_rc=0 readback_policy="exact" comparison_json actual_bytes actual_sha paragraphs=0 ready_xml native_selection="" native_kind="" native_compare_rc=0 ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
   [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
   text="$1"

@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_processing",
   "brain_workflow_key": "douyin_video_processing",
-  "contract_sha256": "69acbc21132a78df508a104d668bf55d815b8befcfe6d4bec77bb6cbebd52f2f",
+  "contract_sha256": "91a068795fe35604ba63071a87dfea822fe0b7b2439b2b734a38fbb560643a01",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -303,8 +303,8 @@
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "{tag}*-comments-panel.xml",
-        "match": "[0-9万.]+条评论",
+        "glob": "{tag}-v*-collection-comments-panel.xml",
+        "match": "(?=[\\s\\S]*<node(?=[^>]*\\bresource-id=\"com\\.ss\\.android\\.ugc\\.aweme:id/ety\")(?=[^>]*\\bclass=\"android\\.widget\\.EditText\")(?=[^>]*\\bpackage=\"com\\.ss\\.android\\.ugc\\.aweme\")[^>]*>)(?:<node(?=[^>]*\\btext=\"[0-9万.]+条评论\")(?=[^>]*\\bresource-id=\"com\\.ss\\.android\\.ugc\\.aweme:id/title\")(?=[^>]*\\bclass=\"android\\.widget\\.TextView\")(?=[^>]*\\bpackage=\"com\\.ss\\.android\\.ugc\\.aweme\")[^>]*>|<node(?=[^>]*\\btext=\"评论 [0-9万.]+\")(?=[^>]*\\bresource-id=\"com\\.ss\\.android\\.ugc\\.aweme:id/ez-\")(?=[^>]*\\bclass=\"android\\.widget\\.TextView\")(?=[^>]*\\bpackage=\"com\\.ss\\.android\\.ugc\\.aweme\")[^>]*>)",
         "expect": {
           "op": ">=",
           "ref": "metrics.videos_processed"

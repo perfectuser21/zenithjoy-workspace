@@ -7390,7 +7390,7 @@ agent_suite:
   ci: L3
   status: active
   product: AI员工
-  note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+  note: "公司Wiki真实渲染：版本/来源/JSON保存与深色父背景正文、标签、来源、加载、错误的computed对比度；Dashboard默认--coverage与company-wiki-config-smoke执行"
 
 - id: company-config
   path: services/phone-adb-controller/__tests__/company-config.test.mjs

@@ -6,6 +6,17 @@ QV_EID="$TAG-v$VID-${MODE:-identity}"
 qv_nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] || /bin/sleep "$1"; }
 qv_log(){ print -u2 -r -- "[queue-video] $*"; }
 qv_field(){ print -r -- "$1" | sed -n "s/^$2=//p" | head -1; }
+qv_confirm_nickname(){
+  # 只解XML字符实体；不裁空白/删emoji/变体符，不替代控制器鲜证与实际ID核验。
+  node - "$QV_DIR/nickname-match-lib.js" "$1" "$2" "${3:-}" <<'JS'
+const {decodeXmlEntities}=require(process.argv[2]);
+const encoding=process.argv[5];
+if(!['xml_decoded','xml_raw'].includes(encoding))process.exit(1);
+const observed=encoding==='xml_raw'?decodeXmlEntities(process.argv[3]):process.argv[3],expected=decodeXmlEntities(process.argv[4]);
+if(!observed||!expected||observed!==expected)process.exit(1);
+process.stdout.write(observed);
+JS
+}
 qv_quote(){ local q=\' s="$1"; s="${s//$q/$q\\$q$q}"; print -rn -- "'$s'"; }
 qv_remote(){
   local sub="$1" args="" a; shift
@@ -160,8 +171,13 @@ except Exception: print("pending")')"
 }
 # 失败恢复后，不沿用此前屏幕坐标：重新核验视频，并读取当前屏找到同条评论。
 qv_relocate_comment(){
-  local nick="$1" body="$2" raw ln
-  QV_RESCANS=$(( ${QV_RESCANS:-0} + 1 ))
+  local nick="$1" body="$2" raw ln purpose="${3:-identity}"
+  case "$purpose" in
+    identity) QV_RESCANS=$(( ${QV_RESCANS:-0} + 1 ));;
+    avatar) QV_AVATAR_RECOVERIES=$(( ${QV_AVATAR_RECOVERIES:-0} + 1 ));;
+    *) return 1;;
+  esac
+  qv_log "comment_relocation kind=$purpose row=$QV_ROW evidence=$QV_EID-rescan-$QV_ROW"
   "$C" --profile "$P" back </dev/null >/dev/null || return 1
   qv_verify_video "$QV_EID-recovery-$QV_ROW" || return 1
   "$C" --profile "$P" open-comments "$QV_EID-reopen-$QV_ROW" </dev/null >/dev/null || return 1
@@ -170,7 +186,9 @@ qv_relocate_comment(){
     [[ "$(print -r -- "$ln" | cut -f1)" == "$nick" && "$(print -r -- "$ln" | cut -f2)" == "$body" ]] || continue
     QV_LINE="$ln"; return 0
   done
-  return 1
+  # 只有back/实际VID复核/评论重开/新树读取均成功，才是目标不在新屏。
+  # rc1仍为取证或上下文失败，绝不可当成可安全跳过的候选。
+  return 2
 }
 qv_history_prepare(){
   typeset -gA QV_HISTORY_ROWS QV_HISTORY_USED
@@ -193,7 +211,7 @@ qv_collect(){
   local budget
   budget="$(qv_collection_budget)" || return 2
   local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 covered=0 identity_started own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
-  local -A seen emitted
+  local -A seen emitted unavailable_avatar
   local sampling=0
   if (( ${+LEADGEN_COMMENT_LIMIT} )); then sampling=1; cap="$LEADGEN_COMMENT_LIMIT"; fi
   opened="$("$C" --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || {
@@ -243,6 +261,25 @@ except Exception: print("medium")' "$count")"
       (( own_rc != 0 )) || { [[ "$author" == author ]] && return 8; continue; }
       [[ "$author" != author ]] || continue
       QV_LINE="$line"; identity=""
+      tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
+      x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
+      if [[ -z "$x" && -z "$y" && -n "$nickb64" ]]; then
+        # 仅空头像坐标：不猜坐标；新鲜上下文成功后最多重定位一次。
+        # 已明确不可操作的同昵称+全文只在再次空坐标时略过，不挡后续完整新树。
+        [[ -z "${unavailable_avatar[$nick$'\t'$body]:-}" ]] || continue
+        local relocate_rc=0
+        qv_relocate_comment "$nick" "$body" avatar || relocate_rc=$?
+        (( relocate_rc == 0 || relocate_rc == 2 )) || { qv_log "avatar_recovery_failed row=$total"; return 6; }
+        tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
+        x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
+        if (( relocate_rc == 2 )) || [[ -z "$x" && -z "$y" && -n "$nickb64" ]]; then
+          unavailable_avatar[$nick$'\t'$body]=1
+          print -- "COMMENT_SKIP\t$VID\tavatar_unavailable\t$QV_EID-rescan-$QV_ROW"
+          qv_log "comment_skipped row=$total reason=avatar_unavailable evidence=$QV_EID-rescan-$QV_ROW"
+          # 恢复已改变屏位；不能点原raw剩余旧坐标，下一轮重新collect。
+          exhausted=0; break
+        fi
+      fi
       for attempt in 1 2 3; do
         tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
         x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
@@ -250,11 +287,12 @@ except Exception: print("medium")' "$count")"
         identity_started="$(date +%s)"
         identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$QV_EID-person$total-t$attempt" </dev/null)" || identity=""
         onick="$(qv_field "$identity" nickname)"
-        [[ "$onick" == "$nick" ]] && break
+        onick="$(qv_confirm_nickname "$onick" "$nick" "$(qv_field "$identity" nickname_encoding)")" && break
         identity=""
         (( attempt < 3 )) && qv_relocate_comment "$nick" "$body" || break
       done
       [[ -n "$identity" ]] || { qv_log "identity_unconfirmed row=$total"; return 6; }
+      local recipient_profile_eid="$QV_EID-person$total-t$attempt"
       oid="$(qv_field "$identity" douyin_id)"; atype="$(qv_field "$identity" account_type)"; ip="$(qv_field "$identity" profile_ip)"
       if [[ -z "$oid" && "$(qv_field "$identity" profile_status)" == unavailable && "$(qv_field "$identity" unavailable_reason)" == account_deregistered ]]; then
         local unavailable_proof unavailable_eid="$QV_EID-person$total-t$attempt" unavailable_root="${DOUYIN_PHONE_TMP_ROOT:-/private/tmp/openclaw-phone}/evidence/$P" unavailable_file
@@ -299,6 +337,7 @@ except Exception: print("medium")' "$count")"
       DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-after-card$total-open" </dev/null >/dev/null || return 4
       DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-after-card$total" || return 4
       "$C" --profile "$P" open-comments "$QV_EID-after-card$total-comments" </dev/null >/dev/null || return 6
+      node "$QV_DIR/queued-recipient-evidence.js" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL" "$P" "$oid" "$onick" "$body" "$identity_started" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$recipient_profile_eid" "$QV_EID-after-card$total" xml_raw || return 8
       emitted[$oid$'\t'$body]=1; covered=$((covered+1))
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
       # 名片返回后页面重排；下一条重新collect，绝不沿用旧坐标。

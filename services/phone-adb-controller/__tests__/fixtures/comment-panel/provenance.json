@@ -1,0 +1,13 @@
+{
+  "source_path": "/tmp/openclaw-phone/evidence/legacy/codexyellow20261014s861eef64r3_102-v7674939415818521875-collection-comments-panel.xml",
+  "source_commit": "861eef648ec0f773321a09118f17b5e69ab871cf",
+  "source_sha256": "bd1e54e90bb75b52b992928b40f53ef856a3a9e9e07513f96d74d11e19c7601d",
+  "fixture": "poi-header-861.xml",
+  "transform": "仅去除正文/个人姓名/无关desc文本，保实际header、所有节点结构/包名/RID/class/selected/bounds；原件私有不入git。",
+  "legacy": {
+    "source_path": "/tmp/codex-861r1-102-independent-original-evidence-20261014/__private__tmp__openclaw-phone__evidence__legacy__codexyellow20261014s861eef64r1_102-v7637880891511528896-collection-comments-panel.xml",
+    "source_sha256": "1e58210d40a59fd672693da2233287d8331ff828570c722963147b31a7994551",
+    "fixture": "legacy-header-861.xml",
+    "transform": "仅清私有正文/昵称与非EditText desc，title原文/结构/包/class/RID不改"
+  }
+}

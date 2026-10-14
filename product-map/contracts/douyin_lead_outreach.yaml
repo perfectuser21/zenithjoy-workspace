@@ -15,12 +15,13 @@ trigger_inputs:
   - Lead
   - Account
   - Device
+  - RecipientQualification
 known_gaps: []
 activities:
   - key: preflight
     name: 预检
     order: 1
-    version: 3.0.0
+    version: 4.0.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -48,6 +49,18 @@ activities:
           - intent_grade
           - repeat_hits
           - status
+      - type: RecipientQualification
+        cardinality: many
+        fields:
+          - line_key
+          - comment_id
+          - status
+          - company_id
+          - company_version
+          - native_profile_sha256
+          - reason
+          - tenant_id
+          - policy_id
     outputs:
       - type: Device
         cardinality: one
@@ -76,6 +89,8 @@ activities:
     preconditions:
       - 显式LEADGEN_SEND=1授权本批触达；账号风险flag及当日日上限仍生效，无授权零发送
       - 真实读取限额与发送账号，不符合时禁止取单发送
+      - 只读PG confirmed桥与passed资格、本run冻结公司版本、真实nativeUID/全文/VID和Feishu
+        marker/UID/全payload读回通过才领单；旧personal/A/B或缺证据unknown不ready，不修改旧protected/已发单
     postconditions:
       - probe: pf_device_verified
         asserts: 保留原后置条件：pf_device_verified
@@ -120,7 +135,8 @@ activities:
     runtime:
       phase: setup
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -162,6 +178,14 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-outreach-bridge.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/outreach-order-lock.py
+        revision: contract
     steps:
       - key: acquire_device_lock
         name: 拿设备锁
@@ -173,7 +197,8 @@ activities:
         check: lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.acquire_device_lock（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            preflight.acquire_device_lock（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -193,7 +218,8 @@ activities:
         check: lock-refresh 后锁文件 mtime 更新
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.refresh_lock_heartbeat（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            preflight.refresh_lock_heartbeat（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -214,7 +240,8 @@ activities:
         check: adb get-state == device 且 serial 与声明一致
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.verify_device_identity（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            preflight.verify_device_identity（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -234,7 +261,8 @@ activities:
         check: telephony call_state == IDLE
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.verify_call_idle（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            preflight.verify_call_idle（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -254,7 +282,8 @@ activities:
         check: 我页抖音号 in profile 的注册账号列表(account-current + account_registered)
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.read_account_mark（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            preflight.read_account_mark（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -276,10 +305,12 @@ activities:
           - Run.profile
           - Run.serial
         check: ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron
-          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即 0）
+          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即
+          0）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js preflight.open_run_ledger（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            preflight.open_run_ledger（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -383,7 +414,8 @@ activities:
           - sender_id
           - reached_at
     preconditions:
-      - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until 未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
+      - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until
+        未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
         daily_cap（config/dm-rate-ramp.json）；不可用账号在取单前经 --exclude 排除
       - 触达等级 ∈ 该业务线 outreachGrades（选单时过滤，决策 67762358；老数据无等级前缀放行）
       - 线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）
@@ -439,7 +471,8 @@ activities:
     runtime:
       phase: batch_end
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -477,7 +510,8 @@ activities:
         check: 预写触达中后回读，状态/分发号/话术ID 三项一致，否则 CLAIM_FAILED 不发
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.pick_order（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            send_dm.pick_order（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -498,7 +532,8 @@ activities:
         check: 输入框回读 == 审批话术，发送后气泡可见
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.send_private_message（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            send_dm.send_private_message（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -518,7 +553,8 @@ activities:
         check: 现场无「暂无法给对方发送消息」「发送消息过于频繁」
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js send_dm.verify_delivery（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            send_dm.verify_delivery（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -586,7 +622,8 @@ activities:
           - sender_id
           - reached_at
     preconditions:
-      - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until 未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
+      - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until
+        未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
         daily_cap（config/dm-rate-ramp.json）；不可用账号在取单前经 --exclude 排除
       - 触达等级 ∈ 该业务线 outreachGrades（选单时过滤，决策 67762358；老数据无等级前缀放行）
       - 线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）
@@ -642,7 +679,8 @@ activities:
     runtime:
       phase: batch_end
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -679,7 +717,8 @@ activities:
         check: 真实发送回写已触达；互关或限流回写触达受阻；未知保留永久prepared，不自动重排
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js write_back.write_back_result（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            write_back.write_back_result（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -760,7 +799,8 @@ activities:
     runtime:
       phase: finalize
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -807,7 +847,8 @@ activities:
         check: 前台不再是 com.ss.android.ugc.aweme
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.close_app（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            cleanup.close_app（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -827,7 +868,8 @@ activities:
         check: 锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.release_lock（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            cleanup.release_lock（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -843,10 +885,12 @@ activities:
         reads:
           - Device.serial
         writes: []
-        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）
+        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode
+          厂商launcher）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.return_safe_desktop（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            cleanup.return_safe_desktop（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -866,7 +910,8 @@ activities:
         check: n_items>0 且 n_files>=n_items（workflow-result.sh:194）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js cleanup.finalize_run（原约束保留，原订单/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-outreach-orders.js
+            cleanup.finalize_run（原约束保留，原订单/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint

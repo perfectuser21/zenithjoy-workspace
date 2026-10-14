@@ -21,11 +21,34 @@ inputs:
   - type: CommentSampleRequest
     cardinality: one
     optional: true
-    fields: [run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s]
+    fields:
+      [
+        run_tag,
+        source_run,
+        profile,
+        serial,
+        line,
+        comment_limit,
+        collection_budget_s
+      ]
   - type: HistoricalComment
     cardinality: many
     optional: true
-    fields: [id, line_key, run_tag, source_run, video_id, video_url, schema_version, status, douyin_id, body, history_sha256, coverage]
+    fields:
+      [
+        id,
+        line_key,
+        run_tag,
+        source_run,
+        video_id,
+        video_url,
+        schema_version,
+        status,
+        douyin_id,
+        body,
+        history_sha256,
+        coverage
+      ]
 known_gaps: []
 activities:
   - key: preflight
@@ -115,7 +138,8 @@ activities:
     runtime:
       phase: setup
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -160,7 +184,8 @@ activities:
         check: lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.acquire_device_lock（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            preflight.acquire_device_lock（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -180,7 +205,8 @@ activities:
         check: lock-refresh 后锁文件 mtime 更新
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -201,7 +227,8 @@ activities:
         check: adb get-state == device 且 serial 与声明一致
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_device_identity（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            preflight.verify_device_identity（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -221,7 +248,8 @@ activities:
         check: telephony call_state == IDLE
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_call_idle（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            preflight.verify_call_idle（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -241,7 +269,8 @@ activities:
         check: 我页抖音号 in profile 的注册账号列表(account-current + account_registered)
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.read_account_mark（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            preflight.read_account_mark（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -263,10 +292,12 @@ activities:
           - Run.profile
           - Run.serial
         check: ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron
-          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即 0）
+          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即
+          0）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.open_run_ledger（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            preflight.open_run_ledger（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -353,7 +384,8 @@ activities:
     runtime:
       phase: batch_end
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -496,8 +528,8 @@ activities:
         - 本批无 pending 视频
       retryable:
         - 转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）
-        - 判定 API 故障（OpenRouter 402/429/网络）留 pending，judgment_reason 记「判定异常(待重判)」（judge-video.js
-          markVideoJudgeError）
+        - 判定 API 故障（OpenRouter 402/429/网络）留 pending，judgment_reason
+          记「判定异常(待重判)」（judge-video.js markVideoJudgeError）
         - 录音死寂（harvest-keyword.sh 电平打点）
       needs_human:
         cases:
@@ -516,7 +548,8 @@ activities:
     runtime:
       phase: per_item
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -580,7 +613,8 @@ activities:
         check: 本run逐VID实际record-start媒体音量回读为正整数；未知或零不得通过，音轨静音不能替代媒体音量证据
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh qualification.unmute_before_record（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            qualification.unmute_before_record（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -599,7 +633,8 @@ activities:
         check: 录屏文件存在且时长 ≥ 预算的 80%
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh qualification.record_triple_speed（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            qualification.record_triple_speed（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -618,7 +653,8 @@ activities:
         check: 送ASR的本轮音频必须有16kHz音轨且电平非死寂；实际静音仅允许本run租约PG拒绝与独立读回，不得标题或旧转写兜底matched
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh qualification.extract_audio（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            qualification.extract_audio（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -638,16 +674,19 @@ activities:
         check: 可用本轮音轨正常转写；空/静音 → rejected。静音在ASR前用本轮录音核验拒绝事实终结，保旧transcript但不冒充本轮ASR完成
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh qualification.transcribe（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            qualification.transcribe（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
           readback:
             type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <>
-              'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%'
-              AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%'
-              AND coalesce(judgment_reason, '') NOT LIKE '本轮录音核验拒绝:静音音轨%'
+            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch =
+              '$RUN_TAG' AND judgment_status <> 'pending' AND
+              coalesce(transcript, '') = '' AND coalesce(judgment_reason, '')
+              NOT LIKE '转写为空%' AND coalesce(judgment_reason, '') NOT LIKE
+              'V2便宜闸%' AND coalesce(judgment_reason, '') NOT LIKE
+              '本轮录音核验拒绝:静音音轨%'
             expect:
               op: <=
               value: 0
@@ -663,14 +702,16 @@ activities:
         check: judgment_status ∈ {matched, rejected} 且 judgment_reason 非空
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh qualification.judge_content（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            qualification.judge_content（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
           readback:
             type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <>
-              'pending' AND coalesce(judgment_reason, '') = ''
+            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch =
+              '$RUN_TAG' AND judgment_status <> 'pending' AND
+              coalesce(judgment_reason, '') = ''
             expect:
               op: <=
               value: 0
@@ -679,7 +720,7 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.2.1
+    version: 2.3.0
     compatibility: backward
     owner:
       department: line02 智能获客
@@ -688,7 +729,16 @@ activities:
       - type: CommentSampleRequest
         cardinality: one
         optional: true
-        fields: [run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s]
+        fields:
+          [
+            run_tag,
+            source_run,
+            profile,
+            serial,
+            line,
+            comment_limit,
+            collection_budget_s
+          ]
       - type: Video
         cardinality: many
         fields:
@@ -739,6 +789,7 @@ activities:
           - body
           - video_id
           - harvest_batch
+          - recipient_evidence
       - type: Video
         cardinality: many
         effect: update
@@ -748,8 +799,10 @@ activities:
       - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，可选collection_budget_s仅显式配置时冻结为1..6720整数，默认480和进程960保持，显式进程预算加480收尾并受Activity/真实全局剩余时间限制；配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
       - 仅matched视频可采评论
       - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
-      - 可选HistoricalComment是只读PG系统输入，持本run matched租约且source_run受信VID清单后queue comment_history读取，非用户CLI或qualification输出；当前唯一line+VID+exactURL绑定，旧短链仅标题窄候选后受信只读HEAD实际VID相同才纳入私有工件，unknown仍走原路径，schema或scope异常拒绝
+      - 可选HistoricalComment是只读PG系统输入，持本run matched租约且source_run受信VID清单后queue
+        comment_history读取，非用户CLI或qualification输出；当前唯一line+VID+exactURL绑定，旧短链仅标题窄候选后受信只读HEAD实际VID相同才纳入私有工件，unknown仍走原路径，schema或scope异常拒绝
       - 历史命中仍需当前评论人的新鲜actualOID和严格返回评论面板，完整正文相等后才免重复名片动作
+      - NativeRecipientEvidence是现采集Step附带可选原件，不新增UI动作/不改12列LEAD；锁内person-profile/returned+after-card实际VID+重开评论成功后才产出，缺原件unknown不ready
     postconditions:
       - probe: coll_only_matched
         asserts: 保留原后置条件：coll_only_matched
@@ -811,7 +864,8 @@ activities:
     runtime:
       phase: per_item
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -842,6 +896,10 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/queued-video-lib.sh
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/queued-recipient-evidence.js
+        revision: contract
     model:
       - provider: openrouter
         model: bytedance/ui-tars-1.5-7b
@@ -854,17 +912,20 @@ activities:
           - Video.video_url
           - Video.judgment_status
         writes: []
-        check: 评论区面板节点可见；可选历史输入不替代当前视频和面板核验
+        check: 本run逐VID工件具有原生评论header和输入面板；旧n条评论与新exact评论
+          n均可见；本Step只证面板，实际VID仍须qv新鲜nonce与identity sidecar核验；可选历史不替代核验
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.open_comment_section（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.open_comment_section（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}*-comments-panel.xml"
-            match: "[0-9万.]+条评论"
+            glob: "{tag}-v*-collection-comments-panel.xml"
+            match: '(?=[\s\S]*<node(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ety")(?=[^>]*\bclass="android\.widget\.EditText")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)(?:<node(?=[^>]*\btext="[0-9万.]+条评论")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/title")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>|<node(?=[^>]*\btext="评论
+              [0-9万.]+")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ez-")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)'
             expect:
               op: ">="
               ref: metrics.videos_processed
@@ -885,10 +946,12 @@ activities:
           - Comment.dedup_key
           - Comment.harvest_batch
           - Comment.line_key
-        check: 逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过
+        check: 逐屏整行去重，连续 2
+          屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.collect_comments（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.collect_comments（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -905,11 +968,13 @@ activities:
           - Comment.nickname
         writes:
           - Comment.douyin_id
-        check: 主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link 仍是本视频，漂移即本视频剩余评论作废(0929修，见下
+        check: 主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link
+          仍是本视频，漂移即本视频剩余评论作废(0929修，见下
           known_gaps)；历史匹配也必须新鲜actualOID逐字核验及严格评论面板返回，profile和returned原工件hash独立关联
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.verify_commenter_identity（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.verify_commenter_identity（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -927,10 +992,12 @@ activities:
           - Comment.douyin_id
         writes:
           - Comment.profile_url
-        check: 分享名片 → sec_uid，剪贴板守卫回读；失败重试3次(同commenter-identity套路)，3次仍失败才降级为线索保留但链接为空；仅可信同VID+actualOID+完整body历史经新鲜验证后免重复card，独立PG消费证据必须成立
+        check: 分享名片 →
+          sec_uid，剪贴板守卫回读；失败重试3次(同commenter-identity套路)，3次仍失败才降级为线索保留但链接为空；仅可信同VID+actualOID+完整body历史经新鲜验证后免重复card，独立PG消费证据必须成立
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.resolve_profile_link（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.resolve_profile_link（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -949,17 +1016,19 @@ activities:
         writes:
           - Video.process_status
           - Video.comment_count
-        check: process_status=评论已采 只写给matched且原默认完整采集或新鲜footer视频；采样quota_reached走collect_partial不写全采状态，fulfilled_sample_video_ids仅本run已核目标，不全局排除；评论提交事务重验历史PGid/OID/fullbody/视频归属，comment_count只写本次distinct已核历史加新覆盖，历史4条加新0条写4，不把未核旧UI总数当历史覆盖
+        check: process_status=评论已采
+          只写给matched且原默认完整采集或新鲜footer视频；采样quota_reached走collect_partial不写全采状态，fulfilled_sample_video_ids仅本run已核目标，不全局排除；评论提交事务重验历史PGid/OID/fullbody/视频归属，comment_count只写本次distinct已核历史加新覆盖，历史4条加新0条写4，不把未核旧UI总数当历史覆盖
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.mark_video_collected（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.mark_video_collected（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
           readback:
             type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND process_status =
-              '评论已采'
+            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch =
+              '$RUN_TAG' AND process_status = '评论已采'
             expect:
               op: ">="
               ref: metrics.videos_collected
@@ -969,11 +1038,12 @@ activities:
         reads:
           - Video.video_url
         writes: []
-        check: 每张卡片处理完 back-to-results 一次做对（Activity=搜索结果页且搜索框=本词）；走了兜底重搜（deeplink 重发搜索+重扫卡片）算一次没做对。0930 决策
-          f425e3fd：此前不是步骤，三次修复都没有格子能变红；cmd09300230 批 134/134 走兜底、跑 6 小时
+        check: 新0102保留身份错位兜底率质量代理。rescan_rate/identity_rescan_rate仅为真实身份失败重定位调用数除以合格视频数，
+          正常空头像恢复另如实计avatar_recovery_count，不计为身份错位；原0.3阈值不变。此代理不构成搜索结果页实际归位证据。
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.return_to_results（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.return_to_results（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -994,23 +1064,28 @@ activities:
           - Comment.harvest_batch
           - Comment.dedup_key
           - Comment.line_key
+          - Comment.recipient_evidence
         check: 评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数
-          PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit 1；保本次LEAD观察comments_collected及原PG门槛，新增comments_inserted/history_verified/coverage分列，历史不输出新LEAD或迁旧batch
+          PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit
+          1；保本次LEAD观察comments_collected及原PG门槛，新增comments_inserted/history_verified/coverage分列，历史不输出新LEAD或迁旧batch；可选recipient原件严格绑定line/run/source_run/profile/VID/UID/全文SHA、私有文件真实RUN_DIR和hash，异常拒绝
         implementation:
           status: implemented
-          ref: process-queued-video.sh + queued-video-lib.sh collection.push_raw_comments（原约束保留，真PG/证据读回）
+          ref: process-queued-video.sh + queued-video-lib.sh
+            collection.push_raw_comments（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
           readback:
             type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_comments WHERE harvest_batch = '$RUN_TAG'
+            query: SELECT count(*) FROM zenithjoy.leadgen_comments WHERE harvest_batch =
+              '$RUN_TAG'
             expect:
               op: ">="
               ref: metrics.comments_collected
     known_gaps:
-      - gap: coll_video_binding_consistent 只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是 harvest-keyword.sh
-          video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验
+      - gap: coll_video_binding_consistent
+          只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是
+          harvest-keyword.sh video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验
         task: 878fe194
     commander:
       entry: activity-commander.mjs
@@ -1082,7 +1157,8 @@ activities:
     runtime:
       phase: finalize
       entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
+        RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1141,7 +1217,8 @@ activities:
         check: 锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.release_lock（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            cleanup.release_lock（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -1157,10 +1234,12 @@ activities:
         reads:
           - Device.serial
         writes: []
-        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）
+        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode
+          厂商launcher）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.return_safe_desktop（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            cleanup.return_safe_desktop（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -1180,7 +1259,8 @@ activities:
         check: n_items>0 且 n_files>=n_items（workflow-result.sh:194）
         implementation:
           status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）
+          ref: leadgen-workflow.mjs + leadgen-queue.js
+            cleanup.finalize_run（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint

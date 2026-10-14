@@ -188,6 +188,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       let inserted = 0;
       for (const comment of input.comments || []) {
         if (!comment.nickname || !comment.commentBody) throw Error('评论身份或正文缺失');
+        if(comment.recipientEvidence?.status==='verified'){
+          const e=comment.recipientEvidence;
+          if(e.scope?.video_id!==input.video_id||e.scope?.profile&&!require('./line-routes.js').routeOf(lineKey).profiles.includes(e.scope.profile))throw Error('recipient采集归属错误');
+          require('./queued-recipient-evidence.js').validateEvidence(e,{line_key:lineKey,run,douyin_id:comment.douyinId,nickname:comment.nickname,comment_body:comment.commentBody,comment_body_sha256:require('./queued-recipient-evidence.js').hash(comment.commentBody),video_url:comment.sourceVideoUrl});
+        }
         const result = await db.upsertComment(client, { ...comment, lineKey, harvestBatch: run });
         if (result.inserted) inserted++;
       }
@@ -227,8 +232,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     }
     return { scored, ids, config: evidence };
   }
+  if(op==='bridge_readback')return require('./leadgen-outreach-bridge.js').readbackBridge(pool,input);
+  if(op==='bridge_outreach')return require('./leadgen-outreach-bridge.js').bridgeOutreach(pool,input,deps);
   if (op === 'mark_leads') {
-    let marked = 0, created = 0, repeats = 0;const ids=[],lead_ids=[];
+    const bridgeConfig=await (deps.freezeCompanyConfig||freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'103'});
+    let marked = 0, created = 0, repeats = 0;const ids=[],lead_ids=[];const recipient_calls={model_call_count:0,passed:0,excluded:0,unknown:0};
     for (let n = 0; n < limit; n++) {
       const result = await transaction(pool, async client => {
         // 同业务线的人员去重串行化；评论行与人员更新一起提交，崩溃重跑不增加虚假重复次数。
@@ -243,16 +251,19 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           nickname: row.nickname, douyinId: row.douyin_id, profileUrl: row.profile_url,
           commentBody: row.comment_body, sourceVideo: row.source_video,
           aiJudgmentReason: `[${row.intent_grade}] ${row.judgment_reason || ''}` });
+        let bridge=null;
+        if(lead)bridge=await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead,config:bridgeConfig},deps);
         await db.markCommentJudgment(client, { lineKey, dedupKey: row.dedup_key,
           relevance: row.relevance, intentGrade: row.intent_grade, reason: row.judgment_reason });
-        return { lead, id:row.id };
+        return { lead, id:row.id, qualification:bridge?.qualification };
       });
       if (!result) break;
       marked++;
+      if(result.qualification){recipient_calls[result.qualification.status]++;const count=result.qualification.model_call_count;recipient_calls.model_call_count+=Number.isSafeInteger(count)&&count>=0?count:0;}
       ids.push(result.id);if(result.lead)lead_ids.push(result.lead.id);
       if (result.lead?.created) created++; else if (result.lead) repeats++;
     }
-    return { marked, created, repeats, ids, lead_ids };
+    return { marked, created, repeats, ids, lead_ids, recipient_calls };
   }
   if(['score_readback','mark_readback'].includes(op)){
     const ids=input.ids,leads=input.lead_ids||[];
@@ -260,7 +271,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||[...ids,...leads].some(id=>!/^[-a-zA-Z0-9]{1,80}$/.test(id)))throw Error('读回ID列表无效');
     const rows=ids.length?(await pool.query('SELECT id,relevance,intent_grade,process_status FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])',[lineKey,ids])).rows:[];
     const leadRows=leads.length?(await pool.query('SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND id=ANY($2::uuid[])',[lineKey,leads])).rows:[];
-    const failures=ids.filter(id=>{const row=rows.find(r=>r.id===id);
+    const related=op==='mark_readback'?rows.filter(r=>r.relevance==='相关').map(r=>r.id):[];
+    const outbox=related.length?(await pool.query('SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND comment_id=ANY($2::uuid[]) AND run_tag=$3',[lineKey,related,run])).rows:[];
+    const bridgeFailures=related.filter(id=>{const matches=outbox.filter(r=>r.comment_id===id);if(matches.length!==1)return true;const b=matches[0],p=b.payload;return !p||b.line_key!==lineKey||p.line_key!==lineKey||p.comment_id!==id||p.lead_id!==b.lead_id||!leads.includes(b.lead_id)||require('./leadgen-outreach-bridge.js').digest(p)!==b.payload_sha256;}).length;
+    const failures=bridgeFailures+ids.filter(id=>{const row=rows.find(r=>r.id===id);
       return !row||!['相关','不相关'].includes(row.relevance)||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade)
         ||op==='mark_readback'&&row.process_status!=='已分拣';}).length
       +leads.filter(id=>!leadRows.some(r=>r.id===id)).length;
