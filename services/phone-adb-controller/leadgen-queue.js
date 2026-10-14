@@ -236,7 +236,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(op==='bridge_outreach')return require('./leadgen-outreach-bridge.js').bridgeOutreach(pool,input,deps);
   if (op === 'mark_leads') {
     const bridgeConfig=await (deps.freezeCompanyConfig||freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'103'});
-    let marked = 0, created = 0, repeats = 0;const ids=[],lead_ids=[];
+    let marked = 0, created = 0, repeats = 0;const ids=[],lead_ids=[];const recipient_calls={model_call_count:0,passed:0,excluded:0,unknown:0};
     for (let n = 0; n < limit; n++) {
       const result = await transaction(pool, async client => {
         // 同业务线的人员去重串行化；评论行与人员更新一起提交，崩溃重跑不增加虚假重复次数。
@@ -251,17 +251,19 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           nickname: row.nickname, douyinId: row.douyin_id, profileUrl: row.profile_url,
           commentBody: row.comment_body, sourceVideo: row.source_video,
           aiJudgmentReason: `[${row.intent_grade}] ${row.judgment_reason || ''}` });
-        if(lead)await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead,config:bridgeConfig},deps);
+        let bridge=null;
+        if(lead)bridge=await require('./leadgen-outreach-bridge.js').enqueueBridge(client,{lineKey,run,sourceRun,comment:row,lead,config:bridgeConfig},deps);
         await db.markCommentJudgment(client, { lineKey, dedupKey: row.dedup_key,
           relevance: row.relevance, intentGrade: row.intent_grade, reason: row.judgment_reason });
-        return { lead, id:row.id };
+        return { lead, id:row.id, qualification:bridge?.qualification };
       });
       if (!result) break;
       marked++;
+      if(result.qualification){recipient_calls[result.qualification.status]++;const count=result.qualification.model_call_count;recipient_calls.model_call_count+=Number.isSafeInteger(count)&&count>=0?count:0;}
       ids.push(result.id);if(result.lead)lead_ids.push(result.lead.id);
       if (result.lead?.created) created++; else if (result.lead) repeats++;
     }
-    return { marked, created, repeats, ids, lead_ids };
+    return { marked, created, repeats, ids, lead_ids, recipient_calls };
   }
   if(['score_readback','mark_readback'].includes(op)){
     const ids=input.ids,leads=input.lead_ids||[];

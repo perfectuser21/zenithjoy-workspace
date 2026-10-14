@@ -37,10 +37,17 @@ async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readF
 // 原Feishu订单字段、分类/等级/去重语义复用；仅为四活动提供单条原子区入口。
 // prepared标记是永久发送预留，40分钟旧悬空回收不能将其重新排队。
 async function withOrderLock(line,fn,{directory=require('path').join(require('os').homedir(),'.config/zenithjoy/outreach-order-locks')}={}){
- const path=require('path').join(directory,line+'.lock');
- fs.mkdirSync(require('path').dirname(path),{recursive:true,mode:0o700});
- try{fs.mkdirSync(path,{mode:0o700});}catch(e){if(e.code==='EEXIST')throw Error('触达原订单领单锁忙');throw e;}
- try{return await fn();}finally{fs.rmdirSync(path);}
+ const {spawn}=require('node:child_process');
+ const child=spawn('python3',[require('path').join(__dirname,'outreach-order-lock.py'),directory,line,String(process.pid),crypto.randomUUID()],{stdio:['pipe','pipe','pipe']});
+ child.stdin.on('error',()=>{}); // 已退出的broker pipe错误不变成未捕获崩溃；close退出码仍是正式清理门禁。
+ let text='',ready=false;const closed=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',code=>resolve(code));});
+ try {
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill('SIGTERM');reject(Error('触达原订单锁启动超时'));},5000);
+   child.stdout.on('data',chunk=>{text+=chunk;if(text==='ORDER_LOCK_READY\n'){ready=true;clearTimeout(timer);resolve();}});
+   closed.then(code=>{if(!ready){clearTimeout(timer);reject(Error(code===3?'触达原订单领单锁忙':'触达原订单锁证据失败'));}},e=>{clearTimeout(timer);reject(e);});
+  });
+  return await fn();
+ } finally {child.stdin.end();const code=await closed;if(ready&&code!==0)throw Error('触达原订单锁清理证据未确认');}
 }
 async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFileSync,deadlineAt=Infinity}={}){
  const cache=env.LEADGEN_FEISHU_CREDENTIALS||require('path').join(require('os').homedir(),'.credentials/leadgen-feishu-accounts.json');

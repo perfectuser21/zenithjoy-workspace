@@ -73,7 +73,7 @@ test('标记人的更新与评论完成状态原子提交，已有已触达人�
     { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, {rows:[{id:'l1',line_key:'jinuo',douyin_id:'id'}]}, { rows: [] }, {rows:[]},
   ]);
   const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 });
-  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'] });
+  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
   const person = pool.calls.find(c => /SET dup_hit_count/.test(c.sql));
   assert.ok(person);
   assert.ok(!/status\s*=|reached_at\s*=|DELETE/.test(person.sql));
