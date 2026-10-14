@@ -111,3 +111,10 @@ test('103标人独立读回必须核真实comment→lead outbox，缺意图不�
  const r=await queueRequest(pool,{op:'mark_readback',line:'jinuo',run:'score103',ids:[cid],lead_ids:[lid]});
  assert.equal(r.verified,false);assert.ok(r.failures>0);assert.ok(calls.some(c=>c.sql.includes('leadgen_bridge_outbox')));
 });
+
+test('bridge独立PG读回确认已落实处置，缺行/仍attempted/篡改payload不得完成',async()=>{
+ const row=pendingBridge();row.state='excluded';row.qualification_status='excluded';row.payload.qualification.status='excluded';row.payload_sha256=require('crypto').createHash('sha256').update(JSON.stringify(row.payload)).digest('hex');
+ const pool={query:async()=>({rows:[row]})};const input={op:'bridge_readback',line:'jinuo',run:'score103',ids:[cid]};
+ assert.equal((await queueRequest(pool,input)).verified,true);
+ for(const change of [{rows:[]},{rows:[{...row,state:'attempted'}]},{rows:[{...row,payload_sha256:'0'.repeat(64)}]}])assert.equal((await queueRequest({query:async()=>change},input)).verified,false);
+});
