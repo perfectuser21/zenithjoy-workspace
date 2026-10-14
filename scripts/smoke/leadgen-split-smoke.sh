@@ -4,6 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 # 先运行实际部署语法命令，防止混合列表中的Python锁文件被Node校验到正式部署才失败。
 node --test services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs services/phone-adb-controller/__tests__/deployment-release-evidence.test.mjs
+# 配套Skill的源绑定、完整分发与漂移覆盖必须先通过；不冒作实际接手验收。
+node --test scripts/product-map/__tests__/leadgen-workflow-skill.test.js services/phone-adb-controller/__tests__/leadgen-skill-source-contract.test.mjs services/phone-adb-controller/__tests__/drift-check.test.mjs
 # 正式Pilot不继承HOME；测试须自建隔离目录，不能依赖开发机个人配置。
 env -u HOME node --test --test-name-pattern='init: 额外导出|init\(preflight\) 就上报一条 span' \
  services/phone-adb-controller/__tests__/workflow-result.test.mjs \

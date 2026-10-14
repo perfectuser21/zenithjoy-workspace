@@ -7439,3 +7439,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "明示fake SSH PG catalog输入经真实readiness；缺schema/无效JSON先于admission及安装拒绝，配套CAS安装须真实字节读回"
+
+- id: leadgen-workflow-skill-contract
+  path: scripts/product-map/__tests__/leadgen-workflow-skill.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition#step4；四wf_run整体陪跑映射、真实版本/文件缺失阻断；保留Code执行边界"
+
+- id: leadgen-skill-source-contract
+  path: services/phone-adb-controller/__tests__/leadgen-skill-source-contract.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition#step4；四业务Skill/12Activity配套、共享开头收尾、设备/MMV实际manifest覆盖；不是现场fallback测试"

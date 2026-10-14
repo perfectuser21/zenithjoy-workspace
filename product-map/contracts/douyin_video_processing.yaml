@@ -1,6 +1,9 @@
 version: 1
 capability: keyword_acquisition
 contract_key: douyin_video_processing
+commander_skill:
+  name: wf-douyin_video_processing
+  version: 0.1.0
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -141,6 +144,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        revision: contract
+        name: douyin-leadgen-102
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/douyin-phone-adb
@@ -387,6 +396,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        revision: contract
+        name: douyin-leadgen-102
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
@@ -551,6 +566,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        revision: contract
+        name: douyin-leadgen-102
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
@@ -867,6 +888,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        revision: contract
+        name: douyin-leadgen-102
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/queued-comment-history.js
@@ -1160,6 +1187,12 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: skill
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        revision: contract
+        name: douyin-leadgen-102
+        version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/douyin-phone-adb

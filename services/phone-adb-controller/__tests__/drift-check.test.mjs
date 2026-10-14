@@ -121,11 +121,12 @@ test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目
   const deploy = spawnSync("git", ["-C", SRC, "show", "HEAD:services/phone-adb-controller/deploy.sh"], {encoding:"utf8"}).stdout;
   const arr = (name) => {
     const m = deploy.match(new RegExp(`^${name}=\\(([\\s\\S]*?)\\)`, "m"));
-    return m[1].split("\n").map((l) => l.replace(/#.*/, "")).join(" ").split(/\s+/).filter(Boolean);
+    return m ? m[1].split("\n").map((l) => l.replace(/#.*/, "")).join(" ").split(/\s+/).filter(Boolean) : [];
   };
   const expected = arr("MMV_JS_FILES").length + arr("MMV_TOPLEVEL_FILES").length + arr("MMV_PROBE_FILES").length + arr("MMV_BIN_FILES").length
     + (arr("DEVICE_SH_FILES").length + arr("DEVICE_NODE_FILES").length + arr("DEVICE_PLAN_FILES").length
       + arr("DEVICE_CTL_FILES").length * arr("DEVICE_CTL_DIRS").length)
+    + arr("DEVICE_RPC_PROBE_FILES").length * 3
     + (deploy.includes("RELEASE_EVIDENCE_FILES=(") ? arr("RELEASE_EVIDENCE_FILES").length * 3 : 0);
   assert.equal(lines.length, expected);
   assert.ok(lines.every(line=>!line.startsWith('xian-m1 ')));
@@ -143,6 +144,23 @@ test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目
     "xian-m4 .local/bin/douyin-phone-adb douyin-phone-adb",
     "xian-m4 bin-harvest/douyin-phone-adb douyin-phone-adb",
   ]) assert.ok(lines.includes(want), `缺 ${want}\n${r.stdout}`);
+});
+
+test('配套Skill与引用文件在设备和MMV两个正式路径都纳入漂移检查',()=>{
+  const c=setup();
+  try{
+    const d=join(c.repo,'services','phone-adb-controller');
+    const paths=['skills/douyin-leadgen-103/SKILL.md','skills/douyin-leadgen-103/references/runtime-calls.json'];
+    writeFileSync(join(d,'deploy.sh'),MINI_DEPLOY+'\nDEVICE_RPC_PROBE_FILES=('+paths.join(' ')+')\n');
+    git(c.repo,'-c','user.email=t@t','-c','user.name=t','add','-A');
+    git(c.repo,'-c','user.email=t@t','-c','user.name=t','commit','--no-verify','-qm','skill manifest');
+    const r=c.run({},['--list']);
+    assert.equal(r.status,0,r.stderr);
+    const lines=r.stdout.trim().split('\n');
+    for(const path of paths)for(const [host,dir] of [['mmv','bin-harvest'],['mmv','.openclaw/leadgen-scripts'],['xian-m4','bin-harvest']]){
+      assert.ok(lines.includes(host+' '+dir+'/'+path+' '+path),'漏检查 '+host+':'+dir+'/'+path);
+    }
+  }finally{c.cleanup();}
 });
 
 test("--list: 注释里的文件名不算,单行数组也能解析", () => {
