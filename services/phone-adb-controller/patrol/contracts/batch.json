@@ -13,7 +13,8 @@
       "cwd": null,
       "env": {},
       "commands": [
-        "/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/864154c57e88e8085d2add741a79103a28891a44/runner.py batch --execution-script \"$0\""
+        "/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/864154c57e88e8085d2add741a79103a28891a44/runner.py batch --execution-script \"$0\"",
+        "/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/4f899cab6425341646e27c5fca20979b8ac42be7/runner.py batch --execution-script \"$0\""
       ]
     }
   },
@@ -24,10 +25,16 @@
         "type": "string"
       },
       "source_revision": {
-        "const": "864154c57e88e8085d2add741a79103a28891a44"
+        "enum": [
+          "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "864154c57e88e8085d2add741a79103a28891a44"
+        ]
       },
       "phone_source_revision": {
-        "const": "864154c57e88e8085d2add741a79103a28891a44"
+        "enum": [
+          "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "864154c57e88e8085d2add741a79103a28891a44"
+        ]
       },
       "control_source_revision": {
         "const": "f38c5a5635d2f57554efcfee4b09163d10cfe39b"
@@ -39,7 +46,8 @@
       "正式定义与实际代码来源分开追溯",
       "执行前绑定冻结定义及可信部署版本",
       "旧记录不由当前定义覆盖",
-      "当前主执行固定864；旧4f兼容定义及旧Run按原冻结版本保留"
+      "默认执行864；兼容入口固定4f；每次Run冻结实际代码及定义版本",
+      "直接入口、手机源码与release实际目录必须一致；控制器恢复保留原始来源"
     ]
   },
   "activities": [
@@ -132,6 +140,69 @@
           "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/openclaw_commander.py",
           "version": "f38c5a5635d2f57554efcfee4b09163d10cfe39b",
           "digest": "sha256:35c2f039f62dd19fb7f7241acef342aafd1d88733531c76f28fc076ee5a9f271"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/runner.py",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/runner.py",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/dispatch.py",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/dispatch.py",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:ea60ff9e538aa77f991d5f234d47cb392a2613ead560c0963d5949d53a1694de"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/preflight.py",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/preflight.py",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:a2874821f56add3ab2e80e5ded7510d2df0b4f2bbf09b87fc63a755b59918ce0"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/collector.py",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/collector.py",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/ocr.swift",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/ocr.swift",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:89431efae1526a56b9e5164cee7293f4ea877f6d4ca61f1b76b05f48d3291005"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/publish.mjs",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/publish.mjs",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:528daa587ceba84348723fbf24a7169645462a71a1378407910ed0d2b5daf6bf"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/mirror.mjs",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/mirror.mjs",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:a628a9406528a24de126a9cafdc63c17a9f9f8e0d82d1b2dd41a94a3efc8ebb0"
         }
       ],
       "steps": [
@@ -219,6 +290,17 @@
             }
           }
         }
+      ],
+      "implementation_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/runner.py",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/runner.py",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce"
+        }
       ]
     },
     {
@@ -269,6 +351,17 @@
               ]
             }
           }
+        }
+      ],
+      "implementation_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "scripts/phone-account-patrol/runner.py",
+          "revision": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "ref": "perfectuser21/zenithjoy-workspace:scripts/phone-account-patrol/runner.py",
+          "version": "4f899cab6425341646e27c5fca20979b8ac42be7",
+          "digest": "sha256:26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce"
         }
       ]
     }
