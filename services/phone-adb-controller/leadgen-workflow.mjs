@@ -190,7 +190,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     if(!Array.isArray(own.nicknames)||!Array.isArray(own.ids))throw Error('自家账号配置缺失');
     const normalize=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
     const ownNames=new Set([...own.nicknames,...own.ids].map(normalize));
-    const fulfilled=new Set(),priorProofs=[];
+    const fulfilled=new Set(),priorProofs=[],ignoredFailedSamplingRuns=[];
     if(sampleInput){
       const siblings=readdirSync(resolve(env.WFR_RUN_DIR,'..'));
       if(siblings.length>2000)throw Error('采样前序运行索引超界');
@@ -205,8 +205,14 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         if(si.profile!==profile||si.serial!==serial||si.line!==line||prior.deployment.source_commit!==current.deployment.source_commit||prior.run_identity?.tag!==si.run_tag||prior.run_identity?.capability!=='douyin_video_processing'||prior.run_identity?.profile!==profile||prior.run_identity?.serial!==si.serial||prior.run_identity?.serial!==serial||prior.run_identity?.run_id!==name)throw Error('前序采样冻结scope不符');
         const receipt=JSON.parse(readFileSync(file,'utf8')),final=JSON.parse(readFileSync(join(priorDir,'split-result.json'),'utf8'));
         const attempt=typeof final.run_id==='string'?final.run_id.slice((name+'__').length):'';
-        if(!/^a[1-9][0-9]*$/.test(attempt)||final.run_id!==name+'__'+attempt||!['completed','partial'].includes(final.status))throw Error('前序采样缺真实run及attempt终态');
+        if(!/^a[1-9][0-9]*$/.test(attempt)||final.run_id!==name+'__'+attempt||!['completed','partial','failed'].includes(final.status))throw Error('前序采样缺真实run及attempt终态');
         const binding=readBinding(priorDir,attempt,prior);if(binding.run_id!==final.run_id||receipt.run_id!==binding.run_id)throw Error('前序采样运行绑定不一致');
+        if(final.profile!==profile||JSON.stringify(final.sampling_input)!==JSON.stringify(si)||final.source_commit!==current.deployment.source_commit||final.workflow_key!=='douyin_video_processing')throw Error('前序采样终态scope不符');
+        // 失败运行保留原件，但不兑现其采样配额，也不能堵住同批其它待处理视频。
+        // 只有冻结来源、身份及正式绑定全部一致的失败终态可以在这里忽略。
+        if(final.status==='failed'){
+          ignoredFailedSamplingRuns.push({prior_run:si.run_tag,run_id:binding.run_id,status:final.status});continue;
+        }
         const activity=final.results?.find(r=>r.activity==='collection');
         if(receipt.verified!==true||JSON.stringify(receipt.sampling_input)!==JSON.stringify(si)||final.profile!==profile||JSON.stringify(final.sampling_input)!==JSON.stringify(si)||final.source_commit!==current.deployment.source_commit||final.workflow_key!=='douyin_video_processing'||activity?.verification?.verified!==true||!['completed','partial'].includes(activity?.status)||!Array.isArray(receipt.videos)||receipt.videos.length>1000||JSON.stringify(activity.result?.sampling_receipts)!==JSON.stringify(receipt.videos.map(({pg_rows,...publicReceipt})=>publicReceipt)))throw Error('前序采样缺真实已验收Activity回执');
         for(const v of receipt.videos){
@@ -226,11 +232,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     }
     state.intakeVideoIds=eligible;
     const proof={verified:true,source_run:sourceRun,source_commit:upstream.deployment.source_commit,
-      prior_sampling_readbacks:priorProofs,observed_at:new Date().toISOString(),video_ids:ids,eligible_video_ids:eligible,skipped,rows,
+      prior_sampling_readbacks:priorProofs,ignored_failed_sampling_runs:ignoredFailedSamplingRuns,observed_at:new Date().toISOString(),video_ids:ids,eligible_video_ids:eligible,skipped,rows,
       duplicate_observations:input.captures.length-ids.length};
     writeFileSync(join(env.WFR_RUN_DIR,`${run}-intake-readback.json`),JSON.stringify(proof),{mode:0o600});
     return {historical_filter_verified:Number(rows.length===ids.length),own_filter_verified:Number(Array.isArray(own.nicknames)&&Array.isArray(own.ids)),run_dedup_verified:Number(new Set(eligible).size===eligible.length),
-      received:ids.length,eligible:eligible.length,skipped_completed:skipped.filter(v=>v.reason==='completed').length,
+      received:ids.length,eligible:eligible.length,ignored_failed_sampling_runs:ignoredFailedSamplingRuns.length,skipped_completed:skipped.filter(v=>v.reason==='completed').length,
       skipped_sample_fulfilled:skipped.filter(v=>v.reason==='sample_fulfilled').length,skipped_rejected:skipped.filter(v=>v.reason==='rejected').length,skipped_own:skipped.filter(v=>v.reason==='own').length,duplicate_observations:proof.duplicate_observations};
   };
   const collectionTiming=()=>{
