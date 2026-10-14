@@ -277,7 +277,10 @@ types:
       - status
       - raw_sha256
       - recipient_evidence
+      - comment_encoding
+      - receipt_id
     note: 可选；缺原件unknown。fresh本profile/返回同nick全文、actualVID成对才verified；不是account_type或原grade；历史无原件不得补造。
+      本producer正文xml_raw仅解码一层；canonical正文不解，缺来源marker拒绝；每attempt独享receipt_id，正文须同一fhn评论卡精确昵称+全文，不允许全局拼接。
   RecipientQualification:
     identity:
       - line_key
