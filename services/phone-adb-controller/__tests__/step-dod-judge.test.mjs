@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -235,11 +235,13 @@ test("接线守卫：批次/收工/触达三处给裁判读回上下文；部署
 const PROCESS_SPEC_PATH=join(SRC,'plans','douyin_video_processing.steps.json');
 function processCommentPanelJudgment(xml,{scoped=true,tag='headerProof'}={}) {
  const d=mkdtempSync(join(tmpdir(),'comment-header-'));
+ try {
  const name=scoped?`${tag}-v7674939415818521875-collection-comments-panel.xml`:`${tag}-collection-comments-panel.xml`;
  writeFileSync(join(d,name),xml);
  const all=JSON.parse(readFileSync(PROCESS_SPEC_PATH,'utf8'));
  const step=all.steps.find(s=>s.key==='douyin_video_processing.collection.open_comment_section');
  return judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{tag,evidenceDir:d,metrics:{videos_processed:1}}}).steps[0];
+ } finally {rmSync(d,{recursive:true,force:true});}
 }
 const POI_COMMENT_FIXTURE=join(HERE,'fixtures','comment-panel','poi-header-861.xml');
 test('正式102真实评论 n头原件通过；无需降videos_processed阈值',()=>{
@@ -261,4 +263,15 @@ test('正式102缺本run逐VID scope不能用面板通过，不改独立实际VI
 test('正式102旧真实n条评论header继续通过',()=>{
  const r=processCommentPanelJudgment(readFileSync(join(HERE,'fixtures','comment-panel','legacy-header-861.xml'),'utf8'));
  assert.deepEqual([r.observed,r.pass],[1,true]);
+});
+
+test('正式102属性重排合法，exact头字段不可拆分拼接',()=>{
+ const original=readFileSync(POI_COMMENT_FIXTURE,'utf8');
+ const permuted=original.replace(/<node[^>]*resource-id="com.ss.android.ugc.aweme:id\/ez-"[^>]*>/,tag=>{
+  const attrs=[...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map(a=>`${a[1]}="${a[2]}"`);
+  return '<node '+attrs.reverse().join(' ')+'>';
+ });
+ assert.equal(processCommentPanelJudgment(permuted).pass,true);
+ const split=original.replace('text="评论 4"','text="评论 4个想法"');
+ assert.equal(processCommentPanelJudgment(split).pass,false);
 });

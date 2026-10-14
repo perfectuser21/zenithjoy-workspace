@@ -36,6 +36,7 @@ node --test services/phone-adb-controller/__tests__/outreach-walking-skeleton.te
  services/phone-adb-controller/__tests__/leadgen-queue.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-rpc.test.mjs \
  services/phone-adb-controller/__tests__/runtime-definition.test.mjs \
+ services/phone-adb-controller/__tests__/step-dod-judge.test.mjs \
  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
  services/phone-adb-controller/__tests__/workflow-result.test.mjs \
  services/phone-adb-controller/__tests__/workflow-result-span.test.mjs \

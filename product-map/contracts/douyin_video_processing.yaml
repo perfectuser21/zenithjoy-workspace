@@ -679,7 +679,7 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.2.1
+    version: 2.2.2
     compatibility: backward
     owner:
       department: line02 智能获客
@@ -854,7 +854,7 @@ activities:
           - Video.video_url
           - Video.judgment_status
         writes: []
-        check: 评论区面板节点可见；可选历史输入不替代当前视频和面板核验
+        check: 本run逐VID工件具有原生评论header和输入面板；旧n条评论与新exact评论 n均可见；本Step只证面板，实际VID仍须qv新鲜nonce与identity sidecar核验；可选历史不替代核验
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh collection.open_comment_section（原约束保留，真PG/证据读回）
@@ -863,8 +863,8 @@ activities:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}*-comments-panel.xml"
-            match: "[0-9万.]+条评论"
+            glob: "{tag}-v*-collection-comments-panel.xml"
+            match: '(?=[\s\S]*<node(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ety")(?=[^>]*\bclass="android\.widget\.EditText")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)(?:<node(?=[^>]*\btext="[0-9万.]+条评论")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/title")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>|<node(?=[^>]*\btext="评论 [0-9万.]+")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ez-")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)'
             expect:
               op: ">="
               ref: metrics.videos_processed
