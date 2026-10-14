@@ -400,7 +400,7 @@ def legacy_preflight_probe(receipt, control_revision, run):
         failure = {'code': 'preflight_timeout' if isinstance(error, subprocess.TimeoutExpired) else 'ssh_launch_failed',
                    'message': str(error), 'exit_code': None, 'error_type': type(error).__name__,
                    'timeout_sec': 60 if isinstance(error, subprocess.TimeoutExpired) else None,
-                   'stdout': getattr(error, 'output', None), 'stderr': getattr(error, 'stderr', None)}
+                   'stdout': safe_error_text(getattr(error, 'output', None)), 'stderr': safe_error_text(getattr(error, 'stderr', None))}
     prefix = '旧runner尚未启动；新版补查前自检（诊断source=' + bridge.PHONE_SOURCE_REVISION + '）'
     path = STATE / (receipt['run_id'] + '.legacy-preflight.json')
     failure.update(stage='legacy_pre_execution_preflight', host='xian-m4',
