@@ -37,3 +37,11 @@ test('独立recipient模型读取完整native主页与原公司V3排除信号，
  try{const result=await createRequire(import.meta.url)('../judge-recipient.js').qualifyRecipient(comment,snapshot,{apiKey:'fixture-key'});assert.equal(result.status,'excluded');assert.equal(result.company_version,3);assert.equal(comment.intent_grade,'A');assert.equal(called,1);}finally{globalThis.fetch=old;}
  });
 });
+
+import {parseCollection} from '../leadgen-workflow.mjs';
+test('102 actual native产物必须绑定本run上游scope，跨source proof不能消费到PG',()=>scoped(f=>{
+ const r=capture(f.args),out=`RECIPIENT_PROOF\t${vid}\tperson987\t${r.body_sha256}\t${r.file}\t${r.sha256}\nLEAD\t本人\tperson987\tpersonal\t在哪里报名\t09-27\t山东\tAI考证\t关键词\t山东\thttps://www.douyin.com/user/person987\t${f.args.videoUrl}\nCOLLECTION\t${vid}\tcollected\t1`;
+ const opts={recipientScope:{runDir:f.args.runDir,lineKey:'jinuo',run:'source102',sourceRun:'source101',profile:'legacy'}};
+ assert.equal(parseCollection({code:0,stdout:out},vid,opts)[0].recipientEvidence.status,'verified');
+ assert.throws(()=>parseCollection({code:0,stdout:out},vid,{recipientScope:{...opts.recipientScope,sourceRun:'other101'}}),/recipient/);
+}));
