@@ -369,8 +369,8 @@ def recovery_snapshots(tasks):
             for t in tasks if (t.get('payload') or {}).get('recovery_demand')]
 
 
-def recover(call, deployment, current, wrapper_path, control_hash, control_revision):
-    tasks = task_rows(call, deployment['project_id'])
+def recover(call, deployment, current, wrapper_path, control_hash, control_revision, scope_select):
+    all_tasks = task_rows(call, deployment['project_id']);tasks = scope_select(all_tasks)
     for task in tasks:phone_revision(task, deployment)
     schedules = call('recurring-tasks')
     schedules = schedules if isinstance(schedules, list) else schedules.get('recurring_tasks', schedules.get('data'))
@@ -394,7 +394,7 @@ def recover(call, deployment, current, wrapper_path, control_hash, control_revis
                 'workflow_id': MAINTENANCE_WORKFLOW_ID, 'maintenance_owner': '主理人', 'commander': 'OpenClaw:infra',
                 'runtime_requires_llm': False, 'headed_manual': True}}
         ensure_task(call, deployment, body, lambda t, origin=origin: (t.get('payload') or {}).get('recovery_demand') is True and t['payload'].get('origin_task_id') == origin['id'])
-    tasks = task_rows(call, deployment['project_id']);phones = call('phone-registry')['phones']
+    all_tasks = task_rows(call, deployment['project_id']);tasks = scope_select(all_tasks);phones = call('phone-registry')['phones']
     for candidate in [t for t in tasks if (t.get('payload') or {}).get('recovery_demand') and phone_revision(t, deployment) == deployment['source_revision']]:
         demand = read_task(call, candidate['id']);scope = demand_scope(demand, deployment)
         if demand['status'] in CLOSED:continue
@@ -404,7 +404,7 @@ def recover(call, deployment, current, wrapper_path, control_hash, control_revis
                 or phone_revision(origin, deployment) != deployment['source_revision'] or phone_revision(batch, deployment) != deployment['source_revision']
                 or batch['payload'].get('recurring_task_id') != scope['original_schedule_id'] or batch['payload'].get('recurring_slot') != scope['original_slot']):
             raise ValueError('需求原始范围已变化')
-        tasks = task_rows(call, deployment['project_id']);by_id = {t['id']: t for t in tasks}
+        all_tasks = task_rows(call, deployment['project_id']);tasks = scope_select(all_tasks);by_id = {t['id']: t for t in tasks}
         attempts = [t for t in tasks if t.get('task_type') == 'script_run' and (t.get('payload') or {}).get('recovery_demand_id') == demand['id']]
         for attempt in attempts:
             p = attempt['payload']
@@ -439,7 +439,7 @@ def recover(call, deployment, current, wrapper_path, control_hash, control_revis
                 lambda t: (t.get('payload') or {}).get('recovery_attention') is True and t['payload'].get('recovery_demand_id') == demand['id'])
             progress['attention_task_id'] = attention['id']
         generation = max((t['payload']['recovery_generation'] for t in attempts), default=0)
-        active = [t for t in tasks if t.get('task_type') == 'script_run' and (t.get('payload') or {}).get('phone_serial') == scope['phone_serial'] and t['status'] in ACTIVE]
+        active = [t for t in all_tasks if t.get('task_type') == 'script_run' and (t.get('payload') or {}).get('phone_serial') == scope['phone_serial'] and t['status'] in ACTIVE]
         if permanent:progress['phase'] = 'needs_maintenance'
         elif not schedule.get('is_active'):progress['phase'] = 'schedule_paused'
         elif not registered[0].get('enabled'):progress['phase'] = 'device_disabled'
@@ -464,5 +464,5 @@ def recover(call, deployment, current, wrapper_path, control_hash, control_revis
                                       and t['payload'].get('recovery_generation') == generation and t.get('task_type') == 'script_run')
                 progress.update(phase='waiting_attempt', generation=generation, active_attempt_task_id=attempt['id'])
         patch_recovery(call, demand, progress)
-    return {'demands': recovery_snapshots([t for t in task_rows(call, deployment['project_id'])
+    return {'demands': recovery_snapshots([t for t in scope_select(task_rows(call, deployment['project_id']))
             if (t.get('payload') or {}).get('recovery_demand') and phone_revision(t, deployment) == deployment['source_revision']]), 'covered_originals': covered}

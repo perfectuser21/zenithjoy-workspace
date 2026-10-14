@@ -75,7 +75,7 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 
 沿用原30分钟维护计划，目标入口为 openclaw_native.py maintain --execution-script "$0"，不新增有效 timer。是否正式启用以中央计划和registry读回确认。maintain保留冻结runner monitor的原批次健康，并独立推进持续恢复；原monitor故障显示partial_failure，仍尝试读取中央需求，不伪称健康。
 
-每个未完成正式手机任务对应中央 blocked project需求，blocked_until为空；维护负责人主理人，commander为OpenClaw:infra。固定原任务/批次/计划/slot/serial/source放payload，变量仅进result.recovery。完整分页读取activated_at之后的正式22点slot，跨日持续；旧failed任务和Run不改。结清或取消需求不重建；后续正式巡查或已授权人工补查可凭真实完成证据覆盖旧需求。
+每个未完成正式手机任务对应中央 blocked project需求，blocked_until为空；维护负责人主理人，commander为OpenClaw:infra。固定原任务/批次/计划/slot/serial/source放payload，变量仅进result.recovery。完整分页读取activated_at之后的正式22点slot，跨日持续；旧failed任务和Run不改。 恢复先按同项目、原正式计划、启用时间、北京时间22点整的批次与真实祖先链定界，再认证手机版本；其他计划的试跑、无正式祖先的候选及启用前人工记录只保留台账。正式祖先下的缺字段、流程冲突或未知源码版本仍拒绝，不靠源码白名单筛走异常；范围外同手机在途脚本仍阻止补查抢占设备。结清或取消需求不重建；后续正式巡查或已授权人工补查可凭真实完成证据覆盖旧需求。
 
 补查是需求下独立script_run，稳定需求+generation幂等，POST丢回执先读中央记录，不盲重建。新任务只用original_schedule_id/original_slot，不带主计划recurring_task_id。同设备已有正式/恢复任务时延后；退避15/30/60分钟后每小时继续，由实际30分钟维护轮检查到期。超过3次真实失败只登记一条blocked人工维护任务，需求仍未完成。设备停用、需求明确终止时停止；当前身份、指纹或迁移不符合合同则待维护，不盲执行。
 

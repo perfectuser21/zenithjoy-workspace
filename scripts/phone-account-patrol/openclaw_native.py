@@ -271,6 +271,66 @@ def execution_task(script):
     return match.group(1)
 
 
+def recovery_partition(tasks, schedule, deployment):
+    """先凭正式时段与祖先定范围，再校版本；不让候选历史冒充发布需求。"""
+    activated = bridge.timestamp((schedule.get('template') or {}).get('activated_at') or schedule.get('created_at'))
+    by_id = {t['id']: t for t in tasks};included = {};excluded = {}
+    for task in tasks:
+        p = task.get('payload') or {}
+        if task.get('project_id') != deployment['project_id']:raise ValueError('恢复清单含外项目记录')
+        if p.get('recurring_task_id') != deployment['schedule_id']:
+            excluded[task['id']] = 'outside_formal_schedule';continue
+        if bridge.timestamp(task['created_at']) < activated:
+            excluded[task['id']] = 'before_activation';continue
+        slot = bridge.timestamp(p.get('recurring_slot')).astimezone(zoneinfo.ZoneInfo('Asia/Shanghai'))
+        if (slot.hour, slot.minute, slot.second, slot.microsecond) != (22, 0, 0, 0):
+            excluded[task['id']] = 'outside_formal_slot';continue
+        if p.get('workflow_id') != deployment['batch_workflow_id'] or task.get('task_type') not in ['qiumi_task', 'script_run']:
+            raise ValueError('正式时段批次缺流程或执行身份')
+        if task['task_type'] == 'qiumi_task' and (p.get('qiumi_department') != 'infra' or (p.get('qiumi_route') or {}).get('source') != 'explicit'):
+            raise ValueError('正式领跑缺infra明确路由')
+        included[task['id']] = 'formal_batch'
+    batches = set(included)
+    for task in tasks:
+        if task.get('parent_task_id') not in batches:continue
+        p = task.get('payload') or {}
+        if task['id'] in batches:continue
+        if task.get('task_type') != 'script_run' or p.get('workflow_id') != deployment['single_workflow_id']:
+            raise ValueError('正式批次子记录缺单手机流程身份')
+        included[task['id']] = 'formal_phone'
+    phones = {key for key, reason in included.items() if reason == 'formal_phone'}
+    for task in tasks:
+        p = task.get('payload') or {}
+        if not p.get('recovery_demand'):continue
+        origin = by_id.get(p.get('origin_task_id'));batch = by_id.get(p.get('origin_batch_task_id'))
+        if not origin or not batch:raise ValueError('恢复需求原始祖先不可确认')
+        if origin['id'] not in phones and batch['id'] not in batches and task.get('parent_task_id') not in phones:
+            excluded[task['id']] = 'outside_formal_ancestry';continue
+        if origin['id'] not in phones or batch['id'] not in batches or origin.get('parent_task_id') != batch['id'] or task.get('parent_task_id') != origin['id']:
+            raise ValueError('正式恢复需求祖先冲突')
+        if p.get('workflow_id') != bridge.MAINTENANCE_WORKFLOW_ID:raise ValueError('正式恢复需求缺流程身份')
+        included[task['id']] = 'formal_recovery_demand'
+    demands = {key for key, reason in included.items() if reason == 'formal_recovery_demand'}
+    for task in tasks:
+        p = task.get('payload') or {};demand_id = p.get('recovery_demand_id')
+        if p.get('recovery_attention'):
+            if demand_id in demands or task.get('parent_task_id') in demands:
+                if task.get('task_type') != 'project':raise ValueError('正式补查尝试不可伪装维护注意记录')
+            continue
+        if demand_id in demands or task.get('parent_task_id') in demands:
+            if demand_id not in demands or task.get('parent_task_id') != demand_id or task.get('task_type') != 'script_run' or p.get('workflow_id') != deployment['single_workflow_id']:
+                raise ValueError('正式补查尝试祖先或流程冲突')
+            included[task['id']] = 'formal_recovery_attempt'
+        elif p.get('recovery_origin_task_id') in phones or task.get('parent_task_id') in phones:
+            if task.get('task_type') == 'script_run':
+                if p.get('workflow_id') != deployment['single_workflow_id']:raise ValueError('正式手动补查缺流程身份')
+                included[task['id']] = 'formal_manual_recovery'
+    selected = [t for t in tasks if t['id'] in included]
+    for task in selected:bridge.phone_revision(task, deployment)
+    return {'tasks': selected, 'included': [{'task_id': k, 'reason': v} for k, v in included.items()],
+            'excluded': [{'task_id': t['id'], 'reason': excluded.get(t['id'], 'outside_formal_ancestry')} for t in tasks if t['id'] not in included]}
+
+
 def maintain(task_id, deployment, state, call=None, current=None, run=None):
     call = call or api;run = run or subprocess.run;current = current or dt.datetime.now(dt.timezone.utc)
     path = pathlib.Path(__file__).resolve()
@@ -298,8 +358,12 @@ def maintain(task_id, deployment, state, call=None, current=None, run=None):
         if health is None or legacy_failed:
             health = {'status': 'unknown', 'reason': 'legacy_monitor_failed', 'exit_code': legacy.returncode};legacy_failed = True
         path = pathlib.Path(__file__).resolve();digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        deployments = bridge.recovery_deployments(state, deployment, bridge.task_rows(call, deployment['project_id']))
-        results = [bridge.recover(call, frozen, current, path, digest, p['source_revision']) for frozen in deployments]
+        schedules = call('recurring-tasks');schedules = schedules if isinstance(schedules, list) else schedules.get('recurring_tasks', schedules.get('data'))
+        matches = [s for s in schedules if s['id'] == deployment['schedule_id']]
+        if len(matches) != 1:raise ValueError('正式巡查计划没有唯一读回')
+        select = lambda records: recovery_partition(records, matches[0], deployment)['tasks']
+        deployments = bridge.recovery_deployments(state, deployment, select(bridge.task_rows(call, deployment['project_id'])))
+        results = [bridge.recover(call, frozen, current, path, digest, p['source_revision'], select) for frozen in deployments]
         recovery = {key: [entry for result in results for entry in result[key]] for key in ['demands', 'covered_originals']}
         value = {'status': 'partial_failure' if legacy_failed else 'observed', 'actor': 'OpenClaw:infra', 'maintenance_task_id': task_id, 'legacy_health': health, 'recovery': recovery}
         bridge.save(state, 'native-maintenance-' + task_id + '.json', value)
