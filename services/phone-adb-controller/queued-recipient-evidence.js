@@ -37,7 +37,9 @@ function validateEvidence(e,scope){
  if(!['xml_raw','canonical'].includes(e.scope.comment_encoding))throw Error('RECIPIENT_BODY_ENCODING_MISSING');
  if(!routeOf(scope.line_key).profiles.includes(e.scope.profile))throw Error('RECIPIENT_PROFILE_SCOPE_INVALID');
  if(!/^\d{16,24}$/.test(e.scope.video_id||'')||e.video_identity?.verified!==true||e.video_identity.content_type!=='video'||e.video_identity.expected_video_id!==e.scope.video_id||e.video_identity.observed_video_id!==e.scope.video_id||e.video_identity.evidence_id!==e.scope.video_identity_eid)throw Error('RECIPIENT_VIDEO_ID_INVALID');
- const prefix=e.scope.run+'-v'+e.scope.video_id+'-collection',row=e.scope.profile_eid?.match(new RegExp('^'+prefix+'-person([1-9][0-9]*)-t[123]$'))?.[1];
+ const prefix=e.scope.run+'-v'+e.scope.video_id+'-collection',personPrefix=prefix+'-person';
+ const row=typeof e.scope.profile_eid==='string'&&e.scope.profile_eid.startsWith(personPrefix)
+  ? e.scope.profile_eid.slice(personPrefix.length).match(/^([1-9][0-9]*)-t[123]$/)?.[1] : null;
  if(!row||e.scope.video_identity_eid!==prefix+'-after-card'+row)throw Error('RECIPIENT_PAIR_INVALID');
  for(const k of ['profile','returned'])if(typeof e.raw[k]!=='string'||Buffer.byteLength(e.raw[k])>4*1024*1024||hash(e.raw[k])!==e.sha256[k])throw Error('RECIPIENT_BYTES_INVALID');
  return parseNative(e.raw.profile,e.raw.returned,{nickname:scope.nickname,douyinId:scope.douyin_id,commentBody:scope.comment_body,commentEncoding:e.scope.comment_encoding});
