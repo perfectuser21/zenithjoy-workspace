@@ -12,13 +12,13 @@ import tempfile
 
 STATE = pathlib.Path.home() / '.local/share/phone-account-patrol'
 API = 'http://localhost:5221/api/brain/'
-PHONE_SOURCE_REVISION = 'c1e2075a681249663978c925aa84b8b25d086103'
+PHONE_SOURCE_REVISION = 'e19fc282606bfb289a35c53d159af10589ce10a6'
 MAINTENANCE_WORKFLOW_ID = 'e4d2030f-129f-4668-95dd-4a6d880493a8'
 EXPECTED_SHA256 = {
-    'runner.py': '9e674a32596a00186be34498b07341f2c2861c9f83aec076d440107097e21af1',
+    'runner.py': '6cafb7e06b08934cee730a035ca526bebcd53c9cacb1a378f4c48d3c17996387',
     'collector.py': '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3',
     'dispatch.py': 'ea60ff9e538aa77f991d5f234d47cb392a2613ead560c0963d5949d53a1694de',
-    'preflight.py': '46bca3dadd177d64bbde6704ef73ac31637970ebe6c85d2a7b49086dbdddef43',
+    'preflight.py': 'c89d4dcc6ec3523af9423d4daa8995a0ae5e3243da49058bb9d823729dc7d9e7',
     'publish.mjs': '528daa587ceba84348723fbf24a7169645462a71a1378407910ed0d2b5daf6bf',
     'ocr.swift': '89431efae1526a56b9e5164cee7293f4ea877f6d4ca61f1b76b05f48d3291005',
     'SKILL.md': 'ee99dc331f8aec05c1071260dcfb06197c4add7d74b5160ea3084b5b8b5e6dde',

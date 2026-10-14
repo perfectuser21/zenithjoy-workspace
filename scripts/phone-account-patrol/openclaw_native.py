@@ -21,15 +21,39 @@ SPEC.loader.exec_module(bridge)
 STATE = bridge.STATE
 
 
-def safe_error_text(value, limit=2000):
+def safe_error_text(value, limit=2000, _depth=0):
     text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value or '')
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if text.lstrip().startswith(('{', '[')) and len(text) <= 100000:
+        try:
+            structured = json.loads(text)
+        except ValueError:
+            pass
+        else:
+            text = json.dumps(safe_error_value(structured, _depth + 1), ensure_ascii=False)
     for key, secret in os.environ.items():
         if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
             text = text.replace(secret, '[REDACTED]')
-    text = re.sub(r'(?i)(Bearer\s+)[^\s"\']+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?i)("[^"\n]{0,100}(?:password|token|secret|api[_-]?key|authorization)[^"\n]{0,100}"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)'(?:\\.|[^'\\])*' ''', r"\1'[REDACTED]'", text, flags=re.X)
+    text = re.sub(r'(?im)^(\s*(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?i)((?:Bearer|Basic)\s+)[^\s"\']+', r'\1[REDACTED]', text)
     text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
+    text = re.sub(r'(https?://)[^/\s@]+@', r'\1[REDACTED]@', text)
     text = re.sub(r'(https?://[^\s?]+\?)[^\s"\']+', r'\1[REDACTED]', text)
     return text[:limit]
+
+
+def safe_error_value(value, _depth=0):
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if isinstance(value, dict):
+        return {k: '[REDACTED]' if re.search(r'password|token|secret|api.?key|authorization', k, re.I) else safe_error_value(v, _depth + 1) for k, v in value.items()}
+    if isinstance(value, list):
+        return [safe_error_value(v, _depth + 1) for v in value[:20]]
+    return safe_error_text(value, _depth=_depth + 1) if isinstance(value, str) else value
 
 
 def safe_failure(value):
@@ -37,6 +61,8 @@ def safe_failure(value):
     failure = {k: safe_error_text(value[k], 1000 if k == 'message' else 2000) for k in
                ['stage', 'code', 'message', 'host', 'stderr', 'stdout', 'error_type'] if isinstance(value.get(k), str)}
     failure['exit_code'] = value.get('exit_code') if type(value.get('exit_code')) is int else None
+    failure['timeout_sec'] = value.get('timeout_sec') if type(value.get('timeout_sec')) in (int, float) else None
+    failure['truncated'] = value.get('truncated') is True
     failure['evidence'] = [safe_error_text(v, 500) for v in value.get('evidence', [])[:10] if isinstance(v, str)] if isinstance(value.get('evidence'), list) else []
     return failure
 

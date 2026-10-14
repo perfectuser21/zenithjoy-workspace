@@ -84,3 +84,10 @@ MMV与M4固定运行源码为`4f899cab6425341646e27c5fca20979b8ac42be7`，两端
 只有正式冻结手机子任务或核验过的补查任务，具备规范Run、exit0、完整九平台及写回/镜子证据、同serial/source/workflow和真实时间窗口，才结清completed_no_pr。原需求时间取原任务/slot，且不早于被采用成功任务created_at；不会因晚建账强制重复已完成人工补查。不同slot的后继证据记明实际task/run/slot，inspect追加recovery_demands但不覆盖原children和原failure。
 
 私有native-maintenance-<任务ID>.json只是执行回执，需求真身始终是中央Tasks。正式入口、真实补查及取消守卫仍须部署后验收，不以静态回归替代。
+
+
+## 失败原因与每次尝试证据
+
+新版本的单手机失败回执包含任务、Run、设备、流程与源码身份，以及failure.stage/code/message/exit_code、脱敏限长的stdout/stderr和证据路径。ADB自检明确不可达时显示adb_unreachable及实际ADB错误；SSH非零/超时保留远端阶段，不能仅凭退出码猜手机离线。preflight失败JSON在判失败之前按Run保存，失败仍非零；补查只透传同任务/设备/版本/Run的失败回执。历史缺证据仍未知，不用新结果填旧Run。
+
+发布时先验证新release全量8文件与commander冻结指纹，保留旧release；现有排队/运行任务与恢复需求不得静默换源码。正式切换需先处理旧版在途需求，再按真实部署注册及任务模板切换新源码和控制器，检查新Run的失败详情及Notion回读。仅PR、CI或本地fixture通过不代表已经生产生效。
