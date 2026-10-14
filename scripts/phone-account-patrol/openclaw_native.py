@@ -30,6 +30,8 @@ def safe_error_text(value, limit=2000, _depth=0):
     if text.lstrip().startswith(('{', '[')) and len(text) <= 100000:
         try:
             structured = json.loads(text)
+        except RecursionError:
+            return '[LOG OMITTED: diagnostic nesting exceeds safety limit]'
         except ValueError:
             pass
         else:

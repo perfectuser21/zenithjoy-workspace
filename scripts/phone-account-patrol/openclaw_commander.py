@@ -12,10 +12,10 @@ import tempfile
 
 STATE = pathlib.Path.home() / '.local/share/phone-account-patrol'
 API = 'http://localhost:5221/api/brain/'
-PHONE_SOURCE_REVISION = '7fe022a39a1b2679add3093dce27491d35a37e9d'
+PHONE_SOURCE_REVISION = '864154c57e88e8085d2add741a79103a28891a44'
 MAINTENANCE_WORKFLOW_ID = 'e4d2030f-129f-4668-95dd-4a6d880493a8'
 EXPECTED_SHA256 = {
-    'runner.py': '5e9ea3584a6e42e8da895b87e76bb28520a4da280a66cd125740cf75f9ec8d8e',
+    'runner.py': '026e94011162a4e42e7e07edf4c5b04f28796067dae3161e5ce185c4bd53e16e',
     'collector.py': '501dd4af5358676473201ecbf8c3712db682e9a17128d52e3565021a3cb521f3',
     'dispatch.py': 'ea60ff9e538aa77f991d5f234d47cb392a2613ead560c0963d5949d53a1694de',
     'preflight.py': 'c89d4dcc6ec3523af9423d4daa8995a0ae5e3243da49058bb9d823729dc7d9e7',
