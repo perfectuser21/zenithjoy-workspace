@@ -9,7 +9,7 @@ const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const validId=v=>typeof v==='string'&&/^[A-Za-z0-9_.-]{1,64}$/.test(v);
 const recordId=v=>typeof v==='string'&&/^rec[A-Za-z0-9]{6,40}$/.test(v);
 function sender(route,profile,id){if(!route.profiles.includes(profile)||!validId(id))throw Error('触达profile或账号绑定缺失');}
-async function request(url,opts,fetcher){const r=await fetcher(url,{...opts,signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('触达批准话术HTTP失败');const b=await r.json();if(b.code!==0)throw Error('触达批准话术API失败');return b;}
+async function request(url,opts,fetcher,deadlineAt=Infinity){const remaining=deadlineAt-Date.now();if(remaining<=0)throw Error('BRIDGE_DEADLINE');const r=await fetcher(url,{...opts,signal:AbortSignal.timeout(Math.max(1,Math.min(15000,Math.floor(remaining))))});if(!r.ok)throw Error('触达批准话术HTTP失败');const b=await r.json();if(b.code!==0)throw Error('触达批准话术API失败');return b;}
 
 // 仅中央端读取1Password导出的私有账号缓存；设备RPC不能提交自拟模板。
 async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readFileSync,now=new Date()}={}){
@@ -42,16 +42,16 @@ async function withOrderLock(line,fn,{directory=require('path').join(require('os
  try{fs.mkdirSync(path,{mode:0o700});}catch(e){if(e.code==='EEXIST')throw Error('触达原订单领单锁忙');throw e;}
  try{return await fn();}finally{fs.rmdirSync(path);}
 }
-async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFileSync}={}){
+async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFileSync,deadlineAt=Infinity}={}){
  const cache=env.LEADGEN_FEISHU_CREDENTIALS||require('path').join(require('os').homedir(),'.credentials/leadgen-feishu-accounts.json');
  const acc=JSON.parse(read(cache,'utf8'))[route.account];if(!acc?.appId||!acc.appSecret)throw Error('触达1Password批准账号缓存缺失');
- const tok=(await request('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:acc.appId,app_secret:acc.appSecret})},fetcher)).tenant_access_token;
+ const tok=(await request('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:acc.appId,app_secret:acc.appSecret})},fetcher,deadlineAt)).tenant_access_token;
  if(!tok)throw Error('触达授权失败');
  const headers={Authorization:'Bearer '+tok,'Content-Type':'application/json'};
  const base=`https://open.feishu.cn/open-apis/bitable/v1/apps/${route.base}/tables/${route.lead}/records`;
- const api=(url,opts={})=>request(url,{headers,...opts},fetcher);
+ const api=(url,opts={},callDeadline=Infinity)=>request(url,{headers,...opts},fetcher,Math.min(deadlineAt,callDeadline));
  return {
-  async all(){let page='',out=[];for(let i=0;i<30;i++){const b=await api(base+'?page_size=100&automatic_fields=true'+(page?'&page_token='+encodeURIComponent(page):''));out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达订单分页损坏');}throw Error('触达订单分页超界');},
+  async all({deadlineAt:callDeadline=Infinity}={}){let page='',out=[];for(let i=0;i<30;i++){const b=await api(base+'?page_size=100&automatic_fields=true'+(page?'&page_token='+encodeURIComponent(page):''),{},callDeadline);out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达订单分页损坏');}throw Error('触达订单分页超界');},
   async fields(){let page='',out=[];for(let n=0;n<5;n++){const b=await api(base.replace(/\/records$/,'/fields')+'?page_size=100'+(page?'&page_token='+encodeURIComponent(page):''));out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达字段分页损坏');}throw Error('触达字段分页超界');},
   async post(fields){return (await api(base,{method:'POST',body:JSON.stringify({fields})})).data?.record;},
   async get(id){if(!recordId(id))throw Error('触达原订单ID无效');return (await api(base+'/'+id)).data?.record;},

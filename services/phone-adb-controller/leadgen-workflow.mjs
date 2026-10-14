@@ -387,7 +387,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       return {...r,scoring_readback_failures:readback.failures};},
     mark_leads:async()=>{const r=await queue('mark_leads');const readback=await queue('mark_readback',{ids:r.ids,lead_ids:r.lead_ids});
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-mark_leads-readback.json`),JSON.stringify(readback));
-      const bridge=await queue('bridge_outreach');
+      const remaining=state.budgetDeadline?state.budgetDeadline-Date.now():180000;
+      if(remaining<=15000)throw Error('EXECUTION_DEADLINE: 桥接剩余预算不足');
+      const bridge=await queue('bridge_outreach',{remaining_ms:Math.min(165000,remaining-15000)});
       return {...r,bridge,mark_leads_readback_failures:readback.failures,...(bridge.verified===false?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false;

@@ -46,19 +46,20 @@ function buildOrderFields(row,route,types){
  'AI判断理由':`[${p.intent_grade}级] `+(p.judgment_reason||''),'状态':'待触达','发送状态':'未发送','搜索账号':'池转入(自动判定)','采集时间':time,'合规核验状态':bridgeMarker(row)};
 }
 async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
+ const deadlineAt=Date.now()+Math.max(1,Math.min(165000,Number(input.remaining_ms)||165000));
  const route=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js');
  return (lock||outreach.withOrderLock)(route.key,async()=>{
   const result={published:0,protected:0,excluded:0,unknown:0,ids:[],verified:true};
   const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state IN ('pending','attempted','unknown') ORDER BY created_at,id LIMIT $2`,[route.key,Math.max(1,Math.min(50,Number(input.limit)||10))])).rows;
   let api=client;
-  for(const row of rows){result.ids.push(row.id);
+  for(const row of rows){if(Date.now()>=deadlineAt){result.verified=false;result.unknown++;break;}result.ids.push(row.id);
    if(row.qualification_status!=='passed'){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
     result[excluded?'excluded':'unknown']++;continue;
    }
    try{nativeIntent(row);}catch{result.unknown++;result.verified=false;continue;}
-   if(!api)api=await outreach.orderClient(route);
-   let all;try{all=await api.all();}catch{result.unknown++;result.verified=false;continue;}
+   if(!api)api=await outreach.orderClient(route,{deadlineAt});
+   let all;try{all=await api.all({deadlineAt});}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));
    if(found.length){
     if(found.length===1&&fieldsMatch(row,found[0])){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='confirmed',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,found[0].record_id]);result.published++;}
@@ -69,11 +70,12 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
    const duplicates=all.filter(r=>txt(r.fields?.['抖音号']).trim().toLowerCase()===String(row.payload.target_douyin_id).toLowerCase()||txt(r.fields?.['抖音昵称'])===row.payload.nickname);
    if(duplicates.length){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='protected',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,duplicates[0].record_id]);result.protected++;continue;}
    let fields;try{fields=buildOrderFields(row,route,await api.fields());}catch{result.unknown++;result.verified=false;continue;}
+   if(Date.now()>=deadlineAt){result.unknown++;result.verified=false;break;}
    const stored=await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='attempted',fields=$3::jsonb,fields_sha256=$4,attempted_at=now(),updated_at=now() WHERE line_key=$1 AND id=$2 AND state IN ('pending','unknown') AND attempted_at IS NULL RETURNING *",[route.key,row.id,JSON.stringify(fields),digest(fields)]);
    if(stored.rowCount!==1)throw Error('BRIDGE_ATTEMPT_NOT_PERSISTED');
    row.fields=fields;row.fields_sha256=digest(fields);row.state='attempted';
    try{await api.post(fields);}catch{await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET last_error=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,'post_outcome_unknown']);}
-   let back;try{back=(await api.all()).filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));}catch{back=[];}
+   let back;try{back=(await api.all({deadlineAt})).filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));}catch{back=[];}
    if(back.length===1&&fieldsMatch(row,back[0])){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='confirmed',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,back[0].record_id]);result.published++;}
    else{result.unknown++;result.verified=false;}
   }
