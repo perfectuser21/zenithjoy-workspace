@@ -227,6 +227,21 @@ class NativeCommanderTests(unittest.TestCase):
 
 
 class ContinuousRecoveryTests(unittest.TestCase):
+    def test_nonformal_canary_candidate_and_pre_activation_phones_do_not_block_partition(self):
+        for index, shape in enumerate([
+            {'task_type':'script_run','status':'cancelled','created_at':'2026-10-12T08:41:27Z','parent_task_id':None,'payload':{'workflow_id':WORKFLOW,'source_revision':'2'*40,'recurring_task_id':ROUTING,'recurring_slot':'2026-10-12T08:41:00Z'}},
+            {'task_type':'script_run','status':'completed','created_at':'2026-10-10T09:47:14Z','parent_task_id':ROUTING,'payload':{'workflow_id':SINGLE,'source_revision':'6'*40,'phone_serial':'phone-a'}},
+            {'task_type':'script_run','status':'paused','created_at':'2026-10-10T09:05:40Z','parent_task_id':ROUTING,'payload':{'workflow_id':SINGLE,'source_revision':'1'*40,'phone_serial':'phone-a'}}]):
+            task = dict(shape,id=str(uuid_module.UUID(int=500+index)),project_id=PROJECT)
+            self.tasks[task['id']] = task
+        self.cycle();self.assertEqual(len(self.demands()),1);self.assertEqual(len(self.attempts()),1)
+
+    def test_formal_child_missing_workflow_cannot_escape_unknown_source_guard(self):
+        self.tasks[CHILD]['payload'].pop('workflow_id')
+        self.tasks[CHILD]['payload']['source_revision']='f'*40
+        with self.assertRaises(ValueError):self.cycle()
+        self.assertEqual(self.posts,[])
+
     def test_unversioned_current_wrapper_cannot_self_attest_with_task_hash(self):
         self.cycle();demand = self.demands()[0];attempt = self.attempts()[0];attempt['status'] = 'in_progress'
         loose = self.state / 'unversioned' / 'openclaw_native.py';loose.parent.mkdir();loose.write_text('unversioned controller')
