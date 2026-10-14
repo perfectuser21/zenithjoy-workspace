@@ -139,3 +139,8 @@ test('资格unknown旧意图不能重复占满异步领取上限并饿死新pend
  await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'next103',limit:2},{lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',policy_id:'policy3',version:3})});
  assert.ok(!/state IN \('pending','attempted','unknown'\)/.test(selected),'资格unknown已真实hold，不可再次占原领取窗口');assert.match(selected,/CASE WHEN state='pending' THEN 0/);assert.match(selected,/'attempted'/);
 });
+
+test('原飞书采集时间须使用源comment collected_at，不能变成103桥建单时刻',()=>{
+ const {buildOrderFields}=require('../leadgen-outreach-bridge.js'),{routeOf}=require('../line-routes.js');const row=pendingBridge();row.payload.collected_at='2026-10-13T01:02:03Z';row.payload_sha256=require('../leadgen-outreach-bridge.js').digest(row.payload);
+ const fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:5}]);assert.equal(fields['采集时间'],Date.parse(row.payload.collected_at));
+});

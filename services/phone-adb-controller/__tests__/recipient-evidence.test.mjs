@@ -45,3 +45,12 @@ test('102 actual native产物必须绑定本run上游scope，跨source proof不�
  assert.equal(parseCollection({code:0,stdout:out},vid,opts)[0].recipientEvidence.status,'verified');
  assert.throws(()=>parseCollection({code:0,stdout:out},vid,{recipientScope:{...opts.recipientScope,sourceRun:'other101'}}),/recipient/);
 }));
+
+test('正文编码来源严格单层：canonical字面实体不误认emoji，xml_raw数字/嵌套amp合法匹配',()=>{
+ const {parseNative}=createRequire(import.meta.url)('../queued-recipient-evidence.js');const emoji=returned.replace('在哪里报名','&#127826;'),literal=returned.replace('在哪里报名','&amp;#127826;');
+ assert.throws(()=>parseNative(profile,emoji,{nickname:'本人',douyinId:'person987',commentBody:'&#127826;',commentEncoding:'canonical'}),/RECIPIENT_/);
+ assert.equal(parseNative(profile,emoji,{nickname:'本人',douyinId:'person987',commentBody:'&#127826;',commentEncoding:'xml_raw'}).returned_comment_verified,true);
+ assert.equal(parseNative(profile,literal,{nickname:'本人',douyinId:'person987',commentBody:'&#127826;',commentEncoding:'canonical'}).returned_comment_verified,true);
+ assert.equal(parseNative(profile,literal,{nickname:'本人',douyinId:'person987',commentBody:'&amp;#127826;',commentEncoding:'xml_raw'}).returned_comment_verified,true);
+ assert.throws(()=>parseNative(profile,literal,{nickname:'本人',douyinId:'person987',commentBody:'🍒',commentEncoding:'canonical'}),/RECIPIENT_/);
+});
