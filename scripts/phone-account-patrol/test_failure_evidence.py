@@ -49,7 +49,8 @@ class FailureEvidenceTests(unittest.TestCase):
                               ('API_KEY="secret with spaces"', ['secret with spaces']),
                               ("{'password': 'alpha beta gamma'}", ['alpha', 'beta', 'gamma']),
                               ('password: "alpha beta gamma"', ['alpha', 'beta', 'gamma']),
-                              (json.dumps({'log': json.dumps({'password': 'alpha beta gamma'})}), ['alpha', 'beta', 'gamma'])]:
+                              (json.dumps({'log': json.dumps({'password': 'alpha beta gamma'})}), ['alpha', 'beta', 'gamma']),
+                              ('probe started\n' + json.dumps({'log': json.dumps({'password': 'alpha beta gamma'})}), ['alpha', 'beta', 'gamma'])]:
             cleaned = runner.safe_error_text(text)
             for secret in secrets:
                 self.assertNotIn(secret, cleaned)
