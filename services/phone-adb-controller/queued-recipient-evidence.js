@@ -19,7 +19,11 @@ if ids!=[v['douyinId']]: raise ValueError('uid')
 if sum(n.get('text')==v['nickname'] and n.get('content-desc')==v['nickname']+'，复制名字和修改备注' for n in p)!=1: raise ValueError('nickname')
 headers=[n for n in b if n.get('class')=='android.widget.TextView' and ((n.get('resource-id')==pkg+':id/title' and re.fullmatch(r'[0-9万.]+条评论',n.get('text',''))) or (n.get('resource-id')==pkg+':id/ez-' and re.fullmatch(r'评论 [0-9万.]+',n.get('text',''))))]
 if not headers or not any(n.get('resource-id')==pkg+':id/ety' and n.get('class')=='android.widget.EditText' for n in b): raise ValueError('panel')
-if not any(n.get('text')==v['nickname'] for n in b) or not any(n.get('text')==v['commentBody'] for n in b): raise ValueError('returned_comment')
+def exact_comment(n):
+ if n.get('resource-id')!=pkg+':id/fhn' or n.get('class')!='android.widget.FrameLayout' or n.get('text','')!='': return False
+ m=re.fullmatch(re.escape(v['nickname'])+r',(.+),[^,]*, · [^,]*,回复 按钮(?:,.*)?',n.get('content-desc',''))
+ return bool(m and m.group(1)==v['commentBody'])
+if not any(n.get('text')==v['nickname'] for n in b) or not (any(exact_comment(n) for n in b) or any(n.get('text')==v['commentBody'] for n in b)): raise ValueError('returned_comment')
 texts=list(dict.fromkeys(s for n in p for s in [n.get('text',''),n.get('content-desc','')] if s))
 print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'returned_comment_verified':True},ensure_ascii=False))
 `],{input:JSON.stringify({profile,returned,nickname,douyinId,commentBody:decodeXmlEntities(commentBody)}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});
