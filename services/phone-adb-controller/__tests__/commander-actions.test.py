@@ -10,6 +10,8 @@ import unittest
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('actions', HERE / 'commander/wf-v2-actions.py')
@@ -30,7 +32,7 @@ class ActionsTest(unittest.TestCase):
         pair = {'code': impl(self.code, 'code'), 'skill': impl(self.skill, 'skill')}
         pair['skill']['verification_ref'] = {'task_id': 'verify-task', 'run_id': 'verify-run', 'definition_sha256': 'f' * 64}
         pair['business_requirement_sha256'] = 'b' * 64
-        self.envelope = {'task_id': 'task-1', 'run_id': 'run-1', 'attempt': 1, 'owner_epoch': 1,
+        self.envelope = {'protocol': 'commander-v2', 'task_id': 'task-1', 'run_id': 'run-1', 'attempt': 1, 'owner_epoch': 1,
                          'input_sha256': 'a' * 64, 'deadline_at': time.time() + 60, 'cleanup_deadline_at': time.time() + 90,
                          'input': {'allow_discard_existing_draft': True, 'authorization': {'object': {'task_id': 'task-1', 'account_ref': 'account'}, 'action': 'discard_existing_draft', 'scope': {'visibility': 'private', 'purpose': 'acceptance', 'content_ref': 'clip'}, 'grant_ref': 'decision-1'}},
                          'definition': {'snapshot_sha256': 'f' * 64},
@@ -92,6 +94,20 @@ class ActionsTest(unittest.TestCase):
             actions.ActionStore(next_env, self.home).admit()
         with self.assertRaises(ValueError):
             self.store.execute('task-1:publish', self.publish)
+
+    def test_historical_failure_does_not_authorize_current_run_rescue(self):
+        self.store.record_execution('publish', 'code', 'fail', {'value': 0})
+        self.store.close('official old child stopped', stopped=True)
+        env = copy.deepcopy(self.envelope)
+        env.update(run_id='run-2', owner_epoch=2, attempt=2)
+        current = actions.ActionStore(env, self.home)
+        current.admit()
+        with self.assertRaisesRegex(ValueError, 'primary'):
+            current.takeover('publish', lambda ref: {})
+        current.record_execution('publish', 'code', 'pass', {'value': 1})
+        fact = current.record_execution('publish', 'skill', 'pass', {'value': 1})
+        self.assertEqual(fact['execution_role'], 'primary')
+        self.assertEqual(current.executions()[0]['outcome'], 'fail', 'historical failure erased')
 
     def test_skill_takeover_requires_primary_failure_and_formal_matching_verification(self):
         binding = self.envelope['activity_bindings'][0]
@@ -164,6 +180,88 @@ class ActionsTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 actions.install_policy(policy, candidate)
 
+    def test_gateway_actual_code_failure_and_single_skill_record_reach_formal_events(self):
+        spec = importlib.util.spec_from_file_location('gateway', HERE / 'commander/wf-v2-gateway.py')
+        gateway = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gateway)
+        def persist(env):
+            directory = self.home / 'wf-agent-runs' / env['run_id']
+            (directory / 'evidence').mkdir(parents=True)
+            env['definition'].update(runtime_snapshot_sha256='e' * 64, expected_path=[{'reference_id': 'publish', 'activity_id': 'activity', 'activity_definition_version_id': 'version'}])
+            for name, value in [('envelope', env), ('input', env['input']), ('contract', env['contract'])]:
+                (directory / (name + '.json')).write_text(json.dumps(value))
+            return directory
+        directory = persist(self.envelope)
+        with patch.dict(os.environ, HOME=str(self.home)):
+            result = gateway.execute('primary', self.envelope, {'reference_id': 'publish', 'args': []})
+            self.assertNotEqual(result['result']['exit_code'], 0)
+            self.assertTrue(Path(result['evidence']['artifact']).is_file())
+            events = json.loads((directory / 'events.json').read_text())
+            self.assertEqual(events[0]['data']['outcome'], 'fail')
+            self.assertEqual(events[0]['data']['evidence']['implementation']['kind'], 'code')
+            self.assertEqual(events[0]['data']['evidence']['execution_role'], 'primary')
+            env = copy.deepcopy(self.envelope)
+            env.update(task_id='task-skill-only', run_id='run-skill-only')
+            activity = env['activity_bindings'][0]
+            activity['primary_implementation'] = dict(activity['implementations']['skill'], business_requirement_sha256=activity['implementations']['business_requirement_sha256'])
+            activity.pop('implementations')
+            skill_dir = persist(env)
+            actions.ActionStore(env).admit()
+            context = gateway.execute('primary', env, {'reference_id': 'publish'})
+            started = datetime.now(timezone.utc).isoformat()
+            actual = Path(context['skill']['path']).read_text()
+            ended = datetime.now(timezone.utc).isoformat()
+            gateway.execute('record', env, {'reference_id': 'publish', 'kind': 'skill', 'outcome': 'pass', 'observed': {'value': len(actual)}, 'started_at': started, 'ended_at': ended})
+            event = json.loads((skill_dir / 'events.json').read_text())[0]
+            self.assertEqual(event['data']['evidence']['execution_role'], 'primary')
+            self.assertEqual(event['data']['evidence']['implementation']['kind'], 'skill')
+
+    def test_code_exit_zero_stays_unknown_until_frozen_probe_reads_actual_work(self):
+        spec = importlib.util.spec_from_file_location('gateway_probe', HERE / 'commander/wf-v2-gateway.py')
+        gateway = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gateway)
+        work = self.home / 'external-work.json'
+        self.code.write_text('import json\nfrom pathlib import Path\nPath(' + repr(str(work)) + ').write_text(json.dumps({"work_id":"work-1","privacy":"private"}))\n')
+        pair = self.envelope['activity_bindings'][0]['implementations']
+        pair['code']['implementation']['digest'] = hashlib.sha256(self.code.read_bytes()).hexdigest()
+        helper = HERE / '__tests__/fixtures/commander-work-readback.py'
+        self.envelope['contract']['action_bindings'][0]['readback'] = {'path': '__tests__/fixtures/commander-work-readback.py', 'digest': hashlib.sha256(helper.read_bytes()).hexdigest(), 'args': [str(work), 'publish']}
+        directory = self.home / 'wf-agent-runs' / 'run-1'
+        (directory / 'evidence').mkdir(parents=True)
+        self.envelope['definition'].update(runtime_snapshot_sha256='e' * 64, expected_path=[{'reference_id': 'publish'}])
+        (directory / 'envelope.json').write_text(json.dumps(self.envelope))
+        with patch.dict(os.environ, HOME=str(self.home)):
+            result = gateway.execute('primary', self.envelope, {'reference_id': 'publish'})
+            self.assertEqual(result['result']['exit_code'], 0)
+            self.assertEqual(json.loads((directory / 'events.json').read_text())[0]['data']['outcome'], 'unknown')
+            # 在隔离作用域中持久动作意图；读取独立fixture作品文件，不接受stdin PASS。
+            with self.assertRaises(ConnectionError):
+                self.store.execute('task-1:publish', lambda: (_ for _ in ()).throw(ConnectionError('lost response')))
+            probe = actions.readback_helper(self.envelope, 'task-1:publish', HERE)
+            events = gateway.emit_readback(self.envelope, 'task-1:publish', probe)
+            self.assertEqual(events[0]['data']['outcome'], 'pass')
+            self.assertEqual(events[0]['data']['evidence']['readback_receipt']['work_id'], 'work-1')
+            facts = json.loads((directory / 'events.json').read_text())
+            self.assertEqual([f['data']['outcome'] for f in facts], ['unknown', 'pass'])
+            work.write_text(json.dumps({'work_id': 'work-1', 'privacy': 'private', 'business_valid': False}))
+            failed_probe = actions.readback_helper(self.envelope, 'task-1:publish', HERE)
+            gateway.emit_readback(self.envelope, 'task-1:publish', failed_probe)
+            self.assertEqual([x['outcome'] for x in self.store.executions()], ['unknown', 'pass', 'fail'])
+            proof = {'id': 'verify-task', 'parent_task_id': 'skill-business', 'status': 'completed', 'task_type': 'research',
+                     'payload': {'verification_transport': 'openclaw-agent-v1', 'run_id': 'wfv-proof'},
+                     'result': {'receipt': {'verification_runtime': {'provider': 'openai', 'model': 'gpt-6.1-sol', 'logical_run_id': 'wfv-proof', 'official_run_id': 'official-proof', 'rerouted': False}},
+                                'workflow_verification': {'task_id': 'skill-business', 'run_id': 'verify-run', 'definition_sha256': 'f' * 64,
+                                                          'verdict': 'PASS', 'execution_role': 'primary', 'implementation': pair['skill']['implementation'],
+                                                          'environment': self.envelope['contract']['environment'], 'assertions': [{'name': 'actual_skill_result', 'pass': True}], 'evidence': ['source-original']}}}
+            source = {'id': 'skill-business', 'status': 'completed', 'result': {'workflow_control': {'verify_task_id': 'verify-task', 'envelope': {
+                'run_id': 'verify-run', 'definition': {'snapshot_sha256': 'f' * 64}, 'contract': {'environment': self.envelope['contract']['environment']},
+                'activity_bindings': [{'primary_implementation': dict(pair['skill'], business_requirement_sha256=pair['business_requirement_sha256'])}]}}}}
+            with patch.object(gateway.io, 'brain_read', side_effect=lambda path: proof if path.endswith('verify-task') else source):
+                context = gateway.execute('takeover', self.envelope, {'reference_id': 'publish'})
+            self.assertEqual(context['execution_role'], 'rescue')
+            self.assertEqual(context['skill']['path'], str(self.skill))
+            self.assertEqual(json.loads((directory / 'events.json').read_text())[-1]['data']['outcome'], 'fail')
+
     def test_gate_refuses_late_controller_even_if_original_device_owner_remains(self):
         policy = self.home / 'policy.json'
         actions.install_policy(policy, self.envelope)
@@ -174,6 +272,28 @@ class ActionsTest(unittest.TestCase):
         actions.close_policy(policy, stopped=False)
         with self.assertRaises(ValueError):
             actions.check_policy(policy, 'run-1', 1, 'tap', 'task-1:publish')
+
+    def test_slow_controller_uses_frozen_budget_and_expired_budget_sends_nothing(self):
+        spec = importlib.util.spec_from_file_location('phone_slow', HERE / 'commander/wf-v2-phone.py')
+        phone_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(phone_module)
+        env = copy.deepcopy(self.envelope)
+        env['contract']['resources'].update(machine='xian-m4', profile='p1', device_serial='SER1')
+        env['deadline_at'] = datetime.fromtimestamp(time.time() + 50, timezone.utc).isoformat()
+        env['cleanup_deadline_at'] = datetime.fromtimestamp(time.time() + 80, timezone.utc).isoformat()
+        ssh = self.home / 'ssh'
+        log = self.home / 'ssh.log'
+        ssh.write_text('#!/bin/sh\nprintf started >> "$TEST_SSH_LOG"\nsleep 26\nprintf actual-controller-result\n')
+        ssh.chmod(0o755)
+        phone = phone_module.Phone(self.home, env)
+        phone.stage = 'preflight'
+        with patch.dict(os.environ, PATH=str(self.home) + os.pathsep + os.environ['PATH'], TEST_SSH_LOG=str(log)):
+            self.assertEqual(phone.ssh('isolated-read-only-controller'), b'actual-controller-result')
+            before = log.read_bytes()
+            phone.deadline = time.time() - 1
+            with self.assertRaisesRegex(ValueError, 'budget exhausted'):
+                phone.ssh('must-not-be-sent')
+            self.assertEqual(log.read_bytes(), before)
 
     def test_actual_controller_checks_epoch_and_fence_before_any_adb(self):
         registry = self.home / 'registry.tsv'

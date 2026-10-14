@@ -9,4 +9,7 @@ if not path.exists():
 else:
     work = json.loads(path.read_text())
     assert work['privacy'] == 'private' and work['work_id']
-    print(json.dumps({'status': 'committed', 'receipt': {'work_id': work['work_id'], 'privacy': work['privacy'], 'checked_source': str(path)}}))
+    result = {'status': 'committed', 'receipt': {'work_id': work['work_id'], 'privacy': work['privacy'], 'checked_source': str(path)}}
+    if len(sys.argv) > 2:
+        result['activity_facts'] = [{'reference_id': sys.argv[2], 'outcome': 'pass' if work.get('business_valid', True) else 'fail', 'observed': {'value': 1 if work.get('business_valid', True) else 0}}]
+    print(json.dumps(result))
