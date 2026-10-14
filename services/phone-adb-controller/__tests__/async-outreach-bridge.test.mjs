@@ -144,3 +144,14 @@ test('原飞书采集时间须使用源comment collected_at，不能变成103桥
  const {buildOrderFields}=require('../leadgen-outreach-bridge.js'),{routeOf}=require('../line-routes.js');const row=pendingBridge();row.payload.collected_at='2026-10-13T01:02:03Z';row.payload_sha256=require('../leadgen-outreach-bridge.js').digest(row.payload);
  const fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:5}]);assert.equal(fields['采集时间'],Date.parse(row.payload.collected_at));
 });
+
+import {spawn} from 'node:child_process';
+test('原line锁真实进程崩溃后可在死owner证明下恢复，活owner仍拒竞争',async()=>{
+ const {withOrderLock}=require('../leadgen-outreach-orders.js'),d=mkdtempSync(join(tmpdir(),'bridge-dead-owner-')),module=require.resolve('../leadgen-outreach-orders.js');
+ const child=spawn(process.execPath,['-e',`const {withOrderLock}=require(${JSON.stringify(module)});withOrderLock('jinuo',async()=>{console.log('HELD');setInterval(()=>{},1000);await new Promise(()=>{});},{directory:process.argv[1]}).catch(e=>{console.error(e.message);process.exitCode=1;});`,d],{stdio:['ignore','pipe','pipe']});
+ try{await new Promise((ok,bad)=>{const timer=setTimeout(()=>bad(Error('owner start bounded timeout')),5000);child.stdout.once('data',()=>{clearTimeout(timer);ok();});child.once('error',bad);});
+ await assert.rejects(withOrderLock('jinuo',async()=>{}, {directory:d}),/锁忙/);
+ const done=new Promise(ok=>child.once('close',ok));child.kill('SIGKILL');await done;
+ let executed=0;await withOrderLock('jinuo',async()=>{executed++;},{directory:d});assert.equal(executed,1);
+ }finally{if(child.exitCode===null)child.kill('SIGKILL');rmSync(d,{recursive:true,force:true});}
+});

@@ -63,3 +63,10 @@ test('返回正文须同fhn评论卡昵称+全文，别卡正文与全局nicknam
 test('本run正常重试同person eid原件要独享immutable receipt，不能覆盖或wx撞死',()=>scoped(f=>{
  const first=capture(f.args),old=readFileSync(first.file),second=capture(f.args);assert.notEqual(first.file,second.file);assert.deepEqual(readFileSync(first.file),old);assert.equal(statSync(second.file).mode&0o777,0o600);
 }));
+
+test('资格外发计数来自真实独立调用，缺native proof为0，API失败仍记录一次不ready',async()=>{
+ const {qualifyRecipient}=createRequire(import.meta.url)('../judge-recipient.js');const none=await qualifyRecipient({},companyFixture(),{apiKey:'fake'});assert.equal(none.model_call_count,0);
+ await scoped(async f=>{const e=JSON.parse(readFileSync(capture(f.args).file)),c={line_key:'jinuo',harvest_batch:'source102',douyin_id:'person987',nickname:'本人',comment_body:'在哪里报名',source_video_url:f.args.videoUrl,recipient_evidence:e},s=companyFixture();s.runtime_config.comment_scoring.audiences=[{name:'原人群',exclusion_signals:['同行机构']}];
+ const r=await qualifyRecipient(c,s,{apiKey:'fake',httpPost:async()=>{throw Error('fixture failed actual call');}});assert.equal(r.model_call_count,1);assert.equal(r.status,'unknown');assert.equal(r.model_response_id,null);
+ });
+});
