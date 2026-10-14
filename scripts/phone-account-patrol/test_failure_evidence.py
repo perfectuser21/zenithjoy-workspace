@@ -20,7 +20,8 @@ spec.loader.exec_module(runner)
 class FailureEvidenceTests(unittest.TestCase):
     def test_deeply_nested_diagnostic_cannot_break_failure_reporting(self):
         cleaned = runner.safe_error_text('[' * 2000 + '0' + ']' * 2000)
-        self.assertIn('OMITTED', cleaned)
+        # Python's decoder stack limit varies; both safe omission paths are valid.
+        self.assertRegex(cleaned, r'OMITTED|TRUNCATED')
         self.assertLess(len(cleaned), 2000)
 
     def test_preflight_adb_error_retains_device_error_and_checks_runner_hash(self):
