@@ -73,3 +73,12 @@ test('桥接POST前durable attempted；响应未知仅GET匹配marker/UID/payloa
  const second=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103retry',limit:1},opts);
  assert.equal(posts,1,'未知结果不能盲POST重发');assert.equal(row.state,'confirmed');assert.equal(second.published,1);
 });
+
+test('104旧personal/A飞书待触达行缺独立native资格不能领取，protected原行保持',async()=>{
+ const {outreachRequest}=require('../leadgen-outreach-orders.js');
+ const row={record_id:'recOLD123456',fields:{'抖音昵称':'旧机构','抖音号':'legacyOrg','主页链接':'https://www.douyin.com/user/legacyOrg','AI判断理由':'[A级] 报名','状态':'待触达'}};let puts=0;
+ const client={all:async()=>[row],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);},get:async()=>row};
+ const result=await outreachRequest({op:'claim_outreach',line:'jinuo',run:'contact104',limit:1,profile:'legacy',sender_douyin_id:'sender987'},
+  {sourceCommit:'a'.repeat(40),client,lock:async(_line,fn)=>fn(),eligibleOrders:async()=>[],policy:async()=>({template:{id:'approved',version:'B',message:'你好'}})});
+ assert.deepEqual(result,[]);assert.equal(puts,0);assert.equal(row.fields['状态'],'待触达');
+});
