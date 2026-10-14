@@ -52,6 +52,8 @@ async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFile
  const api=(url,opts={})=>request(url,{headers,...opts},fetcher);
  return {
   async all(){let page='',out=[];for(let i=0;i<30;i++){const b=await api(base+'?page_size=100&automatic_fields=true'+(page?'&page_token='+encodeURIComponent(page):''));out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达订单分页损坏');}throw Error('触达订单分页超界');},
+  async fields(){let page='',out=[];for(let n=0;n<5;n++){const b=await api(base.replace(/\/records$/,'/fields')+'?page_size=100'+(page?'&page_token='+encodeURIComponent(page):''));out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达字段分页损坏');}throw Error('触达字段分页超界');},
+  async post(fields){return (await api(base,{method:'POST',body:JSON.stringify({fields})})).data?.record;},
   async get(id){if(!recordId(id))throw Error('触达原订单ID无效');return (await api(base+'/'+id)).data?.record;},
   async put(id,fields){if(!recordId(id))throw Error('触达原订单ID无效');await api(base+'/'+id,{method:'PUT',body:JSON.stringify({fields})});}
  };
@@ -107,4 +109,4 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
   throw Error('触达未知原订单操作');
  });
 }
-module.exports={outreachPolicy,outreachRequest,withOrderLock,receiptValid};
+module.exports={outreachPolicy,outreachRequest,withOrderLock,receiptValid,orderClient};

@@ -387,7 +387,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       return {...r,scoring_readback_failures:readback.failures};},
     mark_leads:async()=>{const r=await queue('mark_leads');const readback=await queue('mark_readback',{ids:r.ids,lead_ids:r.lead_ids});
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-mark_leads-readback.json`),JSON.stringify(readback));
-      return {...r,mark_leads_readback_failures:readback.failures};},
+      const bridge=await queue('bridge_outreach');
+      return {...r,bridge,mark_leads_readback_failures:readback.failures,...(bridge.verified===false?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false;
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}

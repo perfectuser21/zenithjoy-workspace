@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS zenithjoy.leadgen_bridge_outbox (
  qualification_status text NOT NULL CHECK(qualification_status IN ('passed','excluded','unknown')),
  state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','attempted','confirmed','protected','excluded','unknown')),
  attempted_at timestamptz,
+ fields jsonb,
+ fields_sha256 text,
  feishu_record_id text,
  last_error text,
  created_at timestamptz NOT NULL DEFAULT now(),
