@@ -27,6 +27,7 @@ const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Obje
 // JSONB不保留输入键序；先按JSON语义规范化，再递归排序，值/数组顺序仍严格。
 const digest=v=>crypto.createHash('sha256').update(JSON.stringify(canonical(JSON.parse(JSON.stringify(v))))).digest('hex');
 function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`;}
+function frozenQualification(p,snapshot){const q=p.qualification;return q?.company_id===snapshot.company_id&&String(q.company_version)===String(snapshot.version)&&typeof q.tenant_id==='string'&&q.tenant_id!==''&&q.tenant_id===snapshot.tenant_id&&typeof q.policy_id==='string'&&q.policy_id!==''&&q.policy_id===(snapshot.policy_id||snapshot.runtime_config?.policy_id);}
 function nativeIntent(row){
  const p=row.payload;
  if(!p||row.line_key!==p.line_key||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
@@ -60,7 +61,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
     result[excluded?'excluded':'unknown']++;continue;
    }
-   try{const p=nativeIntent(row);if(p.qualification.company_id!==snapshot.company_id||String(p.qualification.company_version)!==String(snapshot.version))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
+   try{const p=nativeIntent(row);if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
    if(!api)api=await outreach.orderClient(route,{deadlineAt});
    let all;try{all=await api.all({deadlineAt});}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));
@@ -94,7 +95,7 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
   const rows=ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
   const allowed=[];
   for(const row of rows){try{
-   const p=nativeIntent(row);if(p.qualification.company_id!==snapshot.company_id||String(p.qualification.company_version)!==String(snapshot.version))continue;
+   const p=nativeIntent(row);if(!frozenQualification(p,snapshot))continue;
    if(!row.fields||digest(row.fields)!==row.fields_sha256)continue;
    const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
   }catch{/* 旧/错scope/缺native证明均不ready，不改原记录。 */}}

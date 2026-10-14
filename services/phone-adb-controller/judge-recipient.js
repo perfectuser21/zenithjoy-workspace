@@ -18,7 +18,7 @@ async function qualifyRecipient(comment,snapshot,{httpPost=(url,body,key)=>defau
    questions:{recipient:{type:'choice',instructions:'按原冻结公司产品、人群、意向与排除信号，结合完整原生主页独立判这个真实UID是否是可触达目标。不得改变原评分、不得新增业务阈值。人群排除信号优先；缺足够主页语义或无法判断用unknown。',criteria:{passed:'符合原criteria与原audiences目标画像/意向信号，并且没有原排除信号；有可信同UID主页语义。',excluded:'符合原不相关criteria或任一原audiences排除信号，完整主页证明同行/广告等也按原规则排除。',unknown:'原生主页语义不足或无法按原冻结criteria确认；不得只凭personal/A/B等级猜通过。'}}}},key);
   const a=response?.answers?.recipient;
   if(!['passed','excluded','unknown'].includes(a?.choice)||!Number.isFinite(a.confidence)||a.confidence<rules.confidence_threshold)return {status:'unknown',reason:'recipient_model_unverified'};
-  return {status:a.choice,reason:'frozen_company_native_profile_judgment',confidence:a.confidence,company_id:snapshot.company_id,company_version:snapshot.version,policy_id:snapshot.runtime_config.policy_id,native_profile_sha256:comment.recipient_evidence.sha256.profile};
+  return {status:a.choice,reason:'frozen_company_native_profile_judgment',confidence:a.confidence,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,company_version:snapshot.version,policy_id:snapshot.policy_id||snapshot.runtime_config.policy_id,native_profile_sha256:comment.recipient_evidence.sha256.profile};
  }catch{return {status:'unknown',reason:'recipient_model_unavailable'};}
 }
 module.exports={qualifyRecipient};

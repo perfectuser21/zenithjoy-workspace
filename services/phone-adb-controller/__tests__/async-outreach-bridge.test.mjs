@@ -43,7 +43,7 @@ import {mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 function pendingBridge(){
- const p={version:1,line_key:'jinuo',run:'score103',source_run:'source102',comment_id:cid,lead_id:lid,lead_identity:{id:lid,line_key:'jinuo',douyin_id:'person987'},target_douyin_id:'person987',nickname:'待核个人',comment_body:'在哪里报名',profile_url:'https://www.douyin.com/user/person987',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',intent_grade:'A',judgment_reason:'原分档',qualification:{status:'passed',company_id:'company1',company_version:3}};
+ const p={version:1,line_key:'jinuo',run:'score103',source_run:'source102',comment_id:cid,lead_id:lid,lead_identity:{id:lid,line_key:'jinuo',douyin_id:'person987'},target_douyin_id:'person987',nickname:'待核个人',comment_body:'在哪里报名',profile_url:'https://www.douyin.com/user/person987',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',intent_grade:'A',judgment_reason:'原分档',qualification:{status:'passed',company_id:'company1',company_version:3,tenant_id:'tenant1',policy_id:'policy3'}};
  const pkg='com.ss.android.ugc.aweme',vid='7637880891511528896',prefix='source102-v'+vid+'-collection';
  const profile=`<hierarchy><node package="${pkg}" text="待核个人" content-desc="待核个人，复制名字和修改备注"/><node package="${pkg}" text="抖音号：person987"/><node package="${pkg}" text="普通职员，想学习AI考证"/></hierarchy>`;
  const returned=`<hierarchy><node package="${pkg}" class="android.widget.TextView" resource-id="${pkg}:id/title" text="4条评论"/><node package="${pkg}" class="android.widget.EditText" resource-id="${pkg}:id/ety"/><node package="${pkg}" text="待核个人"/><node package="${pkg}" text="在哪里报名"/></hierarchy>`;
@@ -68,7 +68,7 @@ test('103正常mark活动须消费durable bridge，不等待104 preflight',async
 test('桥接POST前durable attempted；响应未知仅GET匹配marker/UID/payload，重放不能POST第二次',async()=>{
  const row=pendingBridge(),pool=bridgeStore(row),events=[],remote=[];let posts=0,gets=0;
  const api={all:async()=>{events.push('get');gets++;if(gets===2)throw Error('first readback unavailable');return remote;},fields:async()=>[{field_name:'采集时间',type:1}],post:async fields=>{posts++;events.push('post');assert.equal(row.state,'attempted');remote.push({record_id:'recABC123456',fields});throw Error('HTTP response unknown');}};
- const opts={client:api,lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:3})};
+ const opts={client:api,lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:3,tenant_id:'tenant1',policy_id:'policy3'})};
  const first=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',limit:1},opts);
  assert.equal(posts,1);assert.equal(first.published,0);assert.equal(first.verified,false);assert.equal(row.state,'attempted');assert.ok(pool.calls.some(c=>/SET state='attempted'/.test(c.sql)));
  const second=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103retry',limit:1},opts);
