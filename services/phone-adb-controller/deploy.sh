@@ -314,7 +314,11 @@ echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS
 for f in "${MMV_JS_FILES[@]}"; do
   if [[ ! -s "$D/$f" ]]; then echo "  ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
   push_atomic "$D/$f" mmv "~/.openclaw/leadgen-scripts" "$f"
-  if ssh mmv "node -c ~/.openclaw/leadgen-scripts/$f" 2>/tmp/deploy-err-$$; then
+  case "$f" in
+    *.py) _chk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/.openclaw/leadgen-scripts/$f";;
+    *) _chk="node -c ~/.openclaw/leadgen-scripts/$f";;
+  esac
+  if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
     echo "  ✅ $f"
   else
     echo "  ❌ $f 语法检查失败: $(cat /tmp/deploy-err-$$ | head -3)"
@@ -400,8 +404,11 @@ for host in xian-m4; do
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
-    if [[ "$f" == *.json ]]; then _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
-    else _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f"; fi
+    case "$f" in
+      *.py) _nchk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/bin-harvest/$f";;
+      *.json) _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
+      *) _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
+    esac
     if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else

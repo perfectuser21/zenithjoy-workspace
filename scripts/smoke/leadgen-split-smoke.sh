@@ -2,6 +2,8 @@
 # 四新流程Activity/Step正式发布回归：真实运行node:test，不把该套件误当Vitest。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# 先运行实际部署语法命令，防止混合列表中的Python锁文件被Node校验到正式部署才失败。
+node --test services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs
 # 正式Pilot不继承HOME；测试须自建隔离目录，不能依赖开发机个人配置。
 env -u HOME node --test --test-name-pattern='init: 额外导出|init\(preflight\) 就上报一条 span' \
  services/phone-adb-controller/__tests__/workflow-result.test.mjs \
