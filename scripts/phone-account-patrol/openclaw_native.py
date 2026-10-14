@@ -81,9 +81,12 @@ def safe_failure(value):
     # Only transport the public error contract, never arbitrary nested data.
     failure = {k: safe_error_text(value[k], 1000 if k == 'message' else 2000) for k in
                ['stage', 'code', 'message', 'host', 'stderr', 'stdout', 'error_type'] if isinstance(value.get(k), str)}
+    clipped_text = any(len(value[k]) > (1000 if k == 'message' else 2000) for k in failure)
     failure['exit_code'] = value.get('exit_code') if type(value.get('exit_code')) is int else None
     failure['timeout_sec'] = value.get('timeout_sec') if type(value.get('timeout_sec')) in (int, float) else None
-    failure['truncated'] = value.get('truncated') is True
+    evidence = value.get('evidence') if isinstance(value.get('evidence'), list) else []
+    clipped_evidence = len(evidence) > 10 or any(isinstance(v, str) and len(v) > 500 for v in evidence)
+    failure['truncated'] = value.get('truncated') is True or clipped_text or clipped_evidence
     failure['evidence'] = [safe_error_text(v, 500) for v in value.get('evidence', [])[:10] if isinstance(v, str)] if isinstance(value.get('evidence'), list) else []
     return failure
 
@@ -400,7 +403,9 @@ def legacy_preflight_probe(receipt, control_revision, run):
         failure = {'code': 'preflight_timeout' if isinstance(error, subprocess.TimeoutExpired) else 'ssh_launch_failed',
                    'message': str(error), 'exit_code': None, 'error_type': type(error).__name__,
                    'timeout_sec': 60 if isinstance(error, subprocess.TimeoutExpired) else None,
-                   'stdout': safe_error_text(getattr(error, 'output', None)), 'stderr': safe_error_text(getattr(error, 'stderr', None))}
+                   'stdout': safe_error_text(getattr(error, 'output', None)), 'stderr': safe_error_text(getattr(error, 'stderr', None)),
+                   'truncated': any(isinstance(v, (bytes, str)) and len(v) > 2000 for v in
+                                    [getattr(error, 'output', None), getattr(error, 'stderr', None)])}
     prefix = '旧runner尚未启动；新版补查前自检（诊断source=' + bridge.PHONE_SOURCE_REVISION + '）'
     path = STATE / (receipt['run_id'] + '.legacy-preflight.json')
     failure.update(stage='legacy_pre_execution_preflight', host='xian-m4',
