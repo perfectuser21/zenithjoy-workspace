@@ -54,7 +54,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
  return (lock||outreach.withOrderLock)(route.key,async()=>{
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,sourceRun:input.source_run,step:'103'});
   const result={published:0,protected:0,excluded:0,unknown:0,ids:[],verified:true};
-  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state IN ('pending','attempted','unknown') ORDER BY created_at,id LIMIT $2`,[route.key,Math.max(1,Math.min(50,Number(input.limit)||10))])).rows;
+  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,Math.max(1,Math.min(50,Number(input.limit)||10))])).rows;
   let api=client;
   for(const row of rows){if(Date.now()>=deadlineAt){result.verified=false;result.unknown++;break;}result.ids.push(row.id);
    if(row.qualification_status!=='passed'){
