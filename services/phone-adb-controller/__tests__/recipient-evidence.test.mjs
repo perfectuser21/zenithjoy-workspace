@@ -59,3 +59,7 @@ test('返回正文须同fhn评论卡昵称+全文，别卡正文与全局nicknam
  const {parseNative}=createRequire(import.meta.url)('../queued-recipient-evidence.js');const wrong=returned.replace('在哪里报名','本人的另一条正文').replace('</hierarchy>',`<node package="${pkg}" text="在哪里报名"/></hierarchy>`);
  assert.throws(()=>parseNative(profile,wrong,{nickname:'本人',douyinId:'person987',commentBody:'在哪里报名'}),/RECIPIENT_/);
 });
+
+test('本run正常重试同person eid原件要独享immutable receipt，不能覆盖或wx撞死',()=>scoped(f=>{
+ const first=capture(f.args),old=readFileSync(first.file),second=capture(f.args);assert.notEqual(first.file,second.file);assert.deepEqual(readFileSync(first.file),old);assert.equal(statSync(second.file).mode&0o777,0o600);
+}));
