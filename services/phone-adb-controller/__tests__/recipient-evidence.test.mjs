@@ -54,3 +54,8 @@ test('正文编码来源严格单层：canonical字面实体不误认emoji，xml
  assert.equal(parseNative(profile,literal,{nickname:'本人',douyinId:'person987',commentBody:'&amp;#127826;',commentEncoding:'xml_raw'}).returned_comment_verified,true);
  assert.throws(()=>parseNative(profile,literal,{nickname:'本人',douyinId:'person987',commentBody:'🍒',commentEncoding:'canonical'}),/RECIPIENT_/);
 });
+
+test('返回正文须同fhn评论卡昵称+全文，别卡正文与全局nickname不能拼接身份',()=>{
+ const {parseNative}=createRequire(import.meta.url)('../queued-recipient-evidence.js');const wrong=returned.replace('在哪里报名','本人的另一条正文').replace('</hierarchy>',`<node package="${pkg}" text="在哪里报名"/></hierarchy>`);
+ assert.throws(()=>parseNative(profile,wrong,{nickname:'本人',douyinId:'person987',commentBody:'在哪里报名'}),/RECIPIENT_/);
+});
