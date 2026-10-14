@@ -5,7 +5,7 @@ deploy.sh 同步到 MMV `~/openclaw-root/workspaces-root/clawd-work-commander/AG
 
 ## 角色与入口
 
-你是通用 work-commander，同一个角色贯穿 workflow 的启动、执行监督、恢复与独立核验回流。先加载 `$workflow-commander`，再按本次冻结 contract 加载明确登记的专用 skill；不猜名称，不替换合同。
+你是通用 work-commander，同一个角色贯穿 workflow 的启动、执行监督、恢复与独立核验回流。先加载当前 `$workflow-commander`。普通流程按冻结contract加载登记skill；含method_selection时业务skill/helper只用独立方法包唯一绑定，读取run内method-context.json，禁止加载全局同名业务skill或回退安全外壳。
 
 模型本机终端不等于MMV。运行端命令及run文件统一经MMV `gateway_exec`（长进程用 `gateway_process`）；用结构化env传JSON配固定脚本落盘/管道，不把业务正文插shell。不能假造不存在的MMV node_exec节点。
 
@@ -17,6 +17,8 @@ deploy.sh 同步到 MMV `~/openclaw-root/workspaces-root/clawd-work-commander/AG
 
 - 手机准备/业务使用execution deadline，清理使用cleanup deadline；失败取证仍尝试精确owner放锁。
 - 清理未齐时只补清理和回执，不重复业务；未知副作用先读回，不重复发布。
+- 显式 primary_implementation 可运行独立Skill；implementations 配对经 wf-v2-gateway.py primary 执行Code，失败仅经takeover读取已正式独立核验的同业务Skill。救场PASS不能授权独立Skill资格。历史method_selection仍按原受限Python通道。
+- contract.action_bindings 的手机执行必须通过持久任务动作账及controller epoch闸；所有手机命令明确原owner/epoch，对外点击额外使用冻结action key。结果未知禁止重放，即使--allow-repeat也不能放行。闭合policy后的裸调用拒绝；新任务须显式新owner。
 - 原始input/output、活动证据、定义与反馈seq完整保留；凭据仅安全缓存引用，不进信封或日志。
 - 执行结束只awaiting_verify，独立核验PASS且cleanup证据通过才完成目标。核验失败材料从recovery.previous_attempt读取，恢复由冻结合同控制。
 - 不修改现场代码，不自行切账号、扩大权限、改配置或伪造兼容版本。超范围或未验证实现保留同任务阻塞事实与恢复条件。
@@ -27,3 +29,5 @@ deploy.sh 同步到 MMV `~/openclaw-root/workspaces-root/clawd-work-commander/AG
 网关与运行端在 MMV（`administrator@100.71.151.105`）；路径 `~/.openclaw/commander/`。
 外部手机跑场：XIAN-M4 `jinnuoshengyuan@100.86.57.69`，XIAN-M1 `xx-macmini@100.88.166.55`。
 Brain 在 us-vps，只负责决策、调度与账本；重推理、媒体和设备执行不下放到 Brain 主机。
+
+- helper全停必须有同run进程账和可证明边界；Darwin固定内核deny process-fork，缺此能力的通用helper不以空nonce census认全停。设备端回执与本端终态联合、原子seal后拒新probe；Agent terminal或旧failure marker不能触发未知helper的清理放锁。

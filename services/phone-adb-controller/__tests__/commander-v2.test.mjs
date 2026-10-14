@@ -87,13 +87,13 @@ test('数值指数与Unicode键按Brain JSON摘要一致，部署进行中拒绝
 });
 test('反馈断网后按原seq重放，0600凭据仅存在Authorization头',async()=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');
- const f=fixture(),dir=start(f);helper(f,'event',dir,{type:'activity_completed',data:{reference_id:'ref',outcome:'pass',evidence:{path:'报告.json'}}});
+ const f=fixture();f.envelope.definition.expected_path=[{reference_id:'ref',activity_id:'activity'}];writeFileSync(f.file,JSON.stringify(f.envelope));const dir=start(f);helper(f,'event',dir,{type:'activity_completed',data:{reference_id:'ref',outcome:'pass',started_at:'2026-10-13T10:00:00Z',ended_at:'2026-10-13T10:00:01Z',evidence:{path:'报告.json'}}});
  const expected=JSON.parse(readFileSync(join(dir,'events.json')));const token=join(f.home,'internal-token');writeFileSync(token,'test-secret-only-in-header',{mode:0o600});f.env.WF_INTERNAL_TOKEN_FILE=token;
  const received=[];let fail=true;
- const server=createServer((req,res)=>{let body='';req.on('data',x=>body+=x);req.on('end',()=>{assert.equal(req.headers.authorization,'Bearer test-secret-only-in-header');received.push(JSON.parse(body));res.statusCode=fail?503:200;res.end('{}');});});
+ const server=createServer((req,res)=>{let body='';req.on('data',x=>body+=x);req.on('end',()=>{assert.equal(req.headers.authorization,'Bearer test-secret-only-in-header');received.push(JSON.parse(body));res.statusCode=fail?503:200;res.end(JSON.stringify({accepted:true,seq:JSON.parse(body).seq}));});});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));f.env.WF_BRAIN_URL='http://127.0.0.1:'+server.address().port;
  const replay=()=>new Promise((resolve,reject)=>{const p=spawn('python3',[join(f.dir,'wf-v2.py'),'replay',dir],{env:f.env,stdio:'ignore'});p.on('error',reject);p.on('exit',resolve);});
- try{assert.equal(await replay(),0);fail=false;assert.equal(await replay(),0);assert.deepEqual(received,[expected[0],...expected]);received.length=0;assert.equal(await replay(),0);assert.deepEqual(received,[]);assert.equal(readFileSync(join(dir,'events.json'),'utf8').includes('test-secret'),false);}finally{await new Promise(resolve=>server.close(resolve));}
+ try{assert.notEqual(await replay(),0);fail=false;assert.equal(await replay(),0);assert.deepEqual(received,[expected[0],...expected]);received.length=0;assert.equal(await replay(),0);assert.deepEqual(received,[]);assert.equal(readFileSync(join(dir,'events.json'),'utf8').includes('test-secret'),false);}finally{await new Promise(resolve=>server.close(resolve));}
 });
 test('v2手机共享控制器外壳：精确owner、官方child停止后桌面原件与放锁读回',async()=>{
  const {spawn}=await import('node:child_process');const {existsSync}=await import('node:fs');
@@ -286,6 +286,7 @@ try:r.phone_module.shell.execute(p,'preflight',fail);raise AssertionError('missi
 except ValueError as error:assert 'binding' in str(error)
 assert calls==[]
 e['activity_bindings']=[dict(path,key='preflight',steps=[{'key':'check','step_id':'step'}])]
+r.io.write(d/'envelope.json',e)
 for i in range(2):
  try:r.phone_module.shell.execute(p,'preflight',fail);raise AssertionError('failed preflight replay became success')
  except ValueError as error:assert 'real preflight failure' in str(error)
@@ -299,6 +300,7 @@ test('cleanup中间失败只记blocked且原件不可覆盖；最终唯一pass�
  const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
 e=r.io.read(d/'envelope.json');path={'reference_id':'ref','activity_id':'act','activity_definition_version_id':'version'}
 e['definition']['expected_path']=[path,dict(path,step_id='step')];e['activity_bindings']=[dict(path,key='cleanup',steps=[{'key':'check','step_id':'step'}])]
+r.io.write(d/'envelope.json',e)
 class Phone:directory=d;envelope=e;cleanup_deadline=time.time()+30;control_receipts=[]
 p=Phone();calls=[]
 def clean():
@@ -357,7 +359,7 @@ test('MMV gateway_exec结构化env示例可执行、无损落盘且拒绝覆盖�
  assert.equal(execute(f.envelope).status,0);assert.notEqual(execute({...f.envelope,input:{changed:true}}).status,0);
  assert.notEqual(execute({...f.envelope,recovery:{max_attempts:true}}).status,0,'JSON boolean must not equal number');
  assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
- const dir=start(f),request=JSON.parse(readFileSync(join(dir,'agent-request.json')));assert.equal(request.execution_location.tool,'gateway_exec');assert.equal(request.execution_location.host,'mmv');assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/模型本机不是MMV/);
+ f.file=result.envelope_path;const dir=start(f),request=JSON.parse(readFileSync(join(dir,'agent-request.json')));assert.equal(request.execution_location.tool,'gateway_exec');assert.equal(request.execution_location.host,'mmv');assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/模型本机不是MMV/);
  assert.ok(skill.includes('gateway_process'));assert.ok(skill.includes('WF_BINDING_JSON'));assert.ok(skill.includes('模型本机'));
  const special=readFileSync(join(source,'skills/wf-douyin_video_publish/SKILL.md'),'utf8');
  assert.match(special,/version: 0\.1\.2/);assert.match(special,/multi-platform-publish/);assert.doesNotMatch(special,/android-douyin-private-video|45 分钟|wf-status\.sh mmv/);

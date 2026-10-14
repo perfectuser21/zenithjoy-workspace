@@ -1,6 +1,6 @@
 ---
 name: workflow-commander
-version: 2.0.10
+version: 2.2.0
 description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 
@@ -15,7 +15,7 @@ description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻�
 1. Codex 的模型本机 shell 可能位于 `/Users/Shared/openclaw-workspaces`，不等于 MMV。先用 `gateway_exec` 执行 hostname 核对网关宿主。本文所有 `~/.openclaw/commander`、run目录、报告helper及文件读写都在 MMV（`administrator@100.71.151.105`），必须用 `gateway_exec`；不要假造 MMV 的 node_exec 节点。手机动作才使用冻结资源对应跑场通道。
 2. 使用明确面向 MMV 的**结构化文件工具**，或下方已验证的 `gateway_exec.env` 桥，将完整信封原样写入本 run 独享路径。模型本机写出的文件不能当成远端文件。固定脚本从结构化 env 取 JSON，独占创建、0600写入，再重新解析比较；同路径相同信封可重入，冲突拒绝。禁止把业务值插进 command、echo 或自由文本 shell；凭据不得进入信封。
 3. 正式调用 `session_status` 取得当前 `agent:work-commander:…` session key，后续 parent_session_key 必须是它。不能伪造其他父会话。
-4. 调 `~/.openclaw/commander/wf-launch.sh --ready`，经 stdin 传结构化 `{definition,workflow_key}`。只有 ready=true，且返回的 release_id、snapshot_sha256、runtime_snapshot_sha256 与本次绑定一致，才能启动。该接口实际校验整包文件与加载的工作区；半上线、缺映射或漂移都不能起跑或降级旧协议。
+4. 调 `~/.openclaw/commander/wf-launch.sh --ready`，经 stdin 原样传本次完整信封（含可选 method_selection）。只有 ready=true，且返回的 release_id、snapshot_sha256、runtime_snapshot_sha256 与本次绑定一致，才能启动。该接口实际校验整包文件与加载的工作区；半上线、缺映射或漂移都不能起跑或降级旧协议。
 5. 读取信封内冻结 contract；commander_skill 非空则核对指定名称和版本并加载，版本不符要记录阻塞。不得拿最新合同替换冻结合同。`resources={}` 是正常非手机流程，不增加或伪造 serial/profile/biz。
 
 `gateway_exec` 参数为 `{command:string,title:string,env:Record<string,string>,timeoutSeconds:number,yieldMs:number}`。command 固定；env 每个值是字符串，信封/事件先 JSON.stringify 后作为一个 env 值传入。下面是实际可执行模板，替换 env 值即可；不能把业务字符串替换进 command。
@@ -36,7 +36,7 @@ description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻�
 后续命令同样交给 `gateway_exec`，把已核对路径、session及JSON置于对应结构化 env。工具无 stdin 参数，用固定 Python 从 env 生成管道输入；先保存并读回完整 spawn receipt，再组合绑定 JSON。ready命令的env继续使用同一原始信封：
 
 ```bash
-python3 -c 'import os,json; e=json.loads(os.environ["WF_ENVELOPE_JSON"]); print(json.dumps({"definition":e["definition"],"workflow_key":e["workflow_key"]}))' | bash "$HOME/.openclaw/commander/wf-launch.sh" --ready
+python3 -c 'import os,json; e=json.loads(os.environ["WF_ENVELOPE_JSON"]); print(json.dumps(e))' | bash "$HOME/.openclaw/commander/wf-launch.sh" --ready
 ```
 
 绑定命令的env为 `WF_BINDING_JSON=JSON.stringify(按request及receipt组合的完整绑定对象)`、`WF_RUN_DIR=启动回执的run目录`：
@@ -66,7 +66,7 @@ bash "$HOME/.openclaw/commander/wf-launch.sh" --envelope "$WF_ENVELOPE_PATH" --p
 
 领取命令：`python3 ~/.openclaw/commander/wf-v2.py claim-spawn <run目录>`。它会持久保存本 run 唯一 spawn 权，返回 request 和 message。核对 request 的 run_id、task_id、parent_session_key、nonce 与本单一致，且未过 expires_at。已领取但缺绑定时，只能找回原 spawn 回执。
 
-用当前官方 `sessions_spawn` **一次**创建业务子会话：agentId=request.agent_id（当前授权 `skill-factory`），mode=run，context=isolated，cleanup=keep，completionTarget=parent；taskName 使用 run_id（超长时使用 task_id 前8位）。runTimeoutSeconds 不得超过 request.expires_at 的剩余秒数；不能重新给固定完整预算。task 原样包含 message 和完整 request，不 fork Commander 历史、不设置模型覆盖或 fallback。
+用当前官方 `sessions_spawn` **一次**创建业务子会话：agentId=request.agent_id（当前授权 `skill-factory`），mode=run，context=isolated，cleanup=keep，completionTarget=parent；taskName 使用 run_id（超长时使用 task_id 前8位）。runTimeoutSeconds 不得超过 request.expires_at 的剩余秒数；不能重新给固定完整预算。task 原样包含 message 和完整 request，不 fork Commander 历史、不设置模型覆盖或 fallback。不得额外要求业务子会话调用未暴露的session_status或其它非目标工具；父会话归属已经由request、binding及官方receipt证明。失败材料保留原文，下次先读previous_attempt避免重复相同指挥偏差。
 
 子会话开始任何业务动作前必须读取本 run 的 `agent-binding.json`，确认 parent/run/task/nonce 与 request 一致、childSessionKey 是自己；最多在剩余执行预算内等绑定。存在 `handoff-closed.json` 或身份不符时立即停止，不能触发业务副作用。可通过实际可用文件工具或已有 SSH 通道读取；不指定子会话未暴露的工具。
 
@@ -94,7 +94,9 @@ helper 使用官方 `agent.wait` 读取绑定 child 的确切 run，校验 runId
 
 外壳交付保留全部 input、definition、outputs、evidence、effects 和真实 cleanup 回执。大产物写运行目录，交付引用与 hash，不截断原内容。Brain 依据冻结 output_schema 检查成功输出，违约会派生失败并保留原文。
 
-`wf-v2.py replay <run目录>` 按持久 seq 重放；已提交反馈不能改写。内部凭据默认只读本人0600的 `~/.credentials/cecelia-internal.env` 中 CECELIA_INTERNAL_TOKEN，也可用 WF_INTERNAL_TOKEN_FILE 指向纯 token 的0600缓存；不得放入信封、消息、日志或产物。缺凭据或网络失败保留原事件，状态读回可以补账。
+活动 `outcome` 只允许 `pass|fail|skipped|unknown`，`activity_completed` 是事件类型，`completed` 仅是 delivery.status，不能作 outcome。时间必须是实际发生的带时区 ISO 时间，结束不得早于开始；完成事件的 evidence 为非空对象，`skipped` 必须有非空字符串 `evidence.skip_reason` 说明真实跳过原因。入口在分配 seq 前校验冻结路径及这些字段。若未入队而被拒，可依据原产物在同 task/run/attempt 纠正字段重报，不能重新执行业务或覆盖原产物。
+
+`wf-v2.py replay <run目录>` 按持久 seq 重放，返回真实 `ack_seq/pending/failed_seq/error/rejected`；pending、运输错误或正式拒收时 CLI 非零。后台运输错误只保留待传记录，不触发第二份业务失败交付。`replayed:true` 仅说明传输队列已收到确认，ACK 不代表业务成功：Brain 的 `rejected` 会与 ACK 原子保留并出现在 status.feedback，必须按正式失败/独立核验接续，不能抹去拒收。已持久反馈不能改写、改序号或将 completed 自动转成 pass。内部凭据默认只读本人0600的 `~/.credentials/cecelia-internal.env` 中 CECELIA_INTERNAL_TOKEN，也可用 WF_INTERNAL_TOKEN_FILE 指向纯 token 的0600缓存；不得放入信封、消息、日志或产物。缺凭据或网络失败保留原事件，状态读回可以补账。
 
 ## 5. 独立核验与原任务恢复
 
@@ -104,8 +106,40 @@ FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt �
 
 新 attempt、实现版本切换、恢复授权和剩余预算由 Brain 的冻结恢复政策决定。未知副作用先独立读回；没有兼容且已验证的部署时，保持同任务 blocked 并明确恢复条件，不能伪造回退版本。汇报使用查回事实、证据和 actor，不以退出码零代替目标完成。
 
+## 6. 受信历史完整业务方法
+
+只有Brain正式信封含 `method_selection` 才使用方法选择；没有候选时保持阻塞，不能自行找历史文件。当前Supervisor/安全外壳/全局workspace始终为当前版。ready分别读取两份正式release、当前gate、collector observation及实际文件，再核 `commander-composition-v1` 组合摘要。起跑信封必须已经固定该摘要；不能把测量结果擅自填回已冻结信封。
+
+方法包位于MMV `~/.local/share/zenithjoy/commander-methods/<manifest_sha256>`，独立target为 `mmv--method--<manifest_sha256>`。由当前发布器 `deployment-method.mjs prepare|install <absolute_spec.json>` 创建正式release并安装固定Git对象，完整Pilot计划仍由Brain核验。安装、collector或部署不证明业务PASS，候选资格来自已有独立业务验收。现场Commander禁止执行安装命令或改包。
+
+业务request的 `execution_location.method_context` 指向run内 `method-context.json`。先读该文件的完整 `method_selection` 和 `legacy_helper_bindings`；旧合同的 `~/.openclaw/commander/wf-report.py` 只按唯一冻结repo/path映射，不能直接执行当前同名helper。MMV gateway_exec采用结构化env传 `WF_METHOD_REQUEST_JSON=JSON.stringify({source_path,args})` 和 `WF_METHOD_ENVELOPE=原run绝对envelope路径`，固定命令：
+
+```bash
+python3 -c 'import os; print(os.environ["WF_METHOD_REQUEST_JSON"])' | python3 "$HOME/.openclaw/commander/wf-method.py" execute "$WF_METHOD_ENVELOPE"
+```
+
+首版仅接纳可机械固定依赖的Python业务方法。contract.skill非空、业务skill执行入口以及任何非安全业务skill绑定均明确拒绝：Markdown链接齐全不能证明裸命令已冻结。包中当前安全skill只作为摘要比对的只读上下文，仍加载当前Commander，绝不执行历史副本或global同名业务skill。支持的Python静态子集禁止动态装载、反射、os间接执行与搜索路径篡改；这不是任意Python沙箱。缺依赖、未知路径、不同安全代码或包漂移直接拒绝，不临时补依赖。方法相同字节只能称历史版本选择，不声称算法回退奏效。
+
+original_goal_definition固定最初run/release、目标、输入摘要、完整恢复政策及原两截止时间。selected业务合同只负责所选完整方法，不混拼活动；原input/output/验收/资源/副作用授权不变。selection_receipt保留上一失败run和候选业务PASS及独立核验身份。独立核验同时检查原目标与所选方法；需要历史helper时用当前 `wf-method.py resolve` stdin `{source_path}` 先读回唯一真实绑定，再按核验独立预算运行其verify，禁止核验阶段collect或重发业务。方法失配不能改回当前helper凑PASS。
+
+## 同业务Code与Skill、持久动作与执行撤销
+
+共享信封v1使用冻结 `activity_bindings[].primary_implementation` 或 `implementations`，实现身份为 `{kind,id,version,digest}`，环境为 `contract.environment={id,fingerprint}`。单Skill显式声明可先独立运行，不能默认加载全局同名Skill。配对Code入口用 `python3 ~/.openclaw/commander/wf-v2-gateway.py primary <实际run/envelope.json>`，stdin `{reference_id,args}`；Code非零/异常会机械保留正式fail，退出0只记unknown。业务结果只有冻结只读probe实际读回后才能新记观察事实；不以退出码授权PASS。
+
+Code失败后 `takeover` stdin `{reference_id}` 返回唯一Skill来源。资格只从Brain正式独立核验任务读回：官方模型运输、原业务任务/run/定义、同业务要求、Skill摘要与当前冻结环境一致，且为Skill `primary` PASS；救场或Code整体PASS不能作资格。当前源码字节不符、没有独立证明、存在unknown动作时拒绝接手，不自动降到旧Skill/Code。Skill实际业务事实用 `record` stdin `{reference_id,kind:"skill",outcome,observed,started_at,ended_at,step_id?}`，角色由机械上下文决定；Code原失败永久保留。
+
+有 `contract.action_bindings` 时，手机外壳安装冻结policy。每条控制器命令都带 `--lock-owner` 原run以及结构化环境 `WF_COMMANDER_OWNER_EPOCH`；对外点击还带 `WF_COMMANDER_ACTION_KEY` 的稳定任务key及匹配 `--outward` 动作。任务动作账先持久unknown意图再点击，同key未知或已提交都不会重新点击，`--allow-repeat`不能覆盖。放弃旧稿须输入布尔true与 `{object:{task_id,account_ref},action:"discard_existing_draft",scope:{visibility:"private",purpose:"acceptance",content_ref},grant_ref}` 完全匹配；缺字段不能默认授权。
+
+点击成功仍须 `wf-v2-gateway.py readback <实际envelope>` stdin `{key}`。只运行冻结 `action.readback={path,digest,args}`；缺helper则保留unknown，不能把截图或点击退出0当作品成功。probe可提供 `activity_facts` 的真实观察，角色/实现/环境由外壳绑定，不接受stdin自报Code PASS。生产业务helper尚未冻结时，不宣称新组合业务验收通过。
+
+`fence` stdin `{task_id,run_id,owner_epoch,reason}` 撤销任务动作与设备policy，回传真实 `execution_fenced`、官方 `execution_stopped` 与清理状态。不能从已取消RPC推断已停，未知时保留锁。新attempt须独立run、下一epoch和attempt，同任务输入/授权/合同/业务定义/总执行与收尾期限不变；远端fence与动作账同步，unknown须先读回。policy闭合且锁释放后，裸控制器也不能恢复发布权；新legacy任务必须明确新owner领锁。
+
+本轮新增的是冻结信封消费者，不读写C版本组合表，不恢复暂停任务。所有新版业务、真机、部署和独立核验结果分别记账。
+
 ## 旧在途兼容边界
 
 旧五参数入口只用于既有历史调度兼容；历史在途运行继续按原外壳收尾。新 JSON 信封不得转换为旧参数。全部入口共用部署 admission；部署期间不启动旧外壳，也不创建历史看护角色。部署和代码变更由版本化发布流程处理。
 
 冻结 recovery.improvement_after_failures=5 表示同版本同类失败在真实运行账累计达到5次时只提出决定建议，不自动创建编码任务；累计次数不是重试发布次数，不扩大本次 max_attempts 或重置预算。
+
+helper启动意图、PID出生身份与实际终态保存在同run的helper-processes.json；官方Agent terminal不能替代OS helper终态。Darwin实际helper受固定sandbox-exec deny process-fork约束，Python使用-I -S；多进程RPA helper不在此受支持范围。该约束不可用时，仅机械允许的字面量/固定只读JSON转发子集可证明进程边界，通用helper即使nonce扫描为空也保持全停未证实与锁隔离。fence、finalize及交付/失败重入必须联合本地与设备端同身份stopped回执，原子seal后不能新启probe；未决不得释放锁。

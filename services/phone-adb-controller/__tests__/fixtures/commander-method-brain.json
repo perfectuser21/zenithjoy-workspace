@@ -1,0 +1,52 @@
+{
+  "manifest": {
+    "protocol": "commander-method-v1",
+    "workflow": {
+      "key": "report",
+      "workflow_id": "00000000-0000-4000-8000-000000000002",
+      "workflow_definition_version_id": "00000000-0000-4000-8000-000000000001",
+      "snapshot_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "source": {
+      "repo": "perfectuser21/zenithjoy-workspace",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "bindings": [
+      {
+        "kind": "code",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "src/report.py",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  },
+  "manifest_sha256": "20b39f21921630a1abe647c0037847adf79aa44d504b99fcf70c023a1bdac84e",
+  "resolved_bindings": [
+    {
+      "kind": "code",
+      "repo": "perfectuser21/zenithjoy-workspace",
+      "path": "src/report.py",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "absolute_path": "/Users/administrator/.local/share/zenithjoy/commander-methods/20b39f21921630a1abe647c0037847adf79aa44d504b99fcf70c023a1bdac84e/src/report.py"
+    }
+  ],
+  "resolved_bindings_sha256": "5e02d1910a97f032526e965867e3c1c0a6fd9fadc412fa966f9023add0875a18",
+  "composition": {
+    "protocol": "commander-composition-v1",
+    "supervisor_runtime_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "method_manifest_sha256": "20b39f21921630a1abe647c0037847adf79aa44d504b99fcf70c023a1bdac84e",
+    "resolved_bindings_sha256": "5e02d1910a97f032526e965867e3c1c0a6fd9fadc412fa966f9023add0875a18"
+  },
+  "runtime_snapshot_sha256": "1ebee492029b72a3a537f4b8e8acdee50094fa2fd3fb17e61209fa1a562cf821",
+  "input": {
+    "2": 1,
+    "10": 1e-7,
+    "zero": 0,
+    "𐀀": "非BMP",
+    "": "私用区",
+    "text": "中文\n$(无命令)"
+  },
+  "input_sha256": "84d8f6f344abd8aab409f4ecb14b94ba81c9fb8c3e1d27c3f7cc21394c9c02b6"
+}

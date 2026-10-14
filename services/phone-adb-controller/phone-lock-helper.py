@@ -10,6 +10,57 @@ import signal
 import time
 import subprocess
 import sys
+import importlib.util
+from pathlib import Path
+
+
+def commander_policy():
+    mode, path, owner_path, owner = sys.argv[2:]
+    if not (mode in ('readback', 'inspect') and not Path(owner_path).exists()) and not owner_matches(owner_path, owner):
+        raise ValueError('Commander policy requires current exact device owner')
+    root = Path(__file__).resolve().parent
+    source = root / 'wf-v2-actions.py'
+    if not source.exists():
+        source = root / 'commander/wf-v2-actions.py'
+    spec = importlib.util.spec_from_file_location('commander_actions', source)
+    actions = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(actions)
+    incoming = json.load(sys.stdin)
+    if mode == 'bind':
+        if incoming.get('run_id') != owner:
+            raise ValueError('Commander policy run does not own device')
+        actions.install_policy(path, incoming, admit_store=True)
+    elif mode == 'fence':
+        policy = actions.read(path)
+        if any(policy.get(k) != incoming.get(k) for k in ('task_id', 'run_id', 'owner_epoch')):
+            raise ValueError('Commander fence identity mismatch')
+        process_spec = importlib.util.spec_from_file_location('remote_helper_processes', source.parent / 'wf-v2-processes.py')
+        processes = importlib.util.module_from_spec(process_spec)
+        process_spec.loader.exec_module(processes)
+        helpers_stopped = processes.Registry(policy).observe(fence=True, stop=True, seal_when_stopped=True)
+        stopped = incoming.get('execution_stopped') is True and helpers_stopped
+        actions.close_policy(path, stopped=stopped)
+        store = actions.ActionStore(policy)
+        if store.path.exists():
+            store.close('formal Commander fencing', stopped=stopped)
+    elif mode == 'readback':
+        policy = actions.read(path)
+        if any(policy.get(k) != incoming.get(k) for k in ('task_id', 'run_id', 'owner_epoch')):
+            raise ValueError('Commander readback identity mismatch')
+        print(json.dumps(actions.readback_helper(policy, incoming['key'], root)))
+        return
+    elif mode == 'inspect':
+        policy = actions.read(path)
+        if any(policy.get(k) != incoming.get(k) for k in ('task_id', 'run_id', 'owner_epoch')):
+            raise ValueError('Commander actions identity mismatch')
+        store = actions.ActionStore(policy)
+        print(json.dumps(store.state()['actions'] if store.path.exists() else {}))
+        return
+    else:
+        raise ValueError('unknown Commander policy command')
+    print(json.dumps({'protocol': 'commander-v2', 'task_id': incoming['task_id'], 'run_id': owner,
+                      'owner_epoch': incoming['owner_epoch'], 'execution_fenced': mode == 'fence',
+                      'execution_stopped': stopped if mode == 'fence' else False}))
 
 
 def record_claim():
@@ -64,7 +115,10 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
         signal.signal(sig, lambda signum, frame: canceled.__setitem__(0, 128 + signum))
     if canceled[0]:
         sys.exit(canceled[0])
-    child = subprocess.Popen(argv, pass_fds=(fd,), start_new_session=True)
+    inherited = (fd,)
+    if os.environ.get('WF_COMMANDER_GATE_FD'):
+        inherited += (int(os.environ['WF_COMMANDER_GATE_FD']),)
+    child = subprocess.Popen(argv, pass_fds=inherited, start_new_session=True)
     deadline = time.monotonic() + budget
     root_reaped = False
     while not canceled[0] and time.monotonic() < deadline:
@@ -372,7 +426,9 @@ def lock_receipt():
 
 
 if __name__ == '__main__':
-    if sys.argv[1] == 'record-claim':
+    if sys.argv[1] == 'commander-policy':
+        commander_policy()
+    elif sys.argv[1] == 'record-claim':
         record_claim()
     elif sys.argv[1] == 'runtime-contract':
         runtime_contract()

@@ -1,0 +1,30 @@
+[
+  {
+    "input": "{\"number\":1}",
+    "sha256": "3d6a916e86efba9105154ea95dda8d8da47df173d931c23e7a346c7babd81a3e"
+  },
+  {
+    "input": "{\"number\":1.0}",
+    "sha256": "3d6a916e86efba9105154ea95dda8d8da47df173d931c23e7a346c7babd81a3e"
+  },
+  {
+    "input": "{\"number\":1e-7}",
+    "sha256": "eca50befb60e7b39badf0c1ba912952ed7d996a16e94031801cd0fd4094f1bb8"
+  },
+  {
+    "input": "{\"number\":-0.0}",
+    "sha256": "37e0043fa06b9c3790cd32d713dfda30e7ce8217f30ef142d2732c18ea0024d2"
+  },
+  {
+    "input": "{\"2\":\"two\",\"10\":\"ten\"}",
+    "sha256": "d7d8369c8035a81d2664403842012bcbcf7165d2f980b78a645f5b6a15fa8a60"
+  },
+  {
+    "input": "{\"\\ue000\":\"bmp\",\"\\ud800\\udc00\":\"astral\"}",
+    "sha256": "5e72745dd500f8b8d997ef851679707b89099da29d2aca4b93dfd85810ebaa20"
+  },
+  {
+    "input": "{\"label\": \"中文\\n$() `literal` 😀  \"}",
+    "sha256": "0e62f23189965643ee9d7a1a97086803df90723fefe12977b3813c8280c74fa2"
+  }
+]

@@ -223,8 +223,8 @@ jobs:
   openclaw-scripts-test:
     name: OpenClaw Scripts Test
     runs-on: ubuntu-latest
-    # 1467 项测试实测约 272 秒；另需安装依赖和执行清理，5 分钟会在测试通过后超时。
-    timeout-minutes: 7
+    # run 38550494755：2145 项通过，测试耗时约397秒；依赖安装与post清理使7分钟总窗超时。
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -37,7 +37,7 @@ def timestamp(value):
 def run_directory(run):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', run):
         raise ValueError('invalid run id')
-    return Path.home() / 'wf-agent-runs' / run
+    return Path.home().resolve() / 'wf-agent-runs' / run
 
 
 def validate(envelope, parent):
@@ -67,11 +67,16 @@ def validate(envelope, parent):
         raise ValueError('envelope too large')
     if envelope['contract'].get('resources'):
         phone_module.Phone(run_directory(envelope['run_id']), envelope)
+    if 'method_selection' in envelope and not re.fullmatch(r'[a-f0-9]{64}', envelope['definition'].get('runtime_snapshot_sha256') or ''):
+        raise ValueError('method launch requires frozen composition')
     io.ready(envelope)
+    if 'method_selection' in envelope:
+        module('wf-method').execution_context(envelope, run_directory(envelope['run_id']))
 
 
 def make_request(directory, envelope, parent):
-    if (directory / 'agent-request.json').exists():
+    initialized = (directory / 'agent-request.json').exists()
+    if initialized and ('method_selection' not in envelope or ((directory / 'method-context.json').exists() and (directory / 'msg.txt').exists())):
         return
     agent = envelope['contract'].get('agent', 'skill-factory')
     if agent != 'skill-factory':
@@ -84,20 +89,31 @@ def make_request(directory, envelope, parent):
     # init持nonce/parent；deadline来自Brain，不因恢复而延长。
     import contextlib
     with contextlib.redirect_stdout(__import__('io').StringIO()):
-        handoff.init(directory, parent, min(86400, remaining))
+        if not initialized:
+            handoff.init(directory, parent, min(86400, remaining))
     request = io.read(directory / 'agent-request.json')
     request['expires_at'] = timestamp(envelope['deadline_at'])
     request['protocol'] = io.PROTOCOL
     request['execution_location'] = {'host': 'mmv', 'tool': 'gateway_exec', 'run_directory': str(directory)}
+    method_instruction = ''
+    if 'method_selection' in envelope:
+        context = module('wf-method').execution_context(envelope, directory)
+        io.write(directory / 'method-context.json', context)
+        request['execution_location']['method_context'] = str(directory / 'method-context.json')
+        method_instruction = context['instruction']
     io.write(directory / 'agent-request.json', request)
     (directory / 'msg.txt').write_text(
         '【通用Commander业务子会话】仅执行冻结合同，禁止修改代码或直接完成Brain任务。\n'
         '执行位置execution_location=MMV网关宿主；模型本机不是MMV。读取绑定、input/contract、活动event、报告collect/verify、产物和交付文件均须gateway_exec；JSON用结构化env配固定Python读os.environ传stdin，正文不得拼shell。长进程用gateway_process。resources.machine仅指手机动作宿主，不能据此迁移run目录或报告helper。\n'
         '完整输入：' + str(directory / 'input.json') + '\n冻结合同：' + str(directory / 'contract.json') +
         '\n运行信封：' + str(directory / 'envelope.json') + '\n产物目录：' + str(directory / 'evidence') +
+        '\n' + method_instruction + '\n不要求业务子会话调用session_status；仅使用实际暴露且执行目标所需的工具，绑定文件与官方receipt确认归属。上次因未暴露工具失败时先读previous_attempt，不重复附加无关工具要求。'
         '\n按照合同skill与activities执行；原样保留所有输入字段，仅为contract中by=agent的业务activity/step上报（preflight与cleanup由外壳负责，不能代补）；每个真实完成的activity/step，用activity_bindings按key定位并对照definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
         '\n手机资源由外壳领锁/收尾，业务全程精确使用run_id作lock-owner，不另领或释放锁。'
+        '\n活动 outcome 只允许 pass|fail|skipped|unknown；activity_completed 是事件类型，completed 仅是 delivery.status，不是 outcome。started_at/ended_at 用真实带时区ISO时间；completed 的 evidence 必须为非空对象，skipped 必须有非空字符串 evidence.skip_reason。event 被拒且未分seq时可依据同一真实产物纠正字段后重报；已持久事件不得改写。'
         '\n外部副作用幂等key用task_id与activity，不用run_id；未知副作用先读回，不重复发布。'
+        '\n含activity_bindings[].implementations时先经 wf-v2-gateway.py primary <本run/envelope.json> stdin {reference_id,args}执行唯一冻结Code；Code失败后仅经takeover stdin {reference_id}取得已正式独立验证的同业务Skill路径，不自行加载全局同名Skill。takeover失败即保留阻塞，不降旧版。'
+        '\n含contract.action_bindings的手机命令带 --lock-owner 原run及结构化env WF_COMMANDER_OWNER_EPOCH=原owner_epoch；对外点击还必须WF_COMMANDER_ACTION_KEY=冻结effects.key，并用--outward匹配冻结action。不得用--allow-repeat绕动作账。发布点击成功仍结果未知，先wf-v2-gateway.py readback stdin {key}取得已冻结作品读回；无读回helper保留unknown。'
         '\n最后一行：WF_DELIVERY {"status":"completed|failed|blocked","outputs":{},"evidence":[],"effects":[],"failure":null}'
         '\n上次失败结构化上下文见信封recovery.previous_attempt（run_id、attempt、failure、verification.assertions/evidence、diagnostic_sha256）；先核对证据，原始记录按task/run只读回查。\n核验失败的断言与证据见信封recovery；只在冻结恢复合同允许范围修复产物，不现场修代码。\n', encoding='utf-8')
 
@@ -108,6 +124,7 @@ def current(directory):
     result = dict(protocol=io.PROTOCOL, run_id=env['run_id'], state=state['phase'],
                   execution_stopped=state.get('execution_stopped', False),
                   deadline_at=env['deadline_at'], cleanup_deadline_at=env['cleanup_deadline_at'])
+    result['feedback'] = io.feedback_status(directory)
     for name, field in [('delivery.json', 'delivery'), ('events.json', 'events')]:
         if (directory / name).exists():
             result[field] = io.read(directory / name)
@@ -145,9 +162,22 @@ def launch_locked(path, parent):
     envelope = io.read(path)
     validate(envelope, parent)
     directory = run_directory(envelope['run_id'])
+    # 新attempt先机械验证独享目录，再持久任何输入；不能靠未来目录预存在换取旧run安全PASS。
+    if directory.is_symlink() or (directory.parent.exists() and directory.parent.resolve() != directory.parent):
+        raise ValueError('run root alias forbidden')
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if directory.resolve() != directory or (directory / '.launch.lock').is_symlink():
+        raise ValueError('run root is not canonical')
+    if 'method_selection' in envelope:
+        goal = envelope['method_selection']['original_goal_definition']
+        previous = envelope['method_selection']['selection_receipt']['previous_run_id']
+        if envelope['run_id'] in (goal['original_run_id'], previous):
+            raise ValueError('new attempt must not reuse failed run')
     with io.lock(directory / '.launch.lock'):
         if (directory / 'envelope.json').exists():
+            for name in ('envelope.json', 'input.json', 'contract.json', 'runtime.json'):
+                if (directory / name).is_symlink():
+                    raise ValueError('persisted run file alias forbidden')
             if io.read(directory / 'envelope.json') != envelope:
                 raise ValueError('frozen run identity/input/budget conflict')
             if io.read(directory / 'input.json') != envelope['input'] or io.read(directory / 'contract.json') != envelope['contract']:
@@ -155,6 +185,8 @@ def launch_locked(path, parent):
             if io.read(directory / 'runtime.json')['parent'] != parent:
                 raise ValueError('parent session conflict; use original attributed parent')
         else:
+            if any(path.name != '.launch.lock' for path in directory.iterdir()):
+                raise ValueError('new run directory contains prior evidence; refuse overwrite')
             if time.time() >= timestamp(envelope['deadline_at']):
                 raise ValueError('execution budget exhausted')
             io.write(directory / 'envelope.json', envelope)
@@ -163,6 +195,8 @@ def launch_locked(path, parent):
             (directory / 'evidence').mkdir(exist_ok=True)
             io.write(directory / 'runtime.json', dict(phase='preparing', execution_stopped=False, parent=parent))
             io.emit(directory, 'started', {'definition': envelope['definition']})
+        if module('wf-v2-actions').managed(envelope) and not (directory / 'delivery.json').exists():
+            module('wf-v2-actions').ActionStore(envelope).admit()
         if not envelope['contract'].get('resources') and not (directory / 'delivery.json').exists():
             make_request(directory, envelope, parent)
         start_worker(directory)
@@ -175,6 +209,12 @@ def claim(directory):
             raise ValueError('handoff closed; no new side effects')
         if (directory / 'spawn-claimed.json').exists() or (directory / 'agent-binding.json').exists():
             raise ValueError('spawn already claimed; bind existing receipt or await; never respawn')
+        envelope = io.read(directory / 'envelope.json')
+        if 'method_selection' in envelope:
+            expected = module('wf-method').execution_context(envelope, directory)
+            if io.read(directory / 'method-context.json') != expected or not (directory / 'msg.txt').is_file():
+                raise ValueError('method child context missing or drifted')
+            io.ready(envelope)  # 领取唯一spawn权之前重新核两实例，不能凭启动时旧ready。
         request = io.read(directory / 'agent-request.json')
         if time.time() >= request['expires_at']:
             raise ValueError('spawn deadline exhausted')
@@ -185,6 +225,16 @@ def claim(directory):
 def finalize(directory, envelope, phone):
     completion = io.read(directory / 'agent-completion.json')
     agent = io.read(directory / 'agent-delivery.json')
+    if not module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True):
+        raise ValueError('helper kernel terminal unconfirmed; retain lock and cleanup false')
+    if module('wf-v2-actions').managed(envelope):
+        if phone:
+            phone.deadline = phone.cleanup_deadline
+            phone.stage = 'cleanup'
+            receipt = phone.policy('fence', stopped=True)
+            if not module('wf-v2-actions').fence_confirmed(envelope, receipt):
+                raise ValueError('phone execution fencing/helper terminal unconfirmed')
+        module('wf-v2-actions').ActionStore(envelope).close('official child and helper terminal', stopped=True)
     cleanup_path = directory / 'cleanup.json'
     if cleanup_path.exists() and io.read(cleanup_path).get('completed') is True:
         cleanup = io.read(cleanup_path)
@@ -210,6 +260,13 @@ def finalize(directory, envelope, phone):
                     effects=agent.get('effects', []), cleanup=cleanup, status=status,
                     failure=agent.get('failure') if status == 'completed' else (agent.get('failure') or 'execution_failed'),
                     agent_delivery=agent)
+    if module('wf-v2-actions').managed(envelope):
+        records = module('wf-v2-actions').ActionStore(envelope).state()['actions']
+        if phone:
+            records.update(phone.policy('inspect'))
+        delivery['effects'] = [{'key': a['key'], 'status': records.get(a['key'], {}).get('status', 'none'),
+                               'receipt': records.get(a['key'], {'not_attempted': True})}
+                              for a in module('wf-v2-actions').action_bindings(envelope)]
     if len(io.canonical(delivery)) > 200000:
         original = directory / 'agent-delivery.json'
         delivery['outputs'] = {'artifact': str(original), 'sha256': __import__('hashlib').sha256(original.read_bytes()).hexdigest()}
@@ -254,6 +311,10 @@ def worker(directory):
             for key in ('preflight', 'cleanup'):
                 phone_module.shell.recover(phone, key)
         if (directory / 'delivery.json').exists():
+            if not module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True):
+                raise ValueError('delivery reentry helper terminal unconfirmed')
+            if phone and module('wf-v2-actions').managed(envelope) and not module('wf-v2-actions').fence_confirmed(envelope, phone.policy('fence', stopped=True)):
+                raise ValueError('delivery reentry remote helper terminal unconfirmed')
             delivery = io.read(directory / 'delivery.json')
             if not any(event['type'] == 'delivery' for event in io.read(directory / 'events.json')):
                 io.emit(directory, 'delivery', delivery)
@@ -261,6 +322,10 @@ def worker(directory):
             io.replay(directory)
             return
         if (directory / 'execution-failure.json').exists():
+            if not module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True):
+                raise ValueError('failure reentry helper terminal unconfirmed')
+            if phone and module('wf-v2-actions').managed(envelope) and not module('wf-v2-actions').fence_confirmed(envelope, phone.policy('fence', stopped=True)):
+                raise ValueError('failure reentry remote helper terminal unconfirmed')
             reason = io.read(directory / 'execution-failure.json')['reason']
             if phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
                 cleanup = phone.cleanup()
@@ -326,6 +391,16 @@ def worker(directory):
             if not (directory / 'spawn-claimed.json').exists() and not (directory / 'agent-binding.json').exists():
                 io.write(directory / 'handoff-closed.json', {'reason': str(error)})
                 stopped = True
+        stopped = stopped and module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True)
+        if module('wf-v2-actions').managed(envelope):
+            if phone:
+                try:
+                    receipt = phone.policy('fence', stopped=stopped)
+                    stopped = stopped and module('wf-v2-actions').fence_confirmed(envelope, receipt)
+                except Exception as fencing_error:
+                    stopped = False
+                    io.write(directory / 'execution-fence-error.json', {'reason': str(fencing_error)})
+            module('wf-v2-actions').ActionStore(envelope).close(str(error), stopped=stopped)
         if stopped:
             io.write(directory / 'execution-failure.json', {'reason': str(error)})
         if stopped and phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
@@ -371,8 +446,7 @@ def main():
     elif command == 'claim-spawn':
         result = claim(Path(sys.argv[2]))
     elif command == 'replay':
-        io.replay(Path(sys.argv[2]))
-        result = {'replayed': True}
+        result = io.replay(Path(sys.argv[2]))
     elif command == 'event':
         event = json.load(sys.stdin)
         if event.get('type') not in ('activity_started', 'activity_completed'):
@@ -381,6 +455,8 @@ def main():
     else:
         raise ValueError('unknown operation')
     print(json.dumps(result, ensure_ascii=False))
+    if command == 'replay' and (not result['replayed'] or result.get('error') or result.get('rejected')):
+        sys.exit(2)
 
 
 if __name__ == '__main__':

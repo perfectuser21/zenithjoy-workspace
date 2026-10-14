@@ -152,4 +152,6 @@ codex-publish-contract-smoke.sh
 commander-codex-agent-smoke.sh
 
 commander-report-smoke.sh
+commander-method-smoke.sh
+
 company-wiki-config-smoke.sh
