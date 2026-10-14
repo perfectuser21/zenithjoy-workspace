@@ -11,7 +11,7 @@ async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},
  const intent={version:1,line_key:lineKey,run,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
    target_douyin_id:comment.douyin_id,nickname:comment.nickname,comment_body:comment.comment_body,
    profile_url:comment.profile_url,source_video:comment.source_video,source_video_url:comment.source_video_url,
-   intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
+   collected_at:comment.collected_at,intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
  const payload=JSON.stringify(intent),sha=digest(intent);
  await client.query(`INSERT INTO zenithjoy.leadgen_bridge_outbox(line_key,comment_id,lead_id,run_tag,source_run,payload,payload_sha256,qualification_status)
   VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8) ON CONFLICT(line_key,comment_id) DO NOTHING`,
@@ -41,7 +41,7 @@ function fieldsMatch(row,record){
  return Object.entries(expected).every(([k,v])=>txt(record.fields[k])===String(v));
 }
 function buildOrderFields(row,route,types){
- const p=nativeIntent(row),created=Date.parse(row.created_at);
+ const p=nativeIntent(row),created=Date.parse(p.collected_at);
  if(!Number.isFinite(created)||!types.some(t=>t.field_name==='采集时间'))throw Error('BRIDGE_FIELD_TYPES_MISSING');
  const time=types.find(t=>t.field_name==='采集时间').type===5?created:new Date(created+8*3600e3).toISOString().replace('T',' ').slice(0,16);
  return {'抖音获客-线索表':p.nickname,...buildLeadCoreFields({nick:p.nickname,dyid:p.target_douyin_id,purl:p.profile_url,comment:p.comment_body,video:p.source_video,vurl:p.source_video_url}),
