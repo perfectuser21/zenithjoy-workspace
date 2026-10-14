@@ -24,7 +24,7 @@ def exact_comment(n):
  if n.get('resource-id')!=pkg+':id/fhn' or n.get('class')!='android.widget.FrameLayout' or n.get('text','')!='': return False
  m=re.fullmatch(re.escape(v['nickname'])+r',(.+),[^,]*, · [^,]*,回复 按钮(?:,.*)?',n.get('content-desc',''))
  return bool(m and m.group(1)==v['commentBody'])
-if not any(n.get('text')==v['nickname'] for n in b) or not (any(exact_comment(n) for n in b) or any(n.get('text')==v['commentBody'] for n in b)): raise ValueError('returned_comment')
+if not any(exact_comment(n) for n in b): raise ValueError('returned_comment')
 texts=list(dict.fromkeys(s for n in p for s in [n.get('text',''),n.get('content-desc','')] if s))
 print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'returned_comment_verified':True},ensure_ascii=False))
 `],{input:JSON.stringify({profile,returned,nickname,douyinId,commentBody:commentEncoding==='xml_raw'?decodeXmlEntities(commentBody):commentBody}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});
