@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -57,6 +58,15 @@ def authorize(envelope, action):
     need(action['object'].get('task_id') == envelope['task_id'], 'action authorization task mismatch')
     account = envelope['contract'].get('resources', {}).get('account_ref')
     need(action['object'].get('account_ref') == account, 'action authorization account mismatch')
+    workflow_input = envelope['input']
+    granted_scope = workflow_input.get('authorization', {}).get('scope', {})
+    for field in ('content_ref', 'visibility', 'purpose'):
+        actual = workflow_input.get(field, workflow_input.get('privacy', granted_scope.get(field)) if field == 'visibility' else granted_scope.get(field))
+        declared = action.get('scope', {}).get(field)
+        if declared is not None:
+            need(actual == declared, 'action authorization input scope mismatch: ' + field)
+    if 'content_ref' in action['object']:
+        need(action['object']['content_ref'] == workflow_input.get('content_ref', granted_scope.get('content_ref')), 'action authorization content object mismatch')
     if action['action'] != 'discard_existing_draft':
         return
     auth = envelope['input'].get('authorization', {})
@@ -67,6 +77,11 @@ def authorize(envelope, action):
          and isinstance(auth.get('grant_ref'), str) and auth['grant_ref'].strip()
          and scope.get('visibility') == 'private' and scope.get('purpose') == 'acceptance'
          and isinstance(scope.get('content_ref'), str) and scope['content_ref'], 'draft authorization missing or outside scope')
+
+
+def fence_confirmed(envelope, receipt):
+    return (receipt.get('execution_fenced') is True and receipt.get('execution_stopped') is True
+            and all(receipt.get(k) == envelope[k] for k in ('protocol', 'task_id', 'run_id', 'owner_epoch')))
 
 
 class ActionStore:
@@ -106,7 +121,7 @@ class ActionStore:
             write(self.path, state)
 
     def action(self, key):
-        rows = [a for a in self.envelope['contract'].get('action_bindings', []) if a['key'] == key]
+        rows = [a for a in action_bindings(self.envelope) if a['key'] == key]
         need(len(rows) == 1 and self.envelope['task_id'] in key, 'action lacks one frozen task binding')
         authorize(self.envelope, rows[0])
         return rows[0]
@@ -214,14 +229,53 @@ class ActionStore:
             return skill
 
 
-def source_path(raw):
+def source_path(raw, root=None):
+    root = Path(root or Path(__file__).resolve().parent).resolve()
+    prefix = 'services/phone-adb-controller/commander/'
     path = Path(raw)
-    if not path.is_absolute():
-        root = Path(__file__).resolve().parent
+    if raw.startswith(prefix):
+        relative = raw[len(prefix):]
+        manifest = read(root / 'runtime-manifest.json')
+        need(relative in manifest['files'], 'source has no unique installed manifest binding')
+        path = root / relative
+        need(hashlib.sha256(path.read_bytes()).hexdigest() == manifest['files'][relative], 'installed source differs from manifest')
+    elif not path.is_absolute():
         path = root / path
         need(path.resolve().is_relative_to(root), 'source outside frozen runtime root')
     need(path.is_file() and path.resolve() == path, 'source missing or linked')
     return path
+
+
+def managed(envelope):
+    return bool(envelope['contract'].get('action_bindings') or envelope.get('action_bindings')
+                or any(a.get('implementations') or a.get('primary_implementation') for a in envelope.get('activity_bindings', [])))
+
+
+def derive_action_bindings(envelope):
+    bindings = json.loads(json.dumps(envelope['contract'].get('action_bindings', [])))
+    for action in bindings:
+        fields = [(action, 'key'), (action.get('object', {}), 'task_id'), (action.get('object', {}), 'content_ref'), (action.get('scope', {}), 'content_ref')]
+        for owner, name in fields:
+            raw = owner.get(name)
+            if not isinstance(raw, str):
+                continue
+            if '{{input.content_ref}}' in raw:
+                content = envelope['input'].get('content_ref')
+                need(isinstance(content, str) and content, 'action template requires current input content_ref')
+                raw = raw.replace('{{input.content_ref}}', content)
+            owner[name] = raw.replace('{{task_id}}', envelope['task_id'])
+        need('{{' not in json.dumps(action), 'undeclared action template placeholder')
+    return bindings
+
+
+def action_bindings(envelope):
+    expected = derive_action_bindings(envelope)
+    outer = envelope.get('action_bindings')
+    if outer is not None:
+        need(outer == expected, 'outer action bindings differ from frozen template')
+        return outer
+    need('{{' not in json.dumps(envelope['contract'].get('action_bindings', [])), 'templated action bindings require formal outer derivation')
+    return expected
 
 
 def install_policy(path, envelope, admit_store=False):
@@ -257,7 +311,7 @@ def check_policy(path, run, owner_epoch, command, action_key=None):
     need(time.time() < epoch(p['cleanup_deadline_at'] if cleanup else p['deadline_at']), 'controller deadline exhausted')
     need(not p.get('_closed') or (cleanup and p.get('_stopped') is True), 'controller execution quarantined')
     if action_key:
-        rows = [a for a in p['contract'].get('action_bindings', []) if a['key'] == action_key]
+        rows = [a for a in action_bindings(p) if a['key'] == action_key]
         need(len(rows) == 1, 'controller action not frozen')
         authorize(p, rows[0])
     return p
@@ -320,7 +374,11 @@ def readback_helper(envelope, key, root):
     config = action.get('readback', {})
     need(isinstance(config, dict) and isinstance(config.get('args'), list) and config.get('digest'), 'readback helper not frozen; retain unknown')
     root = Path(root).resolve()
-    path = root / config.get('path', '')
+    raw_path = config.get('path', '')
+    if raw_path.startswith('services/phone-adb-controller/commander/'):
+        path = source_path(raw_path, root if (root / 'runtime-manifest.json').exists() else Path(__file__).resolve().parent)
+    else:
+        path = root / raw_path
     need(path.is_file() and path.resolve() == path and path.is_relative_to(root), 'readback source missing or outside runtime root')
     need(hashlib.sha256(path.read_bytes()).hexdigest() == config['digest'].removeprefix('sha256:'), 'readback source digest mismatch')
     need(path.suffix == '.py', 'readback helper must use fixed Python runtime')
@@ -330,9 +388,12 @@ def readback_helper(envelope, key, root):
         budget = epoch(envelope['cleanup_deadline_at']) - time.time()
         need(budget > 0, 'readback cleanup budget exhausted')
         started = datetime.now().astimezone().isoformat()
-        result = subprocess.run([sys.executable, str(path), *args], capture_output=True, text=True, timeout=budget)
-        need(result.returncode == 0, 'independent action readback helper failed')
-        return dict(json.loads(result.stdout), _observed_started_at=started, _observed_ended_at=datetime.now().astimezone().isoformat())
+        spec = importlib.util.spec_from_file_location('probe_processes', Path(__file__).parent / 'wf-v2-processes.py')
+        processes = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(processes)
+        result = processes.Registry(envelope).run([sys.executable, str(path), *args], os.environ.copy(), budget, 'readback', source=path)
+        need(result['exit_code'] == 0, 'independent action readback helper failed')
+        return dict(json.loads(result['stdout']), _observed_started_at=started, _observed_ended_at=datetime.now().astimezone().isoformat())
     return store.readback(key, observe)
 
 

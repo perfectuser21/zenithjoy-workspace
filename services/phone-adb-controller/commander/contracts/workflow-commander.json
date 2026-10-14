@@ -46,7 +46,8 @@
       "implementation_bindings": [
         {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-method.py", "revision": "contract"},
         {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2-actions.py", "revision": "contract"},
-        {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2-gateway.py", "revision": "contract"}
+        {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2-gateway.py", "revision": "contract"},
+        {"kind": "code", "repo": "perfectuser21/zenithjoy-workspace", "path": "services/phone-adb-controller/commander/wf-v2-processes.py", "revision": "contract"}
       ],
       "steps": [
         {"key": "ready", "name": "读回整套部署及固定定义身份", "order": 1, "dod": {"mode": "hard", "readback": {"type": "evidence", "glob": "runtime-manifest.json", "expect": {"op": ">=", "value": 1}}}}

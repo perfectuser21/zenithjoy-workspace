@@ -195,7 +195,7 @@ def launch_locked(path, parent):
             (directory / 'evidence').mkdir(exist_ok=True)
             io.write(directory / 'runtime.json', dict(phase='preparing', execution_stopped=False, parent=parent))
             io.emit(directory, 'started', {'definition': envelope['definition']})
-        if envelope['contract'].get('action_bindings') and not (directory / 'delivery.json').exists():
+        if module('wf-v2-actions').managed(envelope) and not (directory / 'delivery.json').exists():
             module('wf-v2-actions').ActionStore(envelope).admit()
         if not envelope['contract'].get('resources') and not (directory / 'delivery.json').exists():
             make_request(directory, envelope, parent)
@@ -225,14 +225,16 @@ def claim(directory):
 def finalize(directory, envelope, phone):
     completion = io.read(directory / 'agent-completion.json')
     agent = io.read(directory / 'agent-delivery.json')
-    if envelope['contract'].get('action_bindings'):
-        module('wf-v2-actions').ActionStore(envelope).close('official child terminal', stopped=True)
+    if not module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True):
+        raise ValueError('helper kernel terminal unconfirmed; retain lock and cleanup false')
+    if module('wf-v2-actions').managed(envelope):
         if phone:
             phone.deadline = phone.cleanup_deadline
             phone.stage = 'cleanup'
             receipt = phone.policy('fence', stopped=True)
-            if receipt.get('execution_fenced') is not True:
-                raise ValueError('phone execution fencing unconfirmed')
+            if not module('wf-v2-actions').fence_confirmed(envelope, receipt):
+                raise ValueError('phone execution fencing/helper terminal unconfirmed')
+        module('wf-v2-actions').ActionStore(envelope).close('official child and helper terminal', stopped=True)
     cleanup_path = directory / 'cleanup.json'
     if cleanup_path.exists() and io.read(cleanup_path).get('completed') is True:
         cleanup = io.read(cleanup_path)
@@ -258,13 +260,13 @@ def finalize(directory, envelope, phone):
                     effects=agent.get('effects', []), cleanup=cleanup, status=status,
                     failure=agent.get('failure') if status == 'completed' else (agent.get('failure') or 'execution_failed'),
                     agent_delivery=agent)
-    if envelope['contract'].get('action_bindings'):
+    if module('wf-v2-actions').managed(envelope):
         records = module('wf-v2-actions').ActionStore(envelope).state()['actions']
         if phone:
             records.update(phone.policy('inspect'))
         delivery['effects'] = [{'key': a['key'], 'status': records.get(a['key'], {}).get('status', 'none'),
                                'receipt': records.get(a['key'], {'not_attempted': True})}
-                              for a in envelope['contract']['action_bindings']]
+                              for a in module('wf-v2-actions').action_bindings(envelope)]
     if len(io.canonical(delivery)) > 200000:
         original = directory / 'agent-delivery.json'
         delivery['outputs'] = {'artifact': str(original), 'sha256': __import__('hashlib').sha256(original.read_bytes()).hexdigest()}
@@ -309,6 +311,10 @@ def worker(directory):
             for key in ('preflight', 'cleanup'):
                 phone_module.shell.recover(phone, key)
         if (directory / 'delivery.json').exists():
+            if not module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True):
+                raise ValueError('delivery reentry helper terminal unconfirmed')
+            if phone and module('wf-v2-actions').managed(envelope) and not module('wf-v2-actions').fence_confirmed(envelope, phone.policy('fence', stopped=True)):
+                raise ValueError('delivery reentry remote helper terminal unconfirmed')
             delivery = io.read(directory / 'delivery.json')
             if not any(event['type'] == 'delivery' for event in io.read(directory / 'events.json')):
                 io.emit(directory, 'delivery', delivery)
@@ -316,6 +322,10 @@ def worker(directory):
             io.replay(directory)
             return
         if (directory / 'execution-failure.json').exists():
+            if not module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True):
+                raise ValueError('failure reentry helper terminal unconfirmed')
+            if phone and module('wf-v2-actions').managed(envelope) and not module('wf-v2-actions').fence_confirmed(envelope, phone.policy('fence', stopped=True)):
+                raise ValueError('failure reentry remote helper terminal unconfirmed')
             reason = io.read(directory / 'execution-failure.json')['reason']
             if phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
                 cleanup = phone.cleanup()
@@ -381,15 +391,18 @@ def worker(directory):
             if not (directory / 'spawn-claimed.json').exists() and not (directory / 'agent-binding.json').exists():
                 io.write(directory / 'handoff-closed.json', {'reason': str(error)})
                 stopped = True
-        if stopped:
-            io.write(directory / 'execution-failure.json', {'reason': str(error)})
-        if envelope['contract'].get('action_bindings'):
-            module('wf-v2-actions').ActionStore(envelope).close(str(error), stopped=stopped)
+        stopped = stopped and module('wf-v2-processes').Registry(envelope).observe(fence=True, seal_when_stopped=True)
+        if module('wf-v2-actions').managed(envelope):
             if phone:
                 try:
-                    phone.policy('fence', stopped=stopped)
+                    receipt = phone.policy('fence', stopped=stopped)
+                    stopped = stopped and module('wf-v2-actions').fence_confirmed(envelope, receipt)
                 except Exception as fencing_error:
+                    stopped = False
                     io.write(directory / 'execution-fence-error.json', {'reason': str(fencing_error)})
+            module('wf-v2-actions').ActionStore(envelope).close(str(error), stopped=stopped)
+        if stopped:
+            io.write(directory / 'execution-failure.json', {'reason': str(error)})
         if stopped and phone and (not (directory / 'cleanup.json').exists() or not io.read(directory / 'cleanup.json').get('completed')):
             try:
                 io.write(directory / 'cleanup.json', phone.cleanup())

@@ -141,3 +141,5 @@ Code失败后 `takeover` stdin `{reference_id}` 返回唯一Skill来源。资格
 旧五参数入口只用于既有历史调度兼容；历史在途运行继续按原外壳收尾。新 JSON 信封不得转换为旧参数。全部入口共用部署 admission；部署期间不启动旧外壳，也不创建历史看护角色。部署和代码变更由版本化发布流程处理。
 
 冻结 recovery.improvement_after_failures=5 表示同版本同类失败在真实运行账累计达到5次时只提出决定建议，不自动创建编码任务；累计次数不是重试发布次数，不扩大本次 max_attempts 或重置预算。
+
+helper启动意图、PID出生身份与实际终态保存在同run的helper-processes.json；官方Agent terminal不能替代OS helper终态。Darwin实际helper受固定sandbox-exec deny process-fork约束，Python使用-I -S；多进程RPA helper不在此受支持范围。该约束不可用时，仅机械允许的字面量/固定只读JSON转发子集可证明进程边界，通用helper即使nonce扫描为空也保持全停未证实与锁隔离。fence、finalize及交付/失败重入必须联合本地与设备端同身份stopped回执，原子seal后不能新启probe；未决不得释放锁。

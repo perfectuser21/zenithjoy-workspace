@@ -11,7 +11,7 @@
         "observation_id": "00000000-0000-4000-8000-000000000003",
         "workflow_id": "00000000-0000-4000-8000-000000000004",
         "workflow_definition_version_id": "00000000-0000-4000-8000-000000000008",
-        "snapshot_sha256": "ed2ebd0c846e01cd5f24925a8b6a5a2112ab51e4a19ed4ca6f8ea6a5a36a0eb4",
+        "snapshot_sha256": "2720fef3192ae46dc295131a56e507c7d055043be1b9ac61582348e9aeba1f6f",
         "runtime_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "expected_path": [
           {
@@ -47,7 +47,7 @@
     "observation_id": "00000000-0000-4000-8000-000000000003",
     "workflow_id": "00000000-0000-4000-8000-000000000004",
     "workflow_definition_version_id": "00000000-0000-4000-8000-000000000008",
-    "snapshot_sha256": "ed2ebd0c846e01cd5f24925a8b6a5a2112ab51e4a19ed4ca6f8ea6a5a36a0eb4",
+    "snapshot_sha256": "2720fef3192ae46dc295131a56e507c7d055043be1b9ac61582348e9aeba1f6f",
     "runtime_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "expected_path": [
       {
@@ -64,13 +64,13 @@
       "type": "object"
     },
     "resources": {
-      "machine": "worker",
+      "machine": "xian-m4",
       "profile": "private",
       "account_ref": "acceptance-account",
       "device_serial": "phone"
     },
     "environment": {
-      "id": "scratch:worker:private",
+      "id": "scratch:xian-m4:private",
       "fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     },
     "recovery": {
@@ -85,35 +85,47 @@
     },
     "action_bindings": [
       {
-        "key": "00000000-0000-4000-8000-000000000001:publish:content-1",
+        "key": "{{task_id}}:publish:{{input.content_ref}}",
         "reference_id": "00000000-0000-4000-8000-000000000006",
         "object": {
-          "task_id": "00000000-0000-4000-8000-000000000001",
+          "task_id": "{{task_id}}",
           "account_ref": "acceptance-account",
-          "content_ref": "content-1"
+          "content_ref": "{{input.content_ref}}"
         },
         "action": "publish",
         "scope": {
           "visibility": "private",
           "purpose": "acceptance",
-          "content_ref": "content-1"
+          "content_ref": "{{input.content_ref}}"
+        },
+        "readback": {
+          "path": "services/phone-adb-controller/commander/helpers/private-readback.py",
+          "digest": "301b3267371a55ffb85a9b2e80213795ec211b28d079122eec369e5daf2902d7",
+          "args": []
         }
       },
       {
-        "key": "00000000-0000-4000-8000-000000000001:discard:content-1",
+        "key": "{{task_id}}:discard_existing_draft:{{input.content_ref}}",
         "reference_id": "00000000-0000-4000-8000-000000000006",
         "object": {
-          "task_id": "00000000-0000-4000-8000-000000000001",
+          "task_id": "{{task_id}}",
           "account_ref": "acceptance-account"
         },
         "action": "discard_existing_draft",
         "scope": {
           "visibility": "private",
           "purpose": "acceptance",
-          "content_ref": "content-1"
+          "content_ref": "{{input.content_ref}}"
+        },
+        "readback": {
+          "path": "services/phone-adb-controller/commander/helpers/private-readback.py",
+          "digest": "301b3267371a55ffb85a9b2e80213795ec211b28d079122eec369e5daf2902d7",
+          "args": []
         }
       }
-    ]
+    ],
+    "execution_profile": "codex_agent",
+    "agent": "skill-factory"
   },
   "release": {
     "payload": {
@@ -121,7 +133,7 @@
         {
           "id": "00000000-0000-4000-8000-000000000008",
           "workflow_id": "00000000-0000-4000-8000-000000000004",
-          "payload_sha256": "ed2ebd0c846e01cd5f24925a8b6a5a2112ab51e4a19ed4ca6f8ea6a5a36a0eb4",
+          "payload_sha256": "2720fef3192ae46dc295131a56e507c7d055043be1b9ac61582348e9aeba1f6f",
           "payload": {
             "contract": {
               "key": "private_publish",
@@ -129,13 +141,13 @@
                 "type": "object"
               },
               "resources": {
-                "machine": "worker",
+                "machine": "xian-m4",
                 "profile": "private",
                 "account_ref": "acceptance-account",
                 "device_serial": "phone"
               },
               "environment": {
-                "id": "scratch:worker:private",
+                "id": "scratch:xian-m4:private",
                 "fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
               },
               "recovery": {
@@ -150,35 +162,47 @@
               },
               "action_bindings": [
                 {
-                  "key": "00000000-0000-4000-8000-000000000001:publish:content-1",
+                  "key": "{{task_id}}:publish:{{input.content_ref}}",
                   "reference_id": "00000000-0000-4000-8000-000000000006",
                   "object": {
-                    "task_id": "00000000-0000-4000-8000-000000000001",
+                    "task_id": "{{task_id}}",
                     "account_ref": "acceptance-account",
-                    "content_ref": "content-1"
+                    "content_ref": "{{input.content_ref}}"
                   },
                   "action": "publish",
                   "scope": {
                     "visibility": "private",
                     "purpose": "acceptance",
-                    "content_ref": "content-1"
+                    "content_ref": "{{input.content_ref}}"
+                  },
+                  "readback": {
+                    "path": "services/phone-adb-controller/commander/helpers/private-readback.py",
+                    "digest": "301b3267371a55ffb85a9b2e80213795ec211b28d079122eec369e5daf2902d7",
+                    "args": []
                   }
                 },
                 {
-                  "key": "00000000-0000-4000-8000-000000000001:discard:content-1",
+                  "key": "{{task_id}}:discard_existing_draft:{{input.content_ref}}",
                   "reference_id": "00000000-0000-4000-8000-000000000006",
                   "object": {
-                    "task_id": "00000000-0000-4000-8000-000000000001",
+                    "task_id": "{{task_id}}",
                     "account_ref": "acceptance-account"
                   },
                   "action": "discard_existing_draft",
                   "scope": {
                     "visibility": "private",
                     "purpose": "acceptance",
-                    "content_ref": "content-1"
+                    "content_ref": "{{input.content_ref}}"
+                  },
+                  "readback": {
+                    "path": "services/phone-adb-controller/commander/helpers/private-readback.py",
+                    "digest": "301b3267371a55ffb85a9b2e80213795ec211b28d079122eec369e5daf2902d7",
+                    "args": []
                   }
                 }
-              ]
+              ],
+              "execution_profile": "codex_agent",
+              "agent": "skill-factory"
             },
             "activities": [
               {
@@ -214,18 +238,18 @@
                   "kind": "code",
                   "id": "private-publish-code",
                   "version": "2.0.0",
-                  "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                  "digest": "8d17279e921450da8be40c76676a27a4b9706dc9a2aa0bbad018518a07efde87"
                 },
-                "path": "helpers/private-publish.py"
+                "path": "services/phone-adb-controller/commander/helpers/private-publish.py"
               },
               "skill": {
                 "implementation": {
                   "kind": "skill",
                   "id": "private-publish-skill",
                   "version": "2.0.0",
-                  "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                  "digest": "70a6a9da5bd00c82ad43fbfc77583e3c002da0defdc7eb9532a0ff95581ae74f"
                 },
-                "path": "skills/private-publish/SKILL.md",
+                "path": "services/phone-adb-controller/commander/skills/private-publish/SKILL.md",
                 "verification_ref": {
                   "task_id": "00000000-0000-4000-8000-000000000020",
                   "run_id": "wfd-00000000-0000-4000-8000-000000000021",
@@ -238,15 +262,28 @@
                 "kind": "code",
                 "id": "private-publish-code",
                 "version": "2.0.0",
-                "path": "helpers/private-publish.py",
-                "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                "path": "services/phone-adb-controller/commander/helpers/private-publish.py",
+                "digest": "sha256:8d17279e921450da8be40c76676a27a4b9706dc9a2aa0bbad018518a07efde87",
+                "status": "verified",
+                "validation_scope": "reference_only",
+                "repo": "perfectuser21/zenithjoy-workspace",
+                "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "scope": "activity",
+                "content_sha256": "8d17279e921450da8be40c76676a27a4b9706dc9a2aa0bbad018518a07efde87"
               },
               {
                 "kind": "skill",
                 "id": "private-publish-skill",
                 "version": "2.0.0",
-                "path": "skills/private-publish/SKILL.md",
-                "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                "path": "services/phone-adb-controller/commander/skills/private-publish/SKILL.md",
+                "digest": "sha256:70a6a9da5bd00c82ad43fbfc77583e3c002da0defdc7eb9532a0ff95581ae74f",
+                "status": "verified",
+                "validation_scope": "reference_only",
+                "repo": "perfectuser21/zenithjoy-workspace",
+                "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "name": "private-publish-skill",
+                "scope": "activity",
+                "content_sha256": "70a6a9da5bd00c82ad43fbfc77583e3c002da0defdc7eb9532a0ff95581ae74f"
               }
             ]
           }
@@ -261,18 +298,18 @@
         "kind": "code",
         "id": "private-publish-code",
         "version": "2.0.0",
-        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        "digest": "8d17279e921450da8be40c76676a27a4b9706dc9a2aa0bbad018518a07efde87"
       },
-      "path": "helpers/private-publish.py"
+      "path": "services/phone-adb-controller/commander/helpers/private-publish.py"
     },
     "skill": {
       "implementation": {
         "kind": "skill",
         "id": "private-publish-skill",
         "version": "2.0.0",
-        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        "digest": "70a6a9da5bd00c82ad43fbfc77583e3c002da0defdc7eb9532a0ff95581ae74f"
       },
-      "path": "skills/private-publish/SKILL.md",
+      "path": "services/phone-adb-controller/commander/skills/private-publish/SKILL.md",
       "verification_ref": {
         "task_id": "00000000-0000-4000-8000-000000000020",
         "run_id": "wfd-00000000-0000-4000-8000-000000000021",
@@ -285,11 +322,11 @@
       "kind": "skill",
       "id": "private-publish-skill",
       "version": "2.0.0",
-      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      "digest": "70a6a9da5bd00c82ad43fbfc77583e3c002da0defdc7eb9532a0ff95581ae74f"
     },
     "execution_role": "fallback",
     "environment": {
-      "id": "scratch:worker:private",
+      "id": "scratch:xian-m4:private",
       "fingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     },
     "observed": {
@@ -305,5 +342,39 @@
       "private_work_count_after": 1,
       "publish_attempts": 1
     }
+  },
+  "source_files": {
+    "services/phone-adb-controller/commander/helpers/private-publish.py": "print(\"fixture Code executed; business result requires readback\")\n",
+    "services/phone-adb-controller/commander/skills/private-publish/SKILL.md": "---\nname: private-publish-skill\nversion: 2.0.0\n---\n# 私密验收技能\n只按冻结动作执行并保留独立读回证据。\n",
+    "services/phone-adb-controller/commander/helpers/private-readback.py": "import json\nprint(json.dumps({'status': 'none', 'receipt': {'source': 'fixture:private-work-count', 'private_work_count': 0}, 'activity_facts': [{'reference_id': '00000000-0000-4000-8000-000000000006', 'outcome': 'fail', 'observed': {'value': 0}}]}))\n"
+  },
+  "skill_first": {
+    "primary_implementation": {
+      "implementation": {
+        "kind": "skill",
+        "id": "private-publish-skill",
+        "version": "2.0.0",
+        "digest": "70a6a9da5bd00c82ad43fbfc77583e3c002da0defdc7eb9532a0ff95581ae74f"
+      },
+      "path": "services/phone-adb-controller/commander/skills/private-publish/SKILL.md",
+      "business_requirement_sha256": "ae8c75619cb1ed7dba177d1b72e98740522f1e460ffec20ae037272a6dea70b6"
+    },
+    "execution_role": "primary"
+  },
+  "probe_readback": {
+    "status": "none",
+    "receipt": {
+      "source": "fixture:private-work-count",
+      "private_work_count": 0
+    },
+    "activity_facts": [
+      {
+        "reference_id": "00000000-0000-4000-8000-000000000006",
+        "outcome": "fail",
+        "observed": {
+          "value": 0
+        }
+      }
+    ]
   }
 }

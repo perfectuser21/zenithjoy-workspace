@@ -18,7 +18,7 @@ PROTOCOL = 'commander-v2'
 HERE = Path(__file__).resolve().parent
 FILES = ['wf-launch.sh', 'wf-status.sh', 'wf-agent-run.sh', 'wf-agent-lib.py',
          'wf-agent-handoff.py', 'wf-v2.py', 'wf-v2-io.py', 'wf-v2-phone.py', 'wf-v2-shell.py',
-         'wf-report.py', 'wf-method.py', 'wf-v2-actions.py', 'wf-v2-gateway.py', 'workflow-contracts.json', 'AGENTS.md']
+         'wf-report.py', 'wf-method.py', 'wf-v2-actions.py', 'wf-v2-gateway.py', 'wf-v2-processes.py', 'workflow-contracts.json', 'AGENTS.md']
 
 
 def canonical(value):

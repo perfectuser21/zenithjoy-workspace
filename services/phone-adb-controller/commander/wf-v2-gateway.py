@@ -4,8 +4,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import signal
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -31,6 +29,12 @@ def bound(path):
     actions.need(path == expected and path.resolve() == path, 'gateway requires actual persisted run envelope')
     actions.need(io.read(path.parent / 'input.json') == envelope['input']
                  and io.read(path.parent / 'contract.json') == envelope['contract'], 'gateway frozen input/contract drift')
+    prefix = 'services/phone-adb-controller/commander/'
+    for activity in envelope.get('activity_bindings', []):
+        declared = [activity.get('primary_implementation')]
+        declared += [activity.get('implementations', {}).get(k) for k in ('code', 'skill')]
+        for binding in filter(None, declared):
+            actions.need(isinstance(binding.get('path'), str) and binding['path'].startswith(prefix), 'gateway requires frozen repo-relative source; absolute/global source forbidden')
     io.ready(envelope)
     return envelope
 
@@ -48,12 +52,15 @@ def verification(ref, envelope, reference):
                  and runtime.get('rerouted') is False, 'verification transport not formally confirmed')
     result = task.get('result', {}).get('workflow_verification', {})
     actions.need(result.get('task_id') == task.get('parent_task_id') and result.get('run_id') == ref['run_id'] and result.get('definition_sha256') == ref['definition_sha256']
-                 and result.get('assertions') and all(a.get('pass') is True for a in result['assertions']), 'verification identity or assertions mismatch')
+                 and isinstance(result.get('assertions'), list) and result['assertions'] and all(a.get('pass') is True for a in result['assertions'])
+                 and any(a.get('name') == 'cleanup' and a.get('pass') is True for a in result['assertions'])
+                 and isinstance(result.get('evidence'), list) and result['evidence'], 'verification identity or assertions mismatch')
     source_response = io.brain_read('/api/brain/tasks/' + task['parent_task_id'])
     source = source_response.get('task', source_response)
     control = source.get('result', {}).get('workflow_control', {})
     frozen = control.get('envelope', {})
     actions.need(source.get('status') in ('completed', 'completed_no_pr') and control.get('verify_task_id') == ref['task_id']
+                 and isinstance(result.get('attempt'), int) and result['attempt'] == frozen.get('attempt')
                  and frozen.get('run_id') == ref['run_id'] and frozen.get('definition', {}).get('snapshot_sha256') == ref['definition_sha256']
                  and frozen.get('contract', {}).get('environment') == envelope['contract']['environment'], 'verification source run/environment mismatch')
     expected = actions.ActionStore(envelope).binding(reference)['implementations']
@@ -73,19 +80,15 @@ def invoke(path, args, envelope):
     env = {k: v for k, v in os.environ.items() if k not in ('PYTHONPATH', 'NODE_PATH', 'BASH_ENV', 'ENV')}
     env.update(WF_COMMANDER_ENVELOPE=str(Path.home().resolve() / 'wf-agent-runs' / envelope['run_id'] / 'envelope.json'),
                WF_COMMANDER_OWNER_EPOCH=str(envelope['owner_epoch']), PYTHONDONTWRITEBYTECODE='1')
-    child = subprocess.Popen([interpreter, str(path), *args], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
-    try:
-        stdout, stderr = child.communicate(timeout=max(0.01, actions.epoch(envelope['deadline_at']) - time.time()))
-    except subprocess.TimeoutExpired:
-        os.killpg(child.pid, signal.SIGKILL)
-        stdout, stderr = child.communicate()
-        raise ValueError('frozen code deadline exhausted; result unknown')
-    return {'exit_code': child.returncode, 'stdout': stdout.decode(), 'stderr': stderr.decode()}
+    return module('wf-v2-processes').Registry(envelope).run([interpreter, str(path), *args], env,
+        max(0.01, actions.epoch(envelope['deadline_at']) - time.time()), 'primary', source=path)
 
 
 def fence(envelope, incoming):
     actions.need(all(incoming.get(k) == envelope[k] for k in ('task_id', 'run_id', 'owner_epoch')), 'fence identity mismatch')
     store = actions.ActionStore(envelope)
+    registry = module('wf-v2-processes').Registry(envelope)
+    helpers_stopped = registry.observe(fence=True, stop=incoming.get('stop_helpers', True) is True, seal_when_stopped=True)
     store.close(incoming.get('reason', 'execution authority revoked'), stopped=False)
     stopped = False
     directory = Path.home().resolve() / 'wf-agent-runs' / envelope['run_id']
@@ -93,6 +96,7 @@ def fence(envelope, incoming):
     if binding_path.exists() and terminal_path.exists():
         terminal, binding = io.read(terminal_path), io.read(binding_path)
         stopped = terminal.get('runId') == binding['child_run_id'] and terminal.get('endedAt') is not None
+    stopped = stopped and helpers_stopped
     fenced = True
     resource = envelope['contract'].get('resources', {})
     if resource:
@@ -102,9 +106,12 @@ def fence(envelope, incoming):
         try:
             result = phone.policy('fence', stopped=stopped)
             fenced = result.get('execution_fenced') is True and all(result.get(k) == envelope[k] for k in ('task_id', 'run_id', 'owner_epoch'))
+            stopped = stopped and fenced and result.get('execution_stopped') is True
         except Exception as error:
             fenced = False
+            stopped = False
             io.write(directory / 'execution-fence-error.json', {'reason': str(error)})
+    stopped = stopped and registry.observe(fence=True, seal_when_stopped=True)
     if stopped:
         store.close(incoming.get('reason', 'official terminal confirmed'), stopped=True)
     result = {k: envelope[k] for k in ('protocol', 'task_id', 'run_id', 'owner_epoch')}
@@ -200,16 +207,23 @@ def emit_readback(envelope, key, result):
     store = actions.ActionStore(envelope)
     action = store.action(key)
     events = []
+    previous = store.executions()
+    takeovers = store.state().get('takeovers', {})
+    identities = [(x['reference_id'], x.get('step_id')) for x in result.get('activity_facts', [])]
+    actions.need(len(identities) == len(set(identities)), 'readback duplicates frozen observation path')
     for observed in result.get('activity_facts', []):
         reference = observed['reference_id']
         actions.need(reference == action['reference_id'] and isinstance(observed.get('observed'), dict), 'readback fact outside frozen action')
         activity = store.binding(reference)
         primary = activity.get('primary_implementation') or activity.get('implementations', {}).get('code')
-        failed = any(x['run_id'] == envelope['run_id'] and x['reference_id'] == reference and x['implementation']['kind'] == 'code' and x['outcome'] == 'fail' for x in store.executions())
+        failed = any(x['run_id'] == envelope['run_id'] and x['reference_id'] == reference and x['implementation']['kind'] == 'code' and x['outcome'] == 'fail' for x in previous)
         if failed:
-            takeover = store.state().get('takeovers', {}).get(reference)
-            actions.need(takeover, 'Code failure retained; readback alone cannot authorize rescue or turn Code PASS')
-            implementation, role = takeover['implementation'], 'rescue'
+            takeover = takeovers.get(reference)
+            if takeover:
+                implementation, role = takeover['implementation'], 'rescue'
+            else:
+                actions.need(observed['outcome'] != 'pass', 'Code failure retained; readback alone cannot turn Code PASS')
+                implementation, role = primary['implementation'], 'primary'
         else:
             actions.need(primary, 'readback primary identity missing')
             implementation, role = primary['implementation'], 'primary'

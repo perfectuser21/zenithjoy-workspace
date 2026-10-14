@@ -29,3 +29,5 @@ deploy.sh 同步到 MMV `~/openclaw-root/workspaces-root/clawd-work-commander/AG
 网关与运行端在 MMV（`administrator@100.71.151.105`）；路径 `~/.openclaw/commander/`。
 外部手机跑场：XIAN-M4 `jinnuoshengyuan@100.86.57.69`，XIAN-M1 `xx-macmini@100.88.166.55`。
 Brain 在 us-vps，只负责决策、调度与账本；重推理、媒体和设备执行不下放到 Brain 主机。
+
+- helper全停必须有同run进程账和可证明边界；Darwin固定内核deny process-fork，缺此能力的通用helper不以空nonce census认全停。设备端回执与本端终态联合、原子seal后拒新probe；Agent terminal或旧failure marker不能触发未知helper的清理放锁。

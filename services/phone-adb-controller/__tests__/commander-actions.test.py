@@ -422,7 +422,7 @@ class ActionsTest(unittest.TestCase):
         adb = self.home / 'adb'
         log = self.home / 'adb.log'
         work = self.home / 'external-work.json'
-        adb.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_ADB_LOG"\ncase "$*" in *get-state*) echo device;; *"getprop ro.product.model"*) echo MODEL;; *"dumpsys window"*) echo "mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}";; *"shell input tap"*) printf \'{"work_id":"work-1","privacy":"private"}\' > "$TEST_WORK";; *" pull "*) for last; do :; done; printf PNGDATA > "$last";; esac\nexit 0\n')
+        adb.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_ADB_LOG"\ncase "$*" in *get-state*) echo device;; *"getprop ro.product.model"*) echo MODEL;; *"dumpsys window"*) echo "mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}";; *"shell input tap"*) printf \'{"status":"committed","receipt":{"work_id":"work-1","privacy":"private"}}\' > "$TEST_WORK";; *" pull "*) for last; do :; done; printf PNGDATA > "$last";; esac\nexit 0\n')
         adb.chmod(0o755)
         sips = self.home / 'sips'
         sips.write_text('#!/bin/sh\nfor last; do :; done\nprintf jpg > "$last"\n')
@@ -433,8 +433,8 @@ class ActionsTest(unittest.TestCase):
         (lock / 'owner').write_text('run-1\n')
         (lock / 'acquired_at').write_text(str(int(time.time())))
         policy = tmp / 'locks/SER1.commander.json'
-        helper = HERE / '__tests__/fixtures/commander-work-readback.py'
-        self.envelope['contract']['action_bindings'][0]['readback'] = {'path': '__tests__/fixtures/commander-work-readback.py', 'digest': hashlib.sha256(helper.read_bytes()).hexdigest(), 'args': [str(work)]}
+        helper = HERE / '__tests__/fixtures/commander-readonly-json-probe.py'
+        self.envelope['contract']['action_bindings'][0]['readback'] = {'path': '__tests__/fixtures/commander-readonly-json-probe.py', 'digest': hashlib.sha256(helper.read_bytes()).hexdigest(), 'args': [str(work)]}
         actions.install_policy(policy, self.envelope)
         env = dict(os.environ, HOME=str(self.home), DOUYIN_PHONE_REGISTRY=str(registry), DOUYIN_PHONE_TMP_ROOT=str(tmp),
                    DOUYIN_ADB_BIN=str(adb), DOUYIN_PYTHON_BIN=sys.executable, TEST_ADB_LOG=str(log),

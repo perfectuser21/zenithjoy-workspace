@@ -2,6 +2,7 @@
 """手机共享外壳：沿用控制器精确owner锁、账号核验、桌面原证据与锁读回。"""
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import re
 import shlex
@@ -19,6 +20,8 @@ def load(name):
 io = load('wf-v2-io')
 lib = load('wf-agent-lib')
 shell = load('wf-v2-shell')
+
+actions = load('wf-v2-actions')
 
 
 class Phone:
@@ -95,7 +98,7 @@ class Phone:
             intent = self.directory / 'phone-action-intent.json'
             if not intent.exists():
                 io.write(intent, dict(self.identity(), args=list(args), at=shell.now()))
-        if self.envelope['contract'].get('action_bindings'):
+        if actions.managed(self.envelope):
             command_env = 'WF_COMMANDER_OWNER_EPOCH=' + str(self.envelope['owner_epoch']) + ' '
         else:
             command_env = ''
@@ -149,7 +152,7 @@ class Phone:
             raise ValueError('phone busy')
         if self.owner() != self.run:
             raise ValueError('phone lock readback mismatch')
-        if self.envelope['contract'].get('action_bindings'):
+        if actions.managed(self.envelope):
             policy = self.policy('bind')
             if any(policy.get(k) != self.envelope[k] for k in ('task_id', 'run_id', 'owner_epoch')):
                 raise ValueError('phone Commander policy readback mismatch')

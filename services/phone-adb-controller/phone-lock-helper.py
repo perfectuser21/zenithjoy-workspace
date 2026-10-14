@@ -34,10 +34,15 @@ def commander_policy():
         policy = actions.read(path)
         if any(policy.get(k) != incoming.get(k) for k in ('task_id', 'run_id', 'owner_epoch')):
             raise ValueError('Commander fence identity mismatch')
-        actions.close_policy(path, stopped=incoming.get('execution_stopped') is True)
+        process_spec = importlib.util.spec_from_file_location('remote_helper_processes', source.parent / 'wf-v2-processes.py')
+        processes = importlib.util.module_from_spec(process_spec)
+        process_spec.loader.exec_module(processes)
+        helpers_stopped = processes.Registry(policy).observe(fence=True, stop=True, seal_when_stopped=True)
+        stopped = incoming.get('execution_stopped') is True and helpers_stopped
+        actions.close_policy(path, stopped=stopped)
         store = actions.ActionStore(policy)
         if store.path.exists():
-            store.close('formal Commander fencing', stopped=incoming.get('execution_stopped') is True)
+            store.close('formal Commander fencing', stopped=stopped)
     elif mode == 'readback':
         policy = actions.read(path)
         if any(policy.get(k) != incoming.get(k) for k in ('task_id', 'run_id', 'owner_epoch')):
@@ -54,7 +59,8 @@ def commander_policy():
     else:
         raise ValueError('unknown Commander policy command')
     print(json.dumps({'protocol': 'commander-v2', 'task_id': incoming['task_id'], 'run_id': owner,
-                      'owner_epoch': incoming['owner_epoch'], 'execution_fenced': mode == 'fence'}))
+                      'owner_epoch': incoming['owner_epoch'], 'execution_fenced': mode == 'fence',
+                      'execution_stopped': stopped if mode == 'fence' else False}))
 
 
 def record_claim():

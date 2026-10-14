@@ -89,7 +89,7 @@ deploy_commander() {
   echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
   ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
   # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-v2-shell.py wf-report.py wf-method.py wf-v2-actions.py wf-v2-gateway.py; do
+  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-v2-shell.py wf-report.py wf-method.py wf-v2-actions.py wf-v2-gateway.py wf-v2-processes.py; do
     if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
     case "$f" in
       *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
@@ -248,7 +248,7 @@ MMV_PROBE_FILES=(
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
   phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
-  bypass-report.sh commander/wf-v2-actions.py
+  bypass-report.sh commander/wf-v2-actions.py commander/wf-v2-processes.py
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
