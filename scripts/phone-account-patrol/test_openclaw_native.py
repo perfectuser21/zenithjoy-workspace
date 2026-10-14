@@ -242,6 +242,20 @@ class ContinuousRecoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.cycle()
         self.assertEqual(self.posts,[])
 
+    def test_formal_demand_parent_cannot_hide_behind_foreign_origin_pointers(self):
+        self.cycle();demand = self.demands()[0]
+        demand['payload'].update(origin_task_id=REVIEW, origin_batch_task_id=REVIEW, phone_source_revision='f'*40)
+        self.posts.clear()
+        with self.assertRaises(ValueError):native.recovery_partition(list(self.tasks.values()), self.call('recurring-tasks')[0], self.deployment)
+        self.assertEqual(self.posts,[])
+
+    def test_formal_attempt_cannot_hide_as_attention_record(self):
+        self.cycle();attempt = self.attempts()[0]
+        attempt['payload'].update(recovery_attention=True, phone_source_revision='f'*40)
+        self.posts.clear()
+        with self.assertRaises(ValueError):self.cycle()
+        self.assertEqual(self.posts,[])
+
     def test_unversioned_current_wrapper_cannot_self_attest_with_task_hash(self):
         self.cycle();demand = self.demands()[0];attempt = self.attempts()[0];attempt['status'] = 'in_progress'
         loose = self.state / 'unversioned' / 'openclaw_native.py';loose.parent.mkdir();loose.write_text('unversioned controller')
