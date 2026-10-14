@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,appendFileSync,chmodSync,existsSync,renameSync,readdirSync,lstatSync} from 'node:fs';
+import {readFileSync,writeFileSync,appendFileSync,chmodSync,existsSync,renameSync,readdirSync,lstatSync,realpathSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
@@ -73,11 +73,11 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
     if(f[0]==='RECIPIENT_UNKNOWN'){row.recipientEvidence={version:1,status:'unknown',reason:'native_profile_missing'};continue;}
     if(!recipientScope?.runDir||f.length!==6)throw Error('recipient缺本run读取scope');
     const st=lstatSync(f[4]);
-    if(!st.isFile()||st.isSymbolicLink()||(st.mode&0o777)!==0o600||st.size>10*1024*1024||resolve(join(f[4],'..'))!==resolve(recipientScope.runDir))throw Error('recipient私有工件越界');
+    if(!st.isFile()||st.isSymbolicLink()||(st.mode&0o777)!==0o600||st.size>10*1024*1024||realpathSync(resolve(join(f[4],'..')))!==realpathSync(recipientScope.runDir))throw Error('recipient私有工件越界');
     const bytes=readFileSync(f[4]);if(createHash('sha256').update(bytes).digest('hex')!==f[5])throw Error('recipient私有工件hash不符');
     const evidence=JSON.parse(bytes),scope={line_key:recipientScope.lineKey,run:recipientScope.run,douyin_id:row.douyinId,nickname:row.nickname,comment_body:row.commentBody,comment_body_sha256:bodyHash,video_url:row.sourceVideoUrl};
     recipientProof.validateEvidence(evidence,scope);
-    if(evidence.scope.profile!==recipientScope.profile||evidence.scope.video_id!==videoId)throw Error('recipient采集profile或VID错位');
+    if(evidence.scope.profile!==recipientScope.profile||evidence.scope.video_id!==videoId||evidence.scope.source_run!==(recipientScope.sourceRun||null))throw Error('recipient采集profile或VID错位');
     row.recipientEvidence=evidence;
   }
   if(Number(marker[3])!==comments.length||marker[2]==='no_comments'&&comments.length)throw Error('采集完成数量与评论证据不符');
@@ -341,7 +341,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         collectionTiming();
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
         appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),result.stdout);
-        const rows=parseCollection(result,v.video_id,{allowPartial:true,recipientScope:{runDir:env.WFR_RUN_DIR,lineKey:lineRoutes.routeOf(line).key,run,profile}});
+        const rows=parseCollection(result,v.video_id,{allowPartial:true,recipientScope:{runDir:env.WFR_RUN_DIR,lineKey:lineRoutes.routeOf(line).key,run,sourceRun:env.LEADGEN_SOURCE_RUN,profile}});
         const telemetry=result.stdout.split('\n').find(s=>s.startsWith(`RESCAN\t${v.video_id}\t`))?.split('\t')[2];
         if(!/^\d+$/.test(telemetry||''))throw Error('缺实际重扫计数，不能宣称采集通过');
         const avatarLines=result.stdout.split('\n').filter(s=>s.startsWith(`AVATAR_RECOVERY\t${v.video_id}\t`));
