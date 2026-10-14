@@ -312,6 +312,17 @@ class ContinuousRecoveryTests(unittest.TestCase):
             self.assertNotEqual(value['failure']['code'],'adb_unreachable')
             self.setUp()
 
+    def test_legacy_probe_timeout_preserves_and_redacts_partial_bytes_logs(self):
+        error = subprocess.TimeoutExpired(['ssh'],60,output=b'partial device response password="fake secret"',stderr=b'partial SSH stderr')
+        value, code, commands = self.legacy_execution(error)
+        failure=value['failure']
+        self.assertEqual(len(commands),1);self.assertNotEqual(code,0)
+        self.assertEqual(failure['code'],'preflight_timeout');self.assertEqual(failure['timeout_sec'],60)
+        self.assertIsNone(failure['exit_code']);self.assertTrue(failure['evidence'])
+        self.assertIn('partial device response',failure.get('stdout',''))
+        self.assertIn('partial SSH stderr',failure.get('stderr',''))
+        self.assertNotIn('fake secret',json.dumps(value))
+
     def test_legacy_probe_success_rechecks_cancellation_or_enabled_before_old_runner(self):
         for change, expected in [(lambda demand:demand.update(status='cancelled'),'stopped'),
                                  (lambda demand:setattr(self,'serial_enabled',False),'stopped'),
