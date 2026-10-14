@@ -10,6 +10,7 @@ import unittest
 import os
 import subprocess
 import sys
+import shutil
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -144,13 +145,41 @@ class ActionsTest(unittest.TestCase):
         sample = json.loads((HERE / '__tests__/fixtures/commander-contract-v1.json').read_text())
         self.assertEqual(sample['sample_version'], 1)
         envelope = {'task_id': sample['task']['id'], 'contract': sample['contract'], 'input': sample['task']['payload']['workflow_input']}
-        discard = next(a for a in envelope['contract']['action_bindings'] if a['action'] == 'discard_existing_draft')
+        envelope['action_bindings'] = actions.derive_action_bindings(envelope)
+        discard = next(a for a in envelope['action_bindings'] if a['action'] == 'discard_existing_draft')
         actions.authorize(envelope, discard)
-        self.assertEqual(sample['implementations']['skill']['verification_ref']['definition_sha256'], 'a' * 64)
+        self.assertTrue(sample['implementations']['skill']['verification_ref']['definition_sha256'])
         self.assertEqual(sample['evidence']['observed'], {'value': 1})
         envelope['input']['authorization']['object']['account_ref'] = 'wrong-account'
         with self.assertRaisesRegex(ValueError, 'authorization'):
             actions.authorize(envelope, discard)
+
+    def test_shared_source_files_install_and_consume_without_path_rewrite(self):
+        sample = json.loads((HERE / '__tests__/fixtures/commander-contract-v1.json').read_text())
+        runtime = self.home / 'shared-installed'
+        runtime.mkdir()
+        prefix = 'services/phone-adb-controller/commander/'
+        files = {}
+        for raw, content in sample['source_files'].items():
+            self.assertTrue(raw.startswith(prefix))
+            relative = raw[len(prefix):]
+            path = runtime / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            files[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+        (runtime / 'runtime-manifest.json').write_text(json.dumps({'files': files}))
+        for binding in [sample['implementations']['code'], sample['implementations']['skill'], sample['skill_first']['primary_implementation']]:
+            actual = actions.source_path(binding['path'], runtime)
+            self.assertEqual(hashlib.sha256(actual.read_bytes()).hexdigest(), binding['implementation']['digest'])
+        envelope = {'task_id': sample['task']['id'], 'input': sample['task']['payload']['workflow_input'], 'contract': sample['contract']}
+        expected = actions.derive_action_bindings(envelope)
+        envelope['action_bindings'] = expected
+        self.assertEqual(actions.action_bindings(envelope), expected)
+        self.assertIn(envelope['task_id'], expected[0]['key'])
+        self.assertIn('{{task_id}}', envelope['contract']['action_bindings'][0]['key'])
+        envelope['action_bindings'][0]['scope']['visibility'] = 'public'
+        with self.assertRaisesRegex(ValueError, 'frozen template'):
+            actions.action_bindings(envelope)
 
     def test_probe_preserves_activity_and_step_failure_in_one_observation(self):
         spec = importlib.util.spec_from_file_location('gateway_multi', HERE / 'commander/wf-v2-gateway.py')
@@ -182,6 +211,73 @@ class ActionsTest(unittest.TestCase):
         self.assertEqual(fact['implementation']['digest'], primary['implementation']['digest'])
         with self.assertRaises(ValueError):
             store.record_execution('publish', 'code', 'pass', {'value': 1})
+
+    def test_no_phone_no_actions_actual_launch_and_terminal_close_execution_ledger(self):
+        runtime = self.home / 'runtime'
+        shutil.copytree(HERE / 'commander', runtime)
+        spec = importlib.util.spec_from_file_location('readonly_runtime', runtime / 'wf-v2.py')
+        run = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(run)
+        env = copy.deepcopy(self.envelope)
+        env.update(task_id='1234abcd-0000-4000-8000-000000000001', run_id='readonly-run')
+        env['contract'].update(resources={}, action_bindings=[], execution_profile='codex_agent')
+        env['deadline_at'] = datetime.fromtimestamp(time.time() + 60, timezone.utc).isoformat()
+        env['cleanup_deadline_at'] = datetime.fromtimestamp(time.time() + 90, timezone.utc).isoformat()
+        env['definition'].update(release_id='readonly-release', expected_path=[{'reference_id': 'publish'}])
+        env['input_sha256'] = hashlib.sha256(json.dumps(env['input'], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        path = self.home / 'envelope.json'
+        path.write_text(json.dumps(env))
+        manifest = run.io.manifest(runtime, {'readonly-release': {'workflow_key': 'readonly', 'snapshot_sha256': env['definition']['snapshot_sha256']}})
+        env['definition']['runtime_snapshot_sha256'] = manifest['runtime_snapshot_sha256']
+        env['workflow_key'] = 'readonly'
+        path.write_text(json.dumps(env))
+        with patch.dict(os.environ, HOME=str(self.home), WF_V2_NO_WORKER='1'):
+            run.launch(path, 'agent:work-commander:readonly-fixture')
+            store = actions.ActionStore(env)
+            self.assertTrue(store.path.is_file(), 'read-only primary implementation has no execution ledger')
+            directory = self.home / 'wf-agent-runs/readonly-run'
+            gateway = run.module('wf-v2-gateway')
+            outcome = gateway.execute('primary', env, {'reference_id': 'publish'})
+            self.assertNotEqual(outcome['result']['exit_code'], 0)
+            (directory / 'agent-completion.json').write_text(json.dumps({'status': 'ok'}))
+            (directory / 'agent-delivery.json').write_text(json.dumps({'status': 'failed', 'outputs': {}, 'evidence': [outcome['evidence']['artifact']], 'effects': [], 'failure': 'actual fixture Code failure'}))
+            run.finalize(directory, env, None)
+            self.assertTrue(store.state()['closed'])
+            self.assertTrue(store.state()['stopped'])
+            skill_env = copy.deepcopy(env)
+            skill_env.update(task_id='1234abcd-0000-4000-8000-000000000002', run_id='readonly-skill-run')
+            slot = skill_env['activity_bindings'][0]
+            slot['primary_implementation'] = dict(slot['implementations']['skill'], business_requirement_sha256=slot['implementations']['business_requirement_sha256'])
+            slot.pop('implementations')
+            path.write_text(json.dumps(skill_env))
+            run.launch(path, 'agent:work-commander:readonly-skill-fixture')
+            context = gateway.execute('primary', skill_env, {'reference_id': 'publish'})
+            started = datetime.now(timezone.utc).isoformat()
+            actual = Path(context['skill']['path']).read_text()
+            ended = datetime.now(timezone.utc).isoformat()
+            gateway.execute('record', skill_env, {'reference_id': 'publish', 'kind': 'skill', 'outcome': 'pass', 'observed': {'value': len(actual)}, 'started_at': started, 'ended_at': ended})
+            skill_dir = self.home / 'wf-agent-runs/readonly-skill-run'
+            artifact = skill_dir / 'evidence/actual-skill-read.txt'
+            artifact.write_text(actual)
+            (skill_dir / 'agent-completion.json').write_text(json.dumps({'status': 'ok'}))
+            (skill_dir / 'agent-delivery.json').write_text(json.dumps({'status': 'completed', 'outputs': {'text_path': str(artifact)}, 'evidence': [str(artifact)], 'effects': [], 'failure': None}))
+            run.finalize(skill_dir, skill_env, None)
+            self.assertTrue(actions.ActionStore(skill_env).state()['stopped'])
+            self.assertEqual(json.loads((skill_dir / 'events.json').read_text())[1]['data']['evidence']['execution_role'], 'primary')
+
+    def test_repo_relative_source_resolves_one_manifest_file_and_rejects_drift(self):
+        runtime = self.home / 'installed'
+        runtime.mkdir()
+        path = runtime / 'wf-report.py'
+        path.write_text('print("actual installed fixture")\n')
+        (runtime / 'runtime-manifest.json').write_text(json.dumps({'files': {'wf-report.py': hashlib.sha256(path.read_bytes()).hexdigest()}}))
+        raw = 'services/phone-adb-controller/commander/wf-report.py'
+        self.assertEqual(actions.source_path(raw, runtime), path)
+        with self.assertRaisesRegex(ValueError, 'binding'):
+            actions.source_path('services/phone-adb-controller/commander/wrong/wf-report.py', runtime)
+        path.write_text('print("drift")\n')
+        with self.assertRaisesRegex(ValueError, 'manifest'):
+            actions.source_path(raw, runtime)
 
     def test_policy_recovery_cannot_change_frozen_goal_input_or_total_budget(self):
         policy = self.home / 'policy.json'
@@ -269,11 +365,18 @@ class ActionsTest(unittest.TestCase):
                      'payload': {'verification_transport': 'openclaw-agent-v1', 'run_id': 'wfv-proof'},
                      'result': {'receipt': {'verification_runtime': {'provider': 'openai', 'model': 'gpt-6.1-sol', 'logical_run_id': 'wfv-proof', 'official_run_id': 'official-proof', 'rerouted': False}},
                                 'workflow_verification': {'task_id': 'skill-business', 'run_id': 'verify-run', 'definition_sha256': 'f' * 64,
-                                                          'verdict': 'PASS', 'execution_role': 'primary', 'implementation': pair['skill']['implementation'],
-                                                          'environment': self.envelope['contract']['environment'], 'assertions': [{'name': 'actual_skill_result', 'pass': True}], 'evidence': ['source-original']}}}
+                                                          'attempt': 1, 'verdict': 'PASS', 'execution_role': 'primary', 'implementation': pair['skill']['implementation'],
+                                                          'environment': self.envelope['contract']['environment'], 'assertions': [{'name': 'actual_skill_result', 'pass': True}, {'name': 'cleanup', 'pass': True}], 'evidence': ['source-original']}}}
             source = {'id': 'skill-business', 'status': 'completed', 'result': {'workflow_control': {'verify_task_id': 'verify-task', 'envelope': {
-                'run_id': 'verify-run', 'definition': {'snapshot_sha256': 'f' * 64}, 'contract': {'environment': self.envelope['contract']['environment']},
+                'run_id': 'verify-run', 'attempt': 1, 'definition': {'snapshot_sha256': 'f' * 64}, 'contract': {'environment': self.envelope['contract']['environment']},
                 'activity_bindings': [{'primary_implementation': dict(pair['skill'], business_requirement_sha256=pair['business_requirement_sha256'])}]}}}}
+            for mutation in ('cleanup', 'attempt'):
+                invalid = copy.deepcopy(proof)
+                v = invalid['result']['workflow_verification']
+                v['assertions'] = v['assertions'][:1] if mutation == 'cleanup' else v['assertions']
+                v['attempt'] = 2 if mutation == 'attempt' else 1
+                with patch.object(gateway.io, 'brain_read', side_effect=lambda path: invalid if path.endswith('verify-task') else source), self.assertRaises(ValueError):
+                    gateway.verification(pair['skill']['verification_ref'], self.envelope, 'publish')
             with patch.object(gateway.io, 'brain_read', side_effect=lambda path: proof if path.endswith('verify-task') else source):
                 context = gateway.execute('takeover', self.envelope, {'reference_id': 'publish'})
             self.assertEqual(context['execution_role'], 'rescue')
@@ -342,6 +445,14 @@ class ActionsTest(unittest.TestCase):
         stale = call('run-1', 2, 'tap-evidence', ('--outward', 'publish', '10', '20', 'run-1-01-publish', '0'))
         self.assertNotEqual(stale.returncode, 0, stale.stdout + stale.stderr)
         self.assertFalse(log.exists(), 'stale child reached ADB')
+        for mutate in [lambda e: e['contract']['action_bindings'][0]['object'].update(content_ref='foreign-content'), lambda e: e['contract']['action_bindings'][0]['scope'].update(visibility='public')]:
+            wrong = copy.deepcopy(self.envelope)
+            mutate(wrong)
+            actions.write(policy, wrong)  # 隔离frozen-policy故障注入，不更改生产定义。
+            rejected = call('run-1', 1, 'tap-evidence', ('10', '20', 'run-1-01-publish', '0', '--outward', 'publish'))
+            self.assertNotEqual(rejected.returncode, 0, rejected.stdout + rejected.stderr)
+            self.assertFalse(log.exists(), 'foreign content or visibility reached ADB')
+        actions.write(policy, self.envelope)
         current = call('run-1', 1, 'open-app')
         self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
         args = ('10', '20', 'run-1-01-publish', '0', '--outward', 'publish')
