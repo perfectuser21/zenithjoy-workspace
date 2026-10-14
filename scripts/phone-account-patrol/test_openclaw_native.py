@@ -264,6 +264,64 @@ class ContinuousRecoveryTests(unittest.TestCase):
         with patch.object(native, '__file__', str(loose)), self.assertRaises(ValueError):
             native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, lambda *a, **k: self.fail('未验真入口不应运行手机'))
 
+    def legacy_execution(self, probe, after_probe=None):
+        old = native.bridge.LEGACY_PHONE_REVISION
+        legacy = dict(self.deployment, source_revision=old, release='/fixed/old')
+        self.tasks[BATCH]['payload'].update(source_revision=old, cmd='/usr/bin/python3 /fixed/old/runner.py batch --execution-script "$0"')
+        self.tasks[CHILD]['payload']['source_revision'] = old
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy):self.cycle()
+        demand, attempt = self.demands()[0], self.attempts()[0];attempt['status'] = 'in_progress'
+        commands = []
+        def execute(command, **kwargs):
+            commands.append(command)
+            if command[0] == '/usr/bin/ssh':
+                if after_probe:after_probe(demand)
+                if isinstance(probe, Exception):raise probe
+                return probe
+            return subprocess.CompletedProcess([], 255, '', 'legacy runner failure')
+        with patch.object(native.bridge, 'load_historical_deployment', return_value=legacy), patch.object(native, 'STATE', self.state):
+            value, code = native.recovery_phone('/tmp/script-' + attempt['id'] + '-a1.sh', demand['id'], 'phone-a', self.deployment, self.call, execute)
+        return value, code, commands
+
+    def probe_output(self, code='adb_unreachable', serial='phone-a', returncode=1):
+        checks = dict(source_version=True, ocr=True, device_lock_controller=True, pillow=True, adb_online=code is None)
+        return subprocess.CompletedProcess([], returncode, json.dumps({'ok':code is None, 'serial':serial, 'checks':checks,
+            'failure':{'code':code,'message':'device not found; password="fake secret"','stderr':'offline','exit_code':1} if code else None}), '')
+
+    def test_legacy_adb_probe_records_distinct_diagnostic_identity_without_starting_old_runner(self):
+        value, code, commands = self.legacy_execution(self.probe_output())
+        self.assertEqual(len(commands),1);self.assertEqual(commands[0][0],'/usr/bin/ssh')
+        self.assertIn(native.bridge.PHONE_SOURCE_REVISION, commands[0][-1])
+        self.assertEqual(value['failure']['stage'],'legacy_pre_execution_preflight')
+        self.assertEqual(value['failure']['code'],'adb_unreachable');self.assertNotEqual(code,0)
+        self.assertIn('旧runner尚未启动',value['failure']['message'])
+        self.assertIn(native.bridge.PHONE_SOURCE_REVISION,value['failure']['message'])
+        self.assertNotIn('fake secret',json.dumps(value));self.assertEqual(value['source_revision'],native.bridge.LEGACY_PHONE_REVISION)
+        proof = json.loads(next(self.state.glob('*.legacy-preflight.json')).read_text())
+        self.assertEqual(proof['run_id'],value['run_id']);self.assertEqual(proof['diagnostic_source_revision'],native.bridge.PHONE_SOURCE_REVISION)
+        self.assertEqual(proof['phone_source_revision'],native.bridge.LEGACY_PHONE_REVISION)
+        self.assertEqual(proof['control_source_revision'],'a'*40);self.assertIn('observed_at',proof)
+
+    def test_legacy_probe_transport_dependency_and_identity_failures_never_guess_adb(self):
+        for probe in [self.probe_output(returncode=255), self.probe_output('prerequisite_failed'),
+                      self.probe_output(serial='foreign'), subprocess.TimeoutExpired(['ssh'],60,stderr='timed out')]:
+            value, code, commands = self.legacy_execution(probe)
+            self.assertEqual(len(commands),1);self.assertNotEqual(code,0)
+            self.assertNotEqual(value['failure']['code'],'adb_unreachable')
+            self.setUp()
+
+    def test_legacy_probe_success_rechecks_cancellation_or_enabled_before_old_runner(self):
+        for change in [lambda demand:demand.update(status='cancelled'), lambda demand:setattr(self,'serial_enabled',False)]:
+            value, code, commands = self.legacy_execution(self.probe_output(None, returncode=0),change)
+            self.assertEqual(len(commands),1);self.assertEqual(value['status'],'stopped');self.assertEqual(code,0)
+            self.setUp()
+
+    def test_successful_probe_does_not_claim_later_legacy_failure_root_cause(self):
+        value, code, commands = self.legacy_execution(self.probe_output(None, returncode=0))
+        self.assertEqual(len(commands),2);self.assertEqual(commands[1][1],'/fixed/old/runner.py')
+        self.assertEqual(value['failure']['code'],'legacy_failure_detail_unavailable')
+        self.assertIn('不是',value['failure']['message']);self.assertNotEqual(code,0)
+
     def test_old_phone_demand_continues_with_new_control_without_rewriting_identity(self):
         old = '4f899cab6425341646e27c5fca20979b8ac42be7'
         legacy = dict(self.deployment, source_revision=old, release='/fixed/old')
