@@ -26,6 +26,15 @@ ROUTING = '99999999-9999-4999-8999-999999999999'
 
 
 class NativeCommanderTests(unittest.TestCase):
+    def test_failure_marks_local_clipping_and_preserves_upstream_truncation(self):
+        for value in [{'message':'m'*1001}, {'stdout':'o'*2001}, {'stderr':'e'*2001},
+                      {'evidence':['proof']*11}, {'evidence':['p'*501]}]:
+            with self.subTest(field=list(value)):
+                failure=native.safe_failure(value)
+                self.assertTrue(failure['truncated'])
+        self.assertTrue(native.safe_failure({'message':'short','truncated':True})['truncated'])
+        self.assertFalse(native.safe_failure({'message':'short','evidence':['proof']})['truncated'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -322,6 +331,14 @@ class ContinuousRecoveryTests(unittest.TestCase):
         self.assertIn('partial device response',failure.get('stdout',''))
         self.assertIn('partial SSH stderr',failure.get('stderr',''))
         self.assertNotIn('fake secret',json.dumps(value))
+
+    def test_legacy_probe_timeout_keeps_original_bytes_or_string_clipping_flag(self):
+        for output in [b'partial '+b'x'*2100, 'partial '+'x'*2100]:
+            value, _, _ = self.legacy_execution(subprocess.TimeoutExpired(['ssh'],60,output=output,stderr=None))
+            self.assertTrue(value['failure']['truncated'])
+            self.assertLessEqual(len(value['failure']['stdout']),2000)
+            self.assertEqual(value['failure']['stderr'],'')
+            self.setUp()
 
     def test_legacy_probe_success_rechecks_cancellation_or_enabled_before_old_runner(self):
         for change, expected in [(lambda demand:demand.update(status='cancelled'),'stopped'),
