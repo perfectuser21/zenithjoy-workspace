@@ -268,7 +268,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||[...ids,...leads].some(id=>!/^[-a-zA-Z0-9]{1,80}$/.test(id)))throw Error('读回ID列表无效');
     const rows=ids.length?(await pool.query('SELECT id,relevance,intent_grade,process_status FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])',[lineKey,ids])).rows:[];
     const leadRows=leads.length?(await pool.query('SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND id=ANY($2::uuid[])',[lineKey,leads])).rows:[];
-    const failures=ids.filter(id=>{const row=rows.find(r=>r.id===id);
+    const related=op==='mark_readback'?rows.filter(r=>r.relevance==='相关').map(r=>r.id):[];
+    const outbox=related.length?(await pool.query('SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND comment_id=ANY($2::uuid[]) AND run_tag=$3',[lineKey,related,run])).rows:[];
+    const bridgeFailures=related.filter(id=>{const matches=outbox.filter(r=>r.comment_id===id);if(matches.length!==1)return true;const b=matches[0],p=b.payload;return !p||b.line_key!==lineKey||p.line_key!==lineKey||p.comment_id!==id||p.lead_id!==b.lead_id||!leads.includes(b.lead_id)||require('node:crypto').createHash('sha256').update(JSON.stringify(p)).digest('hex')!==b.payload_sha256;}).length;
+    const failures=bridgeFailures+ids.filter(id=>{const row=rows.find(r=>r.id===id);
       return !row||!['相关','不相关'].includes(row.relevance)||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade)
         ||op==='mark_readback'&&row.process_status!=='已分拣';}).length
       +leads.filter(id=>!leadRows.some(r=>r.id===id)).length;

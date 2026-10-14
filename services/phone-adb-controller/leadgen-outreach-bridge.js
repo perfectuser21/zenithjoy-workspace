@@ -49,6 +49,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
  const deadlineAt=Date.now()+Math.max(1,Math.min(165000,Number(input.remaining_ms)||165000));
  const route=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js');
  return (lock||outreach.withOrderLock)(route.key,async()=>{
+  const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,sourceRun:input.source_run,step:'103'});
   const result={published:0,protected:0,excluded:0,unknown:0,ids:[],verified:true};
   const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state IN ('pending','attempted','unknown') ORDER BY created_at,id LIMIT $2`,[route.key,Math.max(1,Math.min(50,Number(input.limit)||10))])).rows;
   let api=client;
@@ -57,7 +58,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
     result[excluded?'excluded':'unknown']++;continue;
    }
-   try{nativeIntent(row);}catch{result.unknown++;result.verified=false;continue;}
+   try{const p=nativeIntent(row);if(p.qualification.company_id!==snapshot.company_id||String(p.qualification.company_version)!==String(snapshot.version))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
    if(!api)api=await outreach.orderClient(route,{deadlineAt});
    let all;try{all=await api.all({deadlineAt});}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));

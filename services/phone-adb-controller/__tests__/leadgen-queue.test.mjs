@@ -82,7 +82,8 @@ test('标记人的更新与评论完成状态原子提交，已有已触达人�
 });
 
 test('评分和标记人按实际处理ID独立读回，缺行不得宣称verified',async()=>{
-  const pool=fakePool([{rows:[{id:'c1',relevance:'相关',intent_grade:'A',process_status:'已分拣'}]},{rows:[]}]);
+  const payload={line_key:'jinuo',comment_id:'c1',lead_id:'l1'};const sha=require('crypto').createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  const pool=fakePool([{rows:[{id:'c1',relevance:'相关',intent_grade:'A',process_status:'已分拣'}]},{rows:[]},{rows:[{line_key:'jinuo',comment_id:'c1',lead_id:'l1',payload,payload_sha256:sha}]}]);
   const result=await queueRequest(pool,{op:'mark_readback',line:'jinuo',run:'test',ids:['c1'],lead_ids:['l1']});
   assert.equal(result.verified,false);assert.equal(result.failures,1);
   assert.match(pool.calls[0].sql,/line_key=\$1 AND id=ANY/);
