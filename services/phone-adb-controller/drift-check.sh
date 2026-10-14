@@ -52,7 +52,7 @@ md5_stdin() {
 list_targets() {
   local deploy f h d
   deploy="$(git -C "$REPO" show "$REF:$SUBDIR/deploy.sh" 2>/dev/null)" || { log "读不到 $REF:$SUBDIR/deploy.sh"; return 2; }
-  local -a js top probe sh node plan ctl dirs
+  local -a js top probe sh node plan ctl dirs evidence
   read -ra js <<< "$(parse_array MMV_JS_FILES <<< "$deploy")"
   read -ra top <<< "$(parse_array MMV_TOPLEVEL_FILES <<< "$deploy")"
   read -ra probe <<< "$(parse_array MMV_PROBE_FILES <<< "$deploy")"
@@ -62,9 +62,17 @@ list_targets() {
   read -ra plan <<< "$(parse_array DEVICE_PLAN_FILES <<< "$deploy")"
   read -ra ctl <<< "$(parse_array DEVICE_CTL_FILES <<< "$deploy")"
   read -ra dirs <<< "$(parse_array DEVICE_CTL_DIRS <<< "$deploy")"
+  read -ra evidence <<< "$(parse_array RELEASE_EVIDENCE_FILES <<< "$deploy")"
   if (( ${#js[@]} == 0 || ${#sh[@]} == 0 || ${#ctl[@]} == 0 || ${#dirs[@]} == 0 )); then
     log "deploy.sh 清单解析为空(数组被改名/改形状?),拒绝给出假绿"; return 2
   fi
+  for f in ${evidence[@]+"${evidence[@]}"}; do
+    local source="${f%%=*}" destination="${f#*=}"
+    [[ "$source" == apps/api/db/migrations/*.sql && "$destination" == release-evidence/"${source##*/}" && "$source" != *..* ]] || return 2
+    echo "$MMV_HOST bin-harvest/$destination $source"
+    echo "$MMV_HOST .openclaw/leadgen-scripts/$destination $source"
+    for h in "${DEVICE_HOSTS[@]}"; do echo "$h bin-harvest/$destination $source"; done
+  done
   for f in "${js[@]}"; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
   for f in ${top[@]+"${top[@]}"}; do echo "$MMV_HOST .openclaw/$f $f"; done
   for f in ${probe[@]+"${probe[@]}"}; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
@@ -102,7 +110,9 @@ main() {
   trap 'rm -rf "$work"' EXIT
   local f
   awk '{print $3}' <<< "$targets" | sort -u | while read -r f; do
-    echo "$f $(git -C "$REPO" show "$REF:$SUBDIR/$f" 2>/dev/null | md5_stdin)"
+    local source="$SUBDIR/$f"
+    [[ "$f" == apps/api/db/migrations/*.sql ]] && source="$f"
+    echo "$f $(git -C "$REPO" show "$REF:$source" 2>/dev/null | md5_stdin)"
   done > "$work/want"
 
   local total=0 hosts h paths out line

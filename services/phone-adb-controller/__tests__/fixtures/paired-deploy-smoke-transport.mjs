@@ -1,6 +1,6 @@
 // Local-only transport for the paired input deployment smoke. Other deployment
-// commands retain the existing record-only stub; only this pair is executed and verified.
-import {appendFileSync,copyFileSync,existsSync,mkdirSync,readFileSync,unlinkSync,writeFileSync} from 'node:fs';
+// commands retain the existing record-only stub; paired inputs and fixed SQL evidence use isolated real files.
+import {appendFileSync,copyFileSync,existsSync,mkdirSync,readFileSync,unlinkSync,writeFileSync,chmodSync,renameSync} from 'node:fs';
 import {basename,join,resolve} from 'node:path';
 import {spawnSync,spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -22,11 +22,50 @@ function companyInventory(){
  const tables={tenant_company_profiles:{company_id:'uuid',tenant_id:'uuid',company_key:'text',wiki:'jsonb',runtime_config:'jsonb',config_status:'text',config_version:'integer',source_evidence:'jsonb'},company_config_versions:{company_id:'uuid',tenant_id:'uuid',version:'integer',snapshot:'jsonb'},company_config_runs:{company_id:'uuid',tenant_id:'uuid',run_id:'text',version:'integer',snapshot:'jsonb',task_inputs:'jsonb',source_run:'text'},leadgen_videos:{judgment_config:'jsonb'},leadgen_comments:{judgment_config:'jsonb'}};
  return {columns:Object.entries(tables).flatMap(([table_name,fields])=>Object.entries(fields).map(([column_name,data_type])=>({table_name,column_name,data_type}))),indexes:[{tablename:'company_config_runs',indexdef:'CREATE UNIQUE INDEX fixture_run_key ON zenithjoy.company_config_runs (company_id, run_id)'}],triggers:['immutable_company_run','immutable_company_version'].map(tgname=>({tgname,tgenabled:'O'})),profiles:[]};
 }
+const sqlSource='apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql';
+const sqlName=basename(sqlSource);
+const sqlTargets=[['xian-m4','~/bin-harvest'],['mmv','~/bin-harvest'],['mmv','~/.openclaw/leadgen-scripts']];
+function sqlTarget(root,host,base){
+ if(!sqlTargets.some(([h,b])=>h===host&&b===base))throw Error('unexpected SQL evidence target');
+ const home=host==='xian-m4'?paths(root).home:join(root,'remote-mmv');
+ mkdirSync(home,{recursive:true,mode:0o700});
+ return {home,directory:join(home,base.slice(2),'release-evidence')};
+}
+function sqlRemote(root,host,cmd){
+ if(!cmd?.includes('release-evidence'))return null;
+ // Only the two exact reviewed Python fragments from the real installer may execute.
+ // No arbitrary SSH shell command is passed to a local shell.
+ const deploy=readFileSync(new URL('../../deploy.sh',import.meta.url),'utf8');
+ const section=deploy.slice(deploy.indexOf('deploy_release_evidence() {'),deploy.indexOf('# Commander 入口'));
+ const codes=[...section.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1].replaceAll('\\"','"'));
+ if(codes.length!==3)throw Error('SQL evidence production commands changed');
+ for(const [expectedHost,base] of sqlTargets){
+  if(host!==expectedHost)continue;
+  const directory=base+'/release-evidence',stage=directory+'/.'+sqlName+'.deploy-new',file=directory+'/'+sqlName;
+  if(cmd===`python3 -c '${codes[1]}' ${directory}`||cmd===`python3 -c '${codes[2]}' ${file}`){
+   const target=sqlTarget(root,host,base),isDirectory=cmd.endsWith(' '+directory);
+   const r=spawnSync('python3',['-c',codes[isDirectory?1:2],isDirectory?target.directory:join(target.directory,sqlName)],{encoding:'utf8',env:{...process.env,HOME:target.home}});
+   return {status:r.status??2,stdout:r.stdout||'',stderr:r.stderr||''};
+  }
+  if(cmd===`chmod 600 ${stage} && mv -f ${stage} ${file}`){
+   const target=sqlTarget(root,host,base),staged=join(target.directory,'.'+sqlName+'.deploy-new');
+   chmodSync(staged,0o600);renameSync(staged,join(target.directory,sqlName));
+   return {status:0,stdout:'',stderr:''};
+  }
+ }
+ throw Error('unexpected SQL evidence remote command');
+}
 export function transport(root,mode,args){
  root=resolve(root);const p=paths(root);const ok=stdout=>({status:0,stdout:stdout||'',stderr:''});
  try{
   if(mode==='scp'){
    appendFileSync(join(root,'scp.log'),args.join('\n')+'\n');const target=args.at(-1);
+   if(target.includes('release-evidence/')){
+    const matched=sqlTargets.find(([host,base])=>target===`${host}:${base}/release-evidence/.${sqlName}.deploy-new`);
+    if(!matched||args.at(-2)!==resolve(fileURLToPath(new URL('../../../../',import.meta.url)),sqlSource))throw Error('unexpected SQL evidence upload');
+    const t=sqlTarget(root,...matched);copyFileSync(args.at(-2),join(t.directory,'.'+sqlName+'.deploy-new'));
+    return ok();
+   }
    if(target.startsWith(`xian-m4:${p.stage}`)){
     const destination=target.slice('xian-m4:'.length);
     const sources=args.slice(0,-1).filter(a=>!a.startsWith('-'));
@@ -48,6 +87,7 @@ export function transport(root,mode,args){
    else if(mode!=='schema-ready')throw Error('unknown readiness fixture mode');
    return ok(JSON.stringify(inventory)+'\n');
   }
+  const evidenceResult=sqlRemote(root,host,cmd);if(evidenceResult)return evidenceResult;
   if(host==='mmv'&&cmd==='python3'&&process.env.PAIR_DEPLOY_STOP_AT_ADMISSION==='1')return {status:3,stdout:'',stderr:'explicit fixture admission denied after readiness\n'};
   if(host==='xian-m4'&&cmd==='mktemp -d /tmp/input-runtime-deploy.XXXXXX')return ok(p.stage+'\n');
   if(cmd?.includes(p.stage)){

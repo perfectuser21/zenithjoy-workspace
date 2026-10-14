@@ -1,7 +1,8 @@
 import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {prepare,transport,verify} from './fixtures/paired-deploy-smoke-transport.mjs';
@@ -75,4 +76,24 @@ for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实d
   let uploads='';try{uploads=readFileSync(join(root,'scp.log'),'utf8');}catch{}
   assert.equal(uploads,'','readiness失败不得执行任何安装上传');
  }
+});
+
+test('SQL附件transport真实存三份源字节、实际SHA读回并拒绝篡改/未知目标',t=>{
+ const f=fixture(t),source=join(service,'../../apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql');
+ const name='20261014_130000_leadgen_outreach_bridge.sql',bytes=readFileSync(source);
+ const text=readFileSync(join(service,'deploy.sh'),'utf8');const block=text.slice(text.indexOf('deploy_release_evidence() {'),text.indexOf('# Commander 入口'));
+ const codes=[...block.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1].replaceAll('\\"','"'));assert.equal(codes.length,3);
+ for(const [host,base,local] of [['xian-m4','~/bin-harvest','remote/bin-harvest'],['mmv','~/bin-harvest','remote-mmv/bin-harvest'],['mmv','~/.openclaw/leadgen-scripts','remote-mmv/.openclaw/leadgen-scripts']]){
+  const directory=base+'/release-evidence',file=directory+'/'+name,stage=directory+'/.'+name+'.deploy-new';
+  assert.equal(transport(f.root,'ssh',[host,`python3 -c '${codes[1]}' ${directory}`]).status,0);
+  assert.equal(transport(f.root,'scp',['-q','-p',source,host+':'+stage]).status,0);
+  assert.equal(transport(f.root,'ssh',[host,`chmod 600 ${stage} && mv -f ${stage} ${file}`]).status,0);
+  const actual=join(f.root,local,'release-evidence',name);assert.deepEqual(readFileSync(actual),bytes);assert.equal(statSync(actual).mode&0o777,0o600);
+  const read=()=>transport(f.root,'ssh',[host,`python3 -c '${codes[2]}' ${file}`]);
+  const hash=read();assert.equal(hash.status,0);assert.match(hash.stdout,/^[0-9a-f]{64}\n$/);assert.equal(hash.stdout.trim(),createHash('sha256').update(bytes).digest('hex'));
+  writeFileSync(actual,'changed after upload');const changed=read();assert.equal(changed.status,0);assert.notEqual(changed.stdout,hash.stdout,'不得回固定假hash');
+  rmSync(actual);assert.notEqual(read().status,0,'缺文件不能伪造成功hash');
+ }
+ assert.equal(transport(f.root,'scp',['-q',source,'xian-m1:~/bin-harvest/release-evidence/.'+name+'.deploy-new']).status,2);
+ assert.equal(transport(f.root,'ssh',['xian-m4','python3 -c "print(1)" ~/outside/release-evidence/'+name]).status,2);
 });

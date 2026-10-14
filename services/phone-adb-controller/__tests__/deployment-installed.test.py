@@ -44,6 +44,12 @@ class AggregateTests(unittest.TestCase):
    for n in p.CONTROLLERS:
     for folder in ('bin-harvest','.local/bin'):put(remote/folder,Path(n).name)
     for folder in ('bin-harvest','.openclaw/leadgen-scripts'):put(home/folder,Path(n).name)
+   sql_path='apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql'
+   sql_dest='release-evidence/'+Path(sql_path).name
+   sql_data=(Path(__file__).resolve().parents[3]/sql_path).read_bytes();sql_sha=hashlib.sha256(sql_data).hexdigest()
+   controller_entries.append(dict(path=sql_path,deployed_path=sql_dest,content_sha256=sql_sha))
+   sql_copies=[remote/'bin-harvest'/sql_dest,home/'bin-harvest'/sql_dest,home/'.openclaw/leadgen-scripts'/sql_dest]
+   for file in sql_copies:file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(sql_data)
    ack=dict(source_repo='repo',source_commit='b'*40,release_id='xian-release',observation_id='xian-observation',environment='production',target='xian-m4',files=controller_entries)
    (remote/'bin-harvest/deployment-manifest.json').write_text(json.dumps(ack))
    files={'AGENTS.md':h,'skills/workflow-commander/SKILL.md':h}
@@ -52,6 +58,7 @@ class AggregateTests(unittest.TestCase):
    (runtime/'runtime-manifest.json').write_text(json.dumps(dict(protocol='commander-v2',files=files,releases=releases,runtime_snapshot_sha256=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest())))
    paths=list(p.ATTACHMENTS+p.CONTROLLERS)+['services/phone-adb-controller/commander/'+name for name in files]
    spec=dict(manifest=dict(source_repo='repo',source_commit='b'*40,files=[dict(path=n,deployed_path='component:'+n,content_sha256=h) for n in paths]),local_manifest=dict(files=controller_entries),commander_files=files,commander_releases=releases,xian_ack=ack)
+   paths.append(sql_path);spec['manifest']['files'].append(dict(path=sql_path,deployed_path=sql_dest,content_sha256=sql_sha))
    work_info=dict(source='openclaw-workspace',eligible=True,modelVisible=True,filePath=str(workspace/'skills/workflow-commander/SKILL.md'))
    def call(args,**kwargs):
     if args[0]=='openclaw':
@@ -61,6 +68,16 @@ class AggregateTests(unittest.TestCase):
     return original([sys.executable,'-c',"import socket;socket.gethostname=lambda:'mac-mini-m4-xian';"+code],env=dict(os.environ,HOME=str(remote)))
    with patch.object(p.socket,'gethostname',return_value='aad17-2'),patch.object(p.subprocess,'check_output',side_effect=call):
     result=p.collect(spec,home);self.assertEqual(len(result['files']),len(paths));self.assertEqual(result['publish_readback']['installed_package_revision'],'a'*40)
+    for file in sql_copies:
+     with self.subTest(sql_copy=str(file)):
+      file.unlink()
+      with self.assertRaises((ValueError,FileNotFoundError,subprocess.CalledProcessError)):p.collect(spec,home)
+      file.write_bytes(b'tampered')
+      with self.assertRaises((ValueError,subprocess.CalledProcessError)):p.collect(spec,home)
+      file.unlink();file.symlink_to(package/p.ATTACHMENTS[0])
+      with self.assertRaises((ValueError,subprocess.CalledProcessError)):p.collect(spec,home)
+      file.unlink();file.write_bytes(sql_data)
+      self.assertEqual(len(p.collect(spec,home)['files']),len(paths))
     work_info['source']='openclaw-managed'
     with self.assertRaisesRegex(ValueError,'官方实际skill'):p.collect(spec,home)
     work_info['source']='openclaw-workspace';spec['xian_ack']=dict(ack,observation_id='other')
