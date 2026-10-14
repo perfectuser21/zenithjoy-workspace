@@ -127,3 +127,9 @@ test('Postgres JSONB键序重排后payload/fields语义相同仍应独立验收�
  assert.equal(nativeIntent(row).target_douyin_id,'person987');assert.equal(fieldsMatch(row,{fields:structuredClone(row.fields)}),true);
  row.payload.nickname='别人';assert.throws(()=>nativeIntent(row),/BRIDGE_/);
 });
+
+test('bridge同company不同tenant/原policy版本也不得发布，不能只比company_id',async()=>{
+ const row=pendingBridge(),pool=bridgeStore(row);let posts=0;
+ const r=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',limit:1},{client:{all:async()=>[],fields:async()=>[{field_name:'采集时间',type:1}],post:async()=>{posts++;}},lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:3,tenant_id:'differentTenant',policy_id:'differentPolicy'})});
+ assert.equal(posts,0);assert.equal(r.verified,false);
+});
