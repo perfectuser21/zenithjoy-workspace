@@ -1,5 +1,5 @@
 {
-  "object_types": "8773f8ec9c2d43acc1d244cd3913b95c199669c17d7f42b1a764403a51fe9aed",
+  "object_types": "b4ab693dba3cab3aec04667191f19fa7d98e7010795a4f9c3fabb96834f17fc8",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -25,16 +25,16 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "bbfeca70c30535e4e815448161645716132a1bf80180edc3de96039aa3217ae4",
+      "sha256": "ba9415f4b037f4af1bb3e1b97f2342b7aaa79b54cac24cfcd5d3887bd12c1556",
       "activities": {
         "scoring": "9b884aa9bea7d29f3e1add46f570cebe232feb892548b943abda64d2c9898b6d",
-        "mark_leads": "6509bcc0d862e17500d569a1c8a6bc818215ddf1cd44d3d26472b22944d3f36b"
+        "mark_leads": "6931faaea38bb4096bf296e75911b48b6714adb5e8a342968bd12f975df2705d"
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "ac4a03c72e3616c9548021352b58b6bbcf387f76567767fc8d68ec66e4177408",
+      "sha256": "b8f4862d8a1bfcbbbdc83d5e3c467df7c73f6f295b7fb1d07c29b469a028ee4a",
       "activities": {
-        "preflight": "78143b031174e66648b386559121dd5e22f85fe64de8808d9d02f2d34fd2e580",
+        "preflight": "5c128ec8fe56d582d572c90e510b8a6363a2318aa8788f367f79d7a73cef64b5",
         "send_dm": "bfd62bf8796e11ab162b0e778ad83d65273ab2e1097ab28da03bfe7c956405f8",
         "write_back": "5de1d74eddc262d4073d7b392e12c50eb14aee7a806a5c5f5dcac3a0e6945d00",
         "cleanup": "32cff9610a238f70cffbbc6be2eee493fcf03f749c12ac396444a539ed668402"
@@ -49,12 +49,12 @@
       }
     },
     "douyin_video_processing": {
-      "sha256": "a431f9457c296480d63ae8f9ee7dedd2f65c7213e86185f278d0a09415ed507e",
+      "sha256": "91a068795fe35604ba63071a87dfea822fe0b7b2439b2b734a38fbb560643a01",
       "activities": {
         "preflight": "41213546c9efc1e758c6c00522ff51e5a1c5696affdc3985aa4c60c79189e096",
         "dedup": "b7990d59c1612fcb659717ec8cebc200db3f5be06bf6fbf3690a8c7b72c31d04",
         "qualification": "ce057b60778321a66a34536b3ccc568a2691716473531058f915c4a3b87a0eb7",
-        "collection": "ecdb3b3b062e71cb6cb9955cb42ab03d85007d91d0e945426daada8175eecb49",
+        "collection": "e8f7b5dc2eff4ec84639dbf40b7863f2cd4509aac9e98ce84783f5247e341d05",
         "cleanup": "644781cb13cd244641ec876a0bcb46e794eb0fbdc55ad16748db8cc3a562ebbd"
       }
     },

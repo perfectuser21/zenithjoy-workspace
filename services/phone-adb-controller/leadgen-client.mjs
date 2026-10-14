@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
 
-export const RPC_FILES = ['nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
+export const RPC_FILES = ['outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
   'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
   'leadgen-db-lib.js', 'company-config-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
   'judge-jev.js', 'judge-comment.js', 'qualify-video.js', 'transcribe-qwen-audio.js',

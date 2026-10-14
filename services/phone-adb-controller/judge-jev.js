@@ -41,9 +41,10 @@ class JudgeApiError extends Error {
   }
 }
 
-async function defaultHttpPost(url, body, apiKey) {
+async function defaultHttpPost(url, body, apiKey, {signal} = {}) {
   const r = await fetch(url, {
     method: "POST",
+    ...(signal ? {signal} : {}),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });

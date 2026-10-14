@@ -1,6 +1,6 @@
 ---
 name: workflow-commander
-version: 2.0.8
+version: 2.0.9
 description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 

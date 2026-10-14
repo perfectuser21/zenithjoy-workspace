@@ -68,12 +68,12 @@ test('评论评分模型失败留在待评分队列，不降成C档', async () =
 
 test('标记人的更新与评论完成状态原子提交，已有已触达人只增加重复标记', async () => {
   const pool = fakePool([
-    { rows: [] }, { rows: [{ id: 'c1', dedup_key: '甲|id|报名', nickname: '甲', douyin_id: 'id',
+    { rows: [] }, { rows: [{ id: 'c1', line_key:'jinuo', dedup_key: '甲|id|报名', nickname: '甲', douyin_id: 'id',
       comment_body: '如何报名', source_video: '培训', relevance: '相关', intent_grade: 'A' }] },
-    { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, { rows: [] },
+    { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, {rows:[{id:'l1',line_key:'jinuo',douyin_id:'id'}]}, { rows: [] }, {rows:[]},
   ]);
   const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 });
-  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'] });
+  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
   const person = pool.calls.find(c => /SET dup_hit_count/.test(c.sql));
   assert.ok(person);
   assert.ok(!/status\s*=|reached_at\s*=|DELETE/.test(person.sql));
@@ -82,7 +82,8 @@ test('标记人的更新与评论完成状态原子提交，已有已触达人�
 });
 
 test('评分和标记人按实际处理ID独立读回，缺行不得宣称verified',async()=>{
-  const pool=fakePool([{rows:[{id:'c1',relevance:'相关',intent_grade:'A',process_status:'已分拣'}]},{rows:[]}]);
+  const payload={line_key:'jinuo',comment_id:'c1',lead_id:'l1'};const sha=require('../leadgen-outreach-bridge.js').digest(payload);
+  const pool=fakePool([{rows:[{id:'c1',relevance:'相关',intent_grade:'A',process_status:'已分拣'}]},{rows:[]},{rows:[{line_key:'jinuo',comment_id:'c1',lead_id:'l1',payload,payload_sha256:sha}]}]);
   const result=await queueRequest(pool,{op:'mark_readback',line:'jinuo',run:'test',ids:['c1'],lead_ids:['l1']});
   assert.equal(result.verified,false);assert.equal(result.failures,1);
   assert.match(pool.calls[0].sql,/line_key=\$1 AND id=ANY/);

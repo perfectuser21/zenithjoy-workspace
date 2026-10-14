@@ -9,7 +9,7 @@ const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const validId=v=>typeof v==='string'&&/^[A-Za-z0-9_.-]{1,64}$/.test(v);
 const recordId=v=>typeof v==='string'&&/^rec[A-Za-z0-9]{6,40}$/.test(v);
 function sender(route,profile,id){if(!route.profiles.includes(profile)||!validId(id))throw Error('触达profile或账号绑定缺失');}
-async function request(url,opts,fetcher){const r=await fetcher(url,{...opts,signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('触达批准话术HTTP失败');const b=await r.json();if(b.code!==0)throw Error('触达批准话术API失败');return b;}
+async function request(url,opts,fetcher,deadlineAt=Infinity){const remaining=deadlineAt-Date.now();if(remaining<=0)throw Error('BRIDGE_DEADLINE');const r=await fetcher(url,{...opts,signal:AbortSignal.timeout(Math.max(1,Math.min(15000,Math.floor(remaining))))});if(!r.ok)throw Error('触达批准话术HTTP失败');const b=await r.json();if(b.code!==0)throw Error('触达批准话术API失败');return b;}
 
 // 仅中央端读取1Password导出的私有账号缓存；设备RPC不能提交自拟模板。
 async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readFileSync,now=new Date()}={}){
@@ -37,21 +37,30 @@ async function outreachPolicy(input,{fetcher=fetch,env=process.env,read=fs.readF
 // 原Feishu订单字段、分类/等级/去重语义复用；仅为四活动提供单条原子区入口。
 // prepared标记是永久发送预留，40分钟旧悬空回收不能将其重新排队。
 async function withOrderLock(line,fn,{directory=require('path').join(require('os').homedir(),'.config/zenithjoy/outreach-order-locks')}={}){
- const path=require('path').join(directory,line+'.lock');
- fs.mkdirSync(require('path').dirname(path),{recursive:true,mode:0o700});
- try{fs.mkdirSync(path,{mode:0o700});}catch(e){if(e.code==='EEXIST')throw Error('触达原订单领单锁忙');throw e;}
- try{return await fn();}finally{fs.rmdirSync(path);}
+ const {spawn}=require('node:child_process');
+ const child=spawn('python3',[require('path').join(__dirname,'outreach-order-lock.py'),directory,line,String(process.pid),crypto.randomUUID()],{stdio:['pipe','pipe','pipe']});
+ child.stdin.on('error',()=>{}); // 已退出的broker pipe错误不变成未捕获崩溃；close退出码仍是正式清理门禁。
+ let text='',ready=false;const closed=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',code=>resolve(code));});
+ try {
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill('SIGTERM');reject(Error('触达原订单锁启动超时'));},5000);
+   child.stdout.on('data',chunk=>{text+=chunk;if(text==='ORDER_LOCK_READY\n'){ready=true;clearTimeout(timer);resolve();}});
+   closed.then(code=>{if(!ready){clearTimeout(timer);reject(Error(code===3?'触达原订单领单锁忙':'触达原订单锁证据失败'));}},e=>{clearTimeout(timer);reject(e);});
+  });
+  return await fn();
+ } finally {child.stdin.end();const code=await closed;if(ready&&code!==0)throw Error('触达原订单锁清理证据未确认');}
 }
-async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFileSync}={}){
+async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFileSync,deadlineAt=Infinity}={}){
  const cache=env.LEADGEN_FEISHU_CREDENTIALS||require('path').join(require('os').homedir(),'.credentials/leadgen-feishu-accounts.json');
  const acc=JSON.parse(read(cache,'utf8'))[route.account];if(!acc?.appId||!acc.appSecret)throw Error('触达1Password批准账号缓存缺失');
- const tok=(await request('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:acc.appId,app_secret:acc.appSecret})},fetcher)).tenant_access_token;
+ const tok=(await request('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:acc.appId,app_secret:acc.appSecret})},fetcher,deadlineAt)).tenant_access_token;
  if(!tok)throw Error('触达授权失败');
  const headers={Authorization:'Bearer '+tok,'Content-Type':'application/json'};
  const base=`https://open.feishu.cn/open-apis/bitable/v1/apps/${route.base}/tables/${route.lead}/records`;
- const api=(url,opts={})=>request(url,{headers,...opts},fetcher);
+ const api=(url,opts={},callDeadline=Infinity)=>request(url,{headers,...opts},fetcher,Math.min(deadlineAt,callDeadline));
  return {
-  async all(){let page='',out=[];for(let i=0;i<30;i++){const b=await api(base+'?page_size=100&automatic_fields=true'+(page?'&page_token='+encodeURIComponent(page):''));out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达订单分页损坏');}throw Error('触达订单分页超界');},
+  async all({deadlineAt:callDeadline=Infinity}={}){let page='',out=[];for(let i=0;i<30;i++){const b=await api(base+'?page_size=100&automatic_fields=true'+(page?'&page_token='+encodeURIComponent(page):''),{},callDeadline);out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达订单分页损坏');}throw Error('触达订单分页超界');},
+  async fields(){let page='',out=[];for(let n=0;n<5;n++){const b=await api(base.replace(/\/records$/,'/fields')+'?page_size=100'+(page?'&page_token='+encodeURIComponent(page):''));out.push(...(b.data?.items||[]));if(!b.data?.has_more)return out;page=b.data.page_token;if(!page)throw Error('触达字段分页损坏');}throw Error('触达字段分页超界');},
+  async post(fields){return (await api(base,{method:'POST',body:JSON.stringify({fields})})).data?.record;},
   async get(id){if(!recordId(id))throw Error('触达原订单ID无效');return (await api(base+'/'+id)).data?.record;},
   async put(id,fields){if(!recordId(id))throw Error('触达原订单ID无效');await api(base+'/'+id,{method:'PUT',body:JSON.stringify({fields})});}
  };
@@ -63,7 +72,7 @@ function receiptValid(input,line,source){const r=input.receipt;
   const f=r.raw_evidence?.[key];if(f?.file!==input.run+'-a2-dm-1-'+suffix||!/^[a-f0-9]{64}$/.test(f.sha256||''))throw Error('触达原始证明不完整');
  }return r;
 }
-async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,lock=withOrderLock}={}){
+async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,lock=withOrderLock,eligibleOrders,pool,freezeCompanyConfig}={}){
  const route=routeOf(input.line),run=input.run;
  if(!/^[a-zA-Z0-9_-]{1,64}$/.test(run||'')||!/^[a-f0-9]{40}$/.test(sourceCommit||''))throw Error('触达正式运行来源证明缺失');
  if(input.op==='claim_outreach')sender(route,input.profile,input.sender_douyin_id);
@@ -73,8 +82,9 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
  return lock(route.key,async()=>{
   if(input.op==='claim_outreach'){
    if(input.limit!==1)throw Error('触达必须显式首单范围');const p=await policy(input),all=await api.all();
+   const qualified=new Set(await (eligibleOrders||((route,all,input)=>require('./leadgen-outreach-bridge.js').eligibleOrders(route,all,input,{pool,freezeCompanyConfig})))(route,all,input));
    const reserved=lib.reservedRecipientSet(all);
-   const rows=all.filter(r=>txt(r.fields?.['状态'])==='待触达'&&lib.classifyPending(r.fields)==='ok'&&lib.gradeAllowed(lib.leadGrade(r.fields),route.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
+   const rows=all.filter(r=>qualified.has(r.record_id)&&txt(r.fields?.['状态'])==='待触达'&&lib.classifyPending(r.fields)==='ok'&&lib.gradeAllowed(lib.leadGrade(r.fields),route.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
    rows.sort((a,b)=>(Number(b.fields['重复命中次数'])||0)-(Number(a.fields['重复命中次数'])||0)||lib.gradeRank(lib.leadGrade(a.fields))-lib.gradeRank(lib.leadGrade(b.fields)));
    if(!rows.length)return [];
    const pick=rows[0],lead=lib.extractLead(pick.fields),fields={'状态':'触达中','话术ID':p.template.id,'话术版本':p.template.version,'话术内容':p.template.message,'实际分发号':input.profile+'('+input.sender_douyin_id+')','回复结果':marker('claim',run,sourceCommit)};
@@ -107,4 +117,4 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
   throw Error('触达未知原订单操作');
  });
 }
-module.exports={outreachPolicy,outreachRequest,withOrderLock,receiptValid};
+module.exports={outreachPolicy,outreachRequest,withOrderLock,receiptValid,orderClient};

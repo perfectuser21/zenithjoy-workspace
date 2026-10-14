@@ -54,3 +54,16 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: bridge_readback
+    stage: mark_leads
+    journey_cell: stage:mark_leads
+    probe:
+      type: metric
+      ref: metrics.bridge_readback_failures
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 真实outbox处置及PG独立读回；未知POST不确认不重发，资格unknown/excluded仅作为真实不ready处置，不冒发送。
