@@ -29,16 +29,18 @@ print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'r
 function validateEvidence(e,scope){
  if(e?.version!==1||e.status!=='verified'||!e.scope||!e.raw||!e.sha256)throw Error('RECIPIENT_EVIDENCE_MISSING');
  for(const key of ['line_key','run','douyin_id','nickname','comment_body_sha256','video_url'])if(e.scope[key]!==scope[key])throw Error('RECIPIENT_SCOPE_INVALID');
- if(!/^\d{16,24}$/.test(e.scope.video_id||'')||!e.video_identity?.verified||e.video_identity.content_type!=='video'||e.video_identity.expected_video_id!==e.scope.video_id||e.video_identity.observed_video_id!==e.scope.video_id||e.video_identity.evidence_id!==e.scope.video_identity_eid)throw Error('RECIPIENT_VIDEO_ID_INVALID');
+ if(!routeOf(scope.line_key).profiles.includes(e.scope.profile))throw Error('RECIPIENT_PROFILE_SCOPE_INVALID');
+ if(!/^\d{16,24}$/.test(e.scope.video_id||'')||e.video_identity?.verified!==true||e.video_identity.content_type!=='video'||e.video_identity.expected_video_id!==e.scope.video_id||e.video_identity.observed_video_id!==e.scope.video_id||e.video_identity.evidence_id!==e.scope.video_identity_eid)throw Error('RECIPIENT_VIDEO_ID_INVALID');
  const prefix=e.scope.run+'-v'+e.scope.video_id+'-collection',row=e.scope.profile_eid?.match(new RegExp('^'+prefix+'-person([1-9][0-9]*)-t[123]$'))?.[1];
  if(!row||e.scope.video_identity_eid!==prefix+'-after-card'+row)throw Error('RECIPIENT_PAIR_INVALID');
  for(const k of ['profile','returned'])if(typeof e.raw[k]!=='string'||Buffer.byteLength(e.raw[k])>4*1024*1024||hash(e.raw[k])!==e.sha256[k])throw Error('RECIPIENT_BYTES_INVALID');
  return parseNative(e.raw.profile,e.raw.returned,{nickname:scope.nickname,douyinId:scope.douyin_id,commentBody:scope.comment_body});
 }
 function capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid}){
+ if(!Number.isSafeInteger(Number(started))||Number(started)<=0||Number(started)*1000>Date.now()+1000)throw Error('RECIPIENT_TIME_INVALID');
  const scope={line_key:routeOf(line).key,run,source_run:sourceRun||null,video_id:videoId,video_url:videoUrl,profile,douyin_id:douyinId,nickname,comment_body_sha256:hash(commentBody),profile_eid:profileEid,video_identity_eid:videoEid};
  const root=path.join(process.env.DOUYIN_PHONE_TMP_ROOT||'/private/tmp/openclaw-phone','evidence',profile);
- const read=(file,name)=>{const st=fs.lstatSync(file);if(!st.isFile()||st.isSymbolicLink()||st.size>4*1024*1024||st.mtimeMs<Number(started)*1000||path.dirname(fs.realpathSync(file))!==fs.realpathSync(root)||path.basename(file)!==name)throw Error('RECIPIENT_FRESH_FILE_INVALID');return fs.readFileSync(file,'utf8');};
+ const read=(file,name)=>{const st=fs.lstatSync(file);if(!st.isFile()||st.isSymbolicLink()||st.size>4*1024*1024||st.mtimeMs<Number(started)*1000||path.dirname(fs.realpathSync(file))!==fs.realpathSync(root)||path.basename(file)!==name)throw Error('RECIPIENT_FRESH_FILE_INVALID');return new TextDecoder('utf-8',{fatal:true}).decode(fs.readFileSync(file));};
  const raw={profile:read(profilePath,profileEid+'-profile.xml'),returned:read(returnedPath,profileEid+'-returned.xml')};
  const vf=path.join(runDir,run+'-identity-'+videoId+'.json'),st=fs.lstatSync(vf);
  if(st.isSymbolicLink()||!st.isFile()||st.mtimeMs<Number(started)*1000||path.dirname(fs.realpathSync(vf))!==fs.realpathSync(runDir))throw Error('RECIPIENT_VIDEO_FILE_INVALID');
