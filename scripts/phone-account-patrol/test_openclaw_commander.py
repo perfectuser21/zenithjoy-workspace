@@ -7,6 +7,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('patrol_shared_validation', pathlib.Path(__file__).with_name('openclaw_commander.py'))
 shared = importlib.util.module_from_spec(SPEC)
@@ -18,6 +19,25 @@ PROJECT = '44444444-4444-4444-8444-444444444444'
 
 
 class SharedValidationTests(unittest.TestCase):
+    def test_historical_loader_authenticates_known_hashes_without_changing_current_pointer(self):
+        old = '4f899cab6425341646e27c5fca20979b8ac42be7'
+        self.assertEqual(shared.ACCEPTED_RELEASES[old]['runner.py'], '26c5e6dc065b42f8298e485aca2492f25eb83b8a9650409ca3dc33b51798b9ce')
+        self.assertEqual(shared.LEGACY_CONTROL_SHA256, '988f3f65522dbc9a0f33cf3161ca58e08981b6713e185972eb5d499dce58b596')
+        historical = self.state / 'releases' / old;historical.mkdir()
+        # 隔离密码学fixture使用已有八文件真实字节；生产旧版hash白名单不被改写。
+        for name in shared.EXPECTED_SHA256:(historical / name).write_bytes((self.release / name).read_bytes())
+        manifest = dict(self.deployment, source_revision=old);manifest.pop('release')
+        (historical / 'deployment.json').write_text(json.dumps(manifest))
+        pointer = (self.state / 'deployment-current.json').read_bytes()
+        with patch.dict(shared.ACCEPTED_RELEASES, {old: shared.EXPECTED_SHA256}):
+            accepted = shared.load_historical_deployment(self.state, old, self.deployment)
+            self.assertEqual(accepted['source_revision'], old)
+            with self.assertRaises(ValueError):shared.load_historical_deployment(self.state, old, dict(self.deployment, schedule_id=PROJECT))
+            (historical / 'runner.py').write_text('tampered')
+            with self.assertRaises(ValueError):shared.load_historical_deployment(self.state, old, self.deployment)
+        self.assertEqual((self.state / 'deployment-current.json').read_bytes(), pointer)
+        with self.assertRaises(ValueError):shared.load_historical_deployment(self.state, 'f' * 40, self.deployment)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -21,6 +21,76 @@ SPEC.loader.exec_module(bridge)
 STATE = bridge.STATE
 
 
+def safe_error_text(value, limit=2000, _depth=0):
+    text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else str(value or '')
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if len(text) > 1000000:
+        return '[LOG OMITTED: exceeds diagnostic safety limit]'
+    if text.lstrip().startswith(('{', '[')) and len(text) <= 100000:
+        try:
+            structured = json.loads(text)
+        except RecursionError:
+            return '[LOG OMITTED: diagnostic nesting exceeds safety limit]'
+        except ValueError:
+            pass
+        else:
+            text = json.dumps(safe_error_value(structured, _depth + 1), ensure_ascii=False)
+    # Structured output can be surrounded by plain console lines or prefixes.
+    decoder = json.JSONDecoder()
+    pieces, cursor = [], 0
+    for attempt, marker in enumerate(re.finditer(r'[\{\[]', text)):
+        if marker.start() < cursor:
+            continue
+        if attempt >= 128:
+            pieces.append('[REMAINING LOG OMITTED]'); cursor = len(text); break
+        try:
+            value, end = decoder.raw_decode(text, marker.start())
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(value, (dict, list)):
+            pieces.extend([text[cursor:marker.start()], json.dumps(safe_error_value(value, _depth + 1), ensure_ascii=False)])
+            cursor = end
+    if pieces:
+        text = ''.join(pieces) + text[cursor:]
+    for key, secret in os.environ.items():
+        if re.search(r'token|password|secret|api.?key', key, re.I) and len(secret) >= 4:
+            text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'(?i)("[^"\n]{0,100}(?:password|token|secret|api[_-]?key|authorization)[^"\n]{0,100}"\s*:\s*)"(?:\\.|[^"\\])*"', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)"(?:\\.|[^"\\])*"''', r'\1"[REDACTED]"', text)
+    text = re.sub(r'''(?i)(["']?[\w-]{0,80}(?:password|token|secret|api[_-]?key|authorization)[\w-]{0,80}["']?\s*[:=]\s*)'(?:\\.|[^'\\])*' ''', r"\1'[REDACTED]'", text, flags=re.X)
+    text = re.sub(r'(?im)^(\s*(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?i)((?:Bearer|Basic)\s+)[^\s"\']+', r'\1[REDACTED]', text)
+    text = re.sub(r'''(?i)(["']?(?:password|token|secret|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+''', r'\1[REDACTED]', text)
+    text = re.sub(r'(https?://)[^/\s@]+@', r'\1[REDACTED]@', text)
+    text = re.sub(r'(https?://[^\s?]+\?)[^\s"\']+', r'\1[REDACTED]', text)
+    return text[:limit]
+
+
+def safe_error_value(value, _depth=0):
+    if _depth > 6:
+        return '[TRUNCATED]'
+    if isinstance(value, dict):
+        return {k: '[REDACTED]' if re.search(r'password|token|secret|api.?key|authorization', k, re.I) else safe_error_value(v, _depth + 1) for k, v in value.items()}
+    if isinstance(value, list):
+        return [safe_error_value(v, _depth + 1) for v in value[:20]]
+    return safe_error_text(value, _depth=_depth + 1) if isinstance(value, str) else value
+
+
+def safe_failure(value):
+    # Only transport the public error contract, never arbitrary nested data.
+    failure = {k: safe_error_text(value[k], 1000 if k == 'message' else 2000) for k in
+               ['stage', 'code', 'message', 'host', 'stderr', 'stdout', 'error_type'] if isinstance(value.get(k), str)}
+    clipped_text = any(len(value[k]) > (1000 if k == 'message' else 2000) for k in failure)
+    failure['exit_code'] = value.get('exit_code') if type(value.get('exit_code')) is int else None
+    failure['timeout_sec'] = value.get('timeout_sec') if type(value.get('timeout_sec')) in (int, float) else None
+    evidence = value.get('evidence') if isinstance(value.get('evidence'), list) else []
+    clipped_evidence = len(evidence) > 10 or any(isinstance(v, str) and len(v) > 500 for v in evidence)
+    failure['truncated'] = value.get('truncated') is True or clipped_text or clipped_evidence
+    failure['evidence'] = [safe_error_text(v, 500) for v in value.get('evidence', [])[:10] if isinstance(v, str)] if isinstance(value.get('evidence'), list) else []
+    return failure
+
+
 def api(path, body=None, method=None):
     request = urllib.request.Request(bridge.API + path, data=json.dumps(body, ensure_ascii=False).encode() if body is not None else None,
                                      headers={'Content-Type': 'application/json'}, method=method)
@@ -136,7 +206,7 @@ def inspect(review_id, batch_id, deployment, state, call=None, current=None):
         children.append({'task_id': task['id'], 'serial': task['payload']['phone_serial'], 'status': task['status'],
                          'run_id': script.get('run_id') or task['payload'].get('script_run_id'), 'exit_code': script.get('exit_code'),
                          'business_status': result.get('status') if result else 'unknown',
-                         'business_receipt': {k: result[k] for k in ['task_id', 'status', 'serial', 'phone', 'checked_at', 'states'] if k in result} if result else None})
+                         'business_receipt': {k: (safe_failure(result[k]) if k == 'failure' else result[k]) for k in ['task_id', 'run_id', 'status', 'serial', 'phone', 'checked_at', 'states', 'failure'] if k in result} if result else None})
     batch_script = (batch.get('result') or {}).get('script') or {}
     batch_exit = batch_script.get('exit_code')
     nonzero_exit = lambda value: type(value) is int and value != 0
@@ -204,12 +274,74 @@ def execution_task(script):
     return match.group(1)
 
 
+def recovery_partition(tasks, schedule, deployment):
+    """先凭正式时段与祖先定范围，再校版本；不让候选历史冒充发布需求。"""
+    activated = bridge.timestamp((schedule.get('template') or {}).get('activated_at') or schedule.get('created_at'))
+    by_id = {t['id']: t for t in tasks};included = {};excluded = {}
+    for task in tasks:
+        p = task.get('payload') or {}
+        if task.get('project_id') != deployment['project_id']:raise ValueError('恢复清单含外项目记录')
+        if p.get('recurring_task_id') != deployment['schedule_id']:
+            excluded[task['id']] = 'outside_formal_schedule';continue
+        if bridge.timestamp(task['created_at']) < activated:
+            excluded[task['id']] = 'before_activation';continue
+        slot = bridge.timestamp(p.get('recurring_slot')).astimezone(zoneinfo.ZoneInfo('Asia/Shanghai'))
+        if (slot.hour, slot.minute, slot.second, slot.microsecond) != (22, 0, 0, 0):
+            excluded[task['id']] = 'outside_formal_slot';continue
+        if p.get('workflow_id') != deployment['batch_workflow_id'] or task.get('task_type') not in ['qiumi_task', 'script_run']:
+            raise ValueError('正式时段批次缺流程或执行身份')
+        if task['task_type'] == 'qiumi_task' and (p.get('qiumi_department') != 'infra' or (p.get('qiumi_route') or {}).get('source') != 'explicit'):
+            raise ValueError('正式领跑缺infra明确路由')
+        included[task['id']] = 'formal_batch'
+    batches = set(included)
+    for task in tasks:
+        if task.get('parent_task_id') not in batches:continue
+        p = task.get('payload') or {}
+        if task['id'] in batches:continue
+        if task.get('task_type') != 'script_run' or p.get('workflow_id') != deployment['single_workflow_id']:
+            raise ValueError('正式批次子记录缺单手机流程身份')
+        included[task['id']] = 'formal_phone'
+    phones = {key for key, reason in included.items() if reason == 'formal_phone'}
+    for task in tasks:
+        p = task.get('payload') or {}
+        if not p.get('recovery_demand'):continue
+        origin = by_id.get(p.get('origin_task_id'));batch = by_id.get(p.get('origin_batch_task_id'))
+        if not origin or not batch:raise ValueError('恢复需求原始祖先不可确认')
+        if origin['id'] not in phones and batch['id'] not in batches and task.get('parent_task_id') not in phones:
+            excluded[task['id']] = 'outside_formal_ancestry';continue
+        if origin['id'] not in phones or batch['id'] not in batches or origin.get('parent_task_id') != batch['id'] or task.get('parent_task_id') != origin['id']:
+            raise ValueError('正式恢复需求祖先冲突')
+        if p.get('workflow_id') != bridge.MAINTENANCE_WORKFLOW_ID:raise ValueError('正式恢复需求缺流程身份')
+        included[task['id']] = 'formal_recovery_demand'
+    demands = {key for key, reason in included.items() if reason == 'formal_recovery_demand'}
+    for task in tasks:
+        p = task.get('payload') or {};demand_id = p.get('recovery_demand_id')
+        if p.get('recovery_attention'):
+            if demand_id in demands or task.get('parent_task_id') in demands:
+                if task.get('task_type') != 'project':raise ValueError('正式补查尝试不可伪装维护注意记录')
+            continue
+        if demand_id in demands or task.get('parent_task_id') in demands:
+            if demand_id not in demands or task.get('parent_task_id') != demand_id or task.get('task_type') != 'script_run' or p.get('workflow_id') != deployment['single_workflow_id']:
+                raise ValueError('正式补查尝试祖先或流程冲突')
+            included[task['id']] = 'formal_recovery_attempt'
+        elif p.get('recovery_origin_task_id') in phones or task.get('parent_task_id') in phones:
+            if task.get('task_type') == 'script_run':
+                if p.get('workflow_id') != deployment['single_workflow_id']:raise ValueError('正式手动补查缺流程身份')
+                included[task['id']] = 'formal_manual_recovery'
+    selected = [t for t in tasks if t['id'] in included]
+    for task in selected:bridge.phone_revision(task, deployment)
+    return {'tasks': selected, 'included': [{'task_id': k, 'reason': v} for k, v in included.items()],
+            'excluded': [{'task_id': t['id'], 'reason': excluded.get(t['id'], 'outside_formal_ancestry')} for t in tasks if t['id'] not in included]}
+
+
 def maintain(task_id, deployment, state, call=None, current=None, run=None):
     call = call or api;run = run or subprocess.run;current = current or dt.datetime.now(dt.timezone.utc)
+    path = pathlib.Path(__file__).resolve()
     parent = bridge.read_task(call, task_id);p = parent.get('payload') or {}
     if (parent.get('task_type') != 'script_run' or parent.get('status') != 'in_progress' or parent.get('project_id') != deployment['project_id']
             or p.get('workflow_id') != bridge.MAINTENANCE_WORKFLOW_ID or p.get('runtime_requires_llm') is not False
-            or not re.fullmatch(r'[0-9a-f]{40}', p.get('source_revision', ''))):
+            or not re.fullmatch(r'[0-9a-f]{40}', p.get('source_revision', ''))
+            or path != bridge.CONTROL_RELEASES / p['source_revision'] / 'openclaw_native.py'):
         raise ValueError('持续维护不是正式中央维护代码任务')
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (state / 'native-maintenance.lock').open('a') as lock:
@@ -229,19 +361,78 @@ def maintain(task_id, deployment, state, call=None, current=None, run=None):
         if health is None or legacy_failed:
             health = {'status': 'unknown', 'reason': 'legacy_monitor_failed', 'exit_code': legacy.returncode};legacy_failed = True
         path = pathlib.Path(__file__).resolve();digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        recovery = bridge.recover(call, deployment, current, path, digest, p['source_revision'])
+        schedules = call('recurring-tasks');schedules = schedules if isinstance(schedules, list) else schedules.get('recurring_tasks', schedules.get('data'))
+        matches = [s for s in schedules if s['id'] == deployment['schedule_id']]
+        if len(matches) != 1:raise ValueError('正式巡查计划没有唯一读回')
+        select = lambda records: recovery_partition(records, matches[0], deployment)['tasks']
+        deployments = bridge.recovery_deployments(state, deployment, select(bridge.task_rows(call, deployment['project_id'])))
+        results = [bridge.recover(call, frozen, current, path, digest, p['source_revision'], select) for frozen in deployments]
+        recovery = {key: [entry for result in results for entry in result[key]] for key in ['demands', 'covered_originals']}
         value = {'status': 'partial_failure' if legacy_failed else 'observed', 'actor': 'OpenClaw:infra', 'maintenance_task_id': task_id, 'legacy_health': health, 'recovery': recovery}
         bridge.save(state, 'native-maintenance-' + task_id + '.json', value)
         return value
 
 
-def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
+def legacy_preflight_probe(receipt, control_revision, run):
+    """新版只读观察不替换旧执行版本，也不推断旧运行的历史根因。"""
+    remote = '/Users/jinnuoshengyuan/.local/share/phone-account-patrol/releases/' + bridge.PHONE_SOURCE_REVISION
+    command = ['/usr/bin/ssh', '-o', 'BatchMode=yes', '-o', 'ControlMaster=no', '-o', 'ControlPath=none',
+               '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2',
+               '-o', 'ProxyJump=none', '-o', 'ProxyCommand=none', 'xian-m4',
+               '/opt/homebrew/bin/python3 ' + shlex.quote(remote + '/preflight.py') + ' --serial ' + shlex.quote(receipt['serial'])]
+    check = None;ok = False
+    try:
+        output = run(command, capture_output=True, text=True, timeout=60)
+        failure = {'code': 'ssh_connection_failed' if output.returncode == 255 else 'preflight_response_invalid',
+                   'message': '新版远端自检未返回可信同设备结果', 'exit_code': output.returncode,
+                   'stdout': output.stdout, 'stderr': output.stderr}
+        try:
+            check = json.loads(output.stdout) if len(output.stdout) <= 100000 else None
+        except (ValueError, RecursionError):
+            check = None
+        if output.returncode in [0, 1] and isinstance(check, dict) and check.get('serial') == receipt['serial']:
+            checks = check.get('checks') or {};detail = check.get('failure')
+            required = ['source_version', 'ocr', 'device_lock_controller', 'pillow', 'adb_online']
+            ok = output.returncode == 0 and check.get('ok') is True and isinstance(checks, dict) and all(checks.get(k) is True for k in required)
+            if not ok and check.get('ok') is False and isinstance(checks, dict) and isinstance(detail, dict):
+                code = detail.get('code')
+                if ((code == 'adb_unreachable' and checks.get('source_version') is True and checks.get('adb_online') is False and type(detail.get('exit_code')) is int)
+                        or code in ['source_version_mismatch', 'prerequisite_failed', 'adb_check_timeout', 'adb_check_failed']):
+                    failure.update(detail, stdout=output.stdout, stderr=str(output.stderr or '') + '\n' + str(detail.get('stderr') or ''))
+    except (subprocess.TimeoutExpired, OSError) as error:
+        failure = {'code': 'preflight_timeout' if isinstance(error, subprocess.TimeoutExpired) else 'ssh_launch_failed',
+                   'message': str(error), 'exit_code': None, 'error_type': type(error).__name__,
+                   'timeout_sec': 60 if isinstance(error, subprocess.TimeoutExpired) else None,
+                   'stdout': safe_error_text(getattr(error, 'output', None)), 'stderr': safe_error_text(getattr(error, 'stderr', None)),
+                   'truncated': any(isinstance(v, (bytes, str)) and len(v) > 2000 for v in
+                                    [getattr(error, 'output', None), getattr(error, 'stderr', None)])}
+    prefix = '旧runner尚未启动；新版补查前自检（诊断source=' + bridge.PHONE_SOURCE_REVISION + '）'
+    path = STATE / (receipt['run_id'] + '.legacy-preflight.json')
+    failure.update(stage='legacy_pre_execution_preflight', host='xian-m4',
+                   message=prefix + '：' + str(failure.get('message') or ''), evidence=[str(path), prefix])
+    failure = safe_failure(failure)
+    proof = dict(receipt, stage='legacy_pre_execution_preflight', diagnostic_source_revision=bridge.PHONE_SOURCE_REVISION,
+                 phone_source_revision=receipt['source_revision'], control_source_revision=control_revision,
+                 observed_at=dt.datetime.now(dt.timezone.utc).isoformat(), status='passed' if ok else 'failed',
+                 observation=safe_error_value(check), failure=None if ok else failure,
+                 transport={k: failure.get(k) for k in ['stdout', 'stderr', 'exit_code']})
+    bridge.save(STATE, path.name, proof)
+    return None if ok else failure
+
+
+def recovery_phone(script, demand_id, serial, deployment, call=None, run=None, _legacy_probed=False):
     call = call or api;run = run or subprocess.run;task_id = execution_task(script)
-    demand = bridge.read_task(call, demand_id);scope = bridge.demand_scope(demand, deployment)
-    receipt = {'task_id': task_id, 'serial': serial, 'source_revision': bridge.PHONE_SOURCE_REVISION, 'actor': 'phone-account-patrol-recovery'}
+    current_deployment = deployment
+    demand = bridge.read_task(call, demand_id)
+    revision = bridge.phone_revision(demand, deployment)
+    if revision != deployment['source_revision']:
+        deployment = bridge.load_historical_deployment(STATE, revision, deployment)
+    scope = bridge.demand_scope(demand, deployment)
+    receipt = {'task_id': task_id, 'serial': serial, 'source_revision': deployment['source_revision'], 'actor': 'phone-account-patrol-recovery'}
     if demand['status'] in bridge.CLOSED:return dict(receipt, status='stopped', reason='demand_closed'), 0
     task = bridge.read_task(call, task_id);p = task.get('payload') or {}
     digest = hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
+    control_path = pathlib.Path(__file__).resolve()
     expected = ['/usr/bin/python3', str(pathlib.Path(__file__).resolve()), 'recovery-phone', '--demand-task-id', demand_id, '--serial', serial, '--execution-script', '$0']
     if (shlex.split(p.get('cmd') or '') != expected or p.get('host') != 'mmv' or p.get('recovery_demand_id') != demand_id
             or type(p.get('recovery_generation')) is not int or p['recovery_generation'] < 1 or p.get('recurring_task_id') is not None
@@ -249,8 +440,10 @@ def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
             or demand['status'] != 'blocked' or task.get('parent_task_id') != demand_id or task.get('status') != 'in_progress'
             or task.get('task_type') != 'script_run' or task.get('project_id') != deployment['project_id']
             or p.get('original_scope') != scope or p.get('phone_serial') != serial or serial != scope['phone_serial']
-            or p.get('source_revision') != bridge.PHONE_SOURCE_REVISION or p.get('workflow_id') != deployment['single_workflow_id']
-            or p.get('control_sha256') != digest or p.get('runtime_requires_llm') is not False):
+            or p.get('source_revision') != deployment['source_revision'] or p.get('workflow_id') != deployment['single_workflow_id']
+            or p.get('control_sha256') != digest or not re.fullmatch(r'[0-9a-f]{40}', p.get('control_source_revision') or '')
+            or control_path != bridge.CONTROL_RELEASES / p['control_source_revision'] / 'openclaw_native.py'
+            or p.get('runtime_requires_llm') is not False):
         raise ValueError('recovery_identity_mismatch')
     phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]
     if len(phones) != 1 or phones[0].get('host') != 'xian-m4':raise ValueError('recovery_identity_mismatch')
@@ -265,14 +458,38 @@ def recovery_phone(script, demand_id, serial, deployment, call=None, run=None):
     phones = [x for x in call('phone-registry')['phones'] if x.get('serial') == serial]
     if len(phones) != 1 or phones[0].get('host') != 'xian-m4':raise ValueError('recovery_identity_mismatch')
     if not phones[0].get('enabled'):return dict(receipt, status='stopped', reason='device_disabled'), 0
-    output = run(['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'phone', '--serial', serial, '--execution-script', script],
-                 capture_output=True, text=True, timeout=1150)
+    receipt.update(run_id=pathlib.Path(script).stem, workflow_id=deployment['single_workflow_id'], control_source_revision=p['control_source_revision'])
+    if revision == bridge.LEGACY_PHONE_REVISION and not _legacy_probed:
+        failure = legacy_preflight_probe(receipt, p['control_source_revision'], run)
+        if failure:return dict(receipt, status='failed', failure=failure), 1
+        # 自检耗时期间可能取消、停用或有其他在途任务；完整重读全部既有守卫。
+        return recovery_phone(script, demand_id, serial, current_deployment, call, run, _legacy_probed=True)
+    try:
+        output = run(['/usr/bin/python3', str(pathlib.Path(deployment['release']) / 'runner.py'), 'phone', '--serial', serial, '--execution-script', script],
+                     capture_output=True, text=True, timeout=1150)
+    except subprocess.TimeoutExpired as error:
+        return dict(receipt, status='failed', failure={'stage': 'phone_subprocess', 'code': 'phone_subprocess_timeout',
+            'message': '单手机执行超时', 'exit_code': None, 'timeout_sec': 1150,
+            'stdout': safe_error_text(error.output), 'stderr': safe_error_text(error.stderr), 'evidence': []}), 1
     if output.returncode:
-        return dict(receipt, status='failed', reason='frozen_phone_failed', exit_code=output.returncode), output.returncode
+        for line in reversed(output.stdout.splitlines()):
+            try: value = json.loads(line)
+            except ValueError: continue
+            if (isinstance(value, dict) and value.get('status') == 'failed' and value.get('task_id') == task_id
+                    and value.get('serial') == serial and value.get('workflow_id') == deployment['single_workflow_id']
+                    and value.get('source_revision') == deployment['source_revision'] and value.get('run_id') == receipt['run_id']
+                    and isinstance(value.get('failure'), dict)):
+                return dict(receipt, status='failed', failure=safe_failure(value['failure'])), output.returncode
+        legacy = revision == bridge.LEGACY_PHONE_REVISION
+        message = '旧版运行未保存内部失败详情；先前新版自检不是本次运行失败根因' if legacy else '单手机子进程失败，详见原始错误'
+        evidence = [str(STATE / (receipt['run_id'] + '.legacy-preflight.json')), '仅起跑前观察；诊断source=' + bridge.PHONE_SOURCE_REVISION] if legacy else []
+        return dict(receipt, status='failed', reason='frozen_phone_failed', failure={
+            'stage': 'phone_subprocess', 'code': 'legacy_failure_detail_unavailable' if legacy else 'phone_subprocess_failed', 'message': message,
+            'exit_code': output.returncode, 'stdout': safe_error_text(output.stdout), 'stderr': safe_error_text(output.stderr), 'evidence': evidence}), output.returncode
     for line in reversed(output.stdout.splitlines()):
         try:value = json.loads(line)
         except ValueError:continue
-        if isinstance(value, dict) and value.get('task_id') == task_id and value.get('serial') == serial and value.get('source_revision') == bridge.PHONE_SOURCE_REVISION:
+        if isinstance(value, dict) and value.get('task_id') == task_id and value.get('serial') == serial and value.get('source_revision') == deployment['source_revision']:
             return value, 0
     raise ValueError('冻结手机运行没有同身份回执')
 
