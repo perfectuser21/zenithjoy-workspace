@@ -28,3 +28,12 @@ test('原r7真实fhn回复元数据正文在content-desc：同一原生评论卡
  assert.equal(parseNative(profile,a11y,{nickname:'本人',douyinId:'person987',commentBody:'在哪里报名'}).returned_comment_verified,true);
  for(const wrong of [a11y.replace('本人,在哪里报名,','邻居,在哪里报名,'),a11y.replace('本人,在哪里报名,','本人,在哪里报名呢,'),a11y.replace('id/fhn','id/video_desc')])assert.throws(()=>parseNative(profile,wrong,{nickname:'本人',douyinId:'person987',commentBody:'在哪里报名'}),/RECIPIENT_/);
 });
+
+import {companyFixture} from './company-config-fixture.mjs';
+test('独立recipient模型读取完整native主页与原公司V3排除信号，网络请求有界且不改原A档',async()=>{
+ await scoped(async f=>{const e=JSON.parse(readFileSync(capture(f.args).file)),comment={line_key:'jinuo',harvest_batch:'source102',douyin_id:'person987',nickname:'本人',comment_body:'在哪里报名',source_video_url:f.args.videoUrl,source_video:'AI考证',intent_grade:'A',recipient_evidence:e};
+ const snapshot=companyFixture();snapshot.version=3;snapshot.runtime_config.comment_scoring.audiences=[{name:'原人群',exclusion_signals:['同行机构','已考仅分享无新需求']}];const old=globalThis.fetch;let called=0;
+ globalThis.fetch=async(url,opts)=>{called++;assert.ok(opts.signal,'新独立资格模型不可无限等待');const body=JSON.parse(opts.body),state=JSON.parse(body.state);assert.ok(state.native_profile.includes('在职学习'));assert.ok(body.state.includes('同行机构'));assert.equal(state.original_grade,'A');return {ok:true,json:async()=>({answers:{recipient:{choice:'excluded',confidence:.9}}})};};
+ try{const result=await createRequire(import.meta.url)('../judge-recipient.js').qualifyRecipient(comment,snapshot,{apiKey:'fixture-key'});assert.equal(result.status,'excluded');assert.equal(result.company_version,3);assert.equal(comment.intent_grade,'A');assert.equal(called,1);}finally{globalThis.fetch=old;}
+ });
+});
