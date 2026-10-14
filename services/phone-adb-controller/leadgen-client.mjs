@@ -137,14 +137,21 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
   };
 }
 
+// SSH 建连与两跳短链解析共用有限预算；调用者的更短截止时间仍优先。
+export async function resolveShareViaFrozenPeer({ frozen, url, execute = execInput, local = false, timeoutMs = 50000 } = {}) {
+  const rpc = createRpc({ frozen, execute, local });
+  const { result } = await rpc({ kind: 'resolve_share_link', url }, { timeoutMs });
+  if (!/^https:\/\/www\.douyin\.com\/(video|note)\/[0-9]{16,24}$/.test(result?.resolved_url || '') ||
+      result.resolved_url !== `https://www.douyin.com/${result.content_type}/${result.content_id}`) throw Error('解析回执身份无效');
+  return result.resolved_url;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if(process.argv[2]==='resolve-share-link'){
       if(process.argv.length!==4)throw Error('解析参数无效');
-      const rpc=createRpc({frozen:readFrozen(process.env.WFR_RUN_DIR),local:process.env.LEADGEN_LOCAL_RPC==='1'});
-      const {result}=await rpc({kind:'resolve_share_link',url:process.argv[3]},{timeoutMs:20000});
-      if(!/^https:\/\/www\.douyin\.com\/(video|note)\/[0-9]{16,24}$/.test(result?.resolved_url||'')||result.resolved_url!==`https://www.douyin.com/${result.content_type}/${result.content_id}`)throw Error('解析回执身份无效');
-      process.stdout.write(result.resolved_url+'\n');
+      const url = await resolveShareViaFrozenPeer({frozen:readFrozen(process.env.WFR_RUN_DIR),url:process.argv[3],local:process.env.LEADGEN_LOCAL_RPC==='1'});
+      process.stdout.write(url+'\n');
     }else{
     if (process.argv[2] !== 'qualify' || process.argv[3] !== 'judge') throw Error('未知调用');
     const args = {};

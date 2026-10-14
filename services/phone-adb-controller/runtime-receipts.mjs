@@ -7,6 +7,17 @@ import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput 
 import { bindRun,readBinding } from './runtime-binding.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
+// 只在prepare前选择中央同一MMV的登记地址；恢复既有run仍读取原冻结路由。
+export function selectMmvTransport(inventory,route='tailscale'){
+  if(!['tailscale','public'].includes(route))throw Error('WF_MMV_SSH_ROUTE仅允许tailscale或public');
+  const rows=Array.isArray(inventory)?inventory:inventory?.machines;
+  const matches=Array.isArray(rows)?rows.filter(m=>m?.id==='ed3555dc-4777-446c-bdf0-d928d6a08ef1'):[];
+  if(matches.length!==1)throw Error('中央MMV执行路由缺少唯一登记');
+  const machine=matches[0],address=machine.metadata?.tailscale_ip,alias=machine.metadata?.public_ip;
+  const ipv4=value=>typeof value==='string'&&/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)&&value.split('.').every(n=>Number(n)<=255);
+  if(machine.status!=='active'||!ipv4(address)||!address.startsWith('100.')||!ipv4(alias))throw Error('中央MMV执行路由缺少可核验地址');
+  return {machine_id:machine.id,ssh_hostname:route==='public'?alias:address,ssh_hostkey_alias:alias};
+}
 // release 整包数百 KB，执行机经中继跨境下载晚高峰要 6–10 秒：GET 给 60 秒并重试；POST 只放宽超时不盲目重试。
 // curl 失败时 Node 的报错会带整条命令（含 Bearer token），这里换成只含方法/路径/退出码/stderr 摘要的错误。
 export function request(path,body){
@@ -56,11 +67,8 @@ export async function run(args){
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
     let runtimeTransport;
     if(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'].includes(e.WF_BRAIN_WORKFLOW)){
-      const inventory=await request('/api/brain/machines');const rows=Array.isArray(inventory)?inventory:inventory.machines||[];
-      const machine=rows.find(m=>m.id==='ed3555dc-4777-446c-bdf0-d928d6a08ef1');
-      const address=machine?.metadata?.tailscale_ip,alias=machine?.metadata?.public_ip;
-      if(machine?.status!=='active'||!/^100\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(address||'')||!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(alias||''))throw Error('中央MMV执行路由缺少可核验地址');
-      runtimeTransport={machine_id:machine.id,ssh_hostname:address,ssh_hostkey_alias:alias};
+      const inventory=await request('/api/brain/machines');
+      runtimeTransport=selectMmvTransport(inventory,e.WF_MMV_SSH_ROUTE);
     }
     await freezeDefinition({samplingInput,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){

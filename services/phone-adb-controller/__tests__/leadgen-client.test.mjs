@@ -5,8 +5,24 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {execInput,createRpc,RPC_FILES} from '../leadgen-client.mjs';
+import * as client from '../leadgen-client.mjs';
 
 const frozen={deployment:{source_commit:'a'.repeat(40)},files:Object.fromEntries(RPC_FILES.map(path=>['runtime/'+path,'b'.repeat(64)]))};
+test('真实26.511秒建连加短链解析可在有限预算完成，未核来源或假ID仍拒绝',async()=>{
+ const actual={resolved_url:'https://www.douyin.com/video/7691237147096960271',content_id:'7691237147096960271',content_type:'video'};
+ // 传输夹具按已观测耗时执行时限合同；不联网、不冒真实取链成功。
+ const calls=[];const execute=async(_c,_a,o)=>{
+  const wire=JSON.parse(o.input);calls.push({wire,timeout:o.timeoutMs});
+  assert.equal(wire.kind,'resolve_share_link');assert.deepEqual(wire.source.files.map(x=>x.path),RPC_FILES);
+  if(o.timeoutMs<26511)throw Error('EXECUTION_DEADLINE');
+  assert.ok(o.timeoutMs<=60000,'不能无限等待或扩大总体预算');
+  return {code:0,stdout:JSON.stringify({ok:true,result:actual}),stderr:''};
+ };
+ assert.equal(await client.resolveShareViaFrozenPeer({frozen,url:'https://v.douyin.com/MHIr0PxToCo/',execute}),actual.resolved_url);
+ await assert.rejects(client.resolveShareViaFrozenPeer({frozen,url:'https://v.douyin.com/MHIr0PxToCo/',execute,timeoutMs:20000}),/EXECUTION_DEADLINE/);
+ await assert.rejects(client.resolveShareViaFrozenPeer({frozen:{deployment:frozen.deployment,files:{}},url:'https://v.douyin.com/MHIr0PxToCo/',execute}),/缺远端依赖/);
+ await assert.rejects(client.resolveShareViaFrozenPeer({frozen,url:'https://v.douyin.com/MHIr0PxToCo/',execute:async()=>({code:0,stdout:JSON.stringify({ok:true,result:{...actual,content_id:'7691237147096960999'}}),stderr:''})}),/解析回执身份无效/);
+});
 test('只读Commander丢失SSH回执时有界重试；仍按原总预算',async()=>{
  const calls=[];const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
   calls.push(opts.timeoutMs);return calls.length===1?{code:255,stdout:'',stderr:'transport closed'}:{code:0,stdout:JSON.stringify({ok:true,decision:{action:'continue',reason:'真实回执'}}),stderr:''};
