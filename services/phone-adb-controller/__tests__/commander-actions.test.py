@@ -152,6 +152,24 @@ class ActionsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'authorization'):
             actions.authorize(envelope, discard)
 
+    def test_probe_preserves_activity_and_step_failure_in_one_observation(self):
+        spec = importlib.util.spec_from_file_location('gateway_multi', HERE / 'commander/wf-v2-gateway.py')
+        gateway = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gateway)
+        self.envelope['definition'].update(runtime_snapshot_sha256='e' * 64, expected_path=[{'reference_id': 'publish'}, {'reference_id': 'publish', 'step_id': 'step-1'}])
+        self.envelope['contract']['action_bindings'][0]['readback'] = {'path': 'frozen-probe.py', 'digest': 'f' * 64, 'args': []}
+        directory = self.home / 'wf-agent-runs/run-1'
+        directory.mkdir(parents=True)
+        (directory / 'envelope.json').write_text(json.dumps(self.envelope))
+        self.store.record_execution('publish', 'code', 'unknown', {'value': 0})
+        now = datetime.now(timezone.utc).isoformat()
+        result = {'status': 'none', 'receipt': {'readback_source': 'isolated-probe'}, '_observed_started_at': now, '_observed_ended_at': now,
+                  'activity_facts': [{'reference_id': 'publish', 'outcome': 'fail', 'observed': {'value': 0}}, {'reference_id': 'publish', 'step_id': 'step-1', 'outcome': 'fail', 'observed': {'value': 0}}]}
+        with patch.dict(os.environ, HOME=str(self.home)):
+            events = gateway.emit_readback(self.envelope, 'task-1:publish', result)
+        self.assertEqual(len(events), 2)
+        self.assertEqual([e['data']['outcome'] for e in events], ['fail', 'fail'])
+
     def test_explicit_skill_primary_can_run_without_a_code_partner(self):
         env = copy.deepcopy(self.envelope)
         activity = env['activity_bindings'][0]
