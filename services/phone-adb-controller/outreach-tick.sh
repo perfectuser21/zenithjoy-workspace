@@ -282,6 +282,14 @@ outreach_ledger(){
 # source 守卫: smoke 层4 以 OUTREACH_TICK_SOURCED=1 source 本文件只取函数,不执行主体
 [[ -n "${OUTREACH_TICK_SOURCED:-}" ]] && return 0
 
+# 旧独立cron入口已退役；正式目录即使TESTING开启也不能领单、清暂停或发送。
+# 保留上面的函数加载供历史归因回归；新业务只走冻结四流程入口。
+legacy_outreach_canonical="$HOME/bin-harvest"
+if [[ "${0:A:h}" == "${legacy_outreach_canonical:A}" ]]; then
+  print -u2 -- 'OUTREACH_TICK_RETIRED: 旧触达入口已退役；请使用 leadgen-run.sh douyin_lead_outreach。'
+  exit 1
+fi
+
 # 可视化旁路(0919): 触达每阶段报给控制塔; 上报失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }

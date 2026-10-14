@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, copyFileSync, chmodSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, copyFileSync, chmodSync, mkdirSync, existsSync, rmSync, symlinkSync, readdirSync, openSync, closeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -525,4 +525,41 @@ exit 0`);
   assert.equal(c.tickRun().status, 0);
   assert.ok(!existsSync(join(c.state, "dm-pausecount-legacy.txt")));
   assert.ok(!existsSync(join(c.state, "dm-anomaly-legacy.txt")));
+});
+
+
+// crontab受OS权限限制未能移除：真正已发布canonical入口必须由代码拒绝，TESTING不得豁免。
+for(const variant of ['absolute','testing','relative','entry-symlink','directory-symlink'])test(`canonical旧tick入口退役 ${variant} 且无状态/外部副作用`,{skip:SKIP},()=>{
+ const c=setup();
+ try {
+  const canonical=join(c.home,'bin-harvest'),physical=variant==='directory-symlink'?join(c.home,'published-real'):canonical;
+  mkdirSync(join(physical,'state'),{recursive:true});
+  for(const name of ['outreach-tick.sh','dm-daily-cap.js','dm-rate-ramp-lib.js'])copyFileSync(join(c.tick,name),join(physical,name));
+  mkdirSync(join(physical,'config'));copyFileSync(join(c.tick,'config/dm-rate-ramp.json'),join(physical,'config/dm-rate-ramp.json'));
+  if(variant==='directory-symlink')symlinkSync(physical,canonical,'dir');
+  const preserved={'dm-paused-legacy.flag':'人工永久暂停\n不设soft_until\n','dm-count-legacy-20261014.txt':'17\n'};
+  for(const [name,data] of Object.entries(preserved))writeFileSync(join(physical,'state',name),data);
+  const env={...c.env};if(variant==='absolute')delete env.OUTREACH_TICK_TESTING;else env.OUTREACH_TICK_TESTING='1';
+  let script=join(canonical,'outreach-tick.sh');
+  if(variant==='relative')script='bin-harvest/outreach-tick.sh';
+  if(variant==='entry-symlink'){script=join(c.home,'old-tick-link.sh');symlinkSync(join(canonical,'outreach-tick.sh'),script);}
+  const outPath=join(c.home,'retirement-stdout'),errPath=join(c.home,'retirement-stderr');
+  const outFd=openSync(outPath,'w',0o600),errFd=openSync(errPath,'w',0o600);let r;
+  try{r=spawnSync(ZSH,[script],{env,cwd:c.home,stdio:['ignore',outFd,errFd],detached:true,timeout:2000,killSignal:'SIGKILL'});}
+  finally{closeSync(outFd);closeSync(errFd);if(r?.error?.code==='ETIMEDOUT'&&r.pid)try{process.kill(-r.pid,'SIGKILL');}catch(e){if(e.code!=='ESRCH')throw e;}}
+  r.stdout=readFileSync(outPath,'utf8');r.stderr=readFileSync(errPath,'utf8');
+  assert.equal(r.error,undefined,'退役须立即结束，不能睡眠或等待主体');assert.equal(r.status,1);assert.match(r.stderr,/OUTREACH_TICK_RETIRED/);
+  for(const [name,data] of Object.entries(preserved))assert.equal(readFileSync(join(physical,'state',name),'utf8'),data);
+  assert.deepEqual(c.ssh(),[]);assert.deepEqual(c.adb(),[]);assert.equal(c.log(),'');
+  for(const name of ['tick.lock','brain-calls.log','wfr-counts.log','pg-calls.log','send-calls.log'])assert.equal(existsSync(join(c.home,name)),false);
+  assert.deepEqual(readdirSync(join(physical,'state')).sort(),Object.keys(preserved).sort(),'不得清pause或增加计数/告警标记');
+ }finally{rmSync(c.home,{recursive:true,force:true});}
+});
+test('canonical旧tick SOURCED仍可读取归因函数且不进入主体',{skip:SKIP},()=>{
+ const c=setup();
+ try{
+  const canonical=join(c.home,'bin-harvest');mkdirSync(canonical);const script=join(canonical,'outreach-tick.sh');copyFileSync(c.script,script);
+  const r=spawnSync(ZSH,['-c','OUTREACH_TICK_SOURCED=1 source "$1"; classify_failure "current sender account does not match the claimed distribution account"','_',script],{encoding:'utf8',env:c.env,timeout:2000});
+  assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'account_mismatch');assert.deepEqual(c.ssh(),[]);assert.deepEqual(c.adb(),[]);assert.equal(c.log(),'');
+ }finally{rmSync(c.home,{recursive:true,force:true});}
 });
