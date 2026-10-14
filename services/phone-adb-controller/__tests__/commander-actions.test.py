@@ -136,6 +136,19 @@ class ActionsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'authorization'):
             actions.authorize(envelope, discard)
 
+    def test_explicit_skill_primary_can_run_without_a_code_partner(self):
+        env = copy.deepcopy(self.envelope)
+        activity = env['activity_bindings'][0]
+        primary = dict(activity['implementations']['skill'], business_requirement_sha256=activity['implementations']['business_requirement_sha256'])
+        activity.pop('implementations')
+        activity['primary_implementation'] = primary
+        store = actions.ActionStore(env, self.home)
+        fact = store.record_execution('publish', 'skill', 'pass', {'value': 1})
+        self.assertEqual(fact['execution_role'], 'primary')
+        self.assertEqual(fact['implementation']['digest'], primary['implementation']['digest'])
+        with self.assertRaises(ValueError):
+            store.record_execution('publish', 'code', 'pass', {'value': 1})
+
     def test_gate_refuses_late_controller_even_if_original_device_owner_remains(self):
         policy = self.home / 'policy.json'
         actions.install_policy(policy, self.envelope)
