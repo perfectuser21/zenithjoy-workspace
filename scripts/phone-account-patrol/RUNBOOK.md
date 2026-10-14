@@ -111,7 +111,7 @@ GP-Anchor: none(infra)
 - Run与Workflow正文显示阶段、原因和证据，真实Notion读回。
 ### 冻结版本切换与历史恢复
 
-当前手机发布仍固定 `864154c57e88e8085d2add741a79103a28891a44` 的八文件指纹；历史只额外认可已验收 `4f899cab6425341646e27c5fca20979b8ac42be7` 的独立八文件指纹。历史 manifest 必须匹配同一 project、schedule 和 Workflow，且逐文件验真，不依赖可变 manifest 自证。未知版本直接报错，不能跳过需求。
+修复版手机候选固定 `864154c57e88e8085d2add741a79103a28891a44` 的八文件指纹，是否已切换以当前部署指针和中央 registry 读回为准；历史只额外认可已验收 `4f899cab6425341646e27c5fca20979b8ac42be7` 的独立八文件指纹。历史 manifest 必须匹配同一 project、schedule 和 Workflow，且逐文件验真，不依赖可变 manifest 自证。未知版本直接报错，不能跳过需求。
 
 同一 `native-maintenance.lock` 内分别推进两个已认证版本的需求。旧需求、旧 Run、原始范围不改写；新 generation 使用原需求的手机源码和新版控制器，退避和设备仲裁保持原口径。旧控制器完成证明仅接受冻结的 `22d20ba53b7d33f595be0984b790fe77921c0917` 路径及已提交字节 SHA256 `988f3f65522dbc9a0f33cf3161ca58e08981b6713e185972eb5d499dce58b596`，任务自报哈希与磁盘内容同时改变仍不可信。
 
