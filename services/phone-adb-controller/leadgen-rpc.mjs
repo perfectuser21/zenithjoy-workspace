@@ -61,7 +61,7 @@ export async function handleRpc(input, deps = {}) {
   (deps.verify || verifyRpcSource)(input.source);
   let pool;
   try {
-    if(input.kind==='outreach')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit})};
+    if(input.kind==='outreach'){pool=deps.pool||require('./leadgen-db-connect.js').getPool();return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit,pool})};}
     if(input.kind==='outreach_policy')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachPolicy(input)};
     if(input.kind==='resolve_share_link')return {ok:true,result:await resolveCopiedShareLink(input.url,{execute:deps.resolveExec||exec})};
     if (input.kind === 'commander') {

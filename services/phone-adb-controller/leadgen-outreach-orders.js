@@ -65,7 +65,7 @@ function receiptValid(input,line,source){const r=input.receipt;
   const f=r.raw_evidence?.[key];if(f?.file!==input.run+'-a2-dm-1-'+suffix||!/^[a-f0-9]{64}$/.test(f.sha256||''))throw Error('触达原始证明不完整');
  }return r;
 }
-async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,lock=withOrderLock}={}){
+async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,lock=withOrderLock,eligibleOrders,pool,freezeCompanyConfig}={}){
  const route=routeOf(input.line),run=input.run;
  if(!/^[a-zA-Z0-9_-]{1,64}$/.test(run||'')||!/^[a-f0-9]{40}$/.test(sourceCommit||''))throw Error('触达正式运行来源证明缺失');
  if(input.op==='claim_outreach')sender(route,input.profile,input.sender_douyin_id);
@@ -75,8 +75,9 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
  return lock(route.key,async()=>{
   if(input.op==='claim_outreach'){
    if(input.limit!==1)throw Error('触达必须显式首单范围');const p=await policy(input),all=await api.all();
+   const qualified=new Set(await (eligibleOrders||((route,all,input)=>require('./leadgen-outreach-bridge.js').eligibleOrders(route,all,input,{pool,freezeCompanyConfig})))(route,all,input));
    const reserved=lib.reservedRecipientSet(all);
-   const rows=all.filter(r=>txt(r.fields?.['状态'])==='待触达'&&lib.classifyPending(r.fields)==='ok'&&lib.gradeAllowed(lib.leadGrade(r.fields),route.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
+   const rows=all.filter(r=>qualified.has(r.record_id)&&txt(r.fields?.['状态'])==='待触达'&&lib.classifyPending(r.fields)==='ok'&&lib.gradeAllowed(lib.leadGrade(r.fields),route.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
    rows.sort((a,b)=>(Number(b.fields['重复命中次数'])||0)-(Number(a.fields['重复命中次数'])||0)||lib.gradeRank(lib.leadGrade(a.fields))-lib.gradeRank(lib.leadGrade(b.fields)));
    if(!rows.length)return [];
    const pick=rows[0],lead=lib.extractLead(pick.fields),fields={'状态':'触达中','话术ID':p.template.id,'话术版本':p.template.version,'话术内容':p.template.message,'实际分发号':input.profile+'('+input.sender_douyin_id+')','回复结果':marker('claim',run,sourceCommit)};

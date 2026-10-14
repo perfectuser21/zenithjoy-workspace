@@ -77,3 +77,19 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
  });
 }
 module.exports={enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fieldsMatch,buildOrderFields};
+async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
+ let owned=false;if(!pool){pool=require('./leadgen-db-connect.js').getPool();owned=true;}
+ try{
+  const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,step:'104'});
+  const ids=all.map(r=>r.record_id);if(ids.length>3000)throw Error('BRIDGE_ORDER_SCOPE_EXCEEDED');
+  const rows=ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
+  const allowed=[];
+  for(const row of rows){try{
+   const p=nativeIntent(row);if(p.qualification.company_id!==snapshot.company_id||String(p.qualification.company_version)!==String(snapshot.version))continue;
+   if(!row.fields||digest(row.fields)!==row.fields_sha256)continue;
+   const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
+  }catch{/* 旧/错scope/缺native证明均不ready，不改原记录。 */}}
+  return allowed;
+ }finally{if(owned)await pool.end();}
+}
+module.exports.eligibleOrders=eligibleOrders;
