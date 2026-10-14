@@ -12,7 +12,7 @@ async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},
    target_douyin_id:comment.douyin_id,nickname:comment.nickname,comment_body:comment.comment_body,
    profile_url:comment.profile_url,source_video:comment.source_video,source_video_url:comment.source_video_url,
    intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
- const payload=JSON.stringify(intent),sha=crypto.createHash('sha256').update(payload).digest('hex');
+ const payload=JSON.stringify(intent),sha=digest(intent);
  await client.query(`INSERT INTO zenithjoy.leadgen_bridge_outbox(line_key,comment_id,lead_id,run_tag,source_run,payload,payload_sha256,qualification_status)
   VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8) ON CONFLICT(line_key,comment_id) DO NOTHING`,
  [lineKey,comment.id,lead.id,run,sourceRun,payload,sha,qualification.status]);
@@ -23,7 +23,9 @@ const {routeOf}=require('./line-routes.js');
 const {buildLeadCoreFields}=require('./lead-fields-lib.js');
 const {txt}=require('./next-outreach-lib.js');
 const evidence=require('./queued-recipient-evidence.js');
-const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
+const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+// JSONB不保留输入键序；先按JSON语义规范化，再递归排序，值/数组顺序仍严格。
+const digest=v=>crypto.createHash('sha256').update(JSON.stringify(canonical(JSON.parse(JSON.stringify(v))))).digest('hex');
 function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`;}
 function nativeIntent(row){
  const p=row.payload;
@@ -83,7 +85,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
   return result;
  });
 }
-module.exports={enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fieldsMatch,buildOrderFields};
+module.exports={digest,enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fieldsMatch,buildOrderFields};
 async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
  if(!pool)throw Error('BRIDGE_PG_AUTHORITY_MISSING');
  {

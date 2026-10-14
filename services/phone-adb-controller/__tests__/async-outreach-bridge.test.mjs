@@ -49,7 +49,7 @@ function pendingBridge(){
  const returned=`<hierarchy><node package="${pkg}" class="android.widget.TextView" resource-id="${pkg}:id/title" text="4条评论"/><node package="${pkg}" class="android.widget.EditText" resource-id="${pkg}:id/ety"/><node package="${pkg}" text="待核个人"/><node package="${pkg}" text="在哪里报名"/></hierarchy>`;
  const hash=v=>require('crypto').createHash('sha256').update(v).digest('hex');
  p.comment_run='source102';p.recipient_evidence={version:1,status:'verified',scope:{line_key:'jinuo',run:'source102',profile:'legacy',video_id:vid,video_url:p.source_video_url,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body_sha256:hash(p.comment_body),profile_eid:prefix+'-person1-t1',video_identity_eid:prefix+'-after-card1'},raw:{profile,returned},sha256:{profile:hash(profile),returned:hash(returned)},video_identity:{verified:true,content_type:'video',expected_video_id:vid,observed_video_id:vid,evidence_id:prefix+'-after-card1'}};
- return {id:cid,line_key:'jinuo',payload:p,payload_sha256:require('crypto').createHash('sha256').update(JSON.stringify(p)).digest('hex'),qualification_status:'passed',state:'pending',created_at:'2026-10-14T00:00:00Z'};
+ return {id:cid,line_key:'jinuo',payload:p,payload_sha256:require('../leadgen-outreach-bridge.js').digest(p),qualification_status:'passed',state:'pending',created_at:'2026-10-14T00:00:00Z'};
 }
 function bridgeStore(row){
  const calls=[];return {calls,async query(sql,args){calls.push({sql,args});
@@ -85,7 +85,7 @@ test('104旧personal/A飞书待触达行缺独立native资格不能领取，prot
 });
 
 test('同昵称旧PGlead UID不同不能把comment→lead别名冒成ready身份',()=>{
- const {nativeIntent}=require('../leadgen-outreach-bridge.js');const row=pendingBridge();row.payload.lead_identity={id:lid,line_key:'jinuo',douyin_id:'other987'};row.payload_sha256=require('crypto').createHash('sha256').update(JSON.stringify(row.payload)).digest('hex');
+ const {nativeIntent}=require('../leadgen-outreach-bridge.js');const row=pendingBridge();row.payload.lead_identity={id:lid,line_key:'jinuo',douyin_id:'other987'};row.payload_sha256=require('../leadgen-outreach-bridge.js').digest(row.payload);
  assert.throws(()=>nativeIntent(row),/BRIDGE_/);
 });
 test('未知POST读回须核持久fields hash，篡改expected payload不能假confirmed',()=>{
@@ -113,7 +113,7 @@ test('103标人独立读回必须核真实comment→lead outbox，缺意图不�
 });
 
 test('bridge独立PG读回确认已落实处置，缺行/仍attempted/篡改payload不得完成',async()=>{
- const row=pendingBridge();row.state='excluded';row.qualification_status='excluded';row.payload.qualification.status='excluded';row.payload_sha256=require('crypto').createHash('sha256').update(JSON.stringify(row.payload)).digest('hex');
+ const row=pendingBridge();row.state='excluded';row.qualification_status='excluded';row.payload.qualification.status='excluded';row.payload_sha256=require('../leadgen-outreach-bridge.js').digest(row.payload);
  const pool={query:async()=>({rows:[row]})};const input={op:'bridge_readback',line:'jinuo',run:'score103',ids:[cid]};
  assert.equal((await queueRequest(pool,input)).verified,true);
  for(const change of [{rows:[]},{rows:[{...row,state:'attempted'}]},{rows:[{...row,payload_sha256:'0'.repeat(64)}]}])assert.equal((await queueRequest({query:async()=>change},input)).verified,false);
@@ -122,7 +122,7 @@ test('bridge独立PG读回确认已落实处置，缺行/仍attempted/篡改payl
 test('Postgres JSONB键序重排后payload/fields语义相同仍应独立验收，值变化仍拒绝',()=>{
  const {nativeIntent,fieldsMatch,buildOrderFields}=require('../leadgen-outreach-bridge.js'),{routeOf}=require('../line-routes.js');const row=pendingBridge();
  const reorder=v=>Array.isArray(v)?v.map(reorder):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).reverse().map(([k,x])=>[k,reorder(x)])):v;
- row.fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:1}]);row.fields_sha256=require('crypto').createHash('sha256').update(JSON.stringify(row.fields)).digest('hex');
+ row.fields=buildOrderFields(row,routeOf('jinuo'),[{field_name:'采集时间',type:1}]);row.fields_sha256=require('../leadgen-outreach-bridge.js').digest(row.fields);
  row.payload=reorder(row.payload);row.fields=reorder(row.fields);
  assert.equal(nativeIntent(row).target_douyin_id,'person987');assert.equal(fieldsMatch(row,{fields:structuredClone(row.fields)}),true);
  row.payload.nickname='别人';assert.throws(()=>nativeIntent(row),/BRIDGE_/);
