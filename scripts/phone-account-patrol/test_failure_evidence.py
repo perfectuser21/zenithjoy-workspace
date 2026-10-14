@@ -5,6 +5,10 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
+import contextlib
+import io
+import hashlib
+import sys
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).parent
@@ -14,6 +18,30 @@ spec.loader.exec_module(runner)
 
 
 class FailureEvidenceTests(unittest.TestCase):
+    def test_preflight_adb_error_retains_device_error_and_checks_runner_hash(self):
+        spec = importlib.util.spec_from_file_location('failure_preflight', ROOT / 'preflight.py')
+        preflight = importlib.util.module_from_spec(spec); spec.loader.exec_module(preflight)
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            files = ['runner.py', 'collector.py', 'dispatch.py', 'preflight.py', 'publish.mjs', 'ocr.swift', 'SKILL.md', 'mirror.mjs']
+            for name in files: (root / name).write_bytes((ROOT / name).read_bytes())
+            manifest = {'sha256': {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in files}}
+            (root / 'deployment.json').write_text(json.dumps(manifest))
+            output = io.StringIO()
+            with patch.object(preflight, '__file__', str(root / 'preflight.py')), patch.object(sys, 'argv', ['preflight', '--serial', 'phone-a']), \
+                    patch.object(preflight.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'error: device phone-a not found')), contextlib.redirect_stdout(output):
+                self.assertEqual(preflight.main(), 1)
+            receipt = json.loads(output.getvalue())
+            self.assertEqual(receipt['failure']['code'], 'adb_unreachable')
+            self.assertIn('device phone-a not found', receipt['failure']['stderr'])
+            (root / 'runner.py').write_text('changed dependency')
+            output = io.StringIO()
+            with patch.object(preflight, '__file__', str(root / 'preflight.py')), patch.object(sys, 'argv', ['preflight', '--serial', 'phone-a']), \
+                    patch.object(preflight.subprocess, 'run') as adb, contextlib.redirect_stdout(output):
+                self.assertEqual(preflight.main(), 1)
+                adb.assert_not_called()
+            self.assertEqual(json.loads(output.getvalue())['failure']['code'], 'source_version_mismatch')
+
     def test_quoted_secrets_basic_auth_and_url_userinfo_are_redacted(self):
         for text, secrets in [('{"password":"alpha beta gamma"}', ['alpha', 'beta', 'gamma']),
                               ('Authorization: Basic ZmFrZTpwYXNz', ['ZmFrZTpwYXNz']),
