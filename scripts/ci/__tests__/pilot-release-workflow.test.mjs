@@ -4,8 +4,8 @@ import {existsSync,readFileSync} from 'node:fs';
 import YAML from 'yaml';
 import {validatePatrolCaller} from '../implementation-patrol-scope.mjs';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
-// Cecelia PR #6425 的实际 squash 合并提交；不能固定已删除开发分支中的中途提交。
-const revision='7af362d7854a92132bb68257a37bbd30ed56e572';
+// Cecelia PR #6435 的实际 squash 合并提交；不能固定已删除开发分支中的中途提交。
+const revision='8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
 test('完整发布caller名称与路径固定，仅main push/手动触发，不借PR影响结果',()=>{
  const w=config();assert.equal(w.name,'Pilot release verification');
