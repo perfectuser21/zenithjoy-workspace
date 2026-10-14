@@ -14,6 +14,15 @@ spec.loader.exec_module(runner)
 
 
 class FailureEvidenceTests(unittest.TestCase):
+    def test_quoted_secrets_basic_auth_and_url_userinfo_are_redacted(self):
+        for text, secrets in [('{"password":"alpha beta gamma"}', ['alpha', 'beta', 'gamma']),
+                              ('Authorization: Basic ZmFrZTpwYXNz', ['ZmFrZTpwYXNz']),
+                              ('https://alice:fake-pass@example.test/path', ['alice', 'fake-pass']),
+                              ('API_KEY="secret with spaces"', ['secret with spaces'])]:
+            cleaned = runner.safe_error_text(text)
+            for secret in secrets:
+                self.assertNotIn(secret, cleaned)
+
     def test_remote_error_preserves_evidence_without_guessing_adb(self):
         output = subprocess.CompletedProcess([], 255, '', 'Permission denied (publickey).')
         with patch.object(runner.subprocess, 'run', return_value=output):
