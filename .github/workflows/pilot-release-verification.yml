@@ -33,12 +33,12 @@ jobs:
     name: Complete pilot release verification
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@744e8d9ceb0543eaf541795cd1a805f77d2c922f
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@7af362d7854a92132bb68257a37bbd30ed56e572
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: zenithjoy
       head_revision: ${{ github.sha }}
-      tooling_revision: 744e8d9ceb0543eaf541795cd1a805f77d2c922f
+      tooling_revision: 7af362d7854a92132bb68257a37bbd30ed56e572
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
@@ -48,12 +48,27 @@ jobs:
     name: Complete commander release verification
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@744e8d9ceb0543eaf541795cd1a805f77d2c922f
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@7af362d7854a92132bb68257a37bbd30ed56e572
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: commander-generic
       head_revision: ${{ github.sha }}
-      tooling_revision: 744e8d9ceb0543eaf541795cd1a805f77d2c922f
+      tooling_revision: 7af362d7854a92132bb68257a37bbd30ed56e572
+    secrets:
+      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+      CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+      BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+
+  verify-patrol-definitions:
+    name: Complete patrol definitions release verification
+    if: github.ref == 'refs/heads/main'
+    needs: caller-contract
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@7af362d7854a92132bb68257a37bbd30ed56e572
+    with:
+      source_repo: perfectuser21/zenithjoy-workspace
+      scope: cecelia-device-patrol-definitions
+      head_revision: ${{ github.sha }}
+      tooling_revision: 7af362d7854a92132bb68257a37bbd30ed56e572
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}

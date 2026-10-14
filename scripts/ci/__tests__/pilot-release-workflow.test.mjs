@@ -4,8 +4,8 @@ import {existsSync,readFileSync} from 'node:fs';
 import YAML from 'yaml';
 import {validatePatrolCaller} from '../implementation-patrol-scope.mjs';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
-// Cecelia PR #6407 的实际 squash 合并提交；不能固定已删除开发分支中的中途提交。
-const revision='744e8d9ceb0543eaf541795cd1a805f77d2c922f';
+// Cecelia PR #6425 的实际 squash 合并提交；不能固定已删除开发分支中的中途提交。
+const revision='7af362d7854a92132bb68257a37bbd30ed56e572';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
 test('完整发布caller名称与路径固定，仅main push/手动触发，不借PR影响结果',()=>{
  const w=config();assert.equal(w.name,'Pilot release verification');
@@ -43,4 +43,14 @@ test('发布协议断言在现有PR检查和自身main检查永久执行，旧�
  assert.ok(legacy.jobs['caller-contract'].steps.some(s=>s.run===command));
  assert.ok(legacy.on.pull_request);assert.match(legacy.jobs.impact.uses,/\/implementation-impact.yml@[a-f0-9]{40}$/);
  assert.equal(validatePatrolCaller(legacy),true,'独立Pilot协议守卫也拒绝禁用旧caller，避免自检job关闭后失声');
+});
+test('巡查定义有独立完整发布证明，保留现有范围且不以影响N/A冒充通过',()=>{
+ const w=config(),j=w.jobs['verify-patrol-definitions'];
+ assert.ok(j,'cecelia-device-patrol-definitions须有独立完整发布验证');
+ assert.equal(j.if,"github.ref == 'refs/heads/main'");
+ assert.equal(j.needs,'caller-contract');
+ assert.equal(j.uses,w.jobs.verify.uses);
+ assert.deepEqual(j.with,{...w.jobs.verify.with,scope:'cecelia-device-patrol-definitions'});
+ assert.deepEqual(j.secrets,w.jobs.verify.secrets);
+ assert.equal(j['continue-on-error'],undefined);
 });
