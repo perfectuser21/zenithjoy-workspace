@@ -2,7 +2,7 @@
 import {readFileSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
-import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,brainRequest} from './deployment-preflight.mjs';
+import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,deploymentAssertionPlan,brainRequest} from './deployment-preflight.mjs';
 const extraKeys=['workflow_report.internal','workflow_commander.internal','douyin_video_publish.android'];
 const need=(v,m)=>{if(!v)throw Error('统一部署: '+m);};
 const same=(a,b)=>digest(a)===digest(b);
@@ -27,7 +27,7 @@ function checkScope(e,scope,sha){
  const defs=s.definitions;need(defs?.workflows?.length&&defs.activities?.length,'空定义');
  for(const kind of ['workflows','activities']){need(new Set(defs[kind].map(x=>x.id)).size===defs[kind].length,'重复定义');for(const row of defs[kind])need(row.source_repo===DEPLOY_REPO&&row.source_commit===sha&&row.payload_sha256===rowHash(row),'定义来源漂移');}
  need(r?.protocol==='pilot_release_verification_v1'&&r.purpose==='release_verification'&&r.scope===scope&&same(r.source,{repo:DEPLOY_REPO,head_revision:sha})&&r.verification_status==='verified'&&Array.isArray(r.gaps)&&!r.gaps.length&&r.snapshot_sha256===snapshot_sha256&&r.assertion_source==='current_registration','完整CI来源不符');
- const plan=Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,r[k]]));
+ const plan=deploymentAssertionPlan(r,s);
  need(r.expected_usages?.length&&r.assertion_plan_sha256===digest(plan),'CI计划摘要不符');
  for(const kind of ['workflows','activities'])need(Array.isArray(r.definition_versions?.[kind])&&new Set(r.definition_versions[kind].map(x=>x.id)).size===r.definition_versions[kind].length&&defs[kind].every(w=>r.definition_versions[kind].some(v=>v.id===w.id&&v.payload_sha256===w.payload_sha256&&v.source_repo===w.source_repo&&v.source_commit===w.source_commit)),'报告缺冻结定义');
  need(c?.purpose==='release_verification'&&c.actor==='pilot_release_verification'&&c.scope==='declared_pilot_regressions'&&c.business_runtime_status==='not_evaluated'&&c.verdict==='PASS'&&same(c.source,r.source)&&c.snapshot_sha256===snapshot_sha256&&c.assertion_plan_sha256===r.assertion_plan_sha256&&c.report_sha256===digest(Buffer.from(JSON.stringify(r))),'CI receipt不符');
@@ -42,6 +42,8 @@ function subset(definitions,workflows){
 }
 export function targetDefinitions(bundle,sha,readFile){
  validateDeploymentEvidence(bundle,sha,readFile);
+ // 第三scope是whole-Pilot门禁，不进入M4/MMV的7/4流程安装闭包。
+ checkScope(bundle.patrol,'cecelia-device-patrol-definitions',sha);
  const scopes=[checkScope(bundle,'zenithjoy',sha),checkScope(bundle.commander,'commander-generic',sha)],all={workflows:[],activities:[]};
  for(const kind of ['workflows','activities']){const rows=new Map();for(const defs of scopes)for(const row of defs[kind]){need(!rows.has(row.id)||same(rows.get(row.id),row),'同ID跨scope冻结冲突');rows.set(row.id,row);}all[kind]=[...rows.values()];}
  const legacy=all.workflows.filter(w=>WORKFLOWS.includes(w.workflow_id));need(legacy.length===4,'缺旧四流程');

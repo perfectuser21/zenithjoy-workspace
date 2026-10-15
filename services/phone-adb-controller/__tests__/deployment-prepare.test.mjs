@@ -31,7 +31,8 @@ async function fixture(t){
  const refresh=e=>{delete e.snapshot.snapshot_sha256;e.snapshot.snapshot_sha256=digest(e.snapshot);e.report.snapshot_sha256=e.snapshot.snapshot_sha256;e.report.definition_versions=e.snapshot.definitions;e.report.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,e.report[k]])));Object.assign(e.receipt,{snapshot_sha256:e.snapshot.snapshot_sha256,assertion_plan_sha256:e.report.assertion_plan_sha256,report_sha256:digest(Buffer.from(JSON.stringify(e.report)))});};
  refresh({snapshot,report,receipt});
  const commander=structuredClone({snapshot,report,receipt});commander.snapshot.scope='commander-generic';commander.snapshot.definitions.workflows=commanderWorkflows;commander.report.scope='commander-generic';refresh(commander);
- const bundlePath=join(temp,'bundle.json');writeFileSync(bundlePath,JSON.stringify({run:{id:42,sha,repo,branch:'main',event:'push',path:'.github/workflows/pilot-release-verification.yml'},snapshot,report,receipt,commander}));
+ const patrol=structuredClone(commander);patrol.snapshot.scope='cecelia-device-patrol-definitions';patrol.snapshot.definitions.workflows=[makeExtra(23,'single-phone-account-patrol')];patrol.report.scope='cecelia-device-patrol-definitions';refresh(patrol);
+ const bundlePath=join(temp,'bundle.json');writeFileSync(bundlePath,JSON.stringify({run:{id:42,sha,repo,branch:'main',event:'push',path:'.github/workflows/pilot-release-verification.yml'},snapshot,report,receipt,commander,patrol}));
  const tokenPath=join(temp,'token.env');writeFileSync(tokenPath,'CECELIA_INTERNAL_TOKEN=fixture-private-token\n',{mode:0o600});
  const releases=new Map(),requests=[];let mode='valid';
  const server=createServer(async(req,res)=>{
