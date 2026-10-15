@@ -67,6 +67,9 @@ export function openRouterCommander({ model = 'google/gemini-2.5-flash', timeout
   };
 }
 
+// Exact producer error names: capability/strategy/evidence gaps are not UI repair requests.
+export const isCaptureContractFailure=evidence=>/\b(?:RECORD_AUDIO_STRATEGY_UNSUPPORTED|RECORD_AUDIO_CAPTURE_UNAVAILABLE|RECORD_AUDIO_TRACK_UNVERIFIED|RECORD_CAPTURE_STRATEGY_UNVERIFIED|RECORD_CAPTURE_SILENT)\b/.test(JSON.stringify(evidence));
+
 export async function runActivity({ activity, context, execute, commander, record, recover }) {
   const cleanup = activity.key === 'cleanup';
   let commanderStatus = 'available';
@@ -104,6 +107,7 @@ export async function runActivity({ activity, context, execute, commander, recor
       return {...evidence,status:'failed',execution_stopped:false,commander_status:commanderStatus,decision:{action:'escalate',reason:'原执行者终止未验证，保留资源'}};
     }
     const after = await consult('after', evidence);
+    if(isCaptureContractFailure(evidence))return {...evidence,commander_status:commanderStatus,decision:{action:'escalate',reason:'音频能力或捕获合同证据缺口，不重试或用UI代修'},failure_class:'capture_contract_blocked'};
     if (evidence.status === 'failed' && after.action === 'retry' && attempt < maxAttempts) continue;
     if (recover && ['failed','partial'].includes(evidence.status) && !['finish','escalate'].includes(after.action)) {
       try {

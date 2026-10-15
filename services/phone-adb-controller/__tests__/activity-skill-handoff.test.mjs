@@ -58,6 +58,6 @@ for(const name of ['RECORD_AUDIO_STRATEGY_UNSUPPORTED','RECORD_AUDIO_CAPTURE_UNA
  const evidence={status:'partial',result:{failures:[{stage:'record_start',reason:name}],matched:1}};
  assert.equal(classifyActivityFailure({key:'qualification'},evidence),'blocked');
  let calls=0,skills=0,cleaned=0;
- const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{calls++;return evidence.result.status?evidence.result:{status:'partial',...evidence.result};},cleanup:async()=>{cleaned++;return {safe_desktop:true};}},commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',execution_stopped:true};}});
+ const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{calls++;return {status:'partial',...evidence.result};},cleanup:async()=>{cleaned++;return {safe_desktop:true};}},commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',execution_stopped:true};}});
  assert.equal(calls,1);assert.equal(skills,0);assert.equal(cleaned,1);assert.equal(r.status,'partial');assert.equal(r.results[0].result.matched,1);
 });

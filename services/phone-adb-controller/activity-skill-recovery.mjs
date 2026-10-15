@@ -3,10 +3,12 @@ import {join} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {startActivityBroker} from './activity-skill-broker.mjs';
 import {safeExecutionDiagnostic} from './leadgen-client.mjs';
+import {isCaptureContractFailure} from './activity-commander.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const noLaunch=message=>{const e=Error(message);e.executionStopped=true;throw e;};
 export function classifyActivityFailure(activity,failure){
  const text=JSON.stringify(failure);
+ if(isCaptureContractFailure(failure))return 'blocked';
  if(/SOURCE_|BINDING_|CONTRACT_|COMPANY_|ACCOUNT_|未授权|暂停|日发送上限|锁.*(不符|未知|失败)|LOCK_|鉴权|AUTH_|EXECUTION_DEADLINE|预算|截止|配额/.test(text))return 'blocked';
  if(activity.key==='collection'&&failure.status==='partial')return 'blocked';
  if(activity.key==='send_dm')return 'readback_only';
