@@ -43,3 +43,9 @@ test('single-slot tool relay uses managed strict M4 alias and cannot accept arbi
  assert.equal((await relayActivityTool(dir,'inspect',{},deps)).result.fixture,true);await assert.rejects(()=>relayActivityTool(dir,'shell',{},deps));assert.equal(called,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
+
+test('real public inspect CLI validates without waiting for an unrelated open stdin channel',async()=>{
+ const {spawn}=await import('node:child_process');const child=spawn(process.execPath,[new URL('../leadgen-skill-agent.mjs',import.meta.url).pathname,'tool','/nonexistent/isolated-fixture-handoff','inspect'],{stdio:['pipe','pipe','pipe']});
+ let timedOut=false;const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},1500);
+ try{const code=await new Promise(resolve=>child.once('close',resolve));assert.equal(timedOut,false);assert.equal(code,1);}finally{clearTimeout(timer);child.stdin.destroy();child.kill('SIGKILL');}
+});
