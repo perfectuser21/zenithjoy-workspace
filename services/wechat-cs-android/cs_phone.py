@@ -57,8 +57,9 @@ def chat_focus(raw, require_empty=True):
     if require_empty and (re.findall(r'\binitialSelStart=(-?\d+)', editor) != ['0']
                           or re.findall(r'\binitialSelEnd=(-?\d+)', editor) != ['0']):
         raise ValueError('chat_input_not_initial_empty_selection')
-    connection_id = re.search(r'\bconnection=([A-Za-z_$][\w.$]*@[0-9a-fA-F]+)', connection).group(1)
-    return tokens[0], connection_id
+    # IME switches rebuild connection objects; each current connection is proven
+    # active above. Across a switch, the stable identity is the actual editor view.
+    return 'com.tencent.mm.ui.widget.MMEditText', tokens[0]
 
 
 def chat_phone(base_phone):
