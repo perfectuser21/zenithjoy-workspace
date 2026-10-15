@@ -45,7 +45,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -146,7 +146,14 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "69edb889bed6496c255f8aaa220cddedc8b85ffb3f1ee0cb266378f098f87dfe"
+      "code_digest": "77ba739a34df92a1cad40acd7c8f6e9ed74f0815bc6d552060097a540a258757",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_video_discovery.collect_videos方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "69edb889bed6496c255f8aaa220cddedc8b85ffb3f1ee0cb266378f098f87dfe",
+        "current_code_digest": "77ba739a34df92a1cad40acd7c8f6e9ed74f0815bc6d552060097a540a258757"
+      }
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.0.0",
@@ -192,7 +199,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -297,7 +304,14 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "f2cf178f21954d2c3aff3893f853f7640c3cc7ac13d4d305e144dcd55b00d4bf"
+      "code_digest": "90678fa128d40f714d7393a6f99c0001910c52fd284f2b9325f718a62723d03d",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_video_processing.preflight方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "f2cf178f21954d2c3aff3893f853f7640c3cc7ac13d4d305e144dcd55b00d4bf",
+        "current_code_digest": "90678fa128d40f714d7393a6f99c0001910c52fd284f2b9325f718a62723d03d"
+      }
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.0.0",
@@ -343,7 +357,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -444,7 +458,14 @@
           "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
         }
       ],
-      "code_digest": "a7adf00fa1cae99248cad727892b1ce4218eb81ec4603ceb48aa65734855894d"
+      "code_digest": "853639ce5148b51f1f0753ecd208fb88d2a44196c4ff65bd7f16567961fb7c37",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_video_processing.dedup方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "a7adf00fa1cae99248cad727892b1ce4218eb81ec4603ceb48aa65734855894d",
+        "current_code_digest": "853639ce5148b51f1f0753ecd208fb88d2a44196c4ff65bd7f16567961fb7c37"
+      }
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.1.0",
@@ -490,7 +511,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -598,7 +619,14 @@
           "sha256": "2e972f4ca894ccc1a98c9b0afd7e6893808e33ec4a82fb5a20263e28ed9c02e1"
         }
       ],
-      "code_digest": "d77edd1419b62c63f183836a042121749918f6ea71879ae6436a43e66479e451"
+      "code_digest": "f03c1575c1f18521f310f2604ec20b3c1be7b0369c802f670c98773336ec65b2",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_video_processing.qualification方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "d77edd1419b62c63f183836a042121749918f6ea71879ae6436a43e66479e451",
+        "current_code_digest": "f03c1575c1f18521f310f2604ec20b3c1be7b0369c802f670c98773336ec65b2"
+      }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.3.0",
@@ -644,7 +672,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -767,7 +795,14 @@
           "sha256": "befda1bd125177423044f6f94763d2eeec0bf9ed0599de1ac5e8bbbdd1c91c04"
         }
       ],
-      "code_digest": "79b11fc366037463eb5dafba30cddef2d1d0d2afd8b01af42936d78d183a61a5"
+      "code_digest": "3b0a0cd3c38b6d6de68e4db6ba6c384beb8628e0755d83c285393fd28252badb",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_video_processing.collection方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "79b11fc366037463eb5dafba30cddef2d1d0d2afd8b01af42936d78d183a61a5",
+        "current_code_digest": "3b0a0cd3c38b6d6de68e4db6ba6c384beb8628e0755d83c285393fd28252badb"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.0.0",
@@ -813,7 +848,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -910,7 +945,14 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "eacd1b851266c6ba11022db71970373a23187c9881ca193508203f4f108e27e8"
+      "code_digest": "d273160bed24026341dea9fbbfba4bf4c8fa7df71e20ef346bda94cc8b4932c2",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_video_processing.cleanup方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "eacd1b851266c6ba11022db71970373a23187c9881ca193508203f4f108e27e8",
+        "current_code_digest": "d273160bed24026341dea9fbbfba4bf4c8fa7df71e20ef346bda94cc8b4932c2"
+      }
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.0.0",
@@ -956,7 +998,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -1036,7 +1078,14 @@
           "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
         }
       ],
-      "code_digest": "0a112320fcee3fc140bd48cb6157b228f945af1651ca4b5a27a606b73c497817"
+      "code_digest": "4120081bbedcbca133bc22cc75b50eda1f8c1effbbec324e33120e20a9fe0e9c",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_comment_scoring.scoring方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "0a112320fcee3fc140bd48cb6157b228f945af1651ca4b5a27a606b73c497817",
+        "current_code_digest": "4120081bbedcbca133bc22cc75b50eda1f8c1effbbec324e33120e20a9fe0e9c"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.0.0",
@@ -1082,7 +1131,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -1211,7 +1260,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "2e99257853d92f74612d19c8f61a7ca70d91d0b42388ff5c993817dd461c88eb"
+      "code_digest": "0eb95cc476d8de70164d9c8defa30f2261c69b33d09602219fa8cfc0748ad58b",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_comment_scoring.mark_leads方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "2e99257853d92f74612d19c8f61a7ca70d91d0b42388ff5c993817dd461c88eb",
+        "current_code_digest": "0eb95cc476d8de70164d9c8defa30f2261c69b33d09602219fa8cfc0748ad58b"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "4.0.0",
@@ -1257,7 +1313,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -1390,7 +1446,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "492af327d19fedd7af7559e067a34b2bc8263b928cdb9f70eae79a919b1c45f3"
+      "code_digest": "c7ae67489dd706f4f56713d28aa6c7606ee19cc808de0fc6972122f43f685e7e",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_lead_outreach.preflight方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "492af327d19fedd7af7559e067a34b2bc8263b928cdb9f70eae79a919b1c45f3",
+        "current_code_digest": "c7ae67489dd706f4f56713d28aa6c7606ee19cc808de0fc6972122f43f685e7e"
+      }
     },
     "douyin_lead_outreach.send_dm": {
       "activity_version": "3.0.0",
@@ -1436,7 +1499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -1544,7 +1607,14 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "259849513148beba16d5be7bb1193f0b710984b90775431b152013ca6c2a9347"
+      "code_digest": "85e2cb74277c7b2d9bf96c65bbd61111ff94645b9cd90069c1214352c3f1b670",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_lead_outreach.send_dm方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "259849513148beba16d5be7bb1193f0b710984b90775431b152013ca6c2a9347",
+        "current_code_digest": "85e2cb74277c7b2d9bf96c65bbd61111ff94645b9cd90069c1214352c3f1b670"
+      }
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "3.0.0",
@@ -1590,7 +1660,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -1698,7 +1768,14 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "259849513148beba16d5be7bb1193f0b710984b90775431b152013ca6c2a9347"
+      "code_digest": "85e2cb74277c7b2d9bf96c65bbd61111ff94645b9cd90069c1214352c3f1b670",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_lead_outreach.write_back方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "259849513148beba16d5be7bb1193f0b710984b90775431b152013ca6c2a9347",
+        "current_code_digest": "85e2cb74277c7b2d9bf96c65bbd61111ff94645b9cd90069c1214352c3f1b670"
+      }
     },
     "douyin_lead_outreach.cleanup": {
       "activity_version": "3.0.0",
@@ -1744,7 +1821,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
+          "sha256": "f56fbb49b1460a68973a8c32e6ad8903f8bd75d0c3e1e103f87c3e4e543c7b25"
         },
         {
           "kind": "code",
@@ -1855,7 +1932,14 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "0c9b639dba9eddc902130b6d856a6eda93a8d518c12e11296f255e67f5e8217d"
+      "code_digest": "186e93906af53738ebbb10a0f39febdfc0aacede95aea943d38b815515ff84f5",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立逐对象核douyin_lead_outreach.cleanup方法/支持正文、业务合同及消费者与5de完全相同；唯一绑定leadgen-skill-agent.mjs仅修官方spawn receipt同一授权openai/gpt-6.1-sol的full/bare精确等价格式和省略可选taskName；原gateway工具/参数、run/task/slot/nonce/来源/租约、终态裸ID校验、未知隔离及104只读不重发边界不变。",
+        "reviewed_by": "codex:/root/patrol_source_registration",
+        "previous_code_digest": "0c9b639dba9eddc902130b6d856a6eda93a8d518c12e11296f255e67f5e8217d",
+        "current_code_digest": "186e93906af53738ebbb10a0f39febdfc0aacede95aea943d38b815515ff84f5"
+      }
     }
   },
   "workflows": {

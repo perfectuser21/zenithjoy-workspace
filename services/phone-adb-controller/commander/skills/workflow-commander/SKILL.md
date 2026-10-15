@@ -1,6 +1,6 @@
 ---
 name: workflow-commander
-version: 2.0.19
+version: 2.0.20
 description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 
@@ -66,7 +66,7 @@ bash "$HOME/.openclaw/commander/wf-launch.sh" --envelope "$WF_ENVELOPE_PATH" --p
 
 领取命令：`python3 ~/.openclaw/commander/wf-v2.py claim-spawn <run目录>`。它会持久保存本 run 唯一 spawn 权，返回 request 和 message。核对 request 的 run_id、task_id、parent_session_key、nonce 与本单一致，且未过 expires_at。已领取但缺绑定时，只能找回原 spawn 回执。
 
-用当前官方 `sessions_spawn` **一次**创建业务子会话：agentId=request.agent_id（当前授权 `skill-factory`），mode=run，context=isolated，cleanup=keep，completionTarget=parent；taskName 使用 run_id（超长时使用 task_id 前8位）。runTimeoutSeconds 不得超过 request.expires_at 的剩余秒数；不能重新给固定完整预算。task 原样包含 message 和完整 request，不 fork Commander 历史、不设置模型覆盖或 fallback。
+用当前官方 `sessions_spawn` **一次**创建业务子会话：agentId=request.agent_id（当前授权 `skill-factory`），mode=run，context=isolated，cleanup=keep，completionTarget=parent；不设置可选taskName；原run_id/task_id只留在本次请求和绑定，不为名称正则修改业务身份。runTimeoutSeconds 不得超过 request.expires_at 的剩余秒数；不能重新给固定完整预算。task 原样包含 message 和完整 request，不 fork Commander 历史、不设置模型覆盖或 fallback。
 
 子会话开始任何业务动作前必须读取本 run 的 `agent-binding.json`，确认 parent/run/task/nonce 与 request 一致、childSessionKey 是自己；最多在剩余执行预算内等绑定。存在 `handoff-closed.json` 或身份不符时立即停止，不能触发业务副作用。可通过实际可用文件工具或已有 SSH 通道读取；不指定子会话未暴露的工具。
 
@@ -116,4 +116,4 @@ FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt �
 
 使用同一官方sessions_spawn参数及授权模型校验。child任务原样包含request及activity-request（方法Skill与support正文、原Code失败、broker_host/tool/request路径）；上下文隔离，只执行指定slot。child先核agent-binding与自己的session，不能使用裸queue/SQL/原phone自由发送或创建Workflow。其唯一业务工具为原run activity-skill-tool：inspect、受控phone、一次该slot resume；send_dm readback_only不得resume或点击发送。调用MMV gateway_exec或原宿主SSH执行本次冻结工具，JSON通过stdin/env，不将业务字符串拼shell。
 
-原官方spawn receipt原样保存到spawn-receipt.json，核openai/gpt-6.1-sol后用本次source提供的commander/wf-agent-handoff.py bind，再await持续官方agent.wait。预算不得重置，父CLI exit0/模型自述不能替代child官方终态。未知/超时精确停止原child并读回；无确证时报告unknown保留原run锁。最终结果由原broker记录的成熟代码返回值和原独立verify决定，不由child输出JSON改写闭包/账本。
+原官方spawn receipt原样保存到spawn-receipt.json，resolvedProvider必须精确openai，resolvedModel仅接受精确openai/gpt-6.1-sol或兼容裸名gpt-6.1-sol，不修改原receipt；终态effective.model仍核裸ID gpt-6.1-sol。核验后用本次source提供的commander/wf-agent-handoff.py bind，再await持续官方agent.wait。预算不得重置，父CLI exit0/模型自述不能替代child官方终态。未知/超时精确停止原child并读回；无确证时报告unknown保留原run锁。最终结果由原broker记录的成熟代码返回值和原独立verify决定，不由child输出JSON改写闭包/账本。
