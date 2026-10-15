@@ -416,6 +416,7 @@ print -rl -- "$@" > "$FIXTURE/scrcpy-args"
 [[ "$SCRCPY_OPTOUT" != 1 ]] || { print -u2 audio_capture_opt_out;exit 1; }
 trap 'print stopped > "$FIXTURE/capture-stopped"; exit 0' INT TERM
 print start >> "$FIXTURE/scrcpy-started"
+print $$ > "$FIXTURE/fixture-recorder.pid"
 [[ "$CAPTURE_MODE" != early_exit ]] || exit 0
 [[ "$CAPTURE_MODE" != delayed ]] || /bin/sleep 0.15
 case "$CAPTURE_MODE" in
@@ -444,10 +445,33 @@ exec /bin/ps "$@"
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nFFPROBE=$FIXTURE/ffprobe\nFFMPEG=$FIXTURE/ffmpeg\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == (500|2000) ]]; then /bin/sleep 0.02; fi; if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\n${volumeHelpers}\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${stopFn}\n${activeRecording?'print $$ > $FIXTURE/other.rec.pid':''}\n${initialWrong?'touch $FIXTURE/fg-switched':''}\n${sdkRace?`print ORIGINAL > $FIXTURE/sdk-protected\nTRAPDEBUG(){ if [[ \"$ZSH_DEBUG_CMD\" == *'capture-sdk.txt'* && \"$ZSH_DEBUG_CMD\" == *'$sdk'* && \"$ZSH_DEBUG_CMD\" != '[['* && ! -e $FIXTURE/sdk-race-injected ]]; then touch $FIXTURE/sdk-race-injected; ${sdkRace==='symlink'?'ln -s $FIXTURE/sdk-protected $FIXTURE/probe.capture-sdk.txt':'print PREEXISTING > $FIXTURE/probe.capture-sdk.txt'}; fi; }`:''}\n${probeMode==='session'?'record_playback_state probe':probeMode==='stop'?'record_start probe 25; record_stop probe':'record_start probe 25'}\n`;
   const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0',SDK:sdk,SCRCPY_OPTOUT:scrcpyOptOut?'1':'0',CAPTURE_MODE:captureMode,CAPTURE_OWNER:captureOwner},timeout:20000});
   const captureReadyAtReturn=existsSync(join(d,'probe.rec.mkv'))&&statSync(join(d,'probe.rec.mkv')).size>0;const stoppedBeforeHarnessCleanup=existsSync(join(d,'capture-stopped'));
-  const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
+
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
   return {...r,captureReadyAtReturn,stoppedBeforeHarnessCleanup,sdkRaceInjected:existsSync(join(d,'sdk-race-injected')),sdkProtected:existsSync(join(d,'sdk-protected'))?readFileSync(join(d,'sdk-protected'),'utf8').trim():null,sdkOriginal:existsSync(join(d,'probe.capture-sdk.txt'))?readFileSync(join(d,'probe.capture-sdk.txt'),'utf8').trim():null,scrcpyArgs:existsSync(join(d,'scrcpy-args'))?readFileSync(join(d,'scrcpy-args'),'utf8').trim().split('\n'):[],finalVolume:existsSync(join(d,'volume'))?readFileSync(join(d,'volume'),'utf8').trim():'1',restoredEvidence:existsSync(join(d,'probe-playback-restored.native-audio.json')),rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
- }finally{rmSync(d,{recursive:true,force:true});}
+ }finally{
+  // Stop and observe this isolated fixture before deleting files its TERM trap can write.
+  // Never retry rmSync while a live writer is still using the directory.
+  const pidFile=existsSync(join(d,'fixture-recorder.pid'))?join(d,'fixture-recorder.pid'):join(d,'probe.rec.pid');
+  if(existsSync(pidFile)){
+   const pid=Number(readFileSync(pidFile,'utf8').trim());assert.ok(Number.isSafeInteger(pid)&&pid>1);
+   const inspect=()=>{
+    const result=spawnSync('/bin/ps',['-ww','-p',String(pid),'-o','stat=,command='],{encoding:'utf8'});
+    if(result.status===1&&!result.stdout.trim())return null;
+    assert.equal(result.status,0,result.stderr);
+    const [state,...command]=result.stdout.trim().split(/\s+/);
+    if(state.startsWith('Z'))return null;
+    assert.ok(command.includes(join(d,'scrcpy')),'fixture PID identity changed; do not signal or delete evidence');
+    return state;
+   };
+   if(inspect()){
+    try{process.kill(pid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
+    const deadline=Date.now()+2000;
+    while(inspect()&&Date.now()<deadline)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);
+    assert.equal(inspect(),null,'fixture recorder exit unknown; preserve directory');
+   }
+  }
+  rmSync(d,{recursive:true,force:true});
+ }
 }
 // MediaSession只作诊断，保留严格原值解析；不再要求其PLAYING才代表真实native播放。
 for(const [mediaTarget,expected] of [
