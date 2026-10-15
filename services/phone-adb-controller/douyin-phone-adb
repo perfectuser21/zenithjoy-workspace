@@ -2792,7 +2792,8 @@ import os,sys,time,stat,subprocess,shlex,signal,json,errno
 pid,parent=int(sys.argv[1]),int(sys.argv[2]);binary,serial,out,log=sys.argv[3:7];maximum=int(sys.argv[7]);proof=sys.argv[8]
 expected=[binary,'-s',serial,'--no-window','--no-playback','--audio-source=playback','--audio-dup','--require-audio','--record='+out,'--time-limit='+str(maximum)]
 observations=[];identity=None;reason='readiness_timeout';stopped=False
-# Startup and termination share a finite budget; never reset the workflow deadline.
+# Startup is capped at 8s and reserves workflow time for owned termination.
+# Stop observations are separately bounded; the outer action still owns the deadline.
 end=time.monotonic()+min(8.0,float(maximum))
 try:
  start=float(os.environ.get('WF_RUN_START_TS','nan'));total=float(os.environ.get('WF_RUN_MAX_SECONDS','nan'))
