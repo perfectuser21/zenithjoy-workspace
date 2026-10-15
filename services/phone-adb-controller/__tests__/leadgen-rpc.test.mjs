@@ -52,3 +52,11 @@ test('异步桥/native资格新增依赖必须同source闭包，缺任一helper�
  await assert.rejects(handleRpc({kind:'queue',source,request:{op:'bridge_outreach',line:'jinuo',run:'score103'}},{verify:s=>verifyRpcSource(s,f.options),pool:{query:async()=>{used=true;return {rows:[]};}}}),/DEPENDENCY_MISSING/);
  assert.equal(used,false);}
 });
+
+test('Skill transport runtime import closure cannot be omitted or drift outside RPC source guard',()=>{
+ for(const path of ['runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs']){
+  const f=fixture();assert.ok(RPC_FILES.includes(path),'declared import '+path);
+  assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(x=>x.path!==path)},f.options),/DEPENDENCY_MISSING/);
+  assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.map(x=>x.path===path?{...x,sha256:'b'.repeat(64)}:x)},f.options),/BYTES_MISMATCH/);
+ }
+});
