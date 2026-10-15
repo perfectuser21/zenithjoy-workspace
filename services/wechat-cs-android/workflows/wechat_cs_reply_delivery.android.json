@@ -4,13 +4,13 @@
   "capability_id": "ac2e35bc-849a-48cd-917f-79d15c5ac886",
   "channel": "wechat",
   "form": "android_rpa",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "runtime": {
     "skill_id": "b63d108a-0068-4566-9d6b-5bd895218a11",
     "entrypoint": "wechat-cs-android",
     "execution_profile": "codex_agent",
     "agent": "zenithjoy-moments",
-    "code_revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2",
+    "code_revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0",
     "code_path": "services/wechat-cs-android/"
   },
   "input_schema": {
@@ -122,15 +122,16 @@
         "受claim事件与授权测试联系人一致且没有回复尝试",
         "后端配置、登录账号和两个设备租约均准确就绪",
         "运行绑定对应已鉴权租户和当前客服账号，source_event_id沿用已领取事件",
-        "唯一runtime联系人、实屏身份PNG与摘要、授权任务和State持久绑定一致；接管模式必须明确且名单允许"
+        "唯一runtime联系人、实屏身份PNG与摘要、授权任务和State持久绑定一致；接管模式必须明确且名单允许",
+        "仅精确PNG纯读取45秒有界预算，其他ADB命令仍15秒，超时终止回收且不自动重试"
       ],
       "implementation": {
         "kind": "code",
         "ref": "services/wechat-cs-android/backend_cli.py",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "repo": "perfectuser21/zenithjoy-workspace",
         "path": "services/wechat-cs-android/backend_cli.py",
-        "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+        "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
       },
       "implementation_bindings": [
         {
@@ -139,31 +140,39 @@
           "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
           "revision": "contract",
           "name": "wechat-cs-android",
-          "version": "0.3.0"
+          "version": "0.3.1"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/watcher.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/watcher.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/bridge.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/bridge.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/identity.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/identity.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/phone_read_budget.py",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/phone_read_budget.py",
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0",
+          "version": "0.3.1"
         }
       ],
       "steps": [
@@ -177,10 +186,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/bridge.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/bridge.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -204,10 +213,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/backend_cli.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/backend_cli.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -235,10 +244,10 @@
       "implementation": {
         "kind": "code",
         "ref": "services/wechat-cs-android/cs_phone.py",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "repo": "perfectuser21/zenithjoy-workspace",
         "path": "services/wechat-cs-android/cs_phone.py",
-        "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+        "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
       },
       "implementation_bindings": [
         {
@@ -247,31 +256,39 @@
           "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
           "revision": "contract",
           "name": "wechat-cs-android",
-          "version": "0.3.0"
+          "version": "0.3.1"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/bridge.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/bridge.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/artifact_transport.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/artifact_transport.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/identity.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/identity.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/phone_read_budget.py",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/phone_read_budget.py",
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0",
+          "version": "0.3.1"
         }
       ],
       "steps": [
@@ -285,10 +302,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/cs_phone.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/cs_phone.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -312,10 +329,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/bridge.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/bridge.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -342,10 +359,10 @@
       "implementation": {
         "kind": "code",
         "ref": "services/wechat-cs-android/cs_phone.py",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "repo": "perfectuser21/zenithjoy-workspace",
         "path": "services/wechat-cs-android/cs_phone.py",
-        "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+        "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
       },
       "implementation_bindings": [
         {
@@ -354,39 +371,47 @@
           "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
           "revision": "contract",
           "name": "wechat-cs-android",
-          "version": "0.3.0"
+          "version": "0.3.1"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/backend_cli.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/backend_cli.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/bridge.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/bridge.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/artifact_transport.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/artifact_transport.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/identity.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/identity.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/phone_read_budget.py",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/phone_read_budget.py",
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0",
+          "version": "0.3.1"
         }
       ],
       "steps": [
@@ -400,10 +425,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/backend_cli.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/backend_cli.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -427,10 +452,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/cs_phone.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/cs_phone.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -454,10 +479,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/cs_phone.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/cs_phone.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -485,10 +510,10 @@
       "implementation": {
         "kind": "code",
         "ref": "services/wechat-cs-android/backend_cli.py",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "repo": "perfectuser21/zenithjoy-workspace",
         "path": "services/wechat-cs-android/backend_cli.py",
-        "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+        "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
       },
       "implementation_bindings": [
         {
@@ -497,31 +522,39 @@
           "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
           "revision": "contract",
           "name": "wechat-cs-android",
-          "version": "0.3.0"
+          "version": "0.3.1"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/cs_phone.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/cs_phone.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/bridge.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/bridge.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
         },
         {
           "kind": "code",
           "ref": "services/wechat-cs-android/identity.py",
-          "version": "0.3.0",
+          "version": "0.3.1",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/wechat-cs-android/identity.py",
-          "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/phone_read_budget.py",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/phone_read_budget.py",
+          "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0",
+          "version": "0.3.1"
         }
       ],
       "steps": [
@@ -535,10 +568,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/backend_cli.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/backend_cli.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",
@@ -562,10 +595,10 @@
           "implementation": {
             "kind": "code",
             "ref": "services/wechat-cs-android/cs_phone.py",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "repo": "perfectuser21/zenithjoy-workspace",
             "path": "services/wechat-cs-android/cs_phone.py",
-            "revision": "7eb99e5cfc013539d7a9ad4ec0654c03802da1f2"
+            "revision": "cdf3181c7b8dead8de4f49d36d81aef6903bb8e0"
           },
           "dod": {
             "mode": "hard",

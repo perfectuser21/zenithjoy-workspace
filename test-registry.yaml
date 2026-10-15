@@ -7511,3 +7511,11 @@ agent_suite:
   status: active
   product: 私域运营
   note: "GP-Anchor: line04/passive_reception#step2；局部建档不覆盖全量扫描账、身份冲突409整批回滚、默认full兼容"
+
+- id: wechat-cs-screenshot-read-budget
+  path: services/wechat-cs-android/tests/test_phone_read_budget.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；精确PNG读取45秒且超时终止回收，写命令保持15秒和一次执行；使用模拟进程不碰手机"
