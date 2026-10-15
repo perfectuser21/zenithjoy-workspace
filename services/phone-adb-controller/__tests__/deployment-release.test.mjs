@@ -79,22 +79,23 @@ test('MMV正式观测用真实中央机器hostname；device身份冒认MMV拒绝
 });
 
 
-test('actual MMV copy loop preserves nested file paths and atomic failure before ACK (isolated filesystem transport fixture)',()=>{
+test('actual MMV and M4 copy loops preserve nested paths and atomic failure before ACK (isolated filesystem transport fixture)',()=>{
  const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
  const prefix=source.slice(0,source.indexOf('# 在任何SSH前核验部署源字节'));
- const start=source.indexOf('echo "=== [1/3]');const end=source.indexOf('echo "=== [1b/3]',start);
+ for(const scenario of [{host:'mmv',root:'~/.openclaw/leadgen-scripts',array:'MMV_JS_FILES',start:'echo \"=== [1/3]',end:'echo \"=== [1b/3]'},{host:'xian-m4',root:'~/bin-harvest',array:'DEVICE_NODE_FILES',start:'  for f in \"${DEVICE_NODE_FILES[@]}\";',end:'  # 探针在设备也必须保留原嵌套路径'}]){
+ const start=source.indexOf(scenario.start),end=source.indexOf(scenario.end,start);
  assert.ok(start>0&&end>start);const loop=source.slice(start,end);
  for(const failure of ['', 'mkdir', 'scp', 'mv']){
   const dir=mkdtempSync(join(tmpdir(),'deploy-nested-fixture-'));
   try{
    const src=join(dir,'source'),remote=join(dir,'remote'),bin=join(dir,'bin'),ack=join(dir,'ack');
-   for(const d of [src,remote,bin,join(src,'commander')])mkdirSync(d,{recursive:true});
-   const files=['top.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py'];
-   for(const file of files){writeFileSync(join(src,file),file.endsWith('.py')?'x = 1\n':'export const fixture = 1;\n');if(!file.includes('/'))writeFileSync(join(remote,file),'# old fixture bytes\n');}
+   for(const d of [src,remote,bin,join(src,'commander'),join(src,'config')])mkdirSync(d,{recursive:true});
+   const files=['top.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py','config/leadgen-outreach-rate-ramp.json'];
+   for(const file of files){writeFileSync(join(src,file),file.endsWith('.py')?'x = 1\n':file.endsWith('.json')?'{}\n':'export const fixture = 1;\n');if(!file.includes('/'))writeFileSync(join(remote,file),'# old fixture bytes\n');}
    writeFileSync(join(bin,'ssh'),`#!/usr/bin/env python3
 import os,sys,subprocess
-assert sys.argv[1]=='mmv'
-command=' '.join(sys.argv[2:]).replace('~/.openclaw/leadgen-scripts',os.environ['FIXTURE_REMOTE'])
+assert sys.argv[1]==os.environ['FIXTURE_HOST']
+command=' '.join(sys.argv[2:]).replace(os.environ['FIXTURE_ROOT'],os.environ['FIXTURE_REMOTE']).replace('/opt/homebrew/bin/node',os.environ['FIXTURE_NODE'])
 assert os.environ['FIXTURE_REMOTE'] in command
 fail=os.environ.get('FIXTURE_FAIL')
 if fail=='mkdir' and command.startswith('mkdir '):sys.exit(72)
@@ -105,18 +106,20 @@ sys.exit(subprocess.call(['/bin/bash','-c',command]))
 import os,sys,shutil,pathlib
 if os.environ.get('FIXTURE_FAIL')=='scp':sys.exit(74)
 source,destination=sys.argv[-2:]
-assert destination.startswith('mmv:~/.openclaw/leadgen-scripts/')
-relative=destination.split('mmv:~/.openclaw/leadgen-scripts/',1)[1]
+prefix=os.environ['FIXTURE_HOST']+':'+os.environ['FIXTURE_ROOT']+'/'
+assert destination.startswith(prefix)
+relative=destination[len(prefix):]
 assert '..' not in pathlib.Path(relative).parts
 try:shutil.copy2(source,pathlib.Path(os.environ['FIXTURE_REMOTE'])/relative)
 except OSError:sys.exit(75)
 `,{mode:0o755});
-   const script=prefix+'\nD="$FIXTURE_SOURCE"\nMMV_JS_FILES=(top.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py)\n'+loop+'\ntouch "$FIXTURE_ACK"\n';
-   let failed=false;try{execFileSync('/bin/bash',['-c',script,new URL('../deploy.sh',import.meta.url).pathname],{env:{...process.env,PATH:bin+':'+process.env.PATH,FIXTURE_SOURCE:src,FIXTURE_REMOTE:remote,FIXTURE_ACK:ack,FIXTURE_FAIL:failure},stdio:'pipe'});}catch{failed=true;}
-   assert.equal(failed,Boolean(failure),'actual script failure phase '+(failure||'successful nested copy'));
+   const script=prefix+'\nD="$FIXTURE_SOURCE"\nhost="$FIXTURE_HOST"\n'+scenario.array+'=(top.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py config/leadgen-outreach-rate-ramp.json)\n'+loop+'\ntouch "$FIXTURE_ACK"\n';
+   let failed=false;try{execFileSync('/bin/bash',['-c',script,new URL('../deploy.sh',import.meta.url).pathname],{env:{...process.env,PATH:bin+':'+process.env.PATH,FIXTURE_SOURCE:src,FIXTURE_REMOTE:remote,FIXTURE_ACK:ack,FIXTURE_FAIL:failure,FIXTURE_HOST:scenario.host,FIXTURE_ROOT:scenario.root,FIXTURE_NODE:process.execPath},stdio:'pipe'});}catch{failed=true;}
+   assert.equal(failed,Boolean(failure),scenario.host+' actual script failure phase '+(failure||'successful nested copy'));
    assert.equal(existsSync(ack),!failure,'no completion/ACK after mkdir, scp or mv failure');
    if(failure)assert.equal(readFileSync(join(remote,files[0]),'utf8'),'# old fixture bytes\n','failed atomic replacement preserves previous final');
    else for(const file of files)assert.equal(readFileSync(join(remote,file),'utf8'),readFileSync(join(src,file),'utf8'));
   }finally{rmSync(dir,{recursive:true,force:true});}
+ }
  }
 });
