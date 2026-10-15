@@ -251,3 +251,16 @@ describe('generateChatDraft 去飞书自动直发 [BEHAVIOR]', () => {
     expect(llm).toHaveBeenCalled();
   });
 });
+
+describe('回复不等待记忆固化 regression', () => {
+  it('达到固化阈值也不在回复前启动额外分析模型', async () => {
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockQuery.mockImplementation(async (sql: string) => sql.includes('consolidated = FALSE')
+      ? { rows: Array.from({length:8}, (_, i) => ({id:i, direction:'in', content:'客户消息', sender_name:'客户'})) }
+      : {rows:[],rowCount:0});
+    vi.mocked(callOpenRouter).mockResolvedValue({ content: '收到' } as any);
+    const {generateChatDraft} = await import('../wechat-draft');
+    await generateChatDraft({sender:'客户',wechat_id:'wx-c',content:'你好'});
+    expect(vi.mocked(callOpenRouter).mock.calls.some(([p]) => p.purpose === 'wechat_consolidate')).toBe(false);
+  });
+});

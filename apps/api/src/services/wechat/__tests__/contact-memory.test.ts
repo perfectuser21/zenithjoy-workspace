@@ -390,3 +390,15 @@ describe('consolidate', () => {
     expect(wrote).toBe(false);
   });
 });
+
+// 草稿不是已经发生的对话：不能用于后续回答或客户画像。
+describe('delivered-only regression', () => {
+  it('短期记忆 SQL 只取 delivered 消息', async () => {
+    await getShortTerm('scope');
+    expect(String(mockedQuery.mock.calls[0][0])).toMatch(/status = 'delivered'/);
+  });
+  it('固化 SQL 只取 delivered 消息', async () => {
+    await consolidate('scope');
+    expect(String(mockedQuery.mock.calls[0][0])).toMatch(/status = 'delivered'/);
+  });
+});
