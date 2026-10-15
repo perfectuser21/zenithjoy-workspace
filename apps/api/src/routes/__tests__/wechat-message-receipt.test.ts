@@ -97,3 +97,16 @@ describe('POST /api/wechat/messages/:id/receipt', () => {
     expect(markMessageReceipt).not.toHaveBeenCalled();
   });
 });
+
+describe('送达回执限流', () => {
+  it('同一来源过量请求在访问数据库前返回429', async () => {
+    vi.mocked(resolveCsWechatIdentity).mockResolvedValue('cs-x');
+    let status = 0;
+    for (let i = 0; i < 121; i++) {
+      const response = await request(app).post('/api/wechat/messages/invalid/receipt').send({ok:true});
+      status = response.status;
+    }
+    expect(status).toBe(429);
+    expect(markMessageReceipt).not.toHaveBeenCalled();
+  });
+});

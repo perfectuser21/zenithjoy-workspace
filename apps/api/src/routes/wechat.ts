@@ -14,11 +14,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'node:crypto';
-import pool from '../db/connection';
 import { resolveTenantForAgent } from '../services/agent-tenant-resolver';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
-import { simpleRateLimit } from '../middleware/simple-rate-limit';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import {
   enqueueFailureAlert,
   listPendingOutbound,
@@ -26,6 +25,10 @@ import {
 } from '../services/wechat/cs-outbound';
 import { getCsWorkStats, type StatsDate } from '../services/wechat/cs-work-stats';
 import { runDailyReportSettlement, getDailyReports } from '../services/wechat/cs-daily-report';
+import { requireServiceCredential } from '../middleware/cs-config-guard';
+import { parseCrmScope, requireCrmBinding } from '../services/wechat/crm-analysis';
+import pool from '../db/connection';
+import { wakeCrmAnalysis } from '../services/wechat/crm-analysis';
 import { markMessageReceipt } from '../services/wechat/contact-memory';
 import { resolveCsWechatIdentity } from '../services/wechat/cs-identity-resolve';
 import { recordIdentityAlert } from '../services/wechat/cs-account-config-store';
@@ -75,6 +78,7 @@ const ListenerHeartbeatSchema = z
   .passthrough();
 
 const DraftGenerateSchema = z.object({
+  source_event_id: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   sender: z.string().min(1),
   wechat_id: z.string().min(1),
   content: z.string().min(1),
@@ -278,7 +282,7 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
 // 私聊草稿生成：listen_chat.py 拉到名单内客户消息 → POST 这里 → DeepSeek 生草稿 →
 // 写飞书"互动记录" + DB wechat_publish_task（pending_review，approval_source NULL）
 
-wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
+wechatRouter.post('/draft-generate', (req,res,next)=>req.body?.source_event_id ? requireServiceCredential(req,res,next) : next(), async (req: Request, res: Response) => {
   const parsed = DraftGenerateSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => ({
@@ -294,8 +298,11 @@ wechatRouter.post('/draft-generate', async (req: Request, res: Response) => {
     });
   }
 
+  if(parsed.data.source_event_id && req.tenantId && parsed.data.tenant_id && req.tenantId!==parsed.data.tenant_id)
+    return res.status(403).json({error:'CROSS_TENANT'});
   // 多租户隔离：写入必须归属当前租户 agent，缺租户上下文一律 4xx 拒绝、绝不写入任意 agent。
-  const tenantId = await resolveTenantId(req);
+  const tenantId = parsed.data.source_event_id && req.tenantId ? req.tenantId : await resolveTenantId(req);
+  if(parsed.data.source_event_id && req.tenantId && req.header('X-Tenant-Id') && req.header('X-Tenant-Id')!==req.tenantId)return res.status(403).json({error:'CROSS_TENANT'});
   if (!tenantId) {
     return res.status(400).json({
       error: 'NO_TENANT_CONTEXT',
@@ -363,7 +370,7 @@ wechatRouter.post('/cs/outbound/:id/receipt', async (req: Request, res: Response
 // body.cs_wechat_id 直传 > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。
 // 中间 csConfig 段不可省：手填 SSOT 场景 csConfig.wechat_id 可能与反查值不一致，draft 写行盖的
 // 是 csConfig 值，回执归属必须用同一值，否则 UPDATE 0 行、out 行卡 draft → 假账反向复发。
-wechatRouter.post('/messages/:id/receipt', async (req: Request, res: Response) => {
+wechatRouter.post('/messages/:id/receipt', simpleRateLimit({windowMs:60_000,max:120,keyFn:ipKeyFn}), (req,res,next)=>(req.header('Authorization')||req.header('X-License-Key')||req.header('X-Internal-Token')) ? requireServiceCredential(req,res,next) : next(), async (req: Request, res: Response) => {
   const messageId = Number(req.params.id);
   if (!Number.isInteger(messageId) || messageId <= 0) {
     return res.status(400).json({ error: 'BAD_MESSAGE_ID', message: 'id 必须为正整数' });
@@ -376,7 +383,18 @@ wechatRouter.post('/messages/:id/receipt', async (req: Request, res: Response) =
   if (!csWechatId) {
     return res.status(403).json({ error: 'NO_CS_IDENTITY', message: '无法解析客服身份' });
   }
-  const updated = await markMessageReceipt(messageId, ok, csWechatId);
+  let authorizedScope:string|undefined;
+  if(req.header('Authorization')||req.header('X-License-Key')||req.header('X-Internal-Token')){
+    const row=await pool.query('SELECT contact_key FROM zenithjoy.wechat_messages WHERE id=$1 AND cs_wechat_id=$2',[messageId,csWechatId]);
+    const key=row.rows[0]?.contact_key;
+    const scope=typeof key==='string'?parseCrmScope(key):null;
+    if(scope){
+      if((req.tenantId&&req.tenantId!==scope.tenantId)||scope.csWechatId!==csWechatId||!await requireCrmBinding(scope))return res.status(403).json({error:'CROSS_TENANT'});
+      authorizedScope=key;
+    }
+  }
+  const updated = authorizedScope ? await markMessageReceipt(messageId,ok,csWechatId,authorizedScope) : await markMessageReceipt(messageId,ok,csWechatId);
+  if (ok) wakeCrmAnalysis();
   return res.status(200).json({ ok: true, updated });
 });
 

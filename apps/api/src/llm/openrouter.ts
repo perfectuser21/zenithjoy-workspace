@@ -4,6 +4,8 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
 
 export interface CallOpenRouterArgs {
+  /** 有界后台分析；不传保持现有调用行为。 */
+  timeoutMs?: number;
   prompt: string;
   purpose: string;
   maxTokens?: number;
@@ -102,6 +104,7 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
   try {
     const res = await fetch(url, {
       method: 'POST',
+      ...(args.timeoutMs ? {signal:AbortSignal.timeout(args.timeoutMs)} : {}),
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',

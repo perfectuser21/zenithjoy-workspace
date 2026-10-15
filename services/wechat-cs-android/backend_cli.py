@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import urllib.parse
@@ -80,11 +81,15 @@ class Backend:
         screenshot_hash(context.get('screenshot', ''))
 
     def draft(self, context):
+        event_id = context.get('event_id')
+        if not isinstance(event_id, str) or re.fullmatch(r'[0-9a-f]{64}', event_id) is None:
+            raise ValueError('invalid_source_event_id')
         self.check_context(context)
         self.preflight()
         body = dict(sender=SENDER, wechat_id=context['contact_key'], content=batch_content(context),
                     mode='auto', is_group=False, tenant_id=self.config['tenant_id'],
-                    agent_id=self.config['agent_id'], cs_wechat_id=self.config['cs_wechat_id'])
+                    agent_id=self.config['agent_id'], cs_wechat_id=self.config['cs_wechat_id'],
+                    source_event_id=event_id)
         response = self.request('POST', '/api/wechat/draft-generate', body)
         if response.get('status') != 'sent' or not valid_draft(response) or response.get('ok') is False:
             raise ValueError('draft_not_sendable')
@@ -139,7 +144,7 @@ def main():
                 backend.check_context(context)
                 state.verify_phone_evidence(args.event_id, context['screenshot'])
                 state.claim_draft(args.event_id, context)
-                draft = backend.draft(context)
+                draft = backend.draft(dict(context, event_id=args.event_id))
                 state.set_draft(args.event_id, draft, context)
                 result = draft
             elif args.action == 'claim-send':
