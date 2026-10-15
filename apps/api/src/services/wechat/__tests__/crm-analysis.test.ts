@@ -90,3 +90,62 @@ describe('事件结果与恢复',()=>{
   expect((await readScopedCrmProfile(scope,'客户'))?.messages).toEqual([]);
  });
 });
+
+
+describe('真实迟到送达回归：待办水位不等于完整客户证据',()=>{
+ const inMessage={id:'334',sender_name:'测试客户',direction:'in',content:'想了解智能客服，预算5000元，担心回复不及时',created_at:'2026-10-15T16:27:50.389Z'};
+ const outMessage={id:'335',sender_name:'测试客户',direction:'out',content:'5000预算先看基础方案',created_at:'2026-10-15T16:27:52.504Z'};
+ const old={summary:'客户预算5000，关注及时回复',need:'智能客服',budget:'5000',concern:'回复延迟',stage_suggestion:'A2',next_action:'介绍方案',source_message_ids:['334'],updated_at:'2026-10-15T16:28:00Z'};
+ function setup(pending:unknown[],history:unknown[],previous:unknown=old){
+  query.mockImplementation(async(sql:string)=>{
+   if(sql.includes('service_agents'))return {rows:[{}]};
+   if(sql.includes('pg_try_advisory_xact_lock'))return {rows:[{locked:true}]};
+   if(sql.includes('consolidated = FALSE')&&sql.includes('SELECT'))return {rows:pending};
+   if(sql.includes('wechat_messages')&&sql.includes('SELECT'))return {rows:history};
+   if(sql.includes('SELECT summary,facts'))return {rows:previous?[{summary:old.summary,facts:{schema_version:1,analysis:previous}}]:[]};
+   return {rows:[],rowCount:1};
+  });
+  llm.mockResolvedValue({content:JSON.stringify({...old,summary:'客户预算未见新增表达',budget:null})});
+ }
+ function stored(){return JSON.parse(query.mock.calls.find(([s])=>String(s).includes('INSERT INTO zenithjoy.wechat_contact_memory'))![1][3]).analysis;}
+ it('入站已消费而出站晚到时，模型仍收到同scope原始入站，来源与消费ID分开',async()=>{
+  setup([outMessage],[outMessage,inMessage]);
+  await analyzeCrmScope(crmScopeKey(scope));
+  const prompt=llm.mock.calls[0][0].prompt;
+  expect(prompt).toContain(inMessage.content);
+  expect(prompt).toContain('"role":"in"');
+  expect(stored().source_message_ids).toEqual(['334','335']);
+  expect(stored().customer_source_message_ids).toEqual(['334']);
+  expect(stored().consumed_message_ids).toEqual(['335']);
+  const water=query.mock.calls.find(([s])=>String(s).includes('SET consolidated'))!;
+  expect(water[1][2]).toEqual(['335']);
+  expect(query.mock.calls.some(([s])=>String(s).includes('UPDATE zenithjoy.crm_customers'))).toBe(false);
+ });
+ it('仅新增客服话语时不得用null或新摘要抹去已确认客户预算',async()=>{
+  setup([outMessage],[outMessage,inMessage]);
+  await analyzeCrmScope(crmScopeKey(scope));
+  expect(stored().budget).toBe('5000');
+  expect(stored().summary).toBe(old.summary);
+ });
+ it('新的客户明确撤回预算仍允许更新为空，不强行保留旧值',async()=>{
+  const correction={...inMessage,id:'336',content:'我撤回之前的预算，预算尚未确定',created_at:'2026-10-15T17:00:00Z'};
+  setup([correction],[correction,outMessage,inMessage]);
+  await analyzeCrmScope(crmScopeKey(scope));
+  expect(stored().budget).toBeNull();
+ });
+ it('模型数字预算正规转字符串，不凭空添加币种',async()=>{
+  setup([inMessage],[inMessage],null);
+  llm.mockResolvedValue({content:JSON.stringify({...old,budget:5000})});
+  await analyzeCrmScope(crmScopeKey(scope));
+  expect(stored().budget).toBe('5000');
+ });
+ it('正式显式rebuild可从已送达历史修复画像，不伪造待办或改已消费消息',async()=>{
+  setup([],[outMessage,inMessage]);
+  llm.mockResolvedValue({content:JSON.stringify({...old,budget:5000})});
+  expect(await analyzeCrmScope(crmScopeKey(scope),{rebuild:true})).toMatchObject({status:'updated'});
+  expect(stored().budget).toBe('5000');
+  expect(stored().source_message_ids).toEqual(['334','335']);
+  expect(stored().consumed_message_ids).toEqual([]);
+  expect(query.mock.calls.some(([s])=>String(s).includes('SET consolidated'))).toBe(false);
+ });
+});
