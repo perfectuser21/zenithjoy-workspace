@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 from backend_cli import Backend, DEFAULT_CONFIG, load_config
 from identity import ContactBinding, LEGACY_SENDER, LEGACY_CONTACT_KEY
+from phone_read_budget import screenshot_phone
 from bridge import CS_WECHAT_ID, State, parse_notification, private_json, single_instance
 
 
@@ -145,7 +146,7 @@ def load_phone(config):
     spec.loader.exec_module(module)
     if config['serial'] != '47.100.213.173:10001':
         raise ValueError('unexpected_test_device')
-    return module.Phone(config['serial'], config['owner'], config['evidence_root'],
+    return screenshot_phone(module.Phone)(config['serial'], config['owner'], config['evidence_root'],
                         config.get('lock_root', '/private/tmp/openclaw-phone/locks'),
                         adb=config['adb'], timeout=15)
 

@@ -58,3 +58,21 @@ class ReadBudgetTests(unittest.TestCase):
         with patch('phone_read_budget.subprocess.Popen') as popen:
             with self.assertRaises(ValueError): phone.run('exec-out', 'screencap', '-p')
         popen.assert_not_called()
+
+    def test_load_phone_installs_budget_without_changing_base_timeout(self):
+        import tempfile
+        from watcher import load_phone
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'approved_phone.py'
+            path.write_text('class Phone:\n'
+                ' def __init__(self,serial,owner,evidence_dir,lock_root,adb,timeout):\n'
+                '  self.serial,self.adb,self.timeout=serial,adb,timeout\n'
+                ' def require_owner(self): pass\n'
+                ' def run(self,*args): return self.timeout\n')
+            phone = load_phone(dict(phone_module=str(path),serial='47.100.213.173:10001',
+                owner='test',evidence_root=directory,adb='approved-adb'))
+            self.assertEqual(phone.run('shell','input','tap','1','2'),15)
+            process=Mock(pid=7,returncode=0);process.communicate.return_value=(b'PNG',b'')
+            with patch('phone_read_budget.subprocess.Popen',return_value=process):
+                self.assertEqual(phone.run('exec-out','screencap','-p'),b'PNG')
+            self.assertEqual(process.communicate.call_args.kwargs['timeout'],45)
