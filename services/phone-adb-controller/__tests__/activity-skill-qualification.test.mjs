@@ -35,3 +35,22 @@ test('unknown claim receipt is not re-claimed or converted into zero-row success
  await assert.rejects(()=>h.qualification());await assert.rejects(()=>h.qualification(),/领取.*未知/);assert.equal(claims,1);
  }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+test('handoff heartbeat rejects a code-zero phone receipt for another owner',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-heartbeat-'));let wrong=false;const registry=join(d,'accounts.tsv');writeFileSync(registry,'fixture\tfixture-account\n');
+ try{const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture-run',P:'fixture',SERIAL:'fixture-serial',LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller'},rpc:async()=>({result:{}}),execute:async(cmd,args)=>{
+  let stdout='';if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
+  if(cmd==='/fixture/controller'){const op=args[2]==='--lock-owner'?args[4]:args[2];if(op==='preflight')stdout='serial=fixture-serial\n';if(op==='lock-acquire')stdout='lock=acquired\n';if(op==='lock-refresh')stdout=`lock=refreshed owner=${wrong?'another-run':'fixture-run'} ttl=3600s\n`;if(op==='account-current')stdout='douyin_id=fixture-account\n';}
+  return {code:0,stdout,stderr:''};
+ }});await h.preflight();wrong=true;await assert.rejects(()=>h.handoffHeartbeat({key:'qualification'}),/所有权|续期/);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('handoff heartbeat requires acknowledged renewal of the original video lease',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-video-heartbeat-'));let heartbeat=false;
+ try{const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture-run',P:'fixture',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{
+  if(q.op==='claim_videos')return {result:[{video_id:'7646309328911907195',video_url:'https://www.douyin.com/video/7646309328911907195',judgment_status:'matched'}]};
+  assert.equal(q.op,'renew_video');return {result:{renewed:!heartbeat}};
+ },execute:async()=>({code:0,stdout:'',stderr:''})});await h.qualification();heartbeat=true;await assert.rejects(()=>h.handoffHeartbeat({key:'qualification'}),/租约/);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
