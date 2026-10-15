@@ -46,7 +46,8 @@ for(const row of [
   const observed=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(observed.length,row.pass?1:3,'保留三次调用预算，最终正文成功即停止');
   for(const args of observed){
-   assert.ok(args.includes('https://openrouter.ai/api/v1/chat/completions'));
+   const methodIndex=args.indexOf('-X');assert.equal(args[methodIndex+1],'POST');
+   assert.equal(args[methodIndex+2],'https://openrouter.ai/api/v1/chat/completions');
    assert.ok(args.includes('Authorization: Bearer fixture-key-not-a-secret'));
    assert.equal(args[args.indexOf('--max-time')+1],'60');
    const body=JSON.parse(args[args.indexOf('-d')+1]);assert.equal(body.model,'deepseek/deepseek-v4-flash');assert.deepEqual(body.reasoning,{enabled:false});assert.equal(body.max_tokens,4096);
