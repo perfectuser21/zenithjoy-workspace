@@ -30,7 +30,7 @@ class FakePhone:
             raise AssertionError('ADB read outside guard')
         if args == ('cmd', 'notification', 'list'):
             return '0|com.tencent.mm|1|null|10088\n0|other|1|null|10'
-        if args == ('cmd', 'notification', 'get', '0|com.tencent.mm|1|null|10088'):
+        if args == ('cmd', 'notification', 'get', "'0|com.tencent.mm|1|null|10088'"):
             return self.raw
         raise AssertionError('Unexpected ADB command')
 
