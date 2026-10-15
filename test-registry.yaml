@@ -7519,3 +7519,11 @@ agent_suite:
   status: active
   product: 私域运营
   note: "GP-Anchor: line04/passive_reception#step2；精确PNG读取45秒且超时终止回收，写命令保持15秒和一次执行；使用模拟进程不碰手机"
+
+- id: wechat-cs-prestart-recovery
+  path: services/wechat-cs-android/tests/test_prestart_recovery.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；启动前Gateway重启的显式证据恢复，完整未执行历史、PID时序、分离目录锁及零动作闸门；不自动重发"
