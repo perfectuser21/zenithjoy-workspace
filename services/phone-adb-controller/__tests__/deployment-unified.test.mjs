@@ -9,7 +9,7 @@ const repo='perfectuser21/zenithjoy-workspace',sha='a'.repeat(40),bytes=Buffer.f
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 function row(n,payload,identity){const source={repo,path:'contract.json',commit:sha};return{id:uuid(n),[identity]:payload[identity],source_repo:repo,source_path:source.path,source_commit:sha,payload,payload_sha256:digest({source,payload})};}
 function evidence(scope,keys){
- const activities=keys.map((key,i)=>{const id=uuid(500+i+(scope==='zenithjoy'?0:100));return row(700+i+(scope==='zenithjoy'?0:100),{activity_id:id,implementation_bindings:[{kind:'code',scope:'activity',status:'verified',repo,revision:sha,path:'services/phone-adb-controller/'+(key.includes('internal')?'commander/wf-report.py':'douyin-phone-adb'),digest:'sha256:'+digest(bytes)}],steps:[]},'activity_id');});
+ const activities=keys.map((key,i)=>{const id=uuid(500+i+(scope==='zenithjoy'?0:100));return row(700+i+(scope==='zenithjoy'?0:100),{activity_id:id,implementation_bindings:[{kind:'code',field:'implementation',scope:'activity',status:'verified',repo,revision:sha,path:'services/phone-adb-controller/'+(key.includes('internal')?'commander/wf-report.py':'douyin-phone-adb'),digest:'sha256:'+digest(bytes)}],steps:[]},'activity_id');});
  const workflows=keys.map((key,i)=>row(900+i+(scope==='zenithjoy'?0:100),{workflow_id:scope==='zenithjoy'&&i<4?`b1000000-0000-4000-8000-${String(101+i).padStart(12,'0')}`:uuid(100+i),key,contract:{key,...(key==='workflow_commander.internal'?{}:{execution_profile:'codex_agent'})},activities:[{activity_id:activities[i].activity_id,activity_version_id:activities[i].id}]},'workflow_id'));
  const snapshot={schema_version:1,scope,repo,revision:sha,status:'verified',gaps:[],definitions:{workflows,activities}};snapshot.snapshot_sha256=digest(snapshot);
  const report={protocol:'pilot_release_verification_v1',purpose:'release_verification',scope,source:{repo,head_revision:sha},snapshot_sha256:snapshot.snapshot_sha256,verification_status:'verified',gaps:[],assertion_source:'current_registration',definition_versions:{workflows,activities},expected_usages:workflows.map(w=>({workflow_id:w.workflow_id})),required_assertions:[{assertion_ref:scope+'.sh',source_bindings:[]}]};
@@ -51,4 +51,44 @@ test('真实HTTP xian→唯一MMV观测，旧两root只收到同ACK本机视图'
 
 test('部署锁与真实安装采集Python回归',()=>{
  const result=spawnSync('python3',[new URL('./deployment-installed.test.py',import.meta.url).pathname],{encoding:'utf8'});assert.equal(result.status,0,result.stdout+'\n'+result.stderr);
+});
+
+// 使用官方作者协议的实际字段形状；全为隔离fixture，非生产发布或真实Git证明。
+const planKeys=['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'];
+function sealPlan(e){
+ e.report.assertion_plan_sha256=digest(Object.fromEntries([...planKeys,...(Object.hasOwn(e.report,'implementation_source_set')?['implementation_source_set']:[])].map(k=>[k,e.report[k]])));
+ Object.assign(e.receipt,{assertion_plan_sha256:e.report.assertion_plan_sha256,report_sha256:digest(Buffer.from(JSON.stringify(e.report)))});
+}
+function authoringCommander(bundle){
+ // 独立预期来自fixture的两个固定Activity/version，保留官方完整身份定位。
+ bundle.commander.report.implementation_source_set=[0,1].map(i=>({activity_id:uuid(600+i),activity_definition_version_id:uuid(800+i),kind:'code',repo,path:'services/phone-adb-controller/commander/wf-report.py',revision:sha,digest:'sha256:'+digest(bytes),scope:'activity',field:'implementation'}));
+ bundle.commander.report.implementation_source_set.sort((a,b)=>digest(a).localeCompare(digest(b)));sealPlan(bundle.commander);return bundle;
+}
+test('官方source_set完整计划可部署目标七/四流程，旧无字段报告继续合法',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');
+ for(const bundle of [fixture(),authoringCommander(fixture())]){const out=targetDefinitions(bundle,sha,()=>bytes);assert.equal(out.mmv.definitions.workflows.length,7);assert.equal(out['xian-m4'].definitions.workflows.length,4);}
+});
+test('部署前置同样消费完整source_set摘要，不在下一道旧格式门禁失败',async()=>{
+ const {validateDeploymentEvidence}=await import('../deployment-preflight.mjs');const b=fixture();
+ b.report.implementation_source_set=[0,1,2,3,4].map(i=>({activity_id:uuid(500+i),activity_definition_version_id:uuid(700+i),kind:'code',repo,path:'services/phone-adb-controller/douyin-phone-adb',revision:sha,digest:'sha256:'+digest(bytes),scope:'activity',field:'implementation'}));
+ b.report.implementation_source_set.sort((a,b)=>digest(a).localeCompare(digest(b)));sealPlan(b);
+ assert.equal(validateDeploymentEvidence(b,sha,()=>bytes).definitions.workflows.length,4);
+});
+test('自洽重算plan与receipt也不能伪造未绑定来源、版本、漏项或malformed集合',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');
+ for(const [label,mutate]of [
+ ['digest',e=>e.report.implementation_source_set[0].digest='sha256:'+'f'.repeat(64)],
+ ['revision',e=>e.report.implementation_source_set[0].revision='b'.repeat(40)],
+ ['version',e=>e.report.implementation_source_set[0].activity_definition_version_id=uuid(999)],
+ ['activity',e=>e.report.implementation_source_set[0].activity_id=uuid(998)],
+ ['field',e=>e.report.implementation_source_set[0].field='implementation_bindings'],
+ ['index',e=>e.report.implementation_source_set[0].index=7],
+ ['step',e=>e.report.implementation_source_set[0].step_key='unbound-step'],
+ ['unbound-path',e=>e.report.implementation_source_set[0].path='unbound.js'],
+ ['missing',e=>e.report.implementation_source_set.pop()],
+ ['duplicate',e=>e.report.implementation_source_set.push(e.report.implementation_source_set[0])],
+ ['empty',e=>e.report.implementation_source_set=[]],['null',e=>e.report.implementation_source_set=null],
+ ['object',e=>e.report.implementation_source_set={}],['malformed',e=>e.report.implementation_source_set=[{}]],
+ ]){const b=authoringCommander(fixture());mutate(b.commander);sealPlan(b.commander);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,label);}
+ const b=authoringCommander(fixture());b.commander.report.assertion_plan_sha256='f'.repeat(64);assert.throws(()=>targetDefinitions(b,sha,()=>bytes));
 });
