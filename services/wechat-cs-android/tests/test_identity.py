@@ -104,3 +104,25 @@ class BindingBoundaryTests(BindingFixture, unittest.TestCase):
   with self.assertRaises(ValueError):load_config(self.path)
   self.runtime.pop('contact_identity_evidence');self.save()
   with self.assertRaises(ValueError):load_config(self.path)
+
+class FailClosedModeAndLedgerTests(BindingFixture, unittest.TestCase):
+ def test_unknown_or_missing_takeover_mode_rejected_even_when_whitelisted(self):
+  runtime=load_config(self.path)
+  response=dict(auto_agent_enabled=True,wechat_id=runtime['cs_wechat_id'],tenant_id='t',whitelist=['测试新客'],blacklist=[])
+  for patch in [dict(takeover_mode='unknown'),{},dict(takeover_mode=None)]:
+   with self.subTest(patch=patch):
+    with self.assertRaises(ValueError):Backend(runtime,lambda *args:response|patch).preflight()
+ def test_unbound_empty_baseline_cannot_adopt_new_binding(self):
+  path=self.root/'empty-baseline.db';state=State(path);state.baseline([]);state.close()
+  with self.assertRaises(ValueError):State(path,binding=self.binding())
+ def test_unbound_action_or_other_meta_ledger_cannot_adopt_new_binding(self):
+  for table in ['actions','meta','contexts','phone_evidence']:
+   with self.subTest(table=table):
+    path=self.root/(table+'.db');state=State(path)
+    with state.db:
+     if table=='actions':state.db.execute("INSERT INTO actions VALUES ('old','input','attempted')")
+     elif table=='meta':state.db.execute("INSERT INTO meta VALUES ('paused_unknown','old')")
+     elif table=='contexts':state.db.execute("INSERT INTO contexts VALUES ('hash','old')")
+     else:state.db.execute("INSERT INTO phone_evidence VALUES ('path','old','sha','receipt','serial','owner','screenshot')")
+    state.close()
+    with self.assertRaises(ValueError):State(path,binding=self.binding())
