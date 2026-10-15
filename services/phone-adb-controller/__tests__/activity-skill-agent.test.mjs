@@ -35,11 +35,11 @@ test('parent must claim one durable spawn right; second claim cannot replace chi
  }finally{rmSync(home,{recursive:true,force:true});}
 });
 
-test('single-slot tool relay chooses fixed strict M4 jump and cannot accept arbitrary commands',async()=>{
+test('single-slot tool relay uses managed strict M4 alias and cannot accept arbitrary commands',async()=>{
  const {relayActivityTool,skillRunKey}=await import('../leadgen-skill-agent.mjs');
  const home=mkdtempSync(join(tmpdir(),'skill-relay-'));const q={protocol:'leadgen-activity-v1',run_id:'fixture__a1',activity_key:'qualification',nonce:'e'.repeat(48),source_commit:'a'.repeat(40),deadline_ms:Date.now()+20000,broker_host:'xian-m4',broker_request_path:'/Users/fixture/run/broker-request.json',broker_tool_path:'/Users/fixture/run/activity-skill-tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'fixture'}};
  try{const dir=join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'activity-request.json'),JSON.stringify(q));let called=0;
- const deps={home,authorize:async()=>true,execute:async(cmd,args)=>{called++;assert.equal(cmd,'ssh');assert.ok(args.includes('StrictHostKeyChecking=yes'));assert.ok(args.includes('-J'));assert.equal(args[args.indexOf('-J')+1],'xian-m1');assert.ok(args.includes('xian-m4'));return {code:0,stdout:'{"ok":true,"result":{"fixture":true}}\n',stderr:''};}};
+ const deps={home,authorize:async()=>true,execute:async(cmd,args)=>{called++;assert.equal(cmd,'ssh');assert.ok(args.includes('StrictHostKeyChecking=yes'));assert.equal(args.includes('-J'),false);assert.equal(args.some(x=>x.startsWith('HostName=')),false);assert.ok(args.includes('xian-m4'));return {code:0,stdout:'{"ok":true,"result":{"fixture":true}}\n',stderr:''};}};
  assert.equal((await relayActivityTool(dir,'inspect',{},deps)).result.fixture,true);await assert.rejects(()=>relayActivityTool(dir,'shell',{},deps));assert.equal(called,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });

@@ -4,13 +4,13 @@
     {
       "activity_ref": "douyin_comment_scoring.scoring",
       "skill_name": "douyin-leadgen-activity-103-scoring",
-      "skill_version": "0.1.0",
+      "skill_version": "0.1.1",
       "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md"
     },
     {
       "activity_ref": "douyin_comment_scoring.mark_leads",
       "skill_name": "douyin-leadgen-activity-103-mark-leads",
-      "skill_version": "0.1.0",
+      "skill_version": "0.1.1",
       "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md"
     }
   ]

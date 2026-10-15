@@ -11,7 +11,7 @@ Activity是可验收的业务工作；Skill是执行方法，Code是该方法的
 5. 没有合法单Activity入口、持久交接接口或可用权限时给出blocked原因；不得直接import内部队列、裸写PG、调用整流程冒单步或重启共享服务。
 6. Skill仍失败或预算结束时停止本轮业务，保留部分成果、准确失败/未知原因及资源清理结果。Commander基于证据汇总成功、部分完成、失败或待确认，不把缺证据猜成成功。
 
-这份方法说明和版本配套不是自动handoff实现。当前尚无已验收的公开单Activity交接入口；生产启用与独立实机验收须分别留证。
+本轮源码增加leadgen-activity-v1与原run私有broker入口，真实work-commander父会话→官方sessions_spawn→同slot工具→原独立verify闭环。它不是整Workflow重启入口；当前方法仍需独立实机验收，源码通过、正式发布、生产启用与实机接手分别留证。
 
 ## 升级
 
@@ -20,3 +20,11 @@ Activity是可验收的业务工作；Skill是执行方法，Code是该方法的
 - 业务承诺、输入输出或读回合同变更按Activity合同semver办理；只改执行方法不机械抬业务合同版本。共享Activity变更先列所有消费者，不能只更新其中一个流程。
 - Code内部优化若不改变方法或业务合同，可保持Skill版本；须用明确的兼容评估绑定前后代码集合哈希、理由和reviewer。不能仅刷新哈希就宣称兼容，更不能让兼容声明掩盖Skill正文变化。
 - 同版本Skill文件不可悄改；正在运行的任务保留原冻结组合，新版本供新运行使用。配套通过、代码通过、Skill实机通过、自动接手通过是不同证据，不互相冒用。
+
+## leadgen-activity-v1工具约束
+
+只有原run失败边界可创建request，方法来自冻结Activity binding与实际字节；MMV起跑前重读中央run/definition/Activity及同源Skill。child先验自己的官方绑定；inspect仅读原状态，phone只可读证/受控归位，resume至多一次且只运行原slot成熟handler。原失败和接手证据分开记录，原verify通过才写成功。send_dm始终readback_only，不重发、不凭自述补发送事实。未知child或仍在飞的原动作保持锁、阻止后续业务与cleanup。
+
+102 qualification恢复保持原已领取VID和成功集合，只失败VID生成一次新recovery EID；不重claim、不重录成功VID。已部分写入的collection暂不允许自动resume，保留原新增/覆盖计数并明确blocked，不能当成0条成功或承诺已救回。
+
+child在MMV通过同源 `leadgen-skill-agent.mjs tool <本次私有handoff目录> inspect|phone|resume` 调用固定relay；phone参数走stdin JSON，不由模型拼SSH。relay只用冻结target对应的现有受管SSH别名并严格校验host key，不新增网络跳板；实际冷连接与原生播放故障恢复仍待独立实机证据。

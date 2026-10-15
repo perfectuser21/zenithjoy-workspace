@@ -3,6 +3,11 @@
 source "${0:A:h}/wf-limits.sh" || return 1
 # 手机证据仅按逐视频+已校验MODE分名；锁与业务run仍使用原TAG。
 QV_EID="$TAG-v$VID-${MODE:-identity}"
+# Recovery keeps the original business TAG/lease; never overwrites a recording EID.
+if [[ -n "${QUEUED_VIDEO_EVIDENCE_ATTEMPT:-}" ]]; then
+  [[ "$MODE" == qualification && "$QUEUED_VIDEO_EVIDENCE_ATTEMPT" == 1 ]] || return 2
+  QV_EID="$QV_EID-recovery$QUEUED_VIDEO_EVIDENCE_ATTEMPT"
+fi
 qv_nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] || /bin/sleep "$1"; }
 qv_log(){ print -u2 -r -- "[queue-video] $*"; }
 qv_field(){ print -r -- "$1" | sed -n "s/^$2=//p" | head -1; }

@@ -7463,3 +7463,51 @@ agent_suite:
   status: active
   product: AI员工
   note: "GP-Anchor: line02/keyword_acquisition#step4；四业务Skill/12Activity配套、共享开头收尾、设备/MMV实际manifest覆盖；不是现场fallback测试"
+
+- id: leadgen-activity-skill-handoff
+  path: services/phone-adb-controller/__tests__/activity-skill-handoff.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"
+
+- id: leadgen-activity-skill-broker
+  path: services/phone-adb-controller/__tests__/activity-skill-broker.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"
+
+- id: leadgen-activity-skill-agent
+  path: services/phone-adb-controller/__tests__/activity-skill-agent.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"
+
+- id: leadgen-activity-skill-source
+  path: services/phone-adb-controller/__tests__/activity-skill-source.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"
+
+- id: leadgen-activity-skill-qualification
+  path: services/phone-adb-controller/__tests__/activity-skill-qualification.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"
+
+- id: leadgen-activity-skill-integration
+  path: services/phone-adb-controller/__tests__/activity-skill-integration.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"

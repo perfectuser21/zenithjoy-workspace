@@ -1,10 +1,11 @@
-import {readFileSync,writeFileSync,appendFileSync,chmodSync,existsSync,renameSync,readdirSync,lstatSync,realpathSync} from 'node:fs';
+import {readFileSync,writeFileSync,appendFileSync,chmodSync,existsSync,renameSync,readdirSync,lstatSync,realpathSync,mkdirSync,copyFileSync,constants} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
 import {runActivity} from './activity-commander.mjs';
+import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput,safeExecutionDiagnostic} from './leadgen-client.mjs';
@@ -14,7 +15,7 @@ import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
-export async function runWorkflow({activities,context,handlers,commander,record,verify}) {
+export async function runWorkflow({activities,context,handlers,commander,record,verify,recover}) {
   const results=[];let status='completed',stopped=false;
   const ordered=[...activities.filter(a=>a.key!=='cleanup'),...activities.filter(a=>a.key==='cleanup')];
   const execute=async activity=>{
@@ -23,7 +24,8 @@ export async function runWorkflow({activities,context,handlers,commander,record,
       const remaining=ordered.slice(ordered.indexOf(activity)+1).map(a=>a.key);
       const activityContext={...context,workflow_progress:{completed_activity_keys:results.filter(r=>['completed','skipped'].includes(r.status)).map(r=>r.activity),
         remaining_activity_keys:remaining}};
-      const result=await runActivity({activity,context:activityContext,execute:handlers[activity.key],commander,record});
+      const result=await runActivity({activity,context:activityContext,execute:handlers[activity.key],commander,record,
+        recover:recover?failure=>recover({activity,failure,context:activityContext,execute:handlers[activity.key]}):undefined});
       if(['paused','partial'].includes(result.result?.status))result.status='partial';
       if(result.result?.status==='skipped')result.status='skipped';
       const verifySamplePartial=activity.key==='collection'&&result.status==='partial'&&result.result?.sampling_receipts?.length>0;
@@ -31,6 +33,7 @@ export async function runWorkflow({activities,context,handlers,commander,record,
         result.verification=await verify(activity,result);
         if(result.verification.verified!==true)result.status='failed';
       }
+      if(result.code_failure)await record({...activityContext,activity:activity.key,phase:'verification',evidence:result});
       results.push({activity:activity.key,...result});
       // 清场完成后Commander正常finish是收尾结果；业务提前停止、失败与升级仍如实保留。
       const normalCleanupFinish=activity.key==='cleanup'&&['completed','skipped'].includes(result.status)&&result.decision?.action==='finish';
@@ -40,6 +43,7 @@ export async function runWorkflow({activities,context,handlers,commander,record,
         ||result.result?.status==='partial'||result.result?.status==='paused'){
         if(status!=='failed')status='partial';stopped=true;
       }
+      if(result.execution_stopped===false){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
     }catch(error){
       status='failed';stopped=true;
       const result={activity:activity.key,status:'failed',error:String(error.message).slice(0,400)};
@@ -49,7 +53,10 @@ export async function runWorkflow({activities,context,handlers,commander,record,
   try {for(const a of activities.filter(a=>a.key!=='cleanup')){
     if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
     await execute(a);
-  }}finally{for(const a of activities.filter(a=>a.key==='cleanup'))await execute(a);}
+  }}finally{for(const a of activities.filter(a=>a.key==='cleanup')){
+    if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'Skill子会话终止未知，保留原资源锁'});status='failed';}
+    else await execute(a);
+  }}
   return {status,results};
 }
 
@@ -91,6 +98,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit};
+  let qualificationClaimed=false;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{
     const file=join(env.WFR_RUN_DIR,'activity.log');
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
@@ -121,7 +129,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{});
   };
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
-    ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
+    ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
   const preflight=async()=>{
     if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND!=='1'){
       const flag=join(env.HOME,`bin-harvest/state/dm-paused-${profile}.flag`);
@@ -270,7 +278,24 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     return bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
       v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
       {maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),
-        env:{...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget)}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
+        env:{...(mode==='qualification'&&(qualificationAttempts.get(v.video_id)||1)>1?{QUEUED_VIDEO_EVIDENCE_ATTEMPT:String(qualificationAttempts.get(v.video_id)-1)}:{}),...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget)}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
+  };
+  const archiveQualification=v=>{
+    const attempt=(qualificationAttempts.get(v.video_id)||0)-1;
+    const folder=join(env.WFR_RUN_DIR,'qualification-attempts',v.video_id,String(attempt));
+    mkdirSync(folder,{recursive:true,mode:0o700});const files=[];
+    const sources=[env.WFR_RUN_DIR,join(env.PHONE_EVIDENCE_ROOT||'/private/tmp/openclaw-phone/evidence',profile)];
+    for(const [index,source] of sources.entries()){
+      if(!existsSync(source))continue;
+      for(const name of readdirSync(source)){
+        const relevant=index===0?[`${run}-recording-${v.video_id}.json`,`${run}-identity-${v.video_id}.json`,'qualification.tsv'].includes(name):name.startsWith(`${run}-v${v.video_id}-qualification`);
+        if(!relevant)continue;const from=join(source,name),stat=lstatSync(from);
+        if(!stat.isFile()||stat.isSymbolicLink()||stat.size>128*1024*1024)throw Error('资格原件归档scope或大小不符');
+        const to=join(folder,index+'-'+name);copyFileSync(from,to,constants.COPYFILE_EXCL);chmodSync(to,0o600);
+        const digest=createHash('sha256').update(readFileSync(to)).digest('hex');files.push({source:from,path:to,sha256:digest,size:stat.size});
+      }
+    }
+    writeFileSync(join(folder,'manifest.json'),JSON.stringify({video_id:v.video_id,run,attempt,files}),{flag:'wx',mode:0o600});
   };
   const consumedHistory=(result,v)=>{
     const file=join(env.WFR_RUN_DIR,`${run}-history-${v.video_id}.json`);
@@ -286,7 +311,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     return {consumed,status:h.receipt.status,receipt:h.receipt,sha256:h.sha256};
   };
   const outreach=createOutreachHandlers({env,state,phone,queue:(op,fields)=>(rpc({kind:'outreach',request:{op,line,run,limit:Number(env.LEADGEN_LIMIT||1),...fields}})).then(r=>r.result),rpc});
-  return {state,preflight,
+  return {state,preflight,handoffPhone:phone,handoffHeartbeat:async activity=>{
+      if(locked){const raw=(await phone('lock-refresh',run)).trim().split(/\s+/),fields=Object.fromEntries(raw.map(token=>token.split('=')));
+        if(raw.length!==3||fields.lock!=='refreshed'||fields.owner!==run||!/^\d+s$/.test(fields.ttl||''))throw Error('Skill接手设备锁所有权续期未确认');}
+      if(activity.key!=='cleanup')for(const v of leased){const receipt=await queue('renew_video',{video_id:v.video_id});if(receipt?.renewed!==true)throw Error('Skill接手原视频租约续期未确认');}
+    },handoffContext:async()=>({profile,serial,line,run,account:state.account||null,company_id:(state.company_config||state.companyConfig)?.company_id||null,leased_video_ids:leased.map(v=>v.video_id),qualified_video_ids:qualified.map(v=>v.video_id),sampling_input:sampleInput}),
     source:async()=>(await getDiscovery()).source(),
     dedup:intake,
     collect_videos:async()=>{const result=await (await getDiscovery()).collect_videos();
@@ -300,10 +329,25 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       if(!state.companyConfig)state.companyConfig=await queue('company_config',{step:'102'});
       if(!state.companyConfig?.company_id||!state.companyConfig.version)throw Error('COMPANY_CONFIG_RECEIPT_MISSING');
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
-      leased=await queue('claim_videos',{config_required:true,...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(sampleInput?{prefer_matched:true}:{})});
+      if(state.qualificationClaimUnknown)throw Error('资格领取回执未知，禁止再次认领或伪造空批成功');
+      if(!qualificationClaimed){
+        state.qualificationClaimUnknown=true;
+        leased=await queue('claim_videos',{config_required:true,...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(sampleInput?{prefer_matched:true}:{})});
+        if(!Array.isArray(leased))throw Error('资格领取缺合法原租约列表');
+        qualificationClaimed=true;state.qualificationClaimUnknown=false;
+      }
       state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
-      const failures=[];qualified=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0,recordingsUnverified=0;
-      for(const v of leased){await queue('renew_video',{video_id:v.video_id});
+      const failures=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0,recordingsUnverified=0;
+      for(const v of leased){
+        if(qualificationProgress.get(v.video_id)?.settled)continue;
+        const previous={recordingsRequired,mediaVerified,recordingSilentRejected,recordingOutcomesFailures,recordingsUnverified};
+        let attempted=false,thrown=false;
+        try{
+          await queue('renew_video',{video_id:v.video_id});
+          const used=qualificationAttempts.get(v.video_id)||0;
+          if(used>=2)throw Error('本VID资格恢复次数已尽');
+          if(used)archiveQualification(v);
+          qualificationAttempts.set(v.video_id,used+1);attempted=true;
         if(state.companyConfig&&v.judgment_status==='matched'&&v.judgment_config?.company_id===state.companyConfig?.company_id&&v.judgment_config?.version===state.companyConfig?.version){
           const identity=await videoAction('identity',v);
           if(identity.code===0)qualified.push(v);else failures.push({video_id:v.video_id,code:identity.code,reason:identity.stderr.slice(-500)});
@@ -325,7 +369,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
           const path=recordingPath;
           if(lstatSync(path).isSymbolicLink())throw Error('本轮录音工件不得是symlink');
           const proof=JSON.parse(readFileSync(path,'utf8'));
-          if(proof.version!==2||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
+          if(proof.version!==2||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification${(qualificationAttempts.get(v.video_id)||1)>1?'-recovery'+(qualificationAttempts.get(v.video_id)-1):''}-record`)throw Error('本轮录音工件scope不符');
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
           if(proof.playback_verified!==true||proof.playback_proof_kind!=='native_audio'||proof.playback_package!=='com.ss.android.ugc.aweme')throw Error('本轮native播放未实际核验');
@@ -343,7 +387,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         }catch(error){recordingOutcomesFailures++;failures.push({video_id:v.video_id,reason:error.message});continue;}
         if(result.code===0&&verdict==='matched')qualified.push(v);
         else if(result.code!==0||verdict!=='rejected'){recordingOutcomesFailures++;failures.push({video_id:v.video_id,code:result.code,reason:result.stderr.slice(-500)});}
+        }catch(error){thrown=true;throw error;}finally{
+          if(attempted)qualificationProgress.set(v.video_id,{settled:!thrown&&!failures.some(f=>f.video_id===v.video_id),recordingsRequired:recordingsRequired-previous.recordingsRequired,mediaVerified:mediaVerified-previous.mediaVerified,recordingSilentRejected:recordingSilentRejected-previous.recordingSilentRejected,recordingOutcomesFailures:recordingOutcomesFailures-previous.recordingOutcomesFailures,recordingsUnverified:recordingsUnverified-previous.recordingsUnverified});
+        }
       }
+      const totals=[...qualificationProgress.values()].reduce((all,row)=>Object.fromEntries(Object.keys(all).map(k=>[k,all[k]+row[k]])),{recordingsRequired:0,mediaVerified:0,recordingSilentRejected:0,recordingOutcomesFailures:0,recordingsUnverified:0});
+      ({recordingsRequired,mediaVerified,recordingSilentRejected,recordingOutcomesFailures,recordingsUnverified}=totals);
+      writeFileSync(join(env.WFR_RUN_DIR,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:sourceCommit,leased_video_ids:leased.map(v=>v.video_id),qualified_video_ids:qualified.map(v=>v.video_id),videos:[...qualificationProgress].map(([video_id,facts])=>({video_id,...facts,attempts:qualificationAttempts.get(video_id)}))}),{mode:0o600});
       const verified=leased.filter(v=>{try {const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,`${run}-identity-${v.video_id}.json`),'utf8'));
         return proof.verified===true&&proof.observed_video_id===v.video_id&&proof.content_type==='video';}catch{return false;}}).length;
       return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:recordingsUnverified?null:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
@@ -421,6 +471,15 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
   };
 }
 
+export function activityExecutionDeadline({activity,env,previous,now=Date.now()}){
+  const budget=Number(activity.budget?.max_duration_s||120);
+  const requested=activity.key==='collect_videos'?Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||budget):budget;
+  const start=Number(env.WF_RUN_START_TS),whole=Number(env.WF_RUN_MAX_SECONDS);
+  if(!Number.isSafeInteger(budget)||budget<1||!Number.isSafeInteger(requested)||requested<1||requested>budget||!Number.isSafeInteger(start)||start<=0||!Number.isSafeInteger(whole)||whole<1)throw Error('请求预算超过Activity合同或全局预算非法');
+  if(previous!==undefined&&!Number.isSafeInteger(previous))throw Error('原Activity截止非法');
+  return Math.min(previous??now+requested*1000,(start+whole)*1000);
+}
+
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);const binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
@@ -435,7 +494,7 @@ async function main(){
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
-    if(r.phase==='execution'){
+    if(['execution','verification'].includes(r.phase)){
       const ledgerStatus=['partial','paused','skipped'].includes(r.evidence.result?.status)?'blocked':r.evidence.status;
       const updated=await execInput(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
         '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
@@ -461,15 +520,16 @@ async function main(){
     return {verified,metrics,probes,step_dod:local};
   };
   const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit});
+  const activityDeadlines=new Map();
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
-    const budget=Number(activity.budget?.max_duration_s||120);
-    const requested=activity.key==='collect_videos'?Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||budget):budget;
-    if(!Number.isSafeInteger(requested)||requested<1||requested>budget)throw Error('请求预算超过Activity合同');
-    handlers.state.budgetDeadline=Date.now()+requested*1000;
+    const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key)});
+    activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;
+    if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
     return handlers[activity.key]();
   }]));
-  const result=await runWorkflow({activities,context,handlers:execution,
+  const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc});
+  const result=await runWorkflow({activities,context,handlers:execution,recover,
     commander:async receipt=>{
       if(receipt.phase==='before'){
         const mark=await execInput(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',receipt.activity,'1']);

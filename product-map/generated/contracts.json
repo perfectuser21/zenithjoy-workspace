@@ -25,37 +25,37 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "da1e5ed525413b9932aae6ad71a0fea88c58aaf0ebea933228f2bfdddc16504e",
+      "sha256": "336f87bf3802383e228922d78038a317057281e57f8ee854885d0654f2f0706f",
       "activities": {
-        "scoring": "6a1f662c52ce318c52a89a1005ebac5196343646fef5f96a9917a8eed87d9c35",
-        "mark_leads": "cf42ac1a969e2ce7833f6155647d200f7a0ac4d575b317aa7725ac81e6a5d256"
+        "scoring": "efa9e1b80e8b32b7162df1bd918b271f4c3c8ab8345d5a31b7e4090765c14029",
+        "mark_leads": "8e9051a84c746020b09bb78157a58a610078e676da97f576d62095e1069b0b56"
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "055fd64d6e5a27200057a68a50c58c05f2db9439e603d9d7697d5dc31b94b164",
+      "sha256": "bc77a4875fa3f66eeb4acb6b88920bc08d2f36ef1fe6bbd252059d8d7ad36fd6",
       "activities": {
-        "preflight": "fe3d465e3d257d8c8c8a76428c812d7eb0ac246086271390c2d66b89da7ee99f",
-        "send_dm": "050f2e04d1fe55fc4e3491c8f98da6f399c12663124b178378d05d30f8b6ec88",
-        "write_back": "142265a0e6040a32a41ade829fa9f3cd77e43cdf6e2e5459121bba487414af81",
-        "cleanup": "7f917e7d2b102c69038f62ffdb7be0ebd9296cf4fcc4795cb2d0023dc373da61"
+        "preflight": "bb78ec5d9cac2723656cb83731a7b2933e725c435e9278ec7aeca4d921e1de25",
+        "send_dm": "7f3875e5efb34657d57ba7a3e664930262febd46d74f92f1cab556256989e3e2",
+        "write_back": "c077de78202911c27f9c9df07896013d75ae73b6e5cae196ee5b10adb86012ce",
+        "cleanup": "af269930193f15e5b7b9b46eea09357ef61f5c019a805e439b0bbb1d34d9ba1f"
       }
     },
     "douyin_video_discovery": {
-      "sha256": "a61197cd869942c260a00efe4dc39ed455b54a8e98ae773b2fc21f26b915a483",
+      "sha256": "f2e91b62f47bfac564e7c7d7c7f38aed240611d6c4ebe78a1053d4a5b1c3dc78",
       "activities": {
-        "preflight": "e1ed0f9a9808720c340f6169fa26d89d72f9caeabf4b6480ab96a6438d6a63ab",
-        "collect_videos": "3213d6e88ce9582efea272457d1f2905e32509cd2afb25129d8cbde64c25ddaa",
-        "cleanup": "c1b62c4c6a73fd923b2c09a6de10d8ef5a73a7d3ca38df64de865ab66c057b15"
+        "preflight": "e565ccdef08b27c6bf90aac32e7f8b5ada54038cc6f96d528aba6b7579361972",
+        "collect_videos": "a5b6254911d8e6e13e50e10ebd5128457d75b8a82a07ac9f2e7d14d0df5ad2f7",
+        "cleanup": "962b4cc7bfa1206e3cfa49f950637fe71b8bb5b2a4698964f684a8985ebf5e9f"
       }
     },
     "douyin_video_processing": {
-      "sha256": "4a9938c8e3fd6efe0e36ffcea1eb2ee4f068f3370e5b7812e44a1825897e941e",
+      "sha256": "b76e9d7294d97321ab3cebd0ec16757d554285c1f6f47b268861399d8ee5a427",
       "activities": {
-        "preflight": "e1ed0f9a9808720c340f6169fa26d89d72f9caeabf4b6480ab96a6438d6a63ab",
-        "dedup": "eb2be29be1cd372a6152c2d772834232a23e0a04285305ed1874f518964740c4",
-        "qualification": "1beb335a3df9698ae9d79bf9fa0dba4b0c7698cb86112848ae7631847bf39b7b",
-        "collection": "614ecd6787dc8ad260c90be1bb0cd6d9a65d60dc60f37f174a72027666d6e9ea",
-        "cleanup": "c1b62c4c6a73fd923b2c09a6de10d8ef5a73a7d3ca38df64de865ab66c057b15"
+        "preflight": "e565ccdef08b27c6bf90aac32e7f8b5ada54038cc6f96d528aba6b7579361972",
+        "dedup": "0ce3b4de139b56e364ba6b7a6e45a6a8ba8ef08bb72493f4d4c969591f9bf85f",
+        "qualification": "306c98e66468abd3a24f440b1378327dfcb16c55503c1a3d068f062a10b57110",
+        "collection": "77ee8d446d4e6976ecc53caa03af8baa96e02597f9b441924e2bc8caa758a6b5",
+        "cleanup": "962b4cc7bfa1206e3cfa49f950637fe71b8bb5b2a4698964f684a8985ebf5e9f"
       }
     },
     "douyin_video_publish": {

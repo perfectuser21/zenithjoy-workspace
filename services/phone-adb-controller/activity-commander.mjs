@@ -67,7 +67,7 @@ export function openRouterCommander({ model = 'google/gemini-2.5-flash', timeout
   };
 }
 
-export async function runActivity({ activity, context, execute, commander, record }) {
+export async function runActivity({ activity, context, execute, commander, record, recover }) {
   const cleanup = activity.key === 'cleanup';
   let commanderStatus = 'available';
   const consult = async (phase, evidence) => {
@@ -100,6 +100,17 @@ export async function runActivity({ activity, context, execute, commander, recor
     await record({ ...context, activity: activity.key, phase: 'execution', evidence });
     const after = await consult('after', evidence);
     if (evidence.status === 'failed' && after.action === 'retry' && attempt < maxAttempts) continue;
+    if (recover && ['failed','partial'].includes(evidence.status) && !['finish','escalate'].includes(after.action)) {
+      try {
+        const candidate = await recover(evidence);
+        if (!candidate || !['completed','failed','partial'].includes(candidate.status) || typeof candidate.execution_stopped !== 'boolean') throw Error('SKILL_RECOVERY_RECEIPT_INVALID');
+        await record({ ...context, activity: activity.key, phase: 'skill_execution', evidence: candidate, code_failure: evidence });
+        return { ...candidate, code_failure: evidence, commander_status: commanderStatus, decision: after };
+      } catch (error) {
+        await record({ ...context, activity: activity.key, phase: 'skill_failure', error: safeError(error), code_failure: evidence });
+        return { ...evidence, execution_stopped: error.executionStopped === true, skill_error: safeError(error), commander_status: commanderStatus, decision: after };
+      }
+    }
     return { ...evidence, commander_status: commanderStatus, decision: after };
   }
 }
