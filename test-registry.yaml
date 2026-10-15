@@ -7487,3 +7487,27 @@ agent_suite:
   status: active
   product: AI员工
   note: "模型请求有界超时和默认兼容；mock fetch，不调用真实模型"
+
+- id: wechat-cs-runtime-contact-binding
+  path: services/wechat-cs-android/tests/test_identity.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；唯一实屏授权联系人、通知/状态/手机一致性、明确接管模式；不代替真机验收"
+
+- id: wechat-cs-runtime-workflow-contract
+  path: services/wechat-cs-android/tests/test_workflow_contract.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；四活动九步骤及Skill/Code固定实现合同，实际聊天另验"
+
+- id: crm-partial-friend-ingest
+  path: apps/api/src/routes/__tests__/crm-partial-friend-ingest.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；局部建档不覆盖全量扫描账、身份冲突409整批回滚、默认full兼容"
