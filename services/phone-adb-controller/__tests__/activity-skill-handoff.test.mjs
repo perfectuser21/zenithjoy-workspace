@@ -45,3 +45,9 @@ for(const kind of ['EXECUTION_OUTPUT_LIMIT','EXECUTION_DEADLINE','explicit'])tes
  const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{calls++;const e=Error(kind);if(kind==='explicit')e.executionStopped=false;throw e;},cleanup:async()=>{cleaned++;}},commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',result:{},execution_stopped:true};}});
  assert.equal(calls,1);assert.equal(skills,0);assert.equal(cleaned,0);assert.equal(r.status,'failed');assert.equal(r.results[0].execution_stopped,false);
 });
+
+for(const ok of [true,false])test('unknown execution invokes persistent quarantine and records actual acknowledgment '+ok,async()=>{
+ let called=0,cleaned=0;
+ const r=await runWorkflow({activities:[{key:'qualification'},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{throw Error('EXECUTION_OUTPUT_LIMIT');},cleanup:async()=>{cleaned++;}},commander:async()=>({action:'continue',reason:'fixture'}),record:async()=>{},quarantine:async()=>{called++;if(!ok)throw Error('fixture quarantine receipt lost');return {verified:true,device:{verified:true},videos:[]};}});
+ assert.equal(called,1);assert.equal(cleaned,0);assert.equal(r.status,'failed');assert.equal(r.resource_quarantine.verified,ok);if(!ok)assert.match(r.resource_quarantine.reason,/lost/);
+});
