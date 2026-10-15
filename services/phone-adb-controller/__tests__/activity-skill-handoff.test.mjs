@@ -1,5 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {runInNewContext} from 'node:vm';
+import {fileURLToPath} from 'node:url';
 import {runWorkflow} from '../leadgen-workflow.mjs';
 
 test('isolated fixture: failed Code hands exactly one Activity to Skill then independent verification',async()=>{
@@ -60,4 +66,28 @@ for(const name of ['RECORD_AUDIO_STRATEGY_UNSUPPORTED','RECORD_AUDIO_CAPTURE_UNA
  let calls=0,skills=0,cleaned=0;
  const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{calls++;return {status:'partial',...evidence.result};},cleanup:async()=>{cleaned++;return {safe_desktop:true};}},commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',execution_stopped:true};}});
  assert.equal(calls,1);assert.equal(skills,0);assert.equal(cleaned,1);assert.equal(r.status,'partial');assert.equal(r.results[0].result.matched,1);
+});
+
+// Execute the actual main record adapter and the real ledger CLI; all data is isolated fixture data.
+test('failed Code hands partial Skill delivery to the real ledger without a secondary status failure',()=>{
+ const source=readFileSync(new URL('../leadgen-workflow.mjs',import.meta.url),'utf8');
+ const statement=source.match(/const ledgerStatus=[^;]+;/)?.[0];
+ assert.ok(statement,'main record adapter must remain present');
+ const ledger=fileURLToPath(new URL('../ledger.mjs',import.meta.url));
+ const fixtures=[
+  [{status:'partial',reason:'Skill未交付当前Activity实际执行结果',execution_stopped:true,skill_receipt:{status:'ok',tool_calls:0}},'blocked'],
+  [{status:'paused'},'blocked'],[{status:'skipped'},'blocked'],
+  [{status:'completed',result:{status:'partial',failures:['original recording failure']}},'blocked'],
+  [{status:'failed',error:'original recording failure'},'failed'],[{status:'completed',result:{done:true}},'completed']
+ ];
+ for(const [evidence,expected] of fixtures){
+  const original=structuredClone(evidence),dir=mkdtempSync(join(tmpdir(),'leadgen-ledger-fixture-'));
+  try{
+   const status=runInNewContext(statement+' ledgerStatus;',{r:{evidence}});
+   const updated=spawnSync(process.execPath,[ledger,'set','--run-dir',dir,'--stage','qualification','--status',status,'--n','1'],{encoding:'utf8'});
+   assert.equal(updated.status,0,`outer=${evidence.status}: ${updated.stderr}`);
+   assert.equal(JSON.parse(readFileSync(join(dir,'ledger.json'),'utf8')).stages.qualification.status,expected);
+   assert.deepEqual(evidence,original,'original failure and official child receipt must not be rewritten');
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ }
 });
