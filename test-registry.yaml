@@ -5500,6 +5500,14 @@ agent_suite:
   product: 产品基础设施
   note: "task 338e3ec7（决策 7f842d12）：契约组装→执行计划，缺 runtime/未实现步骤拒跑，plans/*.plan 与契约一致性"
 
+- id: leadgen-activity-method-evolution
+  path: scripts/product-map/__tests__/leadgen-methods.test.js
+  type: integration
+  ci: L2
+  status: active
+  product: Line02 智能获客
+  note: "task 651eb174：真实合同隔离Git基线与CLI，覆盖12方法/14引用、同版方法和支持文件漂移、Workflow双消费者升版、精确Code兼容评估及失败关闭；由test:product-map和获客smoke实际执行。"
+
 - id: product-map-contract
   path: scripts/product-map/__tests__/product-map.test.js
   type: unit
