@@ -2607,7 +2607,7 @@ sys.exit(0 if re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/([\w.$]+)',sys.argv[1])==[
 PYRECORDDETAIL
 }
 
-# 只在native仍inactive时单击新鲜树的明确播放器控件。
+# 只在native仍inactive时单击新鲜树唯一语义播放器控件；混淆resource-id不作稳定身份。
 # 真机qbt文案会与音轨状态相反；动作结果必须再由native证明，不能按文案宣告播放。
 record_play_control() {
   local eid="$1" xml="$EVIDENCE_ROOT/$1.xml" size="" pos x y before before_state
@@ -2628,7 +2628,7 @@ try:
  if root.tag!='hierarchy':sys.exit(1)
  for n in root.iter('node'):
   if n.get('package') not in (None,'',pkg):sys.exit(1)
-  if n.get('content-desc') not in ('播放视频，按钮','暂停视频，按钮') or n.get('clickable')!='true' or n.get('enabled')!='true' or n.get('resource-id')!=pkg+':id/qbt':continue
+  if n.get('content-desc') not in ('播放视频，按钮','暂停视频，按钮') or n.get('clickable')!='true' or n.get('enabled')!='true':continue
   m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
   if not m:continue
   x1,y1,x2,y2=map(int,m.groups())

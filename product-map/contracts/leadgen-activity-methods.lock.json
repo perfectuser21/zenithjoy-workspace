@@ -81,7 +81,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -105,7 +105,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -129,13 +129,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "04423983043a760d6b8b5c5842326d0dfa746e92d9de85444b2e42c611d6dbee",
+      "code_digest": "21299e1df8217c0a26d0d3204889a18b8f00bbab7ca909f1283e0d338f7c55de",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "23e80f0a309b6e8b1a29b0345199c339addbfbd2e99832590d1d5a74c5b31cf9",
-        "current_code_digest": "04423983043a760d6b8b5c5842326d0dfa746e92d9de85444b2e42c611d6dbee"
+        "current_code_digest": "21299e1df8217c0a26d0d3204889a18b8f00bbab7ca909f1283e0d338f7c55de"
       }
     },
     "douyin_video_processing.dedup": {
@@ -202,14 +202,14 @@
         "name": "douyin-leadgen-activity-102-qualification",
         "version": "0.1.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
-        "sha256": "b2df1a586d58864a753c07d56dc44b60baaaa04a46dd8d8ee67dd67e6b1120b0",
+        "sha256": "ae53f9713cc0320b36f8e29f2b2ccf11a1172cd61f3d86772ca496a7c0ca35d2",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "3e8f4e51f959f11da33cf974cf430b3fe1cf6670a198fe76e281ecedb447a37b"
           }
         ],
-        "content_digest": "c47578af985b5b1d3347a527b10dd5f1f7f734ddf6d85c9dc8b6ba5e614becdb"
+        "content_digest": "8c21435baf55cf1a8286492eb57d2a30d80260757ec8db2af5ec92fc8b5400a3"
       },
       "code_bindings": [
         {
@@ -281,7 +281,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -326,13 +326,13 @@
           "sha256": "befda1bd125177423044f6f94763d2eeec0bf9ed0599de1ac5e8bbbdd1c91c04"
         }
       ],
-      "code_digest": "8173018ea2c81b37b43ce910bb708f6d2502f6858b1a41755857ede321563d6c",
+      "code_digest": "4e42513c1977647bc7a9221fb3bae1703f4162f619678f5b5c25b412c1ed8817",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "522bbe861460685e50d80e3c5c09c375be9f4631c73673e962b2ee1f0d2f554c",
-        "current_code_digest": "8173018ea2c81b37b43ce910bb708f6d2502f6858b1a41755857ede321563d6c"
+        "current_code_digest": "4e42513c1977647bc7a9221fb3bae1703f4162f619678f5b5c25b412c1ed8817"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -359,7 +359,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -399,13 +399,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "a6cf2527d91f598e582502213def8cdc0171e42931a5b89a41a74ef177148bc4",
+      "code_digest": "52aa553e648e2eb30ab0c7f28c8960ac1130ee6f609891613ab47dcdd748e79e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "a0c234e6e36ec27744859090070c7330076bafbd6a78287126fb163cfec23a6f",
-        "current_code_digest": "a6cf2527d91f598e582502213def8cdc0171e42931a5b89a41a74ef177148bc4"
+        "current_code_digest": "52aa553e648e2eb30ab0c7f28c8960ac1130ee6f609891613ab47dcdd748e79e"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -593,7 +593,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -617,7 +617,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -669,13 +669,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6bf28dcd04dc0850d060e65a81c661df8114028bee4c552ea0e29ad7bb7b4378",
+      "code_digest": "3f18e3c273bfe3e0d27b94bd121ca3fd98e139aed47ab096e286213d80c4ac4d",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "349939af40f47dc226d8beaee2e47ed822eaddb80386eb04e6e541f0a872c974",
-        "current_code_digest": "6bf28dcd04dc0850d060e65a81c661df8114028bee4c552ea0e29ad7bb7b4378"
+        "current_code_digest": "3f18e3c273bfe3e0d27b94bd121ca3fd98e139aed47ab096e286213d80c4ac4d"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -828,7 +828,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1c2c96e53e0e622a185e866ad38300cc60ba39accab9b14716f787f86097e2d4"
+          "sha256": "8a9a26a67ac89d211a495d6c01566cd5a2600cf5270e7b4daddcc560afd0837e"
         },
         {
           "kind": "code",
@@ -882,13 +882,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "3402b2f68e0bacdb2ce362d83bc4b990366a61386f9ee5b2a64c539be8d48f25",
+      "code_digest": "ec21336a246cab4c8372d97d6c93e8b9617cc465260eb29bbcd5302654ced9cc",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "6a3e389f5f94f9a0c428943a72595ac7184bcf48283a1e3d69d49155017f127a",
-        "current_code_digest": "3402b2f68e0bacdb2ce362d83bc4b990366a61386f9ee5b2a64c539be8d48f25"
+        "current_code_digest": "ec21336a246cab4c8372d97d6c93e8b9617cc465260eb29bbcd5302654ced9cc"
       }
     }
   },
