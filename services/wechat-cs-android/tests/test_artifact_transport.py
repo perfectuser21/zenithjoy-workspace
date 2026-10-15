@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bridge import State
@@ -36,7 +37,7 @@ class TransportTests(unittest.TestCase):
 
     def runner(self, args, **kwargs):
         self.calls.append((args, kwargs))
-        self.assertEqual(kwargs['timeout'], 30)
+        self.assertEqual(kwargs['timeout'], 120 if args[0] == 'scp' else 30)
         self.assertIsInstance(args, list)
         self.assertIn('BatchMode=yes', args)
         if args[0] == 'ssh':
@@ -65,6 +66,17 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(view['sha256'], __import__('hashlib').sha256(source.read_bytes()).hexdigest())
         self.assertEqual(target.parent.stat().st_mode & 0o777, 0o700)
         self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
+    def test_default_entry_uses_scp_budget_for_transfer_slower_than_30_seconds(self):
+        source = self.screenshot()
+        def delayed_runner(args, **kwargs):
+            if args[0] == 'scp' and kwargs['timeout'] <= 31:
+                raise subprocess.TimeoutExpired(args, kwargs['timeout'])
+            return self.runner(args, **kwargs)
+        with patch.object(self.module, 'run_transport_command', side_effect=delayed_runner):
+            result = self.module.transfer(source, self.event, self.state, self.transport)
+        self.assertEqual(Path(result['path']).read_bytes(), source.read_bytes())
+        self.assertEqual([args[0] for args, _ in self.calls], ['ssh', 'ssh', 'scp', 'ssh'])
 
     def test_remote_hash_mismatch_is_not_reported_as_model_view(self):
         source = self.screenshot()
@@ -96,3 +108,49 @@ class TransportTests(unittest.TestCase):
             execute(self.controller, 'text-from-draft', [], dict(image_transport=self.transport), fail)
         self.assertEqual(len(self.phone.calls), 1)
         self.assertEqual(len(calls), 1)
+
+
+class CommandLifecycleTests(unittest.TestCase):
+    def setUp(self):
+        self.module = __import__('artifact_transport')
+
+    def test_default_transfer_runner_supports_bounded_scp_without_retry(self):
+        run = getattr(self.module, 'run_transport_command', None)
+        self.assertTrue(callable(run), '传图进程组生命周期尚未实现')
+        process = Mock(pid=4312, returncode=0)
+        process.communicate.return_value = ('digest', '')
+        with patch.object(self.module.subprocess, 'Popen', return_value=process) as spawn:
+            result = run(['scp', 'original.png', 'node:/proof.png'], capture_output=True,
+                         text=True, timeout=120)
+        self.assertEqual(result.stdout, 'digest')
+        self.assertTrue(spawn.call_args.kwargs['start_new_session'])
+        process.communicate.assert_called_once_with(timeout=120)
+        self.assertEqual(spawn.call_count, 1)
+
+    def test_timeout_kills_process_group_reaps_and_never_retries(self):
+        run = getattr(self.module, 'run_transport_command', None)
+        self.assertTrue(callable(run), '传图超时尚未回收进程组')
+        process = Mock(pid=4312)
+        process.communicate.side_effect = [subprocess.TimeoutExpired(['scp'], 120), ('', '')]
+        with patch.object(self.module.subprocess, 'Popen', return_value=process) as spawn, \
+                patch.object(self.module.os, 'killpg') as kill:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run(['scp', 'original.png', 'node:/proof.png'], capture_output=True,
+                    text=True, timeout=120)
+        kill.assert_called_once_with(4312, self.module.signal.SIGKILL)
+        self.assertEqual(process.communicate.call_args_list, [unittest.mock.call(timeout=120),
+                                                           unittest.mock.call(timeout=2)])
+        self.assertEqual(spawn.call_count, 1)
+
+    def test_interruption_also_reaps_without_retry(self):
+        run = getattr(self.module, 'run_transport_command', None)
+        self.assertTrue(callable(run), '中断回收尚未实现')
+        process = Mock(pid=4312)
+        process.communicate.side_effect = [KeyboardInterrupt(), ('', '')]
+        with patch.object(self.module.subprocess, 'Popen', return_value=process) as spawn, \
+                patch.object(self.module.os, 'killpg') as kill:
+            with self.assertRaises(KeyboardInterrupt):
+                run(['ssh', 'node', 'mkdir'], capture_output=True, text=True, timeout=30)
+        kill.assert_called_once_with(4312, self.module.signal.SIGKILL)
+        self.assertEqual(process.communicate.call_args_list[-1], unittest.mock.call(timeout=2))
+        self.assertEqual(spawn.call_count, 1)

@@ -3,6 +3,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$ROOT"
+# 先定位原PNG跨节点边界：scp120/ssh30、默认入口、超时回收且不重复手机动作。
+python3 -m unittest discover -s services/wechat-cs-android/tests -p test_artifact_transport.py
 python3 -m unittest discover -s services/wechat-cs-android/tests
 cd apps/api
 npx --no-install vitest run \

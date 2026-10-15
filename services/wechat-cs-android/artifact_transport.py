@@ -1,12 +1,31 @@
 """把本事件真实手机PNG送到已授权模型节点，读回SHA256后才提供查看路径。"""
 import hashlib
+import os
+import signal
 from pathlib import Path, PurePosixPath
 import re
 import shlex
 import subprocess
 
 
-def transfer(source, event_id, state, config, runner=subprocess.run):
+def run_transport_command(args, *, capture_output=True, text=True, timeout):
+    """一次有界传输；独立进程组确保超时不会留下scp/ssh子进程。"""
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=text, start_new_session=True)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.communicate(timeout=2)
+        raise
+    return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+
+
+def transfer(source, event_id, state, config, runner=None):
+    runner = runner or run_transport_command
     source = Path(source).resolve()
     if not re.fullmatch(r'[0-9a-f]{64}', event_id):
         raise ValueError('invalid_transport_event')
@@ -28,15 +47,15 @@ def transfer(source, event_id, state, config, runner=subprocess.run):
     remote_path = str(PurePosixPath(remote_dir) / source.name)
     options = ['-F', ssh_config, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
 
-    def run(args):
-        result = runner(args, capture_output=True, text=True, timeout=30)
+    def run(args, timeout=30):
+        result = runner(args, capture_output=True, text=True, timeout=timeout)
         if result.returncode != 0:
             raise ValueError('image_transport_command_failed')
         return result.stdout
 
     run(['ssh', *options, host, shlex.join(['mkdir', '-p', remote_dir])])
     run(['ssh', *options, host, shlex.join(['chmod', '700', remote_dir])])
-    run(['scp', '-p', *options, '--', str(source), host + ':' + remote_path])
+    run(['scp', '-p', *options, '--', str(source), host + ':' + remote_path], timeout=120)
     output = run(['ssh', *options, host, shlex.join(['shasum', '-a', '256', remote_path])])
     match = re.fullmatch(r'([0-9a-fA-F]{64})\s+[^\r\n]+\s*', output)
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
