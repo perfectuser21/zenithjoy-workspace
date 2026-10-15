@@ -25,8 +25,8 @@ function definition(name){
  return {...JSON.parse(readFile({repo,revision,path:ref})),source:{repo,ref,revision}};
 }
 
-test('真实Brain绑定校验器接受Commander技能身份与合同2.0.17',async()=>{
- const doc=definition('workflow-commander');assert.equal(doc.version,'2.0.17');
+test('真实Brain绑定校验器接受Commander技能身份与合同2.0.18',async()=>{
+ const doc=definition('workflow-commander');assert.equal(doc.version,'2.0.18');
  const execution=doc.activities.find(a=>a.implementation_bindings?.some(b=>b.kind==='skill'));
  const rows=await validateImplementationBindings(execution,readFile,{repo,commit:revision});
  const skill=rows.find(b=>b.kind==='skill');
@@ -38,8 +38,8 @@ test('真实prepareDefinitionFreeze读取Commander全部固定源码并产出绑
  assert.equal(proof.source.commit,revision);assert.equal(proof.bindings.size,doc.activities.length);
  for(const rows of proof.bindings.values())assert.ok(rows.length&&rows.every(b=>b.status==='verified'));
 });
-test('已登记报告升至1.0.18后可按本次固定源码重新冻结',async()=>{
- const doc=definition('workflow-report');assert.equal(doc.version,'1.0.18');
+test('已登记报告升至1.0.19后可按本次固定源码重新冻结',async()=>{
+ const doc=definition('workflow-report');assert.equal(doc.version,'1.0.19');
  const proof=await prepareDefinitionFreeze(doc,{readFile});
  assert.equal(proof.source.commit,revision);assert.equal(proof.bindings.size,doc.activities.length);
 });

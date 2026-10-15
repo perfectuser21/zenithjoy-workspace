@@ -337,3 +337,12 @@ test('真实RPC队列调用保留采样阶段安全码，原CLI序列化不会�
  const child=spawnSync(process.execPath,['-e',`const error=new Error(${JSON.stringify(failure.message)});${emission}`],{encoding:'utf8'});
  assert.equal(child.status,1);assert.deepEqual(JSON.parse(child.stdout),{ok:false,error:'RPC_SAMPLE_IDENTITY_NOT_UNIQUE'});assert.equal(child.stderr,'');assert.ok(!child.stdout.includes(privateBody));assert.ok(!child.stdout.includes('private-user'));
 });
+
+test('unknown execution video quarantine CAS binds line/run/VID and reads back persistent status',async()=>{
+ const id='7646309328911907195',status='待人工核验:fixture';
+ const p=fakePool([{rows:[{video_id:id}],rowCount:1},{rows:[{video_id:id,process_status:status}]}]);
+ const r=await queueRequest(p,{op:'quarantine_video',line:'jinuo',run:'fixture',video_id:id});assert.equal(r.quarantined,true);assert.equal(r.process_status,status);
+ const update=p.calls.find(c=>c.sql.startsWith('UPDATE'));assert.deepEqual(update.args,['jinuo',id,'处理中:fixture',status]);assert.match(update.sql,/process_status=\$3/);
+ for(const responses of [[{rows:[],rowCount:0}],[{rows:[{video_id:id}],rowCount:1},{rows:[{video_id:id,process_status:'处理中:other'}]}]])await assert.rejects(queueRequest(fakePool(responses),{op:'quarantine_video',line:'jinuo',run:'fixture',video_id:id}));
+ const bad=fakePool([]);await assert.rejects(queueRequest(bad,{op:'quarantine_video',line:'jinuo',run:'fixture',video_id:'wrong'}));assert.equal(bad.calls.length,0);
+});

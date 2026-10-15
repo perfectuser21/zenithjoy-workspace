@@ -45,7 +45,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
     const actual = createHash('sha256').update(read(resolve(base, file.path))).digest('hex');
     if (actual !== file.sha256) throw Error('RPC_SOURCE_BYTES_MISMATCH');
   }
-  for (const path of ['outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
+  for (const path of ['outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','leadgen-client.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py','leadgen-db-lib.js',
     'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
     'leadgen-db-connect.js','company-config-lib.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
@@ -64,6 +64,12 @@ export async function handleRpc(input, deps = {}) {
     if(input.kind==='outreach'){pool=deps.pool||require('./leadgen-db-connect.js').getPool();return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachRequest(input.request,{sourceCommit:input.source.commit,pool})};}
     if(input.kind==='outreach_policy')return {ok:true,result:await require('./leadgen-outreach-orders.js').outreachPolicy(input)};
     if(input.kind==='resolve_share_link')return {ok:true,result:await resolveCopiedShareLink(input.url,{execute:deps.resolveExec||exec})};
+    if(input.kind==='activity_skill'||input.kind==='activity_skill_authority'){
+      if(input.request?.source_commit!==input.source.commit)throw Error('RPC_SKILL_SOURCE_MISMATCH');
+      const {runSkillAgent,skillAuthority,verifySkillRequest}=await import('./leadgen-skill-agent.mjs');
+      await verifySkillRequest(input.request);
+      return input.kind==='activity_skill_authority'?{ok:true,authorized:skillAuthority(input.request)}:{ok:true,result:await runSkillAgent(input.request)};
+    }
     if (input.kind === 'commander') {
       const { openRouterCommander } = await import('./activity-commander.mjs');
       return { ok: true, decision: await openRouterCommander()(input.receipt) };

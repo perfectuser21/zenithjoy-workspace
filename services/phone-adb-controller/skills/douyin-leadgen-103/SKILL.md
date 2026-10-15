@@ -2,7 +2,7 @@
 name: douyin-leadgen-103
 description: 执行抖音获客103评论评分与线索标记，独立消费已提交评论并使用公司原评分政策。用于Agent执行、调用成熟评分代码及异常接手；不占手机、不等待整批102结束、不发送私信。
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-103/references/reuse-map.json
@@ -66,3 +66,7 @@ Code独立成功、Skill独立成功、Commander救场分别记录。Agent完成
 独立核对真实评论、评分理由与政策、同租户数据、线索与外部写入读回、unknown隔离及租约释放。103与手机101/102/104独立调度；是否产生104可消费订单按实际资格与交付状态判断，不能用“103跑过”替代。
 
 来源：[今日获客方案](https://app.notion.com/p/3f9c40c2ba6381dea615c39380c78e66)、[Skill/Code配套规则](https://app.notion.com/p/3f5c40c2ba6381acbad0d31ee3215f92)。
+
+## 单Activity受控接手
+
+当前源码提供 `leadgen-activity-v1`：仅在原冻结run内Code失败与有限安全重试之后，由真实work-commander父会话派官方Skill child，使用原run私有broker逐Activity接手。`activity-skill-tool.mjs` 不是新任务启动器；inspect/受限phone/一次当前slot resume均受同源方法、绑定、资源和截止约束。子会话终态未知保锁，发送未知只读回。最后仍由原独立verify与持久读回决定成功，不以Agent自述或CLI exit0替代验收。当前源码存在不等于实机接手已验收，具体状态查看当前任务事件与发布观测。

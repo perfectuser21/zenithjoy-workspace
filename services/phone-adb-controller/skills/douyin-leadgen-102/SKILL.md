@@ -2,7 +2,7 @@
 name: douyin-leadgen-102
 description: 执行抖音获客102视频处理：验证101来源、领取待处理视频、判断资格并按评论量采集持久化。用于普通、深采或自动策略及代码异常接手；不修改评分标准或执行私信。
 metadata:
-  version: 0.2.1
+  version: 0.2.2
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-102/references/reuse-map.json
@@ -20,7 +20,7 @@ metadata:
 
 - `douyin_video_processing.preflight` → `douyin-leadgen-activity-102-preflight@0.1.0`。
 - `douyin_video_processing.dedup` → `douyin-leadgen-activity-102-dedup@0.1.0`。
-- `douyin_video_processing.qualification` → `douyin-leadgen-activity-102-qualification@0.1.1`。
+- `douyin_video_processing.qualification` → `douyin-leadgen-activity-102-qualification@0.1.0`。
 - `douyin_video_processing.collection` → `douyin-leadgen-activity-102-collection@0.1.0`。
 - `douyin_video_processing.cleanup` → `douyin-leadgen-activity-102-cleanup@0.1.0`。
 
@@ -73,3 +73,7 @@ Activity方法、支持文件或合同改变时，更新对应方法版本、所
 核对每条采集的来源/资格/原生身份、PG新增与历史消费读回、采样范围、完成或partial语义、截止与清理。独立核验使用相同业务合同；Code失败与Skill救场分开记录。本版正常模式与跨批深采分别验证，不用一个5条样本代表所有档位。
 
 来源：[今日101/102方案](https://app.notion.com/p/3f9c40c2ba6381dea615c39380c78e66)、[Skill/Code配套规则](https://app.notion.com/p/3f5c40c2ba6381acbad0d31ee3215f92)。
+
+## 单Activity受控接手
+
+当前源码提供 `leadgen-activity-v1`：仅在原冻结run内Code失败与有限安全重试之后，由真实work-commander父会话派官方Skill child，使用原run私有broker逐Activity接手。`activity-skill-tool.mjs` 不是新任务启动器；inspect/受限phone/一次当前slot resume均受同源方法、绑定、资源和截止约束。子会话终态未知保锁，发送未知只读回。最后仍由原独立verify与持久读回决定成功，不以Agent自述或CLI exit0替代验收。当前源码存在不等于实机接手已验收，具体状态查看当前任务事件与发布观测。
