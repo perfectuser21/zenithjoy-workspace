@@ -428,7 +428,8 @@
         ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
         ".github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh",
         ".github/workflows/scripts/smoke/line04-cs-memory-smoke.sh",
-        ".github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh"
+        ".github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh"
       ],
       "steps": [
         {
@@ -632,5 +633,5 @@
       ]
     }
   ],
-  "digest": "18d78b986a1cc7c71107151de2a712a8052417eb8bb590173341e3bd18b318be"
+  "digest": "92aa1ab95a1d95c0dff0d4c3f3b4f8f50d2e4a97f0fb5eafcd4b5bb9b5a08859"
 }

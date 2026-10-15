@@ -390,3 +390,26 @@ describe('consolidate', () => {
     expect(wrote).toBe(false);
   });
 });
+
+// 草稿不是已经发生的对话：不能用于后续回答或客户画像。
+describe('delivered-only regression', () => {
+  it('短期记忆 SQL 只取 delivered 消息', async () => {
+    await getShortTerm('scope');
+    expect(String(mockedQuery.mock.calls[0][0])).toMatch(/status = 'delivered'/);
+  });
+  it('固化 SQL 只取 delivered 消息', async () => {
+    await consolidate('scope');
+    expect(String(mockedQuery.mock.calls[0][0])).toMatch(/status = 'delivered'/);
+  });
+});
+describe('scoped回执SQL权限',()=>{
+ it('旧未授权调用不得更新scoped行',async()=>{
+  await markMessageReceipt(42,true,'cs-a');
+  expect(String(mockedQuery.mock.calls[0][0])).toContain("contact_key NOT LIKE 'crm:v1:%'");
+ });
+ it('已授权scope只更新精确scope',async()=>{
+  await markMessageReceipt(42,true,'cs-a','crm:v1:scope');
+  expect(String(mockedQuery.mock.calls[0][0])).toContain('contact_key = $4');
+  expect(mockedQuery.mock.calls[0][1]).toEqual([42,'delivered','cs-a','crm:v1:scope']);
+ });
+});

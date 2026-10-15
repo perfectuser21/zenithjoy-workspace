@@ -32,11 +32,11 @@ import {
 } from './wechat/cs-route-decision';
 import {
   appendMessage,
-  consolidate,
   getContactMemory,
   getShortTerm,
 } from './wechat/contact-memory';
 import { appendTenantMessage } from './wechat/tenant-memory';
+import { crmScopeKey, withCrmEvent, readCrmContext, ensureCrmCustomer, type CrmScope } from './wechat/crm-analysis';
 import { assembleChatContext } from './wechat/context-assembler';
 
 // ─── 客服回复 LLM 配置：走 ToAPI（OpenAI 兼容 /chat/completions）──
@@ -245,6 +245,7 @@ export interface GenerateChatDraftParams {
    * 跳过 license_machines→service_agents 反查。普通 agent 调用传 agent_id 即可。
    */
   cs_wechat_id?: string;
+  source_event_id?: string;
 }
 
 export interface GenerateChatDraftResult {
@@ -255,7 +256,7 @@ export interface GenerateChatDraftResult {
    * ai_failed= route=send 但 AI 生成失败 → 不带 reply（中台已报红）
    * monitor  = mode:'review' 监控态 → 不带 reply
    */
-  status: 'sent' | 'skipped' | 'ai_failed' | 'monitor';
+  status: 'sent' | 'skipped' | 'ai_failed' | 'monitor' | 'event_processing' | 'event_unknown' | 'event_delivered' | 'event_failed';
   task_id: string;
   /** 去飞书后恒为空串（保留字段形状，向后兼容既有 caller 读取）。 */
   draft_id: string;
@@ -351,15 +352,25 @@ async function stampCsMemory(
   }
 }
 
-export async function generateChatDraft(
-  params: GenerateChatDraftParams,
-): Promise<GenerateChatDraftResult> {
+export async function generateChatDraft(params: GenerateChatDraftParams): Promise<GenerateChatDraftResult> {
+  if (!params.source_event_id) {
+    if(params.wechat_id.startsWith('crm:v1:')||params.sender.startsWith('crm:v1:'))throw new Error('CRM_RESERVED_SCOPE');
+    return generateChatDraftInner(params);
+  }
+  if (!params.tenant_id || !params.wechat_id || params.wechat_id === params.sender) throw new Error('CRM_STABLE_CUSTOMER_ID_REQUIRED');
+  const csWechatId = await resolveCsWechatIdentity({directCsWechatId:params.cs_wechat_id, agentId:params.agent_id});
+  if (!csWechatId) throw new Error('CRM_ACCOUNT_NOT_BOUND');
+  const scope: CrmScope = {tenantId:params.tenant_id,csWechatId,customerWechatId:params.wechat_id};
+  return withCrmEvent(scope,params.source_event_id,()=>generateChatDraftInner({...params,cs_wechat_id:csWechatId},scope));
+}
+async function generateChatDraftInner(params: GenerateChatDraftParams, scope?: CrmScope): Promise<GenerateChatDraftResult> {
   const { sender, wechat_id, content, mode = 'auto', tenant_id, agent_id, is_group = false } =
     params;
 
   // 每客服配置（本地 DB = 引擎，决策 dd320e56）：带 agent_id 时优先用【这台机自己那份配置】
   // 的人设/知识库 + 解析客服微信号查 per-cs 黑名单。解不到 → null，回落全局（向后兼容）。
   const csConfig = agent_id ? await getCSConfigByAgentId(agent_id) : null;
+  if(scope && csConfig?.wechat_id && csConfig.wechat_id!==scope.csWechatId)throw new Error('CRM_AGENT_ACCOUNT_MISMATCH');
   // S3 客服工作汇总：解析「处理本消息的客服微信号」给 in/out 落库盖身份章 + 查 per-cs 黑名单。
   // 三段链抽到 resolveCsWechatIdentity（回执路由共用，保证写行/回执归属逐字一致）：
   // 直传 cs_wechat_id > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。csConfig 已为
@@ -390,14 +401,21 @@ export async function generateChatDraft(
   }
 
   // 2) 三层记忆（DB wechat_messages）+ 每号人设/知识库 → 上下文装配
-  const contactKey = wechat_id || sender;
+  if (scope) await ensureCrmCustomer(scope,sender);
+  if(scope){
+    const {customer}=await readCrmContext(scope,sender);
+    if(customer && ['blacklist','internal'].includes(customer.identity))return {ok:true,status:'skipped',task_id:crypto.randomUUID(),draft_id:'',skip_reason:'blacklisted'};
+  }
+  const contactKey = scope ? crmScopeKey(scope) : wechat_id || sender;
   try {
-    await appendMessage(contactKey, sender, 'in', content, csWechatId);
+    const inboundId = await appendMessage(contactKey, sender, 'in', content, csWechatId, params.source_event_id ? {sourceEventId:params.source_event_id} : undefined);
+    if (scope && inboundId == null) throw new Error('CRM_INBOUND_NOT_PERSISTED');
   } catch (err) {
+    if (scope) throw err;
     console.warn('[wechat-draft] 写入站消息失败（不影响生成）:', err);
   }
   // 接缝 #1：同一条 in 盖客服身份章落到被 stats 聚合的 cs_memory_messages（解不到落 NULL）。
-  await stampCsMemory(tenant_id, sender, 'in', content, csWechatId);
+  if (!scope) await stampCsMemory(tenant_id, sender, 'in', content, csWechatId);
 
   // IA 重设计刀1（反转 PR#940）：AI 回复读【每号完整 persona + 每号 business_kb】（每号独立人设+知识库）。
   const globalPersona = await getPersona();
@@ -410,9 +428,10 @@ export async function generateChatDraft(
   try {
     [shortTerm, memory] = await Promise.all([
       getShortTerm(contactKey),
-      getContactMemory(contactKey),
+      scope ? readCrmContext(scope, sender).then(r=>r.memory) : getContactMemory(contactKey),
     ]);
   } catch (err) {
+    if (scope) throw err;
     console.warn('[wechat-draft] 读取客户记忆失败，降级为无记忆:', err);
   }
   const kbHits = retrieveRelevantKB(content, kb);
@@ -530,12 +549,14 @@ export async function generateChatDraft(
   try {
     messageId = await appendMessage(contactKey, sender, 'out', aiReply, csWechatId, {
       status: 'draft',
+      sourceEventId:params.source_event_id,
     });
-    await consolidate(contactKey);
+    if (scope && messageId == null) throw new Error('CRM_DRAFT_NOT_PERSISTED');
   } catch (err) {
-    console.warn('[wechat-draft] 写出站消息/固化失败（不影响回复）:', err);
+    if (scope) throw err;
+    console.warn('[wechat-draft] 写出站消息失败（不影响回复）:', err);
   }
-  await stampCsMemory(tenant_id, sender, 'out', aiReply, csWechatId);
+  // 草稿不再盖章为已回复；真实发送由回执台账确认。
 
   // escalate=true → 写 wechat_publish_task(cs_escalate)，失败 console.warn 不阻塞
   if (aiTags.escalate === true) {
@@ -562,7 +583,7 @@ export async function generateChatDraft(
   // stage 回写 CRM（A1-A4 → INSERT crm_customer_status_history, changed_by='ai_inferred'）
   const VALID_STAGES = new Set(['A1', 'A2', 'A3', 'A4']);
   const stage = typeof aiTags.stage === 'string' ? aiTags.stage : null;
-  if (stage && VALID_STAGES.has(stage) && tenant_id && csWechatId) {
+  if (!scope && stage && VALID_STAGES.has(stage) && tenant_id && csWechatId) {
     pool.query(
       `INSERT INTO zenithjoy.crm_customer_status_history
          (tenant_id, cs_wechat_id, contact, old_status, new_status, changed_at, changed_by)

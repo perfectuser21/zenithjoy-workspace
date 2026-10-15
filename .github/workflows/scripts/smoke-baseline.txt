@@ -154,3 +154,4 @@ commander-codex-agent-smoke.sh
 commander-report-smoke.sh
 company-wiki-config-smoke.sh
 wechat-cs-android-smoke.sh
+line04-crm-analysis-smoke.sh

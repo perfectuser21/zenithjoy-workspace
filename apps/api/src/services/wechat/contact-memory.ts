@@ -16,6 +16,8 @@
  */
 
 import pool from '../../db/connection';
+import { appendTenantMessage } from './tenant-memory';
+import { parseCrmScope } from './crm-analysis';
 import { callOpenRouter } from '../../llm/openrouter';
 import type {
   ChatMessage,
@@ -64,13 +66,17 @@ export async function appendMessage(
   direction: Direction,
   content: string,
   csWechatId?: string | null,
-  opts?: { status?: 'draft' | 'delivered' },
+  opts?: { status?: 'draft' | 'delivered'; sourceEventId?: string },
 ): Promise<number | null> {
   try {
     // status 台账：out 行由 caller 传 'draft'（AI 已生成、真机未确认送达），
     // 真送达回执再置 delivered/failed；in 行与缺省一律 delivered（语义不变）。
     const status = opts?.status ?? 'delivered';
-    const res = await pool.query(
+    const res = opts?.sourceEventId ? await pool.query(
+      `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id, status, source_event_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [contactKey, senderName, direction, content, csWechatId ?? null, status, opts.sourceEventId],
+    ) : await pool.query(
       `INSERT INTO zenithjoy.wechat_messages (contact_key, sender_name, direction, content, cs_wechat_id, status)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [contactKey, senderName, direction, content, csWechatId ?? null, status],
@@ -101,15 +107,26 @@ export async function markMessageReceipt(
   messageId: number,
   ok: boolean,
   csWechatId: string,
+  authorizedScope?: string,
 ): Promise<boolean> {
   try {
     const res = await pool.query(
       `UPDATE zenithjoy.wechat_messages
           SET status = $2
         WHERE id = $1 AND cs_wechat_id = $3 AND direction = 'out' AND status = 'draft'
-        RETURNING id`,
-      [messageId, ok ? 'delivered' : 'failed', csWechatId],
+          ${authorizedScope ? 'AND contact_key = $4' : "AND contact_key NOT LIKE 'crm:v1:%'"}
+        RETURNING id, contact_key, sender_name, content`,
+      authorizedScope ? [messageId, ok ? 'delivered' : 'failed', csWechatId, authorizedScope] : [messageId, ok ? 'delivered' : 'failed', csWechatId],
     );
+    const row=res.rows?.[0];
+    if(row && ok && typeof row.contact_key === 'string' && !parseCrmScope(row.contact_key)) {
+      // 旧Windows路径在真实回执后后台固化；不阻塞发送确认。
+      setImmediate(()=>{void (async()=>{
+        const owner=await pool.query('SELECT tenant_id FROM zenithjoy.service_agents WHERE wechat_id=$1 AND deleted_at IS NULL LIMIT 1',[csWechatId]);
+        if(owner.rows[0]?.tenant_id)await appendTenantMessage({tenantId:owner.rows[0].tenant_id,contact:row.sender_name,role:'out',text:row.content,csWechatId});
+        await consolidate(row.contact_key);
+      })().catch(()=>console.warn('[contact-memory] legacy receipt memory failed'));});
+    }
     return (res.rows?.length ?? 0) > 0;
   } catch (err) {
     console.warn('[contact-memory] markMessageReceipt 失败(已吞):', err);
@@ -133,7 +150,7 @@ export async function getShortTerm(
     const res = await pool.query(
       `SELECT direction, content, created_at
          FROM zenithjoy.wechat_messages
-        WHERE contact_key = $1
+        WHERE contact_key = $1 AND status = 'delivered'
         ORDER BY created_at DESC, id DESC
         LIMIT $2`,
       [contactKey, n],
@@ -232,7 +249,7 @@ export async function consolidate(
     const pending = await pool.query(
       `SELECT id, sender_name, direction, content, created_at
          FROM zenithjoy.wechat_messages
-        WHERE contact_key = $1 AND consolidated = FALSE
+        WHERE contact_key = $1 AND consolidated = FALSE AND status = 'delivered'
         ORDER BY created_at ASC, id ASC`,
       [contactKey],
     );

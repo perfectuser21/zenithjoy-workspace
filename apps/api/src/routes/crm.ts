@@ -14,6 +14,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { crmScopeKey, readScopedCrmProfile, analyzeCrmScope, requireCrmBinding } from '../services/wechat/crm-analysis';
 import {
   requireCsWriteAccess,
   requireCsReadAccess,
@@ -23,6 +24,29 @@ import { buildCustomerRoster } from '../services/crm/customer-roster';
 import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roster';
 
 const router = Router();
+
+router.post('/analysis/profile',requireServiceCredential,async(req:Request,res:Response)=>{
+  const {tenant_id,cs_wechat_id,customer_wechat_id,contact}=req.body??{};
+  if(![tenant_id,cs_wechat_id,customer_wechat_id].every(v=>typeof v==='string'&&v.trim()))return res.status(400).json({error:'CRM_SCOPE_REQUIRED'});
+  if(req.tenantId&&req.tenantId!==tenant_id)return fail(res,403,'CROSS_TENANT','请求租户不匹配');
+  const scope={tenantId:tenant_id,csWechatId:cs_wechat_id,customerWechatId:customer_wechat_id};
+  try{
+    if(!await requireCrmBinding(scope))return fail(res,403,'CROSS_TENANT','客服账号不属于该租户');
+    return res.json({profile:await readScopedCrmProfile(scope,typeof contact==='string'?contact:'' ,100,true)});
+  }catch{return fail(res,500,'CRM_PROFILE_FAILED','CRM读取失败');}
+});
+// 受服务凭据保护的定点补扫：同一分析合同，禁止无scope全量执行。
+router.post('/analysis/run',requireServiceCredential,async(req:Request,res:Response)=>{
+  const {tenant_id,cs_wechat_id,customer_wechat_id}=req.body??{};
+  if(![tenant_id,cs_wechat_id,customer_wechat_id].every(v=>typeof v==='string'&&v.trim()))return res.status(400).json({error:'CRM_SCOPE_REQUIRED'});
+  if(req.tenantId&&req.tenantId!==tenant_id)return fail(res,403,'CROSS_TENANT','请求租户不匹配');
+  const scope={tenantId:tenant_id,csWechatId:cs_wechat_id,customerWechatId:customer_wechat_id};
+  try{
+    if(!await requireCrmBinding(scope))return fail(res,403,'CROSS_TENANT','客服账号不属于该租户');
+    return res.json(await analyzeCrmScope(crmScopeKey(scope)));
+  }catch{return fail(res,500,'CRM_ANALYSIS_FAILED','分析失败，待办保留');}
+});
+
 
 const VALID_STATUS = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
 const VALID_IDENTITY = new Set(['customer', 'blacklist', 'internal']);
@@ -914,9 +938,22 @@ router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Re
       custParams,
     );
     const cust = custRes.rows?.[0] as
-      | { wechat_id: string | null; status: string; last_seen_at: Date | null; updated_at: Date }
+      | { wechat_id: string | null; status: string; source?: string; last_seen_at: Date | null; updated_at: Date }
       | undefined;
 
+    const profileManaged=async()=>{
+      if(!csWechatId)return true;
+      const r=await pool.query('SELECT whitelist,blacklist,takeover_mode FROM zenithjoy.wechat_cs_account_config WHERE wechat_id=$1',[csWechatId]);
+      const cfg=r.rows[0];if(!cfg)return true;
+      const bl=Array.isArray(cfg.blacklist)?cfg.blacklist:[];const wl=Array.isArray(cfg.whitelist)?cfg.whitelist:[];
+      return cfg.takeover_mode==='whitelist'?wl.includes(contact):!bl.includes(contact);
+    };
+    // 新安卓已识别稳定客户后只读该租户/账号/客户scope；不混入旧昵称记忆。
+    if (csWechatId && cust?.wechat_id) {
+      const scoped=await readScopedCrmProfile({tenantId,csWechatId,customerWechatId:cust.wechat_id},contact,msgLimit,cust.source==='android_event');
+      if(scoped)return res.json({profile:{name:contact,contact,wechat_id:cust.wechat_id,
+        status:normalizeProfileStatus(cust.status),managed:await profileManaged(),...scoped,timeline:[],dailies:[]}});
+    }
     // 长期记忆融合 summary（cs_memory 三表按 tenant_id text × contact 隔离，与 tenant-memory.ts 同模式）
     const ltRes = await pool.query(
       `SELECT summary, updated_at FROM zenithjoy.cs_memory_longterm

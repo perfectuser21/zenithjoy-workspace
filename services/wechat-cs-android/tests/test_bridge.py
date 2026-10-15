@@ -119,16 +119,31 @@ class BackendTests(unittest.TestCase):
     def context(self):
         image = self.root / 'before.png'
         image.write_bytes(b'\x89PNG\r\n\x1a\nreal-file-required')
-        return dict(sender='苏小妖', contact_key='wxid_test_contact', content='你好',
+        return dict(sender='苏小妖', contact_key='wxid_test_contact', content='你好', event_id='a' * 64,
                     cs_wechat_id='wxid_skpj8yqmblqc22', screenshot=str(image),
                     visual_confirmed=True, conversation_header='苏小妖')
+
+    def test_draft_forwards_authoritative_event_id_for_server_deduplication(self):
+        self.backend.draft(self.context() | dict(event_id='a' * 64))
+        self.assertEqual(self.calls[-1][2].get('source_event_id'), 'a' * 64)
+
+    def test_draft_rejects_invalid_event_identity_before_any_backend_request(self):
+        for event_id in ('', 'not-an-event', 'A' * 64, None):
+            with self.assertRaises(ValueError):
+                self.backend.draft(self.context() | dict(event_id=event_id))
+            self.assertEqual(self.calls, [])
+
+    def test_already_delivered_server_result_cannot_become_sendable_draft(self):
+        self.response = dict(ok=True, status='delivered', reply='您好', message_id=17)
+        with self.assertRaises(ValueError):
+            self.backend.draft(self.context() | dict(event_id='a' * 64))
 
     def test_draft_uses_observed_context_and_exact_identity(self):
         result = self.backend.draft(self.context())
         self.assertEqual(result['message_id'], 17)
         self.assertEqual(self.calls[-1][2], dict(sender='苏小妖', wechat_id='wxid_test_contact',
             content='你好', mode='auto', is_group=False, tenant_id='tenant-test',
-            agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22'))
+            agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22', source_event_id='a' * 64))
 
     def test_backend_uses_observed_batch_text_without_inventing_image_contents(self):
         context = self.context() | dict(inbound_batch=[dict(type='text', text='你好'),
