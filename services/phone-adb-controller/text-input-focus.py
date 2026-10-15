@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
-INPUT_RUNTIME_REVISION = 3
+INPUT_RUNTIME_REVISION = 4
 import json
 import hashlib
 import re
@@ -105,6 +105,31 @@ def check_zhihu_search_shrink(selection, current):
         raise ValueError("search geometry is not the observed clear-button right shrink")
 
 
+def weibo_body_structure(tree, field):
+    package = "com.sina.weibo"
+    nodes = list(tree.iter("node"))
+    def unique(rid, cls, text=None):
+        matches = [n for n in nodes if n.get("resource-id") == package + ":id/" + rid]
+        if (len(matches) != 1 or matches[0].get("package") != package or matches[0].get("class") != cls
+                or matches[0].get("password") != "false" or (text is not None and matches[0].get("text") != text)):
+            raise ValueError("Weibo composer marker changed")
+        return matches[0]
+    parent = unique("sv_element_container", "android.widget.ScrollView")
+    if (field is not unique("edit_view", "android.widget.EditText") or field not in list(parent)
+            or parent.get("enabled") != "true" or any(n.get("focused") == "true" and n is not field for n in nodes)):
+        raise ValueError("Weibo composer body is ambiguous or unsafe")
+    markers = [unique(rid, "android.widget.TextView", text) for rid, text in
+               (("titleBack", "取消"), ("titleText", "发微博"), ("titleSave", "发送"), ("subTitleText", None))]
+    if not markers[-1].get("text", "").strip():
+        raise ValueError("Weibo composer account is missing")
+    left, top, right, bottom = bounds_rect(field.get("bounds"))
+    pl, pt, pr, pb = bounds_rect(parent.get("bounds"))
+    if not (pl <= left < right <= pr and pt <= top < bottom <= pb):
+        raise ValueError("Weibo body leaves its composer container")
+    return {"policy": "weibo_composer_body_growth_v1", "parent_anchor": [pl, pt, pr],
+            "markers": [{k: n.get(k, "") for k in ("resource-id", "class", "package", "text", "bounds")} for n in markers]}
+
+
 def standard_resolve(xml_path):
     tree = ET.parse(xml_path)
     nodes = [n for n in tree.iter("node")
@@ -120,22 +145,25 @@ def standard_resolve(xml_path):
     identity = {key: node.get(key, "") for key in ("package", "resource-id", "class", "bounds")}
     if not identity["package"] or not identity["bounds"]:
         raise ValueError("focused input identity is incomplete")
-    if identity["package"] == "com.zhihu.android" and identity["resource-id"] == "":
-        # 不满足原生正文结构时仍保留原通用严格bounds许可，不能获得布局兼容。
+    policies = {("com.zhihu.android", ""): ("body_structure", zhihu_body_structure),
+                ("com.zhihu.android", "com.zhihu.android:id/input_text"): ("search_structure", zhihu_search_structure),
+                ("com.sina.weibo", "com.sina.weibo:id/edit_view"): ("weibo_structure", weibo_body_structure)}
+    if (policy := policies.get((identity["package"], identity["resource-id"]))) is not None:
         try:
-            identity["body_structure"] = zhihu_body_structure(tree, node)
+            identity[policy[0]] = policy[1](tree, node)
         except ValueError:
-            pass
-    if identity["package"] == "com.zhihu.android" and identity["resource-id"] == "com.zhihu.android:id/input_text":
-        try:
-            identity["search_structure"] = zhihu_search_structure(tree, node)
-        except ValueError:
-            pass
+            pass  # 未绑定原生页面时，只保留通用严格几何许可。
     return identity
 
 
 def standard_readback(xml_path, selection, allow_body_growth=False):
     current = standard_resolve(xml_path)
+    if allow_body_growth and selection.get("weibo_structure"):
+        before, after = bounds_rect(selection["bounds"]), bounds_rect(current["bounds"])
+        if current.get("weibo_structure") != selection["weibo_structure"] or before[:3] != after[:3] or after[3] < before[3]:
+            raise ValueError("Weibo composer identity or downward-only growth changed")
+        current = dict(current)
+        current["bounds"] = selection["bounds"]
     if allow_body_growth and selection.get("body_structure"):
         current = dict(current)
         current["bounds"] = selection["bounds"]
@@ -147,7 +175,7 @@ def standard_readback(xml_path, selection, allow_body_growth=False):
     if current != selection:
         raise ValueError("focused input identity changed")
     # 兼容分支也必须重验同屏、唯一命名editor/root以及唯一安全焦点，绝不按空id全局读。
-    layout_bound = allow_body_growth and (selection.get("body_structure") or selection.get("search_structure"))
+    layout_bound = allow_body_growth and (selection.get("body_structure") or selection.get("search_structure") or selection.get("weibo_structure"))
     keys = ("package", "resource-id", "class") if layout_bound else ("package", "resource-id", "class", "bounds")
     candidates = [n for n in ET.parse(xml_path).iter("node")
                   if (not layout_bound or n.get("focused") == "true")
@@ -168,7 +196,7 @@ def standard_compare(xml_path, selection, source):
     def identity(text):
         raw = text.encode("utf-8")
         return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-    return {"comparison_mode": mode, "identity_policy": selection.get("search_structure", {}).get("policy", selection.get("body_structure", {}).get("policy", "strict_standard")), "source": identity(source), "actual": identity(actual),
+    return {"comparison_mode": mode, "identity_policy": selection.get("weibo_structure", {}).get("policy", selection.get("search_structure", {}).get("policy", selection.get("body_structure", {}).get("policy", "strict_standard"))), "source": identity(source), "actual": identity(actual),
             "paragraphs": len(source.split("\n\n")) if selection.get("body_structure") else 0}
 
 
