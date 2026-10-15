@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+import signal
 from pathlib import Path
 import sys
 
@@ -131,7 +132,14 @@ class Controller:
         return result
 
 
+def install_cancel_handler():
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt('cancelled_no_retry')
+    signal.signal(signal.SIGTERM, interrupted)
+
+
 def main():
+    install_cancel_handler()
     parser = argparse.ArgumentParser()
     parser.add_argument('--phone-config', required=True)
     parser.add_argument('--state', required=True)
