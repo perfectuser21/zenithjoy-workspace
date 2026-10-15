@@ -146,3 +146,12 @@ test('C排序只限发现：非ASCII UTF8脚本实际执行且继承原编码环
   assert.equal(readFileSync(join(workers[0].output, '中文→é.txt'), 'utf8'), '中文→é');
   assert.equal(verify(root).status, 0);
 });
+
+
+test('真实部署回归仅精确脚本获得180秒预算，其他及近似名仍90秒', () => {
+  const definition = caller.match(/script_timeout\(\) \{[\s\S]*?\n\s*}/)?.[0];
+  assert.ok(definition, '必须提取正式caller的实际预算函数');
+  const actual = spawnSync('bash', ['-c', definition + '\nscript_timeout phone-adb-controller-smoke.sh; script_timeout ordinary-smoke.sh; script_timeout phone-adb-controller-smoke.sh-extra'], { encoding: 'utf8' });
+  assert.equal(actual.status, 0, actual.stderr);
+  assert.equal(actual.stdout, '180\n90\n90\n');
+});
