@@ -2,6 +2,8 @@
 # 四新流程Activity/Step正式发布回归：真实运行node:test，不把该套件误当Vitest。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# MMV实际主机名变更时仍核精确身份与真实collector；相似机器不得通过。
+node --test services/phone-adb-controller/__tests__/runtime-host.test.mjs services/phone-adb-controller/__tests__/deployment-unified.test.mjs
 # 取链预算与正式路由先快速阻断：传输夹具不冒真实业务成功，正式入口仍核凭据/冻结。
 node --test --test-name-pattern='真实26.511秒|正式MMV路由|MMV路由非法|真实prepare CLI消费路由env|正式入口加载凭据后保留' \
  services/phone-adb-controller/__tests__/leadgen-client.test.mjs \

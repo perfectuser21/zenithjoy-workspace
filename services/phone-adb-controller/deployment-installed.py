@@ -85,7 +85,7 @@ def read_regular(root, relative):
 
 
 def collect(spec, home):
- if socket.gethostname().split('.')[0] != 'aad17-2':raise ValueError('实际机器不是MMV')
+ if socket.gethostname().split('.')[0] not in ('aad17-2','r10-7'):raise ValueError('实际机器不是MMV')
  runtime=home/'.openclaw/commander';workspace=home/'openclaw-root/workspaces-root/clawd-work-commander'
  original=read_regular(runtime,'runtime-manifest.json');installed=json.loads(original)
  if installed.get('protocol')!='commander-v2' or installed.get('files')!=spec['commander_files'] or installed.get('releases')!=spec['commander_releases']:raise ValueError('Commander安装manifest与完整release不同')
