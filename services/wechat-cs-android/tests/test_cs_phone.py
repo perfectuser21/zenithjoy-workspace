@@ -61,6 +61,21 @@ class PhoneTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.controller.execute('text-from-draft', [])
 
+    def test_operation_lock_covers_state_check_and_actual_phone_write(self):
+        original = self.phone.execute
+        blocked = []
+        def racing_execute(operation, values):
+            if operation == 'tap':
+                try:
+                    self.controller.execute('text-from-draft', [])
+                except RuntimeError:
+                    blocked.append(True)
+            return original(operation, values)
+        self.phone.execute = racing_execute
+        self.controller.execute('tap', [10, 20])
+        self.assertEqual(blocked, [True])
+        self.assertIsNone(self.state.action('test-event', 'input'))
+
     def test_input_unknown_is_not_retried(self):
         self.phone.fail = True
         with self.assertRaises(RuntimeError):
