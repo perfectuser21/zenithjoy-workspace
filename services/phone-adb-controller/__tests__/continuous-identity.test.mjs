@@ -333,6 +333,8 @@ function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.a
   for(const kind of ['paused','playing'])writeFileSync(join(d,'native-'+kind),readFileSync(join(fixtures,'real-honor-native-audio-'+kind+'.txt')));
   const playXml=readFileSync(join(fixtures,'real-honor-paused-play-control.xml'),'utf8');
   let controlXml=playControl==='pause'?playXml.replace('content-desc="播放视频，按钮"','content-desc="暂停视频，按钮"'):playControl?playXml:'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="视频素材白三角" clickable="true" enabled="true" bounds="[300,600][800,1800]"/></hierarchy>';
+  if(playControl==='newSemanticId')controlXml=readFileSync(join(fixtures,'real-honor-20261015-semantic-player.xml'),'utf8');
+  if(playControl==='mixedResourceMultiple')controlXml=playXml.replace('</hierarchy>','<node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/qbv" content-desc="播放视频，按钮" clickable="true" enabled="true" bounds="[0,0][1200,2504]"/></hierarchy>');
   if(playControl==='wrongId')controlXml=playXml.replace('resource-id="com.ss.android.ugc.aweme:id/qbt"','resource-id="com.ss.android.ugc.aweme:id/unknown"');
   if(playControl==='multiple')controlXml=playXml.replace('</hierarchy>','<node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/qbt" content-desc="暂停视频，按钮" clickable="true" enabled="true" bounds="[0,0][1200,2504]"/></hierarchy>');
   writeFileSync(join(d,'play.xml'),controlXml);
@@ -482,7 +484,7 @@ for(const after of ['foreign','unknown'])test('native单次qbt恢复：点击后
  assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
  assert.ok(r.calls.split('\n').filter(l=>l.includes('input tap')).length<=1);assert.doesNotMatch(r.calls,/keyevent (85|126|127)/);
 });
-for(const playControl of ['wrongId','multiple',false])test('native单次qbt恢复：未知resource或多个播放控件不能点击 '+playControl,()=>{
+for(const playControl of ['multiple','mixedResourceMultiple',false])test('native单次qbt恢复：多个或缺语义播放控件不能点击 '+playControl,()=>{
  const r=recordBoundary({session:'namedStopped',native:'paused',playControl});
  assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);
 });
@@ -536,3 +538,5 @@ for(const volumeReadAfterUp of ['unknown','unchanged'])test('volume cycle restor
 test('volume cycle upper bound unchanged restores exact target without decrement',()=>{const r=recordBoundary({native:'streamPort',volumeUpSaturated:true});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_DOWN/);assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
 
 test('mixed target unmuted and streamPort started tracks never count as unique native',()=>{const r=recordBoundary({native:'mixedTarget'});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_|input tap/);});
+
+test('fresh semantic player survives opaque resource ID drift from actual 20261015 tree',()=>{const r=recordBoundary({native:'paused',playControl:'newSemanticId',nativeAfterTap:'started'});assert.equal(r.status,0,r.stderr);assert.equal(r.started,true);assert.equal(r.calls.split('input tap').length-1,1);assert.match(r.calls,/input tap 600 1252/);});
