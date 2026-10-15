@@ -119,7 +119,7 @@ class BackendTests(unittest.TestCase):
     def context(self):
         image = self.root / 'before.png'
         image.write_bytes(b'\x89PNG\r\n\x1a\nreal-file-required')
-        return dict(sender='苏小妖', contact_key='wxid_test_contact', content='你好',
+        return dict(sender='苏小妖', contact_key='wxid_test_contact', content='你好', event_id='a' * 64,
                     cs_wechat_id='wxid_skpj8yqmblqc22', screenshot=str(image),
                     visual_confirmed=True, conversation_header='苏小妖')
 
@@ -143,7 +143,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(result['message_id'], 17)
         self.assertEqual(self.calls[-1][2], dict(sender='苏小妖', wechat_id='wxid_test_contact',
             content='你好', mode='auto', is_group=False, tenant_id='tenant-test',
-            agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22'))
+            agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22', source_event_id='a' * 64))
 
     def test_backend_uses_observed_batch_text_without_inventing_image_contents(self):
         context = self.context() | dict(inbound_batch=[dict(type='text', text='你好'),
