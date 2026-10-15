@@ -420,12 +420,13 @@ print start >> "$FIXTURE/scrcpy-started"
 [[ "$CAPTURE_MODE" != delayed ]] || /bin/sleep 0.15
 case "$CAPTURE_MODE" in
   no_ready) ;;
+  completed_alive) print media > "$FIXTURE/probe.rec.mkv"; print "INFO: Recording started to matroska file: $FIXTURE/probe.rec.mkv"; print "INFO: Recording complete to matroska file: $FIXTURE/probe.rec.mkv" ;;
   wrong_path) print media > "$FIXTURE/probe.rec.mkv"; print "INFO: Recording started to matroska file: $FIXTURE/wrong.rec.mkv" ;;
   empty_file) touch "$FIXTURE/probe.rec.mkv"; print "INFO: Recording started to matroska file: $FIXTURE/probe.rec.mkv" ;;
   no_file) print "INFO: Recording started to matroska file: $FIXTURE/probe.rec.mkv" ;;
   *) print media > "$FIXTURE/probe.rec.mkv"; print "INFO: Recording started to matroska file: $FIXTURE/probe.rec.mkv" ;;
 esac
-for i in {1..300}; do /bin/sleep 0.01; done
+for i in {1..3000}; do /bin/sleep 0.01; done
 `,{mode:0o755});
   writeFileSync(join(d,'capture-ps'),`#!/bin/zsh
 if [[ "$CAPTURE_OWNER" == unknown ]]; then exit 1; fi
@@ -570,7 +571,7 @@ test('playback dup app opt-out cannot silently fall back to output recording',()
 for(const sdkRace of ['symlink','file'])test('SDK evidence atomic creation refuses late '+sdkRace+' without overwrite',()=>{const r=recordBoundary({sdkRace});assert.equal(r.sdkRaceInjected,true);assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.sdkProtected,'ORIGINAL');assert.equal(r.sdkOriginal,sdkRace==='file'?'PREEXISTING':'ORIGINAL');});
 
 // Runs the actual record_start function; only transport/clock are isolated fixtures.
-for(const captureMode of ['no_ready','wrong_path','empty_file','no_file','early_exit'])test('capture readiness rejects '+captureMode+' before success and stops only its recorder',()=>{
+for(const captureMode of ['no_ready','wrong_path','empty_file','no_file','early_exit','completed_alive'])test('capture readiness rejects '+captureMode+' before success and stops only its recorder',()=>{
  const r=recordBoundary({captureMode});
  assert.notEqual(r.status,0,r.stdout);
  assert.doesNotMatch(r.stdout,/record_started/);
