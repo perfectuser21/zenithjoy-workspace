@@ -113,7 +113,7 @@ class BackendTests(unittest.TestCase):
         self.calls.append((method, path, data))
         if method == 'GET':
             return {'auto_agent_enabled': True, 'wechat_id': 'wxid_skpj8yqmblqc22',
-                    'tenant_id': 'tenant-test'}
+                    'tenant_id': 'tenant-test', 'whitelist': ['苏小妖']}
         return self.response
 
     def context(self):
@@ -148,6 +148,12 @@ class BackendTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.backend.draft(context)
             self.assertEqual(self.calls, [])
+
+    def test_gate_rejects_missing_test_contact(self):
+        backend = self.module.Backend(self.config, lambda *a: dict(
+            auto_agent_enabled=True, wechat_id='wxid_skpj8yqmblqc22', whitelist=['别人']))
+        with self.assertRaises(ValueError):
+            backend.preflight()
 
     def test_gate_rejects_wrong_account_or_disabled(self):
         for response in [dict(auto_agent_enabled=False, wechat_id='wxid_skpj8yqmblqc22'),
