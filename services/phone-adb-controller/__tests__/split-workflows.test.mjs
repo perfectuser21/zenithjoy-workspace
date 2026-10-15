@@ -14,14 +14,13 @@ const workflows = {
   douyin_lead_outreach: ['preflight', 'send_dm', 'write_back', 'cleanup'],
 };
 
-test('正式入口加载凭据后保留显式Brain地址，未指定时仍使用凭据地址', () => {
+test('正式入口加载凭据后保留显式Brain地址，并核新旧MMV精确主机与独立评分身份', async t => {
   // 隔离的进程入口夹具，不连接Brain、不操作手机、不作为业务验收证据。
   const home = mkdtempSync(join(tmpdir(), 'leadgen-entry-env-'));
   try {
     const app = join(home, 'app');
     for (const dir of [app, join(app, 'plans'), join(home, '.credentials'), join(home, '.local/bin')]) mkdirSync(dir, { recursive: true });
     copyFileSync(new URL('../leadgen-run.sh', import.meta.url), join(app, 'leadgen-run.sh'));
-    writeFileSync(join(home, '.local/bin/hostname'), '#!/bin/sh\nprintf "aad17-2\\n"\n', { mode: 0o755 });
     writeFileSync(join(home, '.credentials/brain.env'), 'BRAIN_URL=http://wrong-mirror.invalid:5221\nFIXTURE_CREDENTIAL_LOADED=1\n');
     const plan = 'WF_RUNNER=leadgen-workflow.mjs\nWF_MISSING=\nWF_BRAIN_WORKFLOW=fixture\nWF_CONTRACT_RAW_SHA256=fixture\nWF_ACTIVITY_REFS=fixture\nWF_STEP_SPEC=fixture\n';
     writeFileSync(join(app, 'plans/douyin_comment_scoring.plan'), plan);
@@ -31,20 +30,37 @@ if(process.argv[2]==='prepare'){
  const dir=process.env.WFR_RUN_DIR; mkdirSync(join(dir,'runtime'),{recursive:true});
  copyFileSync(process.argv[1],join(dir,'runtime/runtime-receipts.mjs'));
  writeFileSync(join(dir,'workflow.plan'),${JSON.stringify(plan)});
- writeFileSync(join(dir,'runtime/leadgen-workflow.mjs'), 'console.log(JSON.stringify({brain:process.env.BRAIN_URL,loaded:process.env.FIXTURE_CREDENTIAL_LOADED}));');
+ writeFileSync(join(dir,'runtime/leadgen-workflow.mjs'), 'console.log(JSON.stringify({brain:process.env.BRAIN_URL,loaded:process.env.FIXTURE_CREDENTIAL_LOADED,host:process.env.WFR_HOSTKEY,localRpc:process.env.LEADGEN_LOCAL_RPC,profile:process.env.P,serial:process.env.SERIAL}));');
 }else if(process.argv[2]==='bind-run')console.log('WFR_ATTEMPT=fixture; WFR_SKIP_WORDS=');
 else process.exit(1);
 `);
-    for (const explicit of [true, false]) {
-      const env = { ...process.env, HOME: home, ZDOTDIR: home, WFR_HOME: join(home, explicit ? 'explicit' : 'default') };
+    writeFileSync(join(home, '.local/bin/hostname'), `#!/bin/sh\nprintf '%s\\n' "$FIXTURE_HOST"\n`, {mode:0o755});
+    const cases = [
+      {host:'aad17-2',explicit:true}, {host:'aad17-2',explicit:false},
+      {host:'r10-7',explicit:true}, {host:'r10-7',explicit:false},
+      {host:'r10-70',error:'执行机未登记'},
+      {host:'r10-7',profile:'phone-profile',error:'MMV只执行独立评论评分'},
+      {host:'r10-7',serial:'phone-serial',error:'MMV只执行独立评论评分'},
+      ...['douyin_video_discovery','douyin_video_processing','douyin_lead_outreach'].map(flow=>({host:'r10-7',flow,error:'MMV只执行独立评论评分'})),
+    ];
+    for (const [index, row] of cases.entries()) await t.test(JSON.stringify(row), () => {
+      const env = { ...process.env, HOME: home, ZDOTDIR: home, FIXTURE_HOST: row.host, WFR_HOME: join(home, 'case-'+index) };
       delete env.BRAIN_URL;
-      if (explicit) env.BRAIN_URL = 'http://registered-brain.invalid:5221';
-      const out = spawnSync('/bin/zsh', [join(app, 'leadgen-run.sh'), 'douyin_comment_scoring', 'mmv-scoring', 'none', 'fixture', 'fixture'], { env, encoding: 'utf8' });
+      if (row.explicit) env.BRAIN_URL = 'http://registered-brain.invalid:5221';
+      const out = spawnSync('/bin/zsh', [join(app, 'leadgen-run.sh'), row.flow||'douyin_comment_scoring', row.profile||'mmv-scoring', row.serial||'none', 'fixture', 'fixture'], { env, encoding: 'utf8' });
+      if (row.error) {
+        assert.equal(out.status,1,out.stderr);
+        assert.ok(out.stderr.includes(row.error),out.stderr);
+        assert.equal(out.stdout.trim(),'','禁止身份必须在业务prepare前退出');
+        return;
+      }
       assert.equal(out.status, 0, out.stderr);
       const receipt = JSON.parse(out.stdout.trim().split('\n').at(-1));
-      assert.equal(receipt.brain, explicit ? env.BRAIN_URL : 'http://wrong-mirror.invalid:5221');
+      assert.equal(receipt.brain, row.explicit ? env.BRAIN_URL : 'http://wrong-mirror.invalid:5221');
       assert.equal(receipt.loaded, '1', '保留地址不能跳过凭据加载');
-    }
+      assert.equal(receipt.host,'mmv');assert.equal(receipt.localRpc,'1');
+      assert.equal(receipt.profile,'mmv-scoring');assert.equal(receipt.serial,'none');
+    });
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 

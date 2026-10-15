@@ -13,7 +13,7 @@ esac
 case "$(hostname -s)" in
   *m4-xian*) export WFR_HOSTKEY=xian-m4;;
   *m1-us*) export WFR_HOSTKEY=xian-m1;;
-  aad17-2) export WFR_HOSTKEY=mmv;;
+  aad17-2|r10-7) export WFR_HOSTKEY=mmv;;
   *) print -u2 '执行机未登记'; exit 1;;
 esac
 if [[ "$WFR_HOSTKEY" == mmv ]]; then
