@@ -51,7 +51,7 @@ def task_prompt(event_path, event_id, config, event_dir):
 2. 已由用户授权并从好友资料实屏确认唯一测试联系人微信号suxiaoyao121；contact_key必须精确为suxiaoyao121，昵称苏小妖，不允许昵称降级或其他同名身份。身份原证可读/Users/administrator/.config/zenithjoy/cloud-wechat-cs-20261015/contact-identity.json。读取当前会话可见消息。上下文包含当前要回复的最新入站文本，保留必要上下文。若无法确认新入站消息、已回复、群聊或系统消息，立即停止，不发送。
 3. 写context.json到本事件目录（权限600）：{{"sender":"{SENDER}","conversation_header":"{SENDER}","contact_key":"suxiaoyao121","content":"真实会话上下文","incoming_text":"最新入站完整文本，必须与event.text精确一致","latest_message_direction":"incoming","cs_wechat_id":"{CS_WECHAT_ID}","visual_confirmed":true,"is_group":false,"screenshot":"真实聊天截图绝对PNG路径"}}。
 4. 调后端draft --context context.json --out draft.json。只有退出0且draft包含非空reply与正整数message_id才继续，失败即停。后端实际生成内容必须原样发送，不能自行编回复。
-5. 用受限手机工具text-from-draft输入数据库原始reply，禁止自行转抄或调用text-b64，先不点发送。截图检查输入文字与reply完全一致、头部仍为「{SENDER}」、无同名歧义。写before-send.json（context相同身份字段，content仍上下文，另input_text=完整reply、screenshot=此时真实PNG）。
+5. 先看真实截图确认聊天输入框为空；如果键盘尚未显示，在输入前用受限手机工具tap聚焦聊天输入框。动作附带截图可能抓到过渡帧，必须重新调用screenshot并实际看图确认目标状态后再执行下一步。随后用受限手机工具text-from-draft输入数据库原始reply，禁止自行转抄或调用text-b64，先不点发送。截图检查输入文字与reply完全一致、头部仍为「{SENDER}」、无同名歧义。写before-send.json（context相同身份字段，content仍上下文，另input_text=完整reply、screenshot=此时真实PNG）。
 6. 调claim-send --evidence before-send.json。只有退出0且send_claimed=true，才可调用受限手机工具send X Y（坐标必须从刚看的截图定位）；禁止用通用tap发送，工具会机械拒绝输入后的tap。先持久claim再由send唯一点击。发送结果未知绝不能再点。
 7. 重新截图，真实看见本账号发出的完整reply且无发送失败标记，头部仍为「{SENDER}」。写after-send.json（相同身份字段，sent_text=完整reply、sent_once=true、screenshot=发送后真实PNG）。只有真实送达读回成立才调receipt --evidence after-send.json；否则不回成功回执。
 8. 退出会话到微信聊天列表，让后续测试消息产生系统通知。最后用status读回状态并汇报证据路径。不要在最终回复输出客户消息或完整回复内容。
