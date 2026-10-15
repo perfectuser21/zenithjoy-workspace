@@ -14,6 +14,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { crmScopeKey, readScopedCrmProfile, analyzeCrmScope, requireCrmBinding } from '../services/wechat/crm-analysis';
 import {
   requireCsWriteAccess,
@@ -593,7 +594,7 @@ router.post(
 // body: { cs_wechat_id, scan_scope?:'full'|'partial', contacts:[{name, wechat_id?, last_message?, last_seen?}] }
 // partial用于单好友增量建档，不消费全量扫描请求或对账未观察联系人。
 // 响应: { success, ingested, new, scanned_count }
-router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request, res: Response) => {
+router.post('/friend-scan/ingest', simpleRateLimit({windowMs:60_000,max:120,keyFn:ipKeyFn}), requireServiceCredential, async (req: Request, res: Response) => {
   const body = req.body as {
     cs_wechat_id?: string;
     scan_scope?: 'full' | 'partial';
