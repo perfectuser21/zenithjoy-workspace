@@ -11,7 +11,7 @@ const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
 const fixtures=new URL('./fixtures/',import.meta.url).pathname;
 const vid='7646309328911907195';
 // 单元测试控制器回执为fake；实机录音验收另核原始audio/UID SHA。
-function fakeBoundaryNativeFields(eid,phase){const prefix=eid+'-playback-'+phase;return ' playback_proof_kind=native_audio native_audio_state=started native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');}
+function fakeBoundaryNativeFields(eid,phase){const prefix=eid+'-playback-'+phase;return ' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state=started native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');}
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
 function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false,guideDismissIdle=false}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
@@ -86,8 +86,8 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  case "$3" in
   lock-refresh) print lock=refreshed;exit 0;;
   set-playback-speed) exit 0;;
-  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)' || exit $?;print "record_started media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','start')}";exit 0;;
-  record-stop) print "record_stopped duration_seconds=25.1 mean_volume_db=-35 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','end')}";exit 0;;
+  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)' || exit $?;print "record_started capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','start')}";exit 0;;
+  record-stop) print "record_stopped capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true duration_seconds=25.1 audio_streams=1 mean_volume_db=-35 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','end')}";exit 0;;
   record-extract-audio) print fixture-audio > "$FAKE_PHONE_DIR/record.wav";print "audio_extracted path=$FAKE_PHONE_DIR/record.wav";exit 0;;
  esac
  exec zsh '${runner}' "$@"
@@ -323,7 +323,7 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal',volumeUpSaturated=false,sdk='36',scrcpyOptOut=false,sdkRace=''}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   // 只读RED可指定冻结git源的私有副本；生产及默认GREEN仍用仓库实际控制器。
@@ -333,15 +333,26 @@ function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.a
   for(const kind of ['paused','playing'])writeFileSync(join(d,'native-'+kind),readFileSync(join(fixtures,'real-honor-native-audio-'+kind+'.txt')));
   const playXml=readFileSync(join(fixtures,'real-honor-paused-play-control.xml'),'utf8');
   let controlXml=playControl==='pause'?playXml.replace('content-desc="播放视频，按钮"','content-desc="暂停视频，按钮"'):playControl?playXml:'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="视频素材白三角" clickable="true" enabled="true" bounds="[300,600][800,1800]"/></hierarchy>';
+  if(playControl==='newSemanticId')controlXml=readFileSync(join(fixtures,'real-honor-20261015-semantic-player.xml'),'utf8');
+  if(playControl==='mixedResourceMultiple')controlXml=playXml.replace('</hierarchy>','<node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/qbv" content-desc="播放视频，按钮" clickable="true" enabled="true" bounds="[0,0][1200,2504]"/></hierarchy>');
   if(playControl==='wrongId')controlXml=playXml.replace('resource-id="com.ss.android.ugc.aweme:id/qbt"','resource-id="com.ss.android.ugc.aweme:id/unknown"');
   if(playControl==='multiple')controlXml=playXml.replace('</hierarchy>','<node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/qbt" content-desc="暂停视频，按钮" clickable="true" enabled="true" bounds="[0,0][1200,2504]"/></hierarchy>');
   writeFileSync(join(d,'play.xml'),controlXml);
   writeFileSync(adb,`#!/bin/zsh
 print -r -- "$*" >> "$FIXTURE/calls"
+if [[ "$*" == *'getprop ro.build.version.sdk'* ]]; then print -r -- "$SDK";exit 0;fi
 if [[ "$*" == *'cmd package list packages'* ]]; then
  print 'package:com.ss.android.ugc.aweme uid:10203'
  [[ "$UID_MODE" != shared || "$*" != *'--uid'* ]] || print 'package:com.other.shared uid:10203'
  exit 0
+fi
+if [[ "$*" == *'cmd media_session volume --stream 3 --set '* ]]; then print "$argv[-1]" > "$FIXTURE/volume";touch "$FIXTURE/volume-cycle";exit 0;fi
+if [[ "$*" == *'cmd media_session volume --stream 3 --get'* ]]; then
+ if [[ -f "$FIXTURE/up-issued" && ! -f "$FIXTURE/volume-cycle" ]]; then [[ "$READ_AFTER_UP" != unknown ]] || { print unknown;exit 0; }; [[ "$READ_AFTER_UP" != unchanged ]] || { print "volume is 1 in range [0..17]";exit 0; }; fi
+ v=1; [[ ! -f "$FIXTURE/volume" ]] || v="$(cat "$FIXTURE/volume")"; print "volume is $v in range [0..17]"; exit 0
+fi
+if [[ "$*" == *'input keyevent KEYCODE_VOLUME_'* ]]; then
+ v=1; [[ ! -f "$FIXTURE/volume" ]] || v="$(cat "$FIXTURE/volume")"; if [[ "$*" == *KEYCODE_VOLUME_UP* ]]; then if [[ "$UP_SATURATED" == 1 ]]; then print "$v" > "$FIXTURE/volume";else print $((v+1)) > "$FIXTURE/volume";fi; touch "$FIXTURE/up-issued"; else print $((v-1)) > "$FIXTURE/volume"; touch "$FIXTURE/volume-cycle"; fi; exit 0
 fi
 if [[ "$*" == *'dumpsys audio'* ]]; then
  current="$NATIVE"; [[ ! -f "$FIXTURE/tapped" ]] || current="$AFTER_TAP"
@@ -359,7 +370,12 @@ if [[ "$*" == *'dumpsys audio'* ]]; then
   after_index=$((after_count+1)); (( after_index <= \${#after_sequence} )) || after_index=\${#after_sequence}
   current="$after_sequence[$after_index]"
  fi
+ [[ ! -f "$FIXTURE/volume-cycle" ]] || current="$AFTER_VOLUME"
  case "$current" in
+ streamPort) sed 's/mutedState:none/mutedState:streamVolume portVolume/' "$FIXTURE/native-playing";;
+ streamPortForeign) sed -e 's/mutedState:none/mutedState:streamVolume portVolume/' -e 's/state:paused/state:started/' "$FIXTURE/native-playing";;
+ mixedTarget) sed -e 's#u/pid:10099/#u/pid:10203/#' -e 's/state:paused/state:started/' "$FIXTURE/native-playing";;
+ streamPortMultiple) sed -e 's/mutedState:none/mutedState:streamVolume portVolume/' -e 's/u\/pid:10099\//u\/pid:10203\//' -e 's/state:paused/state:started/' "$FIXTURE/native-playing";;
  started) cat "$FIXTURE/native-playing";;
  paused) cat "$FIXTURE/native-paused";;
  other) sed 's#u/pid:10203/#u/pid:10999/#' "$FIXTURE/native-playing";;
@@ -395,16 +411,20 @@ unknown) print 'unexpected output' ;;
 esac
 fi
 `,{mode:0o755});
-  writeFileSync(join(d,'scrcpy'),`#!/bin/zsh\nprint start >> "$FIXTURE/scrcpy-started"\n/bin/sleep 3\n`,{mode:0o755});
+  writeFileSync(join(d,'scrcpy'),`#!/bin/zsh\nprint -rl -- "$@" > "$FIXTURE/scrcpy-args"\n[[ "$SCRCPY_OPTOUT" != 1 ]] || { print -u2 audio_capture_opt_out;exit 1; }\nprint start >> "$FIXTURE/scrcpy-started"\ntouch "$FIXTURE/probe.rec.mkv"\n/bin/sleep 3\n`,{mode:0o755});
   // 其余真实控制器辅助函数后续按相同命名边界加载；只替换设备/等待/页面守卫。
+  writeFileSync(join(d,'ffprobe'),`#!/bin/zsh\ncase \"$*\" in *format=duration*) print 25;; *stream=codec_type*) [[ \"$*\" != *'-select_streams a'* ]] && print video || print audio;; esac\n`,{mode:0o755});
+  writeFileSync(join(d,'ffmpeg'),'#!/bin/zsh\nprint -u2 -- \"mean_volume: -35 dB\"\n',{mode:0o755});
+  const stopFn=text.slice(text.indexOf('record_stop() {'),text.indexOf('record_extract_audio() {'));
   const helpers=text.slice(text.indexOf('record_pid_file()'),text.indexOf('# set_playback_speed'));
   const extraStart=text.indexOf('record_playback_');
+  const volumeHelpers=text.slice(text.indexOf('media_volume() {'),text.lastIndexOf('\n#',text.indexOf('record_playback_state() {')));
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
-  const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\nensure_media_volume(){ MEDIA_VOLUME_NOW=1; }\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${probeMode==='session'?'record_playback_state probe':'record_start probe 25'}\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0'},timeout:6000});
+  const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nFFPROBE=$FIXTURE/ffprobe\nFFMPEG=$FIXTURE/ffmpeg\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == (500|2000) ]]; then /bin/sleep 0.02; fi; if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\n${volumeHelpers}\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${stopFn}\n${activeRecording?'print $$ > $FIXTURE/other.rec.pid':''}\n${initialWrong?'touch $FIXTURE/fg-switched':''}\n${sdkRace?`print ORIGINAL > $FIXTURE/sdk-protected\nTRAPDEBUG(){ if [[ \"$ZSH_DEBUG_CMD\" == *'capture-sdk.txt'* && \"$ZSH_DEBUG_CMD\" == *'$sdk'* && \"$ZSH_DEBUG_CMD\" != '[['* && ! -e $FIXTURE/sdk-race-injected ]]; then touch $FIXTURE/sdk-race-injected; ${sdkRace==='symlink'?'ln -s $FIXTURE/sdk-protected $FIXTURE/probe.capture-sdk.txt':'print PREEXISTING > $FIXTURE/probe.capture-sdk.txt'}; fi; }`:''}\n${probeMode==='session'?'record_playback_state probe':probeMode==='stop'?'record_start probe 25; record_stop probe':'record_start probe 25'}\n`;
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0',SDK:sdk,SCRCPY_OPTOUT:scrcpyOptOut?'1':'0'},timeout:6000});
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
-  return {...r,rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
+  return {...r,sdkRaceInjected:existsSync(join(d,'sdk-race-injected')),sdkProtected:existsSync(join(d,'sdk-protected'))?readFileSync(join(d,'sdk-protected'),'utf8').trim():null,sdkOriginal:existsSync(join(d,'probe.capture-sdk.txt'))?readFileSync(join(d,'probe.capture-sdk.txt'),'utf8').trim():null,scrcpyArgs:existsSync(join(d,'scrcpy-args'))?readFileSync(join(d,'scrcpy-args'),'utf8').trim().split('\n'):[],finalVolume:existsSync(join(d,'volume'))?readFileSync(join(d,'volume'),'utf8').trim():'1',restoredEvidence:existsSync(join(d,'probe-playback-restored.native-audio.json')),rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
 // MediaSession只作诊断，保留严格原值解析；不再要求其PLAYING才代表真实native播放。
@@ -465,7 +485,7 @@ for(const after of ['foreign','unknown'])test('native单次qbt恢复：点击后
  assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);
  assert.ok(r.calls.split('\n').filter(l=>l.includes('input tap')).length<=1);assert.doesNotMatch(r.calls,/keyevent (85|126|127)/);
 });
-for(const playControl of ['wrongId','multiple',false])test('native单次qbt恢复：未知resource或多个播放控件不能点击 '+playControl,()=>{
+for(const playControl of ['multiple','mixedResourceMultiple',false])test('native单次qbt恢复：多个或缺语义播放控件不能点击 '+playControl,()=>{
  const r=recordBoundary({session:'namedStopped',native:'paused',playControl});
  assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/input tap|keyevent (85|126|127)/);
 });
@@ -492,3 +512,38 @@ test('视频tab机会性策略接受完整新鲜树，不额外dump或toggle',()
  const r=shareWave({policy:'opportunistic-search-tab',freshFirst:true});
  assert.equal(r.status,0,r.stderr);assert.equal(r.state.dumps,1);assert.deepEqual(r.state.keys,[]);assert.match(r.xml,/<hierarchy/);
 });
+
+test('streamPort recovery uses one nonzero volume cycle and fresh native before recording',()=>{
+ const r=recordBoundary({native:'streamPort'});assert.equal(r.status,0,r.stderr);assert.equal(r.started,true);
+ assert.equal(r.calls.split('\n').filter(s=>s.includes('KEYCODE_VOLUME_UP')).length,1);assert.equal(r.calls.split('\n').filter(s=>s.includes('KEYCODE_VOLUME_DOWN')).length,1);
+ assert.match(r.stdout,/native_audio_state=started/);assert.doesNotMatch(r.calls,/keyevent (85|126|127)|input tap/);
+});
+test('streamPort persistent mute fails closed after one cycle',()=>{const r=recordBoundary({native:'streamPort',recoveryAfterVolume:'streamPort'});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.equal(r.calls.split('\n').filter(s=>s.includes('KEYCODE_VOLUME_UP')).length,1);});
+test('streamPort active managed recording blocks recovery without kill',()=>{const r=recordBoundary({native:'streamPort',activeRecording:true});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_|input tap/);});
+for(const recoveryAfterVolume of ['foreign','foreignUnparsed','unknown','muted'])test('streamPort recovery rejects '+recoveryAfterVolume,()=>{const r=recordBoundary({native:'streamPort',recoveryAfterVolume});assert.notEqual(r.status,0,r.stderr);assert.equal(r.started,false);});
+
+test('record stop verifies independent native evidence after managed process exits',()=>{const r=recordBoundary({probeMode:'stop'});assert.equal(r.status,0,r.stderr);assert.equal(r.restoredEvidence,true);assert.match(r.stdout,/playback_restored=true/);});
+
+for(const opts of [{native:'streamPortForeign'},{native:'streamPortMultiple'},{native:'streamPort',uidMode:'shared'},{native:'streamPort',initialWrong:true}])test('native recovery unsafe candidate must not nudge '+JSON.stringify(opts),()=>{const r=recordBoundary(opts);assert.notEqual(r.status,0);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_|input tap/);});
+
+test('post-stop streamPort restoration uses new evidence and a single volume cycle',()=>{
+ const r=recordBoundary({probeMode:'stop',nativeSequence:['started','started','streamPort']});assert.equal(r.status,0,r.stderr);assert.equal(r.restoredEvidence,true);assert.match(r.stdout,/playback_restored=true/);assert.equal(r.calls.split('\n').filter(s=>s.includes('KEYCODE_VOLUME_UP')).length,1);
+});
+test('post-stop unknown audio cannot be washed into restored or trigger volume keys',()=>{
+ const r=recordBoundary({probeMode:'stop',nativeSequence:['started','started','unknown','started']});assert.notEqual(r.status,0);assert.equal(r.restoredEvidence,false);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_/);assert.doesNotMatch(r.stdout,/playback_restored=true/);
+});
+
+for(const state of ['foreign','unknown','started'])test('pre-action native recheck '+state+' never nudges',()=>{const r=recordBoundary({nativeSequence:['streamPort',state]});assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_/);assert.equal(r.started,state==='started',r.stderr);});
+for(const volumeReadAfterUp of ['unknown','unchanged'])test('volume cycle restores own target after '+volumeReadAfterUp+' up readback',()=>{const r=recordBoundary({native:'streamPort',volumeReadAfterUp});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
+
+test('volume cycle upper bound unchanged restores exact target without decrement',()=>{const r=recordBoundary({native:'streamPort',volumeUpSaturated:true});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_DOWN/);assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
+
+test('mixed target unmuted and streamPort started tracks never count as unique native',()=>{const r=recordBoundary({native:'mixedTarget'});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_|input tap/);});
+
+test('fresh semantic player survives opaque resource ID drift from actual 20261015 tree',()=>{const r=recordBoundary({native:'paused',playControl:'newSemanticId',nativeAfterTap:'started'});assert.equal(r.status,0,r.stderr);assert.equal(r.started,true);assert.equal(r.calls.split('input tap').length-1,1);assert.match(r.calls,/input tap 600 1252/);});
+
+for(const sdk of ['33','36'])test('playback duplication SDK '+sdk+' uses required official capture flags',()=>{const r=recordBoundary({sdk});assert.equal(r.status,0,r.stderr);for(const flag of ['--audio-source=playback','--audio-dup','--require-audio'])assert.ok(r.scrcpyArgs.includes(flag),r.scrcpyArgs.join(' '));assert.match(r.stdout,new RegExp('capture_audio_sdk='+sdk));assert.match(r.stdout,/capture_audio_mode=playback_dup/);});
+for(const sdk of ['32','unknown',''])test('unsupported capture SDK '+sdk+' never records or nudges',()=>{const r=recordBoundary({sdk});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.match(r.stderr,/RECORD_AUDIO_STRATEGY_UNSUPPORTED/);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_|input tap/);});
+test('playback dup app opt-out cannot silently fall back to output recording',()=>{const r=recordBoundary({scrcpyOptOut:true});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.ok(r.scrcpyArgs.includes('--require-audio'));assert.equal(r.scrcpyArgs.filter(a=>a.startsWith('--audio-source=')).join(','),'--audio-source=playback');});
+
+for(const sdkRace of ['symlink','file'])test('SDK evidence atomic creation refuses late '+sdkRace+' without overwrite',()=>{const r=recordBoundary({sdkRace});assert.equal(r.sdkRaceInjected,true);assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.sdkProtected,'ORIGINAL');assert.equal(r.sdkOriginal,sdkRace==='file'?'PREEXISTING':'ORIGINAL');});

@@ -71,17 +71,25 @@ qv_open(){
 }
 qv_qualify(){
   local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started="" stopped="" extracted audio="" db duration remote result verdict media="" media_ok=0 playback_ok=0 playback_start=unknown playback_end=unknown playback_package=unknown audio_status=unavailable
+  local capture_mode="" capture_sdk="" capture_required="" capture_ok=0 astreams=""
+  local error_file first_phase="" first_rc=0 first_stderr=""
   [[ "$seconds" == <-> ]] && (( seconds >= 10 && seconds <= 105 )) || return 2
+  error_file="$(mktemp)" || return 5
+  /bin/chmod 600 "$error_file"
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
-  if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null; then
+  if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null 2>"$error_file"; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
-    if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null)"; then
+    if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null 2>"$error_file")"; then
+      capture_mode="$(print -r -- "$started" | sed -n 's/.*capture_audio_mode=\([^ ]*\).*/\1/p')"
+      capture_sdk="$(print -r -- "$started" | sed -n 's/.*capture_audio_sdk=\([^ ]*\).*/\1/p')"
+      capture_required="$(print -r -- "$started" | sed -n 's/.*capture_audio_required=\([^ ]*\).*/\1/p')"
+      [[ "$capture_mode" == playback_dup && "$capture_sdk" == <-> && "$capture_required" == true ]] && (( capture_sdk >= 33 )) && capture_ok=1
       media="$(print -r -- "$started" | sed -n 's/.*media_volume=\([^ ]*\).*/\1/p')"
       [[ "$started" == record_started* && "$media" == <-> ]] && (( media > 0 )) && media_ok=1
       playback_start="$(print -r -- "$started" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
       playback_package="$(print -r -- "$started" | sed -n 's/.* playback_package=\([^ ]*\).*/\1/p')"
       qv_nap "$((seconds+2))"
-      stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null)" || stopped=""
+      stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null 2>"$error_file")" || { first_rc=$?;first_phase=record_stop;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr";stopped=""; }
       playback_end="$(print -r -- "$stopped" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
       if python3 - "$started" "$stopped" "$record_eid" <<'PYNATIVEPAIR'
 import sys,re
@@ -99,34 +107,56 @@ if phases[0]['native_audio_uid']!=phases[1]['native_audio_uid']:sys.exit(1)
 PYNATIVEPAIR
       then playback_ok=1; fi
       if [[ "$stopped" == record_stopped* ]]; then
+        if ! python3 - "$started" "$stopped" "$record_eid" <<'PYCAPTUREPAIR'
+import sys,re
+s,e=[dict(x.split('=',1) for x in raw.split() if '=' in x) for raw in sys.argv[1:3]]
+keys=['capture_audio_mode','capture_audio_sdk','capture_audio_required','capture_audio_sdk_evidence_file','capture_audio_sdk_evidence_sha256']
+assert all(s.get(k) and s.get(k)==e.get(k) for k in keys)
+assert s['capture_audio_mode']=='playback_dup' and s['capture_audio_sdk'].isdigit() and int(s['capture_audio_sdk'])>=33 and s['capture_audio_required']=='true'
+assert s['capture_audio_sdk_evidence_file']==sys.argv[3]+'.capture-sdk.txt' and re.fullmatch('[a-f0-9]{64}',s['capture_audio_sdk_evidence_sha256'])
+PYCAPTUREPAIR
+        then capture_ok=0;fi
+        astreams="$(print -r -- "$stopped" | sed -n 's/.*audio_streams=\([^ ]*\).*/\1/p')"
         db="$(print -r -- "$stopped" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
         duration="$(print -r -- "$stopped" | sed -n 's/.*duration_seconds=\([^ ]*\).*/\1/p')"
         if [[ "$duration" != <->(.<->|) ]] || (( duration < seconds*0.8 )); then
           qv_log 'audio_rejected reason=short_or_unknown_duration'; audio_status=unknown
         elif [[ "$db" != -<->(.<->|) && "$db" != <->(.<->|) ]] || (( db <= -80 )); then
           qv_log 'audio_rejected reason=silent_or_unknown_volume'; audio_status=unknown
-          [[ "$db" == -<->(.<->|) || "$db" == <->(.<->|) ]] && (( db <= -80 )) && audio_status=silent
+          print -u2 -- RECORD_CAPTURE_SILENT
         else
           audio_status=usable
-          if (( media_ok && playback_ok )); then
+          if (( media_ok && playback_ok && capture_ok )) && [[ "$astreams" == <-> ]] && (( astreams >= 1 )); then
             extracted="$("$C" --profile "$P" record-extract-audio "$record_eid" </dev/null)" || extracted=""
             audio="$(print -r -- "$extracted" | sed -n 's/^audio_extracted path=\([^ ]*\).*/\1/p')"
           fi
         fi
       fi
+    else
+      first_rc=$?;first_phase=record_start;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr"
     fi
+  else
+    first_rc=$?;first_phase=set_playback_speed;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr"
   fi
+  /bin/rm -f "$error_file"
   # 媒体音量与内容电平分别存证；静音不是模型内容判定，也不得用旧转写伪装本轮ASR。
   [[ -n "${WFR_RUN_DIR:-}" ]] || return 5
-  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" <<'PYRECORD' || return 5
+  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" "$first_phase" "$first_rc" "$first_stderr" "$capture_mode" "$capture_sdk" "$capture_required" "$astreams" <<'PYRECORD' || return 5
 import sys,json,os,tempfile,datetime,math
-d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end=sys.argv[1:]
+d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end,first_phase,first_rc,first_stderr,capture_mode,capture_sdk,capture_required,astreams=sys.argv[1:]
 def number(v):
  try:
   n=float(v);return n if math.isfinite(n) else None
  except ValueError:return None
 os.makedirs(d,mode=0o700,exist_ok=True)
 p={"version":2,"playback_proof_kind":"native_audio","native_audio":{},"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","playback_verified":playback_ok=="1","playback_package":playback_package,"playback_state":number(playback_start),"playback_end_state":number(playback_end),"audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"playback_raw_evidence":{},"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+capture_fields=dict(x.split('=',1) for x in started.split() if '=' in x)
+end_fields=dict(x.split('=',1) for x in stopped.split() if '=' in x)
+p['capture_audio_end']={'mode':end_fields.get('capture_audio_mode'),'sdk':int(end_fields.get('capture_audio_sdk','')) if end_fields.get('capture_audio_sdk','').isdigit() else None,'required':end_fields.get('capture_audio_required')=='true','sdk_evidence_file':end_fields.get('capture_audio_sdk_evidence_file'),'sdk_evidence_sha256':end_fields.get('capture_audio_sdk_evidence_sha256')}
+p['capture_audio_sdk_evidence_file']=capture_fields.get('capture_audio_sdk_evidence_file')
+p['capture_audio_sdk_evidence_sha256']=capture_fields.get('capture_audio_sdk_evidence_sha256')
+p.update({'capture_audio_mode':capture_mode or None,'capture_audio_sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'capture_audio_required':capture_required=='true','audio_streams':int(astreams) if astreams.isdigit() else None,'capture_audio_verified':capture_mode=='playback_dup' and capture_sdk.isdigit() and int(capture_sdk)>=33 and capture_required=='true' and astreams.isdigit() and int(astreams)>=1 and status=='usable' and p['capture_audio_end']=={'mode':capture_mode,'sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'required':capture_required=='true','sdk_evidence_file':p['capture_audio_sdk_evidence_file'],'sdk_evidence_sha256':p['capture_audio_sdk_evidence_sha256']}})
+p['earliest_error']={'phase':first_phase,'exit_code':int(first_rc),'stderr':first_stderr[-4000:]} if first_phase else None
 for phase,raw in [('start',started),('end',stopped)]:
  fields=dict(x.split('=',1) for x in raw.split() if '=' in x)
  p['playback_raw_evidence'][phase]={k:fields.get('playback_'+k) for k in ('evidence_file','evidence_sha256','foreground_file','foreground_sha256')}
@@ -137,6 +167,14 @@ fd,tmp=tempfile.mkstemp(prefix='.recording-',dir=d)
 with os.fdopen(fd,'w') as f:json.dump(p,f)
 os.replace(tmp,os.path.join(d,run+'-recording-'+vid+'.json'))
 PYRECORD
+  if (( ! capture_ok )); then
+    print -u2 -- RECORD_CAPTURE_STRATEGY_UNVERIFIED
+    print -- "QUAL\t$VID\tpending\tcapture_strategy_unverified"; return 5
+  fi
+  if [[ "$astreams" != <-> ]] || (( astreams < 1 )); then
+    print -u2 -- RECORD_AUDIO_TRACK_UNVERIFIED
+    print -- "QUAL\t$VID\tpending\tcapture_audio_unverified"; return 5
+  fi
   if (( ! media_ok )); then
     qv_log 'recording_pending reason=media_volume_unverified'
     print -- "QUAL\t$VID\tpending\tmedia_volume_unverified"; return 5
