@@ -522,3 +522,41 @@ for(const mode of ['avatar','identity','missing_avatar','malformed_avatar'])test
   const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-video-processing.yaml','utf8')),probe=checks.probes.find(p=>p.key==='coll_rescan_rate');assert.equal(probe.expect.value,0.3);assert.equal(probe.probe.ref,'metrics.rescan_rate');assert.equal(out.rescan_rate<=probe.expect.value,mode==='avatar');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+// 263实机首错：qv_open身份取链失败先退出，未产录音proof；不得被lstat ENOENT改写成音量故障。
+test('102上游取链失败保留首错，未读回录音的音量判未知且不采评论',async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');
+ const {judgeSteps}=await import('../step-judge.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'qualification-upstream-failure-')),id='7696462490024676025';
+ const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'failed-open',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
+ const stderr='CLIPBOARD_NONCE_FIELD_ABSENT:typed\nCLIPBOARD_NONCE_PROOF_FAILED\nfailure_class=WRONG_FOREGROUND\n';
+ const actions=[];
+ try{
+  const h=withCompanyFixture(rawCreateHandlers)({root:dir,env,
+   rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:id,video_url:'https://www.douyin.com/video/'+id,judgment_status:'pending'}]:{}}),
+   execute:async(_c,args)=>{actions.push(args[1]);return {code:4,stdout:'',stderr};}});
+  const r=await h.qualification();
+  assert.equal(r.status,'partial');assert.equal(r.matched,0);assert.equal(r.videos_verified,0);
+  assert.equal(r.failures[0].code,4);assert.match(r.failures[0].reason,/CLIPBOARD_NONCE_FIELD_ABSENT:typed/);
+  assert.doesNotMatch(r.failures[0].reason,/ENOENT/);
+  assert.equal(r.recordings_required,0);assert.equal(r.recording_outcomes_failures,0);
+  assert.equal(r.media_volume_failures,null);
+  const spec={steps:[{key:'volume',at:'qualification',mode:'checkpoint',readback:{type:'metric',ref:'metrics.media_volume_failures',expect:{op:'==',value:0}}}]};
+  assert.equal(judgeSteps({spec,stage:'qualification',ctx:{metrics:r}}).steps[0].pass,null);
+  await h.collection();assert.deepEqual(actions,['qualification']);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('102动作exit0仍缺录音proof时保留真实证据失败，不能借首错修复放行',async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'qualification-missing-proof-')),id='7696462490024676025';
+ try{
+  const h=withCompanyFixture(rawCreateHandlers)({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'missing-proof',P:'work',LEADGEN_LINE:'jinuo'},
+   rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:id,video_url:'https://www.douyin.com/video/'+id,judgment_status:'pending'}]:{}}),
+   execute:async()=>({code:0,stdout:`QUAL\t${id}\tmatched\tjudged\n`,stderr:''})});
+  const r=await h.qualification();
+  assert.equal(r.status,'partial');assert.equal(r.matched,0);assert.equal(r.recordings_required,1);
+  assert.equal(r.recording_outcomes_failures,1);assert.equal(r.media_volume_failures,1);
+  assert.equal(r.recordings_unverified,0);assert.match(r.failures[0].reason,/ENOENT/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

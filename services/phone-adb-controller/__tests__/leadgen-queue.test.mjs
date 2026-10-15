@@ -276,3 +276,64 @@ test('RPC只接本轮v2 native真证据，v1/foreign/unknown/错raw/hash在SQL�
  const mutations=[p=>p.version=1,p=>p.native_audio.start.foreign_started=1,p=>p.native_audio.end.state='unknown',p=>p.native_audio.start.evidence_file='other-run.audio.txt',p=>p.native_audio.end.evidence_sha256='bad',p=>p.native_audio.end.uid=10444,p=>p.native_audio.start.package_uid_verified=false];
  for(const mutate of mutations){const p=structuredClone(base);mutate(p);const pool=fakePool([]);await assert.rejects(queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:p}),/录音|native/);assert.equal(pool.calls.length,0);}
 });
+
+// r102真实失败形态：新native证据属于当前VID，旧PG同人同全文保留另一短链。
+test('采样复用旧评论按真实PG身份读回，当前及历史别名必须受信同VID且不更新旧行',async()=>{
+ const vid='7646309328911907195',current='https://v.douyin.com/current/',old='https://v.douyin.com/old/';
+ const actual={id:'old-id',douyin_id:'native123',comment_body:'完整原评论',source_video_url:old,harvest_batch:'old102',intent_grade:'A',recipient_evidence:null};
+ const before=structuredClone(actual),resolved=[];
+ const p=fakePool([{rows:[{video_id:vid,video_url:current,judgment_status:'matched'}]},{rows:[actual]}]);
+ const input={op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:current,rows:[{douyinId:actual.douyin_id,commentBody:actual.comment_body,sourceVideoUrl:current}]};
+ const result=await queueRequest(p,input,{resolveHistoryUrl:async u=>{resolved.push(u);return {content_type:'video',content_id:vid,resolved_url:'https://www.douyin.com/video/'+vid};}});
+ assert.equal(result.verified,true);assert.deepEqual(result.rows,[{id:actual.id,douyinId:actual.douyin_id,commentBody:actual.comment_body,sourceVideoUrl:old}]);
+ assert.deepEqual(new Set(resolved),new Set([current,old]));assert.deepEqual(actual,before);
+ assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));const query=p.calls[1];assert.match(query.sql,/line_key=\$1/);assert.match(query.sql,/comment_body/);assert.doesNotMatch(query.sql,/source_video_url=ANY/);assert.ok(query.args.some(x=>Array.isArray(x)&&x.includes(actual.comment_body)));
+});
+test('采样历史别名跨VID或解析未知须安全阶段码拒绝，不能仅凭同UID全文计覆盖',async()=>{
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid,old='https://v.douyin.com/old/';
+ const actual={id:'old',douyin_id:'p1',comment_body:'私密完整正文',source_video_url:old};
+ const input={op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows:[{douyinId:'p1',commentBody:actual.comment_body,sourceVideoUrl:url}]};
+ for(const mode of ['foreign','unknown']){
+  const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:[actual]}]);
+  await assert.rejects(queueRequest(p,input,{resolveHistoryUrl:async()=>{if(mode==='unknown')throw Error('secret-token:'+actual.comment_body);return {content_type:'video',content_id:'7000000000000000001',resolved_url:'https://www.douyin.com/video/7000000000000000001'};}}),e=>e.message==='RPC_SAMPLE_URL_IDENTITY_INVALID');
+  assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));
+ }
+});
+test('采样精确身份多行歧义不得挑一条同VID行，候选超界先拒绝不发解析',async()=>{
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid,row={id:'one',douyin_id:'p1',comment_body:'完整正文',source_video_url:url};
+ const q={op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows:[{douyinId:row.douyin_id,commentBody:row.comment_body,sourceVideoUrl:url}]};
+ for(const rows of [[row,{...row,id:'two',source_video_url:'https://v.douyin.com/foreign/'}],Array.from({length:1001},()=>row)]){
+  let network=0;const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows}]);
+  await assert.rejects(queueRequest(p,q,{resolveHistoryUrl:async()=>{network++;}}),e=>/^RPC_SAMPLE_(IDENTITY_NOT_UNIQUE|CANDIDATES_EXCEEDED)$/.test(e.message));assert.equal(network,0);
+ }
+});
+test('采样actual新增历史别名超界拒绝，显式PG ID仍不可错配',async()=>{
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;
+ const wanted=Array.from({length:5},(_,i)=>({id:'id'+i,douyinId:'p'+i,commentBody:'全文'+i,sourceVideoUrl:url}));const actual=wanted.map((r,i)=>({id:r.id,douyin_id:r.douyinId,comment_body:r.commentBody,source_video_url:'https://v.douyin.com/old'+i+'/'}));
+ for(const mode of ['urls','id']){
+  let network=0;const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:actual}]);
+  const rows=mode==='id'?[{...wanted[0],id:'wrong'}]:wanted;
+  await assert.rejects(queueRequest(p,{op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows},{resolveHistoryUrl:async()=>{network++;}}),e=>e.message===(mode==='id'?'RPC_SAMPLE_IDENTITY_NOT_UNIQUE':'RPC_SAMPLE_URLS_EXCEEDED'));assert.equal(network,0);
+ }
+});
+
+test('采样实际PG已canonical时本轮短链仍须受信同VID，禁止只验证旧来源',async()=>{
+ const vid='7646309328911907195',url='https://v.douyin.com/current/',canonical='https://www.douyin.com/video/'+vid;
+ const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:[{id:'old',douyin_id:'p1',comment_body:'全文',source_video_url:canonical}]}]);
+ await assert.rejects(queueRequest(p,{op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows:[{douyinId:'p1',commentBody:'全文',sourceVideoUrl:url}]},{resolveHistoryUrl:async()=>({content_type:'video',content_id:'7000000000000000001',resolved_url:'https://www.douyin.com/video/7000000000000000001'})}),e=>e.message==='RPC_SAMPLE_URL_IDENTITY_INVALID');
+});
+test('真实RPC队列调用保留采样阶段安全码，原CLI序列化不会降为泛化错误或泄漏正文',async()=>{
+ const {handleRpc}=await import('../leadgen-rpc.mjs');
+ const {readFileSync}=await import('node:fs');
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;
+ const privateBody='不应进入RPC错误的私人正文';
+ const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:[]}]);
+ let failure;
+ try{await handleRpc({kind:'queue',source:{},request:{op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows:[{douyinId:'private-user',commentBody:privateBody,sourceVideoUrl:url}]}},{verify:()=>{},pool:p});}catch(error){failure=error;}
+ assert.equal(failure?.message,'RPC_SAMPLE_IDENTITY_NOT_UNIQUE');
+ // 执行原CLI catch正文（不是复制其regex），验证新码确实穿过现有序列化。
+ const source=readFileSync(new URL('../leadgen-rpc.mjs',import.meta.url),'utf8');
+ const emission=source.match(/catch \(error\) \{\n([\s\S]*?)\n  \}\n\}\s*$/)?.[1];assert.ok(emission);
+ const child=spawnSync(process.execPath,['-e',`const error=new Error(${JSON.stringify(failure.message)});${emission}`],{encoding:'utf8'});
+ assert.equal(child.status,1);assert.deepEqual(JSON.parse(child.stdout),{ok:false,error:'RPC_SAMPLE_IDENTITY_NOT_UNIQUE'});assert.equal(child.stderr,'');assert.ok(!child.stdout.includes(privateBody));assert.ok(!child.stdout.includes('private-user'));
+});

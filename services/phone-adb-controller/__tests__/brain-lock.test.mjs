@@ -170,36 +170,36 @@ test("harvest-fallback.sh：以 Brain 锁为准——锁被占不起采收；领
   assert.match(calls.at(-1), /^release ANGYVB4227006983 harvest-fallback:/);
 });
 
-// 1011 现场：xian-m4 的 crontab 经 ssh 改不动（macOS TCC: crontab: tmp/tmp.N: Interrupted system call），
-// 保底 6 行仍直调 harvest-cron.sh。所以闸放进 harvest-cron.sh 本身：crontab 一字不改也先过 Brain 锁。
-test("harvest-cron.sh（crontab 直调）先经 harvest-fallback 过 Brain 锁：被占不起 wf-run；领到锁才 exec wf-run 并放锁", { skip: SKIP }, () => {
-  const c = setup();
-  writeFileSync(join(c.app, "wf-run.sh"), `#!/bin/zsh\necho "$@ held=\${HARVEST_BRAIN_LOCK_HELD:-}" >> ${c.home}/wfrun-args\n`);
-  chmodSync(join(c.app, "wf-run.sh"), 0o755);
-  writeFileSync(join(c.brain, "busy-ANGYVB4402004137"), "phone-recovery-task-uuid");
-  const run = () => spawnSync(ZSH, [join(c.app, "harvest-cron.sh"), "legacy", "ANGYVB4402004137", "AI人工智能训练师", "6", "1"], { encoding: "utf8", env: c.env, timeout: 30000 });
-  let r = run();
-  assert.equal(r.status, 0, r.stderr);
-  assert.ok(!existsSync(join(c.home, "wfrun-args")), "Brain 锁被占时 crontab 直调也不得起采收");
-  rmSync(join(c.brain, "busy-ANGYVB4402004137"));
-  r = run();
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(readFileSync(join(c.home, "wfrun-args"), "utf8").trim(), "keyword_acquisition legacy ANGYVB4402004137 AI人工智能训练师 6 1 held=1");
-  assert.match(c.calls().at(-1), /^release ANGYVB4402004137 harvest-fallback:/);
-});
-
-test("harvest-cron.sh 在已持锁（HARVEST_BRAIN_LOCK_HELD=1）或缺 harvest-fallback.sh 时直接 exec wf-run（不重复领锁）", { skip: SKIP }, () => {
+// 正式旧入口现已退役：crontab不需依赖OS改写，也必须在fallback拿锁前停住。
+// 独立harvest-fallback锁协议继续由上一测试完整验证，不以退役测试替代。
+test("harvest-cron.sh 正式入口无论锁被占或空闲，都在fallback拿锁前退役", { skip: SKIP }, () => {
   const c = setup();
   writeFileSync(join(c.app, "wf-run.sh"), `#!/bin/zsh\necho "$@" >> ${c.home}/wfrun-args\n`);
   chmodSync(join(c.app, "wf-run.sh"), 0o755);
-  let r = spawnSync(ZSH, [join(c.app, "harvest-cron.sh"), "legacy", "SERX", "b", "6", "1"], { encoding: "utf8", env: { ...c.env, HARVEST_BRAIN_LOCK_HELD: "1" }, timeout: 30000 });
-  assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(c.calls(), []);
-  rmSync(join(c.app, "harvest-fallback.sh"));
-  r = spawnSync(ZSH, [join(c.app, "harvest-cron.sh"), "legacy", "SERX", "b", "6", "1"], { encoding: "utf8", env: c.env, timeout: 30000 });
-  assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(c.calls(), []);
-  assert.equal(readFileSync(join(c.home, "wfrun-args"), "utf8").trim().split("\n").length, 2);
+  writeFileSync(join(c.brain, "busy-ANGYVB4402004137"), "phone-recovery-task-uuid");
+  const run = () => spawnSync(ZSH, [join(c.app, "harvest-cron.sh"), "legacy", "ANGYVB4402004137", "AI人工智能训练师", "6", "1"], { encoding: "utf8", env: c.env, timeout: 30000 });
+  for (const busy of [true, false]) {
+    if (!busy) rmSync(join(c.brain, "busy-ANGYVB4402004137"));
+    const r = run();
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stderr, /HARVEST_CRON_RETIRED/);
+    assert.ok(!existsSync(join(c.home, "wfrun-args")), "旧正式入口不能再启动wf-run");
+    assert.deepEqual(c.calls(), [], "退役入口连fallback中央锁也不申请/释放");
+  }
+});
+
+test("harvest-cron.sh 正式入口已持锁或缺fallback也不能恢复旧采收", { skip: SKIP }, () => {
+  const c = setup();
+  writeFileSync(join(c.app, "wf-run.sh"), `#!/bin/zsh\necho "$@" >> ${c.home}/wfrun-args\n`);
+  chmodSync(join(c.app, "wf-run.sh"), 0o755);
+  for (const held of [true, false]) {
+    if (!held) rmSync(join(c.app, "harvest-fallback.sh"));
+    const r = spawnSync(ZSH, [join(c.app, "harvest-cron.sh"), "legacy", "SERX", "b", "6", "1"], { encoding: "utf8", env: { ...c.env, ...(held ? { HARVEST_BRAIN_LOCK_HELD: "1" } : {}) }, timeout: 30000 });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stderr, /HARVEST_CRON_RETIRED/);
+    assert.deepEqual(c.calls(), []);
+    assert.ok(!existsSync(join(c.home, "wfrun-args")), "缺fallback/已持锁不允许退役旁路");
+  }
 });
 
 // 1011 生产实测（xian-m4）：run 正常结束后 EXIT trap 里 rlog 引用 cmd_run 的局部变量 serial，
