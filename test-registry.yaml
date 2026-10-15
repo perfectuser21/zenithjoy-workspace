@@ -7502,7 +7502,7 @@ agent_suite:
   ci: L3
   status: active
   product: 私域运营
-  note: "GP-Anchor: line04/passive_reception#step2；四活动九步骤及Skill/Code固定实现合同，实际聊天另验"
+  note: "GP-Anchor: line04/passive_reception#step2；接待四活动九步骤及Skill/Code固定实现合同、独立好友候选边界，实际运行另验"
 
 - id: crm-partial-friend-ingest
   path: apps/api/src/routes/__tests__/crm-partial-friend-ingest.test.ts

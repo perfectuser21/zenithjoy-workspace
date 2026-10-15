@@ -1,0 +1,429 @@
+{
+  "key": "wechat_friend_onboarding.android",
+  "name": "安卓微信·授权入站好友确认与CRM增量建档",
+  "capability_id": "ac2e35bc-849a-48cd-917f-79d15c5ac886",
+  "channel": "wechat",
+  "form": "android_rpa",
+  "version": "0.1.0",
+  "runtime": {
+    "entrypoint": "wechat-friend-onboarding-android",
+    "execution_profile": "codex_agent",
+    "agent": "zenithjoy-moments"
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "authorization_path",
+      "identity_evidence_path",
+      "phone_config_path",
+      "state_path",
+      "event_dir",
+      "authorized",
+      "scope"
+    ],
+    "properties": {
+      "authorization_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "identity_evidence_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "phone_config_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "state_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "event_dir": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "authorized": {
+        "const": true
+      },
+      "scope": {
+        "const": "test"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "friendship_status",
+      "crm_status",
+      "customer_id",
+      "cleanup_status",
+      "evidence"
+    ],
+    "properties": {
+      "friendship_status": {
+        "enum": [
+          "confirmed",
+          "no_op",
+          "unknown"
+        ]
+      },
+      "crm_status": {
+        "enum": [
+          "registered",
+          "not_written",
+          "conflict",
+          "unknown"
+        ]
+      },
+      "customer_id": {
+        "type": [
+          "string",
+          "integer",
+          "null"
+        ]
+      },
+      "cleanup_status": {
+        "enum": [
+          "background_on_home",
+          "cleanup_pending"
+        ]
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "resources": {
+    "machine": "r10-7.macminivault.com",
+    "gateway_host": "r10-7.macminivault.com",
+    "device_serial": "47.100.213.173:10001",
+    "brain_device_names": [
+      "47.100.213.173:10001",
+      "acp-f6utus34dgnghc1oc"
+    ],
+    "owner_source": "phone_config_path",
+    "application": "com.tencent.mm"
+  },
+  "recovery": {
+    "max_attempts": 1,
+    "retry_safe": false,
+    "total_timeout_sec": 900,
+    "cleanup_timeout_sec": 120
+  },
+  "verification": {
+    "independent": true,
+    "instructions": "独立读取用户授权、唯一申请与实屏身份、一次通过动作账、好友关系、版本证据、CRM三键和客户ID、partial全量扫描账前后、锁释放读回；没有完整证据不得报告整链核验通过。已好友只记录no-op，不删除重做；本流程不得有消息发送。"
+  },
+  "activities": [
+    {
+      "key": "application_identified",
+      "name": "申请身份确认",
+      "executor_kind": "agent",
+      "acceptance": [
+        "唯一授权入站申请、真实本机微信、两租约owner与公共锁均匹配",
+        "真实截图与身份凭证的昵称和客户微信号一致，无同名歧义"
+      ],
+      "implementation": {
+        "kind": "skill",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+        "revision": "contract",
+        "name": "wechat-friend-onboarding-android",
+        "version": "0.1.0"
+      },
+      "implementation_bindings": [],
+      "steps": [
+        {
+          "key": "authorize_and_lease",
+          "name": "核对授权与账号执行条件",
+          "order": 1,
+          "check": "唯一授权入站申请、真实本机微信、两租约owner与公共锁均匹配",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "authorization.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        },
+        {
+          "key": "verify_applicant",
+          "name": "核对申请人与稳定身份",
+          "order": 2,
+          "check": "真实截图与身份凭证的昵称和客户微信号一致，无同名歧义",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "identity-readback.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "friendship_confirmed",
+      "name": "好友关系确认",
+      "executor_kind": "agent",
+      "acceptance": [
+        "已好友时只读no-op，不删除重做；仍是唯一授权入站申请才进入通过",
+        "点击前排他持久attempt，唯一通过动作后实屏关系确认；未知不重试"
+      ],
+      "implementation": {
+        "kind": "skill",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+        "revision": "contract",
+        "name": "wechat-friend-onboarding-android",
+        "version": "0.1.0"
+      },
+      "implementation_bindings": [],
+      "steps": [
+        {
+          "key": "read_friendship",
+          "name": "读取真实好友关系",
+          "order": 1,
+          "check": "已好友时只读no-op，不删除重做；仍是唯一授权入站申请才进入通过",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "friendship-before.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        },
+        {
+          "key": "approve_once",
+          "name": "一次通过并确认好友关系",
+          "order": 2,
+          "check": "点击前排他持久attempt，唯一通过动作后实屏关系确认；未知不重试",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "friendship-after.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "crm_registered",
+      "name": "CRM增量建档",
+      "executor_kind": "agent",
+      "acceptance": [
+        "health构建SHA确实包含固定partial实现且许可租户账号一致，旧版禁止调用",
+        "仅单真实微信号partial，409停且回滚；读回客户主档ID和租户/我方微信/客户微信一致"
+      ],
+      "implementation": {
+        "kind": "skill",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+        "revision": "contract",
+        "name": "wechat-friend-onboarding-android",
+        "version": "0.1.0"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "apps/api/src/routes/crm.ts",
+          "ref": "apps/api/src/routes/crm.ts",
+          "revision": "c062aef664310f63b75014b670560b1465d54682",
+          "version": "0.1.0"
+        }
+      ],
+      "steps": [
+        {
+          "key": "verify_partial_server",
+          "name": "核对增量建档版本和租户账号",
+          "order": 1,
+          "check": "health构建SHA确实包含固定partial实现且许可租户账号一致，旧版禁止调用",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "backend-version.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        },
+        {
+          "key": "upsert_and_readback",
+          "name": "增量建档并按三键读回客户",
+          "order": 2,
+          "check": "仅单真实微信号partial，409停且回滚；读回客户主档ID和租户/我方微信/客户微信一致",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "crm-readback.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "receipt_and_cleanup",
+      "name": "回执与归位",
+      "executor_kind": "agent",
+      "acceptance": [
+        "事实、账号、关系与三键客户ID留痕，不伪造消息或画像",
+        "回桌面保留后台，精确owner释放且读回free；归位缺证据单列"
+      ],
+      "implementation": {
+        "kind": "skill",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+        "revision": "contract",
+        "name": "wechat-friend-onboarding-android",
+        "version": "0.1.0"
+      },
+      "implementation_bindings": [],
+      "steps": [
+        {
+          "key": "record_outcome",
+          "name": "分别记录好友和CRM结果",
+          "order": 1,
+          "check": "事实、账号、关系与三键客户ID留痕，不伪造消息或画像",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "onboarding-result.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        },
+        {
+          "key": "cleanup_and_unlock",
+          "name": "归位并释放本任务锁",
+          "order": 2,
+          "check": "回桌面保留后台，精确owner释放且读回free；归位缺证据单列",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "skill",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/skills/wechat-friend-onboarding-android/SKILL.md",
+            "revision": "contract",
+            "name": "wechat-friend-onboarding-android",
+            "version": "0.1.0"
+          },
+          "dod": {
+            "mode": "hard",
+            "readback": {
+              "type": "evidence",
+              "glob": "cleanup-readback.json",
+              "expect": {
+                "op": ">=",
+                "value": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
