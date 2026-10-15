@@ -17,7 +17,7 @@ import crypto from 'node:crypto';
 import { resolveTenantForAgent } from '../services/agent-tenant-resolver';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
-import { simpleRateLimit } from '../middleware/simple-rate-limit';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import {
   enqueueFailureAlert,
   listPendingOutbound,
@@ -370,7 +370,7 @@ wechatRouter.post('/cs/outbound/:id/receipt', async (req: Request, res: Response
 // body.cs_wechat_id 直传 > csConfig?.wechat_id > resolveCsWechatIdByAgentId(agent_id)。
 // 中间 csConfig 段不可省：手填 SSOT 场景 csConfig.wechat_id 可能与反查值不一致，draft 写行盖的
 // 是 csConfig 值，回执归属必须用同一值，否则 UPDATE 0 行、out 行卡 draft → 假账反向复发。
-wechatRouter.post('/messages/:id/receipt', (req,res,next)=>(req.header('Authorization')||req.header('X-License-Key')||req.header('X-Internal-Token')) ? requireServiceCredential(req,res,next) : next(), async (req: Request, res: Response) => {
+wechatRouter.post('/messages/:id/receipt', simpleRateLimit({windowMs:60_000,max:120,keyFn:ipKeyFn}), (req,res,next)=>(req.header('Authorization')||req.header('X-License-Key')||req.header('X-Internal-Token')) ? requireServiceCredential(req,res,next) : next(), async (req: Request, res: Response) => {
   const messageId = Number(req.params.id);
   if (!Number.isInteger(messageId) || messageId <= 0) {
     return res.status(400).json({ error: 'BAD_MESSAGE_ID', message: 'id 必须为正整数' });
