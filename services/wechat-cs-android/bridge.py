@@ -67,6 +67,11 @@ class State:
         self.db.execute('PRAGMA synchronous=FULL')
         self.db.executescript('''
           CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+          CREATE TABLE IF NOT EXISTS contexts (hash TEXT PRIMARY KEY, event_id TEXT);
+          CREATE TABLE IF NOT EXISTS actions (event_id TEXT, action TEXT, status TEXT,
+            PRIMARY KEY(event_id,action));
+          CREATE TABLE IF NOT EXISTS phone_evidence (path TEXT PRIMARY KEY, event_id TEXT,
+            sha256 TEXT, receipt TEXT, serial TEXT, owner TEXT, operation TEXT);
           CREATE TABLE IF NOT EXISTS events (
             id TEXT PRIMARY KEY, status TEXT NOT NULL, event_json TEXT NOT NULL,
             draft_json TEXT, context_hash TEXT, contact_key TEXT,
@@ -108,6 +113,78 @@ class State:
                                      (status, time.time(), event_id, expected))
             if cursor.rowcount != 1:
                 raise ValueError('event_already_attempted_or_wrong_state')
+
+    def require_ready(self):
+        if self.db.execute("SELECT 1 FROM meta WHERE key='paused_unknown'").fetchone():
+            raise RuntimeError('gateway_outcome_unknown_bridge_paused')
+
+    def pause(self, reason):
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO meta VALUES ('paused_unknown',?)", (reason,))
+
+    def claim_draft(self, event_id, context):
+        row = self.event(event_id)
+        if (context.get('incoming_text') != row['event_json'].get('text')
+                or context.get('latest_message_direction') != 'incoming'
+                or not context.get('incoming_text')
+                or context['incoming_text'] not in context.get('content', '')):
+            raise ValueError('notification_does_not_match_latest_inbound')
+        fingerprint = digest([CS_WECHAT_ID, context.get('contact_key'), context.get('content'),
+                              context['incoming_text']])
+        with self.db:
+            if row['status'] != 'claimed':
+                raise ValueError('draft_already_attempted')
+            try:
+                self.db.execute('INSERT INTO contexts VALUES (?,?)', (fingerprint, event_id))
+            except sqlite3.IntegrityError as exc:
+                raise ValueError('inbound_context_already_consumed') from exc
+            self.db.execute("UPDATE events SET status='drafting',updated_at=? WHERE id=?", (time.time(), event_id))
+
+    def action(self, event_id, action):
+        row = self.db.execute('SELECT status FROM actions WHERE event_id=? AND action=?',
+                              (event_id, action)).fetchone()
+        return row['status'] if row else None
+
+    def claim_action(self, event_id, action):
+        with self.db:
+            try:
+                self.db.execute("INSERT INTO actions VALUES (?,?,'attempted')", (event_id, action))
+            except sqlite3.IntegrityError as exc:
+                raise ValueError('action_already_attempted_no_retry') from exc
+
+    def complete_action(self, event_id, action):
+        with self.db:
+            self.db.execute("UPDATE actions SET status='completed' WHERE event_id=? AND action=?",
+                            (event_id, action))
+
+    def register_phone_evidence(self, event_id, record, phone):
+        path = Path(record['after']['screenshot']).resolve()
+        receipt = Path(record['receipt']).resolve()
+        if (not path.is_relative_to(phone.evidence_dir.resolve())
+                or not receipt.is_relative_to(phone.evidence_dir.resolve())
+                or record.get('serial') != phone.serial or record.get('owner') != phone.owner
+                or record.get('status') not in ('executed', 'requires_visual_readback')):
+            raise ValueError('phone_evidence_wrong_origin')
+        saved = json.loads(receipt.read_text())
+        if (Path(saved.get('after', {}).get('screenshot', '')).resolve() != path
+                or saved.get('serial') != phone.serial or saved.get('owner') != phone.owner):
+            raise ValueError('phone_receipt_mismatch')
+        with self.db:
+            self.db.execute('INSERT INTO phone_evidence VALUES (?,?,?,?,?,?,?)',
+                (str(path), event_id, hashlib.sha256(path.read_bytes()).hexdigest(),
+                 str(receipt), phone.serial, phone.owner, record['operation']))
+
+    def verify_phone_evidence(self, event_id, path):
+        path = Path(path).resolve()
+        row = self.db.execute('SELECT * FROM phone_evidence WHERE path=? AND event_id=?',
+                              (str(path), event_id)).fetchone()
+        if row is None or row['sha256'] != hashlib.sha256(path.read_bytes()).hexdigest():
+            raise ValueError('untrusted_or_changed_phone_screenshot')
+        receipt = json.loads(Path(row['receipt']).read_text())
+        if (receipt.get('serial') != row['serial'] or receipt.get('owner') != row['owner']
+                or Path(receipt.get('after', {}).get('screenshot', '')).resolve() != path):
+            raise ValueError('phone_receipt_changed')
+        return dict(row)
 
     def set_draft(self, event_id, draft, context=None):
         if not valid_draft(draft):

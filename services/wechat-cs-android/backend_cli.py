@@ -108,6 +108,7 @@ def main():
     parser.add_argument('action', choices=['preflight', 'draft', 'claim-send', 'receipt', 'status'])
     parser.add_argument('--config', default=DEFAULT_CONFIG)
     parser.add_argument('--state', required=True)
+    parser.add_argument('--phone-config')
     parser.add_argument('--event-id')
     parser.add_argument('--context')
     parser.add_argument('--evidence')
@@ -117,10 +118,16 @@ def main():
     state = None
     try:
         backend = Backend(load_config(args.config))
+        if args.phone_config:
+            from watcher import check_brain_locks
+            check_brain_locks(json.loads(Path(args.phone_config).read_text()), min_valid_seconds=30)
         if args.action == 'preflight':
             result = backend.preflight()
         else:
+            if not args.phone_config:
+                raise ValueError('missing_phone_lease_config')
             state = State(args.state)
+            state.require_ready()
             row = state.event(args.event_id)
             if row['event_json'].get('sender') != SENDER:
                 raise ValueError('unauthorized_event')
@@ -129,13 +136,17 @@ def main():
             elif args.action == 'draft':
                 context = json.loads(Path(args.context).read_text())
                 backend.check_context(context)
-                state.transition(args.event_id, 'claimed', 'drafting')
+                state.verify_phone_evidence(args.event_id, context['screenshot'])
+                state.claim_draft(args.event_id, context)
                 draft = backend.draft(context)
                 state.set_draft(args.event_id, draft, context)
                 result = draft
             elif args.action == 'claim-send':
                 evidence = json.loads(Path(args.evidence).read_text())
                 backend.check_context(evidence)
+                state.verify_phone_evidence(args.event_id, evidence['screenshot'])
+                if state.action(args.event_id, 'input') != 'completed':
+                    raise ValueError('input_attempt_unknown_or_missing')
                 if (evidence.get('input_text') != row['draft_json']['reply']
                         or evidence.get('contact_key') != row['contact_key']):
                     raise ValueError('input_or_contact_mismatch')
@@ -147,6 +158,11 @@ def main():
                 result = {'send_claimed': True, 'event_id': args.event_id}
             else:
                 evidence = json.loads(Path(args.evidence).read_text())
+                state.verify_phone_evidence(args.event_id, evidence['screenshot'])
+                if state.action(args.event_id, 'send_click') != 'completed':
+                    raise ValueError('send_click_not_confirmed')
+                if screenshot_hash(evidence['screenshot']) == row['evidence_json']['screenshot_sha256']:
+                    raise ValueError('before_after_screenshot_identical')
                 if evidence.get('contact_key') != row['contact_key']:
                     raise ValueError('receipt_contact_mismatch')
                 result = backend.receipt(row['draft_json'], evidence, row['status'])
