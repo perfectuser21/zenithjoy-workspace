@@ -402,3 +402,14 @@ describe('delivered-only regression', () => {
     expect(String(mockedQuery.mock.calls[0][0])).toMatch(/status = 'delivered'/);
   });
 });
+describe('scoped回执SQL权限',()=>{
+ it('旧未授权调用不得更新scoped行',async()=>{
+  await markMessageReceipt(42,true,'cs-a');
+  expect(String(mockedQuery.mock.calls[0][0])).toContain("contact_key NOT LIKE 'crm:v1:%'");
+ });
+ it('已授权scope只更新精确scope',async()=>{
+  await markMessageReceipt(42,true,'cs-a','crm:v1:scope');
+  expect(String(mockedQuery.mock.calls[0][0])).toContain('contact_key = $4');
+  expect(mockedQuery.mock.calls[0][1]).toEqual([42,'delivered','cs-a','crm:v1:scope']);
+ });
+});

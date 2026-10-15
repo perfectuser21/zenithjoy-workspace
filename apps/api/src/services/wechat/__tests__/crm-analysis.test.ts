@@ -69,3 +69,24 @@ describe('CRM档案与读回',()=>{
   expect(query.mock.calls.some(([s])=>String(s).includes('wechat_id IS NULL'))).toBe(true);
  });
 });
+describe('事件结果与恢复',()=>{
+ for(const status of ['delivered','failed'])it(`${status}不再返回可发送文案`,async()=>{
+  query.mockImplementation(async(sql:string)=>sql.includes('service_agents')?{rows:[{}]}:sql.includes('pg_try_advisory_lock')?{rows:[{locked:true}]}:sql.includes('source_event_id =')?{rows:[{direction:'out',id:42,status,content:'旧回复'}]}:{rows:[]});
+  const generate=vi.fn();const result=await withCrmEvent(scope,'b'.repeat(64),generate);
+  expect(result.status).toBe('event_'+status);expect(result.reply).toBeUndefined();expect(generate).not.toHaveBeenCalled();
+ });
+ it('被其他进程占锁时返回processing而不新生成',async()=>{
+  query.mockImplementation(async(sql:string)=>sql.includes('service_agents')?{rows:[{}]}:{rows:[{locked:false}]});
+  const generate=vi.fn();expect((await withCrmEvent(scope,'c'.repeat(64),generate)).status).toBe('event_processing');
+  expect(generate).not.toHaveBeenCalled();expect(release).toHaveBeenCalled();
+ });
+ it('没有新scope事实时保留Windows旧资料分支',async()=>{
+  const {readScopedCrmProfile}=await import('../crm-analysis');
+  expect(await readScopedCrmProfile(scope,'客户')).toBeNull();
+ });
+ it('新scope只有draft时也不回退旧昵称资料',async()=>{
+  query.mockImplementation(async(sql:string)=>sql.includes('count(*)')?{rows:[{total:1,pending:0}]}:{rows:[]});
+  const {readScopedCrmProfile}=await import('../crm-analysis');
+  expect((await readScopedCrmProfile(scope,'客户'))?.messages).toEqual([]);
+ });
+});
