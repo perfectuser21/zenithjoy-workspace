@@ -4,7 +4,7 @@
   "capability_id": "2173a385-a743-41f3-bb7d-d0e4b1d51d4e",
   "channel": "Android/ADB",
   "form": "定时巡查编排",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "runtime": {
     "skill_id": "23656d5a-6d61-4f7e-82a1-b8ace4e7669e",
     "entrypoint": "/usr/bin/python3 /Users/administrator/.local/share/phone-account-patrol/releases/864154c57e88e8085d2add741a79103a28891a44/runner.py batch --execution-script \"$0\"",
