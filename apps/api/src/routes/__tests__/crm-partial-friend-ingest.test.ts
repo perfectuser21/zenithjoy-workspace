@@ -48,3 +48,13 @@ describe('局部好友建档',()=>{
   expect(r.status).toBe(200);expect(transaction.mock.calls.map(([s])=>s)).toEqual(['BEGIN','COMMIT']);
  });
 });
+
+describe('好友建档限流',()=>{
+ it('同一来源过量请求在DB访问前返回429',async()=>{
+  let status=0;
+  for(let index=0;index<125;index++){
+   status=(await request(app).post('/api/crm/friend-scan/ingest').send({...body,scan_scope:'invalid'})).status;
+  }
+  expect(status).toBe(429);expect(query).not.toHaveBeenCalled();expect(transaction).not.toHaveBeenCalled();
+ });
+});
