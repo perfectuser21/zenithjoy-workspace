@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,writeFileSync,mkdirSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,mkdirSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {runSkillAgent} from '../leadgen-skill-agent.mjs';
@@ -11,11 +11,18 @@ test('isolated transport fixture: actual parent CLI args, official child receipt
   const r=await runSkillAgent({protocol:'leadgen-activity-v1',run_id:'fixture__a1',task_id:null,binding_id:'fixture-binding',activity_key:'scoring',nonce:'a'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'b'.repeat(40),broker_host:'mmv',broker_request_path:'/private/tmp/fixture/broker-request.json',broker_tool_path:'/private/tmp/fixture/activity-skill-tool.mjs',mode:'repair',method:{name:'fixture',version:'0.2.0',text:'fixture method only'}},{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
    seen.push({command,args});
    if(command==='openclaw'){
-    assert.ok(args.includes('--session-key'));assert.ok(args.includes('--message-file'));assert.equal(args.includes('--deliver'),false);
     return {code:0,stdout:'parent says success',stderr:''};
    }
    return {code:1,stdout:'',stderr:'fixture no official child receipt'};
   }});
+  const {args}=seen.find(x=>x.command==='openclaw');
+    assert.ok(args.includes('--session-key'));assert.ok(args.includes('--message-file'));assert.equal(args.includes('--deliver'),false);
+    const message=readFileSync(args[args.indexOf('--message-file')+1],'utf8');
+    assert.doesNotMatch(message,/gateway_exec|gateway_process/,'retired names must never be requested from actual parent');
+    assert.match(message,/host[=:：]?[^\n]*gateway/,'every MMV execution must explicitly select gateway host');
+    assert.match(message,/r10-7/,'actual gateway hostname must be checked before any run access');
+    assert.match(message,/sessionId/,'poll only the session returned by this exec');
+    assert.match(message,/30000/,'process poll timeout uses bounded milliseconds');
   assert.equal(r.execution_stopped,false);assert.equal(r.status,'unknown');assert.equal(seen.filter(x=>x.command==='openclaw').length,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
