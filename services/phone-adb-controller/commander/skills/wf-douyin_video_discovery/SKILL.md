@@ -1,6 +1,6 @@
 ---
 name: wf-douyin_video_discovery
-version: 0.1.0
+version: 0.2.0
 description: "抖音视频发现 wf_run 陪跑说明：显式加载本次冻结业务Skill，保持原合同与安全交接边界。"
 ---
 
@@ -10,7 +10,7 @@ description: "抖音视频发现 wf_run 陪跑说明：显式加载本次冻结�
 
 当前 `wf_run` 须由 Agent 显式加载本 wrapper 和业务 Skill，自动调用未接好。此字段入冻结合同不表示 runner 已调用 Skill，也不把本流程改成通用 Commander 的 `codex_agent` 或 commander-v2 执行协议。
 
-从本次正式 `run-definition.json` 的对应 `activities[].implementations` 选择已核 `kind: skill`、name/version/source/digest，按真实 `execution_path` 读取业务 Skill。其冻结部署路径为 `<WFR_RUN_DIR>/runtime/skills/douyin-leadgen-101/SKILL.md`；同时读取该冻结目录 `references/runtime-calls.json` 和 `references/reuse-map.json`。仓路径用于来源核对，最新部署副本或本机Codex链接不能替代本次冻结字节。缺绑定、路径、版本或SHA读回立即阻断。
+先从本run已验证的冻结部署清单读取工作流业务Skill `runtime/skills/douyin-leadgen-101/SKILL.md` 及其 `references/activity-methods.json`、`runtime-calls.json`、`reuse-map.json`，核对本run源码和每文件SHA。再从 `run-definition.json` 对应Activity的 `implementations` 选择确切 `kind: skill`、name/version/source/digest，并按真实 `execution_path` 读取独立Activity Skill及其支持文件。Workflow清单必须与各Activity冻结绑定完全一致；不能再把整流程业务Skill路径当成每个Activity方法。最新部署副本或本机Codex链接不能代替本run冻结字节，缺绑定或原件即阻断。
 
 执行前确认 workflow_key 为 `douyin_video_discovery`，实际公司、line、profile、serial、run_id、attempt、source_run（适用时）、执行权、截止时间及锁/租约均与冻结事实一致。保持原 Activity Commander、定义ACK、原件及PG独立读回；不改现场代码、不换账号、不扩大预算或输入范围。
 
@@ -19,3 +19,7 @@ description: "抖音视频发现 wf_run 陪跑说明：显式加载本次冻结�
 只处理101视频发现。本流程共享的设备预检与收尾引用 douyin_video_processing.preflight / cleanup；遇到这两个 Activity，显式加载冻结的 douyin-leadgen-102，只执行其预检或收尾范围，不启动102资格判断或评论采集。发现链接不能冒充同视频互动指标已持久化。
 
 交接只报告实际运行、逐活动/Step核验、清理及业务读回；代码退出0、合同可加载或 planned登记均不等于业务PASS。未知外部副作用先取合法读回，不能补造证据或重放动作。
+
+## 方法升级
+
+本流程依赖的Activity方法版本由业务Skill的 `references/activity-methods.json` 精确登记。方法变化要同步本陪跑Skill版本与合同 `commander_skill.version`；Commander只使用本run冻结组合。代码内部兼容评估、Skill实机验收和自动handoff能力分别记证据，不从文件存在推定已能接手。
