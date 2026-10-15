@@ -12,7 +12,7 @@ const vid='7646309328911907195';
 function fakeNativeFields(eid,phase,state='started'){
  const prefix=eid+'-playback-'+phase;return ' playback_proof_kind=native_audio native_audio_state='+state+' native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');
 }
-function recordedQualification({volume='1',db='-35',startFail=false,playback=true,endState=3}={}){
+function recordedQualification({volume='1',db='-35',startFail=false,speedFail=false,playback=true,endState=3}={}){
  const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
   const ctl=path.join(dir,'ctl'),remote=path.join(dir,'remote');
   writeFileSync(ctl,`#!/bin/zsh
@@ -20,6 +20,7 @@ print "$3" >> "$FIXTURE/calls"
 case "$3" in
 lock-refresh) print 'lock=refreshed';;
 current-video-link) print 'content_type=video';print 'video_id=${vid}';;
+set-playback-speed) ${speedFail?'print -u2 SPEED_CONTROL_FAILED;exit 6':'true'};;
 record-start) ${startFail?'print -u2 RECORD_NATIVE_AUDIO_UNVERIFIED state=unknown; exit 4':`print "record_started media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1'+fakeNativeFields('$4','start'):''}"`};;
 record-stop) print "record_stopped duration_seconds=25.1 mean_volume_db=${db} audio_streams=1 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeNativeFields('$4','end',endState===3?'started':'unknown')}";;
 record-extract-audio) print "audio_extracted path=$FIXTURE/record.wav";;
@@ -383,3 +384,5 @@ test('新LEAD必须同时生产独立recipient证据标记，缺原生原件明�
 });
 
 test('record-start earliest native error persists with exact rc and null volume',()=>{const r=recordedQualification({startFail:true});assert.equal(r.status,5);assert.equal(r.proof.media_volume,null);assert.equal(r.proof.earliest_error.phase,'record_start');assert.equal(r.proof.earliest_error.exit_code,4);assert.match(r.proof.earliest_error.stderr,/RECORD_NATIVE_AUDIO_UNVERIFIED/);assert.ok(!r.calls.includes('remote'));});
+
+test('set-speed earliest error persists before recording with null volume',()=>{const r=recordedQualification({speedFail:true});assert.equal(r.status,5);assert.equal(r.proof.media_volume,null);assert.deepEqual(r.proof.earliest_error,{phase:'set_playback_speed',exit_code:6,stderr:'SPEED_CONTROL_FAILED'});assert.ok(!r.calls.includes('record-start'));assert.ok(!r.calls.includes('remote'));});
