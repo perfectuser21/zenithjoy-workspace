@@ -86,7 +86,7 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  case "$3" in
   lock-refresh) print lock=refreshed;exit 0;;
   set-playback-speed) exit 0;;
-  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)' || exit $?;print "record_started media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','start')}";exit 0;;
+  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)' || exit $?;print "record_started capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','start')}";exit 0;;
   record-stop) print "record_stopped duration_seconds=25.1 mean_volume_db=-35 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','end')}";exit 0;;
   record-extract-audio) print fixture-audio > "$FAKE_PHONE_DIR/record.wav";print "audio_extracted path=$FAKE_PHONE_DIR/record.wav";exit 0;;
  esac
