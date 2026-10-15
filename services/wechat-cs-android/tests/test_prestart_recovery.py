@@ -129,6 +129,18 @@ class PrestartRecoveryTests(unittest.TestCase):
         self.state.claim(dict(event_id='c'*64, sender='苏小妖', text='另一条'))
         self.assert_refused()
 
+    def test_phone_evidence_without_actions_refuses_recovery(self):
+        self.state.db.execute('INSERT INTO phone_evidence VALUES (?,?,?,?,?,?,?)',
+            ('/private/screenshot.png', self.event_id, 'sha', '{}', 'serial', 'owner', 'screenshot'))
+        self.state.db.commit()
+        self.assert_refused()
+
+    def test_listener_before_new_runtime_refuses_recovery(self):
+        self.logs[4]['_meta']['date'] = (datetime.fromisoformat(
+            self.logs[2]['_meta']['date']) + timedelta(seconds=1)).isoformat()
+        self.write_logs()
+        self.assert_refused()
+
     def test_custom_evidence_root_watcher_lock_prevents_recovery(self):
         with single_instance(self.binding.parent.parent / 'watcher.lock'):
             with self.assertRaises(RuntimeError):

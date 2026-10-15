@@ -44,7 +44,7 @@ def restart_evidence(path, run_id, user_ms, snapshot_ms):
     after = records[index+1:]
     stops = [x for x in after if x['subsystem'] == 'gateway'
              and x['message'] == 'received SIGTERM; shutting down']
-    if not before or not stops:
+    if not before or not stops or before[-1]['ms'] >= accepted['ms']:
         raise ValueError('gateway_restart_evidence_missing')
     stop = stops[0]
     if stop['host'] != host or not 0 <= stop['ms'] - accepted['ms'] <= 10000:
@@ -59,7 +59,7 @@ def restart_evidence(path, run_id, user_ms, snapshot_ms):
         raise ValueError('gateway_restart_new_pid_not_proven')
     listening = [x for x in after if x['host'] == host and x['subsystem'] == 'gateway'
                  and isinstance(x['message'], str) and x['message'].startswith('http server listening')
-                 and stop['ms'] < x['ms'] <= snapshot_ms]
+                 and runtime['ms'] <= x['ms'] <= snapshot_ms]
     ready = [x for x in after if x['host'] == host and x['subsystem'] == 'gateway'
              and x['message'] == 'gateway ready' and runtime['ms'] <= x['ms'] <= snapshot_ms]
     if not listening or not ready or listening[0]['ms'] > ready[0]['ms']:

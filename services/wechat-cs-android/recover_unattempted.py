@@ -118,9 +118,12 @@ def recover(state_path, event_id, proof_path, reason, event_session_receipt=None
                                        (event_id,)).fetchone()[0]
             contexts = state.db.execute('SELECT count(*) FROM contexts WHERE event_id=?',
                                         (event_id,)).fetchone()[0]
+            phone_evidence = state.db.execute(
+                'SELECT count(*) FROM phone_evidence WHERE event_id=?', (event_id,)).fetchone()[0]
             if (row['status'] != 'claimed' or row['draft_json'] is not None
                     or row['context_hash'] is not None or row['contact_key'] is not None
-                    or row['evidence_json'] is not None or actions != 0 or contexts != 0):
+                    or row['evidence_json'] is not None or actions != 0 or contexts != 0
+                    or phone_evidence != 0):
                 raise ValueError('event_has_reply_or_send_attempt_cannot_recover')
             other = state.db.execute("SELECT count(*) FROM events WHERE id<>? AND status NOT IN ('baseline','delivered')",
                                      (event_id,)).fetchone()[0]
@@ -134,7 +137,8 @@ def recover(state_path, event_id, proof_path, reason, event_session_receipt=None
             audit = dict(recovery_id=recovery_id, event_id=event_id, reason=reason,
                          actor='explicit_operator_uid:' + str(os.getuid()), at=at,
                          previous_pause_reason=paused['value'], previous_event=row,
-                         action_count=actions, context_count=contexts, evidence=evidence)
+                         action_count=actions, context_count=contexts,
+                         phone_evidence_count=phone_evidence, evidence=evidence)
             try:
                 state.db.execute('INSERT INTO recovery_audit VALUES (?,?,?,?,?,?,?,?,?,?)',
                     (recovery_id, event_id, reason, audit['actor'], at,
