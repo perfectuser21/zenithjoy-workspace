@@ -91,7 +91,10 @@
     }
   },
   "resources": {
-    "machine": "us-mac-m4",
+    "machine": "r10-7.macminivault.com",
+    "gateway_host": "r10-7.macminivault.com",
+    "model_node": "session-runner",
+    "model_node_address": "100.88.166.55",
     "device_serial": "47.100.213.173:10001",
     "brain_device_names": [
       "47.100.213.173:10001",
@@ -420,7 +423,7 @@
           "key": "receipt_commit",
           "name": "提交真实送达回执并读回终态",
           "order": 1,
-          "check": "receipt返回updated=true且SQLite事件delivered",
+          "check": "后端持久送达状态与SQLite均为delivered，CLI保留ok/updated严格闸门",
           "uses_llm": true,
           "on_fail": "abort",
           "implementation": {
