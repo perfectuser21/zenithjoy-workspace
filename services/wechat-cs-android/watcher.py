@@ -11,6 +11,8 @@ import subprocess
 import sys
 import time
 import uuid
+import urllib.request
+from datetime import datetime, timezone
 
 from backend_cli import Backend, DEFAULT_CONFIG, load_config
 from bridge import CS_WECHAT_ID, SENDER, State, parse_notification, private_json, single_instance
@@ -88,10 +90,13 @@ def dispatch(event, state, root, config, runner=bounded_gateway):
         stream.write(task_prompt(event_path, event['event_id'], config, event_dir))
     session_id = str(uuid.uuid4())
     private_json(event_dir / 'gateway-session.json', {'session_id': session_id, 'event_id': event['event_id']})
+    timeout_seconds = int(config.get('gateway_timeout_seconds', 600))
+    if not 30 <= timeout_seconds <= 900:
+        raise ValueError('invalid_gateway_timeout')
     command = [config.get('openclaw', 'openclaw'), 'agent', '--agent', 'zenithjoy-moments',
-               '--session-id', session_id, '--message-file', str(prompt_path), '--json', '--timeout', '300']
+               '--session-id', session_id, '--message-file', str(prompt_path), '--json', '--timeout', str(timeout_seconds)]
     try:
-        result = runner(command, timeout=330)
+        result = runner(command, timeout=timeout_seconds + 30)
         for name, content in [('gateway-stdout.txt', result.stdout), ('gateway-stderr.txt', result.stderr)]:
             path = event_dir / name
             fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
@@ -116,6 +121,53 @@ def load_phone(config):
                         adb=config['adb'], timeout=15)
 
 
+def fetch_json(url):
+    with urllib.request.urlopen(url, timeout=10) as response:
+        return json.loads(response.read())
+
+
+def check_brain_locks(config, fetch=fetch_json, min_valid_seconds=0):
+    names = config.get('brain_device_names')
+    required = {'47.100.213.173:10001', 'acp-f6utus34dgnghc1oc'}
+    if not isinstance(names, list) or set(names) != required or not config.get('owner'):
+        raise ValueError('missing_exact_brain_device_bindings')
+    response = fetch(config.get('brain_url', 'http://127.0.0.1:5221').rstrip('/') + '/api/brain/device-locks')
+    if response.get('success') is not True:
+        raise ValueError('brain_locks_unavailable')
+    locks = response.get('locks', [])
+    for name in names:
+        rows = [row for row in locks if row.get('device_name') == name]
+        if len(rows) != 1:
+            raise ValueError('brain_device_lock_missing')
+        row = rows[0]
+        if row.get('locked_by') != config['owner'] or row.get('expired') is not False:
+            raise ValueError('brain_device_lock_not_owned')
+        expiry = datetime.fromisoformat(row.get('expires_at', '').replace('Z', '+00:00'))
+        if (expiry - datetime.now(timezone.utc)).total_seconds() <= min_valid_seconds:
+            raise ValueError('brain_device_lock_expired_or_insufficient')
+
+
+def serve(phone, backend, state, root, config, clock=time.monotonic, sleeper=time.sleep):
+    duration = float(config.get('max_runtime_seconds', 3600))
+    if not 0 < duration <= 3600:
+        raise ValueError('test_runtime_must_be_at_most_one_hour')
+    deadline = clock() + duration
+    while clock() < deadline:
+        for event in scan(phone):
+            if state.db.execute('SELECT 1 FROM events WHERE id=?', (event['event_id'],)).fetchone():
+                continue
+            budget = int(config.get('gateway_timeout_seconds', 600)) + 30
+            if deadline - clock() < budget:
+                continue
+            check_brain_locks(config, min_valid_seconds=budget)
+            backend.preflight()
+            dispatch(event, state, root, config)
+        private_json(root / 'watcher-heartbeat.json', {'pid': os.getpid(), 'at': time.time()})
+        sleeper(min(max(2, float(config.get('poll_seconds', 3))), max(0, deadline - clock())))
+    private_json(root / 'watcher-status.json', {'status': 'stopped', 'reason': 'test_deadline_reached',
+                 'at': time.time(), 'message_delivery_verified': False})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', required=True, help='Watcher wiring JSON, private regular file')
@@ -123,6 +175,9 @@ def main():
     parser.add_argument('--once', action='store_true', help='One read-only scan; never dispatch')
     args = parser.parse_args()
     os.umask(0o077)
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, interrupted)
     state = None
     try:
         config_path = Path(args.config)
@@ -142,6 +197,7 @@ def main():
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         config.setdefault('backend_state', str(root / 'state.db'))
         with single_instance(root / 'watcher.lock'):
+            check_brain_locks(config)
             backend.preflight()
             events = scan(phone)
             state = State(config['backend_state'])
@@ -154,15 +210,11 @@ def main():
                 return 0
             private_json(root / 'watcher-status.json', {'status': 'listening', 'pid': os.getpid(),
                          'allowed_sender': SENDER, 'at': time.time(), 'message_delivery_verified': False})
-            while True:
-                for event in scan(phone):
-                    if state.db.execute('SELECT 1 FROM events WHERE id=?', (event['event_id'],)).fetchone():
-                        continue
-                    backend.preflight()
-                    dispatch(event, state, root, config)
-                private_json(root / 'watcher-heartbeat.json', {'pid': os.getpid(), 'at': time.time()})
-                time.sleep(max(2, float(config.get('poll_seconds', 3))))
+            serve(phone, backend, state, root, config)
     except KeyboardInterrupt:
+        if 'root' in locals():
+            private_json(root / 'watcher-status.json', {'status': 'stopped', 'reason': 'interrupted',
+                         'at': time.time()})
         return 0
     except Exception as exc:
         # Fail closed. Supervisor may restart, persistent event claims survive.
