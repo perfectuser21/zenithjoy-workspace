@@ -18,10 +18,10 @@ def load_config(path):
     if path.is_symlink() or path.stat().st_mode & 0o077:
         raise ValueError('runtime_config_requires_private_regular_file')
     config = json.loads(path.read_text())
-    for name in ('api_base', 'tenant_id', 'agent_id', 'cs_wechat_id', 'machine_id'):
+    for name in ('api_base', 'tenant_id', 'agent_id', 'cs_wechat_id', 'machine_id', 'allowed_contact_key'):
         if not isinstance(config.get(name), str) or not config[name].strip():
             raise ValueError('missing_binding_' + name)
-    if config['cs_wechat_id'] != CS_WECHAT_ID:
+    if config['cs_wechat_id'] != CS_WECHAT_ID or config['allowed_contact_key'] != 'suxiaoyao121':
         raise ValueError('wrong_test_account')
     url = urllib.parse.urlsplit(config['api_base'])
     if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password:
@@ -72,6 +72,7 @@ class Backend:
                 or context.get('cs_wechat_id') != self.config['cs_wechat_id']
                 or not isinstance(context.get('contact_key'), str)
                 or not context['contact_key'].strip()
+                or context['contact_key'] != self.config.get('allowed_contact_key')
                 or not isinstance(context.get('content'), str)
                 or not context['content'].strip()
                 or context.get('is_group', False) is not False):

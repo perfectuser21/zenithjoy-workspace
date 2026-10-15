@@ -48,8 +48,8 @@ def task_prompt(event_path, event_id, config, event_dir):
 唯一手机工具是受限cs_phone包装，禁止直接调用底层Phone。命令前缀：{shlex.join(phone)}。先运行该工具--help查子命令；所有读写都用此工具与已有锁。禁止裸ADB写、猜坐标、用文本代替截图。
 唯一后端CLI命令前缀：{shlex.join(backend)}（动作放在脚本名之后，支持preflight/draft/claim-send/receipt/status）。
 1. 看真实截图，导航到「{SENDER}」私聊，头部必须精确匹配；确认没有同名歧义、当前登录账号正确。补读真实聊天上下文，不直接用通知预览代替上下文。
-2. 从实屏确认对端contact_key（微信号或其他稳定身份；若只取得唯一会话显示名，必须在本次测试授权范围内且无同名歧义，明确记录身份局限），与当前会话可见消息。上下文包含当前要回复的最新入站文本，保留必要上下文。若无法确认新入站消息、已回复、群聊或系统消息，立即停止，不发送。
-3. 写context.json到本事件目录（权限600）：{{"sender":"{SENDER}","conversation_header":"{SENDER}","contact_key":"实屏身份","content":"真实会话上下文","incoming_text":"最新入站完整文本，必须与event.text精确一致","latest_message_direction":"incoming","cs_wechat_id":"{CS_WECHAT_ID}","visual_confirmed":true,"is_group":false,"screenshot":"真实聊天截图绝对PNG路径"}}。
+2. 已由用户授权并从好友资料实屏确认唯一测试联系人微信号suxiaoyao121；contact_key必须精确为suxiaoyao121，昵称苏小妖，不允许昵称降级或其他同名身份。身份原证可读/Users/administrator/.config/zenithjoy/cloud-wechat-cs-20261015/contact-identity.json。读取当前会话可见消息。上下文包含当前要回复的最新入站文本，保留必要上下文。若无法确认新入站消息、已回复、群聊或系统消息，立即停止，不发送。
+3. 写context.json到本事件目录（权限600）：{{"sender":"{SENDER}","conversation_header":"{SENDER}","contact_key":"suxiaoyao121","content":"真实会话上下文","incoming_text":"最新入站完整文本，必须与event.text精确一致","latest_message_direction":"incoming","cs_wechat_id":"{CS_WECHAT_ID}","visual_confirmed":true,"is_group":false,"screenshot":"真实聊天截图绝对PNG路径"}}。
 4. 调后端draft --context context.json --out draft.json。只有退出0且draft包含非空reply与正整数message_id才继续，失败即停。后端实际生成内容必须原样发送，不能自行编回复。
 5. 用受限手机工具text-from-draft输入数据库原始reply，禁止自行转抄或调用text-b64，先不点发送。截图检查输入文字与reply完全一致、头部仍为「{SENDER}」、无同名歧义。写before-send.json（context相同身份字段，content仍上下文，另input_text=完整reply、screenshot=此时真实PNG）。
 6. 调claim-send --evidence before-send.json。只有退出0且send_claimed=true，才可调用受限手机工具send X Y（坐标必须从刚看的截图定位）；禁止用通用tap发送，工具会机械拒绝输入后的tap。先持久claim再由send唯一点击。发送结果未知绝不能再点。

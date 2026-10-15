@@ -58,6 +58,7 @@ def parse_notification(key, raw):
 class State:
     def __init__(self, path):
         path = Path(path)
+        self.path = path
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
         os.close(fd)
@@ -138,7 +139,9 @@ class State:
                 self.db.execute('INSERT INTO contexts VALUES (?,?)', (fingerprint, event_id))
             except sqlite3.IntegrityError as exc:
                 raise ValueError('inbound_context_already_consumed') from exc
-            self.db.execute("UPDATE events SET status='drafting',updated_at=? WHERE id=?", (time.time(), event_id))
+            cursor = self.db.execute("UPDATE events SET status='drafting',updated_at=? WHERE id=? AND status='claimed'", (time.time(), event_id))
+            if cursor.rowcount != 1:
+                raise ValueError('draft_already_attempted')
 
     def action(self, event_id, action):
         row = self.db.execute('SELECT status FROM actions WHERE event_id=? AND action=?',

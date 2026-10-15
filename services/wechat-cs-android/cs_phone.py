@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 import sys
 
-from bridge import State, digest
+from bridge import State, single_instance
 
 
 def chat_focus(raw, require_empty=True):
@@ -90,6 +90,12 @@ class Controller:
         self.state, self.event_id, self.phone = state, event_id, phone
 
     def execute(self, operation, values):
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', self.event_id):
+            raise ValueError('invalid_event_id')
+        with single_instance(self.state.path.parent / (self.event_id + '.operation.guard')):
+            return self._execute(operation, values)
+
+    def _execute(self, operation, values):
         self.state.require_ready()
         row = self.state.event(self.event_id)
         if row['event_json'].get('sender') != '苏小妖':
