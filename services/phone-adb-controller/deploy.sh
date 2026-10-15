@@ -469,7 +469,9 @@ for host in xian-m4; do
   done
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
-    push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
+    _pd="$(dirname "$f")"; _pdir="~/bin-harvest"; [[ "$_pd" != "." ]] && _pdir="$_pdir/$_pd"
+    ssh "$host" "mkdir -p $_pdir"
+    push_atomic "$D/$f" "$host" "$_pdir" "$(basename "$f")"
     case "$f" in
       *.py) _nchk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/bin-harvest/$f";;
       *.json) _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
