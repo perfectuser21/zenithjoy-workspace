@@ -255,6 +255,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: unittest apps/api/scripts/tests
         run: python3 -m unittest discover -s apps/api/scripts/tests -p 'test_*.py' -v
+      - name: Android WeChat reception safety contracts (offline)
+        run: bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh
 
   # ─── Agent Line Modules ──────────────────────────────────────────────
   # 2026-07-12 巡检抓漏：line-module TS 编译此前只在 push main 的 agent-installpack

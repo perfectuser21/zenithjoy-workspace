@@ -1,0 +1,459 @@
+{
+  "key": "wechat_cs_reply_delivery.android",
+  "name": "安卓微信客服·单事件接待与真实送达",
+  "capability_id": "ac2e35bc-849a-48cd-917f-79d15c5ac886",
+  "channel": "wechat",
+  "form": "android_rpa",
+  "version": "0.1.0",
+  "runtime": {
+    "skill_id": "b63d108a-0068-4566-9d6b-5bd895218a11",
+    "entrypoint": "wechat-cs-android",
+    "execution_profile": "codex_agent",
+    "agent": "zenithjoy-moments",
+    "code_revision": "50599da9492614d6fb67999111314251c5e3e98f",
+    "code_path": "services/wechat-cs-android/"
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "event_id",
+      "event_path",
+      "state_path",
+      "phone_config_path",
+      "authorized",
+      "scope"
+    ],
+    "properties": {
+      "event_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "event_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "state_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "phone_config_path": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "authorized": {
+        "const": true
+      },
+      "scope": {
+        "const": "test"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "event_id",
+      "message_id",
+      "delivery_status",
+      "cleanup_status",
+      "evidence"
+    ],
+    "properties": {
+      "event_id": {
+        "type": "string"
+      },
+      "message_id": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "delivery_status": {
+        "enum": [
+          "delivered",
+          "not_sent",
+          "unknown"
+        ]
+      },
+      "cleanup_status": {
+        "enum": [
+          "background_on_home",
+          "cleanup_pending"
+        ]
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      }
+    }
+  },
+  "resources": {
+    "machine": "r10-7.macminivault.com",
+    "gateway_host": "r10-7.macminivault.com",
+    "model_node": "session-runner",
+    "model_node_address": "100.88.166.55",
+    "device_serial": "47.100.213.173:10001",
+    "brain_device_names": [
+      "47.100.213.173:10001",
+      "acp-f6utus34dgnghc1oc"
+    ],
+    "owner_source": "phone_config_path",
+    "application": "com.tencent.mm"
+  },
+  "recovery": {
+    "max_attempts": 1,
+    "retry_safe": false,
+    "total_timeout_sec": 900,
+    "cleanup_timeout_sec": 120
+  },
+  "verification": {
+    "independent": true,
+    "instructions": "重新读取本事件SQLite、Phone receipt和发送前后原始截图；核验对端、原始回复、send_click唯一且completed、后端回执真实更新、事件delivered。桌面实屏且微信未被强杀才可确认归位；消息与归位分别判定。"
+  },
+  "activities": [
+    {
+      "key": "reception_ready",
+      "name": "接待条件就绪",
+      "executor_kind": "agent",
+      "acceptance": [
+        "受claim事件与授权测试联系人一致且没有回复尝试",
+        "后端配置、登录账号和两个设备租约均准确就绪"
+      ],
+      "implementation": {
+        "kind": "code",
+        "ref": "services/wechat-cs-android/backend_cli.py",
+        "version": "0.1.0",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/backend_cli.py",
+        "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "skill",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
+          "revision": "contract",
+          "name": "wechat-cs-android",
+          "version": "0.1.0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/watcher.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/watcher.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/bridge.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/bridge.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        }
+      ],
+      "steps": [
+        {
+          "key": "claim_identity",
+          "name": "核对事件与一次接待边界",
+          "order": 1,
+          "check": "事件claimed、无草稿或input/send尝试、未暂停，联系人与私有输入一致",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/bridge.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/bridge.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"event.json","expect":{"op":">=","value":1}}}
+        },
+        {
+          "key": "backend_device_gate",
+          "name": "核对后端与手机执行条件",
+          "order": 2,
+          "check": "preflight就绪、精确租约owner与真实登录微信均一致",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/backend_cli.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/backend_cli.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"*-after.png","expect":{"op":">=","value":1}}}
+        }
+      ]
+    },
+    {
+      "key": "conversation_confirmed",
+      "name": "待答消息与会话确认",
+      "executor_kind": "agent",
+      "acceptance": [
+        "实屏确认苏小妖与微信号suxiaoyao121为唯一私聊",
+        "真实未回复批次含通知锚点且时间匹配、未编图片内容"
+      ],
+      "implementation": {
+        "kind": "code",
+        "ref": "services/wechat-cs-android/cs_phone.py",
+        "version": "0.1.0",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/cs_phone.py",
+        "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "skill",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
+          "revision": "contract",
+          "name": "wechat-cs-android",
+          "version": "0.1.0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/bridge.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/bridge.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/artifact_transport.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/artifact_transport.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        }
+      ],
+      "steps": [
+        {
+          "key": "open_target_chat",
+          "name": "打开并核对正确测试会话",
+          "order": 1,
+          "check": "通过原生view_image看到正确会话头部与对端身份",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/cs_phone.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/cs_phone.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"*-after.png","expect":{"op":">=","value":1}}}
+        },
+        {
+          "key": "observe_inbound_batch",
+          "name": "补读真实待答批次并保存上下文",
+          "order": 2,
+          "check": "context含锚点时间、真实有序批次和未回复声明；最新项与实屏一致",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/bridge.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/bridge.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"context.json","expect":{"op":">=","value":1}}}
+        }
+      ]
+    },
+    {
+      "key": "reply_delivered",
+      "name": "回复真实送达",
+      "executor_kind": "agent",
+      "acceptance": [
+        "使用既有后端草稿且原文输入后经视觉核对",
+        "发送claim后唯一点击并实际读回己方完整回复"
+      ],
+      "implementation": {
+        "kind": "code",
+        "ref": "services/wechat-cs-android/cs_phone.py",
+        "version": "0.1.0",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/cs_phone.py",
+        "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "skill",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
+          "revision": "contract",
+          "name": "wechat-cs-android",
+          "version": "0.1.0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/backend_cli.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/backend_cli.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/bridge.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/bridge.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/artifact_transport.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/artifact_transport.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        }
+      ],
+      "steps": [
+        {
+          "key": "generate_draft",
+          "name": "生成可发送的后端回复草稿",
+          "order": 1,
+          "check": "草稿非空、message_id正整数，批次一次消费",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/backend_cli.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/backend_cli.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"draft.json","expect":{"op":">=","value":1}}}
+        },
+        {
+          "key": "input_draft",
+          "name": "原文输入并重新核对未回复批次",
+          "order": 2,
+          "check": "输入claim唯一、真实文字一致、会话和入站批次未变",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/cs_phone.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/cs_phone.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"before-send.json","expect":{"op":">=","value":1}}}
+        },
+        {
+          "key": "send_once",
+          "name": "一次发送并读回真实回复",
+          "order": 3,
+          "check": "send_click唯一、真实己方气泡可见且无失败标记",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/cs_phone.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/cs_phone.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"after-send.json","expect":{"op":">=","value":1}}}
+        }
+      ]
+    },
+    {
+      "key": "receipt_and_background",
+      "name": "回执与设备归位",
+      "executor_kind": "agent",
+      "acceptance": [
+        "后端回执真实更新且本事件delivered",
+        "返回桌面并保留微信后台，归位缺证据单列cleanup_pending"
+      ],
+      "implementation": {
+        "kind": "code",
+        "ref": "services/wechat-cs-android/backend_cli.py",
+        "version": "0.1.0",
+        "repo": "perfectuser21/zenithjoy-workspace",
+        "path": "services/wechat-cs-android/backend_cli.py",
+        "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+      },
+      "implementation_bindings": [
+        {
+          "kind": "skill",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/skills/wechat-cs-android/SKILL.md",
+          "revision": "contract",
+          "name": "wechat-cs-android",
+          "version": "0.1.0"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/cs_phone.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/cs_phone.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        },
+        {
+          "kind": "code",
+          "ref": "services/wechat-cs-android/bridge.py",
+          "version": "0.1.0",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/wechat-cs-android/bridge.py",
+          "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+        }
+      ],
+      "steps": [
+        {
+          "key": "receipt_commit",
+          "name": "提交真实送达回执并读回终态",
+          "order": 1,
+          "check": "后端持久送达状态与SQLite均为delivered，CLI保留ok/updated严格闸门",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/backend_cli.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/backend_cli.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"after-send.json","expect":{"op":">=","value":1}}}
+        },
+        {
+          "key": "background_and_report",
+          "name": "返回桌面并交付证据",
+          "order": 2,
+          "check": "通过受限back和真实截图核实桌面，不强杀微信，分开报告送达与归位",
+          "uses_llm": true,
+          "on_fail": "abort",
+          "implementation": {
+            "kind": "code",
+            "ref": "services/wechat-cs-android/cs_phone.py",
+            "version": "0.1.0",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/wechat-cs-android/cs_phone.py",
+            "revision": "50599da9492614d6fb67999111314251c5e3e98f"
+          },
+          "dod": {"mode":"hard","readback":{"type":"evidence","glob":"*-after.png","expect":{"op":">=","value":1}}}
+        }
+      ]
+    }
+  ]
+}
