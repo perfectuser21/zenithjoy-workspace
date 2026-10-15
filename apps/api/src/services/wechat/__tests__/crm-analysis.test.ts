@@ -55,3 +55,17 @@ describe('scoped CRM analysis',()=>{
   expect(String(query.mock.calls[0][0])).toContain("crm:v1:%");
  });
 });
+describe('CRM档案与读回',()=>{
+ it('scoped画像读回不会查询旧昵称记忆',async()=>{
+  const {readScopedCrmProfile}=await import('../crm-analysis');
+  query.mockImplementation(async(sql:string)=>sql.includes('SELECT direction')?{rows:[{direction:'in',content:'真实消息',created_at:new Date()}]}:{rows:[]});
+  const profile=await readScopedCrmProfile(scope,'客户');
+  expect(profile?.messages[0].text).toBe('真实消息');
+  expect(query.mock.calls.some(([s])=>String(s).includes('cs_memory_'))).toBe(false);
+ });
+ it('新事件入站前必须有精确CRM客户身份，不能覆盖不同微信号',async()=>{
+  const {ensureCrmCustomer}=await import('../crm-analysis');
+  await expect(ensureCrmCustomer(scope,'同名客户')).rejects.toThrow('CRM_CUSTOMER_IDENTITY_CONFLICT');
+  expect(query.mock.calls.some(([s])=>String(s).includes('wechat_id IS NULL'))).toBe(true);
+ });
+});
