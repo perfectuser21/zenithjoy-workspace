@@ -38,13 +38,14 @@ router.post('/analysis/profile',requireServiceCredential,async(req:Request,res:R
 });
 // 受服务凭据保护的定点补扫：同一分析合同，禁止无scope全量执行。
 router.post('/analysis/run',requireServiceCredential,async(req:Request,res:Response)=>{
-  const {tenant_id,cs_wechat_id,customer_wechat_id}=req.body??{};
+  const {tenant_id,cs_wechat_id,customer_wechat_id,rebuild}=req.body??{};
+  if(rebuild!==undefined&&typeof rebuild!=='boolean')return res.status(400).json({error:'CRM_REBUILD_BOOLEAN_REQUIRED'});
   if(![tenant_id,cs_wechat_id,customer_wechat_id].every(v=>typeof v==='string'&&v.trim()))return res.status(400).json({error:'CRM_SCOPE_REQUIRED'});
   if(req.tenantId&&req.tenantId!==tenant_id)return fail(res,403,'CROSS_TENANT','请求租户不匹配');
   const scope={tenantId:tenant_id,csWechatId:cs_wechat_id,customerWechatId:customer_wechat_id};
   try{
     if(!await requireCrmBinding(scope))return fail(res,403,'CROSS_TENANT','客服账号不属于该租户');
-    return res.json(await analyzeCrmScope(crmScopeKey(scope)));
+    return res.json(await analyzeCrmScope(crmScopeKey(scope),{rebuild:rebuild===true}));
   }catch{return fail(res,500,'CRM_ANALYSIS_FAILED','分析失败，待办保留');}
 });
 
