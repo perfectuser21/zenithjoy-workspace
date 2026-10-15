@@ -1,0 +1,22 @@
+{
+  "source_run": "cloudnight20261015recheck1020",
+  "device": "Android12/720x1280",
+  "test_account": true,
+  "frames": [
+    {
+      "source": "/Users/administrator/.config/zenithjoy/cloud-phone-night-20261014/recheck1020-evidence/text-input-20261015103003-46457-before.xml",
+      "fixture": "weibo-body-before.xml",
+      "sha256": "51ea58514a816dc15eb451247e78958c9c9002416b089914baee1d30e8355d5e"
+    },
+    {
+      "source": "/Users/administrator/.config/zenithjoy/cloud-phone-night-20261014/recheck1020-evidence/text-input-20261015103003-46457-ready.xml",
+      "fixture": "weibo-body-ready.xml",
+      "sha256": "d3a4908dd19d61cf14b7945db0a28eb2794ecff8023026ea58fdf0217e1f6ffb"
+    },
+    {
+      "source": "/Users/administrator/.config/zenithjoy/cloud-phone-night-20261014/recheck1020-evidence/text-input-20261015103003-46457-typed.xml",
+      "fixture": "weibo-body-typed.xml",
+      "sha256": "29e31c990b673e2161f3525ded510e19a5722506d1ad110bfba79801d7ecabd8"
+    }
+  ]
+}
