@@ -11,8 +11,9 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-SENDER = '苏小妖'
-CS_WECHAT_ID = 'wxid_skpj8yqmblqc22'
+from identity import CS_WECHAT_ID, LEGACY_SENDER, ContactBinding
+
+SENDER = LEGACY_SENDER  # 旧单测接口；真实入口必须传入私有绑定。
 
 
 def digest(value):
@@ -32,7 +33,7 @@ def private_json(path, value):
     os.replace(temporary, path)
 
 
-def parse_notification(key, raw):
+def parse_notification(key, raw, binding=None):
     """Fail closed on aggregates/media/system notices; text remains untrusted data."""
     if 'pkg=com.tencent.mm' not in raw or not re.fullmatch(r'[\w|.:-]+', key):
         return None
@@ -40,7 +41,7 @@ def parse_notification(key, raw):
         match = re.search(r'^\s*android\.' + name + r'=String \((.*)\)\s*$', raw, re.M)
         return match.group(1).strip() if match else ''
     title, text = field('title'), field('text')
-    if title != SENDER or not text:
+    if title != (binding.sender if binding else SENDER) or not text:
         return None
     if re.search(r'android\.isGroupConversation=Boolean \(true\)', raw):
         return None
@@ -53,6 +54,8 @@ def parse_notification(key, raw):
         return None
     event = dict(notification_key=key, sender=title, text=text,
                  notification_when=stamp.group(1), cs_wechat_id=CS_WECHAT_ID)
+    if binding:
+        event.update(contact_key=binding.contact_key, contact_binding=binding.fingerprint)
     event['event_id'] = digest(event)
     return event
 
@@ -113,7 +116,7 @@ def inbound_contract(event, context):
 
 
 class State:
-    def __init__(self, path):
+    def __init__(self, path, binding=None):
         path = Path(path)
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -136,6 +139,32 @@ class State:
             evidence_json TEXT, updated_at REAL NOT NULL);
         ''')
 
+        try:
+            stored = self.db.execute("SELECT value FROM meta WHERE key='contact_binding'").fetchone()
+            self.binding = ContactBinding.from_dict(json.loads(stored['value'])) if stored else binding
+            if stored and binding and self.binding != binding:
+                raise ValueError('state_contact_binding_changed_use_new_state')
+            if binding and not stored:
+                if any(self.db.execute('SELECT 1 FROM ' + table + ' LIMIT 1').fetchone()
+                       for table in ('meta', 'events', 'actions', 'contexts', 'phone_evidence')):
+                    raise ValueError('legacy_state_cannot_adopt_new_contact_binding')
+                with self.db:
+                    self.db.execute("INSERT INTO meta VALUES ('contact_binding',?)", (json.dumps(binding.to_dict()),))
+        except BaseException:
+            self.close()
+            raise
+
+    def require_event_identity(self, event):
+        if self.binding:
+            self.binding.require_event(event)
+        elif event.get('sender') != SENDER:
+            raise ValueError('unauthorized_legacy_event')
+
+    def require_context_identity(self, event, context):
+        self.require_event_identity(event)
+        if self.binding:
+            self.binding.require_context(context)
+
     def close(self):
         if self.db is not None:
             self.db.close()
@@ -146,11 +175,13 @@ class State:
             if self.db.execute("SELECT 1 FROM meta WHERE key='baseline'").fetchone():
                 return
             for event in events:
+                self.require_event_identity(event)
                 self.db.execute('INSERT OR IGNORE INTO events VALUES (?,?,?,NULL,NULL,NULL,NULL,?)',
                                 (event['event_id'], 'baseline', json.dumps(event), time.time()))
             self.db.execute("INSERT INTO meta VALUES ('baseline','done')")
 
     def claim(self, event):
+        self.require_event_identity(event)
         with self.db:
             cursor = self.db.execute('INSERT OR IGNORE INTO events VALUES (?,?,?,NULL,NULL,NULL,NULL,?)',
                                     (event['event_id'], 'claimed', json.dumps(event), time.time()))
@@ -182,6 +213,7 @@ class State:
 
     def claim_draft(self, event_id, context):
         row = self.event(event_id)
+        self.require_context_identity(row['event_json'], context)
         contract = inbound_contract(row['event_json'], context)
         fingerprint = digest([CS_WECHAT_ID, context.get('contact_key'), contract])
         with self.db:
@@ -244,6 +276,8 @@ class State:
     def set_draft(self, event_id, draft, context=None):
         if not valid_draft(draft):
             raise ValueError('invalid_draft')
+        if self.binding:
+            self.require_context_identity(self.event(event_id)['event_json'], context or {})
         draft = dict(draft)
         if context and context.get('incoming_text'):
             draft['source_inbound_contract'] = inbound_contract(self.event(event_id)['event_json'], context)
@@ -257,6 +291,7 @@ class State:
 
     def check_send_context(self, event_id, context):
         row = self.event(event_id)
+        self.require_context_identity(row['event_json'], context)
         expected = (row['draft_json'] or {}).get('source_inbound_contract')
         if expected is not None and inbound_contract(row['event_json'], context) != expected:
             raise ValueError('inbound_changed_after_draft_stop_without_sending')

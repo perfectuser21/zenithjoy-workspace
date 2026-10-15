@@ -284,6 +284,7 @@ golden_paths:
       - .github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh
       - .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
       - .github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh
+      - .github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh
     steps:
       - id: step1
         name: 消息被感知

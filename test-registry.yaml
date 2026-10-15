@@ -7463,3 +7463,67 @@ agent_suite:
   status: active
   product: AI员工
   note: "GP-Anchor: line02/keyword_acquisition#step4；四业务Skill/12Activity配套、共享开头收尾、设备/MMV实际manifest覆盖；不是现场fallback测试"
+
+- id: line04-crm-analysis
+  path: apps/api/src/services/wechat/__tests__/crm-analysis.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "安卓客户作用域、事件幂等、真实消息分析及失败回滚；mock DB与模型，不代替真机验收"
+
+- id: line04-crm-event-access
+  path: apps/api/src/routes/__tests__/wechat-crm-event-access.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "新安卓事件许可校验及请求头租户冲突；服务凭据依赖使用测试桩"
+
+- id: api-llm-bounded-timeout
+  path: apps/api/src/llm/__tests__/openrouter-timeout.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "模型请求有界超时和默认兼容；mock fetch，不调用真实模型"
+
+- id: wechat-cs-runtime-contact-binding
+  path: services/wechat-cs-android/tests/test_identity.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；唯一实屏授权联系人、通知/状态/手机一致性、明确接管模式；不代替真机验收"
+
+- id: wechat-cs-runtime-workflow-contract
+  path: services/wechat-cs-android/tests/test_workflow_contract.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；接待四活动九步骤及Skill/Code固定实现合同、独立好友候选边界，实际运行另验"
+
+- id: crm-partial-friend-ingest
+  path: apps/api/src/routes/__tests__/crm-partial-friend-ingest.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；局部建档不覆盖全量扫描账、身份冲突409整批回滚、默认full兼容"
+
+- id: wechat-cs-screenshot-read-budget
+  path: services/wechat-cs-android/tests/test_phone_read_budget.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；精确PNG读取45秒且超时终止回收，写命令保持15秒和一次执行；使用模拟进程不碰手机"
+
+- id: wechat-cs-prestart-recovery
+  path: services/wechat-cs-android/tests/test_prestart_recovery.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；启动前Gateway重启的显式证据恢复，完整未执行历史、PID时序、分离目录锁及零动作闸门；不自动重发"

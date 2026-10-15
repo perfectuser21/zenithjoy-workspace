@@ -1,3 +1,4 @@
+import { startCrmAnalysisWorker } from './services/wechat/crm-analysis';
 import dotenv from 'dotenv';
 import http from 'http';
 import app from './app';
@@ -120,6 +121,7 @@ async function bootstrap(): Promise<void> {
     // 中台定时调度器：日报结算(23:55北京)/朋友圈草稿(09:00)/warmup养号(10:00北京)/DM派单sweep(每分钟)。
     // 治根 2026-07-19：startScheduler() 建库以来从未被服务器进程调用过，四个周期任务全部静默不跑。
     startScheduler();
+    if (!process.env.VITEST) startCrmAnalysisWorker();
     // 工作机控制塔（决策 e14297d4）任务租约 sweeper：过期 running → failed/executor_lost，顺手驱逐闲置帧缓冲。
     // 从 app.ts 迁出（2026-08-30 后端审查）：门控用 VITEST（vitest 自动设置）而非 NODE_ENV
     // ——同文件顶部 app.ts 挂 auth 路由用的同一惯例，NODE_ENV=test 在 CI smoke 里也会被设置，不能用它当门控。

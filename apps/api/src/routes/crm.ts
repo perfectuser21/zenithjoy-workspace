@@ -14,6 +14,8 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+import { crmScopeKey, readScopedCrmProfile, analyzeCrmScope, requireCrmBinding } from '../services/wechat/crm-analysis';
 import {
   requireCsWriteAccess,
   requireCsReadAccess,
@@ -23,6 +25,29 @@ import { buildCustomerRoster } from '../services/crm/customer-roster';
 import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roster';
 
 const router = Router();
+
+router.post('/analysis/profile',requireServiceCredential,async(req:Request,res:Response)=>{
+  const {tenant_id,cs_wechat_id,customer_wechat_id,contact}=req.body??{};
+  if(![tenant_id,cs_wechat_id,customer_wechat_id].every(v=>typeof v==='string'&&v.trim()))return res.status(400).json({error:'CRM_SCOPE_REQUIRED'});
+  if(req.tenantId&&req.tenantId!==tenant_id)return fail(res,403,'CROSS_TENANT','请求租户不匹配');
+  const scope={tenantId:tenant_id,csWechatId:cs_wechat_id,customerWechatId:customer_wechat_id};
+  try{
+    if(!await requireCrmBinding(scope))return fail(res,403,'CROSS_TENANT','客服账号不属于该租户');
+    return res.json({profile:await readScopedCrmProfile(scope,typeof contact==='string'?contact:'' ,100,true)});
+  }catch{return fail(res,500,'CRM_PROFILE_FAILED','CRM读取失败');}
+});
+// 受服务凭据保护的定点补扫：同一分析合同，禁止无scope全量执行。
+router.post('/analysis/run',requireServiceCredential,async(req:Request,res:Response)=>{
+  const {tenant_id,cs_wechat_id,customer_wechat_id}=req.body??{};
+  if(![tenant_id,cs_wechat_id,customer_wechat_id].every(v=>typeof v==='string'&&v.trim()))return res.status(400).json({error:'CRM_SCOPE_REQUIRED'});
+  if(req.tenantId&&req.tenantId!==tenant_id)return fail(res,403,'CROSS_TENANT','请求租户不匹配');
+  const scope={tenantId:tenant_id,csWechatId:cs_wechat_id,customerWechatId:customer_wechat_id};
+  try{
+    if(!await requireCrmBinding(scope))return fail(res,403,'CROSS_TENANT','客服账号不属于该租户');
+    return res.json(await analyzeCrmScope(crmScopeKey(scope)));
+  }catch{return fail(res,500,'CRM_ANALYSIS_FAILED','分析失败，待办保留');}
+});
+
 
 const VALID_STATUS = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
 const VALID_IDENTITY = new Set(['customer', 'blacklist', 'internal']);
@@ -566,11 +591,13 @@ router.post(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // POST /api/crm/friend-scan/ingest — agent 上报客服机近期会话联系人，upsert 幂等落 crm_customers source='scan'
-// body: { cs_wechat_id, contacts:[{name, last_message?, last_seen?}] }
+// body: { cs_wechat_id, scan_scope?:'full'|'partial', contacts:[{name, wechat_id?, last_message?, last_seen?}] }
+// partial用于单好友增量建档，不消费全量扫描请求或对账未观察联系人。
 // 响应: { success, ingested, new, scanned_count }
-router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request, res: Response) => {
+router.post('/friend-scan/ingest', simpleRateLimit({windowMs:60_000,max:120,keyFn:ipKeyFn}), requireServiceCredential, async (req: Request, res: Response) => {
   const body = req.body as {
     cs_wechat_id?: string;
+    scan_scope?: 'full' | 'partial';
     // self_name：运营本人会话名，匹配则该 contact 不入册（向前兼容，agent 不传 → 无影响）。
     self_name?: string;
     contacts?: Array<{
@@ -582,6 +609,8 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
       add_friend_time?: string;
     }>;
   };
+  const scanScope = body.scan_scope ?? 'full';
+  if (scanScope !== 'full' && scanScope !== 'partial') return res.status(400).json({error:'INVALID_SCAN_SCOPE'});
   const csWechatId = (body.cs_wechat_id ?? '').trim();
   const selfName = typeof body.self_name === 'string' ? body.self_name.trim() : '';
   const contacts = Array.isArray(body.contacts) ? body.contacts : [];
@@ -640,16 +669,20 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
                scan_miss_count = 0,
                deleted_at = NULL,
                updated_at = now()
+         ${scanScope === 'partial' ? `WHERE EXCLUDED.wechat_id IS NULL
+           OR NULLIF(btrim(zenithjoy.crm_customers.wechat_id), '') IS NULL
+           OR EXCLUDED.wechat_id = zenithjoy.crm_customers.wechat_id` : ''}
          RETURNING (xmax = 0) AS inserted`,
         [tenantId, csWechatId, r.name, r.last_message, r.last_seen, r.wechat_id, r.add_friend_time, identityVal],
       );
+      if (scanScope === 'partial' && !up.rows?.length) throw new Error('CONTACT_IDENTITY_CONFLICT');
       if (up.rows?.[0]?.inserted === true) newCount += 1;
     }
 
     // 更新 onboarding O2 scanned_count + step_o2_scanned（拉到人即 ok，0 人记 fail）；
     // 同时消费掉「立即扫好友」强制请求（force_scan_requested_at 置 NULL）——本次 ingest 即这次强制扫的结果。
     const scannedCount = rows.length;
-    await client.query(
+    if (scanScope === 'full') await client.query(
       `INSERT INTO zenithjoy.crm_onboarding_state (tenant_id, cs_wechat_id, step_o2_scanned, scanned_count, force_scan_requested_at, updated_at)
        VALUES ($1::uuid, $2, $3, $4, NULL, now())
        ON CONFLICT (tenant_id, cs_wechat_id) DO UPDATE
@@ -661,7 +694,7 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     // 空扫描（rows.length===0）整体跳过——agent 扫一半失败返回 0 人时绝不把全部 scan 行记 miss
     // （连续失败会误删全部）。放 onboarding 之后、COMMIT 之前，保现有事务测试序列不破。
     const reconcileDryRun = process.env.CRM_RECONCILE_DRYRUN !== 'false';
-    if (rows.length > 0) {
+    if (scanScope === 'full' && rows.length > 0) {
       const presentNames = rows.map((r) => r.name);
       const rec = await client.query(
         `UPDATE zenithjoy.crm_customers
@@ -687,9 +720,11 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     }
 
     await client.query('COMMIT');
+    if (scanScope === 'partial') return res.json({success:true,ingested:rows.length,new:newCount,scan_scope:'partial',reconciled:false});
     return res.json({ success: true, ingested: rows.length, new: newCount, scanned_count: scannedCount });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
+    if (err instanceof Error && err.message === 'CONTACT_IDENTITY_CONFLICT') return fail(res,409,'CONTACT_IDENTITY_CONFLICT','同名客户已绑定不同微信号，整批未写入');
     return fail(res, 500, 'INGEST_FAILED', err instanceof Error ? err.message : 'unknown');
   } finally {
     client.release();
@@ -914,9 +949,22 @@ router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Re
       custParams,
     );
     const cust = custRes.rows?.[0] as
-      | { wechat_id: string | null; status: string; last_seen_at: Date | null; updated_at: Date }
+      | { wechat_id: string | null; status: string; source?: string; last_seen_at: Date | null; updated_at: Date }
       | undefined;
 
+    const profileManaged=async()=>{
+      if(!csWechatId)return true;
+      const r=await pool.query('SELECT whitelist,blacklist,takeover_mode FROM zenithjoy.wechat_cs_account_config WHERE wechat_id=$1',[csWechatId]);
+      const cfg=r.rows[0];if(!cfg)return true;
+      const bl=Array.isArray(cfg.blacklist)?cfg.blacklist:[];const wl=Array.isArray(cfg.whitelist)?cfg.whitelist:[];
+      return cfg.takeover_mode==='whitelist'?wl.includes(contact):!bl.includes(contact);
+    };
+    // 新安卓已识别稳定客户后只读该租户/账号/客户scope；不混入旧昵称记忆。
+    if (csWechatId && cust?.wechat_id) {
+      const scoped=await readScopedCrmProfile({tenantId,csWechatId,customerWechatId:cust.wechat_id},contact,msgLimit,cust.source==='android_event');
+      if(scoped)return res.json({profile:{name:contact,contact,wechat_id:cust.wechat_id,
+        status:normalizeProfileStatus(cust.status),managed:await profileManaged(),...scoped,timeline:[],dailies:[]}});
+    }
     // 长期记忆融合 summary（cs_memory 三表按 tenant_id text × contact 隔离，与 tenant-memory.ts 同模式）
     const ltRes = await pool.query(
       `SELECT summary, updated_at FROM zenithjoy.cs_memory_longterm

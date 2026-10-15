@@ -3,12 +3,14 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import urllib.parse
 import urllib.request
 
-from bridge import CS_WECHAT_ID, SENDER, State, digest, private_json, valid_draft, batch_content
+from identity import ContactBinding, LEGACY_SENDER
+from bridge import CS_WECHAT_ID, State, digest, private_json, valid_draft, batch_content
 
 DEFAULT_CONFIG = '/Users/administrator/.credentials/cloud-wechat-cs-runtime.json'
 
@@ -21,8 +23,9 @@ def load_config(path):
     for name in ('api_base', 'tenant_id', 'agent_id', 'cs_wechat_id', 'machine_id', 'allowed_contact_key'):
         if not isinstance(config.get(name), str) or not config[name].strip():
             raise ValueError('missing_binding_' + name)
-    if config['cs_wechat_id'] != CS_WECHAT_ID or config['allowed_contact_key'] != 'suxiaoyao121':
+    if config['cs_wechat_id'] != CS_WECHAT_ID:
         raise ValueError('wrong_test_account')
+    ContactBinding.from_runtime(config)
     url = urllib.parse.urlsplit(config['api_base'])
     if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password:
         raise ValueError('invalid_api_base')
@@ -42,6 +45,8 @@ def screenshot_hash(path):
 class Backend:
     def __init__(self, config, request=None):
         self.config = config
+        self.binding = (ContactBinding.from_runtime(config) if 'allowed_contact' in config else
+                        ContactBinding(LEGACY_SENDER, config['allowed_contact_key']))
         self.request = request or self.http
 
     def http(self, method, path, data=None):
@@ -60,14 +65,26 @@ class Backend:
         config = self.request('GET', path)
         if (config.get('auto_agent_enabled') is not True
                 or config.get('wechat_id') != self.config['cs_wechat_id']
-                or SENDER not in config.get('whitelist', [])
                 or (config.get('tenant_id') is not None
                     and config['tenant_id'] != self.config['tenant_id'])):
             raise ValueError('backend_config_not_ready')
+        mode = config.get('takeover_mode')
+        if mode not in ('blacklist', 'whitelist'):
+            raise ValueError('unknown_backend_takeover_mode')
+        blacklist = config.get('blacklist', [])
+        whitelist = config.get('whitelist', [])
+        if not isinstance(blacklist, list) or not isinstance(whitelist, list):
+            raise ValueError('invalid_backend_contact_lists')
+        identities = {self.binding.sender, self.binding.contact_key}
+        if identities.intersection(blacklist):
+            raise ValueError('test_contact_blacklisted')
+        if mode == 'whitelist' and not identities.intersection(whitelist):
+            raise ValueError('test_contact_not_whitelisted')
         return {'ready': True, 'cs_wechat_id': self.config['cs_wechat_id']}
 
     def check_context(self, context):
-        if (context.get('sender') != SENDER or context.get('conversation_header') != SENDER
+        self.binding.require_context(context)
+        if (context.get('sender') != self.binding.sender or context.get('conversation_header') != self.binding.sender
                 or context.get('visual_confirmed') is not True
                 or context.get('cs_wechat_id') != self.config['cs_wechat_id']
                 or not isinstance(context.get('contact_key'), str)
@@ -80,11 +97,15 @@ class Backend:
         screenshot_hash(context.get('screenshot', ''))
 
     def draft(self, context):
+        event_id = context.get('event_id')
+        if not isinstance(event_id, str) or re.fullmatch(r'[0-9a-f]{64}', event_id) is None:
+            raise ValueError('invalid_source_event_id')
         self.check_context(context)
         self.preflight()
-        body = dict(sender=SENDER, wechat_id=context['contact_key'], content=batch_content(context),
+        body = dict(sender=self.binding.sender, wechat_id=context['contact_key'], content=batch_content(context),
                     mode='auto', is_group=False, tenant_id=self.config['tenant_id'],
-                    agent_id=self.config['agent_id'], cs_wechat_id=self.config['cs_wechat_id'])
+                    agent_id=self.config['agent_id'], cs_wechat_id=self.config['cs_wechat_id'],
+                    source_event_id=event_id)
         response = self.request('POST', '/api/wechat/draft-generate', body)
         if response.get('status') != 'sent' or not valid_draft(response) or response.get('ok') is False:
             raise ValueError('draft_not_sendable')
@@ -127,11 +148,10 @@ def main():
         else:
             if not args.phone_config:
                 raise ValueError('missing_phone_lease_config')
-            state = State(args.state)
+            state = State(args.state, binding=backend.binding)
             state.require_ready()
             row = state.event(args.event_id)
-            if row['event_json'].get('sender') != SENDER:
-                raise ValueError('unauthorized_event')
+            backend.binding.require_event(row['event_json'])
             if args.action == 'status':
                 result = {'status': row['status'], 'event_id': args.event_id}
             elif args.action == 'draft':
@@ -139,7 +159,7 @@ def main():
                 backend.check_context(context)
                 state.verify_phone_evidence(args.event_id, context['screenshot'])
                 state.claim_draft(args.event_id, context)
-                draft = backend.draft(context)
+                draft = backend.draft(dict(context, event_id=args.event_id))
                 state.set_draft(args.event_id, draft, context)
                 result = draft
             elif args.action == 'claim-send':
