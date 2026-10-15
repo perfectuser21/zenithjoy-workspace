@@ -88,9 +88,9 @@ test('actual MMV copy loop preserves nested file paths and atomic failure before
   const dir=mkdtempSync(join(tmpdir(),'deploy-nested-fixture-'));
   try{
    const src=join(dir,'source'),remote=join(dir,'remote'),bin=join(dir,'bin'),ack=join(dir,'ack');
-   for(const d of [src,remote,bin,join(src,'commander'),join(remote,'commander')])mkdirSync(d,{recursive:true});
+   for(const d of [src,remote,bin,join(src,'commander')])mkdirSync(d,{recursive:true});
    const files=['top.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py'];
-   for(const file of files){writeFileSync(join(src,file),file.endsWith('.py')?'x = 1\n':'export const fixture = 1;\n');writeFileSync(join(remote,file),'# old fixture bytes\n');}
+   for(const file of files){writeFileSync(join(src,file),file.endsWith('.py')?'x = 1\n':'export const fixture = 1;\n');if(!file.includes('/'))writeFileSync(join(remote,file),'# old fixture bytes\n');}
    writeFileSync(join(bin,'ssh'),`#!/usr/bin/env python3
 import os,sys,subprocess
 assert sys.argv[1]=='mmv'

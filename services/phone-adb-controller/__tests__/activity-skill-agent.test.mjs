@@ -23,6 +23,7 @@ test('isolated transport fixture: actual parent CLI args, official child receipt
     assert.match(message,/r10-7/,'actual gateway hostname must be checked before any run access');
     assert.match(message,/sessionId/,'poll only the session returned by this exec');
     assert.match(message,/30000/,'process poll timeout uses bounded milliseconds');
+    assert.match(message,/不设置taskName/,'omit optional taskName rather than alter business run identity');
   assert.equal(r.execution_stopped,false);assert.equal(r.status,'unknown');assert.equal(seen.filter(x=>x.command==='openclaw').length,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
@@ -55,4 +56,30 @@ test('real public inspect CLI validates without waiting for an unrelated open st
  const {spawn}=await import('node:child_process');const child=spawn(process.execPath,[new URL('../leadgen-skill-agent.mjs',import.meta.url).pathname,'tool','/nonexistent/isolated-fixture-handoff','inspect'],{stdio:['pipe','pipe','pipe']});
  let timedOut=false;const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},1500);
  try{const code=await new Promise(resolve=>child.once('close',resolve));assert.equal(timedOut,false);assert.equal(code,1);}finally{clearTimeout(timer);child.stdin.destroy();child.kill('SIGKILL');}
+});
+
+
+test('official spawn raw full model reference is accepted without rewriting; exact provider/model negatives remain blocked (isolated lifecycle fixture)',async()=>{
+ const {dirname}=await import('node:path');
+ for(const [provider,model,accepted] of [['openai','openai/gpt-6.1-sol',true],['openai','gpt-6.1-sol',true],['anthropic','openai/gpt-6.1-sol',false],['openai','openrouter/gpt-6.1-sol',false],['openai','openai/openai/gpt-6.1-sol',false],['openai','openai/gpt-6.1-sol ',false],['openai','openai/gpt-6.1-sol-fallback',false]]){
+  const home=mkdtempSync(join(tmpdir(),'spawn-model-raw-fixture-'));let dir,raw;
+  try{
+   const q={protocol:'leadgen-activity-v1',run_id:'fixture__a1',task_id:null,binding_id:'fixture-binding',activity_key:'scoring',nonce:'f'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'a'.repeat(40),broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'isolated method'}};
+   const r=await runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
+    if(command==='openclaw'){
+     dir=dirname(args[args.indexOf('--message-file')+1]);const request=JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'));
+     const child='12345678-0000-4000-8000-000000000001',session='agent:skill-factory:subagent:fixture';
+     writeFileSync(join(dir,'spawn-claimed.json'),JSON.stringify({...request,source_commit:q.source_commit}));
+     writeFileSync(join(dir,'agent-binding.json'),JSON.stringify({...request,child_run_id:child,child_session_key:session}));
+     raw=JSON.stringify({status:'accepted',runId:child,childSessionKey:session,resolvedProvider:provider,resolvedModel:model});writeFileSync(join(dir,'spawn-receipt.json'),raw);
+     // Official wait effective.model is bare ID, unlike spawn resolvedModel.
+     writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'ok',endedAt:1,terminalReceipt:{runId:child,effective:{provider:'openai',model:'gpt-6.1-sol'}}}));
+     return {code:0,stdout:'isolated parent transport',stderr:''};
+    }
+    return {code:args.includes('await')?0:1,stdout:'',stderr:''};
+   }});
+   assert.equal(r.status,accepted?'ok':'unknown',provider+' '+model);assert.equal(r.execution_stopped,accepted);
+   assert.equal(readFileSync(join(dir,'spawn-receipt.json'),'utf8'),raw,'original official receipt remains unchanged');
+  }finally{rmSync(home,{recursive:true,force:true});}
+ }
 });
