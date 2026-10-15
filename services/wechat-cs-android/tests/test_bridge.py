@@ -113,7 +113,7 @@ class BackendTests(unittest.TestCase):
         self.calls.append((method, path, data))
         if method == 'GET':
             return {'auto_agent_enabled': True, 'wechat_id': 'wxid_skpj8yqmblqc22',
-                    'tenant_id': 'tenant-test', 'whitelist': ['苏小妖']}
+                    'tenant_id': 'tenant-test', 'takeover_mode': 'whitelist', 'whitelist': ['苏小妖']}
         return self.response
 
     def context(self):

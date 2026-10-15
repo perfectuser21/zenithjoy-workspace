@@ -14,6 +14,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import pool from '../db/connection';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { crmScopeKey, readScopedCrmProfile, analyzeCrmScope, requireCrmBinding } from '../services/wechat/crm-analysis';
 import {
   requireCsWriteAccess,
@@ -590,11 +591,13 @@ router.post(
 // ─────────────────────────────────────────────────────────────────────────────
 
 // POST /api/crm/friend-scan/ingest — agent 上报客服机近期会话联系人，upsert 幂等落 crm_customers source='scan'
-// body: { cs_wechat_id, contacts:[{name, last_message?, last_seen?}] }
+// body: { cs_wechat_id, scan_scope?:'full'|'partial', contacts:[{name, wechat_id?, last_message?, last_seen?}] }
+// partial用于单好友增量建档，不消费全量扫描请求或对账未观察联系人。
 // 响应: { success, ingested, new, scanned_count }
-router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request, res: Response) => {
+router.post('/friend-scan/ingest', simpleRateLimit({windowMs:60_000,max:120,keyFn:ipKeyFn}), requireServiceCredential, async (req: Request, res: Response) => {
   const body = req.body as {
     cs_wechat_id?: string;
+    scan_scope?: 'full' | 'partial';
     // self_name：运营本人会话名，匹配则该 contact 不入册（向前兼容，agent 不传 → 无影响）。
     self_name?: string;
     contacts?: Array<{
@@ -606,6 +609,8 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
       add_friend_time?: string;
     }>;
   };
+  const scanScope = body.scan_scope ?? 'full';
+  if (scanScope !== 'full' && scanScope !== 'partial') return res.status(400).json({error:'INVALID_SCAN_SCOPE'});
   const csWechatId = (body.cs_wechat_id ?? '').trim();
   const selfName = typeof body.self_name === 'string' ? body.self_name.trim() : '';
   const contacts = Array.isArray(body.contacts) ? body.contacts : [];
@@ -664,16 +669,20 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
                scan_miss_count = 0,
                deleted_at = NULL,
                updated_at = now()
+         ${scanScope === 'partial' ? `WHERE EXCLUDED.wechat_id IS NULL
+           OR NULLIF(btrim(zenithjoy.crm_customers.wechat_id), '') IS NULL
+           OR EXCLUDED.wechat_id = zenithjoy.crm_customers.wechat_id` : ''}
          RETURNING (xmax = 0) AS inserted`,
         [tenantId, csWechatId, r.name, r.last_message, r.last_seen, r.wechat_id, r.add_friend_time, identityVal],
       );
+      if (scanScope === 'partial' && !up.rows?.length) throw new Error('CONTACT_IDENTITY_CONFLICT');
       if (up.rows?.[0]?.inserted === true) newCount += 1;
     }
 
     // 更新 onboarding O2 scanned_count + step_o2_scanned（拉到人即 ok，0 人记 fail）；
     // 同时消费掉「立即扫好友」强制请求（force_scan_requested_at 置 NULL）——本次 ingest 即这次强制扫的结果。
     const scannedCount = rows.length;
-    await client.query(
+    if (scanScope === 'full') await client.query(
       `INSERT INTO zenithjoy.crm_onboarding_state (tenant_id, cs_wechat_id, step_o2_scanned, scanned_count, force_scan_requested_at, updated_at)
        VALUES ($1::uuid, $2, $3, $4, NULL, now())
        ON CONFLICT (tenant_id, cs_wechat_id) DO UPDATE
@@ -685,7 +694,7 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     // 空扫描（rows.length===0）整体跳过——agent 扫一半失败返回 0 人时绝不把全部 scan 行记 miss
     // （连续失败会误删全部）。放 onboarding 之后、COMMIT 之前，保现有事务测试序列不破。
     const reconcileDryRun = process.env.CRM_RECONCILE_DRYRUN !== 'false';
-    if (rows.length > 0) {
+    if (scanScope === 'full' && rows.length > 0) {
       const presentNames = rows.map((r) => r.name);
       const rec = await client.query(
         `UPDATE zenithjoy.crm_customers
@@ -711,9 +720,11 @@ router.post('/friend-scan/ingest', requireServiceCredential, async (req: Request
     }
 
     await client.query('COMMIT');
+    if (scanScope === 'partial') return res.json({success:true,ingested:rows.length,new:newCount,scan_scope:'partial',reconciled:false});
     return res.json({ success: true, ingested: rows.length, new: newCount, scanned_count: scannedCount });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
+    if (err instanceof Error && err.message === 'CONTACT_IDENTITY_CONFLICT') return fail(res,409,'CONTACT_IDENTITY_CONFLICT','同名客户已绑定不同微信号，整批未写入');
     return fail(res, 500, 'INGEST_FAILED', err instanceof Error ? err.message : 'unknown');
   } finally {
     client.release();

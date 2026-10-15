@@ -100,8 +100,7 @@ class Controller:
     def _execute(self, operation, values):
         self.state.require_ready()
         row = self.state.event(self.event_id)
-        if row['event_json'].get('sender') != '苏小妖':
-            raise ValueError('unauthorized_event')
+        self.state.require_event_identity(row['event_json'])
         if operation in ('tap', 'swipe', 'open-wechat'):
             if self.state.action(self.event_id, 'input'):
                 raise ValueError('navigation_locked_after_input_attempt')
@@ -172,12 +171,16 @@ def main():
     if len(args.values) != expected or any(value < 0 or value > 20000 for value in args.values):
         parser.error('operation_arguments_invalid')
     os.umask(0o077)
-    state = State(args.state)
+    state = None
     try:
         config_path = Path(args.phone_config)
         if config_path.is_symlink() or config_path.stat().st_mode & 0o077:
             raise ValueError('phone_config_not_private')
         config = json.loads(config_path.read_text())
+        from backend_cli import load_config, DEFAULT_CONFIG
+        from identity import ContactBinding
+        binding = ContactBinding.from_runtime(load_config(config.get('runtime_config', DEFAULT_CONFIG)))
+        state = State(args.state, binding=binding)
         from watcher import check_brain_locks, load_phone
         check_brain_locks(config, min_valid_seconds=30)
         config['evidence_root'] = str(Path(config['evidence_root']) / args.event_id)
@@ -193,7 +196,8 @@ def main():
                                      else str(exc) if isinstance(exc, ValueError) else 'phone_action_failed_no_retry')}))
         return 2
     finally:
-        state.close()
+        if state:
+            state.close()
 
 
 if __name__ == '__main__':
