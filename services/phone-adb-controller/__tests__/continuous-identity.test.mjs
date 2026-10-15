@@ -323,12 +323,12 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal',volumeUpSaturated=false,sdk='36',scrcpyOptOut=false,sdkRace='',captureMode='ready'}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal',volumeUpSaturated=false,sdk='36',scrcpyOptOut=false,sdkRace='',captureMode='ready',captureOwner='normal'}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   // 只读RED可指定冻结git源的私有副本；生产及默认GREEN仍用仓库实际控制器。
   const text=readFileSync(process.env.RECORD_BOUNDARY_FROZEN_SOURCE||controller,'utf8');
-  const fn=text.slice(text.indexOf('record_start() {'),text.indexOf('\nrecord_status() {'));
+  const fn=text.slice(text.indexOf('record_start() {'),text.indexOf('\nrecord_status() {')).replaceAll("'/bin/ps'",JSON.stringify(join(d,'capture-ps')));
   const adb=join(d,'adb');
   for(const kind of ['paused','playing'])writeFileSync(join(d,'native-'+kind),readFileSync(join(fixtures,'real-honor-native-audio-'+kind+'.txt')));
   const playXml=readFileSync(join(fixtures,'real-honor-paused-play-control.xml'),'utf8');
@@ -427,6 +427,11 @@ case "$CAPTURE_MODE" in
 esac
 for i in {1..300}; do /bin/sleep 0.01; done
 `,{mode:0o755});
+  writeFileSync(join(d,'capture-ps'),`#!/bin/zsh
+if [[ "$CAPTURE_OWNER" == unknown ]]; then exit 1; fi
+if [[ "$CAPTURE_OWNER" == foreign ]]; then print '99999 1 Sat Oct 17 01:02:03 2026 /unrelated/capture --record=elsewhere'; exit 0; fi
+exec /bin/ps "$@"
+`,{mode:0o755});
   // 其余真实控制器辅助函数后续按相同命名边界加载；只替换设备/等待/页面守卫。
   writeFileSync(join(d,'ffprobe'),`#!/bin/zsh\ncase \"$*\" in *format=duration*) print 25;; *stream=codec_type*) [[ \"$*\" != *'-select_streams a'* ]] && print video || print audio;; esac\n`,{mode:0o755});
   writeFileSync(join(d,'ffmpeg'),'#!/bin/zsh\nprint -u2 -- \"mean_volume: -35 dB\"\n',{mode:0o755});
@@ -436,7 +441,7 @@ for i in {1..300}; do /bin/sleep 0.01; done
   const volumeHelpers=text.slice(text.indexOf('media_volume() {'),text.lastIndexOf('\n#',text.indexOf('record_playback_state() {')));
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nFFPROBE=$FIXTURE/ffprobe\nFFMPEG=$FIXTURE/ffmpeg\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == (500|2000) ]]; then /bin/sleep 0.02; fi; if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\n${volumeHelpers}\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${stopFn}\n${activeRecording?'print $$ > $FIXTURE/other.rec.pid':''}\n${initialWrong?'touch $FIXTURE/fg-switched':''}\n${sdkRace?`print ORIGINAL > $FIXTURE/sdk-protected\nTRAPDEBUG(){ if [[ \"$ZSH_DEBUG_CMD\" == *'capture-sdk.txt'* && \"$ZSH_DEBUG_CMD\" == *'$sdk'* && \"$ZSH_DEBUG_CMD\" != '[['* && ! -e $FIXTURE/sdk-race-injected ]]; then touch $FIXTURE/sdk-race-injected; ${sdkRace==='symlink'?'ln -s $FIXTURE/sdk-protected $FIXTURE/probe.capture-sdk.txt':'print PREEXISTING > $FIXTURE/probe.capture-sdk.txt'}; fi; }`:''}\n${probeMode==='session'?'record_playback_state probe':probeMode==='stop'?'record_start probe 25; record_stop probe':'record_start probe 25'}\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0',SDK:sdk,SCRCPY_OPTOUT:scrcpyOptOut?'1':'0',CAPTURE_MODE:captureMode},timeout:6000});
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0',SDK:sdk,SCRCPY_OPTOUT:scrcpyOptOut?'1':'0',CAPTURE_MODE:captureMode,CAPTURE_OWNER:captureOwner},timeout:20000});
   const captureReadyAtReturn=existsSync(join(d,'probe.rec.mkv'))&&statSync(join(d,'probe.rec.mkv')).size>0;const stoppedBeforeHarnessCleanup=existsSync(join(d,'capture-stopped'));
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
@@ -577,4 +582,12 @@ test('capture readiness waits for delayed exact-path log and nonempty file',()=>
  assert.equal(r.status,0,r.stderr);
  assert.equal(r.captureReadyAtReturn,true,'PID alive before recording ready is not success');
  assert.match(r.stdout,/record_started/);
+});
+
+for(const captureOwner of ['foreign','unknown'])test('capture readiness never signals a '+captureOwner+' recorder identity',()=>{
+ const r=recordBoundary({captureMode:'no_ready',captureOwner});
+ assert.notEqual(r.status,0,r.stdout);
+ assert.doesNotMatch(r.stdout,/record_started/);
+ assert.match(r.stderr,/RECORD_CAPTURE_EXIT_UNVERIFIED/);
+ assert.equal(r.stoppedBeforeHarnessCleanup,false,'unverified or foreign recorder must never be signalled');
 });

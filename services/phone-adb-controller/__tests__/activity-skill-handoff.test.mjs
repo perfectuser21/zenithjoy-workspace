@@ -78,7 +78,9 @@ test('failed Code hands partial Skill delivery to the real ledger without a seco
   [{status:'partial',reason:'Skill未交付当前Activity实际执行结果',execution_stopped:true,skill_receipt:{status:'ok',tool_calls:0}},'blocked'],
   [{status:'paused'},'blocked'],[{status:'skipped'},'blocked'],
   [{status:'completed',result:{status:'partial',failures:['original recording failure']}},'blocked'],
-  [{status:'failed',error:'original recording failure'},'failed'],[{status:'completed',result:{done:true}},'completed']
+  [{status:'failed',error:'original recording failure'},'failed'],
+  [{status:'failed',result:{status:'partial',failures:['original recorder failure']}},'failed'],
+  [{status:'completed',result:{done:true}},'completed']
  ];
  for(const [evidence,expected] of fixtures){
   const original=structuredClone(evidence),dir=mkdtempSync(join(tmpdir(),'leadgen-ledger-fixture-'));
