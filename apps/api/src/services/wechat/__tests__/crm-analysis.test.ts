@@ -96,11 +96,12 @@ describe('真实迟到送达回归：待办水位不等于完整客户证据',()
  const inMessage={id:'334',sender_name:'测试客户',direction:'in',content:'想了解智能客服，预算5000元，担心回复不及时',created_at:'2026-10-15T16:27:50.389Z'};
  const outMessage={id:'335',sender_name:'测试客户',direction:'out',content:'5000预算先看基础方案',created_at:'2026-10-15T16:27:52.504Z'};
  const old={summary:'客户预算5000，关注及时回复',need:'智能客服',budget:'5000',concern:'回复延迟',stage_suggestion:'A2',next_action:'介绍方案',source_message_ids:['334'],updated_at:'2026-10-15T16:28:00Z'};
- function setup(pending:unknown[],history:unknown[],previous:unknown=old){
+ function setup(pending:unknown[],history:unknown[],previous:unknown=old,archivedIn:unknown[]=[]){
   query.mockImplementation(async(sql:string)=>{
    if(sql.includes('service_agents'))return {rows:[{}]};
    if(sql.includes('pg_try_advisory_xact_lock'))return {rows:[{locked:true}]};
    if(sql.includes('consolidated = FALSE')&&sql.includes('SELECT'))return {rows:pending};
+   if(sql.includes('wechat_messages')&&sql.includes('SELECT')&&sql.includes('id = ANY'))return {rows:archivedIn};
    if(sql.includes('wechat_messages')&&sql.includes('SELECT'))return {rows:history};
    if(sql.includes('SELECT summary,facts'))return {rows:previous?[{summary:old.summary,facts:{schema_version:1,analysis:previous}}]:[]};
    return {rows:[],rowCount:1};
@@ -132,6 +133,17 @@ describe('真实迟到送达回归：待办水位不等于完整客户证据',()
   setup([correction],[correction,outMessage,inMessage]);
   await analyzeCrmScope(crmScopeKey(scope));
   expect(stored().budget).toBeNull();
+ });
+ it('近100条全为客服时回查旧画像真实入站来源，避免预算和来源被窗口抹去',async()=>{
+  setup([outMessage],[outMessage],old,[inMessage]);
+  await analyzeCrmScope(crmScopeKey(scope));
+  expect(stored().budget).toBe('5000');
+  expect(stored().customer_source_message_ids).toEqual(['334']);
+  expect(llm.mock.calls[0][0].prompt).toContain(inMessage.content);
+  const evidence=query.mock.calls.find(([s])=>String(s).includes('SELECT')&&String(s).includes('id = ANY'))!;
+  expect(evidence[0]).toContain("direction = 'in'");
+  expect(evidence[0]).toContain("status = 'delivered'");
+  expect(evidence[1]).toEqual([crmScopeKey(scope),scope.csWechatId,['334']]);
  });
  it('模型数字预算正规转字符串，不凭空添加币种',async()=>{
   setup([inMessage],[inMessage],null);
