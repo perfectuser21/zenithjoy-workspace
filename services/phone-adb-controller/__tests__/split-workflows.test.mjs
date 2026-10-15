@@ -34,6 +34,7 @@ if(process.argv[2]==='prepare'){
 }else if(process.argv[2]==='bind-run')console.log('WFR_ATTEMPT=fixture; WFR_SKIP_WORDS=');
 else process.exit(1);
 `);
+    writeFileSync(join(home, '.local/bin/hostname'), `#!/bin/sh\nprintf '%s\\n' "$FIXTURE_HOST"\n`, {mode:0o755});
     const cases = [
       {host:'aad17-2',explicit:true}, {host:'aad17-2',explicit:false},
       {host:'r10-7',explicit:true}, {host:'r10-7',explicit:false},
@@ -43,8 +44,7 @@ else process.exit(1);
       ...['douyin_video_discovery','douyin_video_processing','douyin_lead_outreach'].map(flow=>({host:'r10-7',flow,error:'MMV只执行独立评论评分'})),
     ];
     for (const [index, row] of cases.entries()) await t.test(JSON.stringify(row), () => {
-      writeFileSync(join(home, '.local/bin/hostname'), '#!/bin/sh\nprintf "'+row.host+'\\n"\n', {mode:0o755});
-      const env = { ...process.env, HOME: home, ZDOTDIR: home, WFR_HOME: join(home, 'case-'+index) };
+      const env = { ...process.env, HOME: home, ZDOTDIR: home, FIXTURE_HOST: row.host, WFR_HOME: join(home, 'case-'+index) };
       delete env.BRAIN_URL;
       if (row.explicit) env.BRAIN_URL = 'http://registered-brain.invalid:5221';
       const out = spawnSync('/bin/zsh', [join(app, 'leadgen-run.sh'), row.flow||'douyin_comment_scoring', row.profile||'mmv-scoring', row.serial||'none', 'fixture', 'fixture'], { env, encoding: 'utf8' });
