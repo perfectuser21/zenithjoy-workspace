@@ -133,6 +133,25 @@ class Controller:
         return result
 
 
+class ImageTransportFailed(RuntimeError):
+    pass
+
+
+def execute_and_transport(controller, operation, values, config, transporter=None):
+    # Input/send claims and original evidence are persisted before any network copy.
+    result = controller.execute(operation, values)
+    if config.get('image_transport'):
+        if transporter is None:
+            from artifact_transport import transfer
+            transporter = transfer
+        try:
+            result['model_view'] = transporter(result['after']['screenshot'], controller.event_id,
+                                               controller.state, config['image_transport'])
+        except Exception as exc:
+            raise ImageTransportFailed('image_transport_failed') from exc
+    return result
+
+
 def install_cancel_handler():
     def interrupted(signum, frame):
         raise KeyboardInterrupt('cancelled_no_retry')
@@ -164,12 +183,14 @@ def main():
         config['evidence_root'] = str(Path(config['evidence_root']) / args.event_id)
         phone = load_phone(config)
         phone.__class__ = chat_phone(phone.__class__)
-        result = Controller(state, args.event_id, phone).execute(args.operation, args.values)
+        result = execute_and_transport(Controller(state, args.event_id, phone),
+                                       args.operation, args.values, config)
         print(json.dumps(result, ensure_ascii=False))
         return 0
     except Exception as exc:
         print(json.dumps({'ok': False, 'error_type': type(exc).__name__,
-                          'reason': str(exc) if isinstance(exc, ValueError) else 'phone_action_failed_no_retry'}))
+                          'reason': ('image_transport_failed' if isinstance(exc, ImageTransportFailed)
+                                     else str(exc) if isinstance(exc, ValueError) else 'phone_action_failed_no_retry')}))
         return 2
     finally:
         state.close()
