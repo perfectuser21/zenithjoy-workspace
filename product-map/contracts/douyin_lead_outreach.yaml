@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.1.0
+  version: 0.2.0
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -143,9 +143,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-104/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
-        name: douyin-leadgen-104
+        name: douyin-leadgen-activity-104-preflight
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -485,9 +485,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-104/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
-        name: douyin-leadgen-104
+        name: douyin-leadgen-activity-104-send-dm
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -699,9 +699,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-104/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
         revision: contract
-        name: douyin-leadgen-104
+        name: douyin-leadgen-activity-104-write-back
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -825,9 +825,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-104/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
-        name: douyin-leadgen-104
+        name: douyin-leadgen-activity-104-cleanup
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

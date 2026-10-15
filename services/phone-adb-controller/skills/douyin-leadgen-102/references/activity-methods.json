@@ -1,0 +1,35 @@
+{
+  "workflow_key": "douyin_video_processing",
+  "activities": [
+    {
+      "activity_ref": "douyin_video_processing.preflight",
+      "skill_name": "douyin-leadgen-activity-102-preflight",
+      "skill_version": "0.1.0",
+      "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md"
+    },
+    {
+      "activity_ref": "douyin_video_processing.dedup",
+      "skill_name": "douyin-leadgen-activity-102-dedup",
+      "skill_version": "0.1.0",
+      "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md"
+    },
+    {
+      "activity_ref": "douyin_video_processing.qualification",
+      "skill_name": "douyin-leadgen-activity-102-qualification",
+      "skill_version": "0.1.0",
+      "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md"
+    },
+    {
+      "activity_ref": "douyin_video_processing.collection",
+      "skill_name": "douyin-leadgen-activity-102-collection",
+      "skill_version": "0.1.0",
+      "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md"
+    },
+    {
+      "activity_ref": "douyin_video_processing.cleanup",
+      "skill_name": "douyin-leadgen-activity-102-cleanup",
+      "skill_version": "0.1.0",
+      "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md"
+    }
+  ]
+}

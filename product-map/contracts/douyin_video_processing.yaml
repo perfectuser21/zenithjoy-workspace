@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.1.0
+  version: 0.2.0
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -146,9 +146,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
         revision: contract
-        name: douyin-leadgen-102
+        name: douyin-leadgen-activity-102-preflight
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -398,9 +398,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-dedup/SKILL.md
         revision: contract
-        name: douyin-leadgen-102
+        name: douyin-leadgen-activity-102-dedup
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -568,9 +568,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
         revision: contract
-        name: douyin-leadgen-102
+        name: douyin-leadgen-activity-102-qualification
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -890,9 +890,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
-        name: douyin-leadgen-102
+        name: douyin-leadgen-activity-102-collection
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1189,9 +1189,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-cleanup/SKILL.md
         revision: contract
-        name: douyin-leadgen-102
+        name: douyin-leadgen-activity-102-cleanup
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

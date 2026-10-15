@@ -7,11 +7,11 @@ import { loadContractsFromDisk, validateContracts, commanderContractsSpec, COMMA
 
 const keys = ['douyin_video_discovery', 'douyin_video_processing', 'douyin_comment_scoring', 'douyin_lead_outreach'];
 
-test('四个 wf_run 合同通过原机制加载对应0.1.0陪跑Skill，保留执行边界', () => {
+test('四个 wf_run 合同通过原机制加载对应0.2.0陪跑Skill，保留执行边界', () => {
   const ctx = loadContractsFromDisk();
   for (const [index, key] of keys.entries()) {
     const doc = ctx.contracts[key];
-    assert.deepEqual(doc.commander_skill, { name: `wf-${key}`, version: '0.1.0' }, key);
+    assert.deepEqual(doc.commander_skill, { name: `wf-${key}`, version: '0.2.0' }, key);
     assert.equal(doc.runner.entry, 'leadgen-workflow.mjs');
     assert.notEqual(doc.execution_profile, 'codex_agent');
     const text = readFileSync(join(ctx.repoRoot, COMMANDER_SKILLS_DIR, doc.commander_skill.name, 'SKILL.md'), 'utf8');
@@ -20,7 +20,9 @@ test('四个 wf_run 合同通过原机制加载对应0.1.0陪跑Skill，保留�
     assert.equal(frontmatter.version, doc.commander_skill.version);
     const business = `douyin-leadgen-${101 + index}`;
     assert.ok(text.includes(`services/phone-adb-controller/skills/${business}/SKILL.md`));
-    assert.ok(text.includes(`<WFR_RUN_DIR>/runtime/skills/${business}/SKILL.md`));
+    assert.ok(text.includes(`runtime/skills/${business}/SKILL.md`));
+    assert.ok(text.includes('本run已验证的冻结部署清单'));
+    assert.ok(text.includes('execution_path'), 'Activity独立方法必须读取本run真实冻结执行路径');
     assert.ok(text.includes('Agent 显式加载'));
     assert.ok(text.includes('自动调用未接好'));
     assert.ok(text.includes('BLOCKED'));

@@ -284,7 +284,25 @@ DEVICE_SH_FILES=(
 RPC_FILES=(outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js verify-step.mjs step-judge.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
 DEVICE_NODE_FILES=(outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-client.mjs leadgen-workflow.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
 # 探针与配套Skill同属需保留嵌套路径的发布文件；设备/MMV均采集实际字节。
-DEVICE_RPC_PROBE_FILES=(verify-step.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml
+DEVICE_RPC_PROBE_FILES=(
+  skills/leadgen-activity-execution.md
+  skills/douyin-leadgen-101/references/activity-methods.json
+  skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
+  skills/douyin-leadgen-102/references/activity-methods.json
+  skills/douyin-leadgen-activity-102-preflight/SKILL.md
+  skills/douyin-leadgen-activity-102-dedup/SKILL.md
+  skills/douyin-leadgen-activity-102-qualification/SKILL.md
+  skills/douyin-leadgen-activity-102-collection/SKILL.md
+  skills/douyin-leadgen-activity-102-cleanup/SKILL.md
+  skills/douyin-leadgen-103/references/activity-methods.json
+  skills/douyin-leadgen-activity-103-scoring/SKILL.md
+  skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
+  skills/douyin-leadgen-104/references/activity-methods.json
+  skills/douyin-leadgen-activity-104-preflight/SKILL.md
+  skills/douyin-leadgen-activity-104-send-dm/SKILL.md
+  skills/douyin-leadgen-activity-104-write-back/SKILL.md
+  skills/douyin-leadgen-activity-104-cleanup/SKILL.md
+  verify-step.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml
   skills/douyin-leadgen-101/SKILL.md
   skills/douyin-leadgen-101/references/reuse-map.json
   skills/douyin-leadgen-101/references/runtime-calls.json
