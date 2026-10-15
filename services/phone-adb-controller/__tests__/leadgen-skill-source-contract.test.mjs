@@ -61,3 +61,23 @@ test('Skill和引用文件进入设备及MMV的实际发布清单，103不要求
   const scoring=JSON.parse(readFileSync(root+'services/phone-adb-controller/skills/douyin-leadgen-103/references/runtime-calls.json','utf8'));
   assert.ok(scoring.guards[0].includes('不取手机'),'103不得锁serial=none或占真实手机');
 });
+
+
+test('每个独立Activity有独立方法Skill，四Workflow消费完整且精确的Activity方法版本',()=>{
+  const unique=new Set();let references=0;
+  for(const flow of flows){
+    const contract=document(flow);
+    for(const activity of contract.activities){
+      references++;
+      if(activity.ref)continue;
+      const binding=activity.implementation_bindings.find(b=>b.kind==='skill');
+      const expected='douyin-leadgen-activity-'+numbers[flow]+'-'+activity.key.replaceAll('_','-');
+      assert.equal(binding?.name,expected,'原整流程Skill不能冒作独立Activity方法：'+flow+'.'+activity.key);
+      unique.add(binding.name);
+    }
+    const dependency=JSON.parse(readFileSync(root+'services/phone-adb-controller/skills/douyin-leadgen-'+numbers[flow]+'/references/activity-methods.json','utf8'));
+    assert.equal(dependency.workflow_key,flow);
+    assert.deepEqual(dependency.activities.map(a=>a.activity_ref),contract.activities.map(a=>a.ref||flow+'.'+a.key));
+  }
+  assert.equal(references,14);assert.equal(unique.size,12);
+});
