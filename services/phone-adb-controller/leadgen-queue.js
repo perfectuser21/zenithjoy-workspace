@@ -122,6 +122,16 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       return result.rows;
     });
   }
+  if(op==='quarantine_video'){
+    if(!/^\d{16,24}$/.test(input.video_id||''))throw Error('隔离视频ID无效');
+    const status=`待人工核验:${run}`;
+    const result=await pool.query(`UPDATE zenithjoy.leadgen_videos SET process_status=$4,updated_at=now()
+      WHERE line_key=$1 AND video_id=$2 AND process_status=$3 RETURNING video_id`,[lineKey,input.video_id,`处理中:${run}`,status]);
+    if(result.rowCount!==1)throw Error('视频隔离CAS未确认，租约或owner已变化');
+    const actual=(await pool.query('SELECT video_id,process_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2',[lineKey,input.video_id])).rows;
+    if(actual.length!==1||actual[0].video_id!==input.video_id||actual[0].process_status!==status)throw Error('视频隔离持久读回未确认');
+    return {quarantined:true,video_id:input.video_id,process_status:status};
+  }
   if (['renew_video', 'release_video'].includes(op)) {
     const status = op === 'renew_video' ? `处理中:${run}` : '待判定';
     const result = await pool.query(`UPDATE zenithjoy.leadgen_videos SET process_status=$4,updated_at=now()

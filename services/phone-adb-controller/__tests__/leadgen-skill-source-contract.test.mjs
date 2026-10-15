@@ -43,7 +43,11 @@ test('101共享102预检/收尾，接手文档明确Activity范围与原部署�
     const map=JSON.parse(readFileSync(root+'services/phone-adb-controller/skills/douyin-leadgen-'+numbers[flow]+'/references/runtime-calls.json','utf8'));
     assert.equal(map.workflow_key,flow);
     assert.equal(map.full_flow_entry,'leadgen-run.sh');
-    assert.equal(map.single_activity_public_entry_available,false);
+    assert.equal(map.single_activity_public_entry_available,true);
+    assert.equal(map.single_activity_entry.protocol,'leadgen-activity-v1');
+    assert.equal(map.single_activity_entry.validation,'source_ready_awaiting_real_handoff_acceptance');
+    assert.ok(map.single_activity_entry.scope.includes('原进程'));
+    assert.ok(map.single_activity_entry.outward_unknown.includes('不可resume'));
     assert.equal(map.raw_queue_cli_authorized,false);
   }
 });

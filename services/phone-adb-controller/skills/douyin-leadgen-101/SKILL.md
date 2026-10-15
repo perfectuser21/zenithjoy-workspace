@@ -2,7 +2,7 @@
 name: douyin-leadgen-101
 description: 执行抖音获客101视频发现：按公司关键词和筛选条件取真实视频链接、读取互动指标并交接视频。用于Agent执行或同业务合同的代码异常接手；不做视频资格判断、评论评分或私信。
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-101/references/reuse-map.json
@@ -67,3 +67,7 @@ Commander 读输入、活动边界、实际计数和异常摘要，正常定位�
 按本版合同逐项核验实际链接、同视频指标、数据库读回和清理；unknown 指标明确单列。完成本轮数量不等于搜尽。记录 code_success、skill_success、commander_rescue 或 failed/blocked，救场不抹掉原代码失败。正常流程模型用量与采集数量分开记录。
 
 来源：[今日101/102方案](https://app.notion.com/p/3f9c40c2ba6381dea615c39380c78e66)、[Skill/Code配套规则](https://app.notion.com/p/3f5c40c2ba6381acbad0d31ee3215f92)。Activity 是工作边界，Skill 与代码是实现方式。
+
+## 单Activity受控接手
+
+当前源码提供 `leadgen-activity-v1`：仅在原冻结run内Code失败与有限安全重试之后，由真实work-commander父会话派官方Skill child，使用原run私有broker逐Activity接手。`activity-skill-tool.mjs` 不是新任务启动器；inspect/受限phone/一次当前slot resume均受同源方法、绑定、资源和截止约束。子会话终态未知保锁，发送未知只读回。最后仍由原独立verify与持久读回决定成功，不以Agent自述或CLI exit0替代验收。当前源码存在不等于实机接手已验收，具体状态查看当前任务事件与发布观测。

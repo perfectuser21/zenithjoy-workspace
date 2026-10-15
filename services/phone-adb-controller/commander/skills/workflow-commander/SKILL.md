@@ -1,6 +1,6 @@
 ---
 name: workflow-commander
-version: 2.0.17
+version: 2.0.18
 description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 
@@ -109,3 +109,11 @@ FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt �
 旧五参数入口只用于既有历史调度兼容；历史在途运行继续按原外壳收尾。新 JSON 信封不得转换为旧参数。全部入口共用部署 admission；部署期间不启动旧外壳，也不创建历史看护角色。部署和代码变更由版本化发布流程处理。
 
 冻结 recovery.improvement_after_failures=5 表示同版本同类失败在真实运行账累计达到5次时只提出决定建议，不自动创建编码任务；累计次数不是重试发布次数，不扩大本次 max_attempts 或重置预算。
+
+## leadgen-activity-v1：原run单Activity接手
+
+当正式leadgen-skill-agent父CLI提供leadgen-activity-v1时，优先处理本节；这是既有冻结run中的失败Activity，不调用wf-launch、wf-agent-run或leadgen-run，不转换新Workflow，也不领/放原run资源。读取指定activity-request及agent-request原件；session_status真实key必须等于request.parent_session_key。调用本次Source提供的 `node leadgen-skill-agent.mjs claim <本次私有目录>` 校验scope并O_EXCL领取唯一spawn权；已领取而无绑定则只找回原receipt，不再spawn。
+
+使用同一官方sessions_spawn参数及授权模型校验。child任务原样包含request及activity-request（方法Skill与support正文、原Code失败、broker_host/tool/request路径）；上下文隔离，只执行指定slot。child先核agent-binding与自己的session，不能使用裸queue/SQL/原phone自由发送或创建Workflow。其唯一业务工具为原run activity-skill-tool：inspect、受控phone、一次该slot resume；send_dm readback_only不得resume或点击发送。调用MMV gateway_exec或原宿主SSH执行本次冻结工具，JSON通过stdin/env，不将业务字符串拼shell。
+
+原官方spawn receipt原样保存到spawn-receipt.json，核openai/gpt-6.1-sol后用本次source提供的commander/wf-agent-handoff.py bind，再await持续官方agent.wait。预算不得重置，父CLI exit0/模型自述不能替代child官方终态。未知/超时精确停止原child并读回；无确证时报告unknown保留原run锁。最终结果由原broker记录的成熟代码返回值和原独立verify决定，不由child输出JSON改写闭包/账本。

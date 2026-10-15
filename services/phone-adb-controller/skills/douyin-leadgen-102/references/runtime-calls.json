@@ -1,7 +1,7 @@
 {
   "workflow_key": "douyin_video_processing",
   "full_flow_entry": "leadgen-run.sh",
-  "single_activity_public_entry_available": false,
+  "single_activity_public_entry_available": true,
   "raw_queue_cli_authorized": false,
   "source_scope": "当前已发布成熟代码调用说明；不是本版Skill运行PASS",
   "public_entry": {
@@ -51,7 +51,7 @@
       "entry": "leadgen-client.mjs createRpc()/rpcSource()",
       "classification": "INTERNAL_LIBRARY",
       "protocol": "{kind,request,source:{commit,files:[path,sha256]}} source由readFrozen固定闭包自动生成；不要手造source或deps mocks",
-      "safe_use": "仅已冻结且readBinding与当前attempt匹配的正式调用器；现无稳定Agent逐Activity救场CLI"
+      "safe_use": "仅已冻结且readBinding与当前attempt匹配的正式调用器；Agent逐Activity接手只能通过原run私有broker，不直接构造内部RPC"
     },
     {
       "entry": "leadgen-rpc.mjs stdin CLI",
@@ -82,7 +82,16 @@
   ],
   "known_gaps": [
     "现CLI可启动旧合同Code四flow，不自动证明新Skill0.1.0所有实屏指标/ordinary/deep/auto/可中断逐Activity救场合同已实现。",
-    "没有公开的Activity resume/受控Agent单步queue或104写回救场CLI；现有安全方法是完整已冻结run和由原状态机执行；若需Agent接手但无法安全交接，按Skill BLOCKED，不直接import内部函数。",
+    "原run有受控单Activity入口；没有脱离冻结run的任意queue/发送CLI，Agent只能使用该次handoff提供的工具。",
     "104原private-message-send虽是controller动作，不是公开可独立绕prepared调用的业务发送入口；不能用旧tick或裸phone命令替104。"
-  ]
+  ],
+  "single_activity_entry": {
+    "entry": "activity-skill-tool.mjs",
+    "protocol": "leadgen-activity-v1",
+    "invocation": "node <original frozen runtime>/activity-skill-tool.mjs <original broker-request.json> inspect|phone|resume",
+    "scope": "仅现存run当前失败slot，原进程持有状态与资源，禁止自行生成request或重开flow",
+    "validation": "source_ready_awaiting_real_handoff_acceptance",
+    "outward_unknown": "readback_only; send_dm不可resume",
+    "authority": "原run ACK/冻结definition/method与官方child绑定，未知保持锁，原独立verify裁判"
+  }
 }

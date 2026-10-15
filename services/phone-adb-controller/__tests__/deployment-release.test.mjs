@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -43,7 +44,10 @@ test('deploy入口发布新模块且必须在观测回读后才原子发布manif
 test('四流程正式部署覆盖 RPC 固定依赖、四新计划和 MMV 同 SHA 实测 manifest',async()=>{
  const {RPC_FILES}=await import('../leadgen-client.mjs');
  const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
- const array=name=>source.match(new RegExp(name+'=\\(([^)]+)\\)','s'))?.[1].trim().split(/\s+/);
+ const marker='# 在任何SSH前核验部署源字节';assert.ok(source.includes(marker));
+ const prefix=source.slice(0,source.indexOf(marker));
+ // Evaluate the real pre-network array expansion, including transitive probe files.
+ const array=name=>execFileSync('/bin/bash',['-c',prefix+"\nprintf '%s\\0' \"${"+name+"[@]}\"",new URL('../deploy.sh',import.meta.url).pathname],{encoding:'utf8'}).split('\0').filter(Boolean);
  const rpc=array('RPC_FILES');assert.deepEqual([...rpc].sort(),[...RPC_FILES].sort());
  const mmv=[...array('MMV_JS_FILES'),...array('MMV_PROBE_FILES')];for(const name of RPC_FILES)assert.ok(mmv.includes(name),`MMV漏RPC依赖 ${name}`);
  const device=[...array('DEVICE_NODE_FILES'),...array('DEVICE_RPC_PROBE_FILES'),...array('DEVICE_PLAN_FILES')];for(const name of RPC_FILES)assert.ok(device.includes(name),`设备冻结漏RPC依赖 ${name}`);
