@@ -163,6 +163,12 @@ class BackendTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 backend.preflight()
 
+    def test_receipt_zero_rows_updated_is_not_success(self):
+        self.response = {'ok': True, 'updated': False}
+        evidence = self.context() | dict(sent_text='您好', sent_once=True)
+        with self.assertRaises(ValueError):
+            self.backend.receipt(dict(reply='您好', message_id=17), evidence, 'sending')
+
     def test_receipt_requires_claim_and_matching_visible_reply(self):
         draft = dict(reply='您好', message_id=17)
         evidence = self.context() | dict(sent_text='您好', sent_once=True)
@@ -170,6 +176,7 @@ class BackendTests(unittest.TestCase):
             self.backend.receipt(draft, evidence, 'drafted')
         with self.assertRaises(ValueError):
             self.backend.receipt(draft, evidence | dict(sent_text='错误'), 'sending')
+        self.response = {'ok': True, 'updated': True}
         self.backend.receipt(draft, evidence, 'sending')
         self.assertEqual(self.calls[-1], ('POST', '/api/wechat/messages/17/receipt',
             dict(ok=True, agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22')))

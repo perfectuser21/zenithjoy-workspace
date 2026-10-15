@@ -4,6 +4,7 @@ from pathlib import Path
 import contextlib
 import json
 import sys
+import subprocess
 import tempfile
 import unittest
 
@@ -48,6 +49,18 @@ class WatcherTests(unittest.TestCase):
         events = self.module.scan(FakePhone())
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]['sender'], '苏小妖')
+
+    def test_notification_key_survives_real_adb_style_remote_shell(self):
+        class RemoteShellPhone(FakePhone):
+            def shell(inner, *args):
+                if args[:3] != ('cmd', 'notification', 'get'):
+                    return super(RemoteShellPhone, inner).shell(*args)
+                command = "cmd() { printf '%s' \"$3\"; }; " + ' '.join(args)
+                result = subprocess.run(['/bin/sh', '-c', command], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, '0|com.tencent.mm|1|null|10088')
+                return inner.raw
+        self.assertEqual(len(self.module.scan(RemoteShellPhone())), 1)
 
     def test_gateway_uses_untrusted_file_and_unknown_result_never_retried(self):
         import bridge
