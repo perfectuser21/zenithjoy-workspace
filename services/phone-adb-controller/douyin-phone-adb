@@ -2663,14 +2663,28 @@ record_no_active_capture() {
 
 # 严格stream/port候选的一次非零邻档往返；不使用媒体toggle，不等未知变绿。
 record_refresh_track_volume() {
-  local target up down
+  local eid="$1" target up down before before_state
   record_no_active_capture && record_detail_foreground || return 1
   target="$(media_volume || true)"
   [[ "$target" == <-> ]] && (( target > 0 && target < 30 )) || return 1
+  # 紧邻首次按键的新证据；已自行恢复则不再干预，未知/外来轨道关闭恢复。
+  before="$(record_native_audio "$eid-pre-volume")"
+  before_state="$(print -r -- "$before" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  [[ "$before_state" != started ]] || return 0
+  [[ "$before_state" == recoverable_muted ]] || return 1
+  record_no_active_capture && record_detail_foreground || return 1
   "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1 || return 1
   wait_ms 250
   up="$(media_volume || true)"
-  [[ "$up" == <-> ]] && (( up == target + 1 )) || return 1
+  if [[ "$up" != <-> ]] || (( up != target + 1 )); then
+    # UP已提交但读回未知/不符时，不能留在变更后的档位；只恢复明确非零原target。
+    "$ADB" -s "$SERIAL" shell cmd media_session volume --stream 3 --set "$target" >/dev/null 2>&1 || return 1
+    wait_ms 250
+    down="$(media_volume || true)"
+    MEDIA_VOLUME_NOW="${down:-unknown}"
+    print -u2 -- "record-audio-recovery: failed_peak_readback restored=$([[ "$down" == "$target" ]] && print true || print false)"
+    return 1
+  fi
   # 即便前台漂移也应恢复自己的音量；不再执行其他业务动作。
   "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_DOWN >/dev/null 2>&1 || return 1
   wait_ms 250
@@ -2682,7 +2696,7 @@ record_refresh_track_volume() {
 
 record_recover_native() {
   local eid="$1" result
-  record_refresh_track_volume || return 1
+  record_refresh_track_volume "$eid" || return 1
   result="$(record_native_audio "$eid")"
   [[ "$result" == *"native_audio_state=started "* ]] || return 1
   print -r -- "$result"

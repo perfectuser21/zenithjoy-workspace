@@ -28,8 +28,8 @@ metadata:
 
 1. 用真实视频ID进入详情，核对当前页面确为本轮目标；前台、包UID和播放器归属均留原证。
 2. 复用已部署录制与音轨核验方法，分别核对实际媒体音量、native播放/静音状态、真实录像及音轨。设置回显不能代替实际读回；轨道started但标记muted不能直接放行。
-3. 仅当本包UID/详情前台、唯一started音轨且静音原因只有streamVolume/portVolume、没有受管活录制时，允许一次已核正数音量→邻近非零档→原档刷新；每次读回必须成立，恢复后fresh唯一started且muted none才启动录制。未知/外UID/共享UID/解析失败/多音轨不能借恢复放行。录制停止后另存退出后原生恢复证据，持续失败保pending，不重启或kill未知进程。
-4. 录制启动失败时保留最早stderr、exit code、阶段和已有证据。proof中media_volume=null只表示未记录，不能据此推断音量0，或把native音轨首错改写成音量失败。
+3. 仅当本包UID/详情前台、唯一started音轨且静音原因只有streamVolume/portVolume、没有受管活录制时，按键紧前必须fresh核同包唯一stream/port候选；若已started则不按键，未知或外来轨道立即拒绝。允许一次已核正数音量→邻近非零档→原档刷新；UP已提交但读回未知/不符时只允许绝对恢复明确非零原档并读回，仍保失败，不起录；每次读回必须成立，恢复后fresh唯一started且muted none才启动录制。未知/外UID/共享UID/解析失败/多音轨不能借恢复放行。录制停止后另存退出后原生恢复证据，持续失败保pending，不重启或kill未知进程。
+4. 倍速设置、录制启动或停止失败时保留最早stderr、exit code、阶段和已有证据。proof中media_volume=null只表示未记录，不能据此推断音量0，或把native音轨首错改写成音量失败。
 5. 核对录像时长、实际播放速度、提取音频和转写证据，只有达到当前正式合同才调用原公司资格政策。缺真实音频/转写记unknown，不伪造合格。
 6. 缓存结论仅在同视频身份、同公司和政策版本均相符时复用。逐VID交付matched/rejected/unknown和证据；仅合格视频交给评论采集。
 

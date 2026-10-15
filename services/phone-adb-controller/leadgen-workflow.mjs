@@ -328,7 +328,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
           if(proof.version!==2||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
           if(result.code!==0&&proof.earliest_error){
             const first=proof.earliest_error;
-            if(!['record_start','record_stop'].includes(first.phase)||!Number.isSafeInteger(first.exit_code)||first.exit_code<=0||first.exit_code>255||typeof first.stderr!=='string')throw Error('本轮录制首错工件无效');
+            if(!['set_playback_speed','record_start','record_stop'].includes(first.phase)||!Number.isSafeInteger(first.exit_code)||first.exit_code<=0||first.exit_code>255||typeof first.stderr!=='string')throw Error('本轮录制首错工件无效');
             recordingsUnverified++;
             failures.push({video_id:v.video_id,code:first.exit_code,stage:first.phase,reason:safeExecutionDiagnostic(first.stderr,env).slice(-1500)});
             continue;

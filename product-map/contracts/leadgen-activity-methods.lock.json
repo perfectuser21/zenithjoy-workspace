@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -48,13 +48,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "64ccea8794b82d96c1b8d6f4857fb236c3307b0aa897d7587fe3b1c808169ffb",
+      "code_digest": "0d68fa0e66c8bd46c59feebd87a74569b504354099f28a80687b6af62ed01e25",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "1a04f621b0e98b5744a9e4a265c87487566e24370b12b62c42f5036523a72f6e",
-        "current_code_digest": "64ccea8794b82d96c1b8d6f4857fb236c3307b0aa897d7587fe3b1c808169ffb"
+        "current_code_digest": "0d68fa0e66c8bd46c59feebd87a74569b504354099f28a80687b6af62ed01e25"
       }
     },
     "douyin_video_processing.preflight": {
@@ -81,7 +81,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
@@ -105,14 +105,14 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -129,13 +129,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "36346f373e145b4944963e790d55f8816106d7579f70f0c8dd8563157c9364f5",
+      "code_digest": "a3ce0576a6fdff160bd64278163ca697c374aadc58a2e6b6532c033caf51ed68",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "23e80f0a309b6e8b1a29b0345199c339addbfbd2e99832590d1d5a74c5b31cf9",
-        "current_code_digest": "36346f373e145b4944963e790d55f8816106d7579f70f0c8dd8563157c9364f5"
+        "current_code_digest": "a3ce0576a6fdff160bd64278163ca697c374aadc58a2e6b6532c033caf51ed68"
       }
     },
     "douyin_video_processing.dedup": {
@@ -161,7 +161,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -185,13 +185,13 @@
           "sha256": "fba5cc2bed1e7200c502e31e656f28aa86afc04ba577a4702924d10e3603d2e7"
         }
       ],
-      "code_digest": "84b60ad396e685628b7be221efc0fa6d0e352864b9564c5340db8a108ffda934",
+      "code_digest": "d296702d71e1a57b2b5584cdb1f00fb781d3a8533f94af54c64d170c98b67486",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "55f6aa1d6795371df8e2032696a7633510030e97f78bcfcfcdb120481b42d3a7",
-        "current_code_digest": "84b60ad396e685628b7be221efc0fa6d0e352864b9564c5340db8a108ffda934"
+        "current_code_digest": "d296702d71e1a57b2b5584cdb1f00fb781d3a8533f94af54c64d170c98b67486"
       }
     },
     "douyin_video_processing.qualification": {
@@ -202,14 +202,14 @@
         "name": "douyin-leadgen-activity-102-qualification",
         "version": "0.1.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
-        "sha256": "4eeb97890019435fe6fbb026f02cc33c90b8d343adf9a8651378169636f88f1d",
+        "sha256": "b2df1a586d58864a753c07d56dc44b60baaaa04a46dd8d8ee67dd67e6b1120b0",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "3e8f4e51f959f11da33cf974cf430b3fe1cf6670a198fe76e281ecedb447a37b"
           }
         ],
-        "content_digest": "4e89581e4995f42724f6f1ed98ef79d8bdfd8c0dda7bd402a5677b870ddb09d3"
+        "content_digest": "c47578af985b5b1d3347a527b10dd5f1f7f734ddf6d85c9dc8b6ba5e614becdb"
       },
       "code_bindings": [
         {
@@ -217,7 +217,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -245,10 +245,10 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "aaafd195b522a7710af5c9ab8edfc3faafb036cfece5e57fc1e98b6e17c31d70"
+          "sha256": "14788bdc9aeeeeb2ccad2e046e99376de6e0e10ae1cc03406f366c983c81ceb3"
         }
       ],
-      "code_digest": "a567e1d202629f11d9f662ea1248396c2259dac1934c4df1b7d34856c1337b47"
+      "code_digest": "d170d919823ab98b027ee392c58bc8b811a9d7ef6ca69b3b3a2aba8918ac93fc"
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.3.0",
@@ -281,14 +281,14 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -316,7 +316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "aaafd195b522a7710af5c9ab8edfc3faafb036cfece5e57fc1e98b6e17c31d70"
+          "sha256": "14788bdc9aeeeeb2ccad2e046e99376de6e0e10ae1cc03406f366c983c81ceb3"
         },
         {
           "kind": "code",
@@ -326,13 +326,13 @@
           "sha256": "befda1bd125177423044f6f94763d2eeec0bf9ed0599de1ac5e8bbbdd1c91c04"
         }
       ],
-      "code_digest": "10f17d12c9ed6d7fb64ab44fdaecf3ce9d1520bfb2f91f6c8e4b5f27e207a3d8",
+      "code_digest": "9d1e546ddcba9873fc660f094a1f597e02732483eb2ab10fd766319267e78b7b",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "522bbe861460685e50d80e3c5c09c375be9f4631c73673e962b2ee1f0d2f554c",
-        "current_code_digest": "10f17d12c9ed6d7fb64ab44fdaecf3ce9d1520bfb2f91f6c8e4b5f27e207a3d8"
+        "current_code_digest": "9d1e546ddcba9873fc660f094a1f597e02732483eb2ab10fd766319267e78b7b"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -359,7 +359,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
@@ -382,7 +382,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -399,13 +399,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "c7bb490d197fdf27e3446c2b936ecafa5f97f00f5811af3a7633405ffa60d621",
+      "code_digest": "d3edb6ec299c7a9eb69d53c190f3307f9dff045bfa963b5b35867656f98f2eea",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "a0c234e6e36ec27744859090070c7330076bafbd6a78287126fb163cfec23a6f",
-        "current_code_digest": "c7bb490d197fdf27e3446c2b936ecafa5f97f00f5811af3a7633405ffa60d621"
+        "current_code_digest": "d3edb6ec299c7a9eb69d53c190f3307f9dff045bfa963b5b35867656f98f2eea"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -431,7 +431,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -455,13 +455,13 @@
           "sha256": "fba5cc2bed1e7200c502e31e656f28aa86afc04ba577a4702924d10e3603d2e7"
         }
       ],
-      "code_digest": "84b60ad396e685628b7be221efc0fa6d0e352864b9564c5340db8a108ffda934",
+      "code_digest": "d296702d71e1a57b2b5584cdb1f00fb781d3a8533f94af54c64d170c98b67486",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "55f6aa1d6795371df8e2032696a7633510030e97f78bcfcfcdb120481b42d3a7",
-        "current_code_digest": "84b60ad396e685628b7be221efc0fa6d0e352864b9564c5340db8a108ffda934"
+        "current_code_digest": "d296702d71e1a57b2b5584cdb1f00fb781d3a8533f94af54c64d170c98b67486"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -487,7 +487,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -560,13 +560,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "bb299f23531daa5fb28853f850e5bd200cfec481eec8005a875000e450dfd141",
+      "code_digest": "62d44c91997d4943d37e5231f65524a9e7e5489f70a1082008762f03d712f851",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "e31b8d209ad71b6e7f68d1872b0701364fecd3c37936491db8416d34285243fc",
-        "current_code_digest": "bb299f23531daa5fb28853f850e5bd200cfec481eec8005a875000e450dfd141"
+        "current_code_digest": "62d44c91997d4943d37e5231f65524a9e7e5489f70a1082008762f03d712f851"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -593,7 +593,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
@@ -617,14 +617,14 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -669,13 +669,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c284d53de99e59c97e12a5f75940509e5bdb138ec96e166df36b5190ca8e4bb7",
+      "code_digest": "5ee112edc3de7482e2ed385c87a950f97d02695ffceecafd148ee3728a2bb81c",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "349939af40f47dc226d8beaee2e47ed822eaddb80386eb04e6e541f0a872c974",
-        "current_code_digest": "c284d53de99e59c97e12a5f75940509e5bdb138ec96e166df36b5190ca8e4bb7"
+        "current_code_digest": "5ee112edc3de7482e2ed385c87a950f97d02695ffceecafd148ee3728a2bb81c"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -701,7 +701,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -732,13 +732,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "c8d7ffffa5add082b5f0d45c2ccf8b2a0cee888974171a2e6b55f0decfdcb1a6",
+      "code_digest": "3b57eedabccffc27cd8d1ae334833e6ac41e1dd29e9b90f78461270da29441ab",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "eac4821457a7bf4a73b4e04c629ed2e6929b78397079d4d1a787098637913bf2",
-        "current_code_digest": "c8d7ffffa5add082b5f0d45c2ccf8b2a0cee888974171a2e6b55f0decfdcb1a6"
+        "current_code_digest": "3b57eedabccffc27cd8d1ae334833e6ac41e1dd29e9b90f78461270da29441ab"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -764,7 +764,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -795,13 +795,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "c8d7ffffa5add082b5f0d45c2ccf8b2a0cee888974171a2e6b55f0decfdcb1a6",
+      "code_digest": "3b57eedabccffc27cd8d1ae334833e6ac41e1dd29e9b90f78461270da29441ab",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "eac4821457a7bf4a73b4e04c629ed2e6929b78397079d4d1a787098637913bf2",
-        "current_code_digest": "c8d7ffffa5add082b5f0d45c2ccf8b2a0cee888974171a2e6b55f0decfdcb1a6"
+        "current_code_digest": "3b57eedabccffc27cd8d1ae334833e6ac41e1dd29e9b90f78461270da29441ab"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -828,7 +828,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "f9631f9e72d597f8393e28e345d00558b627d4782f3f29a65c6a2de7630bb9ba"
+          "sha256": "8cacd6e5879330f12d1520819439ad5278b17a537137575f562afee6879e7b32"
         },
         {
           "kind": "code",
@@ -851,7 +851,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "21a58144c89e38827e6c10e32a399e8a34b9bf2220dc2e2052de136bcbbba8b3"
+          "sha256": "d6a0bfc81e5f3ff52d1d671ef448f53babb88262a2c8db45cbfb9a853ad2dafc"
         },
         {
           "kind": "code",
@@ -882,13 +882,13 @@
           "sha256": "714376ecbd0977454e4de21550c89187f46436e12c367c00aa5eeeffa32d9277"
         }
       ],
-      "code_digest": "6c4a790594e06683c3b8e663da56108f6ae636b58ad6efb175122cd58bb9b6c6",
+      "code_digest": "cca5cc3d6157203a2346b10de921a288da2865028c0522692cfd6701c57518a2",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅102录制资格函数与失败证据路径改变；此Activity执行分支、合同、方法及副作用状态机不变，配套独立回归与review另外验收。",
         "reviewed_by": "codex:/root/w4_release_verify implementation assessment; independent review pending",
         "previous_code_digest": "6a3e389f5f94f9a0c428943a72595ac7184bcf48283a1e3d69d49155017f127a",
-        "current_code_digest": "6c4a790594e06683c3b8e663da56108f6ae636b58ad6efb175122cd58bb9b6c6"
+        "current_code_digest": "cca5cc3d6157203a2346b10de921a288da2865028c0522692cfd6701c57518a2"
       }
     }
   },

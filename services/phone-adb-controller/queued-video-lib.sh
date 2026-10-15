@@ -71,7 +71,7 @@ qv_qualify(){
   error_file="$(mktemp)" || return 5
   /bin/chmod 600 "$error_file"
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
-  if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null; then
+  if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null 2>"$error_file"; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
     if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null 2>"$error_file")"; then
       media="$(print -r -- "$started" | sed -n 's/.*media_volume=\([^ ]*\).*/\1/p')"
@@ -115,6 +115,8 @@ PYNATIVEPAIR
     else
       first_rc=$?;first_phase=record_start;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr"
     fi
+  else
+    first_rc=$?;first_phase=set_playback_speed;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr"
   fi
   /bin/rm -f "$error_file"
   # 媒体音量与内容电平分别存证；静音不是模型内容判定，也不得用旧转写伪装本轮ASR。
