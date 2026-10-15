@@ -1,6 +1,6 @@
 ---
 name: wf-douyin_lead_outreach
-version: 0.2.0
+version: 0.2.1
 description: "抖音线索触达 wf_run 陪跑说明：显式加载本次冻结业务Skill，保持原合同与安全交接边界。"
 ---
 
@@ -14,7 +14,7 @@ description: "抖音线索触达 wf_run 陪跑说明：显式加载本次冻结�
 
 执行前确认 workflow_key 为 `douyin_lead_outreach`，实际公司、line、profile、serial、run_id、attempt、source_run（适用时）、执行权、截止时间及锁/租约均与冻结事实一致。保持原 Activity Commander、定义ACK、原件及PG独立读回；不改现场代码、不换账号、不扩大预算或输入范围。
 
-`mode=workflow` 仅在当前业务 Skill 的正式完整CLI满足本轮范围时执行该流程；`mode=activity` 只处理指定冻结 Activity。现无合法单 Activity resume 公共入口；无法安全移交当前执行权或工具缺失时保留原失败及恢复条件并报告 BLOCKED，不能重跑整流程冒单步接手、使用 `leadgen-activity.sh` 冒 resume、直调裸queue/RPC函数、并发接管活动run或回退旧流程。旧Skill参考仅加载 reuse-map 明确适用动作，不把 reference_only 当可执行fallback。
+`mode=workflow` 仅在当前业务 Skill 的正式完整CLI满足本轮范围时执行该流程；`mode=activity` 只处理指定冻结 Activity。仅接受原run已生成的leadgen-activity-v1请求及其私有broker工具；无法安全移交当前执行权或工具缺失时保留原失败及恢复条件并报告 BLOCKED，不能重跑整流程冒单步接手、使用 `leadgen-activity.sh` 冒 resume、直调裸queue/RPC函数、并发接管活动run或回退旧流程。旧Skill参考仅加载 reuse-map 明确适用动作，不把 reference_only 当可执行fallback。
 
 只处理104 canonical ready队列的已批准触达与写回。保持原prepared、一次发送、全池去重、账号及原生目标身份、批准正文、风险和ratecaps；暂停未解除不发送。已发送或结果未知先按原状态机读回，不重复POST、不释放prepared重发，不用裸private-message-send或旧outreach-tick代替正式入口。
 

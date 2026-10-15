@@ -467,3 +467,12 @@ test('新认领部分写入失败不发布无标记锁，claim保留且不能重
  assert.ok(existsSync(join(c.dir,'tmp','locks','standalone-claims','SER1','qiumi-a1234567-1791427263848')));
  assert.notEqual(c.run('lock-acquire-new','qiumi-a1234567-1791427263848').status,0);assert.equal(c.actions(),'');
 });
+
+test('unknown execution quarantine is exact-owner persistent across TTL and dead PID',t=>{
+ const c=setup(t);assert.equal(c.run('lock-acquire','probe').status,0);
+ assert.notEqual(c.run('lock-quarantine','another').status,0);assert.ok(!existsSync(join(c.lock,'standalone_review_required')));
+ const q=c.run('lock-quarantine','probe');assert.equal(q.status,0,q.stderr);assert.match(q.stdout,/lock=quarantined owner=probe review_required=true/);
+ c.stale('probe');writeFileSync(join(c.lock,'pid'),'99999999\n');
+ assert.notEqual(c.run('lock-acquire','next-run').status,0);assert.notEqual(c.run('lock-release','probe').status,0);
+ assert.match(c.run('lock-reap').stdout,/preserved.*review-required/);assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),'probe');assert.equal(c.actions(),'');
+});

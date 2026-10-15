@@ -2,7 +2,7 @@
 name: douyin-leadgen-104
 description: 执行已授权抖音获客104线索触达与写回，核对公司、发送账号、原生目标身份及批准话术。用于独立消费合格队列或代码异常接手；结果未知先读回，同一动作不重复发送。
 metadata:
-  version: 0.2.0
+  version: 0.2.1
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-104/references/reuse-map.json
@@ -65,3 +65,7 @@ Commander 接到异常时先核原动作的外部结果、执行权与剩余期�
 独立核验实际接收者、发送账号、批准内容、恰好一次发送、原行写回及清理；只证明已发送，不推断已送达/已读。Code失败保留，Skill救场结果另记；未决不得记completed。创建本Skill不表示Brain已接入自动触发。
 
 来源：[今日Skill/Code与Commander规则](https://app.notion.com/p/3f5c40c2ba6381acbad0d31ee3215f92)，发送政策继续引用本公司的原批准配置。
+
+## 单Activity受控接手
+
+当前源码提供 `leadgen-activity-v1`：仅在原冻结run内Code失败与有限安全重试之后，由真实work-commander父会话派官方Skill child，使用原run私有broker逐Activity接手。`activity-skill-tool.mjs` 不是新任务启动器；inspect/受限phone/一次当前slot resume均受同源方法、绑定、资源和截止约束。子会话终态未知保锁，发送未知只读回。最后仍由原独立verify与持久读回决定成功，不以Agent自述或CLI exit0替代验收。当前源码存在不等于实机接手已验收，具体状态查看当前任务事件与发布观测。

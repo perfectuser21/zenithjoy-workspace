@@ -2,6 +2,8 @@
 # 四新流程Activity/Step正式发布回归：真实运行node:test，不把该套件误当Vitest。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# 单Activity Code→Skill真实工具闭环与未知发送防重发；Gateway/设备均隔离夹具。
+node --test services/phone-adb-controller/__tests__/activity-skill-*.test.mjs
 # MMV实际主机名变更时仍核精确身份与真实collector；相似机器不得通过。
 node --test services/phone-adb-controller/__tests__/runtime-host.test.mjs services/phone-adb-controller/__tests__/deployment-unified.test.mjs services/phone-adb-controller/__tests__/deployment-preflight.test.mjs services/phone-adb-controller/__tests__/deployment-prepare.test.mjs
 # 正式入口用例参数化覆盖aad17-2/r10-7和拒绝相似主机、手机身份、非103流程。
