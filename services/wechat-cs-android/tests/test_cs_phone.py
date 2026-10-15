@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import threading
+import subprocess
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import bridge
@@ -179,3 +180,23 @@ class AtomicContextTests(unittest.TestCase):
             for thread in threads:
                 thread.join(timeout=10)
             self.assertEqual(sorted(results), ['accepted', 'rejected'])
+
+
+class CancellationTests(unittest.TestCase):
+    def test_sigterm_unwinds_phone_cleanup_instead_of_abrupt_exit(self):
+        code = """
+import os, signal, threading, time
+import cs_phone
+cs_phone.install_cancel_handler()
+threading.Timer(0.05, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+try:
+    time.sleep(5)
+except KeyboardInterrupt:
+    print('cancelled')
+finally:
+    print('cleanup')
+"""
+        result = subprocess.run([sys.executable, '-c', code], cwd=str(Path(__file__).resolve().parents[1]),
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['cancelled', 'cleanup'])
