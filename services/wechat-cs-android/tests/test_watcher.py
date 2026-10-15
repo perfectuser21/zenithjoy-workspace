@@ -89,3 +89,61 @@ class WatcherTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class RuntimeLimitsTests(unittest.TestCase):
+    def setUp(self):
+        self.module = __import__('watcher')
+
+    def test_gateway_timeout_is_configurable_without_retry(self):
+        import bridge
+        with tempfile.TemporaryDirectory() as directory:
+            state = bridge.State(Path(directory) / 's.db')
+            self.addCleanup(state.close)
+            calls = []
+            def run(args, **kwargs):
+                calls.append((args, kwargs))
+                return subprocess.CompletedProcess(args, 0, b'{}', b'')
+            config = dict(phone_command=['phone'], runtime_config='/private/runtime.json',
+                backend_script='/backend.py', backend_state=str(Path(directory) / 's.db'),
+                gateway_timeout_seconds=600)
+            event = self.module.scan(FakePhone())[0]
+            self.module.dispatch(event, state, Path(directory), config, run)
+            self.assertEqual(calls[0][0][-1], '600')
+            self.assertEqual(calls[0][1]['timeout'], 630)
+            self.assertEqual(len(calls), 1)
+
+    def test_brain_requires_both_devices_exact_owner_and_unexpired_lease(self):
+        config = dict(brain_device_names=['47.100.213.173:10001', 'acp-f6utus34dgnghc1oc'],
+                      owner='manual-test', brain_url='http://localhost:5221')
+        rows = [{'device_name': name, 'locked_by': 'manual-test', 'expired': False,
+                 'expires_at': '2099-01-01T00:00:00Z'} for name in config['brain_device_names']]
+        check = getattr(self.module, 'check_brain_locks', None)
+        self.assertIsNotNone(check, 'Brain锁检查尚未实现')
+        check(config, fetch=lambda _: {'success': True, 'locks': rows})
+        for bad in [rows[:1], [rows[0], rows[1] | {'locked_by': 'other'}],
+                    [rows[0], rows[1] | {'expired': True}],
+                    [rows[0], rows[1] | {'expires_at': '2000-01-01T00:00:00Z'}]]:
+            with self.assertRaises(ValueError):
+                check(config, fetch=lambda _: {'success': True, 'locks': bad})
+
+    def test_watcher_stops_at_test_deadline(self):
+        import bridge
+        serve = getattr(self.module, 'serve', None)
+        self.assertIsNotNone(serve, '常驻期限尚未实现')
+        with tempfile.TemporaryDirectory() as directory:
+            state = bridge.State(Path(directory) / 's.db')
+            self.addCleanup(state.close)
+            current = [0]
+            def sleep(seconds):
+                current[0] += seconds
+            class Backend:
+                def preflight(self):
+                    raise AssertionError('No new events must not call backend')
+            event = self.module.scan(FakePhone())[0]
+            state.baseline([event])
+            serve(FakePhone(), Backend(), state, Path(directory),
+                  dict(max_runtime_seconds=3, poll_seconds=2),
+                  clock=lambda: current[0], sleeper=sleep)
+            self.assertEqual(json.loads((Path(directory) / 'watcher-status.json').read_text())['status'],
+                             'stopped')
+            self.assertLessEqual(current[0], 3)
