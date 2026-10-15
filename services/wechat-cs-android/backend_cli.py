@@ -68,6 +68,9 @@ class Backend:
                 or (config.get('tenant_id') is not None
                     and config['tenant_id'] != self.config['tenant_id'])):
             raise ValueError('backend_config_not_ready')
+        mode = config.get('takeover_mode')
+        if mode not in ('blacklist', 'whitelist'):
+            raise ValueError('unknown_backend_takeover_mode')
         blacklist = config.get('blacklist', [])
         whitelist = config.get('whitelist', [])
         if not isinstance(blacklist, list) or not isinstance(whitelist, list):
@@ -75,7 +78,7 @@ class Backend:
         identities = {self.binding.sender, self.binding.contact_key}
         if identities.intersection(blacklist):
             raise ValueError('test_contact_blacklisted')
-        if config.get('takeover_mode') != 'blacklist' and not identities.intersection(whitelist):
+        if mode == 'whitelist' and not identities.intersection(whitelist):
             raise ValueError('test_contact_not_whitelisted')
         return {'ready': True, 'cs_wechat_id': self.config['cs_wechat_id']}
 

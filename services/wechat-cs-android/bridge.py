@@ -145,7 +145,8 @@ class State:
             if stored and binding and self.binding != binding:
                 raise ValueError('state_contact_binding_changed_use_new_state')
             if binding and not stored:
-                if self.db.execute('SELECT 1 FROM events LIMIT 1').fetchone():
+                if any(self.db.execute('SELECT 1 FROM ' + table + ' LIMIT 1').fetchone()
+                       for table in ('meta', 'events', 'actions', 'contexts', 'phone_evidence')):
                     raise ValueError('legacy_state_cannot_adopt_new_contact_binding')
                 with self.db:
                     self.db.execute("INSERT INTO meta VALUES ('contact_binding',?)", (json.dumps(binding.to_dict()),))
