@@ -53,6 +53,31 @@ function componentsFor(definitions,sha){
  }
  return [...components.values()].sort((a,b)=>key(a).localeCompare(key(b)));
 }
+// 与官方pilotPlanBody/release-proof同形；来源集合必须由本快照完整绑定重建，不能只信报告自证。
+export function deploymentAssertionPlan(report,snapshot){
+ const keys=['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'];
+ if(Object.hasOwn(report,'implementation_source_set')){
+  const supplied=report.implementation_source_set,activities=snapshot?.definitions?.activities;
+  requireThat(Array.isArray(supplied)&&supplied.length>0&&Array.isArray(activities)&&activities.length>0,'实现来源集合为空或格式无效');
+  const expected=[];
+  for(const a of activities){
+   requireThat(UUID.test(a.activity_id)&&UUID.test(a.id)&&Array.isArray(a.payload?.implementation_bindings)&&a.payload.implementation_bindings.length>0,'实现来源缺固定Activity版本');
+   for(const b of a.payload.implementation_bindings){
+    requireThat(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===snapshot.repo&&SHA.test(b.revision)&&/^sha256:[0-9a-f]{64}$/.test(b.digest||'')&&typeof b.path==='string'&&b.path.length&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(p=>['.','..',''].includes(p)),'实现来源绑定无效');
+    requireThat(['activity','step'].includes(b.scope)&&['implementation','implementation_bindings'].includes(b.field)&&(b.index===undefined||(Number.isInteger(b.index)&&b.index>=0)),'实现来源定位无效');
+    if(b.scope==='step')requireThat(typeof b.step_key==='string'&&a.payload.steps?.some(s=>s.locator?.step_key===b.step_key),'实现来源缺固定Step');
+    expected.push({activity_id:a.activity_id,activity_definition_version_id:a.id,...Object.fromEntries(['kind','repo','path','revision','digest','scope','step_key','field','index'].filter(k=>b[k]!==undefined).map(k=>[k,b[k]]))});
+   }
+  }
+  expected.sort((a,b)=>digest(a).localeCompare(digest(b)));
+  requireThat(new Set(expected.map(r=>digest(r))).size===expected.length&&equal(supplied,expected),'实现来源集合与完整固定绑定不符');
+  keys.push('implementation_source_set');
+ }else{
+  // 官方旧格式只兼容同HEAD实现；跨版本不可删来源集合降格绕过。
+  requireThat(snapshot?.definitions?.activities?.every(a=>(a.payload?.implementation_bindings||[]).every(b=>!['code','skill'].includes(b.kind)||(b.repo===snapshot.repo&&b.revision===snapshot.revision))),'跨版本实现缺完整来源集合');
+ }
+ return Object.fromEntries(keys.map(k=>[k,report[k]]));
+}
 export function validateDeploymentEvidence(bundle,sha,readFile){
  requireThat(SHA.test(sha),'DEPLOY_SHA必须固定');
  const {snapshot,report,receipt}=bundle||{};
@@ -62,7 +87,7 @@ export function validateDeploymentEvidence(bundle,sha,readFile){
  const components=componentsFor(definitions,sha);
  requireThat(report?.protocol==='pilot_release_verification_v1'&&report.purpose==='release_verification'&&report.scope==='zenithjoy'&&report.source?.repo===DEPLOY_REPO&&report.source.head_revision===sha&&report.verification_status==='verified'&&Array.isArray(report.gaps)&&report.gaps.length===0,'CI来源或状态未核验');
  requireThat(equal(Object.keys(report.source).sort(),['head_revision','repo'])&&report.snapshot_sha256===snapshot_sha256&&report.assertion_source==='current_registration','CI不是本次完整试点发布证据');
- const plan=Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,report[k]]));
+ const plan=deploymentAssertionPlan(report,snapshot);
  requireThat(Array.isArray(report.expected_usages)&&report.expected_usages.length>0&&report.assertion_plan_sha256===digest(plan),'完整回归计划摘要不符');
  requireThat(receipt?.purpose==='release_verification'&&receipt.actor==='pilot_release_verification'&&receipt.verdict==='PASS'&&receipt.scope==='declared_pilot_regressions'&&receipt.business_runtime_status==='not_evaluated'&&receipt.snapshot_sha256===snapshot_sha256&&receipt.assertion_plan_sha256===report.assertion_plan_sha256&&equal(receipt.source,report.source)&&receipt.report_sha256===digest(Buffer.from(JSON.stringify(report))),'CI回执未核验');
  requireThat(Array.isArray(report.required_assertions)&&report.required_assertions.length>0&&Array.isArray(receipt.assertions)&&receipt.assertions.length>0,'缺真实回归断言');
