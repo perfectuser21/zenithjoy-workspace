@@ -145,6 +145,13 @@ describe('真实迟到送达回归：待办水位不等于完整客户证据',()
   expect(evidence[0]).toContain("status = 'delivered'");
   expect(evidence[1]).toEqual([crmScopeKey(scope),scope.csWechatId,['334']]);
  });
+ it('旧AI字段没有可回查的真实客户来源时不保留预算宣称',async()=>{
+  setup([outMessage],[outMessage],old,[]);
+  await analyzeCrmScope(crmScopeKey(scope));
+  expect(stored().budget).toBeNull();
+  expect(stored().summary).not.toContain('5000');
+  expect(stored().customer_source_message_ids).toEqual([]);
+ });
  it('模型数字预算正规转字符串，不凭空添加币种',async()=>{
   setup([inMessage],[inMessage],null);
   llm.mockResolvedValue({content:JSON.stringify({...old,budget:5000})});
