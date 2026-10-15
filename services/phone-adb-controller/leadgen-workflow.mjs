@@ -333,6 +333,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
             failures.push({video_id:v.video_id,code:first.exit_code,stage:first.phase,reason:safeExecutionDiagnostic(first.stderr,env).slice(-1500)});
             continue;
           }
+          if(proof.capture_audio_mode!=='playback_dup'||!Number.isSafeInteger(proof.capture_audio_sdk)||proof.capture_audio_sdk<33||proof.capture_audio_required!==true||proof.capture_audio_sdk_evidence_file!==proof.evidence_id+'.capture-sdk.txt'||!/^[a-f0-9]{64}$/.test(proof.capture_audio_sdk_evidence_sha256||''))throw Error('RECORD_CAPTURE_STRATEGY_UNVERIFIED');
+          const captureEnd=proof.capture_audio_end;
+          if(!captureEnd||captureEnd.mode!==proof.capture_audio_mode||captureEnd.sdk!==proof.capture_audio_sdk||captureEnd.required!==true||captureEnd.sdk_evidence_file!==proof.capture_audio_sdk_evidence_file||captureEnd.sdk_evidence_sha256!==proof.capture_audio_sdk_evidence_sha256)throw Error('RECORD_CAPTURE_STRATEGY_UNVERIFIED');
+          if(!Number.isSafeInteger(proof.audio_streams)||proof.audio_streams<1)throw Error('RECORD_AUDIO_TRACK_UNVERIFIED');
+          if(proof.capture_audio_verified!==true)throw Error(proof.audio_status==='silent'||Number.isFinite(proof.mean_volume_db)&&proof.mean_volume_db<=-80?'RECORD_CAPTURE_SILENT':'RECORD_CAPTURE_STRATEGY_UNVERIFIED');
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
           if(proof.playback_verified!==true||proof.playback_proof_kind!=='native_audio'||proof.playback_package!=='com.ss.android.ugc.aweme')throw Error('本轮native播放未实际核验');
