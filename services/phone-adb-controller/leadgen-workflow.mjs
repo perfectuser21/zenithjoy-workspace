@@ -118,9 +118,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
-      recordDiagnostic(result.stderr||'');return result;
+      recordDiagnostic(result.stderr||'');
+      if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
+      return result;
     } catch(error) {
-      if(error.executionStopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
+      if(error.executionStopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
