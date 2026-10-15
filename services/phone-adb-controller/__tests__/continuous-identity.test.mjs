@@ -371,6 +371,7 @@ if [[ "$*" == *'dumpsys audio'* ]]; then
  case "$current" in
  streamPort) sed 's/mutedState:none/mutedState:streamVolume portVolume/' "$FIXTURE/native-playing";;
  streamPortForeign) sed -e 's/mutedState:none/mutedState:streamVolume portVolume/' -e 's/state:paused/state:started/' "$FIXTURE/native-playing";;
+ mixedTarget) sed -e 's#u/pid:10099/#u/pid:10203/#' -e 's/state:paused/state:started/' "$FIXTURE/native-playing";;
  streamPortMultiple) sed -e 's/mutedState:none/mutedState:streamVolume portVolume/' -e 's/u\/pid:10099\//u\/pid:10203\//' -e 's/state:paused/state:started/' "$FIXTURE/native-playing";;
  started) cat "$FIXTURE/native-playing";;
  paused) cat "$FIXTURE/native-paused";;
@@ -533,3 +534,5 @@ for(const state of ['foreign','unknown','started'])test('pre-action native reche
 for(const volumeReadAfterUp of ['unknown','unchanged'])test('volume cycle restores own target after '+volumeReadAfterUp+' up readback',()=>{const r=recordBoundary({native:'streamPort',volumeReadAfterUp});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
 
 test('volume cycle upper bound unchanged restores exact target without decrement',()=>{const r=recordBoundary({native:'streamPort',volumeUpSaturated:true});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_DOWN/);assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
+
+test('mixed target unmuted and streamPort started tracks never count as unique native',()=>{const r=recordBoundary({native:'mixedTarget'});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_|input tap/);});
