@@ -130,6 +130,13 @@ class BackendTests(unittest.TestCase):
             content='你好', mode='auto', is_group=False, tenant_id='tenant-test',
             agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22'))
 
+    def test_backend_uses_observed_batch_text_without_inventing_image_contents(self):
+        context = self.context() | dict(inbound_batch=[dict(type='text', text='你好'),
+            dict(type='text', text='我想咨询智能客服'), dict(type='image')],
+            content='你好；我想咨询智能客服；图片里的内容不能凭空编造')
+        self.backend.draft(context)
+        self.assertEqual(self.calls[-1][2]['content'], '你好\n我想咨询智能客服\n用户发了一张图片（未解读）')
+
     def test_reject_empty_pending_or_invalid_draft(self):
         for response in [dict(status='pending_review', reply='等候', message_id=17),
                          dict(status='sent', reply='', message_id=17),
