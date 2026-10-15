@@ -4,13 +4,13 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-IMPLEMENTATION = 'cdf3181c7b8dead8de4f49d36d81aef6903bb8e0'
+IMPLEMENTATION = '0ba872d6cf534279d0640523636c378f5dd76e5d'
 
 
 class WorkflowContractTests(unittest.TestCase):
     def test_candidate_keeps_four_activities_nine_steps_and_pins_all_code(self):
         workflow = json.loads((ROOT / 'workflows/wechat_cs_reply_delivery.android.json').read_text())
-        self.assertEqual(workflow['version'], '0.3.1')
+        self.assertEqual(workflow['version'], '0.3.2')
         self.assertEqual(workflow['runtime']['code_revision'], IMPLEMENTATION)
         self.assertEqual(len(workflow['activities']), 4)
         self.assertEqual(sum(len(a['steps']) for a in workflow['activities']), 9)
@@ -19,7 +19,7 @@ class WorkflowContractTests(unittest.TestCase):
                         *(step['implementation'] for step in activity['steps'])]
             self.assertTrue(any(b.get('path', '').endswith('/identity.py') for b in bindings))
             for binding in bindings:
-                self.assertEqual(binding['version'], '0.3.1')
+                self.assertEqual(binding['version'], '0.3.2')
                 self.assertEqual(binding['revision'], 'contract' if binding['kind'] == 'skill' else IMPLEMENTATION)
         skill = (ROOT / 'skills/wechat-cs-android/SKILL.md').read_text()
         self.assertIn(IMPLEMENTATION, skill)
