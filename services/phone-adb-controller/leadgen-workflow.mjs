@@ -302,7 +302,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
       leased=await queue('claim_videos',{config_required:true,...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(sampleInput?{prefer_matched:true}:{})});
       state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
-      const failures=[];qualified=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0;
+      const failures=[];qualified=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0,recordingsUnverified=0;
       for(const v of leased){await queue('renew_video',{video_id:v.video_id});
         if(state.companyConfig&&v.judgment_status==='matched'&&v.judgment_config?.company_id===state.companyConfig?.company_id&&v.judgment_config?.version===state.companyConfig?.version){
           const identity=await videoAction('identity',v);
@@ -310,12 +310,19 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
           continue;
         }
         const result=await videoAction('qualification',v);
-        recordingsRequired++;
         appendFileSync(join(env.WFR_RUN_DIR,'qualification.tsv'),result.stdout);
+        const recordingPath=join(env.WFR_RUN_DIR,`${run}-recording-${v.video_id}.json`);
+        if(result.code!==0&&!existsSync(recordingPath)){
+          // qv_open可在录音前失败；缺proof不能覆盖首错，也不能证明媒体音量成功或失败。
+          recordingsUnverified++;
+          failures.push({video_id:v.video_id,code:result.code,stage:'video_action',reason:safeExecutionDiagnostic(result.stderr||'资格动作失败，未读回本轮录音工件',env).slice(-1500)});
+          continue;
+        }
+        recordingsRequired++;
         const marker=result.stdout.split('\n').find(s=>s.startsWith(`QUAL\t${v.video_id}\t`))?.split('\t');
         const verdict=marker?.[2];
         try{
-          const path=join(env.WFR_RUN_DIR,`${run}-recording-${v.video_id}.json`);
+          const path=recordingPath;
           if(lstatSync(path).isSymbolicLink())throw Error('本轮录音工件不得是symlink');
           const proof=JSON.parse(readFileSync(path,'utf8'));
           if(proof.version!==2||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
@@ -339,7 +346,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       }
       const verified=leased.filter(v=>{try {const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,`${run}-identity-${v.video_id}.json`),'utf8'));
         return proof.verified===true&&proof.observed_video_id===v.video_id&&proof.content_type==='video';}catch{return false;}}).length;
-      return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsRequired-mediaVerified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
+      return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:recordingsUnverified?null:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,avatarRecoveries=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
       // 空候选也产出可读回的空工件；保留已有行，缺文件判定仍由统一裁判严格执行。

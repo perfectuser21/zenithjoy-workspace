@@ -3,6 +3,12 @@
 # 用法: harvest-keyword.sh PROFILE KEYWORD_URLENC MAX_VIDEOS RUN_TAG
 # 输出: LEAD\t昵称\t抖音号\taccount_type\t评论\t日期\t地区\t视频标题\t关键词 到 stdout
 # 全部动作走 douyin-phone-adb(锁/守卫/频控内建),本脚本只做序列编排。
+# 共享claimer不能经此旧job-kind绕开四流程；在参数、依赖和所有副作用前拒绝。
+legacy_harvest_canonical="$HOME/bin-harvest"
+if [[ -z "${HARVEST_KEYWORD_LIB:-}" && "${0:A:h}" == "${legacy_harvest_canonical:A}" ]]; then
+  print -u2 -- 'HARVEST_KEYWORD_RETIRED: 旧采集入口已退役；请使用 leadgen-run.sh douyin_video_discovery。'
+  exit 1
+fi
 set -uo pipefail
 C="${DOUYIN_PHONE_ADB:-$HOME/.local/bin/douyin-phone-adb}"
 P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"

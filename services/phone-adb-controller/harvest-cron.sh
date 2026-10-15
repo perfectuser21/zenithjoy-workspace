@@ -4,6 +4,12 @@
 #   这里固定能力 = keyword_acquisition,参数原样透传。历史注释(0915-0929 各次修复的来龙去脉)随代码一起在 wf-run.sh。
 # 库模式: HARVEST_CRON_LIB=1 source 本文件 = source wf-run.sh 的库块(只装函数不跑主体),既有单测照旧。
 if [[ "${HARVEST_CRON_LIB:-0}" == "1" ]]; then source "${${(%):-%x}:A:h}/wf-run.sh"; return 0; fi
+# 正式旧入口先退役，不能先申请中央锁再由旧计划拒绝；库合同仍保留。
+legacy_harvest_canonical="$HOME/bin-harvest"
+if [[ "${0:A:h}" == "${legacy_harvest_canonical:A}" ]]; then
+  print -u2 -- 'HARVEST_CRON_RETIRED: 旧采集入口已退役；请使用 leadgen-run.sh douyin_video_discovery。'
+  exit 1
+fi
 # 派发总闸D(dd7767b8): crontab 保底直调本脚本时先过 Brain 设备锁——xian-m4 的 crontab 经 ssh 改不动(macOS TCC),
 #   闸只能放在这里。harvest-fallback.sh 领到锁后带 HARVEST_BRAIN_LOCK_HELD=1 回调本脚本,才走到下面的 exec。
 #   Commander 主路径(wf-launch.sh)直接起 wf-run.sh,不经过本脚本,不受影响。
