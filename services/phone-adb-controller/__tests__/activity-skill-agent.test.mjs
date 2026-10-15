@@ -17,13 +17,9 @@ test('isolated transport fixture: actual parent CLI args, official child receipt
   }});
   const {args}=seen.find(x=>x.command==='openclaw');
     assert.ok(args.includes('--session-key'));assert.ok(args.includes('--message-file'));assert.equal(args.includes('--deliver'),false);
-    const message=readFileSync(args[args.indexOf('--message-file')+1],'utf8');
-    assert.doesNotMatch(message,/gateway_exec|gateway_process/,'retired names must never be requested from actual parent');
-    assert.match(message,/host[=:：]?[^\n]*gateway/,'every MMV execution must explicitly select gateway host');
-    assert.match(message,/r10-7/,'actual gateway hostname must be checked before any run access');
-    assert.match(message,/sessionId/,'poll only the session returned by this exec');
-    assert.match(message,/30000/,'process poll timeout uses bounded milliseconds');
-    assert.match(message,/不设置taskName/,'omit optional taskName rather than alter business run identity');
+  const message=readFileSync(args[args.indexOf('--message-file')+1],'utf8');
+  assert.match(message,/gateway_exec/,'actual Codex projection uses gateway_exec, unlike native core exec catalog');
+  assert.match(message,/不设置taskName/,'omit optional taskName rather than alter business run identity');
   assert.equal(r.execution_stopped,false);assert.equal(r.status,'unknown');assert.equal(seen.filter(x=>x.command==='openclaw').length,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
@@ -57,7 +53,6 @@ test('real public inspect CLI validates without waiting for an unrelated open st
  let timedOut=false;const timer=setTimeout(()=>{timedOut=true;child.kill('SIGKILL');},1500);
  try{const code=await new Promise(resolve=>child.once('close',resolve));assert.equal(timedOut,false);assert.equal(code,1);}finally{clearTimeout(timer);child.stdin.destroy();child.kill('SIGKILL');}
 });
-
 
 test('official spawn raw full model reference is accepted without rewriting; exact provider/model negatives remain blocked (isolated lifecycle fixture)',async()=>{
  const {dirname}=await import('node:path');

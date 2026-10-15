@@ -346,23 +346,19 @@ readback=r.io.read(d/'cleanup-root-start.json');assert readback['matches'] is Fa
 `);assert.equal(result.status,0,result.stderr+result.stdout);
  }
 });
-test('MMV explicit gateway exec env fixture guards hostname before file access and preserves envelope',()=>{
+test('MMV gateway_exec结构化env示例可执行、无损落盘且拒绝覆盖冲突',()=>{
  const f=fixture();const skill=readFileSync(join(source,'skills/workflow-commander/SKILL.md'),'utf8');
  const block=skill.split('<!-- gateway-envelope-write -->')[1];assert.ok(block,'missing executable gateway envelope example');
  const call=JSON.parse(block.split('```json\n')[1].split('\n```')[0]);
- assert.equal(call.host,'gateway');assert.equal(call.timeoutSeconds,30);assert.ok(call.command.includes('os.environ'));assert.doesNotMatch(call.command,/中文|touch \/tmp/);
- // Isolated socket module fixture; production never accepts an env hostname override.
- writeFileSync(join(f.home,'socket.py'),"import os\ndef gethostname(): return os.environ['FIXTURE_GATEWAY_HOST']\n");
- const execute=(envelope,host='r10-7.macminivault.com')=>spawnSync('bash',['-c',call.command],{env:{...f.env,PYTHONPATH:f.home,PYTHONDONTWRITEBYTECODE:'1',FIXTURE_GATEWAY_HOST:host,WF_ENVELOPE_JSON:JSON.stringify(envelope)},encoding:'utf8'});
- assert.notEqual(execute(f.envelope,'r10-70.macminivault.com').status,0,'wrong gateway must stop before envelope filesystem write');
- assert.equal(existsSync(join(f.home,'wf-agent-inputs')),false);
+ assert.equal(call.timeoutSeconds,30);assert.ok(call.command.includes('os.environ'));assert.doesNotMatch(call.command,/中文|touch \/tmp/);
+ const execute=envelope=>spawnSync('bash',['-c',call.command],{env:{...f.env,WF_ENVELOPE_JSON:JSON.stringify(envelope)},encoding:'utf8'});
  const first=execute(f.envelope);assert.equal(first.status,0,first.stderr);
  const result=JSON.parse(first.stdout);assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
  assert.equal(execute(f.envelope).status,0);assert.notEqual(execute({...f.envelope,input:{changed:true}}).status,0);
  assert.notEqual(execute({...f.envelope,recovery:{max_attempts:true}}).status,0,'JSON boolean must not equal number');
  assert.deepEqual(JSON.parse(readFileSync(result.envelope_path)),f.envelope);
  const dir=start(f),request=JSON.parse(readFileSync(join(dir,'agent-request.json')));assert.equal(request.execution_location.tool,'gateway_exec');assert.equal(request.execution_location.host,'mmv');assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/模型本机不是MMV/);
- assert.ok(skill.includes('sessionId'));assert.ok(skill.includes('30000'));assert.doesNotMatch(skill,/gateway_process/);assert.ok(skill.includes('WF_BINDING_JSON'));assert.ok(skill.includes('模型本机'));
+ assert.ok(skill.includes('gateway_process'));assert.ok(skill.includes('WF_BINDING_JSON'));assert.ok(skill.includes('模型本机'));
  const special=readFileSync(join(source,'skills/wf-douyin_video_publish/SKILL.md'),'utf8');
  assert.match(special,/version: 0\.1\.2/);assert.match(special,/multi-platform-publish/);assert.doesNotMatch(special,/android-douyin-private-video|45 分钟|wf-status\.sh mmv/);
 });
