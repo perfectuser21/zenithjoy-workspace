@@ -32,29 +32,29 @@
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "0cbf539b900311b424529993a039a78fdff22fe24e0a35a5236a5f7fc2822cc5",
+      "sha256": "17d3080b5d6f175c2a2649b68dc5fb7053e47bc4fb8d4ddc408b4638079283a4",
       "activities": {
         "preflight": "030599eba75eebdc4fc5463f9e8b873f8e78b0a65c883815cfb1a9e8a369b24a",
-        "send_dm": "10157fc5083dcaa16a91c76c05170b8eda9aacc8891e562c53f4cf5c6910febc",
-        "write_back": "92fa64536a2be4c9c992967d4b67ee8c0978f428ec7dc3067e2d01f5dcf53bbd",
+        "send_dm": "db4aefee984fd3e408f1fbf25ba3e0abc2721635e99f4c337abf2b9b21d9bb1f",
+        "write_back": "43237819f0b533627b0e53f11e4839b8e14d8aa299741ab331eaee628de68618",
         "cleanup": "e089dfb5e797305c69470541ee97f66a6c82e442129c2adae478cbd4030f98cc"
       }
     },
     "douyin_video_discovery": {
-      "sha256": "728e33f3e7e494fc6fb6b54d6e4417ca3cfd347f4f44b638dcf600ce8e9e485b",
+      "sha256": "45174fe9818313b03841c441838646a8a3944158cbdda4e9ffadfbe61f326b19",
       "activities": {
         "preflight": "7897bc834768b9997b05266564ec4916e6ee4b65ffbd37b8e811dbff8f778ba8",
-        "collect_videos": "ba8c6439345b93aa6bcc83f458e8771548bd5406f0e80bd4bb60a613409cb401",
+        "collect_videos": "408fdcdf372e7596a57726eac5c2efe84479c3df20adeed4d6d51a5b98942da5",
         "cleanup": "480872a8088b82ac5bee869b5787123aa8429f29e1fb3e66dcd497427855663f"
       }
     },
     "douyin_video_processing": {
-      "sha256": "3c54262e8c283abd5cc0dfebe664aa244c6fd1368253a4d0488343e4ea3ea8e5",
+      "sha256": "2dbdec302060da536f48b21c0280b7aa3f2d61c119e357be5f3682e57f4b1ac1",
       "activities": {
         "preflight": "7897bc834768b9997b05266564ec4916e6ee4b65ffbd37b8e811dbff8f778ba8",
-        "dedup": "4a27c7b02574f6cfee36b62d59ffc0e31cf126fee1958d084c2f14e1b0f9f63b",
-        "qualification": "345c3051c62b899007cffd4c95965d0359e766e7531557488546cc7a04054ca4",
-        "collection": "9e72b839fdffe7dd62c8c6011ec969747a3d261731b86af4917878052144f72f",
+        "dedup": "fb6ae1475661d26484915145e553a8e1b0fc89e36d010d38af060f19abaf58ba",
+        "qualification": "2bc17de2d0b30ce4c19f1ebe5dbf1abb36a1f57630c7c6d5fc44c94bc7d6524c",
+        "collection": "e6d1f596ad4add7494a78dfe12689e72c0b9acd613f3ec5b5eb7db07696c9d1f",
         "cleanup": "480872a8088b82ac5bee869b5787123aa8429f29e1fb3e66dcd497427855663f"
       }
     },

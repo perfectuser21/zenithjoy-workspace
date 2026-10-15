@@ -15,7 +15,7 @@ import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
-export async function runWorkflow({activities,context,handlers,commander,record,verify,recover}) {
+export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine}) {
   const results=[];let status='completed',stopped=false;
   const ordered=[...activities.filter(a=>a.key!=='cleanup'),...activities.filter(a=>a.key==='cleanup')];
   const execute=async activity=>{
@@ -55,11 +55,18 @@ export async function runWorkflow({activities,context,handlers,commander,record,
     if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
     await execute(a);
   }}finally{for(const a of activities.filter(a=>a.key==='cleanup')){
-    if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'Skill子会话终止未知，保留原资源锁'});status='failed';}
+    if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'原执行或Skill子会话终止未知，禁止清场并记录资源隔离'});status='failed';}
     else await execute(a);
   }}
-  return {status,results};
+  let resource_quarantine;
+  if(context.skill_execution_unknown){
+    try{resource_quarantine=quarantine?await quarantine():{verified:false,reason:'persistent quarantine adapter unavailable'};}
+    catch(error){resource_quarantine={verified:false,reason:String(error.message).slice(0,400)};}
+    await record({...context,phase:'resource_quarantine',evidence:resource_quarantine});
+  }
+  return {status,results,...(resource_quarantine?{resource_quarantine}:{})};
 }
+
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
   if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
@@ -313,7 +320,21 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     return {consumed,status:h.receipt.status,receipt:h.receipt,sha256:h.sha256};
   };
   const outreach=createOutreachHandlers({env,state,phone,queue:(op,fields)=>(rpc({kind:'outreach',request:{op,line,run,limit:Number(env.LEADGEN_LIMIT||1),...fields}})).then(r=>r.result),rpc});
-  return {state,preflight,handoffPhone:phone,handoffHeartbeat:async activity=>{
+  const quarantineResources=async()=>{
+    const proof={verified:false,device:{verified:serial==='none',applicable:serial!=='none'},videos:[],claim_receipt_unknown:state.qualificationClaimUnknown===true};
+    if(serial!=='none')try{
+      const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
+      const r=await execute(ctl,['--profile',profile,'lock-quarantine',run],{timeoutMs:20000,env:{...env}});
+      proof.device={applicable:true,verified:r.code===0&&r.stdout.trim()===`lock=quarantined owner=${run} review_required=true`,receipt:safeExecutionDiagnostic(r.stdout,env)};
+    }catch(error){proof.device={applicable:true,verified:false,reason:safeExecutionDiagnostic(error.message,env)};}
+    for(const video of leased)try{
+      const r=(await rpc({kind:'queue',request:{op:'quarantine_video',line,run,video_id:video.video_id}},{timeoutMs:30000})).result;
+      proof.videos.push({...r,video_id:video.video_id,verified:r?.quarantined===true&&r.video_id===video.video_id&&r.process_status===`待人工核验:${run}`});
+    }catch(error){proof.videos.push({video_id:video.video_id,verified:false,reason:safeExecutionDiagnostic(error.message,env)});}
+    proof.verified=proof.device.verified&&proof.videos.every(v=>v.verified)&&!proof.claim_receipt_unknown;
+    writeFileSync(join(env.WFR_RUN_DIR,'resource-quarantine.json'),JSON.stringify(proof),{mode:0o600});return proof;
+  };
+  return {state,preflight,quarantineResources,handoffPhone:phone,handoffHeartbeat:async activity=>{
       if(locked){const raw=(await phone('lock-refresh',run)).trim().split(/\s+/),fields=Object.fromEntries(raw.map(token=>token.split('=')));
         if(raw.length!==3||fields.lock!=='refreshed'||fields.owner!==run||!/^\d+s$/.test(fields.ttl||''))throw Error('Skill接手设备锁所有权续期未确认');}
       if(activity.key!=='cleanup')for(const v of leased){const receipt=await queue('renew_video',{video_id:v.video_id});if(receipt?.renewed!==true)throw Error('Skill接手原视频租约续期未确认');}
@@ -534,7 +555,7 @@ async function main(){
     return result;
   }]));
   const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc});
-  const result=await runWorkflow({activities,context,handlers:execution,recover,
+  const result=await runWorkflow({activities,context,handlers:execution,recover,quarantine:handlers.quarantineResources,
     commander:async receipt=>{
       if(receipt.phase==='before'){
         const mark=await execInput(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',receipt.activity,'1']);

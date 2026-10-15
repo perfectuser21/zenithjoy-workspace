@@ -28,3 +28,5 @@ Activity是可验收的业务工作；Skill是执行方法，Code是该方法的
 102 qualification恢复保持原已领取VID和成功集合，只失败VID生成一次新recovery EID；不重claim、不重录成功VID。已部分写入的collection暂不允许自动resume，保留原新增/覆盖计数并明确blocked，不能当成0条成功或承诺已救回。
 
 child在MMV通过同源 `leadgen-skill-agent.mjs tool <本次私有handoff目录> inspect|phone|resume` 调用固定relay；phone参数走stdin JSON，不由模型拼SSH。relay只用冻结target对应的现有受管SSH别名并严格校验host key，不新增网络跳板；实际冷连接与原生播放故障恢复仍待独立实机证据。
+
+旧执行或child终态未知时禁止重试、接手及清场；原进程通过精确owner的lock-quarantine写既有standalone_review_required并读回，已领VID只用同line/run/VID的CAS隔离到待人工核验状态并读回。隔离回执未知必须明确unknown，不宣称保有无限租约；普通设备1800秒/视频15分钟TTL不变，已确认隔离态不得自动陈旧回收或重领。

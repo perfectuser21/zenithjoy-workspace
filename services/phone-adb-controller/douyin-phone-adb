@@ -3913,7 +3913,7 @@ case "$command" in
     check_target_fast
     print -- "foreground=$(foreground_package)"
     ;;
-  lock-acquire|lock-acquire-new|lock-release|lock-release-exact|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock)
+  lock-acquire|lock-acquire-new|lock-quarantine|lock-release|lock-release-exact|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock)
     source "${0:A:h}/phone-lock-lib.sh"
     # 回执证据只在 guard 内层写（外层 phone_lock_command 会 exec 进 guard，回不来）。
     if [[ "$command" == (lock-acquire|lock-acquire-new|lock-release|lock-release-exact) && "${DOUYIN_LOCK_GUARDED:-}" == "$SERIAL:$command" ]]; then

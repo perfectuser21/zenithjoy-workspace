@@ -52,6 +52,17 @@ lock_acquire() {
   fi
   print -- "lock=acquired owner=$run"
 }
+lock_quarantine() {
+  local expected="$1" staged
+  require_run_id "$expected"
+  "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$expected" || die 'quarantine refused: exact owner mismatch'
+  staged="$(/usr/bin/mktemp "$LOCK_DIR/.review-required.XXXXXXXX")" || die 'quarantine staging failed'
+  if ! { print -r -- "$expected" > "$staged" && /bin/chmod 600 "$staged" && /bin/mv "$staged" "$LOCK_DIR/standalone_review_required"; }; then
+    /bin/rm -f "$staged"; die 'quarantine persistence failed'
+  fi
+  [[ "$(<"$LOCK_DIR/standalone_review_required")" == "$expected" ]] || die 'quarantine readback failed'
+  print -- "lock=quarantined owner=$expected review_required=true"
+}
 lock_release() {
   local run="$(normalize_run_id "$1")" owner
   require_run_id "$1"
@@ -140,6 +151,7 @@ phone_lock_command() {
     with-lock) shift; with_lock "$@";;
     lock-acquire) [[ "$#" == 2 ]] || die 'usage: lock-acquire OWNER'; lock_acquire "$2";;
     lock-acquire-new) [[ "$#" == 2 ]] || die 'usage: lock-acquire-new OWNER'; lock_acquire "$2" fresh;;
+    lock-quarantine) [[ "$#" == 2 ]] || die 'usage: lock-quarantine OWNER'; lock_quarantine "$2";;
     lock-release) [[ "$#" == 2 ]] || die 'usage: lock-release OWNER'; lock_release "$2";;
     lock-release-exact) [[ "$#" == 2 ]] || die 'usage: lock-release-exact OWNER'; lock_release "$2" exact;;
     lock-status)

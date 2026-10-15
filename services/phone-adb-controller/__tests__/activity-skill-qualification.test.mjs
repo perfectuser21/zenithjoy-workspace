@@ -65,3 +65,14 @@ test('actual qualification partial retains old execution unknown and cannot hand
  assert.equal(h.state.executionUnknown,true);assert.equal(skills,0);assert.equal(released,0);assert.equal(r.results[0].execution_stopped,false);assert.equal(r.results.at(-1).status,'blocked');
  }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+test('actual original-handler quarantine separately records device marker and owned-video CAS readback',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-quarantine-')),vid='7646309328911907195',run='fixture';let quarantined=0;
+ try{const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:run,P:'fixture',SERIAL:'fixture-serial',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{
+  if(q.op==='claim_videos')return {result:[{video_id:vid,video_url:'https://www.douyin.com/video/'+vid,judgment_status:'pending'}]};
+  if(q.op==='renew_video')return {result:{renewed:true}};
+  assert.equal(q.op,'quarantine_video');assert.equal(q.run,run);assert.equal(q.video_id,vid);assert.equal(q.line,'jinuo');quarantined++;return {result:{quarantined:true,video_id:vid,process_status:'待人工核验:'+run}};
+ },execute:async(cmd,args)=>{if(args.includes('lock-quarantine'))return {code:0,stdout:'lock=quarantined owner=fixture review_required=true\n',stderr:''};throw Error('EXECUTION_OUTPUT_LIMIT');}});
+ await assert.rejects(()=>h.qualification(),/EXECUTION_OUTPUT_LIMIT/);const proof=await h.quarantineResources();assert.equal(proof.verified,true);assert.equal(quarantined,1);assert.equal(proof.videos[0].verified,true);assert.deepEqual(JSON.parse(readFileSync(join(d,'resource-quarantine.json'),'utf8')),proof);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
