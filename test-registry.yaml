@@ -7527,3 +7527,11 @@ agent_suite:
   status: active
   product: 私域运营
   note: "GP-Anchor: line04/passive_reception#step2；启动前Gateway重启的显式证据恢复，完整未执行历史、PID时序、分离目录锁及零动作闸门；不自动重发"
+
+- id: crm-analysis-explicit-rebuild
+  path: apps/api/src/routes/__tests__/crm-analysis-rebuild.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；真实已送达历史显式重算，默认待办兼容，严格boolean及许可/租户/客服归属；不伪造消息"
