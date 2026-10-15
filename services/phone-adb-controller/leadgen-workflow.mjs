@@ -326,6 +326,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
           if(lstatSync(path).isSymbolicLink())throw Error('本轮录音工件不得是symlink');
           const proof=JSON.parse(readFileSync(path,'utf8'));
           if(proof.version!==2||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
+          if(result.code!==0&&proof.earliest_error){
+            const first=proof.earliest_error;
+            if(!['record_start','record_stop'].includes(first.phase)||!Number.isSafeInteger(first.exit_code)||first.exit_code<=0||first.exit_code>255||typeof first.stderr!=='string')throw Error('本轮录制首错工件无效');
+            recordingsUnverified++;
+            failures.push({video_id:v.video_id,code:first.exit_code,stage:first.phase,reason:safeExecutionDiagnostic(first.stderr,env).slice(-1500)});
+            continue;
+          }
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
           if(proof.playback_verified!==true||proof.playback_proof_kind!=='native_audio'||proof.playback_package!=='com.ss.android.ugc.aweme')throw Error('本轮native播放未实际核验');
@@ -346,7 +353,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       }
       const verified=leased.filter(v=>{try {const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,`${run}-identity-${v.video_id}.json`),'utf8'));
         return proof.verified===true&&proof.observed_video_id===v.video_id&&proof.content_type==='video';}catch{return false;}}).length;
-      return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:recordingsUnverified?null:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
+      return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsUnverified?null:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,avatarRecoveries=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
       // 空候选也产出可读回的空工件；保留已有行，缺文件判定仍由统一裁判严格执行。

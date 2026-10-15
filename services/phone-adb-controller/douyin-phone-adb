@@ -2582,8 +2582,12 @@ if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 
     track={'piid':int(m[1]),'uid':int(m[2]),'pid':int(m[3]),'state':m[4],'muted':m[5].strip()}
     if track['uid']==int(uid):p['tracks'].append(track)
     elif track['state']=='started':p['foreign_started'].append(track)
-   started=[t for t in p['tracks'] if t['state']=='started' and t['muted']=='none']
-   if not p['foreign_started'] and not p['unparsed_media_tracks'] and len(started)==1:
+   active=[t for t in p['tracks'] if t['state']=='started']
+   recoverable=[t for t in active if set(t['muted'].split()) and set(t['muted'].split()) <= {'streamVolume','portVolume'}]
+   started=[t for t in active if t['muted']=='none']
+   if not p['foreign_started'] and not p['unparsed_media_tracks'] and len(active)==1 and len(recoverable)==1:
+    p['state']='recoverable_muted';p.update({k:recoverable[0][k] for k in ('pid','piid')})
+   elif not p['foreign_started'] and not p['unparsed_media_tracks'] and len(started)==1:
     p['state']='started';p.update({k:started[0][k] for k in ('pid','piid')})
    elif not p['foreign_started'] and not p['unparsed_media_tracks'] and p['tracks'] and all(t['state'] in ('paused','stopped','idle') and t['muted']=='none' for t in p['tracks']):p['state']='inactive'
 with open(sys.argv[5],'w') as f:json.dump(p,f)
@@ -2645,6 +2649,45 @@ PYPLAYCONTROL
   print -u2 -- "record-play-control: source=tree x=$x y=$y evidence=$eid single_click=true"
 }
 
+# 只读本profile全部受管录制PID，不回收或杀死任何现存owner。
+record_no_active_capture() {
+  local file value
+  for file in "$EVIDENCE_ROOT"/*.rec.pid(N); do
+    [[ -f "$file" && ! -L "$file" ]] || return 1
+    value="$(cat "$file")"
+    [[ "$value" == <-> ]] && (( value > 1 )) || return 1
+    kill -0 "$value" 2>/dev/null && return 1
+  done
+  return 0
+}
+
+# 严格stream/port候选的一次非零邻档往返；不使用媒体toggle，不等未知变绿。
+record_refresh_track_volume() {
+  local target up down
+  record_no_active_capture && record_detail_foreground || return 1
+  target="$(media_volume || true)"
+  [[ "$target" == <-> ]] && (( target > 0 && target < 30 )) || return 1
+  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1 || return 1
+  wait_ms 250
+  up="$(media_volume || true)"
+  [[ "$up" == <-> ]] && (( up == target + 1 )) || return 1
+  # 即便前台漂移也应恢复自己的音量；不再执行其他业务动作。
+  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_DOWN >/dev/null 2>&1 || return 1
+  wait_ms 250
+  down="$(media_volume || true)"
+  MEDIA_VOLUME_NOW="${down:-unknown}"
+  [[ "$down" == "$target" ]] && record_detail_foreground && record_no_active_capture || return 1
+  print -u2 -- "record-audio-recovery: kind=nonzero_volume_cycle before=$target peak=$up after=$down"
+}
+
+record_recover_native() {
+  local eid="$1" result
+  record_refresh_track_volume || return 1
+  result="$(record_native_audio "$eid")"
+  [[ "$result" == *"native_audio_state=started "* ]] || return 1
+  print -r -- "$result"
+}
+
 record_start() {
   local eid max out pidf pid playback_state=unknown playback_try native="" native_state=unknown
   eid="$1"; max="${2:-110}"
@@ -2685,6 +2728,20 @@ record_start() {
       [[ "$native_state" == started ]] && break
       [[ "$native_state" == inactive ]] || break
     done
+  fi
+  if [[ "$native_state" == recoverable_muted ]]; then
+    native="$(record_recover_native "$eid-playback-recovered")" || die "RECORD_NATIVE_AUDIO_UNVERIFIED state=recoverable_muted recovery=failed"
+    # 保留原始precheck；最终start证据须来自同一新鲜恢复读回，字段前缀仍为原合同start。
+    native="$(record_native_audio "$eid-playback-start-verified")"
+    native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+    [[ "$native_state" == started ]] || die "RECORD_NATIVE_AUDIO_UNVERIFIED state=$native_state recovery=unstable"
+    # 合同要求start.*固定名：保留初错副本后再生成本次正式start证据。
+    local suffix
+    for suffix in audio.txt package-uid.txt uid-owners.txt foreground.txt media-session.txt native-audio.json; do
+      [[ ! -f "$EVIDENCE_ROOT/$eid-playback-start.$suffix" ]] || /bin/mv "$EVIDENCE_ROOT/$eid-playback-start.$suffix" "$EVIDENCE_ROOT/$eid-playback-precheck.$suffix"
+    done
+    native="$(record_native_audio "$eid-playback-start")"
+    native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
   fi
   [[ "$native_state" == started ]] || die "RECORD_NATIVE_AUDIO_UNVERIFIED state=$native_state"
   playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
@@ -2734,8 +2791,27 @@ record_stop() {
       kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
       wait_ms 500
     fi
+    kill -0 "$pid" 2>/dev/null && die "RECORD_CAPTURE_EXIT_UNVERIFIED"
     /bin/rm -f "$pidf"
   fi
+  # 退出后另留原件，不用停止前的end证据假定设备音轨已经恢复。
+  local restored restored_state restore_try
+  restored="$(record_native_audio "$eid-playback-restored-initial")"
+  restored_state="$(print -r -- "$restored" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  for restore_try in 1 2; do
+    [[ "$restored_state" == recoverable_muted ]] || break
+    wait_ms 250
+    restored="$(record_native_audio "$eid-playback-restored-wait$restore_try")"
+    restored_state="$(print -r -- "$restored" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  done
+  if [[ "$restored_state" == recoverable_muted ]]; then
+    restored="$(record_recover_native "$eid-playback-restored-recovered")" || die "RECORD_AUDIO_RESTORE_UNVERIFIED recovery=failed"
+    restored_state=started
+  fi
+  [[ "$restored_state" == (started|inactive) ]] || die "RECORD_AUDIO_RESTORE_UNVERIFIED state=$restored_state"
+  restored="$(record_native_audio "$eid-playback-restored")"
+  restored_state="$(print -r -- "$restored" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  [[ "$restored_state" == (started|inactive) ]] || die "RECORD_AUDIO_RESTORE_UNVERIFIED state=$restored_state"
   [[ -f "$out" ]] || die "no recording artifact at $out"
   vstreams="$("$FFPROBE" -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c video || true)"
   astreams="$("$FFPROBE" -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c audio || true)"
@@ -2762,7 +2838,7 @@ record_stop() {
   local mean_db
   mean_db="$("$FFMPEG" -hide_banner -nostats -v info -i "$out" -vn -af volumedetect -f null - 2>&1 \
     | /usr/bin/grep -o 'mean_volume: [-0-9.]* dB' | /usr/bin/tail -1 | /usr/bin/awk '{print $2}' || true)"
-  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown} playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
+  print -- "record_stopped playback_restored=true path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown} playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
   if [[ -n "$mean_db" ]] && (( $(print -- "$mean_db" | /usr/bin/awk '{print ($1 <= -80) ? 1 : 0}') )); then
     print -u2 -- "warning: recording is near-silent (mean_volume=${mean_db} dB); ASR will likely return no words — check the phone's speaker-stream volume is non-zero"
   fi

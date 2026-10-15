@@ -66,17 +66,20 @@ qv_open(){
 }
 qv_qualify(){
   local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started="" stopped="" extracted audio="" db duration remote result verdict media="" media_ok=0 playback_ok=0 playback_start=unknown playback_end=unknown playback_package=unknown audio_status=unavailable
+  local error_file first_phase="" first_rc=0 first_stderr=""
   [[ "$seconds" == <-> ]] && (( seconds >= 10 && seconds <= 105 )) || return 2
+  error_file="$(mktemp)" || return 5
+  /bin/chmod 600 "$error_file"
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
   if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
-    if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null)"; then
+    if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null 2>"$error_file")"; then
       media="$(print -r -- "$started" | sed -n 's/.*media_volume=\([^ ]*\).*/\1/p')"
       [[ "$started" == record_started* && "$media" == <-> ]] && (( media > 0 )) && media_ok=1
       playback_start="$(print -r -- "$started" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
       playback_package="$(print -r -- "$started" | sed -n 's/.* playback_package=\([^ ]*\).*/\1/p')"
       qv_nap "$((seconds+2))"
-      stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null)" || stopped=""
+      stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null 2>"$error_file")" || { first_rc=$?;first_phase=record_stop;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr";stopped=""; }
       playback_end="$(print -r -- "$stopped" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
       if python3 - "$started" "$stopped" "$record_eid" <<'PYNATIVEPAIR'
 import sys,re
@@ -109,19 +112,23 @@ PYNATIVEPAIR
           fi
         fi
       fi
+    else
+      first_rc=$?;first_phase=record_start;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr"
     fi
   fi
+  /bin/rm -f "$error_file"
   # 媒体音量与内容电平分别存证；静音不是模型内容判定，也不得用旧转写伪装本轮ASR。
   [[ -n "${WFR_RUN_DIR:-}" ]] || return 5
-  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" <<'PYRECORD' || return 5
+  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" "$playback_ok" "$playback_package" "$playback_start" "$playback_end" "$first_phase" "$first_rc" "$first_stderr" <<'PYRECORD' || return 5
 import sys,json,os,tempfile,datetime,math
-d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end=sys.argv[1:]
+d,run,vid,eid,media,ok,status,db,duration,started,stopped,playback_ok,playback_package,playback_start,playback_end,first_phase,first_rc,first_stderr=sys.argv[1:]
 def number(v):
  try:
   n=float(v);return n if math.isfinite(n) else None
  except ValueError:return None
 os.makedirs(d,mode=0o700,exist_ok=True)
 p={"version":2,"playback_proof_kind":"native_audio","native_audio":{},"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","playback_verified":playback_ok=="1","playback_package":playback_package,"playback_state":number(playback_start),"playback_end_state":number(playback_end),"audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"playback_raw_evidence":{},"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+p['earliest_error']={'phase':first_phase,'exit_code':int(first_rc),'stderr':first_stderr[-4000:]} if first_phase else None
 for phase,raw in [('start',started),('end',stopped)]:
  fields=dict(x.split('=',1) for x in raw.split() if '=' in x)
  p['playback_raw_evidence'][phase]={k:fields.get('playback_'+k) for k in ('evidence_file','evidence_sha256','foreground_file','foreground_sha256')}
