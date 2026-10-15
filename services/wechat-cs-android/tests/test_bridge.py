@@ -123,6 +123,21 @@ class BackendTests(unittest.TestCase):
                     cs_wechat_id='wxid_skpj8yqmblqc22', screenshot=str(image),
                     visual_confirmed=True, conversation_header='苏小妖')
 
+    def test_draft_forwards_authoritative_event_id_for_server_deduplication(self):
+        self.backend.draft(self.context() | dict(event_id='a' * 64))
+        self.assertEqual(self.calls[-1][2].get('source_event_id'), 'a' * 64)
+
+    def test_draft_rejects_invalid_event_identity_before_any_backend_request(self):
+        for event_id in ('', 'not-an-event', 'A' * 64, None):
+            with self.assertRaises(ValueError):
+                self.backend.draft(self.context() | dict(event_id=event_id))
+            self.assertEqual(self.calls, [])
+
+    def test_already_delivered_server_result_cannot_become_sendable_draft(self):
+        self.response = dict(ok=True, status='delivered', reply='您好', message_id=17)
+        with self.assertRaises(ValueError):
+            self.backend.draft(self.context() | dict(event_id='a' * 64))
+
     def test_draft_uses_observed_context_and_exact_identity(self):
         result = self.backend.draft(self.context())
         self.assertEqual(result['message_id'], 17)
