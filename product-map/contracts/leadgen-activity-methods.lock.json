@@ -45,7 +45,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -146,7 +146,7 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "c1aa5ad46bc816f387de12dacc775eb9b988bc05ec91ed3636c6a997bc069327"
+      "code_digest": "5ddc44148b811a3ec6d384956d00d9a6374f597def421bb91add0ce483371d59"
     },
     "douyin_video_processing.preflight": {
       "activity_version": "2.0.0",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -297,7 +297,7 @@
           "sha256": "b9b49dec362201d1d7b1aae0f0fa80188a10c0e56b49eb67f8501391afda2492"
         }
       ],
-      "code_digest": "db75e40f2654d08b7ad21ef387f6b894465c16825b462e9c6c779e570cf08e9a"
+      "code_digest": "88c638cc639bac90bc0d8b1ba132ef06046d94a08233fff8afa937db7ef7c691"
     },
     "douyin_video_processing.dedup": {
       "activity_version": "3.0.0",
@@ -343,7 +343,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -444,7 +444,7 @@
           "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
         }
       ],
-      "code_digest": "08d9cedf7e25d48d21bcaf6a1827921ab289ac278548606296ada9f047e85602"
+      "code_digest": "b16037c1753639cc94fb647ff4f2191478d9f9b2902efda9dfb89cda44d316eb"
     },
     "douyin_video_processing.qualification": {
       "activity_version": "3.1.0",
@@ -490,7 +490,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -598,7 +598,7 @@
           "sha256": "17790840369de77d2ed58efd6af46d92278179343b8d72e12e0b2aaed52021c1"
         }
       ],
-      "code_digest": "7a6794754b27415f604cb7c2402b2d19e4e31e7a4394f8b1c2670a886f2e7726"
+      "code_digest": "c3c326aec47b3fc5b53dc5a318167f3a6a0a0b625ba74a98d2f8cffc6361f415"
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.3.0",
@@ -644,7 +644,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -767,7 +767,7 @@
           "sha256": "befda1bd125177423044f6f94763d2eeec0bf9ed0599de1ac5e8bbbdd1c91c04"
         }
       ],
-      "code_digest": "8d6321f7ebcf411f7ac0358c6da9409510fcf48341102074ca69237d6213249d"
+      "code_digest": "0f595cfabb48d4157e89e2f429532805021a76ff0badeb7b1449ffc4dab83cb8"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.0.0",
@@ -813,7 +813,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -910,7 +910,7 @@
           "sha256": "b9b49dec362201d1d7b1aae0f0fa80188a10c0e56b49eb67f8501391afda2492"
         }
       ],
-      "code_digest": "fafd416031e358cc8d1c1ec46c7357d68f76b9ab6ef3d2fd7dcf87dd30458fb2"
+      "code_digest": "c2a78416d9bb1278c440589299b78616f9e3371a02a196a4e6cf512b16b3309b"
     },
     "douyin_comment_scoring.scoring": {
       "activity_version": "2.0.0",
@@ -956,7 +956,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -1036,7 +1036,7 @@
           "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
         }
       ],
-      "code_digest": "9f945c40a4665a745dc96c05a087c819681e8c1ce339aedfc09d31470b160bff"
+      "code_digest": "f733655af7591836e4e5e902f2903e24a0484b2b59e17f14b925ecc346167ade"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.0.0",
@@ -1082,7 +1082,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -1211,7 +1211,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "302535c2b88adb6dc657e80baccdec8ce68db81f1831da5c22ca7e9929857deb"
+      "code_digest": "d661db2fd45ea3d9d402ad03a2b31a3181b5d6c21b1c177290471e1ab3ec02b4"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "4.0.0",
@@ -1257,7 +1257,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -1390,7 +1390,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "caab4789c5fc5f262696c6fd3adbd0f4c817fcbf00fba371a7448d9e8ee3afcd"
+      "code_digest": "821c727be8707a3a3da22ac4c507e2c77a1c798393cc925ec9393395f4db5c5e"
     },
     "douyin_lead_outreach.send_dm": {
       "activity_version": "3.0.0",
@@ -1436,7 +1436,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -1544,7 +1544,7 @@
           "sha256": "b9b49dec362201d1d7b1aae0f0fa80188a10c0e56b49eb67f8501391afda2492"
         }
       ],
-      "code_digest": "dce081f00e47a2544df8fc80d207025b259702af8f7ab79e5b5a9272f3a1c5e9"
+      "code_digest": "64dffde3234d771af7cd6fa3cc75da32d8138481f427ae12a2b58068625f5c92"
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "3.0.0",
@@ -1590,7 +1590,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -1698,7 +1698,7 @@
           "sha256": "b9b49dec362201d1d7b1aae0f0fa80188a10c0e56b49eb67f8501391afda2492"
         }
       ],
-      "code_digest": "dce081f00e47a2544df8fc80d207025b259702af8f7ab79e5b5a9272f3a1c5e9"
+      "code_digest": "64dffde3234d771af7cd6fa3cc75da32d8138481f427ae12a2b58068625f5c92"
     },
     "douyin_lead_outreach.cleanup": {
       "activity_version": "3.0.0",
@@ -1744,7 +1744,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "c81db87779f794a424e8dac55c1647819292cb58d2a3221b40a79a182dcb1afe"
+          "sha256": "052ea47826eb138d4098cd18bfc71a6a7e9914bf5ef718fb02119def3c24a110"
         },
         {
           "kind": "code",
@@ -1855,7 +1855,7 @@
           "sha256": "b9b49dec362201d1d7b1aae0f0fa80188a10c0e56b49eb67f8501391afda2492"
         }
       ],
-      "code_digest": "85d9f6dcc4799189bb6020f32948d2e5f1eedafb0c424a8f13b857dc082d3a97"
+      "code_digest": "7c5346ee8dc62dfb7257f43fac414bccf3f75d426e3881913e82708e371d3f06"
     }
   },
   "workflows": {

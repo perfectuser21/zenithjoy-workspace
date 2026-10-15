@@ -147,7 +147,7 @@ if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.ur
  try{
   let result;
   if(process.argv[2]==='claim'&&process.argv.length===4)result=claimSkillSpawn(process.argv[3]);
-  else if(process.argv[2]==='tool'&&process.argv.length===5){let input='';for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');}result=await relayActivityTool(process.argv[3],process.argv[4],input.trim()?JSON.parse(input):{});}
+  else if(process.argv[2]==='tool'&&process.argv.length===5){let input='';if(process.argv[4]==='phone')for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');}result=await relayActivityTool(process.argv[3],process.argv[4],input.trim()?JSON.parse(input):{});}
   else throw Error('only scoped claim/tool is public');
   process.stdout.write(JSON.stringify(result)+'\n');
  }
