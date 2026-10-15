@@ -1610,7 +1610,8 @@ evidence_bundle() {
 }
 
 foreground_package() {
-  "$ADB" -s "$SERIAL" shell dumpsys window 2>/dev/null \
+  # 全量 window 会先输出 LAST ANR 保存的旧焦点；displays 只读取当前显示状态。
+  "$ADB" -s "$SERIAL" shell dumpsys window displays 2>/dev/null \
     | /usr/bin/awk '/mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }' \
     | tr -d '\r'
 }
