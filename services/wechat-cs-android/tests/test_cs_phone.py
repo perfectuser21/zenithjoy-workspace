@@ -210,3 +210,54 @@ finally:
                                 capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), ['cancelled', 'cleanup'])
+
+class InboundBatchTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.state = bridge.State(Path(self.temp.name) / 's.db')
+        self.addCleanup(self.state.close)
+        # 2026-10-15 18:10 Asia/Shanghai, hand-derived from 10:10 UTC.
+        self.when = str(int(__import__('datetime').datetime(2026, 10, 15, 10, 10,
+            tzinfo=__import__('datetime').timezone.utc).timestamp() * 1000))
+        self.state.claim(dict(event_id='batch-one', sender='苏小妖', text='你好', notification_when=self.when))
+        self.batch = [dict(type='text', text='你好'), dict(type='text', text='我想咨询智能客服'), dict(type='image')]
+        self.context = dict(contact_key='suxiaoyao121', incoming_text='你好',
+            content='你好\n我想咨询智能客服\n用户发了一张截图（未解读）',
+            inbound_batch=self.batch, anchor_time_minute='2026-10-15 18:10',
+            latest_message=dict(type='image'), latest_message_direction='incoming',
+            replied_after_anchor=False)
+
+    def test_notification_anchor_can_wake_full_unreplied_text_and_image_batch(self):
+        self.state.claim_draft('batch-one', self.context)
+        self.assertEqual(self.state.event('batch-one')['status'], 'drafting')
+
+    def test_wrong_time_missing_anchor_or_outgoing_after_anchor_rejects(self):
+        bads = [dict(anchor_time_minute='2026-10-15 18:11'),
+                dict(inbound_batch=[dict(type='text', text='其他消息')],
+                     latest_message=dict(type='text', text='其他消息')),
+                dict(replied_after_anchor=True),
+                dict(latest_message_direction='outgoing'),
+                dict(latest_message=dict(type='text', text='你好'))]
+        for patch in bads:
+            with self.assertRaises(ValueError):
+                self.state.claim_draft('batch-one', self.context | patch)
+        self.assertEqual(self.state.event('batch-one')['status'], 'claimed')
+
+    def test_different_notifications_for_same_batch_consume_once(self):
+        self.state.claim(dict(event_id='batch-two', sender='苏小妖', text='我想咨询智能客服',
+                              notification_when=self.when))
+        self.state.claim_draft('batch-one', self.context)
+        with self.assertRaises(ValueError):
+            self.state.claim_draft('batch-two', self.context | dict(incoming_text='我想咨询智能客服'))
+
+    def test_send_context_changed_since_draft_is_rejected(self):
+        self.state.claim_draft('batch-one', self.context)
+        self.state.set_draft('batch-one', dict(reply='您好，请问您希望了解哪方面？', message_id=17), self.context)
+        check = getattr(self.state, 'check_send_context', None)
+        self.assertTrue(callable(check), '发送前批次一致性校验尚未实现')
+        check('batch-one', self.context)
+        changed = self.batch + [dict(type='text', text='还有新消息')]
+        with self.assertRaises(ValueError):
+            check('batch-one', self.context | dict(inbound_batch=changed,
+                latest_message=changed[-1]))
