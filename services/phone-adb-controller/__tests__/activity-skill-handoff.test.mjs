@@ -39,3 +39,9 @@ test('actual frozen Activity budget clips workflow remaining time and never rese
  assert.equal(activityExecutionDeadline({activity,env:{...env,WF_RUN_START_TS:String(now/1000-2390)},now}),now+10000);
  assert.throws(()=>activityExecutionDeadline({activity,env:{...env,WF_RUN_MAX_SECONDS:'bad'},now}));
 });
+
+for(const kind of ['EXECUTION_OUTPUT_LIMIT','EXECUTION_DEADLINE','explicit'])test('old execution termination unknown prevents Code retry, Skill and cleanup '+kind,async()=>{
+ let calls=0,skills=0,cleaned=0;
+ const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{calls++;const e=Error(kind);if(kind==='explicit')e.executionStopped=false;throw e;},cleanup:async()=>{cleaned++;}},commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',result:{},execution_stopped:true};}});
+ assert.equal(calls,1);assert.equal(skills,0);assert.equal(cleaned,0);assert.equal(r.status,'failed');assert.equal(r.results[0].execution_stopped,false);
+});
