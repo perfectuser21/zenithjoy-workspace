@@ -7535,3 +7535,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "单Activity受控接手离线合同；真实CLI/Socket与明确Gateway夹具，不冒实机或模型成功"
+
+- id: wechat-cs-prestart-recovery
+  path: services/wechat-cs-android/tests/test_prestart_recovery.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "GP-Anchor: line04/passive_reception#step2；启动前Gateway重启的显式证据恢复，完整未执行历史、PID时序、分离目录锁及零动作闸门；不自动重发"
