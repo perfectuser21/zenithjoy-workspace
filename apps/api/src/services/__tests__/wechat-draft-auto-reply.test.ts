@@ -264,3 +264,9 @@ describe('回复不等待记忆固化 regression', () => {
     expect(vi.mocked(callOpenRouter).mock.calls.some(([p]) => p.purpose === 'wechat_consolidate')).toBe(false);
   });
 });
+describe('legacy不能进入CRM保留域',()=>{
+ it('拒绝legacy传入已知scoped key',async()=>{
+  const {generateChatDraft}=await import('../wechat-draft');
+  await expect(generateChatDraft({sender:'客户',wechat_id:'crm:v1:fake',content:'你好'})).rejects.toThrow('CRM_RESERVED_SCOPE');
+ });
+});
