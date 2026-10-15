@@ -323,7 +323,7 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal'}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal',volumeUpSaturated=false}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   // 只读RED可指定冻结git源的私有副本；生产及默认GREEN仍用仓库实际控制器。
@@ -349,7 +349,7 @@ if [[ "$*" == *'cmd media_session volume --stream 3 --get'* ]]; then
  v=1; [[ ! -f "$FIXTURE/volume" ]] || v="$(cat "$FIXTURE/volume")"; print "volume is $v in range [0..17]"; exit 0
 fi
 if [[ "$*" == *'input keyevent KEYCODE_VOLUME_'* ]]; then
- v=1; [[ ! -f "$FIXTURE/volume" ]] || v="$(cat "$FIXTURE/volume")"; if [[ "$*" == *KEYCODE_VOLUME_UP* ]]; then print $((v+1)) > "$FIXTURE/volume"; touch "$FIXTURE/up-issued"; else print $((v-1)) > "$FIXTURE/volume"; touch "$FIXTURE/volume-cycle"; fi; exit 0
+ v=1; [[ ! -f "$FIXTURE/volume" ]] || v="$(cat "$FIXTURE/volume")"; if [[ "$*" == *KEYCODE_VOLUME_UP* ]]; then if [[ "$UP_SATURATED" == 1 ]]; then print "$v" > "$FIXTURE/volume";else print $((v+1)) > "$FIXTURE/volume";fi; touch "$FIXTURE/up-issued"; else print $((v-1)) > "$FIXTURE/volume"; touch "$FIXTURE/volume-cycle"; fi; exit 0
 fi
 if [[ "$*" == *'dumpsys audio'* ]]; then
  current="$NATIVE"; [[ ! -f "$FIXTURE/tapped" ]] || current="$AFTER_TAP"
@@ -417,7 +417,7 @@ fi
   const volumeHelpers=text.slice(text.indexOf('media_volume() {'),text.lastIndexOf('\n#',text.indexOf('record_playback_state() {')));
   const extra=extraStart>=0?text.slice(text.lastIndexOf('\n',extraStart-1)+1,text.indexOf('record_start() {')):'';
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nFFPROBE=$FIXTURE/ffprobe\nFFMPEG=$FIXTURE/ffmpeg\nSERIAL=test\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == (500|2000) ]]; then /bin/sleep 0.02; fi; if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\n${volumeHelpers}\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${fn}\n${stopFn}\n${activeRecording?'print $$ > $FIXTURE/other.rec.pid':''}\n${initialWrong?'touch $FIXTURE/fg-switched':''}\n${probeMode==='session'?'record_playback_state probe':probeMode==='stop'?'record_start probe 25; record_stop probe':'record_start probe 25'}\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp},timeout:6000});
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0'},timeout:6000});
   const pid=join(d,'probe.rec.pid');if(existsSync(pid)){try{process.kill(Number(readFileSync(pid,'utf8').trim()),'SIGTERM');}catch{}}
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
   return {...r,finalVolume:existsSync(join(d,'volume'))?readFileSync(join(d,'volume'),'utf8').trim():'1',restoredEvidence:existsSync(join(d,'probe-playback-restored.native-audio.json')),rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
@@ -531,3 +531,5 @@ test('post-stop unknown audio cannot be washed into restored or trigger volume k
 
 for(const state of ['foreign','unknown','started'])test('pre-action native recheck '+state+' never nudges',()=>{const r=recordBoundary({nativeSequence:['streamPort',state]});assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_/);assert.equal(r.started,state==='started',r.stderr);});
 for(const volumeReadAfterUp of ['unknown','unchanged'])test('volume cycle restores own target after '+volumeReadAfterUp+' up readback',()=>{const r=recordBoundary({native:'streamPort',volumeReadAfterUp});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
+
+test('volume cycle upper bound unchanged restores exact target without decrement',()=>{const r=recordBoundary({native:'streamPort',volumeUpSaturated:true});assert.notEqual(r.status,0);assert.equal(r.started,false);assert.equal(r.finalVolume,'1');assert.doesNotMatch(r.calls,/KEYCODE_VOLUME_DOWN/);assert.equal(r.calls.split('volume --stream 3 --set 1').length-1,1);});
