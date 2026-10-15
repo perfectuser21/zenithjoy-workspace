@@ -34,6 +34,7 @@ test('real Weibo frames allow downward body growth with exact text and current a
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
   assert.equal(report.comparison_mode, 'exact');
+  assert.equal(report.identity_policy, 'weibo_composer_body_growth_v1');
   assert.equal(report.actual.bytes, 132);
   assert.equal(report.actual.sha256, 'bc88254227c70b9fda44db9e8314e1fec19ca5a1c3153e3921d3736fd0ee85c5');
 });

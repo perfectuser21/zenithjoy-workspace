@@ -9,7 +9,7 @@ const script=join(service,'input-runtime-release.py');
 const run=(...args)=>spawnSync('python3',[script,...args],{encoding:'utf8'});
 test('paired input deployment source provides verified component metadata before SSH',()=>{
  const r=run('source-info',join(service,'douyin-phone-adb'),join(service,'text-input-focus.py'));
- assert.equal(r.status,0,r.stderr);const info=JSON.parse(r.stdout);assert.equal(info.revision,3);assert.ok(info.function_sha256);assert.ok(info.helper_sha256);
+ assert.equal(r.status,0,r.stderr);const info=JSON.parse(r.stdout);assert.equal(info.revision,4);assert.ok(info.function_sha256);assert.ok(info.helper_sha256);
 });
 const controller=readFileSync(join(service,'douyin-phone-adb'),'utf8'),helper=readFileSync(join(service,'text-input-focus.py'),'utf8');
 function setup(){
@@ -37,7 +37,7 @@ test('paused/viewport rest changes carry the same verified input component and r
 });
 test('same revision input function mutation is rejected without clobbering paused/viewport',()=>{
  const c=setup();snapshot(c);assert.equal(install(c).status,0);snapshot(c);
- writeFileSync(join(c.source,'douyin-phone-adb'),controller.replace('  # INPUT_RUNTIME_REVISION=3','  # INPUT_RUNTIME_REVISION=3\n  # changed input semantics'));
+ writeFileSync(join(c.source,'douyin-phone-adb'),controller.replace('  # INPUT_RUNTIME_REVISION=4','  # INPUT_RUNTIME_REVISION=4\n  # changed input semantics'));
  const r=install(c);assert.equal(r.status,2);assert.match(r.stderr,/regress or mutate/);assert.equal(run('capture',c.a,c.b).stdout,readFileSync(c.expected,'utf8'));
 });
 test('same revision helper mutation is rejected',()=>{
@@ -45,12 +45,12 @@ test('same revision helper mutation is rejected',()=>{
  assert.equal(install(c).status,2);assert.equal(run('capture',c.a,c.b).stdout,readFileSync(c.expected,'utf8'));
 });
 test('paired higher revision can advance but lower paired revision cannot roll it back',()=>{
- const c=setup();writeFileSync(join(c.source,'douyin-phone-adb'),controller.replace('INPUT_RUNTIME_REVISION=3','INPUT_RUNTIME_REVISION=4'));writeFileSync(join(c.source,'text-input-focus.py'),helper.replace('INPUT_RUNTIME_REVISION = 3','INPUT_RUNTIME_REVISION = 4'));
+ const c=setup();writeFileSync(join(c.source,'douyin-phone-adb'),controller.replace('INPUT_RUNTIME_REVISION=4','INPUT_RUNTIME_REVISION=5'));writeFileSync(join(c.source,'text-input-focus.py'),helper.replace('INPUT_RUNTIME_REVISION = 4','INPUT_RUNTIME_REVISION = 5'));
  snapshot(c);assert.equal(install(c).status,0);snapshot(c);writeFileSync(join(c.source,'douyin-phone-adb'),controller);writeFileSync(join(c.source,'text-input-focus.py'),helper);
  const r=install(c);assert.equal(r.status,2);assert.match(r.stderr,/regress or mutate/);
 });
 test('mismatched controller/helper revisions reject the source',()=>{
- const c=setup();writeFileSync(join(c.source,'text-input-focus.py'),helper.replace('INPUT_RUNTIME_REVISION = 3','INPUT_RUNTIME_REVISION = 4'));snapshot(c);assert.equal(install(c).status,2);
+ const c=setup();writeFileSync(join(c.source,'text-input-focus.py'),helper.replace('INPUT_RUNTIME_REVISION = 4','INPUT_RUNTIME_REVISION = 5'));snapshot(c);assert.equal(install(c).status,2);
 });
 test('race CAS rejects a changed target before any paired file is installed',()=>{
  const c=setup();snapshot(c);writeFileSync(join(c.b,'douyin-phone-adb'),controller+'\n# other deployment\n');const current=run('capture',c.a,c.b).stdout;

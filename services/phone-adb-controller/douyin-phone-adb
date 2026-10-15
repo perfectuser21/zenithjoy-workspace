@@ -3529,7 +3529,7 @@ ti_restore_ime() {
 }
 
 text_input() {
-  # INPUT_RUNTIME_REVISION=3
+  # INPUT_RUNTIME_REVISION=4
   local text bytes eid before_xml field typed_xml typed_value enable_out cur b64 restored=1 standard_selection="" standard_rc=0 readback_policy="exact" comparison_json actual_bytes actual_sha paragraphs=0 ready_xml native_selection="" native_kind="" native_compare_rc=0 ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
   [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
   text="$1"
