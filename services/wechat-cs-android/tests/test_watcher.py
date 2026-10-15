@@ -75,7 +75,8 @@ class WatcherTests(unittest.TestCase):
                       runtime_config='/private/runtime.json', backend_script='/controlled/backend.py',
                       backend_state=str(self.root / 'state.db'), openclaw='openclaw')
         self.module.dispatch(events[0], state, self.root, config, run)
-        self.module.dispatch(events[0], state, self.root, config, run)
+        with self.assertRaises(RuntimeError):
+            self.module.dispatch(events[0], state, self.root, config, run)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0:4], ['openclaw', 'agent', '--agent', 'zenithjoy-moments'])
         self.assertNotIn('--local', calls[0])

@@ -1,0 +1,111 @@
+"""守卫：输入后通用点击绕过发送claim，重复发送，任意截图冒充证据。"""
+from pathlib import Path
+import base64
+import json
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import bridge
+
+# Valid 1x1 PNG; tests exercise provenance, not fake screenshot acceptance.
+PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+
+
+class PhoneDouble:
+    serial = '47.100.213.173:10001'
+    owner = 'manual-test'
+
+    def __init__(self, root):
+        self.evidence_dir = root
+        self.calls = []
+        self.fail = False
+
+    def execute(self, operation, values):
+        self.calls.append((operation, values))
+        if self.fail:
+            raise RuntimeError('phone result unknown')
+        image = self.evidence_dir / (str(len(self.calls)) + '.png')
+        image.write_bytes(PNG)
+        receipt = self.evidence_dir / (str(len(self.calls)) + '.json')
+        result = dict(serial=self.serial, owner=self.owner, operation=operation,
+                      status='executed', after={'screenshot': str(image)})
+        receipt.write_text(json.dumps(result))
+        return dict(result, receipt=str(receipt))
+
+
+class PhoneTests(unittest.TestCase):
+    def setUp(self):
+        import importlib.util
+        self.assertIsNotNone(importlib.util.find_spec('cs_phone'), '受限手机工具尚未实现')
+        self.module = __import__('cs_phone')
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.state = bridge.State(self.root / 'state.db')
+        self.addCleanup(self.state.close)
+        self.event = dict(event_id='test-event', sender='苏小妖', text='你好')
+        self.state.claim(self.event)
+        self.state.set_draft('test-event', dict(reply='您好', message_id=17))
+        self.phone = PhoneDouble(self.root)
+        self.controller = self.module.Controller(self.state, 'test-event', self.phone)
+
+    def test_input_uses_database_draft_and_disables_generic_tap(self):
+        self.controller.execute('tap', [10, 20])
+        self.controller.execute('text-from-draft', [])
+        self.assertEqual(self.phone.calls[-1], ('text-b64', [base64.b64encode('您好'.encode()).decode()]))
+        with self.assertRaises(ValueError):
+            self.controller.execute('tap', [10, 20])
+        with self.assertRaises(ValueError):
+            self.controller.execute('text-from-draft', [])
+
+    def test_input_unknown_is_not_retried(self):
+        self.phone.fail = True
+        with self.assertRaises(RuntimeError):
+            self.controller.execute('text-from-draft', [])
+        self.phone.fail = False
+        with self.assertRaises(ValueError):
+            self.controller.execute('text-from-draft', [])
+        self.assertEqual(len(self.phone.calls), 1)
+
+    def test_send_requires_claim_then_clicks_exactly_once(self):
+        with self.assertRaises(ValueError):
+            self.controller.execute('send', [20, 30])
+        self.controller.execute('text-from-draft', [])
+        proof = self.controller.execute('screenshot', [])
+        self.state.save_evidence('test-event', {'before_send': {'screenshot': proof['after']['screenshot']},
+            'screenshot_sha256': __import__('hashlib').sha256(PNG).hexdigest()})
+        self.state.claim_send('test-event')
+        self.controller.execute('send', [20, 30])
+        with self.assertRaises(ValueError):
+            self.controller.execute('send', [20, 30])
+        self.assertEqual(sum(operation == 'tap' for operation, _ in self.phone.calls), 1)
+
+    def test_only_registered_event_phone_evidence_is_accepted(self):
+        proof = self.controller.execute('screenshot', [])
+        self.state.verify_phone_evidence('test-event', proof['after']['screenshot'])
+        fake = self.root / 'fake.png'
+        fake.write_bytes(PNG)
+        with self.assertRaises(ValueError):
+            self.state.verify_phone_evidence('test-event', str(fake))
+        Path(proof['after']['screenshot']).write_bytes(PNG + b'changed')
+        with self.assertRaises(ValueError):
+            self.state.verify_phone_evidence('test-event', proof['after']['screenshot'])
+
+
+class ContextTests(unittest.TestCase):
+    def test_latest_inbound_must_match_claimed_event_and_is_consumed_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = bridge.State(Path(directory) / 's.db')
+            self.addCleanup(state.close)
+            for key in ['first', 'second']:
+                state.claim(dict(event_id=key, sender='苏小妖', text='你好'))
+            context = dict(contact_key='contact', incoming_text='你好', content='对端：你好',
+                           latest_message_direction='incoming')
+            self.assertTrue(callable(getattr(state, 'claim_draft', None)), '事件上下文绑定尚未实现')
+            with self.assertRaises(ValueError):
+                state.claim_draft('first', context | dict(incoming_text='另一个消息'))
+            state.claim_draft('first', context)
+            with self.assertRaises(ValueError):
+                state.claim_draft('second', context)
