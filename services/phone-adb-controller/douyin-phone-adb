@@ -2715,7 +2715,8 @@ record_start() {
     max=320
   fi
   out="$(record_out_file "$eid")"; pidf="$(record_pid_file "$eid")"
-  [[ -e "$out" ]] && die "recording artifact already exists: $out"
+  [[ -e "$out" || -L "$out" ]] && die "recording artifact already exists: $out"
+  [[ ! -e "$EVIDENCE_ROOT/$eid.rec.log" && ! -L "$EVIDENCE_ROOT/$eid.rec.log" && ! -e "$EVIDENCE_ROOT/$eid.capture-startup.json" && ! -L "$EVIDENCE_ROOT/$eid.capture-startup.json" ]] || die "RECORD_AUDIO_CAPTURE_UNAVAILABLE startup evidence already exists"
   if [[ -f "$pidf" ]] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
     die "another recording is already running for this evidence id"
   fi
@@ -2785,10 +2786,89 @@ PYSDKCREATE
     > "$EVIDENCE_ROOT/$eid.rec.log" 2>&1 &
   pid=$!
   print -- "$pid" > "$pidf"
-  wait_ms 1500
-  if ! kill -0 "$pid" 2>/dev/null; then
-    /bin/rm -f "$pidf"
-    die "RECORD_AUDIO_CAPTURE_UNAVAILABLE scrcpy failed to start; see $EVIDENCE_ROOT/$eid.rec.log"
+  local ready_rc=0
+  "$PYTHON_BIN" - "$pid" "$$" "$SCRCPY" "$SERIAL" "$out" "$EVIDENCE_ROOT/$eid.rec.log" "$max" "$EVIDENCE_ROOT/$eid.capture-startup.json" <<'PYCAPTUREREADY' || ready_rc=$?
+import os,sys,time,stat,subprocess,shlex,signal,json,errno
+pid,parent=int(sys.argv[1]),int(sys.argv[2]);binary,serial,out,log=sys.argv[3:7];maximum=int(sys.argv[7]);proof=sys.argv[8]
+expected=[binary,'-s',serial,'--no-window','--no-playback','--audio-source=playback','--audio-dup','--require-audio','--record='+out,'--time-limit='+str(maximum)]
+observations=[];identity=None;reason='readiness_timeout';stopped=False
+# Startup and termination share a finite budget; never reset the workflow deadline.
+end=time.monotonic()+min(8.0,float(maximum))
+try:
+ start=float(os.environ.get('WF_RUN_START_TS','nan'));total=float(os.environ.get('WF_RUN_MAX_SECONDS','nan'))
+ if start==start and total==total:end=min(end,time.monotonic()+max(0,start+total-time.time()-2))
+except ValueError:end=time.monotonic()
+def inspect():
+ global identity
+ try:r=subprocess.run(['/bin/ps','-ww','-p',str(pid),'-o','uid=,ppid=,lstart=,stat=,command='],capture_output=True,text=True,timeout=1)
+ except (OSError,subprocess.TimeoutExpired):return 'unknown'
+ raw=r.stdout.strip();observations.append({'at':time.time(),'ps_exit':r.returncode,'ps':raw})
+ if r.returncode!=0 or not raw:
+  try:os.kill(pid,0)
+  except ProcessLookupError:return 'gone'
+  except OSError:return 'unknown'
+  return 'unknown'
+ fields=raw.split(None,8)
+ if len(fields)!=9:return 'unknown'
+ uid,ppid=fields[:2];stamp=fields[2:7];state,command=fields[7:]
+ if uid!=str(os.getuid()) or ppid!=str(parent):return 'foreign'
+ if identity is not None and stamp!=identity:return 'foreign'
+ if state.startswith('Z'):return 'gone'
+ try:args=shlex.split(command)
+ except ValueError:return 'unknown'
+ # The shell form is only the actual shebang interpreter, never an arbitrary prefix.
+ if args and args[0] in ['/bin/zsh','/bin/sh','/bin/bash'] and len(args)>1:args=args[1:]
+ if not args or os.path.realpath(args[0])!=os.path.realpath(binary) or args[1:]!=expected[1:]:return 'foreign'
+ identity=stamp
+ return 'owned'
+def ready():
+ try:
+  media=os.lstat(out);journal=os.lstat(log)
+  if not stat.S_ISREG(media.st_mode) or media.st_size<=0 or not stat.S_ISREG(journal.st_mode):return False
+  with open(log) as source:lines=[line.rstrip('\r\n') for line in source]
+  if 'INFO: Recording complete to matroska file: '+out in lines:return 'complete'
+  return 'INFO: Recording started to matroska file: '+out in lines
+ except (OSError,UnicodeError):return False
+def save(status):
+ value={'pid':pid,'parent_pid':parent,'expected_argv':expected,'status':status,'reason':reason,'execution_stopped':stopped,'observations':observations}
+ fd=os.open(proof,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
+ with os.fdopen(fd,'w') as target:json.dump(value,target);target.flush();os.fsync(target.fileno())
+while time.monotonic()<end:
+ state=inspect()
+ recording=ready() if state=='owned' else False
+ if recording=='complete':reason='recording_completed_before_ready';break
+ if state=='owned' and recording is True:
+  # Read identity again after reading artifacts; no PID-only success.
+  if inspect()=='owned' and ready() is True:reason='exact_recording_ready';save('ready');sys.exit(0)
+ elif state=='gone':reason='recorder_exited_before_ready';stopped=True;save('unavailable');sys.exit(10)
+ elif state in ['foreign','unknown']:
+  reason='recorder_identity_'+state;save('exit_unknown');sys.exit(11)
+ time.sleep(0.1)
+# Before every signal revalidate the same UID, parent, start identity and full argv.
+for sig in [signal.SIGINT,signal.SIGTERM,signal.SIGKILL]:
+ state=inspect()
+ if state=='gone':stopped=True;break
+ if state!='owned':reason='termination_identity_'+state;save('exit_unknown');sys.exit(11)
+ try:os.kill(pid,sig)
+ except ProcessLookupError:stopped=True;break
+ except OSError:reason='termination_signal_failed';save('exit_unknown');sys.exit(11)
+ until=time.monotonic()+0.5
+ while time.monotonic()<until:
+  state=inspect()
+  if state=='gone':stopped=True;break
+  if state!='owned':reason='termination_identity_'+state;save('exit_unknown');sys.exit(11)
+  time.sleep(0.05)
+ if stopped:break
+if not stopped:reason='termination_unconfirmed';save('exit_unknown');sys.exit(11)
+save('unavailable');sys.exit(10)
+PYCAPTUREREADY
+  if (( ready_rc != 0 )); then
+    if (( ready_rc == 10 )); then
+      wait "$pid" 2>/dev/null || true
+      /bin/rm -f "$pidf"
+      die "RECORD_AUDIO_CAPTURE_UNAVAILABLE recorder not ready; see $EVIDENCE_ROOT/$eid.capture-startup.json and $EVIDENCE_ROOT/$eid.rec.log"
+    fi
+    die "RECORD_CAPTURE_EXIT_UNVERIFIED recorder startup/termination unknown; see $EVIDENCE_ROOT/$eid.capture-startup.json"
   fi
   print -- "record_started capture_audio_mode=playback_dup capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
 }
