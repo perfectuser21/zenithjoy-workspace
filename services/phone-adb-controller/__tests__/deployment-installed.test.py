@@ -66,7 +66,10 @@ class AggregateTests(unittest.TestCase):
      return json.dumps(dict(source='openclaw-managed',eligible=True,modelVisible=True,baseDir=str(package/'.agents/skills/multi-platform-publish'),filePath=str(package/p.ATTACHMENTS[0]))).encode()
     code=shlex.split(args[-1])[2]
     return original([sys.executable,'-c',"import socket;socket.gethostname=lambda:'mac-mini-m4-xian';"+code],env=dict(os.environ,HOME=str(remote)))
-   with patch.object(p.socket,'gethostname',return_value='aad17-2'),patch.object(p.subprocess,'check_output',side_effect=call):
+   with patch.object(p.socket,'gethostname',return_value='r10-7.macminivault.com'),patch.object(p.subprocess,'check_output',side_effect=call):
+    for actual_hostname in ('aad17-2.macminivault.com','r10-7.macminivault.com'):
+     with self.subTest(hostname=actual_hostname),patch.object(p.socket,'gethostname',return_value=actual_hostname):
+      self.assertEqual(len(p.collect(spec,home)['files']),len(paths))
     result=p.collect(spec,home);self.assertEqual(len(result['files']),len(paths));self.assertEqual(result['publish_readback']['installed_package_revision'],'a'*40)
     for file in sql_copies:
      with self.subTest(sql_copy=str(file)):
@@ -82,6 +85,11 @@ class AggregateTests(unittest.TestCase):
     with self.assertRaisesRegex(ValueError,'官方实际skill'):p.collect(spec,home)
     work_info['source']='openclaw-workspace';spec['xian_ack']=dict(ack,observation_id='other')
     with self.assertRaisesRegex(ValueError,'ACK'):p.collect(spec,home)
+
+class HostIdentityTests(unittest.TestCase):
+ def test_similar_hostname_cannot_reach_installed_file_checks(self):
+  with tempfile.TemporaryDirectory() as tmp,patch.object(p.socket,'gethostname',return_value='r10-70.macminivault.com'):
+   with self.assertRaisesRegex(ValueError,'实际机器不是MMV'):p.collect({},Path(tmp))
 
 class GuardTests(unittest.TestCase):
  def test_real_kernel_lock_conflict_and_release(self):
