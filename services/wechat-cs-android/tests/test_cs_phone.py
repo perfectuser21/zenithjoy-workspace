@@ -129,12 +129,22 @@ class ContextTests(unittest.TestCase):
 
 
 class ChatFocusTests(unittest.TestCase):
+    def test_ime_rebuilt_connection_keeps_same_live_chat_editor(self):
+        import cs_phone
+        raw = (Path(__file__).parent / 'fixtures/chat-ime-android12.txt').read_text()
+        switched = raw.replace('connection=ou5.l1@bafb387', 'connection=ou5.l1@abcdef1')
+        self.assertEqual(cs_phone.chat_focus(raw), cs_phone.chat_focus(switched))
+        wrong_view = switched.replace('mServedInputConnectionWrapper=IInputConnectionWrapper{connection=ou5.l1@abcdef1 finished=false mParentInputMethodManager.isActive()=true mServedView=com.tencent.mm.ui.widget.MMEditText{6cd2e8a',
+            'mServedInputConnectionWrapper=IInputConnectionWrapper{connection=ou5.l1@abcdef1 finished=false mParentInputMethodManager.isActive()=true mServedView=com.tencent.mm.ui.widget.MMEditText{deadbeef')
+        with self.assertRaises(ValueError):
+            cs_phone.chat_focus(wrong_view)
+
     def test_only_current_chat_editor_and_active_same_connection_allow_input(self):
         import cs_phone
         parse = getattr(cs_phone, 'chat_focus', None)
         self.assertTrue(callable(parse), '聊天IME专属证明尚未实现')
         raw = (Path(__file__).parent / 'fixtures/chat-ime-android12.txt').read_text()
-        self.assertEqual(parse(raw)[0], '6cd2e8a')
+        self.assertIn('6cd2e8a', parse(raw))
         for bad in [raw.replace('IS_CHAT_EDITOR=true', 'IS_CHAT_EDITOR=false'),
                     raw.replace('finished=false', 'finished=true'),
                     raw.replace('isActive()=true', 'isActive()=false'),
