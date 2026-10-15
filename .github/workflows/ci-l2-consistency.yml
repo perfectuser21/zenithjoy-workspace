@@ -217,6 +217,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -239,6 +241,16 @@ jobs:
 
       - name: Check workflow-specific step specifications drift
         run: node scripts/product-map/gen-step-dod.mjs --check
+
+      - name: Check Activity method pairing and version evolution
+        env:
+          METHOD_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          if [ -n "$METHOD_BASE" ] && [ "$METHOD_BASE" != "0000000000000000000000000000000000000000" ]; then
+            npm run leadgen:methods:check -- --base "$METHOD_BASE"
+          else
+            npm run leadgen:methods:check
+          fi
 
   acceptance-spec-contract:
     name: Line02 Acceptance Spec Contract

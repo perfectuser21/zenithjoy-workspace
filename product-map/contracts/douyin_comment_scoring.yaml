@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.1.0
+  version: 0.2.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -99,9 +99,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
-        name: douyin-leadgen-103
+        name: douyin-leadgen-activity-103-scoring
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -318,9 +318,9 @@ activities:
     implementation_bindings:
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md
+        path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
-        name: douyin-leadgen-103
+        name: douyin-leadgen-activity-103-mark-leads
         version: 0.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
