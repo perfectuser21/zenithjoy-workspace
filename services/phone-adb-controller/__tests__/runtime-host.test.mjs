@@ -13,3 +13,9 @@ test('中央登记MMV实际hostname规范为mmv，不能宽泛匹配相似机器
  assert.equal(deploymentTarget('aad17-2'),'mmv');assert.equal(deploymentTarget('aad17-2.macminivault.com'),'mmv');
  assert.equal(deploymentTarget('aad17-20.macminivault.com'),'aad17-20');
 });
+
+test('MMV新实测hostname r10-7可绑定mmv，r10-70不冒充同机',()=>{
+ assert.equal(deploymentTarget('r10-7'),'mmv');
+ assert.equal(deploymentTarget('r10-7.macminivault.com'),'mmv');
+ assert.equal(deploymentTarget('r10-70.macminivault.com'),'r10-70');
+});
