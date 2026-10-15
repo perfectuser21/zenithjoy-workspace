@@ -560,3 +560,13 @@ test('102动作exit0仍缺录音proof时保留真实证据失败，不能借首�
   assert.equal(r.recordings_unverified,0);assert.match(r.failures[0].reason,/ENOENT/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('102 persisted failed record-start proof retains earliest native error and unknown volume',async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'qualification-native-proof-')),id='7696462490024676025',run='native-first';
+ try{
+  writeFileSync(join(dir,`${run}-recording-${id}.json`),JSON.stringify({version:2,run,video_id:id,evidence_id:`${run}-v${id}-qualification-record`,media_volume:null,media_volume_verified:false,earliest_error:{phase:'record_start',exit_code:2,stderr:'RECORD_NATIVE_AUDIO_UNVERIFIED state=unknown'}}));
+  const h=withCompanyFixture(rawCreateHandlers)({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:run,P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:id,video_url:'https://www.douyin.com/video/'+id,judgment_status:'pending'}]:{}}),execute:async()=>({code:5,stdout:'',stderr:'recording_pending reason=media_volume_unverified'})});
+  const r=await h.qualification();assert.equal(r.matched,0);assert.equal(r.status,'partial');assert.equal(r.failures[0].code,2);assert.equal(r.failures[0].stage,'record_start');assert.match(r.failures[0].reason,/RECORD_NATIVE_AUDIO_UNVERIFIED/);assert.equal(r.media_volume_failures,null);assert.equal(r.recordings_unverified,1);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

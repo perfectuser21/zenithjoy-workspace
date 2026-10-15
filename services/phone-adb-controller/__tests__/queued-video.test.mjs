@@ -20,7 +20,7 @@ print "$3" >> "$FIXTURE/calls"
 case "$3" in
 lock-refresh) print 'lock=refreshed';;
 current-video-link) print 'content_type=video';print 'video_id=${vid}';;
-record-start) ${startFail?'exit 4':`print "record_started media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1'+fakeNativeFields('$4','start'):''}"`};;
+record-start) ${startFail?'print -u2 RECORD_NATIVE_AUDIO_UNVERIFIED state=unknown; exit 4':`print "record_started media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1'+fakeNativeFields('$4','start'):''}"`};;
 record-stop) print "record_stopped duration_seconds=25.1 mean_volume_db=${db} audio_streams=1 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeNativeFields('$4','end',endState===3?'started':'unknown')}";;
 record-extract-audio) print "audio_extracted path=$FIXTURE/record.wav";;
 esac
@@ -381,3 +381,5 @@ test('新LEAD必须同时生产独立recipient证据标记，缺原生原件明�
  assert.match(r.stdout,/RECIPIENT_UNKNOWN\t7646309328911907195\tperson123\t[a-f0-9]{64}\tnative_profile_missing/);
  assert.deepEqual(r.calls.slice(0,4),['lock-refresh','open-video','current-video-link','open-comments']);
 });
+
+test('record-start earliest native error persists with exact rc and null volume',()=>{const r=recordedQualification({startFail:true});assert.equal(r.status,5);assert.equal(r.proof.media_volume,null);assert.equal(r.proof.earliest_error.phase,'record_start');assert.equal(r.proof.earliest_error.exit_code,4);assert.match(r.proof.earliest_error.stderr,/RECORD_NATIVE_AUDIO_UNVERIFIED/);assert.ok(!r.calls.includes('remote'));});
