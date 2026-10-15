@@ -78,3 +78,57 @@ test('official spawn raw full model reference is accepted without rewriting; exa
   }finally{rmSync(home,{recursive:true,force:true});}
  }
 });
+
+
+test('isolated child invocation fixture selects only exact gateway surfaces with literal env and explicit canonical host',async()=>{
+ const agent=await import('../leadgen-skill-agent.mjs');
+ assert.equal(typeof agent.activityToolInvocation,'function','single-slot child needs an executable schema-correct MMV command');
+ const body={command:'tree',args:['literal $(touch forbidden) `false`\n中文']};
+ for(const surface of ['gateway_exec','exec_gateway']){
+  const spec=agent.activityToolInvocation('/private/tmp/fixture', 'phone',surface,body);
+  assert.equal(spec.tool,surface==='gateway_exec'?'gateway_exec':'exec');
+  assert.deepEqual(Object.keys(spec.parameters.env).sort(),['LEADGEN_ACTIVITY_TOOL_JSON','LEADGEN_GATEWAY_SURFACE']);
+  assert.deepEqual(JSON.parse(spec.parameters.env.LEADGEN_ACTIVITY_TOOL_JSON),body);
+  assert.equal(spec.parameters.env.LEADGEN_GATEWAY_SURFACE,surface);
+  assert.equal(spec.parameters.command.includes(body.args[0]),false,'business JSON never enters shell command');
+  assert.equal(spec.parameters.stdin,undefined,'official gateway tools have no stdin field');
+  assert.equal(spec.parameters.host,surface==='exec_gateway'?'gateway':undefined);
+  assert.equal(spec.parameters.ask,undefined);assert.equal(spec.parameters.security,undefined);
+ }
+ for(const surface of ['exec','auto','node_exec','gateway_exec_like','codex_apps.notion.get-session-status'])assert.throws(()=>agent.activityToolInvocation('/private/tmp/fixture','phone',surface,{}));
+});
+
+test('actual generated child command fixture guards each host and pipes literal JSON to the original CLI',async()=>{
+ const agent=await import('../leadgen-skill-agent.mjs');
+ assert.equal(typeof agent.activityToolInvocation,'function');
+ const {spawnSync}=await import('node:child_process');const {chmodSync,existsSync}=await import('node:fs');
+ const home=mkdtempSync(join(tmpdir(),'child-command-fixture-'));const hostname=join(home,'hostname'),relay=join(home,'relay.mjs'),marker=join(home,'called');
+ try{
+  writeFileSync(hostname,'#!/bin/sh\n[ "$FIXTURE_HOST" != fail ] || exit 9\nprintf "%s\\n" "$FIXTURE_HOST"\n');chmodSync(hostname,0o700);
+  writeFileSync(relay,"import{writeFileSync,readFileSync}from'node:fs';writeFileSync(process.env.FIXTURE_MARKER,'called');process.stdout.write(readFileSync(0));");
+  for(const host of ['r10-7','aad17-2','r10-70','','fail']){
+   rmSync(marker,{force:true});const body={command:'tree',args:['literal $(false) `false`\n中文']};
+   const spec=agent.activityToolInvocation('/private/tmp/fixture','phone','exec_gateway',body);
+   // Only the two OS executable dependencies are replaced with isolated fixtures;
+   // run the real generated guard/pipe script, not a mirror implementation.
+   const command=spec.parameters.command.replace(JSON.stringify('/bin/hostname'),JSON.stringify(hostname)).replace(JSON.stringify(new URL('../leadgen-skill-agent.mjs',import.meta.url).pathname),JSON.stringify(relay));
+   assert.notEqual(command,spec.parameters.command);
+   const r=spawnSync('/bin/sh',['-c',command],{env:{...process.env,...spec.parameters.env,FIXTURE_HOST:host,FIXTURE_MARKER:marker},encoding:'utf8'});
+   if(['r10-7','aad17-2'].includes(host)){assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),body);assert.equal(existsSync(marker),true);}
+   else{assert.notEqual(r.status,0);assert.equal(existsSync(marker),false,'wrong/empty/failed hostname never launches relay');}
+  }
+ }finally{rmSync(home,{recursive:true,force:true});}
+});
+
+test('authorized relay durably pins its gateway surface before transport; unknown cannot switch route (isolated fixture)',async()=>{
+ const {relayActivityTool,skillRunKey}=await import('../leadgen-skill-agent.mjs');
+ const home=mkdtempSync(join(tmpdir(),'skill-route-fixture-'));const q={protocol:'leadgen-activity-v1',run_id:'fixture__a1',activity_key:'qualification',nonce:'e'.repeat(48),source_commit:'a'.repeat(40),deadline_ms:Date.now()+20000,broker_host:'xian-m4',broker_request_path:'/Users/fixture/run/broker-request.json',broker_tool_path:'/Users/fixture/run/activity-skill-tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'fixture'}};
+ try{
+  const dir=join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'activity-request.json'),JSON.stringify(q));let calls=0;
+  const deps={home,authorize:async()=>true,surface:'exec_gateway',requireSurface:true,execute:async()=>{calls++;throw Error('EXECUTION_OUTPUT_LIMIT');}};
+  await assert.rejects(()=>relayActivityTool(dir,'inspect',{},deps),/EXECUTION_OUTPUT_LIMIT/);
+  await assert.rejects(()=>relayActivityTool(dir,'inspect',{}, {...deps,surface:'gateway_exec'}),/SURFACE/);assert.equal(calls,1);
+  await assert.rejects(()=>relayActivityTool(dir,'inspect',{}, {...deps,surface:undefined}),/SURFACE/);assert.equal(calls,1);
+  assert.equal(JSON.parse(readFileSync(join(dir,'gateway-surface.json'),'utf8')).surface,'exec_gateway');
+ }finally{rmSync(home,{recursive:true,force:true});}
+});
