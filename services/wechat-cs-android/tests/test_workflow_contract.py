@@ -26,3 +26,17 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn('苏小妖', skill)
         self.assertNotIn('suxiaoyao121', skill)
         self.assertIn('contact_identity_evidence', skill)
+
+    def test_friend_onboarding_is_separate_candidate_with_no_message_delivery(self):
+        workflow = json.loads((ROOT / 'workflows/wechat_friend_onboarding.android.json').read_text())
+        self.assertEqual(workflow['key'], 'wechat_friend_onboarding.android')
+        self.assertEqual(workflow['version'], '0.1.0')
+        self.assertEqual(workflow['capability_id'], 'ac2e35bc-849a-48cd-917f-79d15c5ac886')
+        self.assertEqual(len(workflow['activities']), 4)
+        self.assertNotIn('reply_delivered', [a['key'] for a in workflow['activities']])
+        skill = (ROOT / 'skills/wechat-friend-onboarding-android/SKILL.md').read_text()
+        self.assertIn('scan_scope', skill)
+        self.assertIn('partial', skill)
+        self.assertIn('409', skill)
+        self.assertIn('no-op', skill)
+        self.assertIn('待整链核验', skill)
