@@ -67,6 +67,17 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(target.parent.stat().st_mode & 0o777, 0o700)
         self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
+    def test_default_entry_uses_scp_budget_for_transfer_slower_than_30_seconds(self):
+        source = self.screenshot()
+        def delayed_runner(args, **kwargs):
+            if args[0] == 'scp' and kwargs['timeout'] <= 31:
+                raise subprocess.TimeoutExpired(args, kwargs['timeout'])
+            return self.runner(args, **kwargs)
+        with patch.object(self.module, 'run_transport_command', side_effect=delayed_runner):
+            result = self.module.transfer(source, self.event, self.state, self.transport)
+        self.assertEqual(Path(result['path']).read_bytes(), source.read_bytes())
+        self.assertEqual([args[0] for args, _ in self.calls], ['ssh', 'ssh', 'scp', 'ssh'])
+
     def test_remote_hash_mismatch_is_not_reported_as_model_view(self):
         source = self.screenshot()
         self.hash_mismatch = True
