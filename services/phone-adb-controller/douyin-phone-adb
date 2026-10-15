@@ -2721,9 +2721,24 @@ record_start() {
   fi
   /bin/mkdir -p "$EVIDENCE_ROOT"
   sdk="$("$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" || sdk=""
-  [[ ! -e "$EVIDENCE_ROOT/$eid.capture-sdk.txt" && ! -L "$EVIDENCE_ROOT/$eid.capture-sdk.txt" ]] || die "RECORD_CAPTURE_STRATEGY_UNVERIFIED sdk evidence already exists"
-  print -r -- "$sdk" > "$EVIDENCE_ROOT/$eid.capture-sdk.txt"
-  /bin/chmod 600 "$EVIDENCE_ROOT/$eid.capture-sdk.txt"
+  "$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.capture-sdk.txt" "$sdk" <<'PYSDKCREATE' || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+import os,sys,hashlib,stat
+path,sdk=sys.argv[1:];data=(sdk+'\n').encode();phase='create'
+try:
+ fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
+ phase='write'
+ with os.fdopen(fd,'wb') as f:
+  f.write(data);f.flush();os.fsync(f.fileno());created=os.fstat(f.fileno())
+ phase='readback'
+ fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+ with os.fdopen(fd,'rb') as f:
+  current=os.fstat(f.fileno());actual=f.read(4097)
+  assert (current.st_dev,current.st_ino)==(created.st_dev,created.st_ino) and stat.S_ISREG(current.st_mode) and stat.S_IMODE(current.st_mode)==0o600
+  assert actual==data and hashlib.sha256(actual).digest()==hashlib.sha256(data).digest()
+except (OSError,AssertionError) as error:
+ print('RECORD_CAPTURE_STRATEGY_UNVERIFIED reason=sdk_evidence_'+phase+'_failed errno='+str(getattr(error,'errno',None)),file=sys.stderr)
+ sys.exit(1)
+PYSDKCREATE
   [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die "RECORD_AUDIO_STRATEGY_UNSUPPORTED sdk=${sdk:-unknown} minimum=33"
   # 媒体音量必须非 0，否则录到 -91dB 死寂、ASR 必挂；幂等驱动到最低非零档，
   # 稳态零按键、不再形成音量棘轮。依据见 ensure_media_volume 注释。
