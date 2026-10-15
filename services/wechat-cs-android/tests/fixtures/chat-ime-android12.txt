@@ -1,0 +1,14 @@
+  mInputShown=true
+  mServedView=com.tencent.mm.ui.widget.MMEditText{6cd2e8a VFED..CL. .F...... 0,0-476,72 #7f0a0f8c app:id/bkk aid=1073741825}
+  mNextServedView=com.tencent.mm.ui.widget.MMEditText{6cd2e8a VFED..CL. .F...... 0,0-476,72 #7f0a0f8c app:id/bkk aid=1073741825}
+  mServedConnecting=false
+  mCurrentTextBoxAttribute:
+    inputType=0x24001 imeOptions=0x44000006 privateImeOptions=null
+    actionLabel=null actionId=0
+    initialSelStart=0 initialSelEnd=0 initialCapsMode=0x2000
+    hintText= label=null
+    packageName=com.tencent.mm autofillId=1073741825 fieldId=2131365772 fieldName=null
+    extras=Bundle[{if_support_identity_ability=7, if_support_file_ability=7, SUPPORT_SOGOU_EXPRESSION=1, if_support_new_wxkb=true, wechat_scene=1, IS_CHAT_EDITOR=true, wechat_support_ability=64424509567}]
+    hintLocales=null
+    contentMimeTypes=[image/*, video/*, application/*]
+  mServedInputConnectionWrapper=IInputConnectionWrapper{connection=ou5.l1@bafb387 finished=false mParentInputMethodManager.isActive()=true mServedView=com.tencent.mm.ui.widget.MMEditText{6cd2e8a VFED..CL. .F...... 0,0-476,72 #7f0a0f8c app:id/bkk aid=1073741825}}

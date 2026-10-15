@@ -109,3 +109,25 @@ class ContextTests(unittest.TestCase):
             state.claim_draft('first', context)
             with self.assertRaises(ValueError):
                 state.claim_draft('second', context)
+
+
+class ChatFocusTests(unittest.TestCase):
+    def test_only_current_chat_editor_and_active_same_connection_allow_input(self):
+        import cs_phone
+        parse = getattr(cs_phone, 'chat_focus', None)
+        self.assertTrue(callable(parse), '聊天IME专属证明尚未实现')
+        raw = (Path(__file__).parent / 'fixtures/chat-ime-android12.txt').read_text()
+        self.assertEqual(parse(raw)[0], '6cd2e8a')
+        for bad in [raw.replace('IS_CHAT_EDITOR=true', 'IS_CHAT_EDITOR=false'),
+                    raw.replace('finished=false', 'finished=true'),
+                    raw.replace('isActive()=true', 'isActive()=false'),
+                    raw.replace('packageName=com.tencent.mm', 'packageName=other'),
+                    raw.replace('inputType=0x24001', 'inputType=0x0'),
+                    raw.replace('mInputShown=true', 'mInputShown=false'),
+                    raw.replace('initialSelStart=0', 'initialSelStart=2'),
+                    raw.replace('mCurrentTextBoxAttribute:', 'historical EditorInfo:'),
+                    raw.replace('wechat_scene=1', 'wechat_scene=2'),
+                    raw.replace('mServedView=com.tencent.mm.ui.widget.MMEditText{6cd2e8a',
+                                'mServedView=com.tencent.mm.ui.widget.MMEditText{different', 1)]:
+            with self.assertRaises(ValueError):
+                parse(bad)
