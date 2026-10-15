@@ -104,7 +104,7 @@ class BackendTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.config = dict(api_base='http://127.0.0.1:1', tenant_id='tenant-test',
                            agent_id='agent-test', cs_wechat_id='wxid_skpj8yqmblqc22',
-                           machine_id='cloud-test')
+                           machine_id='cloud-test', allowed_contact_key='wxid_test_contact')
         self.calls = []
         self.response = {'ok': True, 'status': 'sent', 'reply': '您好', 'message_id': 17}
         self.backend = self.module.Backend(self.config, self.request)
@@ -143,7 +143,7 @@ class BackendTests(unittest.TestCase):
     def test_reject_unobserved_or_wrong_conversation_before_request(self):
         for patch in [dict(sender='别人'), dict(visual_confirmed=False),
                       dict(cs_wechat_id='wx-other'), dict(screenshot='/missing'),
-                      dict(content=''), dict(conversation_header='别人')]:
+                      dict(content=''), dict(conversation_header='别人'), dict(contact_key='other-account')]:
             context = self.context() | patch
             with self.assertRaises(ValueError):
                 self.backend.draft(context)

@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import bridge
@@ -131,3 +132,35 @@ class ChatFocusTests(unittest.TestCase):
                                 'mServedView=com.tencent.mm.ui.widget.MMEditText{different', 1)]:
             with self.assertRaises(ValueError):
                 parse(bad)
+
+
+class AtomicContextTests(unittest.TestCase):
+    def test_concurrent_claims_for_one_event_generate_only_one_draft(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 's.db'
+            state = bridge.State(path)
+            state.claim(dict(event_id='one-event', sender='苏小妖', text='你好'))
+            state.close()
+            barrier = threading.Barrier(2)
+            results = []
+            class RacingState(bridge.State):
+                def event(self, key):
+                    row = super().event(key)
+                    barrier.wait(timeout=5)
+                    return row
+            def run(prefix):
+                candidate = RacingState(path)
+                try:
+                    candidate.claim_draft('one-event', dict(incoming_text='你好',
+                        latest_message_direction='incoming', content=prefix + '你好', contact_key='contact'))
+                    results.append('accepted')
+                except ValueError:
+                    results.append('rejected')
+                finally:
+                    candidate.close()
+            threads = [threading.Thread(target=run, args=(prefix,)) for prefix in ['上下文A', '上下文B']]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+            self.assertEqual(sorted(results), ['accepted', 'rejected'])
