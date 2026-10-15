@@ -45,6 +45,7 @@ export async function runWorkflow({activities,context,handlers,commander,record,
       }
       if(result.execution_stopped===false){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
     }catch(error){
+      if(error.executionStopped===false)context={...context,skill_execution_unknown:true};
       status='failed';stopped=true;
       const result={activity:activity.key,status:'failed',error:String(error.message).slice(0,400)};
       results.push(result);await record({...context,...result,phase:'failure'});
@@ -112,6 +113,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
       recordDiagnostic(result.stderr||'');return result;
     } catch(error) {
+      if(error.executionStopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
@@ -524,9 +526,12 @@ async function main(){
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
     const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key)});
     activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;
+    if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
-    return handlers[activity.key]();
+    const result=await handlers[activity.key]();
+    if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
+    return result;
   }]));
   const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc});
   const result=await runWorkflow({activities,context,handlers:execution,recover,

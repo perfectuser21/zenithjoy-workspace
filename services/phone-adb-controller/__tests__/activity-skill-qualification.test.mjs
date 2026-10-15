@@ -54,3 +54,14 @@ test('handoff heartbeat requires acknowledged renewal of the original video leas
  },execute:async()=>({code:0,stdout:'',stderr:''})});await h.qualification();heartbeat=true;await assert.rejects(()=>h.handoffHeartbeat({key:'qualification'}),/租约/);
  }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+test('actual qualification partial retains old execution unknown and cannot hand over or release original lease',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');const d=mkdtempSync(join(tmpdir(),'skill-old-execution-'));let released=0,skills=0;
+ try{const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture',P:'fixture',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{
+  if(q.op==='claim_videos')return {result:[{video_id:'7646309328911907195',video_url:'https://www.douyin.com/video/7646309328911907195',judgment_status:'pending'}]};
+  if(q.op==='release_video')released++;return {result:{}};
+ },execute:async()=>{throw Error('EXECUTION_OUTPUT_LIMIT');}});
+ const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:h,commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',execution_stopped:true};}});
+ assert.equal(h.state.executionUnknown,true);assert.equal(skills,0);assert.equal(released,0);assert.equal(r.results[0].execution_stopped,false);assert.equal(r.results.at(-1).status,'blocked');
+ }finally{rmSync(d,{recursive:true,force:true});}
+});

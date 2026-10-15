@@ -96,8 +96,13 @@ export async function runActivity({ activity, context, execute, commander, recor
       const status=result?.status==='paused'?'partial':['partial','failed','skipped'].includes(result?.status)?result.status:'completed';
       evidence = { status, attempt, result };
     }
-    catch (error) { evidence = { status: 'failed', attempt, error: safeError(error) }; }
+    catch (error) { evidence = { status: 'failed', attempt, error: safeError(error),...(error.executionStopped===false?{execution_stopped:false}:{}) }; }
     await record({ ...context, activity: activity.key, phase: 'execution', evidence });
+    // Parent close after SIGTERM/output truncation does not prove its process group stopped.
+    // Do not retry, hand over, or clear resources until an independent stop readback exists.
+    if(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(JSON.stringify(evidence))){
+      return {...evidence,status:'failed',execution_stopped:false,commander_status:commanderStatus,decision:{action:'escalate',reason:'原执行者终止未验证，保留资源'}};
+    }
     const after = await consult('after', evidence);
     if (evidence.status === 'failed' && after.action === 'retry' && attempt < maxAttempts) continue;
     if (recover && ['failed','partial'].includes(evidence.status) && !['finish','escalate'].includes(after.action)) {
