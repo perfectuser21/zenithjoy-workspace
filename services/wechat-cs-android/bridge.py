@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import sqlite3
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 SENDER = '苏小妖'
 CS_WECHAT_ID = 'wxid_skpj8yqmblqc22'
@@ -53,6 +55,61 @@ def parse_notification(key, raw):
                  notification_when=stamp.group(1), cs_wechat_id=CS_WECHAT_ID)
     event['event_id'] = digest(event)
     return event
+
+
+def normalized_batch(context):
+    batch = context.get('inbound_batch')
+    if not isinstance(batch, list) or not batch:
+        raise ValueError('missing_observed_inbound_batch')
+    result = []
+    for message in batch:
+        if not isinstance(message, dict):
+            raise ValueError('invalid_inbound_message')
+        if message.get('type') == 'text' and set(message) == {'type', 'text'}:
+            if not isinstance(message['text'], str) or not message['text'].strip():
+                raise ValueError('empty_inbound_batch_text')
+            result.append({'type': 'text', 'text': message['text']})
+        elif message == {'type': 'image'}:
+            result.append({'type': 'image'})
+        else:
+            raise ValueError('unsupported_or_invented_image_description')
+    return result
+
+
+def batch_content(context):
+    if 'inbound_batch' not in context:
+        return context['content']
+    return '\n'.join(item['text'] if item['type'] == 'text' else '用户发了一张图片（未解读）'
+                     for item in normalized_batch(context))
+
+
+def inbound_contract(event, context):
+    if (context.get('incoming_text') != event.get('text') or not context.get('incoming_text')
+            or context.get('latest_message_direction') != 'incoming'):
+        raise ValueError('notification_anchor_not_confirmed')
+    if 'inbound_batch' not in context:
+        if (context['incoming_text'] not in context.get('content', '')
+                or context.get('replied_after_anchor', False) is not False):
+            raise ValueError('notification_does_not_match_latest_inbound')
+        return {'incoming_text': context['incoming_text'], 'content': context['content'],
+                'latest_message_direction': 'incoming'}
+    batch = normalized_batch(context)
+    try:
+        minute = datetime.fromtimestamp(int(event['notification_when']) / 1000,
+            ZoneInfo('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M')
+    except (KeyError, ValueError, TypeError, OverflowError) as exc:
+        raise ValueError('invalid_notification_anchor_time') from exc
+    if (context.get('anchor_time_minute') != minute
+            or context.get('replied_after_anchor') is not False
+            or context.get('latest_message') != batch[-1]
+            or not any(item.get('text') == event['text'] for item in batch)
+            or any(item.get('text') not in context.get('content', '')
+                   for item in batch if item['type'] == 'text')):
+        raise ValueError('unverified_or_already_replied_inbound_batch')
+    # Identity deliberately excludes which notification woke this same batch.
+    return {'inbound_batch': batch, 'anchor_time_minute': minute,
+            'latest_message': batch[-1], 'latest_message_direction': 'incoming',
+            'replied_after_anchor': False}
 
 
 class State:
@@ -125,13 +182,8 @@ class State:
 
     def claim_draft(self, event_id, context):
         row = self.event(event_id)
-        if (context.get('incoming_text') != row['event_json'].get('text')
-                or context.get('latest_message_direction') != 'incoming'
-                or not context.get('incoming_text')
-                or context['incoming_text'] not in context.get('content', '')):
-            raise ValueError('notification_does_not_match_latest_inbound')
-        fingerprint = digest([CS_WECHAT_ID, context.get('contact_key'), context.get('content'),
-                              context['incoming_text']])
+        contract = inbound_contract(row['event_json'], context)
+        fingerprint = digest([CS_WECHAT_ID, context.get('contact_key'), contract])
         with self.db:
             if row['status'] != 'claimed':
                 raise ValueError('draft_already_attempted')
@@ -192,6 +244,9 @@ class State:
     def set_draft(self, event_id, draft, context=None):
         if not valid_draft(draft):
             raise ValueError('invalid_draft')
+        draft = dict(draft)
+        if context and context.get('incoming_text'):
+            draft['source_inbound_contract'] = inbound_contract(self.event(event_id)['event_json'], context)
         with self.db:
             cursor = self.db.execute('''UPDATE events SET status='drafted',draft_json=?,
                 context_hash=?,contact_key=?,updated_at=? WHERE id=? AND status IN ('claimed','drafting')''',
@@ -199,6 +254,12 @@ class State:
                  context.get('contact_key') if context else None, time.time(), event_id))
             if cursor.rowcount != 1:
                 raise ValueError('draft_already_attempted')
+
+    def check_send_context(self, event_id, context):
+        row = self.event(event_id)
+        expected = (row['draft_json'] or {}).get('source_inbound_contract')
+        if expected is not None and inbound_contract(row['event_json'], context) != expected:
+            raise ValueError('inbound_changed_after_draft_stop_without_sending')
 
     def claim_send(self, event_id):
         row = self.event(event_id)

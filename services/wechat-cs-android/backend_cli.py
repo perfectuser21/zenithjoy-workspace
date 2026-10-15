@@ -8,7 +8,7 @@ import sys
 import urllib.parse
 import urllib.request
 
-from bridge import CS_WECHAT_ID, SENDER, State, digest, private_json, valid_draft
+from bridge import CS_WECHAT_ID, SENDER, State, digest, private_json, valid_draft, batch_content
 
 DEFAULT_CONFIG = '/Users/administrator/.credentials/cloud-wechat-cs-runtime.json'
 
@@ -82,7 +82,7 @@ class Backend:
     def draft(self, context):
         self.check_context(context)
         self.preflight()
-        body = dict(sender=SENDER, wechat_id=context['contact_key'], content=context['content'],
+        body = dict(sender=SENDER, wechat_id=context['contact_key'], content=batch_content(context),
                     mode='auto', is_group=False, tenant_id=self.config['tenant_id'],
                     agent_id=self.config['agent_id'], cs_wechat_id=self.config['cs_wechat_id'])
         response = self.request('POST', '/api/wechat/draft-generate', body)
@@ -145,6 +145,7 @@ def main():
             elif args.action == 'claim-send':
                 evidence = json.loads(Path(args.evidence).read_text())
                 backend.check_context(evidence)
+                state.check_send_context(args.event_id, evidence)
                 state.verify_phone_evidence(args.event_id, evidence['screenshot'])
                 if state.action(args.event_id, 'input') != 'completed':
                     raise ValueError('input_attempt_unknown_or_missing')
