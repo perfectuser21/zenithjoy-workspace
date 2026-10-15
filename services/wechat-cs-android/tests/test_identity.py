@@ -10,7 +10,7 @@ from bridge import State, parse_notification
 from backend_cli import Backend, load_config
 from watcher import task_prompt
 
-class IdentityTests(unittest.TestCase):
+class BindingFixture:
  def setUp(self):
   self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
   self.root=Path(self.temp.name)
@@ -24,6 +24,9 @@ class IdentityTests(unittest.TestCase):
  def binding(self):
   from identity import ContactBinding
   return ContactBinding.from_runtime(load_config(self.path))
+
+
+class IdentityTests(BindingFixture, unittest.TestCase):
  def test_new_private_runtime_accepts_only_verified_identity(self):
   self.assertEqual(self.binding().sender,'测试新客')
  def test_mismatch_or_changed_proof_rejected(self):
@@ -42,7 +45,7 @@ class IdentityTests(unittest.TestCase):
   self.assertIsNone(parse_notification('k',raw.replace('测试新客','苏小妖'),binding))
  def test_state_persists_single_binding_and_rejects_identity_swap(self):
   binding=self.binding();state=State(self.root/'state.db',binding=binding);self.addCleanup(state.close)
-  event=dict(event_id='e',sender=binding.sender,contact_key=binding.contact_key,contact_binding=binding.fingerprint,text='你好')
+  event=dict(event_id='e',sender=binding.sender,contact_key=binding.contact_key,contact_binding=binding.fingerprint,cs_wechat_id=binding.cs_wechat_id,text='你好')
   state.claim(event)
   with self.assertRaises(ValueError):state.claim(event|dict(event_id='f',sender='苏小妖'))
   state.close()
@@ -61,3 +64,43 @@ class IdentityTests(unittest.TestCase):
   config=dict(backend_script='/b.py',runtime_config=str(self.path),backend_state='/s.db',contact_binding=binding.to_dict())
   text=task_prompt('/event.json','event',config,self.root)
   self.assertIn('测试新客',text);self.assertIn('test_customer',text);self.assertNotIn('suxiaoyao121',text)
+
+class BindingBoundaryTests(BindingFixture, unittest.TestCase):
+ # 继承完整fixture；以下只新增跨入口边界。
+ def test_context_identity_change_is_rejected_before_network(self):
+  config=load_config(self.path);calls=[]
+  backend=Backend(config,lambda *args:calls.append(args))
+  context=dict(sender='测试新客',conversation_header='测试新客',contact_key='test_customer',cs_wechat_id=config['cs_wechat_id'],content='你好',visual_confirmed=True,screenshot=str(self.png))
+  backend.check_context(context)
+  for patch in [dict(sender='别人'),dict(conversation_header='别人'),dict(contact_key='other_customer'),dict(cs_wechat_id='other')]:
+   with self.assertRaises(ValueError):backend.check_context(context|patch)
+  self.assertEqual(calls,[])
+ def test_phone_controller_accepts_bound_new_contact_and_rejects_tampered_event(self):
+  from cs_phone import Controller
+  from test_cs_phone import PhoneDouble
+  binding=self.binding();state=State(self.root/'phone.db',binding=binding);self.addCleanup(state.close)
+  event=dict(event_id='new-event',sender=binding.sender,contact_key=binding.contact_key,contact_binding=binding.fingerprint,cs_wechat_id=binding.cs_wechat_id,text='你好')
+  state.claim(event);phone=PhoneDouble(self.root);controller=Controller(state,'new-event',phone)
+  controller.execute('screenshot',[])
+  with state.db:state.db.execute('UPDATE events SET event_json=? WHERE id=?',(json.dumps(event|dict(contact_key='other_customer')),'new-event'))
+  with self.assertRaises(ValueError):controller.execute('tap',[1,2])
+  self.assertEqual(len(phone.calls),1)
+ def test_state_without_runtime_still_enforces_persisted_binding(self):
+  binding=self.binding();state=State(self.root/'persist.db',binding=binding);state.close()
+  state=State(self.root/'persist.db');self.addCleanup(state.close)
+  with self.assertRaises(ValueError):state.claim(dict(event_id='legacy',sender='苏小妖',text='你好'))
+ def test_new_binding_cannot_adopt_existing_legacy_event_ledger(self):
+  state=State(self.root/'legacy.db');state.claim(dict(event_id='legacy',sender='苏小妖',text='你好'));state.close()
+  with self.assertRaises(ValueError):State(self.root/'legacy.db',binding=self.binding())
+ def test_invalid_blacklist_shape_fails_closed(self):
+  backend=Backend(load_config(self.path),lambda *args:dict(auto_agent_enabled=True,wechat_id='wxid_skpj8yqmblqc22',tenant_id='t',takeover_mode='blacklist',blacklist='not-a-list'))
+  with self.assertRaises(ValueError):backend.preflight()
+ def test_proof_permissions_symlink_and_missing_proof_fail_closed(self):
+  self.proof_path.chmod(0o644)
+  with self.assertRaises(ValueError):load_config(self.path)
+  self.proof_path.chmod(0o600)
+  alias=self.root/'alias.json';alias.symlink_to(self.proof_path)
+  self.runtime['contact_identity_evidence']=str(alias);self.save()
+  with self.assertRaises(ValueError):load_config(self.path)
+  self.runtime.pop('contact_identity_evidence');self.save()
+  with self.assertRaises(ValueError):load_config(self.path)
