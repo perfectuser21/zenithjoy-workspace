@@ -532,7 +532,7 @@ async function main(){
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
     if(['execution','verification'].includes(r.phase)){
-      const ledgerStatus=[r.evidence.status,r.evidence.result?.status].some(status=>['partial','paused','skipped'].includes(status))?'blocked':r.evidence.status;
+      const ledgerStatus=r.evidence.status==='failed'?'failed':[r.evidence.status,r.evidence.result?.status].some(status=>['partial','paused','skipped'].includes(status))?'blocked':r.evidence.status;
       const updated=await execInput(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
         '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
       if(updated.code!==0)throw Error('实际活动账本更新失败');
