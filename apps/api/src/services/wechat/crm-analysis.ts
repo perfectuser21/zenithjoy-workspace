@@ -143,7 +143,10 @@ export async function analyzeCrmScope(key:string,options:{rebuild?:boolean}={}):
       }
     }
     const customerIds=context.filter(r=>r.direction==='in').map(r=>String(r.id));
-    if(!customerIds.length){parsed.need=null;parsed.budget=null;parsed.concern=null;parsed.stage_suggestion=null;}
+    if(!customerIds.length){
+      parsed.summary='尚无可核验的客户入站消息，不能确认客户需求、预算或顾虑。';
+      parsed.need=null;parsed.budget=null;parsed.concern=null;parsed.stage_suggestion=null;parsed.next_action=null;
+    }
     const analysis:CrmAnalysis={...parsed,source_message_ids:context.map(r=>String(r.id)),
       customer_source_message_ids:customerIds,consumed_message_ids:ids,updated_at:new Date().toISOString()};
     await client.query(`INSERT INTO zenithjoy.wechat_contact_memory
