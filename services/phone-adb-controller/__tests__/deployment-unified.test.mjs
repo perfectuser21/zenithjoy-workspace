@@ -16,7 +16,7 @@ function evidence(scope,keys){
  report.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,report[k]])));
  const receipt={purpose:'release_verification',actor:'pilot_release_verification',verdict:'PASS',scope:'declared_pilot_regressions',business_runtime_status:'not_evaluated',snapshot_sha256:snapshot.snapshot_sha256,assertion_plan_sha256:report.assertion_plan_sha256,source:report.source,report_sha256:digest(Buffer.from(JSON.stringify(report))),assertions:[{assertion_ref:scope+'.sh',source_repo:repo,source_revision:sha,test_sha256:'b'.repeat(64),source_bindings:[],exit_code:0}]};return{snapshot,report,receipt};
 }
-export function fixture(){return{...evidence('zenithjoy',['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach','douyin_video_publish.android']),commander:evidence('commander-generic',['workflow_report.internal','workflow_commander.internal'])};}
+export function fixture(){return{...evidence('zenithjoy',['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach','douyin_video_publish.android']),commander:evidence('commander-generic',['workflow_report.internal','workflow_commander.internal']),patrol:evidence('cecelia-device-patrol-definitions',['single-phone-account-patrol'])};}
 test('双scope唯一MMV七流程/xian四流程，完整receipt不能偷减且同key不同版本拒绝',async()=>{
  const {targetDefinitions}=await import('../deployment-targets.mjs');const bundle=fixture();
  const result=targetDefinitions(bundle,sha,()=>bytes);assert.equal(result.mmv.definitions.workflows.length,7);assert.equal(result['xian-m4'].definitions.workflows.length,4);
@@ -91,4 +91,13 @@ test('自洽重算plan与receipt也不能伪造未绑定来源、版本、漏项
  ['object',e=>e.report.implementation_source_set={}],['malformed',e=>e.report.implementation_source_set=[{}]],
  ]){const b=authoringCommander(fixture());mutate(b.commander);sealPlan(b.commander);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,label);}
  const b=authoringCommander(fixture());b.commander.report.assertion_plan_sha256='f'.repeat(64);assert.throws(()=>targetDefinitions(b,sha,()=>bytes));
+});
+
+test('第三scope证据必须完整，但其固定历史实现不混入七/四流程安装',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');const b=fixture(),p=b.patrol,a=p.snapshot.definitions.activities[0];
+ a.payload.implementation_bindings[0].revision='b'.repeat(40);a.payload_sha256=digest({source:{repo:a.source_repo,path:a.source_path,commit:a.source_commit},payload:a.payload});
+ const {snapshot_sha256,...body}=p.snapshot;p.snapshot.snapshot_sha256=digest(body);p.report.snapshot_sha256=p.snapshot.snapshot_sha256;p.receipt.snapshot_sha256=p.snapshot.snapshot_sha256;
+ p.report.implementation_source_set=[{activity_id:uuid(600),activity_definition_version_id:uuid(800),kind:'code',repo,path:'services/phone-adb-controller/douyin-phone-adb',revision:'b'.repeat(40),digest:'sha256:'+digest(bytes),scope:'activity',field:'implementation'}];sealPlan(p);
+ const out=targetDefinitions(b,sha,()=>bytes);assert.equal(out.mmv.definitions.workflows.length,7);assert.ok(out.mmv.components.every(c=>c.revision===sha));
+ for(const [label,mutate]of [['missing',x=>delete x.patrol],['scope',x=>x.patrol.report.scope='other'],['receipt',x=>x.patrol.receipt.assertions[0].exit_code=1],['source_set',x=>{x.patrol.report.implementation_source_set[0].revision='c'.repeat(40);sealPlan(x.patrol);}]] ) {const invalid=structuredClone(b);mutate(invalid);assert.throws(()=>targetDefinitions(invalid,sha,()=>bytes),undefined,label);}
 });
