@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 
 // 明示模拟本轮native v2工件；不宣称原始audio为实机采集。
-function fakeNativeProof(eid){return {playback_proof_kind:'native_audio',native_audio:Object.fromEntries(['start','end'].map(phase=>[phase,{state:'started',uid:10203,pid:528,piid:73615,package_uid_verified:true,foreign_started:0,...Object.fromEntries([['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].flatMap(([k,s])=>[[k+'_file',eid+'-playback-'+phase+'.'+s],[k+'_sha256','a'.repeat(64)]]))}]))};}
+function fakeNativeProof(eid){return {capture_audio_mode:'playback_dup',capture_audio_sdk:36,capture_audio_required:true,capture_audio_sdk_evidence_file:eid+'.capture-sdk.txt',capture_audio_sdk_evidence_sha256:'c'.repeat(64),capture_audio_verified:true,capture_audio_end:{mode:'playback_dup',sdk:36,required:true,sdk_evidence_file:eid+'.capture-sdk.txt',sdk_evidence_sha256:'c'.repeat(64)},audio_streams:1,playback_proof_kind:'native_audio',native_audio:Object.fromEntries(['start','end'].map(phase=>[phase,{state:'started',uid:10203,pid:528,piid:73615,package_uid_verified:true,foreign_started:0,...Object.fromEntries([['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].flatMap(([k,s])=>[[k+'_file',eid+'-playback-'+phase+'.'+s],[k+'_sha256','a'.repeat(64)]]))}]))};}
 test('正式录前音量Step判真实媒体回读，不能用静音内容电平代替',async()=>{
  const contract=parseYaml(readFileSync('product-map/contracts/douyin_video_processing.yaml','utf8'));
  const step=contract.activities.find(a=>a.key==='qualification').steps.find(s=>s.key==='unmute_before_record');
@@ -207,14 +207,14 @@ test('资格动作容纳已实测的打开与身份核验组合耗时，仍受�
  }
 });
 
-test('实际静音本轮只经租约PG拒绝回执终结，不能进入matched或内容模型',async()=>{
+test('dup静音捕获本轮保持pending，不能作为视频内容写PG拒绝或进入模型',async()=>{
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  for(const badScope of [false,true]){
   const dir=mkdtempSync(join(tmpdir(),'silent-workflow-')),id='7663337150875733275',ops=[];
   const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'silent-processing',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
   const rpc=async body=>{const op=body.request.op;ops.push(op);if(op==='claim_videos')return {result:[{video_id:id,video_url:'https://v.douyin.com/fresh/',title:'新视频',keyword:'AI',judgment_status:'pending'}]};if(op==='reject_recording')return {result:{verified:true,video_id:id,verdict:'rejected',kind:'recording_silent'}};return {result:{}};};
-  const execute=async()=>{writeFileSync(join(dir,`silent-processing-identity-${id}.json`),JSON.stringify({verified:true,observed_video_id:id,content_type:'video'}));writeFileSync(join(dir,`silent-processing-recording-${id}.json`),JSON.stringify({version:2,...fakeNativeProof(`silent-processing-v${id}-qualification-record`),run:badScope?'other':'silent-processing',video_id:id,evidence_id:`silent-processing-v${id}-qualification-record`,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:1,playback_end_state:1,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91}));return {code:0,stdout:`QUAL\t${id}\trejected\trecording_silent\n`,stderr:''};};
-  try{const h=createHandlers({root:dir,env,rpc,execute});h.state.budgetDeadline=Date.now()+1800000;const r=await h.qualification();assert.equal(r.matched,0);if(badScope){assert.equal(r.failures.length,1);assert.ok(!ops.includes('reject_recording'));assert.equal(r.media_volume_failures,1);}else{assert.equal(r.failures.length,0);assert.ok(ops.includes('reject_recording'));assert.equal(r.media_volume_failures,0);assert.equal(r.recordings_silent_rejected,1);}}finally{rmSync(dir,{recursive:true,force:true});}
+  const execute=async()=>{writeFileSync(join(dir,`silent-processing-identity-${id}.json`),JSON.stringify({verified:true,observed_video_id:id,content_type:'video'}));writeFileSync(join(dir,`silent-processing-recording-${id}.json`),JSON.stringify({version:2,...fakeNativeProof(`silent-processing-v${id}-qualification-record`),run:badScope?'other':'silent-processing',video_id:id,evidence_id:`silent-processing-v${id}-qualification-record`,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',playback_state:1,playback_end_state:1,media_volume_verified:true,media_volume:1,audio_status:'silent',capture_audio_verified:false,mean_volume_db:-91}));return {code:0,stdout:`QUAL\t${id}\trejected\trecording_silent\n`,stderr:''};};
+  try{const h=createHandlers({root:dir,env,rpc,execute});h.state.budgetDeadline=Date.now()+1800000;const r=await h.qualification();assert.equal(r.matched,0);if(badScope){assert.equal(r.failures.length,1);assert.ok(!ops.includes('reject_recording'));assert.equal(r.media_volume_failures,1);}else{assert.equal(r.failures.length,1);assert.ok(!ops.includes('reject_recording'));assert.equal(r.recordings_silent_rejected,0);}}finally{rmSync(dir,{recursive:true,force:true});}
  }
 });
 
@@ -559,4 +559,32 @@ test('102动作exit0仍缺录音proof时保留真实证据失败，不能借首�
   assert.equal(r.recording_outcomes_failures,1);assert.equal(r.media_volume_failures,1);
   assert.equal(r.recordings_unverified,0);assert.match(r.failures[0].reason,/ENOENT/);
  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('102 persisted failed record-start proof retains earliest native error and unknown volume',async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'qualification-native-proof-')),id='7696462490024676025',run='native-first';
+ try{
+  writeFileSync(join(dir,`${run}-recording-${id}.json`),JSON.stringify({version:2,run,video_id:id,evidence_id:`${run}-v${id}-qualification-record`,media_volume:null,media_volume_verified:false,earliest_error:{phase:'record_start',exit_code:2,stderr:'RECORD_NATIVE_AUDIO_UNVERIFIED state=unknown'}}));
+  const h=withCompanyFixture(rawCreateHandlers)({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:run,P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:id,video_url:'https://www.douyin.com/video/'+id,judgment_status:'pending'}]:{}}),execute:async()=>({code:5,stdout:'',stderr:'recording_pending reason=media_volume_unverified'})});
+  const r=await h.qualification();assert.equal(r.matched,0);assert.equal(r.status,'partial');assert.equal(r.failures[0].code,2);assert.equal(r.failures[0].stage,'record_start');assert.match(r.failures[0].reason,/RECORD_NATIVE_AUDIO_UNVERIFIED/);assert.equal(r.media_volume_failures,null);assert.equal(r.recordings_unverified,1);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('102 persisted failed set-speed proof retains earliest native error and unknown volume',async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'qualification-native-proof-')),id='7696462490024676025',run='native-first';
+ try{
+  writeFileSync(join(dir,`${run}-recording-${id}.json`),JSON.stringify({version:2,run,video_id:id,evidence_id:`${run}-v${id}-qualification-record`,media_volume:null,media_volume_verified:false,earliest_error:{phase:'set_playback_speed',exit_code:2,stderr:'SPEED_CONTROL_FAILED state=unknown'}}));
+  const h=withCompanyFixture(rawCreateHandlers)({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:run,P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>({result:q.op==='claim_videos'?[{video_id:id,video_url:'https://www.douyin.com/video/'+id,judgment_status:'pending'}]:{}}),execute:async()=>({code:5,stdout:'',stderr:'recording_pending reason=media_volume_unverified'})});
+  const r=await h.qualification();assert.equal(r.matched,0);assert.equal(r.status,'partial');assert.equal(r.failures[0].code,2);assert.equal(r.failures[0].stage,'set_playback_speed');assert.match(r.failures[0].reason,/SPEED_CONTROL_FAILED/);assert.equal(r.media_volume_failures,null);assert.equal(r.recordings_unverified,1);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('qualification independently rejects forged or incomplete capture strategy proof',async()=>{
+ const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');
+ const id='7696462490024676025',run='capture-contract',eid=run+'-v'+id+'-qualification-record';
+ const changes=[{capture_audio_mode:'output'},{capture_audio_sdk:32},{capture_audio_required:false},{audio_streams:0},{capture_audio_verified:false},{capture_audio_sdk_evidence_file:'other.capture-sdk.txt'},{capture_audio_end:null},{capture_audio_end:{mode:'playback_dup',sdk:35,required:true,sdk_evidence_file:eid+'.capture-sdk.txt',sdk_evidence_sha256:'c'.repeat(64)}}];
+ for(const change of changes){const dir=mkdtempSync(join(tmpdir(),'capture-proof-'));
+ try{const ops=[];const h=withCompanyFixture(rawCreateHandlers)({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:run,P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{ops.push(q.op);return {result:q.op==='claim_videos'?[{video_id:id,video_url:'https://www.douyin.com/video/'+id,judgment_status:'pending'}]:{}};},execute:async()=>{writeFileSync(join(dir,run+'-identity-'+id+'.json'),JSON.stringify({verified:true,observed_video_id:id,content_type:'video'}));writeFileSync(join(dir,run+'-recording-'+id+'.json'),JSON.stringify({version:2,...fakeNativeProof(eid),run,video_id:id,evidence_id:eid,media_volume:1,media_volume_verified:true,playback_verified:true,playback_package:'com.ss.android.ugc.aweme',audio_status:'usable',mean_volume_db:-35,...change}));return {code:0,stdout:'QUAL\t'+id+'\tmatched\tjudged\n',stderr:''};}});h.state.budgetDeadline=Date.now()+1800000;const r=await h.qualification();assert.equal(r.matched,0,JSON.stringify(change));assert.equal(r.status,'partial');assert.equal(r.failures.length,1);assert.match(r.failures[0].reason,/RECORD_CAPTURE_STRATEGY_UNVERIFIED|RECORD_AUDIO_TRACK_UNVERIFIED/);assert.ok(!ops.includes('reject_recording'));}finally{rmSync(dir,{recursive:true,force:true});}}
 });
