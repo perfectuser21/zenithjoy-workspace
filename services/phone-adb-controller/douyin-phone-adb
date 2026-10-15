@@ -2587,7 +2587,7 @@ if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 
    started=[t for t in active if t['muted']=='none']
    if not p['foreign_started'] and not p['unparsed_media_tracks'] and len(active)==1 and len(recoverable)==1:
     p['state']='recoverable_muted';p.update({k:recoverable[0][k] for k in ('pid','piid')})
-   elif not p['foreign_started'] and not p['unparsed_media_tracks'] and len(started)==1:
+   elif not p['foreign_started'] and not p['unparsed_media_tracks'] and len(active)==1 and len(started)==1:
     p['state']='started';p.update({k:started[0][k] for k in ('pid','piid')})
    elif not p['foreign_started'] and not p['unparsed_media_tracks'] and p['tracks'] and all(t['state'] in ('paused','stopped','idle') and t['muted']=='none' for t in p['tracks']):p['state']='inactive'
 with open(sys.argv[5],'w') as f:json.dump(p,f)
