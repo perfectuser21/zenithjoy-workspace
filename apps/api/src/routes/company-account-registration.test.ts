@@ -1,0 +1,44 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import express, { type Request, type Response, type NextFunction } from 'express';
+import request from 'supertest';
+const mocks = vi.hoisted(() => ({ query: vi.fn(), release: vi.fn(), connect: vi.fn() }));
+vi.mock('../db/connection', () => ({ default: { query: mocks.query, connect: mocks.connect } }));
+vi.mock('../middleware/tenant-context', () => ({ tenantContext: (req: Request, _res: Response, next: NextFunction) => { req.tenantId=req.header('x-test-tenant'); req.tenantRole=req.header('x-test-role')||'owner'; req.feishuUserId='authenticated-actor'; next(); } }));
+import { companyProfileRouter } from './company-profile';
+const app=express(); app.use(express.json()); app.use('/profile',companyProfileRouter);
+const initial=()=>({ company_id:'company-a',tenant_id:'tenant-a',company_key:'yueshengyun',company_name:'悦升云端',config_version:1,config_status:'draft',config_owner:'owner',city:'',industry:'',description:'',customer_problem:'',customer_portrait:'',products:[],key_advantages:[],qa_list:[],wiki:{markdown:'# Draft',products:[{id:'p',name:'待确认'}]},source_evidence:[],runtime_config:{routing:{line_key:'yuesheng',profiles:['old-profile'],feishu_base:'own-base'},policy_id:'draft-v1',comment_scoring:{status:'draft',criteria:{A:'草稿'}},platform_accounts:[{id:'old-record',fields:{抖音号:'oldaccount',手机Profile:'old-profile',ADB序列号:'old-device'},enabled:false,verification_status:'unverified'}]}});
+const input=()=>({expected_version:1,request_id:'11111111-1111-4111-8111-111111111111',ownership_decision_id:'d6b9c66a-f019-469a-957a-399cbfbcbe39',account:{platform:'douyin',douyin_id:'perfect21xx',nickname:'企业Ai员工智能体',profile:'cloud-phone-test',device_serial:'47.100.213.173:10001',device_instance_id:'acp-f6utus34dgnghc1oc',device_host:'mmv'},evidence_refs:[{uri:'/evidence/fresh-account.stdout',sha256:'a'.repeat(64)}]});
+let row: ReturnType<typeof initial>; let foreign: Array<Record<string,unknown>>;let checkpoint: ReturnType<typeof initial>|null;let failSnapshot=false;let failCas=false;
+beforeEach(()=>{vi.clearAllMocks();row=initial();foreign=[];checkpoint=null;failSnapshot=false;failCas=false;mocks.connect.mockResolvedValue({query:mocks.query,release:mocks.release});mocks.query.mockImplementation(async(sql:string,args:unknown[]=[])=>{
+ if(sql==='BEGIN'){checkpoint=structuredClone(row);return {rows:[]};}
+ if(sql==='ROLLBACK'){if(checkpoint)row=checkpoint;return {rows:[]};}
+ if(sql==='COMMIT'){checkpoint=null;return {rows:[]};}
+ if(sql.includes('pg_advisory_xact_lock'))return {rows:[]};
+ if(sql.includes('SELECT company_id, tenant_id, runtime_config'))return {rows:[structuredClone(row),...structuredClone(foreign)]};
+ if(sql.includes('SELECT * FROM zenithjoy.tenant_company_profiles'))return {rows:[structuredClone(row)]};
+ if(sql.startsWith('UPDATE zenithjoy.tenant_company_profiles')){if(failCas)return {rows:[],rowCount:0};row.runtime_config=JSON.parse(String(args[0]));row.config_version=Number(args[1]);return {rows:[structuredClone(row)],rowCount:1};}
+ if(sql.includes('INSERT INTO zenithjoy.company_config_versions')&&failSnapshot)throw Error('snapshot unavailable');
+ return {rows:[],rowCount:1};
+});});
+const post=(body:unknown=input(),role='owner')=>request(app).post('/profile/platform-account-registrations').set('x-test-tenant','tenant-a').set('x-test-role',role).send(body);
+const updates=()=>mocks.query.mock.calls.filter(([sql])=>String(sql).startsWith('UPDATE'));
+describe('正式公司账号归属登记HTTP合同',()=>{
+ it('真实入口追加disabled/unverified登记，保留旧账号/草稿/政策并GET读回',async()=>{const before=initial();const r=await post();expect(r.status).toBe(201);expect(r.body.data.verification_required).toBe(true);expect(r.body.data.account).toMatchObject({douyin_id:'perfect21xx',profile:'cloud-phone-test',device_serial:'47.100.213.173:10001',enabled:false,verification_status:'unverified'});expect(row.config_version).toBe(2);expect(row.config_status).toBe('draft');expect(row.wiki).toEqual(before.wiki);expect(row.runtime_config.comment_scoring).toEqual(before.runtime_config.comment_scoring);expect(row.runtime_config.platform_accounts[0]).toEqual(before.runtime_config.platform_accounts[0]);expect(row.runtime_config.routing.profiles).toEqual(['old-profile','cloud-phone-test']);const read=await request(app).get('/profile').set('x-test-tenant','tenant-a');expect(read.body.data.runtime_config.platform_accounts).toHaveLength(2);});
+ it('管理员亦可登记',async()=>{expect((await post(input(),'admin')).status).toBe(201);});
+ it('缺认证租户拒绝，不认body租户',async()=>{expect((await request(app).post('/profile/platform-account-registrations').send({...input(),tenant_id:'tenant-a'})).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
+ it('普通成员不可登记',async()=>{expect((await post(input(),'member')).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
+ it.each(['company_id','tenant_id','config_status','runtime_config'])('拒绝越权顶层字段%s',async key=>{expect((await post({...input(),[key]:'foreign'})).status).toBe(400);expect(updates()).toHaveLength(0);});
+ it.each(['enabled','verification_status','company_id'])('账号不能自报%s',async key=>{const b=input();Object.assign(b.account,{[key]:key==='enabled'?true:'verified'});expect((await post(b)).status).toBe(400);expect(updates()).toHaveLength(0);});
+ it('缺版本、决定或证据拒绝',async()=>{for(const key of ['expected_version','ownership_decision_id','evidence_refs']){const b:Record<string,unknown>=input();delete b[key];expect((await post(b)).status).toBe(400);}expect(updates()).toHaveLength(0);});
+ it('全局唯一互斥先于任何公司FOR UPDATE，避免跨租户并发抢占',async()=>{await post();const sql=mocks.query.mock.calls.map(([s])=>String(s));expect(sql.findIndex(s=>s.includes('pg_advisory_xact_lock'))).toBeGreaterThan(sql.indexOf('BEGIN'));expect(sql.findIndex(s=>s.includes('pg_advisory_xact_lock'))).toBeLessThan(sql.findIndex(s=>s.includes('FOR UPDATE')));});
+ it('其他公司已有旧fields账号同号（大小写）拒绝且不泄漏所属主体',async()=>{foreign=[{company_id:'company-b',tenant_id:'tenant-b',runtime_config:{platform_accounts:[{fields:{抖音号:'PERFECT21XX'}}]}}];const r=await post();expect(r.status).toBe(409);expect(r.body.error.code).toBe('ACCOUNT_OWNERSHIP_CONFLICT');expect(JSON.stringify(r.body)).not.toContain('company-b');expect(updates()).toHaveLength(0);});
+ it('其他公司已绑相同设备/实例或host+profile拒绝',async()=>{for(const binding of [{device_serial:input().account.device_serial},{device_instance_id:input().account.device_instance_id},{device_host:'mmv',profile:'cloud-phone-test'}]){foreign=[{company_id:'company-b',tenant_id:'tenant-b',runtime_config:{platform_accounts:[{douyin_id:'someoneelse',...binding}]}}];expect((await post()).status).toBe(409);}expect(updates()).toHaveLength(0);});
+ it('同request完整重试返回原登记，旧expected_version不产生第二版本',async()=>{expect((await post()).status).toBe(201);const r=await post();expect(r.status).toBe(200);expect(r.body.data.idempotent).toBe(true);expect(row.config_version).toBe(2);expect(updates()).toHaveLength(1);});
+ it('同request换设备拒绝，不能把旧回执冒新绑定',async()=>{await post();const b=input();b.account.device_serial='other-device';expect((await post(b)).status).toBe(409);expect(updates()).toHaveLength(1);});
+ it('同账号新request不得再建身份',async()=>{await post();const b=input();b.request_id='22222222-2222-4222-8222-222222222222';b.expected_version=2;expect((await post(b)).status).toBe(409);expect(updates()).toHaveLength(1);});
+ it('旧版本冲突保持原公司并落conflict审计',async()=>{const b=input();b.expected_version=0;const r=await post(b);expect(r.status).toBe(409);expect(r.body.error.code).toBe('VERSION_CONFLICT');expect(updates()).toHaveLength(0);expect(mocks.query.mock.calls.some(([s])=>String(s).includes('company_config_changes'))).toBe(true);});
+ it('必须已有draft，不静默停用已启用公司的政策',async()=>{row.config_status='enabled';expect((await post()).status).toBe(409);expect(row.config_status).toBe('enabled');expect(updates()).toHaveLength(0);});
+ it('成功保存不可变版本及旧新actor审计，CAS约束tenant/version',async()=>{await post();const update=updates()[0];expect(String(update[0])).toMatch(/tenant_id\s*=\s*\$4.*config_version\s*=\s*\$5/);expect(update[1]).toEqual([expect.any(String),2,'company-a','tenant-a',1]);const audit=mocks.query.mock.calls.find(([s])=>String(s).includes('INSERT INTO zenithjoy.company_config_changes'));expect(audit?.[1]).toContain('authenticated-actor');expect(mocks.query.mock.calls.some(([s])=>String(s).includes('INSERT INTO zenithjoy.company_config_versions'))).toBe(true);});
+ it('CAS未更新必须回滚，不返回成功',async()=>{failCas=true;expect((await post()).status).toBe(409);expect(row.config_version).toBe(1);expect(mocks.query.mock.calls.some(([s])=>s==='ROLLBACK')).toBe(true);});
+ it('快照失败回滚公司变更并释放连接',async()=>{failSnapshot=true;expect((await post()).status).toBe(500);expect(row).toEqual(initial());expect(mocks.query.mock.calls.some(([s])=>s==='ROLLBACK')).toBe(true);expect(mocks.release).toHaveBeenCalled();});
+});
