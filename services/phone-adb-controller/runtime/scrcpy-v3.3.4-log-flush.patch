@@ -1,0 +1,9 @@
+diff --git a/app/src/util/log.c b/app/src/util/log.c
+index 9114a25..9299756 100644
+--- a/app/src/util/log.c
++++ b/app/src/util/log.c
+@@ -149,2 +149,4 @@ sc_sdl_log_print(void *userdata, int category, SDL_LogPriority priority,
+     fprintf(out, "%s: %s\n", prio_name, message);
++    // Readiness consumers tail redirected logs while recording is alive.
++    fflush(out);
+ }
