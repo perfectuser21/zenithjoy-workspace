@@ -17,7 +17,8 @@ function fixture(t,registry=header+row){
   copyFileSync(new URL('../leadgen-run.sh',import.meta.url),join(app,'leadgen-run.sh'));
   writeFileSync(join(bin,'hostname'),'#!/bin/sh\nprintf "r10-7\\n"\n',{mode:0o755});
   const path=join(home,'registry.tsv');writeFileSync(path,registry);
-  const env={...process.env,HOME:home,ZDOTDIR:home,DOUYIN_PHONE_REGISTRY:path};
+  const adb=join(bin,'adb');writeFileSync(adb,'#!/bin/sh\nprintf \"Android Debug Bridge version 1.0.41\\n\"\n',{mode:0o755});
+  const env={...process.env,HOME:home,ZDOTDIR:home,DOUYIN_PHONE_REGISTRY:path,DOUYIN_ADB_BIN:adb};
   for(const key of ['LEADGEN_MMV_DEVICE_RUNTIME','DOUYIN_ADB_PORT','ADB_SERVER_SOCKET','BRAIN_URL'])delete env[key];
   return {home,app,env};
 }
@@ -39,7 +40,7 @@ async function bridge(t,response='0029'){
     child.stdout.once('data',b=>resolve(Number(b.toString().trim())));
     child.once('error',reject);child.once('exit',code=>reject(Error('fixture exited '+code)));
   });
-  return {LEADGEN_MMV_DEVICE_RUNTIME:'1',DOUYIN_ADB_PORT:String(port),ADB_SERVER_SOCKET:`tcp:localhost:${port}`};
+  return {LEADGEN_MMV_DEVICE_RUNTIME:'1',DOUYIN_ADB_PORT:String(port),ADB_SERVER_SOCKET:`tcp:127.0.0.1:${port}`};
 }
 
 test('MMV默认仍拒手机；原mmv-scoring/none不要求手机配置',t=>{
@@ -86,4 +87,23 @@ test('既有socket协议未知只读拒绝，不调用adb创建或重启服务',
   const out=launch(f,{...route,DOUYIN_ADB_BIN:forbidden});
   assert.equal(out.status,1);assert.match(out.stderr,/MMV_DEVICE_ADB_UNAVAILABLE/);
   assert.equal(existsSync(join(f.home,'adb-was-called')),false);
+});
+
+
+test('MMV设备入口拒绝可自动启动ADB的localhost路径',async t=>{
+  const f=fixture(t),route=await bridge(t);
+  const out=launch(f,{...route,ADB_SERVER_SOCKET:`tcp:localhost:${route.DOUYIN_ADB_PORT}`});
+  assert.equal(out.status,1);assert.match(out.stderr,/MMV_DEVICE_ADB_ROUTE/);
+  assert.doesNotMatch(out.stderr,/正式发布计划缺失/);
+});
+
+
+test('MMV设备入口拒不匹配或未知的本地ADB客户端，不调用设备命令',async t=>{
+  const f=fixture(t),route=await bridge(t);
+  for(const version of ['Android Debug Bridge version 1.0.40','unknown']){
+    writeFileSync(f.env.DOUYIN_ADB_BIN,'#!/bin/sh\n[ "$1" = version ] || exit 97\nprintf "%s\\n" "'+version+'"\n',{mode:0o755});
+    const out=launch(f,route);assert.equal(out.status,1);
+    assert.match(out.stderr,/MMV_DEVICE_ADB_CLIENT/);
+    assert.doesNotMatch(out.stderr,/正式发布计划缺失/);
+  }
 });
