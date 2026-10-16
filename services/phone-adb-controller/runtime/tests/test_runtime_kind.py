@@ -72,6 +72,22 @@ class RuntimeKindTests(RuntimeFixture):
                     self.runtime.verify_runtime(root, runtime_kind=kind)
                 (root / 'scrcpy-server').write_bytes(original)
 
+    def test_default_policy_identity_cannot_be_replaced_by_second_package(self):
+        with patch.object(self.runtime, 'POLICY', self.policy33):
+            with self.assertRaises(self.runtime.RuntimeFailure):
+                self.runtime.verify_runtime(self.sdk33)
+        builder = load(self, 'build-scrcpy-runtime.py')
+        with patch.object(builder, 'POLICY', self.policy33):
+            with self.assertRaises(ValueError):
+                builder.adopt_runtime(self.sdk33/'scrcpy', self.sdk33/'scrcpy-server', self.root/'bad-default')
+
+    def test_second_policy_wrong_identity_and_nonobject_are_refused(self):
+        for value in (self.policy, [], None):
+            with self.subTest(value=type(value).__name__):
+                (self.root / 'runtime-policy-sdk33.json').write_text(json.dumps(value))
+                with self.assertRaises(self.runtime.RuntimeFailure):
+                    self.verify33()
+
     def test_sdk33_missing_policy_never_falls_back(self):
         (self.root / 'runtime-policy-sdk33.json').unlink()
         with self.assertRaises(self.runtime.RuntimeFailure):
