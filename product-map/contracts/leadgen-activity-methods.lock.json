@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -146,13 +146,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "aa754ff9d122feedf1e07c89c4506b9fc97632b6aae12b577d49ddf05f3aae9c",
+      "code_digest": "54e0cade2bf9800ccdf35d9ab902a71c32de3a74ce104e2e09a69d6e78df09fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "69edb889bed6496c255f8aaa220cddedc8b85ffb3f1ee0cb266378f098f87dfe",
-        "current_code_digest": "aa754ff9d122feedf1e07c89c4506b9fc97632b6aae12b577d49ddf05f3aae9c"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "aa754ff9d122feedf1e07c89c4506b9fc97632b6aae12b577d49ddf05f3aae9c",
+        "current_code_digest": "54e0cade2bf9800ccdf35d9ab902a71c32de3a74ce104e2e09a69d6e78df09fa"
       }
     },
     "douyin_video_processing.preflight": {
@@ -256,7 +256,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -280,7 +280,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -304,13 +304,13 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "d1736296648281fb7a5e87a82cbe4546d208fa4d1401b1b781de9bd31a90a1a1",
+      "code_digest": "9b868e9f64589380f0c2c898591e4038f298b52ebab459df6abc78f8f880bbfc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "f2cf178f21954d2c3aff3893f853f7640c3cc7ac13d4d305e144dcd55b00d4bf",
-        "current_code_digest": "d1736296648281fb7a5e87a82cbe4546d208fa4d1401b1b781de9bd31a90a1a1"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "d1736296648281fb7a5e87a82cbe4546d208fa4d1401b1b781de9bd31a90a1a1",
+        "current_code_digest": "9b868e9f64589380f0c2c898591e4038f298b52ebab459df6abc78f8f880bbfc"
       }
     },
     "douyin_video_processing.dedup": {
@@ -413,7 +413,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -458,13 +458,13 @@
           "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
         }
       ],
-      "code_digest": "8187c30c26248dc10b859c081518990d355154fa15e7c0657cfd8c009f31f16e",
+      "code_digest": "f7234b72e7e443cc36c04baaef468a26b63b4dd56555be8fae365e71a2f88abc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "a7adf00fa1cae99248cad727892b1ce4218eb81ec4603ceb48aa65734855894d",
-        "current_code_digest": "8187c30c26248dc10b859c081518990d355154fa15e7c0657cfd8c009f31f16e"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "8187c30c26248dc10b859c081518990d355154fa15e7c0657cfd8c009f31f16e",
+        "current_code_digest": "f7234b72e7e443cc36c04baaef468a26b63b4dd56555be8fae365e71a2f88abc"
       }
     },
     "douyin_video_processing.qualification": {
@@ -567,7 +567,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -619,13 +619,13 @@
           "sha256": "2e972f4ca894ccc1a98c9b0afd7e6893808e33ec4a82fb5a20263e28ed9c02e1"
         }
       ],
-      "code_digest": "55942760fd0b37cf88770f544a3511aac41c452aad757da696c2b0e6f9aaf6a0",
+      "code_digest": "bf1bc6aed5ab376c7f72793b1598f90cdc1f11ef09c5e4460954f994758fdd2f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "d77edd1419b62c63f183836a042121749918f6ea71879ae6436a43e66479e451",
-        "current_code_digest": "55942760fd0b37cf88770f544a3511aac41c452aad757da696c2b0e6f9aaf6a0"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "55942760fd0b37cf88770f544a3511aac41c452aad757da696c2b0e6f9aaf6a0",
+        "current_code_digest": "bf1bc6aed5ab376c7f72793b1598f90cdc1f11ef09c5e4460954f994758fdd2f"
       }
     },
     "douyin_video_processing.collection": {
@@ -750,7 +750,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -795,13 +795,13 @@
           "sha256": "befda1bd125177423044f6f94763d2eeec0bf9ed0599de1ac5e8bbbdd1c91c04"
         }
       ],
-      "code_digest": "d226ff6061cbc37c6a0960875e6dcdeff4d8a1737d007a497885a906959299cd",
+      "code_digest": "eec0106da6a6982165e5dfed3f834390dc6725dc812f162388300e98faa14b5d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "79b11fc366037463eb5dafba30cddef2d1d0d2afd8b01af42936d78d183a61a5",
-        "current_code_digest": "d226ff6061cbc37c6a0960875e6dcdeff4d8a1737d007a497885a906959299cd"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "d226ff6061cbc37c6a0960875e6dcdeff4d8a1737d007a497885a906959299cd",
+        "current_code_digest": "eec0106da6a6982165e5dfed3f834390dc6725dc812f162388300e98faa14b5d"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -905,7 +905,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -945,13 +945,13 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "17fe6ff30fbc04d67771b708348becec77278a8f85e5c1d93e097232341d054f",
+      "code_digest": "dd1ec1c72c6aee44be380bdf55b6e71b32582c833ddf6bb27448dd1f558905db",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "eacd1b851266c6ba11022db71970373a23187c9881ca193508203f4f108e27e8",
-        "current_code_digest": "17fe6ff30fbc04d67771b708348becec77278a8f85e5c1d93e097232341d054f"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "17fe6ff30fbc04d67771b708348becec77278a8f85e5c1d93e097232341d054f",
+        "current_code_digest": "dd1ec1c72c6aee44be380bdf55b6e71b32582c833ddf6bb27448dd1f558905db"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1370,7 +1370,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -1394,7 +1394,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -1446,13 +1446,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "1e1cad0299a3fa59502d112ff2aa5dad02004545dd9f932bd6524a84a75c0f0a",
+      "code_digest": "a591627d5e01e2826dd547f3d5833b118f8a0daf5953d70bd03f662ed14611b0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "492af327d19fedd7af7559e067a34b2bc8263b928cdb9f70eae79a919b1c45f3",
-        "current_code_digest": "1e1cad0299a3fa59502d112ff2aa5dad02004545dd9f932bd6524a84a75c0f0a"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "1e1cad0299a3fa59502d112ff2aa5dad02004545dd9f932bd6524a84a75c0f0a",
+        "current_code_digest": "a591627d5e01e2826dd547f3d5833b118f8a0daf5953d70bd03f662ed14611b0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1555,7 +1555,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -1607,13 +1607,13 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "6fb963ce0c527f0e349b71009e2f0bdef2034449f2c53da1a6936b4df25a3fef",
+      "code_digest": "c9394d25c39a22198b3dac6bcee89a606b178038f35add5465059f81df1e5b51",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "259849513148beba16d5be7bb1193f0b710984b90775431b152013ca6c2a9347",
-        "current_code_digest": "6fb963ce0c527f0e349b71009e2f0bdef2034449f2c53da1a6936b4df25a3fef"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "6fb963ce0c527f0e349b71009e2f0bdef2034449f2c53da1a6936b4df25a3fef",
+        "current_code_digest": "c9394d25c39a22198b3dac6bcee89a606b178038f35add5465059f81df1e5b51"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1716,7 +1716,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -1768,13 +1768,13 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "6fb963ce0c527f0e349b71009e2f0bdef2034449f2c53da1a6936b4df25a3fef",
+      "code_digest": "c9394d25c39a22198b3dac6bcee89a606b178038f35add5465059f81df1e5b51",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "259849513148beba16d5be7bb1193f0b710984b90775431b152013ca6c2a9347",
-        "current_code_digest": "6fb963ce0c527f0e349b71009e2f0bdef2034449f2c53da1a6936b4df25a3fef"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "6fb963ce0c527f0e349b71009e2f0bdef2034449f2c53da1a6936b4df25a3fef",
+        "current_code_digest": "c9394d25c39a22198b3dac6bcee89a606b178038f35add5465059f81df1e5b51"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1878,7 +1878,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "cea54827f26d7ddb6ba33c26d6b2d73e492d1942d1ef6cafa6e1f573cfe3b557"
+          "sha256": "1561a7af4c84b4dd61c94a1b9e5163465ea448aef0f04287f6e783c3d68842b9"
         },
         {
           "kind": "code",
@@ -1932,13 +1932,13 @@
           "sha256": "4e83e004a415f3b8f857a8124bc010e28c1165b66ba3a4b133c56a65f3f2e894"
         }
       ],
-      "code_digest": "3cf5b6a1806e70e323e19976451712ff66975bf4bc9f9e64e9702111b649a441",
+      "code_digest": "4f552483c52270bd6bb635d04b0788a77e04f44624a8cdd4279bb9da2e9e079f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立核对该Activity方法正文、共享支持、版本、合同及消费者全等正式5de；仅既有同MMV同relay的子会话两种已知工具schema适配、逐命令hostname守卫及授权后固定路由，未改原slot、nonce、Source、预算、租约、独立裁判或104未知不重发边界。实际Gateway调用能力尚未验收，本批准仅适用于本条精确code digest。",
-        "reviewed_by": "codex:/root/patrol_source_registration",
-        "previous_code_digest": "0c9b639dba9eddc902130b6d856a6eda93a8d518c12e11296f255e67f5e8217d",
-        "current_code_digest": "3cf5b6a1806e70e323e19976451712ff66975bf4bc9f9e64e9702111b649a441"
+        "reason": "独立核对Activity合同、方法Skill正文及支持文件、版本、Workflow/Commander依赖和消费者与基线fef1f561一致；共享控制器仅修复分享面板text/content-desc语义定位和SDK31 nonce输入复制兼容。分享目标须同包功能容器内唯一可点击且屏内，歧义拒绝导航重试；SDK31仍须有效owner、唯一可信焦点字段、原IME还原、精确typed/empty/pasted nonce和原视频身份归位。前缀残留及部分复制反例拒绝，原slot、预算、租约和104未知不重发边界未改。此批准仅认当前精确code digest的内部兼容，不表示云机稳定性或生产整链验收通过。",
+        "reviewed_by": "codex:/root/share_link_selector_review",
+        "previous_code_digest": "3cf5b6a1806e70e323e19976451712ff66975bf4bc9f9e64e9702111b649a441",
+        "current_code_digest": "4f552483c52270bd6bb635d04b0788a77e04f44624a8cdd4279bb9da2e9e079f"
       }
     }
   },

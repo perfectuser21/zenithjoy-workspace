@@ -31,7 +31,8 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
  const head='<hierarchy><node package="com.ss.android.ugc.aweme" bounds="[0,0][1200,2664]">';
  const field=value=>head+`<node text="${value}" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" hint="人工智能" clickable="true" bounds="[0,0][200,200]"/></node></hierarchy>`;
- const panel=head+'<node text="分享给"/><node text="分享链接" clickable="true" bounds="[40,2300][300,2360]"/></node></hierarchy>';
+ // 合成面板遵循真机功能容器合同；不放宽生产selector或nonce核验。
+ const panel=head+'<node text="分享给" package="com.ss.android.ugc.aweme" enabled="true" bounds="[40,1900][300,1960]"/><node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/function_container" enabled="true" bounds="[0,2200][1200,2450]"><node text="分享链接" package="com.ss.android.ugc.aweme" enabled="true" clickable="true" bounds="[40,2300][300,2360]"/></node></node></hierarchy>';
  writeFileSync(join(d,'registry'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
  const guide=readFileSync(join(fixtures,'real-copy-success-guide-13.xml'),'utf8');
  writeFileSync(join(d,'guide.xml'),guideWrongMarker?guide.replace('可以通过分享的链接找到我','其他引导'):guide);
@@ -59,7 +60,7 @@ else if(has('input keyevent 279'))s.field=s.clip;
 else if(has('input keyevent 67'))s.field='';
 else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.scratchReturns=(s.scratchReturns||0)+1;s.page=process.env.COPY_GUIDE==='1'&&s.scratchReturns===2?'guide':'detail';}else if(s.page==='guide'){s.guideDismisses=(s.guideDismisses||0)+1;s.page=process.env.GUIDE_DISMISS_STUCK==='1'?'guide':process.env.GUIDE_DISMISS_FAILS==='1'?'partial':'detail';}else if(s.page==='panel')s.page='detail';else if(process.env.KEYWORD_RESULTS==='1'&&s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
-else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
+else if(has('input tap')&&s.page==='panel'){if(a.slice(-2).join(' ')!=='170 2330'){console.error('UNTRUSTED_FAKE_PANEL_TAP');process.exit(33);}s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){
  if(process.env.GUIDE_DISMISS_IDLE==='1'&&s.page==='detail'&&s.guideDismisses&&!s.guideIdleRecovered){
