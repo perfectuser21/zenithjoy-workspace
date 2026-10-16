@@ -8,7 +8,10 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import socket
+import threading
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent.parent
@@ -143,6 +146,16 @@ class RuntimeTests(RuntimeFixture):
         self.assertTrue(receipt['execution_stop_unknown'])
         self.assertFalse((self.remote / 'scrcpy-server.jar').exists())
 
+    def test_existing_temporary_file_is_not_clobbered_or_deleted(self):
+        temporary = self.remote / 'zj-scrcpy.stage-collision'
+        temporary.write_bytes(b'foreign-temporary')
+        with patch.object(self.runtime.uuid, 'uuid4', return_value=SimpleNamespace(hex='collision')):
+            result = self.stage()
+        self.assertFalse(result['verified'])
+        self.assertTrue(result['execution_stop_unknown'])
+        self.assertEqual(temporary.read_bytes(), b'foreign-temporary')
+        self.assertFalse((self.remote / 'scrcpy-server.jar').exists())
+
 
 class ShimTests(RuntimeFixture):
     def setUp(self):
@@ -208,12 +221,40 @@ class BuildTests(unittest.TestCase):
                 result = module.adopt_runtime(client, server, output)
                 self.assertEqual((output / 'scrcpy').read_bytes(), b'client')
                 self.assertTrue(result['verified'])
+                self.assertEqual(output.stat().st_mode & 0o777, 0o555)
+                self.assertEqual((output / 'scrcpy').stat().st_mode & 0o777, 0o555)
+                self.assertEqual((output / 'scrcpy-server').stat().st_mode & 0o777, 0o444)
                 with self.assertRaises(Exception):
                     module.adopt_runtime(client, server, output)
+                empty = root / 'preexisting-empty'
+                empty.mkdir()
+                with self.assertRaises(Exception):
+                    module.adopt_runtime(client, server, empty)
+                self.assertEqual(list(empty.iterdir()), [])
                 client.write_bytes(b'unapproved')
                 with self.assertRaises(Exception):
                     module.adopt_runtime(client, server, root / 'other-package')
                 self.assertFalse((root / 'other-package').exists())
+
+
+class ProtocolTests(unittest.TestCase):
+    def test_protocol_mismatch_is_refused_before_adb_can_restart_server(self):
+        runtime = load(self, 'scrcpy-runtime.py')
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen()
+            def serve():
+                connection, _ = listener.accept()
+                with connection:
+                    connection.recv(16)
+                    connection.sendall(b'OKAY0004002a')  # 42 differs from pinned 41
+            thread = threading.Thread(target=serve)
+            thread.start()
+            try:
+                with self.assertRaises(runtime.RuntimeFailure):
+                    runtime.require_existing_server(listener.getsockname()[1])
+            finally:
+                thread.join(timeout=2)
 
 
 if __name__ == '__main__':
