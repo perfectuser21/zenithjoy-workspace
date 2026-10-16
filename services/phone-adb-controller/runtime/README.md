@@ -71,9 +71,16 @@ helper 每步读回现有 `LOCK_DIR/owner`，只接受 exact owner。
 | ADB_BIN / ADB_PORT / SERIAL | 成熟控制器实际绑定的既有通道 |
 | OWNER / LOCK_DIR | exact owner 与设备锁绝对目录 |
 | EVIDENCE_ROOT / EVIDENCE_ID | 本次原件目录与 ID |
+| STAGE_RECEIPT / STAGE_RECEIPT_SHA256 | C同步stage-server成功返回的canonical原件绝对路径及其SHA256 |
 | STAGE_TIMEOUT | 整体上传秒数，默认 45，上限 120 |
 
-shim 只把精确同版 server 的精确目标 push 转为上述 stage。
+所有真实上传只在 C 同步调用的 `stage-server` 阶段进行。
+该阶段返回 `stage_receipt` 及最终原件的 `stage_receipt_sha256`，
+C把两者传入上述 shim 环境变量。shim 对精确同版 server 的精确目标 push
+仅校验本EID/owner/serial/port/runtime pins的成功原件和现场远端SHA/字节数，
+不再调用stage、不生成第二份stage原件、不上传/发布/删除。
+缺canonical、原件SHA变化、unknown原件或远端文件缺失/变化均只读拒绝；
+不会因scrcpy内部push而制造第二次未被C同步归因的写入。
 其余仅允许 scrcpy 必要的 devices、同目标官方 server shell、
 `scrcpy_<scid>` forward/reverse。start-server 只查询现有桥，
 其他目标、任意文件 push、安装、重启、换钥等命令一律拒绝。

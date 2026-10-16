@@ -127,7 +127,8 @@ def require_adb_client(adb_bin, timeout=2):
 def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
                  evidence_root, evidence_id, timeout=45, client_sha256=None):
     receipt = {'verified': False, 'execution_stop_unknown': False, 'phase': 'planned',
-               'serial': serial, 'owner': owner, 'adb_port': adb_port}
+               'serial': serial, 'owner': owner, 'adb_port': adb_port,
+               'evidence_id': evidence_id}
     receipt_path = None
     temporary = '/data/local/tmp/zj-scrcpy.stage-' + uuid.uuid4().hex
     receipt['temporary_path'] = temporary
@@ -271,7 +272,72 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
     except OSError as error:
         receipt.update(verified=False, error='stage receipt persistence failed: ' + str(error),
                        execution_stop_unknown=touched)
+    if receipt.get('verified') and receipt_path:
+        try:
+            # 只加到返回值，不写回原件，避免自引用哈希。
+            receipt['stage_receipt_sha256'] = hashlib.sha256(regular_bytes(receipt_path)).hexdigest()
+        except RuntimeFailure as error:
+            receipt.update(verified=False, execution_stop_unknown=touched, error=str(error))
     return receipt
+
+
+def verify_prestaged_server(config, verified):
+    """内部push只读复用C同步阶段原件；此处没有上传/发布/删除路径。"""
+    raw_path = os.environ.get('ZJ_SCRCPY_STAGE_RECEIPT', '')
+    expected_sha = os.environ.get('ZJ_SCRCPY_STAGE_RECEIPT_SHA256', '')
+    path = Path(raw_path)
+    evidence = Path(config['evidence_root'])
+    if not raw_path or not re.fullmatch(r'[0-9a-f]{64}', expected_sha):
+        raise RuntimeFailure('canonical prestage receipt and SHA256 are required')
+    if (not path.is_absolute() or path.is_symlink() or evidence.is_symlink()
+            or path.parent != evidence
+            or not re.fullmatch(re.escape(config['evidence_id']) + r'\.server-stage\.[0-9a-f]{32}\.json', path.name)):
+        raise RuntimeFailure('canonical prestage receipt is outside the exact evidence binding')
+    raw = regular_bytes(path)
+    if hashlib.sha256(raw).hexdigest() != expected_sha:
+        raise RuntimeFailure('canonical prestage receipt SHA256 changed')
+    try:
+        receipt = json.loads(raw)
+    except (ValueError, UnicodeError) as error:
+        raise RuntimeFailure('canonical prestage receipt is invalid') from error
+    expected = {'phase': 'verified', 'serial': config['serial'], 'owner': config['owner'],
+                'adb_port': config['adb_port'], 'evidence_id': config['evidence_id'],
+                'remote_path': POLICY['remote_server'], 'stage_receipt': str(path),
+                'client_sha256': verified['client_sha256'], 'server_sha256': verified['server_sha256'],
+                'client_path': verified['client_path'], 'server_path': verified['server_path'],
+                'received_bytes': len(regular_bytes(verified['server_path']))}
+    if (not isinstance(receipt, dict) or receipt.get('verified') is not True
+            or receipt.get('execution_stop_unknown') is not False
+            or any(receipt.get(key) != value for key, value in expected.items())):
+        raise RuntimeFailure('canonical prestage receipt is not successful for this exact capture')
+    deadline = time.monotonic() + min(float(config['timeout']), 15)
+    require_owner(config['lock_dir'], config['owner'])
+    require_adb_client(config['adb_bin'], min(2, max(0.1, deadline - time.monotonic())))
+    require_existing_server(config['adb_port'], min(1, max(0.1, deadline - time.monotonic())))
+    target = shlex.quote(POLICY['remote_server'])
+    script = (f'[ ! -L {target} ] && [ -f {target} ] && '
+              f'toybox sha256sum {target} && toybox wc -c < {target}')
+    env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + str(config['adb_port']))
+    child = subprocess.Popen([str(config['adb_bin']), '-H', '127.0.0.1', '-P',
+                              str(config['adb_port']), '-s', config['serial'],
+                              'shell', '-T', script], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             env=env, start_new_session=True)
+    try:
+        stdout, _ = child.communicate(timeout=max(0.1, deadline - time.monotonic()))
+    except (subprocess.TimeoutExpired, RuntimeFailure) as error:
+        terminate_owned(child)
+        raise RuntimeFailure('read-only prestaged server probe did not complete') from error
+    require_owner(config['lock_dir'], config['owner'])
+    lines = stdout.decode('utf-8', errors='strict').splitlines()
+    if (child.returncode or len(lines) != 2
+            or lines[0] != POLICY['server_sha256'] + '  ' + POLICY['remote_server']
+            or not lines[1].strip().isdigit()
+            or int(lines[1]) != expected['received_bytes']):
+        raise RuntimeFailure('prestaged remote server is missing or changed; push shim is read-only')
+    return {'verified': True, 'mode': 'prestaged_readonly_reuse',
+            'stage_receipt': str(path), 'stage_receipt_sha256': expected_sha,
+            'server_sha256': POLICY['server_sha256']}
 
 
 def shim_config():
@@ -308,9 +374,9 @@ def adb_shim(argv):
         if len(argv) >= 3 and argv[:2] == ['-s', serial] and argv[2] == 'push':
             if len(argv) != 5 or os.path.abspath(argv[3]) != verified['server_path'] or argv[4] != POLICY['remote_server']:
                 raise RuntimeFailure('ADB shim refuses a non-pinned server push')
-            result = stage_server(**config)
-            print('runtime server stage: ' + json.dumps(result, ensure_ascii=False), file=sys.stderr)
-            return 0 if result['verified'] else (75 if result['execution_stop_unknown'] else 64)
+            result = verify_prestaged_server(config, verified)
+            print('runtime server reused verified prestage: ' + json.dumps(result, ensure_ascii=False), file=sys.stderr)
+            return 0
         allowed = argv == ['devices', '-l']
         if argv[:2] == ['-s', serial]:
             rest = argv[2:]
