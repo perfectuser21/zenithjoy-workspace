@@ -25,10 +25,10 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "cdd5b63859c6cd0bb3fab524738fc1c7a99616a245019202489d5ae14cead545",
+      "sha256": "895ab4569e88d38b56d01effe024a1c7aa257e73e3f586ddd5730636d81a5450",
       "activities": {
         "scoring": "f701b44bb66545606d98ccb2f5ec86a768cdce94c6bf7ec2092d09adf6c70139",
-        "mark_leads": "c2c6b9e652b40e960f78226aa3a123459c02d3bfc2473a16c69a14bb380ac368"
+        "mark_leads": "c9e08ca660ee93d4e1abd1563d0ffc651d502c72a6fa7988d9a0d684c6568ef0"
       }
     },
     "douyin_lead_outreach": {
@@ -41,20 +41,20 @@
       }
     },
     "douyin_video_discovery": {
-      "sha256": "89c650148110770d30fb0715761c4d318f447c5e8bd04714f983a79756107349",
+      "sha256": "93443c53de7536887df07cecde495c0887827ca5e836736d60b0f017a5faa80f",
       "activities": {
-        "preflight": "a41ac576fd7554604522d12a4517e0927e884aaeccd67b0ec79e9465c7347067",
+        "preflight": "85d2bf298e38c38b88bc1ea2c49de84a17e7c9bb62a20326597ab094c901dbca",
         "collect_videos": "af36fcad33a13cdd06979523cbca67f13903aef32a6d625c0cec167159868963",
         "cleanup": "b5913548d051a5da19765f7f1c8df7c85a7c45218edeaddba4ade84b6e4ee4aa"
       }
     },
     "douyin_video_processing": {
-      "sha256": "a8bf93003eb163b5fff11de9779057e2368f22533ea4c1ccc22367c1c40bf8a2",
+      "sha256": "bc747ef48fa7b4ca4944e8ee1ad39fc4d6c9498571387a0ed93f014bd4aa113d",
       "activities": {
-        "preflight": "a41ac576fd7554604522d12a4517e0927e884aaeccd67b0ec79e9465c7347067",
+        "preflight": "85d2bf298e38c38b88bc1ea2c49de84a17e7c9bb62a20326597ab094c901dbca",
         "dedup": "c07859e2324049155e7c6b57e544eb09f0a6eb84ffead6c2c0924b1f35e1e775",
         "qualification": "17fc2dc64c07254810092a99b487ffc47b575259d608eeef964d4b436c4d5014",
-        "collection": "c98523c96299ae07737471cfd1efa0afbdaf1a601f7192967a4886ef2ebf237b",
+        "collection": "d38e69fad8af5219ceed130b0bd81818e98d5d8411f0b57efa137180796c1934",
         "cleanup": "b5913548d051a5da19765f7f1c8df7c85a7c45218edeaddba4ade84b6e4ee4aa"
       }
     },
