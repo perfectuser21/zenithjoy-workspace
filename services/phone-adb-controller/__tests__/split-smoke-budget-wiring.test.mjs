@@ -71,6 +71,7 @@ test('split smoke executes every original complete test file once in one ordinar
  const full=calls.filter(c=>c.args.includes('--test')&&!c.args.some(x=>x.startsWith('--test-name-pattern')));
  assert.equal(full.length,1,'serial duplicate invocations exceed the fixed 300-second assertion budget');
  assert.ok(full[0].args.includes('--test-concurrency=4'),'bounded file-level concurrency is required; preserve serial subtests');
+ assert.ok(!full[0].args.some(x=>/^--test-(?:skip-pattern|only|todo)(?:=|$)/.test(x)),'complete suite must not skip or select individual tests');
  const files=full[0].args.filter(x=>x.endsWith('.test.mjs')||x.endsWith('.test.js'));
  assert.equal(new Set(files).size,files.length,'ordinary complete suite repeats a file');
  assert.deepEqual([...files].sort(),[...originalFiles,'services/phone-adb-controller/__tests__/split-smoke-budget-wiring.test.mjs'].sort(),'complete suite file set changed');
