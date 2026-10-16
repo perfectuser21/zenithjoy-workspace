@@ -211,6 +211,7 @@ PYMANIFEST
 
 
 MMV_JS_FILES=(
+  capture-strategy.mjs
   push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
   leadgen-db-lib.js company-config-lib.js company-config-sync-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
   judge-video-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
