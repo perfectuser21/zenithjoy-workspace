@@ -16,6 +16,7 @@ function recordedQualification({volume='1',db='-35',startFail=false,speedFail=fa
  const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
   const ctl=path.join(dir,'ctl'),remote=path.join(dir,'remote');
   writeFileSync(ctl,`#!/bin/zsh
+[[ "$3" != --lock-owner ]] || set -- "$1" "$2" "\${@:5}"
 print "$3" >> "$FIXTURE/calls"
 case "$3" in
 lock-refresh) print 'lock=refreshed';;
@@ -51,7 +52,7 @@ test('two queued videos in one run each deliver their own recording to qualifica
  try {
   const ctl=path.join(d,'ctl'), qualify=path.join(d,'qualify'), scp=path.join(d,'scp');
   writeFileSync(ctl,`#!/usr/bin/env node
-const fs=require('fs'),p=require('path');const [flag,profile,cmd,...args]=process.argv.slice(2);const d=process.env.FIXTURE;
+const fs=require('fs'),p=require('path');const argv=process.argv.slice(2);if(argv[2]==='--lock-owner')argv.splice(2,2);const [flag,profile,cmd,...args]=argv;const d=process.env.FIXTURE;
 const active=()=>fs.readFileSync(p.join(d,'active'),'utf8');
 fs.appendFileSync(p.join(d,'calls'),JSON.stringify({cmd,args})+'\\n');
 switch(cmd){
@@ -98,6 +99,7 @@ function run(mode,extra={}) {
  const d=mkdtempSync(path.join(tmpdir(),'queued-video-'));
  const ctl=path.join(d,'ctl'); const log=path.join(d,'calls');
  writeFileSync(ctl,`#!/bin/zsh
+[[ "$3" != --lock-owner ]] || set -- "$1" "$2" "\${@:5}"
 print -r -- "$3" >> "$CALLS"
 print -r -- "$3|\${DOUYIN_DETAIL_PLAYBACK:-standard}|$4|$5" >> "$STRATEGIES"
 case "$3" in

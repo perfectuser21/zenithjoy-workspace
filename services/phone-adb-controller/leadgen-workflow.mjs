@@ -132,7 +132,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       const held=await checked(ctl,['--profile',profile,'lock-refresh',run]);
       if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
     }
-    const ownerArgs=['close-app','return-safe-desktop'].includes(command)?['--lock-owner',run]:[];
+    const ownerArgs=['close-app','return-safe-desktop','current-video-link'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
       command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{});

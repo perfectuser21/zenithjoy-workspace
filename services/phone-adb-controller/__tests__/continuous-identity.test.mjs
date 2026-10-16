@@ -26,7 +26,8 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
   const patched=source.replace(wait,controlled);
   assert.equal(patched.split(controlled).length-1,1,'仅替换一处等待函数');
   assert.equal(patched.replace(controlled,wait),source,'归一化等待后所有业务与CLI字节必须完全相同');
-  runner=join(d,'controller-controlled-wait');writeFileSync(runner,patched);
+  runner=join(d,'douyin-phone-adb');writeFileSync(runner,patched);
+  for(const file of ['phone-lock-lib.sh','phone-lock-helper.py'])writeFileSync(join(d,file),readFileSync(join(fixtures,'..','..',file)));
  }
  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
  const head='<hierarchy><node package="com.ss.android.ugc.aweme" bounds="[0,0][1200,2664]">';
@@ -83,6 +84,8 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const adbText=readFileSync(adb,'utf8').replace('head+`',JSON.stringify(head)+'+`');writeFileSync(adb,adbText,{mode:0o755});
  const curl=join(d,'curl');writeFileSync(curl,`#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/${wrongId?'7646309328911907196':vid}\\r\\n\\r\\n'\n`,{mode:0o755});
  const wrapper=join(d,'ctl');writeFileSync(wrapper,`#!/bin/zsh
+ original_args=("$@")
+ [[ "$3" != --lock-owner ]] || set -- "$1" "$2" "\${@:5}"
  print -r -- "$3:\${DOUYIN_DETAIL_PLAYBACK:-standard}" >> "$FAKE_PHONE_DIR/command-env"
  case "$3" in
   lock-refresh) print lock=refreshed;exit 0;;
@@ -91,11 +94,13 @@ fs.writeFileSync(sfile,JSON.stringify(s));
   record-stop) print "record_stopped capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true duration_seconds=25.1 audio_streams=1 mean_volume_db=-35 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','end')}";exit 0;;
   record-extract-audio) print fixture-audio > "$FAKE_PHONE_DIR/record.wav";print "audio_extracted path=$FAKE_PHONE_DIR/record.wav";exit 0;;
  esac
- exec zsh '${runner}' "$@"
+ exec zsh '${runner}' "\${original_args[@]}"
 `,{mode:0o755});
  const qualify=join(d,'qualify');writeFileSync(qualify,"#!/bin/sh\nprintf 'QUAL_RESULT {\"verdict\":\"matched\"}\\n'\n",{mode:0o755});
  writeFileSync(join(d,'scp'),'#!/usr/bin/env node\nconst fs=require("fs");process.exit(fs.existsSync(process.argv.at(-2))?0:4);\n',{mode:0o755});
  const tmp=join(d,'tmp'),cache=join(d,'.config/openclaw/locate-cache');mkdirSync(cache,{recursive:true});
+ // 队列已持锁：建本测试自己的lease，实际controller/guard仍验证owner。
+ const lock=join(tmp,'locks','SER1.lock');mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),'continuous-run');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)));
  // 同目标旧短链使本次必须走nonce；不得关闭COPY_STALE。
  writeFileSync(join(cache,'legacy-last-clip.txt'),'https://v.douyin.com/Fresh/\n');
  const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,

@@ -21,7 +21,7 @@ test('real queued CLI soft-budget completion persists verified rows and keeps th
   writeFileSync(join(d,'date'),`#!/bin/sh\ncat "$FAKE_COLLECTION_DIR/clock"\n`,{mode:0o755});
   const ctl=join(d,'ctl');
   writeFileSync(ctl,`#!/usr/bin/env node
-const fs=require('fs'),p=require('path');const d=process.env.FAKE_COLLECTION_DIR,cmd=process.argv[4];
+const fs=require('fs'),p=require('path');const d=process.env.FAKE_COLLECTION_DIR,cmd=process.argv[process.argv[4]==='--lock-owner'?6:4];
 fs.appendFileSync(p.join(d,'phone-calls'),cmd+'\\n');
 switch(cmd){
 case 'lock-refresh':console.log('lock=refreshed owner=budget-progress');break;
@@ -98,7 +98,7 @@ test('own-account identity skipped inside one parsed screen still checks budget 
   writeFileSync(join(d,'clock'),'0');writeFileSync(join(d,'own.json'),JSON.stringify({nicknames:[],ids:['own123']}));
   writeFileSync(join(d,'date'),'#!/bin/sh\ncat "$ROW_BUDGET_DIR/clock"\n',{mode:0o755});
   const ctl=join(d,'ctl');writeFileSync(ctl,`#!/usr/bin/env node
-const fs=require('fs'),p=require('path'),d=process.env.ROW_BUDGET_DIR,cmd=process.argv[4];
+const fs=require('fs'),p=require('path'),d=process.env.ROW_BUDGET_DIR,cmd=process.argv[process.argv[4]==='--lock-owner'?6:4];
 fs.appendFileSync(p.join(d,'calls'),cmd+'\\n');
 switch(cmd){
 case 'lock-refresh':console.log('lock=refreshed');break;
