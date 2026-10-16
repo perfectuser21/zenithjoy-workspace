@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "537c1238a2a62d2f4e5c4c24f48f703ef0a80046593b7da02e6bbc41b888d05c",
+      "code_digest": "76b6a5c020b8e96c75a8c6aee1702856689c86375b4319cd25c7a5452d9f272f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享workflow变更限MMV102预检及collection分支，101搜索筛选和卡片取链落库合同未改变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "9847e355c438a624ba2df733337eefad3c7c97db02d07a0ec3d4e96a5fc93848",
-        "current_code_digest": "537c1238a2a62d2f4e5c4c24f48f703ef0a80046593b7da02e6bbc41b888d05c"
+        "reason": "发现Activity仍搜索/筛选/取真实链接及保存视频，record_start不属本方法执行路径；其所有定位、nonce、数量、指标和入库代码不变。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "537c1238a2a62d2f4e5c4c24f48f703ef0a80046593b7da02e6bbc41b888d05c",
+        "current_code_digest": "76b6a5c020b8e96c75a8c6aee1702856689c86375b4319cd25c7a5452d9f272f"
       }
     },
     "douyin_video_processing.preflight": {
@@ -270,7 +270,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -294,7 +294,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "392fac45c0e16f40e21d71843e8a4a5f3177d692eb4193404e1bce81a70bcfee",
+      "code_digest": "24a7499f28c0a25e272c9a4a92e5a98ff3dab007007cf043a0ac9cb6d47734ef",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "设备选择与真实账号核对合同不变；新增既有task_inputs设备选择和私有工件，履行原来源冻结承诺，旧M4路径不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "770f39e64c93bc1ed0c31c1c01899d1d5913eea3d0f47b48276c23b6b1255c70",
-        "current_code_digest": "392fac45c0e16f40e21d71843e8a4a5f3177d692eb4193404e1bce81a70bcfee"
+        "reason": "预检仍核公司、账号、SDK、锁与通话状态，未调用record_start；相同C文件被重复绑定的结构未更改。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "392fac45c0e16f40e21d71843e8a4a5f3177d692eb4193404e1bce81a70bcfee",
+        "current_code_digest": "24a7499f28c0a25e272c9a4a92e5a98ff3dab007007cf043a0ac9cb6d47734ef"
       }
     },
     "douyin_video_processing.dedup": {
@@ -434,7 +434,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "d6d01a2d43061bea2e346d8a20da9b8f4df2050bcfbc74ef55eda6a1004da699"
         }
       ],
-      "code_digest": "632c4115e3c6a2f9024802313bd3250b5f335fea98fc9f8b839e58954bd0b4a2",
+      "code_digest": "6b92d03559528b6e05f8be39da0a3b60b7cc5a5ca48de6a0a418a1590d79877e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享代码仅company_config设备冻结和collect授权分支改变，去重领取和历史状态判定未改变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "6a8946ae988d0e7db2d91be2b336163ba2be94fa2755c64d02c7b6ac68a8a2ac",
-        "current_code_digest": "632c4115e3c6a2f9024802313bd3250b5f335fea98fc9f8b839e58954bd0b4a2"
+        "reason": "判重仍按原来源、历史、自身账号及run集合选取视频，未调用record_start；历史/认领规则不变。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "632c4115e3c6a2f9024802313bd3250b5f335fea98fc9f8b839e58954bd0b4a2",
+        "current_code_digest": "6b92d03559528b6e05f8be39da0a3b60b7cc5a5ca48de6a0a418a1590d79877e"
       }
     },
     "douyin_video_processing.qualification": {
@@ -595,7 +595,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -689,13 +689,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "7f1c6546bce0ee1e6b5511b235980db253e78d3e5c8e3f0ad965acb2026d961c",
+      "code_digest": "5acfc2eee3f28901437c4e636e8b312e06c79c761f5d16a21e413fb891534d06",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "shell变更仅collection传递可选来源文件和摘要，视频资格/原生录音/ASR/公司政策判据未改变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "af2da91cdb31bc4f885b212f884f56ad549ee70440c651414ab7e3a704e4dadd",
-        "current_code_digest": "7f1c6546bce0ee1e6b5511b235980db253e78d3e5c8e3f0ad965acb2026d961c"
+        "reason": "资格方法仍先核原生播放与runtime，再有界录音/提取真实音轨/原ASR与公司判断；仅内部首次非空媒体等待8→12秒并新增诊断，准入、终止、decoder及资格政策不变。Skill只要求有界就绪未固定8秒。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "7f1c6546bce0ee1e6b5511b235980db253e78d3e5c8e3f0ad965acb2026d961c",
+        "current_code_digest": "5acfc2eee3f28901437c4e636e8b312e06c79c761f5d16a21e413fb891534d06"
       }
     },
     "douyin_video_processing.collection": {
@@ -827,7 +827,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -879,7 +879,14 @@
           "sha256": "fdc75f935ec9cac3e6c10815cbd85f2becb30edb9c16af2f90db0c76f8100b92"
         }
       ],
-      "code_digest": "dd33db42949e790198a74af946c41b8adb87a52aa73170e0a8d33d86eb587902"
+      "code_digest": "cd492669b1aa5d6ea2c0b77946db16d4908a559d2baecd2e343cf5ab02153c45",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "采集仍只消费合格视频并核原生身份/PG冻结绑定后保存评论；评论数量、筛选、用户身份及交付字段不变，未调用record_start。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "dd33db42949e790198a74af946c41b8adb87a52aa73170e0a8d33d86eb587902",
+        "current_code_digest": "cd492669b1aa5d6ea2c0b77946db16d4908a559d2baecd2e343cf5ab02153c45"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.0.0",
@@ -982,7 +989,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -1029,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "03f3bc5ceff8b3fa9fe75c8dae8a0a38cd79f8683a74e953452ed99d840795cd",
+      "code_digest": "604fed565186b819e9786e4c950df1e3df1dcbfedf2ee475ed65ef301aeb3689",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享workflow的新增状态限102预检与collection，cleanup handler及未知执行权保资源规则未修改。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "f022bb3e90924d09b8d2f8c5af16905c72d308be1b8d20790cebfc5ada12868c",
-        "current_code_digest": "03f3bc5ceff8b3fa9fe75c8dae8a0a38cd79f8683a74e953452ed99d840795cd"
+        "reason": "收尾停止/核本人进程、关闭应用并归还本人锁原逻辑未改；record_start失败后的逐signal身份核验整段与原版相同，未知仍保锁。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "03f3bc5ceff8b3fa9fe75c8dae8a0a38cd79f8683a74e953452ed99d840795cd",
+        "current_code_digest": "604fed565186b819e9786e4c950df1e3df1dcbfedf2ee475ed65ef301aeb3689"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1468,7 +1475,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -1492,7 +1499,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -1551,13 +1558,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "bbc3ed1eab1a066247445dafdb7b111b03b0afc21822d7fbd6f7c6bbbc1dcd58",
+      "code_digest": "58bc3d192c97c6da56872a2ed54bf3bd2a61fd684d608ab9ce6f3e824dc49a48",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享bridge仅103显式消费PG来源；104 eligibleOrders未传新context仍拒云来源，账号与批准话术预检不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "1c29686077aa411f0f9cd23a674d724a3bcbba45220ac14dd64035b89fb8327d",
-        "current_code_digest": "bbc3ed1eab1a066247445dafdb7b111b03b0afc21822d7fbd6f7c6bbbc1dcd58"
+        "reason": "触达预检的公司、账号、发送授权、暂停与日限额全部不变；未调用record_start，无新增发送授权。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "bbc3ed1eab1a066247445dafdb7b111b03b0afc21822d7fbd6f7c6bbbc1dcd58",
+        "current_code_digest": "58bc3d192c97c6da56872a2ed54bf3bd2a61fd684d608ab9ce6f3e824dc49a48"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1660,7 +1667,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -1719,13 +1726,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924",
+      "code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享workflow新增分支只在MMV102或collection，104发送handler和readback_only兜底未改，未授云发送权。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "239d9c1b51e69ad33e6959855f55a2e84c194dc79e38b326c726627f4af133fd",
-        "current_code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924"
+        "reason": "本次只改录音首次就绪内部函数，私信对象、批准话术、一次发送与未知只读回的代码和Skill均不变，未调用record_start。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924",
+        "current_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1828,7 +1835,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -1887,13 +1894,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924",
+      "code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享workflow新增102来源传递；104动作幂等、未知结果先读回和写回合同未修改。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "239d9c1b51e69ad33e6959855f55a2e84c194dc79e38b326c726627f4af133fd",
-        "current_code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924"
+        "reason": "已发结果写回仍按原订单身份独立读回，未调用record_start；发送未知处理、PG写回与幂等约束不变。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924",
+        "current_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1997,7 +2004,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
+          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
         },
         {
           "kind": "code",
@@ -2058,13 +2065,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "deba2f4d5d99b97005a3f76ab05e07e6fa7f7c73534c04eaaf809085d82ecaa1",
+      "code_digest": "5b2e794df5700604aff28986731fc97309d747126ff808e285bca65de5dcb8ae",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享workflow仅新增102来源传递，104清场、锁归属和未知结果保护未修改。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "8e8644846ab13bf871732d0d5fa07668875c6d5f0cb59f94702b3c6f76c14d50",
-        "current_code_digest": "deba2f4d5d99b97005a3f76ab05e07e6fa7f7c73534c04eaaf809085d82ecaa1"
+        "reason": "触达收尾的应用归位、本人锁释放及未决发送保留逻辑未改；record_start的观测新增不改变本方法。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
+        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
+        "previous_code_digest": "deba2f4d5d99b97005a3f76ab05e07e6fa7f7c73534c04eaaf809085d82ecaa1",
+        "current_code_digest": "5b2e794df5700604aff28986731fc97309d747126ff808e285bca65de5dcb8ae"
       }
     }
   },

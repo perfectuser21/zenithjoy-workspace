@@ -4,7 +4,7 @@
   "capability_id": "0c1f70f1-b061-4118-b741-8a31c1791c68",
   "channel": "internal",
   "form": "orchestration",
-  "version": "2.0.24",
+  "version": "2.0.25",
   "runtime": {
     "skill_id": "12a55e87-5d74-4669-9677-e121863d1af6",
     "entrypoint": "Brain workflow_dispatch → OpenClaw work-commander → wf-launch.sh --envelope"
