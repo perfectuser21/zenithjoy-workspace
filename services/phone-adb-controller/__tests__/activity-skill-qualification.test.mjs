@@ -76,3 +76,19 @@ test('actual original-handler quarantine separately records device marker and ow
  await assert.rejects(()=>h.qualification(),/EXECUTION_OUTPUT_LIMIT/);const proof=await h.quarantineResources();assert.equal(proof.verified,true);assert.equal(quarantined,1);assert.equal(proof.videos[0].verified,true);assert.deepEqual(JSON.parse(readFileSync(join(d,'resource-quarantine.json'),'utf8')),proof);
  }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+for(const transport of ['returned','thrown'])test('actual recorder termination unknown blocks retry, next VID, Skill and cleanup '+transport,async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');const d=mkdtempSync(join(tmpdir(),'recording-stop-unknown-fixture-'));
+ let actions=0,skills=0,cleanup=0,quarantined=0;
+ try{
+  const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture',P:'fixture',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{
+   if(q.op==='claim_videos')return {result:['7646309328911907195','7646309328911907196'].map(video_id=>({video_id,video_url:'https://www.douyin.com/video/'+video_id,judgment_status:'pending'}))};
+   return {result:{renewed:true}};
+  },execute:async()=>{actions++;if(transport==='thrown')throw Error('RECORD_CAPTURE_EXIT_UNVERIFIED');return {code:2,stdout:'',stderr:'RECORD_CAPTURE_EXIT_UNVERIFIED reason=owned_recorder_stop_unknown'};}});
+  h.cleanup=async()=>{cleanup++;return {done:true};};
+  const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:h,commander:async()=>({action:'retry',reason:'isolated fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',execution_stopped:true};},quarantine:async()=>{quarantined++;return {verified:true};}});
+  assert.equal(actions,1,'cannot record a second VID while the first recorder may remain alive');
+  assert.equal(h.state.executionUnknown,true);assert.equal(skills,0);assert.equal(cleanup,0);assert.equal(quarantined,1);
+  assert.equal(r.results[0].execution_stopped,false);assert.equal(r.results.at(-1).status,'blocked');
+ }finally{rmSync(d,{recursive:true,force:true});}
+});

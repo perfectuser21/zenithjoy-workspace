@@ -118,9 +118,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
-      recordDiagnostic(result.stderr||'');return result;
+      recordDiagnostic(result.stderr||'');
+      if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
+      return result;
     } catch(error) {
-      if(error.executionStopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
+      if(error.executionStopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
@@ -530,7 +532,7 @@ async function main(){
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
     if(['execution','verification'].includes(r.phase)){
-      const ledgerStatus=['partial','paused','skipped'].includes(r.evidence.result?.status)?'blocked':r.evidence.status;
+      const ledgerStatus=r.evidence.status==='failed'?'failed':[r.evidence.status,r.evidence.result?.status].some(status=>['partial','paused','skipped'].includes(status))?'blocked':r.evidence.status;
       const updated=await execInput(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
         '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
       if(updated.code!==0)throw Error('实际活动账本更新失败');

@@ -35,7 +35,7 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc})
  return async({activity,failure,execute})=>{
   const directory=join(runDir,'skill-handoff',activity.key);
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
-  if(handlers.state.executionUnknown||failure.execution_stopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(JSON.stringify(failure))){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
+  if(handlers.state.executionUnknown||failure.execution_stopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
   const mode=classifyActivityFailure(activity,failure);
   if(handlers.state.qualificationClaimUnknown)noLaunch('SKILL_HANDOFF_CLAIM_RECEIPT_UNKNOWN');
   if(mode==='blocked')noLaunch(activity.key==='collection'&&failure.status==='partial'?'SKILL_COLLECTION_PARTIAL_READBACK_REQUIRED':'SKILL_HANDOFF_POLICY_BLOCKED');

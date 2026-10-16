@@ -20,6 +20,15 @@ test('isolated transport fixture: actual parent CLI args, official child receipt
   const message=readFileSync(args[args.indexOf('--message-file')+1],'utf8');
   assert.match(message,/gateway_exec/,'actual Codex projection uses gateway_exec, unlike native core exec catalog');
   assert.match(message,/不设置taskName/,'omit optional taskName rather than alter business run identity');
+  const identityLine=message.split('\n').find(line=>line.startsWith('child身份合同：'));
+  assert.ok(identityLine,'child needs its own available caller identity tool, not inherited parent session_status');
+  const policy=JSON.parse(identityLine.slice('child身份合同：'.length));
+  assert.deepEqual(policy.tool,{name:'subagents',parameters:{action:'list'}});
+  assert.deepEqual(policy.caller,{callerIsSubagent:true,callerSessionKey:{file:join(args[args.indexOf('--message-file')+1].replace(/\/parent-message\.txt$/,''),'agent-binding.json'),field:'child_session_key',comparison:'exact'}});
+  assert.deepEqual(policy.binding_checks,['run_id','task_id','parent_session_key','nonce']);
+  assert.equal(policy.on_missing_or_mismatch,'blocked');
+  assert.deepEqual(policy.forbidden_identity_sources,['session_status','list.active','model_self_report','connector_alias']);
+
   assert.equal(r.execution_stopped,false);assert.equal(r.status,'unknown');assert.equal(seen.filter(x=>x.command==='openclaw').length,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
