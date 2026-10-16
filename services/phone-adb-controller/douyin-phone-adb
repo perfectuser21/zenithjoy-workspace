@@ -3,6 +3,7 @@
 set -euo pipefail
 setopt EXTENDED_GLOB
 
+PHONE_CONTROLLER_DIR="${0:A:h}"
 ADB="${DOUYIN_ADB_BIN:-/opt/homebrew/bin/adb}"
 CURL="${DOUYIN_CURL_BIN:-/usr/bin/curl}"
 # 需自带 Pillow。用无版本号软链（现指向 3.14.5），Python 升级不再断链。
@@ -2871,20 +2872,33 @@ record_recover_native() {
   print -r -- "$result"
 }
 
-# SDK31仅启用已实机验收的独立runtime；默认brew与SDK33+策略不变。
+# 两条策略只使用各自同版固定runtime；kind仅由fresh SDK选定，不探测后回退。
 record_sdk31_runtime() {
-  local eid="$1" root="${DOUYIN_SDK31_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk31}" proof="$EVIDENCE_ROOT/$1.capture-runtime.json" verified staged
+  local eid="$1" kind="${2:-sdk31}" root policy proof="$EVIDENCE_ROOT/$1.capture-runtime.json" verified staged port
+  case "$kind" in
+    sdk31) root="${DOUYIN_SDK31_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8}"; policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy.json"; port="${DOUYIN_ADB_PORT:-5041}";;
+    sdk33) root="${DOUYIN_SDK33_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-flush}"; policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy-sdk33.json"; port="${DOUYIN_ADB_PORT:-5037}";;
+    *) die RECORD_CAPTURE_STRATEGY_UNVERIFIED;;
+  esac
   [[ -n "$LOCK_OWNER" ]] || die "RECORD_CAPTURE_STRATEGY_UNVERIFIED explicit_owner_required"
   [[ "$root" == /* && ! -e "$proof" && ! -L "$proof" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
-  local helper="${0:A:h}/runtime/scrcpy-runtime.py"
-  verified="$("$PYTHON_BIN" "$helper" verify --runtime-root "$root")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
-  staged="$("$PYTHON_BIN" "$helper" stage-server --runtime-root "$root" --adb-bin "$ADB" --adb-port "${DOUYIN_ADB_PORT:-5041}" --serial "$SERIAL" --owner "$LOCK_OWNER" --lock-dir "$LOCK_DIR" --evidence-root "$EVIDENCE_ROOT" --evidence-id "$eid" --timeout 30)" || die "RECORD_CAPTURE_EXIT_UNVERIFIED sdk31_server_stage_failed"
-  "$PYTHON_BIN" - "$proof" "$verified" "$staged" <<'PYRUNTIME' || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  local helper="$PHONE_CONTROLLER_DIR/runtime/scrcpy-runtime.py"
+  verified="$("$PYTHON_BIN" "$helper" verify --runtime-kind "$kind" --runtime-root "$root")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  local stage_rc=0
+  staged="$("$PYTHON_BIN" "$helper" stage-server --runtime-kind "$kind" --runtime-root "$root" --adb-bin "$ADB" --adb-port "$port" --serial "$SERIAL" --owner "$LOCK_OWNER" --lock-dir "$LOCK_DIR" --evidence-root "$EVIDENCE_ROOT" --evidence-id "$eid" --timeout 30)" || stage_rc=$?
+  if (( stage_rc != 0 )); then
+    print -u2 -r -- "pinned_server_stage_result=$staged"
+    if (( stage_rc == 64 )) && print -r -- "$staged" | "$PYTHON_BIN" -c 'import json,sys;v=json.load(sys.stdin);assert isinstance(v,dict) and v.get("verified") is False and v.get("execution_stop_unknown") is False and v.get("phase")=="failed" and isinstance(v.get("error"),str) and v["error"]' >/dev/null 2>&1; then
+      die "RECORD_CAPTURE_STRATEGY_UNVERIFIED pinned_server_stage_failed_no_unknown_effects"
+    fi
+    die "RECORD_CAPTURE_EXIT_UNVERIFIED pinned_server_stage_failed"
+  fi
+  "$PYTHON_BIN" - "$proof" "$verified" "$staged" "$policy" <<'PYRUNTIME' || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
 import os,sys,json
-path,raw,stage=sys.argv[1:];v=json.loads(raw);s=json.loads(stage)
+path,raw,stage,policy_path=sys.argv[1:];v=json.loads(raw);s=json.loads(stage);policy=json.load(open(policy_path))
 assert v['verified'] is True and s['verified'] is True and not s.get('execution_stop_unknown')
-assert v['client_sha256']=='7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2'
-assert v['server_sha256']=='764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536'
+assert v['schema']==policy['schema'] and v['version']==policy['version']
+assert all(v[k]==policy[k] for k in ['client_sha256','server_sha256'])
 fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
 with os.fdopen(fd,'w') as f:json.dump({'runtime':v,'stage':s},f);f.flush();os.fsync(f.fileno())
 PYRUNTIME
@@ -2892,9 +2906,9 @@ PYRUNTIME
   export SCRCPY_SERVER_PATH="$(print -r -- "$verified" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["server_path"])')"
   export ZJ_SCRCPY_STAGE_RECEIPT="$(print -r -- "$staged" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["stage_receipt"])')"
   export ZJ_SCRCPY_STAGE_RECEIPT_SHA256="$(print -r -- "$staged" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["stage_receipt_sha256"])')"
-  export ZJ_SCRCPY_RUNTIME_ROOT="$root" ZJ_SCRCPY_ADB_BIN="$ADB" ZJ_SCRCPY_ADB_PORT="${DOUYIN_ADB_PORT:-5041}" ZJ_SCRCPY_SERIAL="$SERIAL" ZJ_SCRCPY_OWNER="$LOCK_OWNER" ZJ_SCRCPY_LOCK_DIR="$LOCK_DIR" ZJ_SCRCPY_EVIDENCE_ROOT="$EVIDENCE_ROOT" ZJ_SCRCPY_EVIDENCE_ID="$eid" ZJ_SCRCPY_STAGE_TIMEOUT=30
-  CAPTURE_ADB="${0:A:h}/runtime/scrcpy-adb-shim.py"
-  CAPTURE_RUNTIME_FIELDS="capture_runtime_client_sha256=7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2 capture_runtime_server_sha256=764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536 capture_runtime_evidence_file=$eid.capture-runtime.json capture_runtime_evidence_sha256=$(record_playback_hash "$eid.capture-runtime.json")"
+  export ZJ_SCRCPY_RUNTIME_KIND="$kind" ZJ_SCRCPY_RUNTIME_ROOT="$root" ZJ_SCRCPY_ADB_BIN="$ADB" ZJ_SCRCPY_ADB_PORT="$port" ZJ_SCRCPY_SERIAL="$SERIAL" ZJ_SCRCPY_OWNER="$LOCK_OWNER" ZJ_SCRCPY_LOCK_DIR="$LOCK_DIR" ZJ_SCRCPY_EVIDENCE_ROOT="$EVIDENCE_ROOT" ZJ_SCRCPY_EVIDENCE_ID="$eid" ZJ_SCRCPY_STAGE_TIMEOUT=30
+  CAPTURE_ADB="$PHONE_CONTROLLER_DIR/runtime/scrcpy-adb-shim.py"
+  CAPTURE_RUNTIME_FIELDS="$(print -r -- "$verified" | "$PYTHON_BIN" -c 'import json,sys;v=json.load(sys.stdin);print("capture_runtime_client_sha256="+v["client_sha256"]+" capture_runtime_server_sha256="+v["server_sha256"])') capture_runtime_evidence_file=$eid.capture-runtime.json capture_runtime_evidence_sha256=$(record_playback_hash "$eid.capture-runtime.json")"
 }
 
 # 仅终止本eid启动原件中同一UID、出生时间、完整argv的进程；PID文件本身不是执行权。
@@ -2965,10 +2979,11 @@ except (OSError,AssertionError) as error:
 PYSDKCREATE
   CAPTURE_RUNTIME_FIELDS=""; CAPTURE_ADB="$ADB"
   if [[ "$sdk" == 31 ]]; then
-    record_sdk31_runtime "$eid" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+    record_sdk31_runtime "$eid" sdk31 || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
     capture_mode=output_pcm_sdk31; capture_container=wav
   else
     [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die "RECORD_AUDIO_STRATEGY_UNSUPPORTED sdk=${sdk:-unknown} minimum=33_or_verified_sdk31"
+    record_sdk31_runtime "$eid" sdk33 || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   fi
   out="$(record_out_file "$eid")"
   [[ ! -e "$out" && ! -L "$out" ]] || die "recording artifact already exists: $out"
@@ -3190,21 +3205,26 @@ record_stop() {
   [[ -f "$out" ]] || die "no recording artifact at $out"
   [[ -f "$EVIDENCE_ROOT/$eid.capture-sdk.txt" && ! -L "$EVIDENCE_ROOT/$eid.capture-sdk.txt" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   sdk="$(cat "$EVIDENCE_ROOT/$eid.capture-sdk.txt")"
+  local runtime_policy fresh_sdk
+  fresh_sdk="$("$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  [[ "$fresh_sdk" == "$sdk" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   if [[ "$sdk" == 31 ]]; then
-    capture_mode=output_pcm_sdk31
-    runtime_fields="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.capture-runtime.json" "$eid" <<'PYSTOPRUNTIME'
+    capture_mode=output_pcm_sdk31; runtime_policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy.json"
+  else
+    [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+    runtime_policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy-sdk33.json"
+  fi
+  runtime_fields="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.capture-runtime.json" "$eid" "$runtime_policy" <<'PYSTOPRUNTIME'
 import json,sys,os,stat,hashlib
-path,eid=sys.argv[1:];fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+path,eid,policy_path=sys.argv[1:];fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
 with os.fdopen(fd,'rb') as f:
  assert stat.S_ISREG(os.fstat(f.fileno()).st_mode);raw=f.read(65537);assert len(raw)<=65536
-v=json.loads(raw);r=v['runtime'];assert r['verified'] is True and v['stage']['verified'] is True and not v['stage'].get('execution_stop_unknown')
-assert r['client_sha256']=='7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2' and r['server_sha256']=='764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536'
+v=json.loads(raw);r=v['runtime'];policy=json.load(open(policy_path))
+assert r['verified'] is True and v['stage']['verified'] is True and not v['stage'].get('execution_stop_unknown')
+assert r['schema']==policy['schema'] and r['version']==policy['version'] and all(r[k]==policy[k] for k in ['client_sha256','server_sha256'])
 print('capture_runtime_client_sha256='+r['client_sha256']+' capture_runtime_server_sha256='+r['server_sha256']+' capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+hashlib.sha256(raw).hexdigest())
 PYSTOPRUNTIME
 )" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
-  else
-    [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
-  fi
   vstreams="$("$FFPROBE" -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c video || true)"
   astreams="$("$FFPROBE" -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c audio || true)"
   dur="$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$out" 2>/dev/null || true)"
@@ -3246,7 +3266,7 @@ a=[x.split('=',1)[1] for x in p['expected_argv'] if x.startswith('--time-limit='
 print(a[0])
 PYREQUESTED
 )" || die RECORD_AUDIO_DECODE_UNVERIFIED
-    decoded_fields="$("$PYTHON_BIN" "${0:A:h}/decode-recording.py" --media "$out" --ffmpeg "$FFMPEG" --requested-seconds "$requested" --evidence-file "$EVIDENCE_ROOT/$eid.decode.json")" || die RECORD_AUDIO_DECODE_UNVERIFIED
+    decoded_fields="$("$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/decode-recording.py" --media "$out" --ffmpeg "$FFMPEG" --requested-seconds "$requested" --evidence-file "$EVIDENCE_ROOT/$eid.decode.json")" || die RECORD_AUDIO_DECODE_UNVERIFIED
     mean_db="$(print -r -- "$decoded_fields" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
   else
   mean_db="$("$FFMPEG" -hide_banner -nostats -v info -i "$out" -vn -af volumedetect -f null - 2>&1 \

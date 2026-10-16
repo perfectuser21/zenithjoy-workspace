@@ -777,6 +777,10 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/runtime/runtime-policy.json
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy-sdk33.json
+        revision: contract
     model:
       - provider: dashscope
         model: qwen-audio-3.0-asr-flash

@@ -77,3 +77,7 @@ Activity方法、支持文件或合同改变时，更新对应方法版本、所
 ## 单Activity受控接手
 
 当前源码提供 `leadgen-activity-v1`：仅在原冻结run内Code失败与有限安全重试之后，由真实work-commander父会话派官方Skill child，使用原run私有broker逐Activity接手。`activity-skill-tool.mjs` 不是新任务启动器；inspect/受限phone/一次当前slot resume均受同源方法、绑定、资源和截止约束。子会话终态未知保锁，发送未知只读回。最后仍由原独立verify与持久读回决定成功，不以Agent自述或CLI exit0替代验收。当前源码存在不等于实机接手已验收，具体状态查看当前任务事件与发布观测。
+
+MMV手机执行按[当前调用映射](references/runtime-calls.json)显式设置 `LEADGEN_MMV_DEVICE_RUNTIME=1`，核本机唯一启用的profile/serial和既有ADB端口。随后仍须原公司冻结资料、verified账号/设备绑定及手机当前账号全部通过；公司draft、缺登记或桥未就绪即停，不借金诺或其他租户配置兜底。该设备入口不扩大本轮输入、预算或发送授权。
+
+SDK≥33的playback_dup使用独立固定3.3.4日志刷新运行时；SDK31的output PCM使用独立固定5.0.1运行时。两者按实际SDK唯一选定并分别核验client/server和首末原件，不升级或回退Homebrew。安装路径和运行包不互换，缺包即保持失败。

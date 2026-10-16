@@ -45,7 +45,18 @@ if [[ "$WFR_HOSTKEY" == mmv ]]; then
       END {if(bad||!header||profiles!=1||serials!=1||enabled!=1)exit 1}
     ' "$DOUYIN_PHONE_REGISTRY" || { print -u2 'MMV_DEVICE_REGISTRY_BINDING_INVALID: profile/serial须唯一精确enabled'; exit 1; }
     [[ "${DOUYIN_ADB_PORT:-}" == <-> ]] && (( DOUYIN_ADB_PORT >= 1 && DOUYIN_ADB_PORT <= 65535 )) || { print -u2 'MMV_DEVICE_ADB_ROUTE_INVALID: 缺有效显式既有端口'; exit 1; }
-    [[ "${ADB_SERVER_SOCKET:-}" == "tcp:localhost:$DOUYIN_ADB_PORT" || "${ADB_SERVER_SOCKET:-}" == "tcp:127.0.0.1:$DOUYIN_ADB_PORT" ]] || { print -u2 'MMV_DEVICE_ADB_ROUTE_INVALID: socket与本机既有端口不一致'; exit 1; }
+    [[ "${ADB_SERVER_SOCKET:-}" == "tcp:127.0.0.1:$DOUYIN_ADB_PORT" ]] || { print -u2 'MMV_DEVICE_ADB_ROUTE_INVALID: socket与本机既有端口不一致'; exit 1; }
+    # version只读本地程序，核客户端协议，避免后续命令因版本冲突重启共享桥。
+    node --input-type=module - "${DOUYIN_ADB_BIN:-/opt/homebrew/bin/adb}" <<'NODE' || { print -u2 'MMV_DEVICE_ADB_CLIENT_INVALID: 本地ADB客户端协议不可确认'; exit 1; }
+import {execFileSync} from 'node:child_process';
+import {isAbsolute} from 'node:path';
+try {
+  const bin=process.argv[2];if(!isAbsolute(bin))throw Error('absolute client required');
+  const version=execFileSync(bin,['version'],{encoding:'utf8',timeout:2000,maxBuffer:32768,stdio:['ignore','pipe','pipe']});
+  const matches=[...version.matchAll(/^Android Debug Bridge version 1\.0\.([0-9]+)\r?$/gm)];
+  if(matches.length!==1||Number(matches[0][1])!==41)throw Error('protocol mismatch');
+} catch {process.exitCode=1;}
+NODE
     # 只读smart-socket，不调用adb及其可能自动start-server的客户端路径。
     node --input-type=module - "$DOUYIN_ADB_PORT" <<'NODE' || { print -u2 'MMV_DEVICE_ADB_UNAVAILABLE: 既有ADB服务不可确认'; exit 1; }
 import net from 'node:net';

@@ -83,7 +83,7 @@ test('设备入口缺显式端口、socket端口不一致或远端host时，在�
 test('既有socket协议未知只读拒绝，不调用adb创建或重启服务',async t=>{
   const f=fixture(t),route=await bridge(t,'002a');
   const forbidden=join(f.home,'.local/bin/adb');
-  writeFileSync(forbidden,`#!/bin/sh\nprintf called > '${f.home}/adb-was-called'\nexit 99\n`,{mode:0o755});
+  writeFileSync(forbidden,`#!/bin/sh\nif [ \"$1\" = version ]; then printf \"Android Debug Bridge version 1.0.41\\n\"; exit 0; fi\nprintf called > '${f.home}/adb-was-called'\nexit 99\n`,{mode:0o755});
   const out=launch(f,{...route,DOUYIN_ADB_BIN:forbidden});
   assert.equal(out.status,1);assert.match(out.stderr,/MMV_DEVICE_ADB_UNAVAILABLE/);
   assert.equal(existsSync(join(f.home,'adb-was-called')),false);

@@ -1,8 +1,18 @@
-# SDK31 固定录音运行时
+# 固定录音运行时：两条SDK策略
 
 本目录只交付脚本、精确策略、上游补丁和离线测试，不包含二进制。
 控制器负责 SDK、真实锁、视频身份、音源、录音 PID、整体截止和终态验收。
 helper 不领取、刷新或释放设备锁，不创建 ADB server。
+
+控制器按实际SDK唯一选择，不用安装探测或捕获失败触发回退：
+
+| SDK | 固定策略 | 客户端 / server | 默认独立安装目录 |
+|---|---|---|---|
+| 31 | output PCM / WAV | 5.0.1，两项SHA见 `runtime-policy.json` | `$HOME/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8` |
+| ≥33 | playback + audio-dup / Matroska | 3.3.4，两项SHA见 `runtime-policy-sdk33.json` | `$HOME/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-flush` |
+
+32或未知SDK保持不支持。两客户端只在既有修复基础上刷新日志，保留8秒就绪及精确PID/argv门禁；不升级Homebrew。
+helper及builder的 `--runtime-kind sdk31|sdk33` 只允许上述固定文件，默认sdk31以兼容既有调用；环境不得指定任意policy。
 
 固定对象见 `runtime-policy.json`：官方 scrcpy v5.0.1 commit
 `a60891aea193d92e7e5c3942700eca63f9d19a5f`；客户端 SHA256 为
@@ -19,9 +29,9 @@ helper 不领取、刷新或释放设备锁，不创建 ADB server。
 python3 runtime/build-scrcpy-runtime.py adopt \
   --client /absolute/path/to/approved/scrcpy \
   --server /absolute/path/to/official/scrcpy-server \
-  --runtime-root "$HOME/.local/share/zenithjoy/scrcpy-sdk31"
+  --runtime-root "$HOME/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8"
 python3 runtime/scrcpy-runtime.py verify \
-  --runtime-root "$HOME/.local/share/zenithjoy/scrcpy-sdk31"
+  --runtime-root "$HOME/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8"
 ```
 
 包中只有 `scrcpy`、`scrcpy-server` 和 `runtime-manifest.json`。
@@ -50,8 +60,8 @@ helper 每步读回现有 `LOCK_DIR/owner`，只接受 exact owner。
 
 接收端使用 `toybox head -c 精确字节数`，无需等待传输通道 EOF。
 唯一临时路径通过 `set -C` 禁止覆盖；发布前核 SHA 和字节数；
-使用 `ln TEMP /data/local/tmp/scrcpy-server.jar` 无覆盖发布并读回，
-只删除自己已确认创建的临时文件。已有正确 server 复用，已有其他内容拒绝替换。
+SDK31使用 `ln TEMP /data/local/tmp/scrcpy-server.jar` 无覆盖发布并读回，
+只删除自己已确认创建的临时文件。SDK33面对Android16禁用hardlink，明确使用 `set -C` 独占创建canonical并按固定字节写入，必须OPENED/STAGED回执及两次SHA/字节读回；不调用ln，也不删除失败/未知canonical。已有正确server复用，已有其他内容拒绝替换。
 
 写入前即保存 `EID.server-stage.UUID.json`。
 成功 exit 0；明确拒绝 exit 64；超时、终止或无法确认的副作用 exit 75，
@@ -67,7 +77,8 @@ helper 每步读回现有 `LOCK_DIR/owner`，只接受 exact owner。
 | 后缀 | 值 |
 |---|---|
 | RUNTIME_ROOT | 独立包绝对目录 |
-| CLIENT_SHA256 | 固定 2823…；省略时同仓库 pin |
+| CLIENT_SHA256 | 所选固定policy的client SHA；省略时同该policy pin |
+| RUNTIME_KIND | sdk31或sdk33，由fresh SDK选定，默认sdk31 |
 | ADB_BIN / ADB_PORT / SERIAL | 成熟控制器实际绑定的既有通道 |
 | OWNER / LOCK_DIR | exact owner 与设备锁绝对目录 |
 | EVIDENCE_ROOT / EVIDENCE_ID | 本次原件目录与 ID |
@@ -87,14 +98,14 @@ C把两者传入上述 shim 环境变量。shim 对精确同版 server 的精确
 启动客户端时同时设置 `SCRCPY_SERVER_PATH=verify 返回的 server_path`。
 
 SDK31 的控制器应显式选 `--no-video --audio-codec=raw --audio-source=output
---require-audio --no-playback --no-control --record=FILE.wav`，保留外层总截止。
+--require-audio --no-playback --record=FILE.wav`，保留外层总截止。
 本 helper 不替代真实 WAV、decoded duration/能量及资源恢复验收。
 
 ## 从固定上游重建候选
 
 准备一个新的、干净的官方 v5.0.1 checkout 和私有 Meson/Ninja/pkgconf，
 复用已安装 FFmpeg/SDL3/libusb 开发文件，不执行全局 brew 升级。
-builder 校验 commit、完整 `git archive` SHA256、补丁 SHA、补丁后 recorder SHA
+builder 校验 commit、完整 `git archive` SHA256、补丁 SHA、补丁后 recorder/logger SHA
 及官方 server SHA，才编译并运行上游测试。
 
 ```sh
@@ -126,3 +137,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -W error::ResourceWarning \
 [recorder 源码](https://github.com/Genymobile/scrcpy/blob/v5.0.1/app/src/recorder.c)。
 
 2026-10-16 日志刷新修复：macOS 的常规文件 stdout 默认全缓冲。固定源码补丁在真实 SDL 日志回调 `fprintf` 后调用 `fflush(out)`，让活进程的精确 recording-start 日志可供启动闸读取。启动上限、完整 argv/进程身份、非空媒体和精确路径日志条件均保持。重建命令会编译并运行 `tests/test_log_flush.py` 的真实 logger 回归（无 ADB/设备）；删除 flush 后该测试在进程仍存活时失败。新 client SHA 须由 controller 同步固定，原 7c15 目录不覆盖。
+
+SDK33建包/adopt/verify/stage均须显式 `--runtime-kind sdk33`，使用3.3.4原版源码与 `scrcpy-v3.3.4-log-flush.patch`；复用现有FFmpeg/SDL2，builder运行对应SDL2活进程日志回归及官方测试。SDK31继续5.0.1 recorder修复、SDL3和原官方测试。跨包客户端/server/receipt或未知kind均拒绝。

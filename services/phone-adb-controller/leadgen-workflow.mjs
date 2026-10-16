@@ -187,8 +187,12 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     await checked('/bin/sleep',['4']);
     const account=await phone('account-current',`${run}-account`);
     const id=account.match(/^douyin_id=(.+)$/m)?.[1]?.trim();
-    const registry=readFileSync(env.DOUYIN_ACCOUNT_REGISTRY||join(env.HOME,'.config/openclaw/douyin-account-routes.tsv'),'utf8');
-    if(!id||!registry.split('\n').some(s=>{const f=s.split('\t');return f[0]===profile&&f[1]===id;}))throw Error('当前账号未在本profile注册');
+    if(!id)throw Error('当前账号未在本profile注册');
+    // MMV101/102已在首个设备动作前取得本run PG绑定，不要求另维护账号缓存真源。
+    if(!mmvStep){
+      const registry=readFileSync(env.DOUYIN_ACCOUNT_REGISTRY||join(env.HOME,'.config/openclaw/douyin-account-routes.tsv'),'utf8');
+      if(!registry.split('\n').some(s=>{const f=s.split('\t');return f[0]===profile&&f[1]===id;}))throw Error('当前账号未在本profile注册');
+    }
     state.account=id;
     if(state.company_config&&state.company_config.expected_sender!==id)throw Error('COMPANY_ACCOUNT_IDENTITY_MISMATCH');
     const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};

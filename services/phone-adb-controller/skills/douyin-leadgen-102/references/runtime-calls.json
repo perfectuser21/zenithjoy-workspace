@@ -7,7 +7,7 @@
   "public_entry": {
     "skill": "douyin-leadgen-102",
     "classification": "PUBLIC_FULL_FROZEN_WORKFLOW_CLI",
-    "host": "xian-m4，须与选择101同profile/现已部署同source",
+    "host": "xian-m4；MMV手机执行仅在显式开启设备运行、实际登记与原公司账号/设备预检全部通过后可用",
     "runner": "$PHONE_RUNNER 已核验的$HOME/bin-harvest/leadgen-run.sh",
     "argv": [
       "douyin_video_processing",
@@ -35,7 +35,14 @@
       "新count inserted/coverage/history_verified/身份rescan/avatar recovery分别记录",
       "cleanup自己视频lease+phone lock释放；partial/failed原件不覆写"
     ],
-    "source_difference": "6dc会被合法前序failed sampling terminal阻塞；cf9最窄修复在完整旧frozen/binding/scope验证后忽略failed，不兑现采样。6dc现场遇此真实阻点不可假称已修或绕intake。"
+    "source_difference": "6dc会被合法前序failed sampling terminal阻塞；cf9最窄修复在完整旧frozen/binding/scope验证后忽略failed，不兑现采样。6dc现场遇此真实阻点不可假称已修或绕intake。",
+    "mmv_device_runtime": {
+      "flag": "LEADGEN_MMV_DEVICE_RUNTIME=1",
+      "registry": "DOUYIN_PHONE_REGISTRY指向本机实读登记表；profile与serial各唯一、精确匹配且enabled=true",
+      "bridge": "显式DOUYIN_ADB_PORT与numeric127.0.0.1的ADB_SERVER_SOCKET同一既有本机端口，本地ADB及server协议均须41；入口只读核桥，不能创建或重启ADB",
+      "company_guard": "原公司冻结资料、verified platform account/profile/device/douyin_id以及实际登录账号核验仍须通过；draft或缺绑定不能借其他公司兜底",
+      "command_template": "env LEADGEN_MMV_DEVICE_RUNTIME=1 DOUYIN_PHONE_REGISTRY=\"$VERIFIED_REGISTRY\" DOUYIN_ADB_PORT=\"$EXISTING_ADB_PORT\" ADB_SERVER_SOCKET=\"tcp:127.0.0.1:$EXISTING_ADB_PORT\" env LEADGEN_SOURCE_RUN=\"$SOURCE_101_TAG\" LEADGEN_LIMIT=\"$VIDEO_CLAIM_LIMIT\" LEADGEN_COMMENT_LIMIT=\"$COMMENT_LIMIT\" QUEUED_VIDEO_COLLECTION_SECONDS=\"$COLLECTION_SECONDS\" WF_RUN_MAX_SECONDS=\"$RUN_SECONDS\" /bin/zsh \"$PHONE_RUNNER\" douyin_video_processing \"$PROFILE\" \"$SERIAL\" \"$LINE\" \"$RUN_TAG\""
+    }
   },
   "guards": [
     "先正规登记认领当前任务并取中央serial lease；leadgen-run内会取本地phone锁但不替中央lease",
