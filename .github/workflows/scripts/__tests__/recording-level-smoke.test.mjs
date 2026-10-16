@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -12,6 +12,7 @@ const controller=readFileSync(path('services/phone-adb-controller/douyin-phone-a
 const decoder=readFileSync(path('services/phone-adb-controller/decode-recording.py'),'utf8');
 function run(c=controller,d=decoder){const dir=mkdtempSync(join(tmpdir(),'recording-level-smoke-'));try{
  for(const [name,data] of [['douyin-phone-adb',c],['decode-recording.py',d],['harvest-keyword.sh',readFileSync(path('services/phone-adb-controller/harvest-keyword.sh'))]])writeFileSync(join(dir,name),data);
+ mkdirSync(join(dir,'__tests__'));writeFileSync(join(dir,'__tests__/decoded-recording.test.mjs'),readFileSync(path('services/phone-adb-controller/__tests__/decoded-recording.test.mjs')));
  return spawnSync('bash',['-c','set -euo pipefail\nD="$1"\nC="$D/douyin-phone-adb"\nfail(){ echo "$*" >&2; exit 1; }\n'+guard,'guard',dir],{encoding:'utf8'});
 }finally{rmSync(dir,{recursive:true,force:true});}}
 test('录音电平闸接受SDK31真实decoder与SDK33内联双路径',()=>{const r=run();assert.equal(r.status,0,r.stderr);});
