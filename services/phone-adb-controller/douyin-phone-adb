@@ -731,6 +731,7 @@ current_video_link() {
   (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   for i in {1..$tries}; do
     if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
+    (( rc == 64 )) && die "SHARE_PANEL_TARGET_UNVERIFIED: refusing navigation retries for an untrusted link target"
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # keyword结果出口退到外部时，不让外层重试再按两次BACK破坏外部栈。
     if [[ -n "$return_keyword" && "$(foreground_package)" != *"$DOUYIN_PACKAGE"* ]]; then
@@ -881,6 +882,53 @@ resolve_content_short_url() {
   die "$reason after 2 bounded HEAD attempts (curl_rc=$rc)"
 }
 
+share_panel_link_target() {
+  "$PYTHON_BIN" - "$1" "$2" "$3" <<'PYSHARETARGET'
+import sys,re,xml.etree.ElementTree as ET
+try:
+    root=ET.parse(sys.argv[1]).getroot(); width,height=map(int,sys.argv[2:]); pkg='com.ss.android.ugc.aweme'
+    parents={c:n for n in root.iter() for c in n}
+    def named(n,label): return n.get('text')==label or n.get('content-desc')==label
+    def bounds(n):
+        m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+        if not m: raise ValueError('invalid_bounds')
+        b=tuple(map(int,m.groups()));x1,y1,x2,y2=b
+        if not (0<=x1<x2<=width and 0<=y1<y2<=height): raise ValueError('offscreen_bounds')
+        return b
+    headers=[n for n in root.iter('node') if n.get('package')==pkg and named(n,'分享给')]
+    if len(headers)!=1: raise ValueError('panel_header_unverified')
+    header=bounds(headers[0]); targets={}
+    for label in root.iter('node'):
+        if not named(label,'分享链接'): continue
+        if label.get('package')!=pkg or label.get('enabled')!='true': raise ValueError('untrusted_link_label')
+        label_bounds=bounds(label); ancestors=[];n=label
+        while n is not None:
+            ancestors.append(n);n=parents.get(n)
+        # Function actions and contacts are separate semantic containers. A contact
+        # named 分享链接 must never become a recipient tap.
+        containers=[n for n in ancestors if n.get('resource-id')==pkg+':id/function_container']
+        if len(containers)!=1: raise ValueError('function_container_unverified')
+        container=containers[0];cb=bounds(container)
+        if container.get('package')!=pkg or container.get('enabled')!='true' or cb[1]<header[3]: raise ValueError('untrusted_function_container')
+        candidates=[]
+        for n in ancestors:
+            if n is container: break
+            if n.get('package')!=pkg or n.get('enabled')!='true': raise ValueError('untrusted_link_ancestor')
+            if n.get('clickable')=='true': candidates.append(n);break
+        if not candidates: raise ValueError('link_not_clickable')
+        target=candidates[0];b=bounds(target)
+        if not (cb[0]<=b[0]<=label_bounds[0]<label_bounds[2]<=b[2]<=cb[2] and cb[1]<=b[1]<=label_bounds[1]<label_bounds[3]<=b[3]<=cb[3]): raise ValueError('link_not_contained')
+        path=set(ancestors[:ancestors.index(target)+1])
+        if any(n.get('clickable')=='true' and n not in path for n in target.iter('node')): raise ValueError('other_clickable_descendant')
+        if any((n.get('text') or n.get('content-desc')) and not named(n,'分享链接') for n in target.iter('node')): raise ValueError('ambiguous_click_container')
+        targets[id(target)]=b
+    if len(targets)!=1: raise ValueError('link_target_ambiguous_or_missing')
+    x1,y1,x2,y2=next(iter(targets.values()));print((x1+x2)//2,(y1+y2)//2)
+except (ValueError,ET.ParseError,OSError) as e:
+    print('SHARE_PANEL_TARGET_UNVERIFIED '+str(e),file=sys.stderr);sys.exit(2)
+PYSHARETARGET
+}
+
 _current_video_link_once() {
   local evidence_id share_xml share_line share_center share_x share_y panel_xml panel_line link_line link_bounds
   local link_x1 link_y1 link_x2 link_y2 link_x link_y
@@ -935,15 +983,8 @@ _current_video_link_once() {
   panel_line="$(/usr/bin/grep -oE '<node[^>]+text="分享给"[^>]*>' "$panel_xml" | /usr/bin/head -1 || true)"
   [[ -n "$panel_line" ]] || die "verified share panel was not found"
 
-  link_line="$(/usr/bin/grep -oE '<node[^>]+text="分享链接"[^>]*>' "$panel_xml" | /usr/bin/head -1 || true)"
-  [[ -n "$link_line" ]] || die "share-link action was not present in the verified panel"
-  link_bounds="$(print -- "$link_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
-  read link_x1 link_y1 link_x2 link_y2 <<< "$link_bounds"
-  require_uint "$link_x1"; require_uint "$link_y1"; require_uint "$link_x2"; require_uint "$link_y2"
-  (( link_x2 > link_x1 && link_y2 > link_y1 && link_x1 <= MAX_X && link_y1 > 200 && link_y2 <= MAX_Y + 1 )) || die "share-link action bounds are outside target screen"
-  link_x=$(( (link_x1 + link_x2) / 2 ))
-  link_y=$(( link_y1 - 96 ))
-  (( link_y > 0 && link_y <= MAX_Y )) || die "share-link action tap point is outside target screen"
+  link_center="$(share_panel_link_target "$panel_xml" "$SCREEN_W" "$SCREEN_H")" || return 64
+  read link_x link_y <<< "$link_center"
   "$ADB" -s "$SERIAL" shell input tap "$link_x" "$link_y"
   wait_ms 800
   copied_path="$(snapshot_evidence "${evidence_id}-link-copied")"
