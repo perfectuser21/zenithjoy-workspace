@@ -3066,9 +3066,9 @@ import os,sys,time,stat,subprocess,shlex,signal,json,errno
 pid,parent=int(sys.argv[1]),int(sys.argv[2]);binary,serial,out,log=sys.argv[3:7];maximum=int(sys.argv[7]);proof=sys.argv[8]
 container=sys.argv[9];expected=[binary,*sys.argv[10:]]
 observations=[];identity=None;reason='readiness_timeout';stopped=False
-# Startup is capped at 8s and reserves workflow time for owned termination.
+# Startup allows bounded first-cluster buffering and reserves workflow time for owned termination.
 # Stop observations are separately bounded; the outer action still owns the deadline.
-end=time.monotonic()+min(8.0,float(maximum))
+end=time.monotonic()+min(12.0,float(maximum))
 try:
  start=float(os.environ.get('WF_RUN_START_TS','nan'));total=float(os.environ.get('WF_RUN_MAX_SECONDS','nan'))
  if start==start and total==total:end=min(end,time.monotonic()+max(0,start+total-time.time()-2))
@@ -3077,7 +3077,7 @@ def inspect():
  global identity
  try:r=subprocess.run(['/bin/ps','-ww','-p',str(pid),'-o','uid=,ppid=,lstart=,stat=,command='],capture_output=True,text=True,timeout=1)
  except (OSError,subprocess.TimeoutExpired):return 'unknown'
- raw=r.stdout.strip();observations.append({'at':time.time(),'ps_exit':r.returncode,'ps':raw})
+ raw=r.stdout.strip();observations.append({'at':time.time(),'ps_exit':r.returncode,'ps':raw,'capture_container':container,'media_size':None,'media_regular':None,'log_regular':None,'log_started':None,'log_completed':None,'artifact_reason':'identity_not_yet_verified'})
  if r.returncode!=0 or not raw:
   try:os.kill(pid,0)
   except ProcessLookupError:return 'gone'
@@ -3097,13 +3097,30 @@ def inspect():
  identity=stamp
  return 'owned'
 def ready():
+ # Diagnostic reads do not satisfy readiness: exact owned identity, regular nonzero
+ # media, exact start log and no complete log remain mandatory, twice.
+ observation=observations[-1];media=None;journal=None;lines=None
+ try:media=os.lstat(out)
+ except OSError:pass
+ if media is not None:
+  observation['media_regular']=stat.S_ISREG(media.st_mode)
+  observation['media_size']=media.st_size
  try:
-  media=os.lstat(out);journal=os.lstat(log)
-  if not stat.S_ISREG(media.st_mode) or media.st_size<=0 or not stat.S_ISREG(journal.st_mode):return False
-  with open(log) as source:lines=[line.rstrip('\r\n') for line in source]
-  if 'INFO: Recording complete to '+container+' file: '+out in lines:return 'complete'
-  return 'INFO: Recording started to '+container+' file: '+out in lines
- except (OSError,UnicodeError):return False
+  journal=os.lstat(log);observation['log_regular']=stat.S_ISREG(journal.st_mode)
+  if observation['log_regular']:
+   with open(log) as source:lines=[line.rstrip('\r\n') for line in source]
+ except (OSError,UnicodeError):pass
+ if lines is not None:
+  observation['log_started']='INFO: Recording started to '+container+' file: '+out in lines
+  observation['log_completed']='INFO: Recording complete to '+container+' file: '+out in lines
+ if media is None:observation['artifact_reason']='media_unavailable';return False
+ if not observation['media_regular']:observation['artifact_reason']='media_not_regular';return False
+ if media.st_size<=0:observation['artifact_reason']='media_empty';return False
+ if journal is None or not observation['log_regular']:observation['artifact_reason']='log_not_regular';return False
+ if lines is None:observation['artifact_reason']='log_unreadable';return False
+ if observation['log_completed']:observation['artifact_reason']='recording_complete';return 'complete'
+ if not observation['log_started']:observation['artifact_reason']='recording_not_started';return False
+ observation['artifact_reason']='ready';return True
 def save(status):
  value={'pid':pid,'parent_pid':parent,'expected_argv':expected,'status':status,'reason':reason,'execution_stopped':stopped,'observations':observations}
  fd=os.open(proof,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
