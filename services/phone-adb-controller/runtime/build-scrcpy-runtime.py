@@ -92,7 +92,12 @@ def rebuild_candidate(source, build_dir, server, meson, ninja, pkg_config):
     subprocess.run(['git', '-C', str(source), 'apply', str(patch_file)], check=True)
     if digest(source / 'app/src/recorder.c') != POLICY['patched_recorder_sha256']:
         raise ValueError('patched recorder digest mismatch')
-    env = dict(os.environ, PKG_CONFIG=str(pkg_config))
+    tools = [str(Path(tool).resolve().parent) for tool in (meson, ninja, pkg_config)]
+    env = dict(os.environ, PKG_CONFIG=str(pkg_config),
+               PATH=os.pathsep.join(tools + [os.environ.get('PATH', '')]))
+    if not env.get('PKG_CONFIG_PATH') and sys.platform == 'darwin':
+        env['PKG_CONFIG_PATH'] = ':'.join('/opt/homebrew/opt/' + name + '/lib/pkgconfig'
+                                         for name in ('ffmpeg', 'sdl3', 'libusb'))
     subprocess.run([str(meson), 'setup', str(build_dir), str(source), '--buildtype=debug',
                     '--prefix=' + str(build_dir / 'prefix'), '-Dcompile_server=false'],
                    env=env, check=True)

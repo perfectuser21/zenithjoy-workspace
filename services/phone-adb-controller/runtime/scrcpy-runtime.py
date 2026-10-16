@@ -252,6 +252,69 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
     return receipt
 
 
+def shim_config():
+    keys = {'runtime_root': 'RUNTIME_ROOT', 'client_sha256': 'CLIENT_SHA256',
+            'adb_bin': 'ADB_BIN', 'adb_port': 'ADB_PORT', 'serial': 'SERIAL',
+            'owner': 'OWNER', 'lock_dir': 'LOCK_DIR', 'evidence_root': 'EVIDENCE_ROOT',
+            'evidence_id': 'EVIDENCE_ID', 'timeout': 'STAGE_TIMEOUT'}
+    config = {}
+    for key, suffix in keys.items():
+        value = os.environ.get('ZJ_SCRCPY_' + suffix)
+        if value is None:
+            if key == 'client_sha256':
+                value = POLICY['client_sha256']
+            elif key == 'timeout':
+                value = '45'
+            else:
+                raise RuntimeFailure('missing pinned ADB shim configuration: ' + suffix)
+        config[key] = value
+    config['adb_port'] = int(config['adb_port'])
+    config['timeout'] = float(config['timeout'])
+    return config
+
+
+def adb_shim(argv):
+    """只替代ADB进程；从不包裹或启动scrcpy，保留真实录制PID。"""
+    try:
+        config = shim_config()
+        verified = verify_runtime(config['runtime_root'], config['client_sha256'])
+        require_owner(config['lock_dir'], config['owner'])
+        serial = config['serial']
+        if argv == ['start-server']:
+            require_existing_server(config['adb_port'])
+            return 0  # 既有桥只读检查，绝不调用start-server。
+        if len(argv) >= 3 and argv[:2] == ['-s', serial] and argv[2] == 'push':
+            if len(argv) != 5 or os.path.abspath(argv[3]) != verified['server_path'] or argv[4] != POLICY['remote_server']:
+                raise RuntimeFailure('ADB shim refuses a non-pinned server push')
+            result = stage_server(**config)
+            print('runtime server stage: ' + json.dumps(result, ensure_ascii=False), file=sys.stderr)
+            return 0 if result['verified'] else (75 if result['execution_stop_unknown'] else 64)
+        allowed = argv == ['devices', '-l']
+        if argv[:2] == ['-s', serial]:
+            rest = argv[2:]
+            prefix = ['shell', 'CLASSPATH=' + POLICY['remote_server'], 'app_process',
+                      '/', 'com.genymobile.scrcpy.Server', POLICY['version']]
+            if rest[:6] == prefix and all(re.fullmatch(r'[A-Za-z0-9_./:@=,+-]+', token) for token in rest[6:]):
+                allowed = True
+            elif rest and rest[0] in ('forward', 'reverse'):
+                if len(rest) == 3 and rest[1] == '--remove':
+                    pattern = r'tcp:[0-9]{1,5}' if rest[0] == 'forward' else r'localabstract:scrcpy_[0-9a-f]{8}'
+                    allowed = bool(re.fullmatch(pattern, rest[2]))
+                elif len(rest) == 3:
+                    local, remote = (rest[1], rest[2]) if rest[0] == 'forward' else (rest[2], rest[1])
+                    allowed = bool(re.fullmatch(r'tcp:[0-9]{1,5}', local) and
+                                   re.fullmatch(r'localabstract:scrcpy_[0-9a-f]{8}', remote))
+        if not allowed:
+            raise RuntimeFailure('ADB shim refuses unrelated command or target')
+        require_existing_server(config['adb_port'])
+        env = dict(os.environ, ADB_SERVER_SOCKET='tcp:localhost:' + str(config['adb_port']))
+        os.execve(str(config['adb_bin']), [str(config['adb_bin']), '-P',
+                  str(config['adb_port']), *argv], env)
+    except (RuntimeFailure, OSError, ValueError) as error:
+        print('pinned ADB shim refused: ' + str(error), file=sys.stderr)
+        return 75 if getattr(error, 'unknown', False) else 64
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['verify', 'stage-server'])
