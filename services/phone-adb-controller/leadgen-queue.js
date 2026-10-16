@@ -50,13 +50,15 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if(requestedBinding!==undefined&&(!['101','102'].includes(String(input.step))||!requestedBinding||Array.isArray(requestedBinding)
       ||typeof requestedBinding!=='object'||Object.keys(requestedBinding).sort().join(',')!=='device_serial,profile'
       ||typeof requestedBinding.profile!=='string'||!requestedBinding.profile||typeof requestedBinding.device_serial!=='string'||!requestedBinding.device_serial))throw Error('COMPANY_DEVICE_BINDING_INPUT_INVALID');
-    const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:String(input.step)});
+    const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:String(input.step),
+      ...(requestedBinding!==undefined&&String(input.step)==='102'?{taskInputs:{device_binding:{...requestedBinding}}}:{})});
     if(requestedBinding!==undefined){
       const accounts=snapshot.runtime_config?.platform_accounts;
       const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===requestedBinding.profile):[];
       const account=matches[0];
       if(!snapshot.company_id||!snapshot.tenant_id||!Number.isSafeInteger(snapshot.version)||snapshot.version<1||matches.length!==1
         ||account.verification_status!=='verified'||account.enabled!==true||account.device_serial!==requestedBinding.device_serial
+        ||String(input.step)==='102'&&(account.company_id!==snapshot.company_id||account.tenant_id!==snapshot.tenant_id||account.platform!=='douyin')
         ||typeof account.douyin_id!=='string'||!account.douyin_id||account.douyin_id.trim()!==account.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: exact frozen company account/device binding required');
       return {...configEvidence(snapshot,run),device_binding:{company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:run,
         profile:account.profile,device_serial:account.device_serial,douyin_id:account.douyin_id,verification_status:'verified',enabled:true}};
@@ -228,8 +230,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         if (!comment.nickname || !comment.commentBody) throw Error('评论身份或正文缺失');
         if(comment.recipientEvidence?.status==='verified'){
           const e=comment.recipientEvidence;
-          if(e.scope?.video_id!==input.video_id||e.scope?.profile&&!require('./line-routes.js').routeOf(lineKey).profiles.includes(e.scope.profile))throw Error('recipient采集归属错误');
-          require('./queued-recipient-evidence.js').validateEvidence(e,{line_key:lineKey,run,douyin_id:comment.douyinId,nickname:comment.nickname,comment_body:comment.commentBody,comment_body_sha256:require('./queued-recipient-evidence.js').hash(comment.commentBody),video_url:comment.sourceVideoUrl});
+          if(e.scope?.video_id!==input.video_id)throw Error('recipient采集归属错误');
+          const companyBinding=e.company_binding===undefined?undefined:await require('./company-config-lib.js').readCollectionAccountBinding(client,{lineKey,run,sourceRun});
+          require('./queued-recipient-evidence.js').validateEvidence(e,{line_key:lineKey,run,douyin_id:comment.douyinId,nickname:comment.nickname,comment_body:comment.commentBody,comment_body_sha256:require('./queued-recipient-evidence.js').hash(comment.commentBody),video_url:comment.sourceVideoUrl},{companyBinding});
         }
         const result = await db.upsertComment(client, { ...comment, lineKey, harvestBatch: run });
         if (result.inserted) inserted++;

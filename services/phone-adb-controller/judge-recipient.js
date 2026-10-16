@@ -4,10 +4,12 @@ const {validateEvidence,hash}=require('./queued-recipient-evidence.js');
 const {configTargetProfile}=require('./company-config-lib.js');
 const {callOpenRouter,defaultHttpPost}=require('./judge-jev.js');
 const {resolveOpenRouterKey,JEV_MODEL,DECISIONS_ENDPOINT}=require('./judge-comment.js');
-async function qualifyRecipient(comment,snapshot,{httpPost=(url,body,key)=>defaultHttpPost(url,body,key,{signal:AbortSignal.timeout(15000)}),apiKey,env=process.env}={}){
+async function qualifyRecipient(comment,snapshot,{httpPost=(url,body,key)=>defaultHttpPost(url,body,key,{signal:AbortSignal.timeout(15000)}),apiKey,env=process.env,companyBinding}={}){
  const model={model_call_count:0,model_response_id:null,model_provider:'openrouter',model:JEV_MODEL,model_endpoint:DECISIONS_ENDPOINT};
  let parsed;
- try{parsed=validateEvidence(comment.recipient_evidence,{line_key:comment.line_key,run:comment.harvest_batch,douyin_id:comment.douyin_id,nickname:comment.nickname,video_url:comment.source_video_url,comment_body:comment.comment_body,comment_body_sha256:hash(comment.comment_body)});}
+ try{
+  if(companyBinding&&(companyBinding.company_id!==snapshot?.company_id||companyBinding.tenant_id!==snapshot?.tenant_id))throw Error('RECIPIENT_COMPANY_SCOPE_INVALID');
+  parsed=validateEvidence(comment.recipient_evidence,{line_key:comment.line_key,run:comment.harvest_batch,douyin_id:comment.douyin_id,nickname:comment.nickname,video_url:comment.source_video_url,comment_body:comment.comment_body,comment_body_sha256:hash(comment.comment_body)},{companyBinding});}
  catch {return {...model,status:'unknown',reason:'native_profile_proof_missing_or_invalid'};}
  const rules=snapshot?.runtime_config?.comment_scoring;
  try{configTargetProfile(snapshot,'103');if(!Array.isArray(rules.audiences)||!rules.audiences.length)throw Error('audiences');}

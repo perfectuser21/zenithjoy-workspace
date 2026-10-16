@@ -1,6 +1,6 @@
 ---
 name: wf-douyin_video_processing
-version: 0.2.3
+version: 0.2.4
 description: "抖音视频处理 wf_run 陪跑说明：显式加载本次冻结业务Skill，保持原合同与安全交接边界。"
 ---
 

@@ -2,7 +2,7 @@
 name: douyin-leadgen-103
 description: 执行抖音获客103评论评分与线索标记，独立消费已提交评论并使用公司原评分政策。用于Agent执行、调用成熟评分代码及异常接手；不占手机、不等待整批102结束、不发送私信。
 metadata:
-  version: 0.2.1
+  version: 0.2.2
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-103/references/reuse-map.json
@@ -13,6 +13,10 @@ metadata:
 # 103 · 评论评分与线索交付
 
 首版可加载 Skill，本版实机业务验收待执行。原评分规则继续作为业务真身，编写 Skill 不构成改分标准的授权。
+
+## 冻结来源绑定
+
+带company_binding的评论，按原102 harvest_batch只读原PG冻结来源及选定设备，不能从评论自报profile或当前账号表补授权；来源公司/租户须同当前冻结评分公司，原评分规则保持。103标人、配送与读回沿此来源；云profile的104触达仍未授权，不因103配送成功自动放行。
 
 ## Activity 方法配套
 

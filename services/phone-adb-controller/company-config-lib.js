@@ -66,4 +66,29 @@ async function freezeCompanyConfig(pool, {lineHint,runId,step,sourceRun,taskInpu
     await client.query('COMMIT');return out;
   } catch(error) {await client.query('ROLLBACK');throw error;} finally {client.release();}
 }
-module.exports={freezeCompanyConfig,configTargetProfile,runtimeSnapshot};
+// 来源授权只能读既有102快照；禁止用freezeCompanyConfig为旧评论补造来源。
+async function readCollectionAccountBinding(pool,{lineKey,run,sourceRun}) {
+  const fail=()=>{throw Error('COMPANY_COLLECTION_BINDING_INVALID');};
+  if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run||''))fail();
+  const rows=(await pool.query(`SELECT company_id,tenant_id,version,run_id,source_run,snapshot,task_inputs
+    FROM zenithjoy.company_config_runs WHERE run_id=$1
+    AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;
+  if(rows.length!==1)fail();
+  const row=rows[0],s=row.snapshot,pick=row.task_inputs?.device_binding;
+  if(!s||row.run_id!==run||(sourceRun!==undefined&&(row.source_run||null)!==(sourceRun||null))
+    ||!s.company_id||!s.tenant_id||!Number.isSafeInteger(s.version)||s.version<1
+    ||row.company_id!==s.company_id||row.tenant_id!==s.tenant_id||Number(row.version)!==s.version
+    ||s.config_status!=='enabled'||s.runtime_config?.routing?.line_key!==lineKey
+    ||!pick||Object.keys(pick).sort().join(',')!=='device_serial,profile'
+    ||typeof pick.profile!=='string'||!pick.profile||typeof pick.device_serial!=='string'||!pick.device_serial)fail();
+  const routing=s.runtime_config.routing.profiles,accounts=s.runtime_config.platform_accounts;
+  const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===pick.profile):[];
+  const a=matches[0];
+  if(!Array.isArray(routing)||routing.filter(p=>p===pick.profile).length!==1||matches.length!==1
+    ||a.enabled!==true||a.verification_status!=='verified'||a.device_serial!==pick.device_serial
+    ||a.company_id!==s.company_id||a.tenant_id!==s.tenant_id||a.platform!=='douyin'
+    ||typeof a.douyin_id!=='string'||!a.douyin_id||a.douyin_id.trim()!==a.douyin_id)fail();
+  return {company_id:s.company_id,tenant_id:s.tenant_id,version:s.version,run_id:run,line_key:lineKey,
+    source_run:row.source_run||null,profile:a.profile,device_serial:a.device_serial,douyin_id:a.douyin_id,verification_status:'verified',enabled:true};
+}
+module.exports={freezeCompanyConfig,configTargetProfile,runtimeSnapshot,readCollectionAccountBinding};

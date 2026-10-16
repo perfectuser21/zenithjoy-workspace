@@ -1,11 +1,18 @@
 "use strict";
 // 标人事务保存桥接意图；没有原生主页证明的旧数据保守unknown，不能以等级冒资格。
 const crypto=require('node:crypto');
+async function collectionBinding(pool,lineKey,run,recipient){
+ if(recipient?.company_binding===undefined)return undefined;
+ return require('./company-config-lib.js').readCollectionAccountBinding(pool,{lineKey,run,sourceRun:recipient.scope?.source_run});
+}
 async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},deps={}){
  if(!lead?.id||!comment?.id||comment.line_key!==lineKey)throw Error('BRIDGE_IDENTITY_INVALID');
  const mapped=(await client.query('SELECT id,line_key,douyin_id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND id=$2',[lineKey,lead.id])).rows;
  const leadIdentity=mapped.length===1?mapped[0]:null;
- let qualification=await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config);
+ let companyBinding,sourceUnknown=false;
+ try{companyBinding=await collectionBinding(client,lineKey,comment.harvest_batch,comment.recipient_evidence);}catch{sourceUnknown=true;}
+ let qualification=sourceUnknown?{status:'unknown',reason:'frozen_collection_binding_missing_or_invalid',model_call_count:0}
+   :await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config,{companyBinding});
  if(!['passed','excluded','unknown'].includes(qualification?.status))throw Error('BRIDGE_QUALIFICATION_INVALID');
  if(qualification.status==='passed'&&(!leadIdentity||leadIdentity.id!==lead.id||leadIdentity.line_key!==lineKey||leadIdentity.douyin_id!==comment.douyin_id))qualification={...qualification,status:'unknown',reason:'lead_identity_mapping_unverified'};
  const intent={version:1,line_key:lineKey,run,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
@@ -28,20 +35,21 @@ const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Obje
 const digest=v=>crypto.createHash('sha256').update(JSON.stringify(canonical(JSON.parse(JSON.stringify(v))))).digest('hex');
 function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`;}
 function frozenQualification(p,snapshot){const q=p.qualification;return q?.company_id===snapshot.company_id&&String(q.company_version)===String(snapshot.version)&&typeof q.tenant_id==='string'&&q.tenant_id!==''&&q.tenant_id===snapshot.tenant_id&&typeof q.policy_id==='string'&&q.policy_id!==''&&q.policy_id===(snapshot.policy_id||snapshot.runtime_config?.policy_id);}
-function nativeIntent(row){
+function nativeIntent(row,{companyBinding}={}){
  const p=row.payload;
  if(!p||row.line_key!==p.line_key||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
+ if(companyBinding&&(p.qualification.company_id!==companyBinding.company_id||p.qualification.tenant_id!==companyBinding.tenant_id))throw Error('BRIDGE_COMPANY_SOURCE_INVALID');
  if(!p.lead_identity||p.lead_identity.id!==p.lead_id||p.lead_identity.line_key!==p.line_key||p.lead_identity.douyin_id!==p.target_douyin_id)throw Error('BRIDGE_LEAD_IDENTITY_INVALID');
  if(!p.profile_url||!/^https:\/\/(?:www|v)\.douyin\.com\/[A-Za-z0-9._/-]+$/.test(p.profile_url))throw Error('BRIDGE_PROFILE_LINK_MISSING');
- evidence.validateEvidence(p.recipient_evidence,{line_key:p.line_key,run:p.comment_run,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body:p.comment_body,comment_body_sha256:evidence.hash(p.comment_body),video_url:p.source_video_url});
+ evidence.validateEvidence(p.recipient_evidence,{line_key:p.line_key,run:p.comment_run,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body:p.comment_body,comment_body_sha256:evidence.hash(p.comment_body),video_url:p.source_video_url},{companyBinding});
  return p;
 }
 function fieldsMatch(row,record){
  const expected=row.fields;if(!expected||digest(expected)!==row.fields_sha256||!record?.fields||txt(record.fields['合规核验状态'])!==bridgeMarker(row)||txt(record.fields['抖音号']).toLowerCase()!==String(row.payload.target_douyin_id).toLowerCase())return false;
  return Object.entries(expected).every(([k,v])=>txt(record.fields[k])===String(v));
 }
-function buildOrderFields(row,route,types){
- const p=nativeIntent(row),created=Date.parse(p.collected_at);
+function buildOrderFields(row,route,types,options){
+ const p=nativeIntent(row,options),created=Date.parse(p.collected_at);
  if(!Number.isFinite(created)||!types.some(t=>t.field_name==='采集时间'))throw Error('BRIDGE_FIELD_TYPES_MISSING');
  const time=types.find(t=>t.field_name==='采集时间').type===5?created:new Date(created+8*3600e3).toISOString().replace('T',' ').slice(0,16);
  return {'抖音获客-线索表':p.nickname,...buildLeadCoreFields({nick:p.nickname,dyid:p.target_douyin_id,purl:p.profile_url,comment:p.comment_body,video:p.source_video,vurl:p.source_video_url}),
@@ -61,7 +69,8 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
     result[excluded?'excluded':'unknown']++;continue;
    }
-   try{const p=nativeIntent(row);if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
+   let companyBinding;
+   try{companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);const p=nativeIntent(row,{companyBinding});if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
    if(!api)api=await outreach.orderClient(route,{deadlineAt});
    let all;try{all=await api.all({deadlineAt});}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));
@@ -73,7 +82,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
    if(row.state==='attempted'||row.attempted_at){result.unknown++;result.verified=false;continue;}
    const duplicates=all.filter(r=>txt(r.fields?.['抖音号']).trim().toLowerCase()===String(row.payload.target_douyin_id).toLowerCase()||txt(r.fields?.['抖音昵称'])===row.payload.nickname);
    if(duplicates.length){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='protected',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,duplicates[0].record_id]);result.protected++;continue;}
-   let fields;try{fields=buildOrderFields(row,route,await api.fields());}catch{result.unknown++;result.verified=false;continue;}
+   let fields;try{fields=buildOrderFields(row,route,await api.fields(),{companyBinding});}catch{result.unknown++;result.verified=false;continue;}
    if(Date.now()>=deadlineAt){result.unknown++;result.verified=false;break;}
    const stored=await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='attempted',fields=$3::jsonb,fields_sha256=$4,attempted_at=now(),updated_at=now() WHERE line_key=$1 AND id=$2 AND state IN ('pending','unknown') AND attempted_at IS NULL RETURNING *",[route.key,row.id,JSON.stringify(fields),digest(fields)]);
    if(stored.rowCount!==1)throw Error('BRIDGE_ATTEMPT_NOT_PERSISTED');
@@ -108,12 +117,12 @@ async function readbackBridge(pool,input){
  const route=routeOf(input.line),ids=input.ids;
  if(!Array.isArray(ids)||ids.length>50||new Set(ids).size!==ids.length||ids.some(id=>!/^[-a-zA-Z0-9]{1,80}$/.test(id)))throw Error('BRIDGE_READBACK_IDS_INVALID');
  const rows=ids.length?(await pool.query('SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND id=ANY($2::uuid[])',[route.key,ids])).rows:[];
- const failures=ids.filter(id=>{const found=rows.filter(r=>r.id===id);if(found.length!==1)return true;const row=found[0],p=row.payload;
-  if(!p||row.line_key!==route.key||p.line_key!==route.key||digest(p)!==row.payload_sha256||!['confirmed','protected','excluded','unknown'].includes(row.state)||p.qualification?.status!==row.qualification_status)return true;
-  if(row.state==='confirmed'){try{nativeIntent(row);}catch{return true;}if(!/^rec[A-Za-z0-9]{6,40}$/.test(row.feishu_record_id||'')||!row.fields||digest(row.fields)!==row.fields_sha256)return true;}
-  if(row.state==='excluded'&&row.qualification_status!=='excluded')return true;
-  return false;
- }).length;
+ let failures=0;
+ for(const id of ids){const found=rows.filter(r=>r.id===id);if(found.length!==1){failures++;continue;}const row=found[0],p=row.payload;
+  if(!p||row.line_key!==route.key||p.line_key!==route.key||digest(p)!==row.payload_sha256||!['confirmed','protected','excluded','unknown'].includes(row.state)||p.qualification?.status!==row.qualification_status){failures++;continue;}
+  if(row.state==='confirmed'){try{nativeIntent(row,{companyBinding:await collectionBinding(pool,p.line_key,p.comment_run,p.recipient_evidence)});}catch{failures++;continue;}if(!/^rec[A-Za-z0-9]{6,40}$/.test(row.feishu_record_id||'')||!row.fields||digest(row.fields)!==row.fields_sha256){failures++;continue;}}
+  if(row.state==='excluded'&&row.qualification_status!=='excluded')failures++;
+ }
  return {verified:failures===0,failures,ids,states:Object.fromEntries(rows.map(r=>[r.id,r.state]))};
 }
 module.exports.readbackBridge=readbackBridge;

@@ -4,6 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {spawnSync}=require('node:child_process');
 const {routeOf}=require('./line-routes.js');
 const {decodeXmlEntities}=require('./nickname-match-lib.js');
+const {isDeepStrictEqual}=require('node:util');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 function parseNative(profile,returned,{nickname,douyinId,commentBody,commentEncoding='canonical'}){
  if(!['xml_raw','canonical'].includes(commentEncoding))throw Error('RECIPIENT_BODY_ENCODING_INVALID');
@@ -31,11 +32,17 @@ print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'r
  if(r.status!==0)throw Error('RECIPIENT_NATIVE_PROOF_INVALID');
  return JSON.parse(r.stdout);
 }
-function validateEvidence(e,scope){
+function validateEvidence(e,scope,{companyBinding}={}){
  if(e?.version!==1||e.status!=='verified'||!e.scope||!e.raw||!e.sha256)throw Error('RECIPIENT_EVIDENCE_MISSING');
  for(const key of ['line_key','run','douyin_id','nickname','comment_body_sha256','video_url'])if(e.scope[key]!==scope[key])throw Error('RECIPIENT_SCOPE_INVALID');
  if(!['xml_raw','canonical'].includes(e.scope.comment_encoding))throw Error('RECIPIENT_BODY_ENCODING_MISSING');
- if(!routeOf(scope.line_key).profiles.includes(e.scope.profile))throw Error('RECIPIENT_PROFILE_SCOPE_INVALID');
+ if(e.company_binding!==undefined||companyBinding!==undefined){
+  const b=companyBinding;
+  if(!b||!isDeepStrictEqual(e.company_binding,b)||Object.keys(b).sort().join(',')!=='company_id,device_serial,douyin_id,enabled,line_key,profile,run_id,source_run,tenant_id,verification_status,version'
+    ||!Number.isSafeInteger(b.version)||b.version<1||b.enabled!==true||b.verification_status!=='verified'
+    ||['company_id','tenant_id','profile','device_serial','douyin_id'].some(k=>typeof b[k]!=='string'||!b[k]||b[k].trim()!==b[k])
+    ||b.line_key!==scope.line_key||b.run_id!==scope.run||b.profile!==e.scope.profile||b.source_run!==e.scope.source_run)throw Error('RECIPIENT_COMPANY_BINDING_INVALID');
+ }else if(!routeOf(scope.line_key).profiles.includes(e.scope.profile))throw Error('RECIPIENT_PROFILE_SCOPE_INVALID');
  if(!/^\d{16,24}$/.test(e.scope.video_id||'')||e.video_identity?.verified!==true||e.video_identity.content_type!=='video'||e.video_identity.expected_video_id!==e.scope.video_id||e.video_identity.observed_video_id!==e.scope.video_id||e.video_identity.evidence_id!==e.scope.video_identity_eid)throw Error('RECIPIENT_VIDEO_ID_INVALID');
  const prefix=e.scope.run+'-v'+e.scope.video_id+'-collection',personPrefix=prefix+'-person';
  const row=typeof e.scope.profile_eid==='string'&&e.scope.profile_eid.startsWith(personPrefix)
@@ -44,7 +51,7 @@ function validateEvidence(e,scope){
  for(const k of ['profile','returned'])if(typeof e.raw[k]!=='string'||Buffer.byteLength(e.raw[k])>4*1024*1024||hash(e.raw[k])!==e.sha256[k])throw Error('RECIPIENT_BYTES_INVALID');
  return parseNative(e.raw.profile,e.raw.returned,{nickname:scope.nickname,douyinId:scope.douyin_id,commentBody:scope.comment_body,commentEncoding:e.scope.comment_encoding});
 }
-function capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding='canonical'}){
+function capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding='canonical',companyBindingFile,companyBindingSha}){
  if(!Number.isSafeInteger(Number(started))||Number(started)<=0||Number(started)*1000>Date.now()+1000)throw Error('RECIPIENT_TIME_INVALID');
  const scope={comment_encoding:commentEncoding,line_key:routeOf(line).key,run,source_run:sourceRun||null,video_id:videoId,video_url:videoUrl,profile,douyin_id:douyinId,nickname,comment_body_sha256:hash(commentBody),profile_eid:profileEid,video_identity_eid:videoEid};
  const root=path.join(process.env.DOUYIN_PHONE_TMP_ROOT||'/private/tmp/openclaw-phone','evidence',profile);
@@ -53,15 +60,23 @@ function capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,ni
  const vf=path.join(runDir,run+'-identity-'+videoId+'.json'),st=fs.lstatSync(vf);
  if(st.isSymbolicLink()||!st.isFile()||st.mtimeMs<Number(started)*1000||path.dirname(fs.realpathSync(vf))!==fs.realpathSync(runDir))throw Error('RECIPIENT_VIDEO_FILE_INVALID');
  const receiptId=crypto.randomUUID();
- const e={version:1,receipt_id:receiptId,status:'verified',scope,raw,sha256:Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,hash(v)])),video_identity:JSON.parse(fs.readFileSync(vf,'utf8')),observed_at:new Date().toISOString()};
- validateEvidence(e,{...scope,comment_body:commentBody});
+ let companyBinding;
+ if(companyBindingFile||companyBindingSha){
+  if(!companyBindingFile||!companyBindingSha||path.resolve(companyBindingFile)!==path.resolve(runDir,run+'-company-binding.json'))throw Error('RECIPIENT_COMPANY_FILE_INVALID');
+  const st=fs.lstatSync(companyBindingFile);
+  if(st.isSymbolicLink()||!st.isFile()||(st.mode&0o777)!==0o600||st.size>16384||path.dirname(fs.realpathSync(companyBindingFile))!==fs.realpathSync(runDir))throw Error('RECIPIENT_COMPANY_FILE_INVALID');
+  const bytes=fs.readFileSync(companyBindingFile);if(hash(bytes)!==companyBindingSha)throw Error('RECIPIENT_COMPANY_FILE_INVALID');
+  companyBinding=JSON.parse(bytes);
+ }
+ const e={version:1,receipt_id:receiptId,status:'verified',scope,...(companyBinding?{company_binding:companyBinding}:{}),raw,sha256:Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,hash(v)])),video_identity:JSON.parse(fs.readFileSync(vf,'utf8')),observed_at:new Date().toISOString()};
+ validateEvidence(e,{...scope,comment_body:commentBody},{companyBinding});
  const file=path.join(runDir,profileEid+'-recipient-'+receiptId+'.json');fs.writeFileSync(file,JSON.stringify(e),{flag:'wx',mode:0o600});
  return {file,sha256:hash(fs.readFileSync(file)),body_sha256:scope.comment_body_sha256};
 }
 if(require.main===module){try{
- const [runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding]=process.argv.slice(2);
+ const [runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding,companyBindingFile,companyBindingSha]=process.argv.slice(2);
  // 旧mock/旧来源缺原件时保持unknown；现有身份核验依然先严格完成。
  if(!profilePath||!returnedPath){console.log(`RECIPIENT_UNKNOWN\t${videoId}\t${douyinId}\t${hash(commentBody)}\tnative_profile_missing`);}
- else {const p=capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding});console.log(`RECIPIENT_PROOF\t${videoId}\t${douyinId}\t${p.body_sha256}\t${p.file}\t${p.sha256}`);}
+ else {const p=capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding,companyBindingFile,companyBindingSha});console.log(`RECIPIENT_PROOF\t${videoId}\t${douyinId}\t${p.body_sha256}\t${p.file}\t${p.sha256}`);}
 }catch{process.stderr.write('RECIPIENT_EVIDENCE_FAILED\n');process.exitCode=8;}}
 module.exports={hash,parseNative,validateEvidence,capture};

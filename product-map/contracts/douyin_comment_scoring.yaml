@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.2.1
+  version: 0.2.2
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -238,7 +238,7 @@ activities:
   - key: mark_leads
     name: 标记人
     order: 2
-    version: 3.0.0
+    version: 3.1.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -307,6 +307,7 @@ activities:
           - fields_sha256
           - feishu_record_id
     preconditions:
+      - 带company_binding的评论须按原102 harvest_batch只读既有PG冻结来源与选定设备，缺失不得补造历史run或仅信评论内绑定；当前评分政策仍独立冻结，来源公司/租户必须相同；103配送和读回沿同来源，104云profile仍未获授权
       - 评论 process_status=待分拣
       - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
       - 同line原锁目录使用内核advisory
@@ -364,12 +365,16 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/company-config-lib.js
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.1.1
+        version: 0.1.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

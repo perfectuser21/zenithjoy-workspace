@@ -27,7 +27,15 @@ if [[ ! -x /usr/bin/xmllint ]]; then
 fi
 
 echo "[1/3] phone-adb-controller 纯函数库单测（own-accounts-lib/lead-fields-lib/next-outreach-lib）"
-node --test "$ROOT"/services/phone-adb-controller/__tests__/*.test.mjs
+# 这里仅验证本字段合同及其原生账号/链接恢复前置。完整控制器通配套仍由
+# ci-l3-code.yml 的 always OpenClaw Scripts Test 执行，并由 L3 必需门禁收口；
+# 不在每个业务smoke里重复全套。接线与失败传播由同名编排测试钉住。
+node --test \
+  "$ROOT/services/phone-adb-controller/__tests__/own-accounts-lib.test.mjs" \
+  "$ROOT/services/phone-adb-controller/__tests__/lead-fields-lib.test.mjs" \
+  "$ROOT/services/phone-adb-controller/__tests__/next-outreach-lib.test.mjs" \
+  "$ROOT/services/phone-adb-controller/__tests__/account-current-nickname.test.mjs" \
+  "$ROOT/services/phone-adb-controller/__tests__/video-link-restore.test.mjs"
 
 echo "[2/3] Path2 触达状态→成功触达 映射单测"
 ( cd "$ROOT/apps/api" && npx vitest run tests/p2-sprint-b1-ws4/lead-writer.test.ts src/services/lead-writer.test.ts )

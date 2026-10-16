@@ -231,8 +231,8 @@ jobs:
               golden-path-f1-anchor-smoke.sh) echo 180 ;;  # 现场npm ci根依赖(ajv/yaml)，冷cache偶发慢
               # 路③ 全跑要真起一次 apps/api 再跑十几段真库判定；90s 光等就绪就烧掉大半
               structured-workbench-smoke.sh) echo 180 ;;
-              # 全目录 phone-adb-controller 回归保留；受测merge708的L3全量1765条通过耗时309.265s。
-              # 此脚本还含vitest与字段回归检查，仅本case给420s有限预算；重试1次和job25m上限不变。
+              # 全目录 phone-adb-controller 回归由独立必需L3执行；本脚本验证五个字段合同文件及API映射。
+              # 保留原420s有限预算（含依赖准备/字段检查）、重试1次及job25m上限。
               leadgen-field-cleanup-smoke.sh) echo 420 ;;
               capability-phone-regression-smoke.sh) echo 180 ;;  # 16套串行真实时序回归实测约122秒
               *) echo 90 ;;
