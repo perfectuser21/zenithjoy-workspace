@@ -51,8 +51,12 @@ child = subprocess.Popen(['/bin/sh', '-c', script], stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
 data = sys.stdin.buffer.read()
 if data:
-    child.stdin.write(data)
-    child.stdin.flush()
+    try:
+        child.stdin.write(data)
+        child.stdin.flush()
+    except BrokenPipeError:
+        # 独占重定向在读stdin之前拒绝；仍须收回真实shell拒绝回执。
+        pass
 # Deliberately keep child.stdin open. A cat receiver cannot complete here.
 code = child.wait(timeout=10)
 out, err = child.stdout.read(), child.stderr.read()

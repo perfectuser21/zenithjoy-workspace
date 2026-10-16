@@ -148,8 +148,10 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
                'serial': serial, 'owner': owner, 'adb_port': adb_port,
                'evidence_id': evidence_id}
     receipt_path = None
-    temporary = '/data/local/tmp/zj-scrcpy.stage-' + uuid.uuid4().hex
-    receipt['temporary_path'] = temporary
+    temporary = None
+    if runtime_kind == 'sdk31':
+        temporary = '/data/local/tmp/zj-scrcpy.stage-' + uuid.uuid4().hex
+        receipt['temporary_path'] = temporary
     touched = False
     own_temporary = False
     deadline = time.monotonic() + float(timeout)
@@ -245,6 +247,31 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
             raise RuntimeFailure('existing remote server is unverified; refuse replacement')
         if initial == 'matching':
             receipt['mode'] = 'reused'
+        elif runtime_kind == 'sdk33':
+            # Android16 shell禁止hardlink；仅此已批准种类使用独占canonical创建。
+            # journal在任何写入前记录真实目标；不删除失败/未知的canonical。
+            receipt.update(phase='canonical_upload_attempted', write_target=destination,
+                           staging_mode='canonical_noclobber')
+            touched = True
+            save()
+            token = uuid.uuid4().hex
+            opened = ('CANONICAL_OPENED ' + token + '\n').encode()
+            script = (f'umask 077; set -C; if {{ printf "CANONICAL_OPENED {token}\\n" >&2; '
+                      f'toybox head -c {len(server)}; }} > {shlex.quote(destination)}; '
+                      f'then printf "STAGED {token}\\n"; else printf "REFUSED {token}\\n"; fi')
+            code, stdout, stderr = adb(script, server)
+            if code == 0 and stdout == ('REFUSED ' + token + '\n').encode() and opened not in stderr:
+                # 受控分支仅在重定向拒绝后返回REFUSED；group未进入，没有本次写入。
+                touched = False
+                receipt['phase'] = 'canonical_create_refused'
+                raise RuntimeFailure('exclusive canonical creation refused without upload')
+            if code or stdout != ('STAGED ' + token + '\n').encode() or stderr != opened:
+                raise RuntimeFailure('canonical fixed-byte upload completion is unproven', unknown=True)
+            receipt['phase'] = 'canonical_received'
+            save()
+            if probe(destination) != 'matching':
+                raise RuntimeFailure('canonical server hash or byte count does not match', unknown=True)
+            receipt['mode'] = 'fixed_byte_canonical_noclobber'
         else:
             receipt['phase'] = 'upload_attempted'
             touched = True
@@ -277,7 +304,8 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
         receipt.update(phase='verified', verified=True, received_bytes=len(server))
     except (RuntimeFailure, OSError, ValueError, UnicodeError) as error:
         receipt.update(verified=False, error=str(error),
-                       execution_stop_unknown=getattr(error, 'unknown', touched and not own_temporary))
+                       execution_stop_unknown=(runtime_kind == 'sdk33' and touched)
+                       or getattr(error, 'unknown', touched and not own_temporary))
         if own_temporary and not receipt['execution_stop_unknown']:
             try:
                 code, _, _ = adb('rm ' + shlex.quote(temporary))
