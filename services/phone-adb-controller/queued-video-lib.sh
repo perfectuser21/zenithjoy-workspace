@@ -66,6 +66,33 @@ qv_open(){
   local held
   held="$("$C" --profile "$P" lock-refresh "$TAG" </dev/null)" || return 3
   [[ "$held" == lock=refreshed* ]] || { qv_log 'lock_refresh_unconfirmed'; return 3; }
+  # 显式MMV手机qualification在已核号后冷开目标，避免主页/上一VID音轨残留。
+  # 不猜SDK；此边界不改变M4、identity或collection，不修改唯一音源验收。
+  if [[ "${WFR_HOSTKEY:-}" == mmv && "${LEADGEN_MMV_DEVICE_RUNTIME:-}" == 1 && "$MODE" == qualification ]]; then
+    [[ "$held" == "lock=refreshed owner=$TAG ttl="<->s ]] || { qv_log 'clean_open_owner_unconfirmed'; return 3; }
+    # 只读本profile受管PID；活跃、格式未知或不可读均禁止关闭App，不杀录音进程。
+    python3 - "${DOUYIN_PHONE_TMP_ROOT:-/private/tmp/openclaw-phone}/evidence/$P" <<'PYCLEANOPEN' || { qv_log 'clean_open_capture_not_quiescent'; return 3; }
+import os,sys,stat
+from pathlib import Path
+root=Path(sys.argv[1])
+try:
+ if root.is_symlink():raise ValueError('symlink evidence directory')
+ if root.exists() and not root.is_dir():raise ValueError('invalid evidence directory')
+ for file in root.glob('*.rec.pid'):
+  fd=os.open(file,os.O_RDONLY|os.O_NOFOLLOW)
+  with os.fdopen(fd,'rb') as source:
+   if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):raise ValueError('invalid pid file')
+   raw=source.read(33)
+  if len(raw)>32 or not raw.strip().isdigit():raise ValueError('unknown pid')
+  pid=int(raw.strip())
+  if pid<=1:raise ValueError('invalid pid')
+  try:os.kill(pid,0)
+  except ProcessLookupError:continue
+  raise ValueError('managed recorder active')
+except (OSError,ValueError):sys.exit(1)
+PYCLEANOPEN
+    "$C" --profile "$P" --lock-owner "$TAG" close-app </dev/null >/dev/null || return 4
+  fi
   DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-open" </dev/null >/dev/null || return 4
   DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-identity" || return 4
 }
