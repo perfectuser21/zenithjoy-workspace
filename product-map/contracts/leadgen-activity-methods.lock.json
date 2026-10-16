@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -122,14 +122,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "4707b4e6de4aa674dca4fbeaf0e71fbea16f95c8e9f997ed8552d6886c7be00e",
+      "code_digest": "9847e355c438a624ba2df733337eefad3c7c97db02d07a0ec3d4e96a5fc93848",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集关键词、筛选、视频链接与入库业务合同未改；共享录音SDK31分支不在本活动路径，新增capture导入及执行未知阻断仅加强资源保护。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reason": "关键词、筛选、链接与入库业务合同未改；显式MMV入口仅按原Skill要求增加公司冻结及实号绑定，101沿原companyKeywords同run冻结taskInputs；旧M4不变。共享录音及保资源保护不改变采集业务。",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "68599cadc3c021fbdbac93658df02da758e813437498a754cae671664404b324",
-        "current_code_digest": "4707b4e6de4aa674dca4fbeaf0e71fbea16f95c8e9f997ed8552d6886c7be00e"
+        "current_code_digest": "9847e355c438a624ba2df733337eefad3c7c97db02d07a0ec3d4e96a5fc93848"
       }
     },
     "douyin_video_processing.preflight": {
@@ -263,7 +263,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -287,21 +287,21 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -318,13 +318,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "cb7bae9277c043d3a27d0dd29085e6b9414401d0fbd54a24fba462715d8b8e00",
+      "code_digest": "770f39e64c93bc1ed0c31c1c01899d1d5913eea3d0f47b48276c23b6b1255c70",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "公司/设备/账号/锁预检业务输入输出未改；共享录音分支不在预检路径，child身份及执行未知阻断仅加强已声明所有权和终止证明。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reason": "公司、设备、账号、锁预检业务合同与Skill未改；显式MMV101/102按原Skill要求使用同run PG冻结的唯一verified enabled账号及设备并核实际ID，去除重复TSV真源；旧M4及104路径保持。",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "5b935f62bf9229ea42cecbab2709d87eca2307b700841519f9b556c4de49e26a",
-        "current_code_digest": "cb7bae9277c043d3a27d0dd29085e6b9414401d0fbd54a24fba462715d8b8e00"
+        "current_code_digest": "770f39e64c93bc1ed0c31c1c01899d1d5913eea3d0f47b48276c23b6b1255c70"
       }
     },
     "douyin_video_processing.dedup": {
@@ -427,7 +427,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -448,14 +448,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -476,16 +476,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
+          "sha256": "94985beefcc09c2af4bb8d9f3b7733e7a95a209df953664170c4bdcc032c65eb"
         }
       ],
-      "code_digest": "3d99c6bc0e5aff9e644ac46ae56d3c04f8318d9ef1fc2577a3d2aebb9e72def3",
+      "code_digest": "6a8946ae988d0e7db2d91be2b336163ba2be94fa2755c64d02c7b6ac68a8a2ac",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "101来源、VID与PG终态判重输入输出及策略未改；新增录音模块绑定为共享文件闭包，录音分支不在判重路径。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "21eb2864d21997d2e5b3874e381805db9c9aec2bac09d66a586ba2688316167e",
-        "current_code_digest": "3d99c6bc0e5aff9e644ac46ae56d3c04f8318d9ef1fc2577a3d2aebb9e72def3"
+        "current_code_digest": "6a8946ae988d0e7db2d91be2b336163ba2be94fa2755c64d02c7b6ac68a8a2ac"
       }
     },
     "douyin_video_processing.qualification": {
@@ -496,14 +496,14 @@
         "name": "douyin-leadgen-activity-102-qualification",
         "version": "0.1.3",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md",
-        "sha256": "8f26b764400c6788aecba5dedfa34a6399352fc6fdcb33b551a31575d84420f5",
+        "sha256": "c44bef05fe453793bbfcfd01265fd0166d96ee2035a42437c684c87bc7626cb1",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "2468c57f556e8d91d12dfaffa35b74715b70c9a9095ecbc777243ae65e32361b"
           }
         ],
-        "content_digest": "fa430307d78496937005ab1f022d4d633cc583cf79fd292fc9c996c7e625b8d7"
+        "content_digest": "3edb1e7722598147bc3e42e7759f036011aebb1640a21bfff05c3ada8c493bfb"
       },
       "code_bindings": [
         {
@@ -588,7 +588,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -609,7 +609,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
@@ -637,14 +637,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "1df9aa3aff33b9293043f9feb5d9e427b74bac54d182bb92b49a2d86afe49d06"
+          "sha256": "c95f8d397726669ad1ac590766b56763ad16be9275600f2809a56fdffc8b0131"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -658,7 +658,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/scrcpy-runtime.py",
           "revision": "contract",
-          "sha256": "9c44c54aaea29dcd0a105e202b7d1dbb28d22f0b343371364f53e794774ca4e4"
+          "sha256": "f0cefb51ea0c8df0871f34055752e1a2f53309a59e252333250a1abe7046e286"
         },
         {
           "kind": "code",
@@ -672,10 +672,17 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/runtime-policy.json",
           "revision": "contract",
-          "sha256": "b662521aab323fe5d9e11e98d8112e4a8ecf7e0b46f279727e39c1e98bf73e5f"
+          "sha256": "ac110a42d51669f21a092676e9da2e20b6544a7b2e10df8dc0094470e562f686"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime/runtime-policy-sdk33.json",
+          "revision": "contract",
+          "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "14b7b22aa2ad3e3b28eb4a926391a4dbea209679bca36dc4bdab688c23a056ec"
+      "code_digest": "af2da91cdb31bc4f885b212f884f56ad549ee70440c651414ab7e3a704e4dadd"
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.3.0",
@@ -799,21 +806,21 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -841,7 +848,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "1df9aa3aff33b9293043f9feb5d9e427b74bac54d182bb92b49a2d86afe49d06"
+          "sha256": "c95f8d397726669ad1ac590766b56763ad16be9275600f2809a56fdffc8b0131"
         },
         {
           "kind": "code",
@@ -851,13 +858,13 @@
           "sha256": "befda1bd125177423044f6f94763d2eeec0bf9ed0599de1ac5e8bbbdd1c91c04"
         }
       ],
-      "code_digest": "36b0f83dc093129fc61bc9641ed57a754e64de602d5832c62c68aa0f2f7f06a6",
+      "code_digest": "b5f1d63b34b9e562fd687cd51b6d8b116684dc6927c35ea9dac488e4d21b5e7e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "评论采样、评论人身份、历史去重及事务入库合同未改；queued-video-lib改动限qualification录音分支，collection路径不消费新增SDK31字段。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "e5be1c42916288e73deaf009afa2dc045916aead6d5272a7df5b7742b5803aff",
-        "current_code_digest": "36b0f83dc093129fc61bc9641ed57a754e64de602d5832c62c68aa0f2f7f06a6"
+        "current_code_digest": "b5f1d63b34b9e562fd687cd51b6d8b116684dc6927c35ea9dac488e4d21b5e7e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -961,7 +968,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -984,14 +991,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1008,13 +1015,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "c83e1e4024d79e89d3b34d9dd3a25fb9d044f94c633f4dc0203ee417f515defc",
+      "code_digest": "f022bb3e90924d09b8d2f8c5af16905c72d308be1b8d20790cebfc5ada12868c",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "原同owner清场及释放业务输入输出未改；新增录制取消未知保护仅阻止无法证明停止时错误清场，保留原有安全清场协议。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "b3d3391ce2662152846cf1d1c962b2fa15055ba484b035833c75ea8ba2f36d05",
-        "current_code_digest": "c83e1e4024d79e89d3b34d9dd3a25fb9d044f94c633f4dc0203ee417f515defc"
+        "current_code_digest": "f022bb3e90924d09b8d2f8c5af16905c72d308be1b8d20790cebfc5ada12868c"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1117,14 +1124,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1145,16 +1152,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
+          "sha256": "94985beefcc09c2af4bb8d9f3b7733e7a95a209df953664170c4bdcc032c65eb"
         }
       ],
-      "code_digest": "6d17729529d3722dc679eaa387363aa9c6629d342c100ff2650770611f46a66e",
+      "code_digest": "5837d7db2c6c99dadaa19ae0066bf94555d4488c3051e4bdbf616662ac5a2729",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "原公司评分模型/政策、评论消费与评分结果写账未改；新增capture模块为shared import闭包，103不占手机亦不执行录音分支。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "f3a0deb6b3e8e0ae4ed50e5e932b2bd6873cb74318c1f73baf3852888ef9e0bc",
-        "current_code_digest": "6d17729529d3722dc679eaa387363aa9c6629d342c100ff2650770611f46a66e"
+        "current_code_digest": "5837d7db2c6c99dadaa19ae0066bf94555d4488c3051e4bdbf616662ac5a2729"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1257,14 +1264,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1285,7 +1292,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "5ade9f17f7c8c0dd88198550527c4c1b10d575064220adb3b509a13d3ca3e307"
+          "sha256": "94985beefcc09c2af4bb8d9f3b7733e7a95a209df953664170c4bdcc032c65eb"
         },
         {
           "kind": "code",
@@ -1337,13 +1344,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "5f75f41d8d3662bceaa847d465c889b174cae6ccbccd5e7ad6269a431e8049c2",
+      "code_digest": "cccd332db1d732f16051d396119f164f76a18a56b5612da5d595c19c7d2b9136",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "评分后线索标记标准、输入输出与持久化未改；共享异常终止和账本失败优先逻辑只防止假成功，不更改标记业务策略。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "ee4d11342fd7b599c6fa812d429a420fd82228c9c7c4a0cdc156ee6d2e83f496",
-        "current_code_digest": "5f75f41d8d3662bceaa847d465c889b174cae6ccbccd5e7ad6269a431e8049c2"
+        "current_code_digest": "cccd332db1d732f16051d396119f164f76a18a56b5612da5d595c19c7d2b9136"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1447,7 +1454,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -1471,21 +1478,21 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1530,13 +1537,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ddae351425dfb28f0da746ae3422be06d0abda6448fee3d4cc24adb2c365c50d",
+      "code_digest": "1c29686077aa411f0f9cd23a674d724a3bcbba45220ac14dd64035b89fb8327d",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公司/设备/账号/锁预检业务输入输出未改；共享录音分支不在预检路径，child身份及执行未知阻断仅加强已声明所有权和终止证明。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "0b0155f3d2fcf5f0a07b448e4771b19f21e44efe5bbbeea5e7a9ad75f5ba3e28",
-        "current_code_digest": "ddae351425dfb28f0da746ae3422be06d0abda6448fee3d4cc24adb2c365c50d"
+        "current_code_digest": "1c29686077aa411f0f9cd23a674d724a3bcbba45220ac14dd64035b89fb8327d"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1639,7 +1646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -1660,14 +1667,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1698,13 +1705,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "5d548e857c81049ea8bcc4ed8516ae56cb471ed9af5e5c3ad6249267088a9817",
+      "code_digest": "239d9c1b51e69ad33e6959855f55a2e84c194dc79e38b326c726627f4af133fd",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "发送授权、原生目标身份、批准话术及发送写回合同未改；录音SDK31分支不在发送路径，旧执行未停时保资源限制与既有Skill边界一致。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "30740f279dacdccb29e5d755b99d2f138ab181bbfc5cc4027c6a89a9f3928cd2",
-        "current_code_digest": "5d548e857c81049ea8bcc4ed8516ae56cb471ed9af5e5c3ad6249267088a9817"
+        "current_code_digest": "239d9c1b51e69ad33e6959855f55a2e84c194dc79e38b326c726627f4af133fd"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1807,7 +1814,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -1828,14 +1835,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1866,13 +1873,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "5d548e857c81049ea8bcc4ed8516ae56cb471ed9af5e5c3ad6249267088a9817",
+      "code_digest": "239d9c1b51e69ad33e6959855f55a2e84c194dc79e38b326c726627f4af133fd",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "真实触达回执到业务写回的输入输出、幂等与身份范围未改；共享录音能力与新增capture模块不进入该活动执行路径。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "30740f279dacdccb29e5d755b99d2f138ab181bbfc5cc4027c6a89a9f3928cd2",
-        "current_code_digest": "5d548e857c81049ea8bcc4ed8516ae56cb471ed9af5e5c3ad6249267088a9817"
+        "current_code_digest": "239d9c1b51e69ad33e6959855f55a2e84c194dc79e38b326c726627f4af133fd"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1976,7 +1983,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a95f3f706f781653069048730f254b54b1923dd419b8ea0bd055848d23bbaa18"
+          "sha256": "b721ef6fe2131047904607e5284d5024315fca973ac5b76f99c98ff5c19a5273"
         },
         {
           "kind": "code",
@@ -1999,14 +2006,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "b60a0adf3a1cd1625bb796d2bdcef50be30786c3c68cefab4d8f59112dde366a"
+          "sha256": "e85f8c99264a847233f33e5efcc5d5ed60752e6fa5f06d8d80d9d7c25b7f0379"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "eb7a6802b56f11c3749276471dbd8513a5b118c172194905b3a47628f9c5f0f9"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -2037,13 +2044,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "3d2b335d43ca10d7f312256fc3d64d60d67023ec2c51b6045781487cf6227742",
+      "code_digest": "8e8644846ab13bf871732d0d5fa07668875c6d5f0cb59f94702b3c6f76c14d50",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "原同owner清场及释放业务输入输出未改；新增录制取消未知保护仅阻止无法证明停止时错误清场，保留原有安全清场协议。",
-        "reviewed_by": "codex-sdk31_nonce_repair_review",
+        "reviewed_by": "codex-sdk31_nonce_repair_review; cloud_adb_auth_audit",
         "previous_code_digest": "08427ead63b19f85fb90e58af21236ea3fe1cd146d799687fc65a5b9e6c3f6e1",
-        "current_code_digest": "3d2b335d43ca10d7f312256fc3d64d60d67023ec2c51b6045781487cf6227742"
+        "current_code_digest": "8e8644846ab13bf871732d0d5fa07668875c6d5f0cb59f94702b3c6f76c14d50"
       }
     }
   },
@@ -2051,9 +2058,9 @@
     "douyin_video_discovery": {
       "workflow_skill": {
         "name": "douyin-leadgen-101",
-        "version": "0.2.1",
+        "version": "0.2.3",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/SKILL.md",
-        "sha256": "9ccb0f2718a940c94f5e9d81c1985d94c730828155fecd303c176edef90f3417",
+        "sha256": "c158f96953cc2e77264a57d84665f631dc62cdbd3936c451c14eb38cce5fb06b",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
@@ -2065,18 +2072,18 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/runtime-calls.json",
-            "sha256": "12f952eb779494afa6e7d9b05f184fff6e7e91eda14b95823f22f7e43b561f6f"
+            "sha256": "8c965bf043884d3afbd2beaf9ae558b17bb88ff4c1018d2599fdd464fcd2d710"
           }
         ],
-        "content_digest": "937a67f33485e78a31b166e254453d3c08b0015d060dd36b6215b3f8f6d42500"
+        "content_digest": "938bc17f898edabbdeaa529769ae6cbfdc7253d22ba6d7d8a31f7843df4c4fef"
       },
       "commander_skill": {
         "name": "wf-douyin_video_discovery",
-        "version": "0.2.1",
+        "version": "0.2.3",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_discovery/SKILL.md",
-        "sha256": "dabcd6f5cf0ffcde9c55e021358d5a622ad3c6cb7e2aeeb026d797fb0bb62196",
+        "sha256": "57180d019493d7cb80a013fe39a2797a7d7bed819b4befde1277fdfa8a0f6689",
         "support_files": [],
-        "content_digest": "c87c2a4f6b6ca1310277d0253f2a29337214ccea8e83c67f58d81c1af68ec729"
+        "content_digest": "0917e847e81fe1e84339d0d39460de2e046ab27cf98e30c182fcca50afe986a7"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
@@ -2108,7 +2115,7 @@
         "name": "douyin-leadgen-102",
         "version": "0.2.3",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "4728141f32ad57a1bab231302f5b369eefdca5cc35a8bf0991b0d5ba2f9531b5",
+        "sha256": "fa2c4769ea6521dcff452553cd1fd161af9f8e509270ea8562b4911c1eac665a",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
@@ -2120,10 +2127,10 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/runtime-calls.json",
-            "sha256": "7bb1f683289234590a78a793f639903e48d29e2a4f6e5b9028b9dc0895ee1b1c"
+            "sha256": "9a50340ecdb58dbbb3dbea25b58e17584a8aa3befde40b5cd97b115a48ea8380"
           }
         ],
-        "content_digest": "48c3fbf552ec0af79f6bda38e99d2c522255a3e923143969825deec17aa1c2d4"
+        "content_digest": "bd0add720395b361c863a7acc3b2b201531a7da6600837bc1fd147a69889a416"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
@@ -2222,9 +2229,9 @@
     "douyin_lead_outreach": {
       "workflow_skill": {
         "name": "douyin-leadgen-104",
-        "version": "0.2.1",
+        "version": "0.2.3",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-104/SKILL.md",
-        "sha256": "e7e55f8ef4777f742bbfff29bea2338c9c23edd3e4b66af778241af4d9821bd7",
+        "sha256": "0406d1d378b0535217a4c8bc19074bcc2f51e8cdd3c313131c20572ffa1ff3f2",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/activity-methods.json",
@@ -2236,18 +2243,18 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/runtime-calls.json",
-            "sha256": "964a1bc4bf8ca344ba2f58edb1da801c6782b4d4339a29b177656d35b82fcaba"
+            "sha256": "afde0eb690ecb4aa8b6b806ef3050bf67df5b769fc1ff3ddc6fabc61eeb35101"
           }
         ],
-        "content_digest": "f1812bcfc4a468e85ec8eec1b5db07945d20e091dea7ca3bd18de052aa35336f"
+        "content_digest": "c73e51cf175e05f66faa6c2599372a3394a480fffbfb1d00781b345276795229"
       },
       "commander_skill": {
         "name": "wf-douyin_lead_outreach",
-        "version": "0.2.1",
+        "version": "0.2.3",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_lead_outreach/SKILL.md",
-        "sha256": "742606f4462fc53971a6e0344fd34997a1ff48e16cd8d9214832451721e1247c",
+        "sha256": "e185bfa02f499f941d57282a2ffb61d7dea12400493daeaeb2c1389e826298e0",
         "support_files": [],
-        "content_digest": "3de81f6aac5fff2d82a42e35da47573cd879055b8063897319b4c1e500729999"
+        "content_digest": "1446cf9b2d110215f6e5d63c95132f5d92c5fc1b66f779d32206fd113f51a1d6"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-104/references/activity-methods.json",
