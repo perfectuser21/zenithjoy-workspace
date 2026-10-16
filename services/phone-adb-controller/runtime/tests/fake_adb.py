@@ -20,6 +20,15 @@ script = args[8].replace('/data/local/tmp/', str(root) + '/')
 mode = os.environ.get('FAKE_ADB_MODE')
 if 'head -c' in script and mode == 'hang-upload':
     time.sleep(30)
+if 'ln ' in script and mode == 'deny-hardlink':
+    sys.stderr.write('ln: Permission denied\n')
+    raise SystemExit(1)
+if 'head -c' in script and mode == 'canonical-race':
+    (root / 'scrcpy-server.jar').write_bytes(b'foreign-canonical-race')
+if 'head -c' in script and mode == 'canonical-symlink-race':
+    protected = root / 'protected-server'
+    protected.write_bytes(b'foreign-protected')
+    (root / 'scrcpy-server.jar').symlink_to(protected)
 if 'ln ' in script and mode == 'publish-race':
     (root / 'scrcpy-server.jar').write_bytes(b'foreign-race')
 toybox = root / 'toybox'

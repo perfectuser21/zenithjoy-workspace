@@ -125,6 +125,66 @@ class RuntimeKindTests(RuntimeFixture):
         self.assertEqual((self.remote / 'scrcpy-server.jar').read_bytes(), self.server)
         self.assertNotIn('head -c', self.log.read_text())
 
+    def test_sdk33_direct_noclobber_works_where_hardlink_is_forbidden(self):
+        os.environ['FAKE_ADB_MODE'] = 'deny-hardlink'
+        result = self.runtime.stage_server(**self.config33())
+        self.assertTrue(result['verified'], result)
+        self.assertEqual(result['mode'], 'fixed_byte_canonical_noclobber')
+        self.assertNotIn('temporary_path', result)
+        self.assertEqual((self.remote / 'scrcpy-server.jar').read_bytes(), self.server33)
+        calls = self.log.read_text()
+        self.assertNotIn('"ln ', calls)
+        self.assertNotIn('"rm ', calls)
+        raw = json.loads(Path(result['stage_receipt']).read_text())
+        self.assertEqual(raw['write_target'], '/data/local/tmp/scrcpy-server.jar')
+        self.assertEqual(raw['staging_mode'], 'canonical_noclobber')
+
+    def test_sdk31_hardlink_failure_does_not_fallback_to_direct_canonical(self):
+        os.environ['FAKE_ADB_MODE'] = 'deny-hardlink'
+        result = self.stage()
+        self.assertFalse(result['verified'])
+        self.assertFalse((self.remote / 'scrcpy-server.jar').exists())
+        self.assertIn('temporary_path', result)
+        self.assertIn('"ln ', self.log.read_text())
+
+    def test_sdk33_canonical_race_is_known_noclobber_refusal(self):
+        os.environ['FAKE_ADB_MODE'] = 'canonical-race'
+        result = self.runtime.stage_server(**self.config33())
+        self.assertFalse(result['verified'])
+        self.assertFalse(result['execution_stop_unknown'], result)
+        self.assertEqual((self.remote / 'scrcpy-server.jar').read_bytes(), b'foreign-canonical-race')
+        self.assertNotIn('temporary_path', result)
+        self.assertNotIn('"rm ', self.log.read_text())
+
+    def test_sdk33_symlink_race_cannot_overwrite_or_delete_foreign(self):
+        os.environ['FAKE_ADB_MODE'] = 'canonical-symlink-race'
+        result = self.runtime.stage_server(**self.config33())
+        self.assertFalse(result['verified'])
+        self.assertFalse(result['execution_stop_unknown'], result)
+        self.assertTrue((self.remote / 'scrcpy-server.jar').is_symlink())
+        self.assertEqual((self.remote / 'protected-server').read_bytes(), b'foreign-protected')
+        self.assertNotIn('"rm ', self.log.read_text())
+
+    def test_sdk33_corrupt_canonical_is_retained_unknown_and_never_deleted(self):
+        os.environ['FAKE_ADB_MODE'] = 'corrupt'
+        result = self.runtime.stage_server(**self.config33())
+        self.assertFalse(result['verified'])
+        self.assertTrue(result['execution_stop_unknown'], result)
+        self.assertEqual((self.remote / 'scrcpy-server.jar').read_bytes(), b'corrupt')
+        self.assertNotIn('"rm ', self.log.read_text())
+
+    def test_sdk33_upload_timeout_journal_has_actual_write_target_and_retains(self):
+        os.environ['FAKE_ADB_MODE'] = 'hang-upload'
+        config = self.config33();config['timeout'] = .4
+        result = self.runtime.stage_server(**config)
+        self.assertFalse(result['verified'])
+        self.assertTrue(result['execution_stop_unknown'])
+        receipt = json.loads(Path(result['stage_receipt']).read_text())
+        self.assertEqual(receipt['write_target'], '/data/local/tmp/scrcpy-server.jar')
+        self.assertEqual(receipt['staging_mode'], 'canonical_noclobber')
+        self.assertNotIn('temporary_path', receipt)
+        self.assertNotIn('"rm ', self.log.read_text())
+
     def shim_env(self, kind='sdk33'):
         config = self.config33()
         return {'ZJ_SCRCPY_RUNTIME_KIND': kind, 'ZJ_SCRCPY_RUNTIME_ROOT': str(self.sdk33),
