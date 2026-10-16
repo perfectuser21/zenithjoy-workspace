@@ -1,0 +1,13 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import http,{type RequestListener,type Server} from 'node:http';
+import {readVerificationTasks,type VerificationTrust} from './company-verification-brain';
+const C='22222222-2222-4222-8222-222222222222',V='33333333-3333-4333-8333-333333333333';
+const servers:Server[]=[];
+async function listen(handler:RequestListener){const s=http.createServer(handler);servers.push(s);await new Promise<void>(r=>s.listen(0,'127.0.0.1',r));const addr=s.address();if(!addr||typeof addr==='string')throw Error('test server failed');return `http://127.0.0.1:${addr.port}`;}
+afterEach(async()=>{vi.unstubAllEnvs();for(const s of servers.splice(0)){s.closeAllConnections();await new Promise<void>(r=>s.close(()=>r()));}});
+const trust=(base:string):VerificationTrust=>({base,token:'test-only-server-secret',revision:'a'.repeat(40),collectors:['collector'],validators:['validator']});
+it('真实HTTP重定向不能把Bearer转发到其他origin',async()=>{let leaked=0;const other=await listen((_q,s)=>{leaked++;s.end('{}');});const base=await listen((_q,s)=>{s.writeHead(302,{Location:other+'/private'});s.end();});await expect(readVerificationTasks([C,V],trust(base))).rejects.toThrow();expect(leaked).toBe(0);});
+it('真实HTTP超过256KiB任务响应拒绝',async()=>{const base=await listen((_q,s)=>{s.setHeader('Content-Type','application/json');s.end(JSON.stringify({id:'capture',result:'x'.repeat(270000)}));});await expect(readVerificationTasks([C,V],trust(base))).rejects.toThrow();});
+it('固定origin不采用环境代理转发server凭据',async()=>{let proxied=0,origin=0;const proxy=await listen((_q,s)=>{proxied++;s.setHeader('Content-Type','application/json');s.end('{}');});const base=await listen((q,s)=>{origin++;expect(q.headers.authorization).toBe('Bearer test-only-server-secret');s.setHeader('Content-Type','application/json');s.end(JSON.stringify({id:q.url?.split('/').pop()}));});vi.stubEnv('HTTP_PROXY',proxy);vi.stubEnv('http_proxy',proxy);vi.stubEnv('NO_PROXY','');vi.stubEnv('no_proxy','');await readVerificationTasks([C,V],trust(base));expect(proxied).toBe(0);expect(origin).toBe(2);});
+
+it.each(['../private','https://attacker.example/task','abc?token=x','%2f..%2fsecret','not-a-uuid'])('client拒绝非法taskID %s且零网络请求',async id=>{let requests=0;const base=await listen((_q,s)=>{requests++;s.end('{}');});await expect(readVerificationTasks([id,V],trust(base))).rejects.toThrow();expect(requests).toBe(0);});

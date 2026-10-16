@@ -2,7 +2,7 @@
 name: douyin-leadgen-104
 description: 执行已授权抖音获客104线索触达与写回，核对公司、发送账号、原生目标身份及批准话术。用于独立消费合格队列或代码异常接手；结果未知先读回，同一动作不重复发送。
 metadata:
-  version: 0.2.1
+  version: 0.2.3
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-104/references/reuse-map.json
@@ -18,10 +18,10 @@ metadata:
 
 本工作流的方法依赖真身见[Activity方法清单](references/activity-methods.json)。执行指定Activity时，按本轮冻结 `activities[].implementations` 的真实name/version/source/digest及execution_path加载对应独立Skill；不能把本工作流Skill当作每个Activity的同一份方法。
 
-- `douyin_lead_outreach.preflight` → `douyin-leadgen-activity-104-preflight@0.1.0`。
-- `douyin_lead_outreach.send_dm` → `douyin-leadgen-activity-104-send-dm@0.1.0`。
-- `douyin_lead_outreach.write_back` → `douyin-leadgen-activity-104-write-back@0.1.0`。
-- `douyin_lead_outreach.cleanup` → `douyin-leadgen-activity-104-cleanup@0.1.0`。
+- `douyin_lead_outreach.preflight` → `douyin-leadgen-activity-104-preflight@0.1.1`。
+- `douyin_lead_outreach.send_dm` → `douyin-leadgen-activity-104-send-dm@0.1.1`。
+- `douyin_lead_outreach.write_back` → `douyin-leadgen-activity-104-write-back@0.1.1`。
+- `douyin_lead_outreach.cleanup` → `douyin-leadgen-activity-104-cleanup@0.1.1`。
 
 Activity方法、支持文件或合同改变时，更新对应方法版本、所有消费者清单、本工作流Skill与Commander Skill版本；纯代码内部兼容优化用明确兼容评估绑定前后代码集合。先跑 `npm run leadgen:methods:check`，再做相应独立验收。方法配套完成不表示单Activity执行权交接已经接通。
 
@@ -69,3 +69,5 @@ Commander 接到异常时先核原动作的外部结果、执行权与剩余期�
 ## 单Activity受控接手
 
 当前源码提供 `leadgen-activity-v1`：仅在原冻结run内Code失败与有限安全重试之后，由真实work-commander父会话派官方Skill child，使用原run私有broker逐Activity接手。`activity-skill-tool.mjs` 不是新任务启动器；inspect/受限phone/一次当前slot resume均受同源方法、绑定、资源和截止约束。子会话终态未知保锁，发送未知只读回。最后仍由原独立verify与持久读回决定成功，不以Agent自述或CLI exit0替代验收。当前源码存在不等于实机接手已验收，具体状态查看当前任务事件与发布观测。
+
+MMV手机执行按[当前调用映射](references/runtime-calls.json)显式设置 `LEADGEN_MMV_DEVICE_RUNTIME=1`，核本机唯一启用的profile/serial和既有ADB端口。随后仍须原公司冻结资料、verified账号/设备绑定及手机当前账号全部通过；公司draft、缺登记或桥未就绪即停，不借金诺或其他租户配置兜底。该设备入口不扩大本轮输入、预算或发送授权。

@@ -1,6 +1,6 @@
 ---
 name: wf-douyin_lead_outreach
-version: 0.2.1
+version: 0.2.3
 description: "抖音线索触达 wf_run 陪跑说明：显式加载本次冻结业务Skill，保持原合同与安全交接边界。"
 ---
 

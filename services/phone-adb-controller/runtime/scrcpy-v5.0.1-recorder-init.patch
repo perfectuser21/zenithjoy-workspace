@@ -1,0 +1,92 @@
+diff --git a/app/src/recorder.c b/app/src/recorder.c
+index 1d819ee..e8433d5 100644
+--- a/app/src/recorder.c
++++ b/app/src/recorder.c
+@@ -144,6 +144,7 @@ sc_recorder_open_output_file(struct sc_recorder *recorder) {
+     char *file_url = sc_str_concat("file:", recorder->filename);
+     if (!file_url) {
+         avformat_free_context(recorder->ctx);
++        recorder->ctx = NULL;
+         return false;
+     }
+ 
+@@ -152,6 +153,7 @@ sc_recorder_open_output_file(struct sc_recorder *recorder) {
+     if (ret < 0) {
+         LOGE("Failed to open output file: %s", recorder->filename);
+         avformat_free_context(recorder->ctx);
++        recorder->ctx = NULL;
+         return false;
+     }
+ 
+@@ -168,6 +170,7 @@ static void
+ sc_recorder_close_output_file(struct sc_recorder *recorder) {
+     avio_close(recorder->ctx->pb);
+     avformat_free_context(recorder->ctx);
++    recorder->ctx = NULL;
+ }
+ 
+ static inline bool
+@@ -453,12 +456,7 @@ end:
+ 
+ static bool
+ sc_recorder_record(struct sc_recorder *recorder) {
+-    bool ok = sc_recorder_open_output_file(recorder);
+-    if (!ok) {
+-        return false;
+-    }
+-
+-    ok = sc_recorder_process_packets(recorder);
++    bool ok = sc_recorder_process_packets(recorder);
+     sc_recorder_close_output_file(recorder);
+     return ok;
+ }
+@@ -647,6 +645,10 @@ sc_recorder_audio_packet_sink_open(struct sc_packet_sink *sink,
+     assert(!recorder->audio_init);
+ 
+     sc_mutex_lock(&recorder->mutex);
++    if (recorder->stopped) {
++        sc_mutex_unlock(&recorder->mutex);
++        return false;
++    }
+ 
+     AVStream *stream = avformat_new_stream(recorder->ctx, NULL);
+     if (!stream) {
+@@ -790,6 +792,7 @@ sc_recorder_init(struct sc_recorder *recorder, const char *filename,
+     sc_recorder_stream_init(&recorder->audio_stream);
+ 
+     recorder->format = format;
++    recorder->ctx = NULL;
+ 
+     assert(cbs && cbs->on_ended);
+     recorder->cbs = cbs;
+@@ -828,10 +831,18 @@ error_free_filename:
+ 
+ bool
+ sc_recorder_start(struct sc_recorder *recorder) {
+-    bool ok = sc_thread_create(&recorder->thread, run_recorder,
++    // Demuxer sinks may open as soon as this function returns. Initialize the
++    // shared context/output synchronously before exposing the recorder.
++    bool ok = sc_recorder_open_output_file(recorder);
++    if (!ok) {
++        return false;
++    }
++
++    ok = sc_thread_create(&recorder->thread, run_recorder,
+                                "scrcpy-recorder", recorder);
+     if (!ok) {
+         LOGE("Could not start recorder thread");
++        sc_recorder_close_output_file(recorder);
+         return false;
+     }
+ 
+diff --git a/app/src/util/log.c b/app/src/util/log.c
+index 470f1e6..f0d7845 100644
+--- a/app/src/util/log.c
++++ b/app/src/util/log.c
+@@ -147,4 +147,6 @@ sc_sdl_log_print(void *userdata, int category, SDL_LogPriority priority,
+     assert(priority < SDL_LOG_PRIORITY_COUNT);
+     const char *prio_name = sc_sdl_log_priority_names[priority];
+     fprintf(out, "%s: %s\n", prio_name, message);
++    // Readiness consumers tail redirected logs while recording is alive.
++    fflush(out);
+ }

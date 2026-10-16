@@ -4681,6 +4681,30 @@ agent_suite:
     deprecation_reason: "旧公司合同允许不受信租户头、空白成功和无CAS写入；被认证租户与版本安全合同取代，原文不改，Line02账号断言已永久迁移"
     note: "Sprint 合约验收测试：GET/PUT company-profile + GET account-status + collect/start 主账号检查 + collect/:task_id 6字段 + terminal→stage_1_done（PR #949）。"
 
+  - id: api-route-company-account-registration
+    path: apps/api/src/routes/company-account-registration.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "负责人真实session登记disabled账号，精确租户/版本CAS/幂等/全局冲突/审计且不启用政策"
+
+  - id: api-route-company-account-verification
+    path: apps/api/src/routes/company-account-verification.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "消费真实独立Brain双任务，精确身份/来源/时效/一次性历史/版本审计且保持disabled"
+
+  - id: api-company-verification-brain
+    path: apps/api/src/services/company-verification-brain.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 智能获客
+    note: "真实本地HTTP核固定Brain读回，重定向/超时/响应上限和环境代理均拒绝泄露凭据"
+
   - id: api-route-company-profile-unit
     path: apps/api/src/routes/company-profile.test.ts
     type: unit

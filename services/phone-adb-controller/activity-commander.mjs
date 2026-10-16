@@ -68,7 +68,7 @@ export function openRouterCommander({ model = 'google/gemini-2.5-flash', timeout
 }
 
 // Exact producer error names: capability/strategy/evidence gaps are not UI repair requests.
-export const isCaptureContractFailure=evidence=>/\b(?:RECORD_AUDIO_STRATEGY_UNSUPPORTED|RECORD_AUDIO_CAPTURE_UNAVAILABLE|RECORD_AUDIO_TRACK_UNVERIFIED|RECORD_CAPTURE_STRATEGY_UNVERIFIED|RECORD_CAPTURE_SILENT)\b/.test(JSON.stringify(evidence));
+export const isCaptureContractFailure=evidence=>/\b(?:RECORD_AUDIO_STRATEGY_UNSUPPORTED|RECORD_AUDIO_CAPTURE_UNAVAILABLE|RECORD_AUDIO_TRACK_UNVERIFIED|RECORD_CAPTURE_STRATEGY_UNVERIFIED|RECORD_CAPTURE_SILENT|RECORD_AUDIO_DECODE_UNVERIFIED)\b/.test(JSON.stringify(evidence));
 
 export async function runActivity({ activity, context, execute, commander, record, recover }) {
   const cleanup = activity.key === 'cleanup';
@@ -103,7 +103,7 @@ export async function runActivity({ activity, context, execute, commander, recor
     await record({ ...context, activity: activity.key, phase: 'execution', evidence });
     // Parent close after SIGTERM/output truncation does not prove its process group stopped.
     // Do not retry, hand over, or clear resources until an independent stop readback exists.
-    if(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(JSON.stringify(evidence))){
+    if(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(evidence))){
       return {...evidence,status:'failed',execution_stopped:false,commander_status:commanderStatus,decision:{action:'escalate',reason:'原执行者终止未验证，保留资源'}};
     }
     const after = await consult('after', evidence);

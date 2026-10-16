@@ -1,0 +1,1 @@
+原件来源：fixed_audioonly_sdk31_20261016T052826Z/server-ready-recording/continuation-before-{fresh-audio,fresh-uid,uid-owners}.stdout。当前音轨片段直接截取PlaybackActivityMonitor至Audio event log之前；UID文件原字节复制。无改写音轨、UID或静音段。其他故障由测试显式注入。

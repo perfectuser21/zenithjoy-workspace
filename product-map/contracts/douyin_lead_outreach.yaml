@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.2.1
+  version: 0.2.3
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -214,6 +214,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -595,6 +599,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach.mjs
         revision: contract
       - kind: code
@@ -865,6 +873,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach.mjs
         revision: contract
       - kind: code
@@ -1047,6 +1059,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

@@ -13,6 +13,7 @@ import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
+import {assertCaptureStrategy} from './capture-strategy.mjs';
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
 export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine}) {
@@ -104,6 +105,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
+  const mmvDeviceRuntime=env.WFR_HOSTKEY==='mmv'&&env.LEADGEN_MMV_DEVICE_RUNTIME==='1';
+  // MMV入口已核的绝对客户端必须贯穿设备命令，不能再从PATH取另一个adb。
+  const adbClient=mmvDeviceRuntime?(env.DOUYIN_ADB_BIN||'/opt/homebrew/bin/adb'):'adb';
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit};
   let qualificationClaimed=false;const qualificationProgress=new Map(),qualificationAttempts=new Map();
@@ -118,9 +122,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
-      recordDiagnostic(result.stderr||'');return result;
+      recordDiagnostic(result.stderr||'');
+      if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
+      return result;
     } catch(error) {
-      if(error.executionStopped===false||/EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
+      if(error.executionStopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
@@ -145,31 +151,48 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       if(existsSync(flag))return {status:'paused',reason:'私信暂停标记生效',sent:0};
       return {status:'paused',reason:'本批私信未授权，保持暂停',sent:0};
     }
-    if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach') {
+    const mmvStep=mmvDeviceRuntime?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
+    if(mmvStep) {
+      // 101沿原取词入口先冻结归一化taskInputs；不能先以空输入建立同run快照。
+      // getDiscovery只取公司关键词并构造handler，此处不会搜索或执行手机动作。
+      if(mmvStep==='101')await getDiscovery();
+      const config=await queue('company_config',{step:mmvStep,device_binding:{profile,device_serial:serial}});
+      const binding=config?.device_binding;
+      if(!config?.company_id||!config?.tenant_id||!Number.isSafeInteger(config?.version)||config.version<1||config.run_id!==run
+        ||!binding||binding.company_id!==config.company_id||binding.tenant_id!==config.tenant_id||binding.version!==config.version||binding.run_id!==run
+        ||binding.profile!==profile||binding.device_serial!==serial||binding.verification_status!=='verified'||binding.enabled!==true
+        ||typeof binding.douyin_id!=='string'||!binding.douyin_id||binding.douyin_id.trim()!==binding.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: MMV company/run/account binding missing or mismatched');
+      state.company_config={...config,expected_sender:binding.douyin_id};
+      appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
+    } else if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach') {
       state.company_config=await queue('company_config',{step:'104'});
       const account=state.company_config?.runtime_config?.platform_accounts?.find(a=>a.profile===profile&&a.verification_status==='verified'&&a.enabled===true);
       if(!account||account.device_serial!==serial||!account.douyin_id)throw Error(`COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: profile=${profile} expected=${account?.device_serial||'missing'} actual=${serial}`);
       state.company_config.expected_sender=account.douyin_id;
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
-    const device=await checked('adb',['-s',serial,'get-state']);
+    const device=await checked(adbClient,['-s',serial,'get-state']);
     if(device.trim()!=='device')throw Error('设备未在线');
     const target=await phone('preflight');
     if(!target.split('\n').includes(`serial=${serial}`))throw Error('profile注册设备与本次serial不一致');
     const held=await phone('lock-acquire',run);
     if(!/^lock=(acquired|held)/m.test(held))throw Error('设备锁未确认');
     locked=true;
-    const calls=await checked('adb',['-s',serial,'shell','dumpsys','telephony.registry']);
+    const calls=await checked(adbClient,['-s',serial,'shell','dumpsys','telephony.registry']);
     const call=calls.match(/mCallState=(\d+)/)?.[1];if(call!=='0')throw Error('通话状态未知或设备通话中');
-    await checked('adb',['-s',serial,'shell','input','keyevent','KEYCODE_WAKEUP']);
-    await checked('adb',['-s',serial,'shell','input','swipe','600','2200','600','800','300']);
+    await checked(adbClient,['-s',serial,'shell','input','keyevent','KEYCODE_WAKEUP']);
+    await checked(adbClient,['-s',serial,'shell','input','swipe','600','2200','600','800','300']);
     await phone('close-app');
-    await checked('adb',['-s',serial,'shell','am','start','-n','com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity']);
+    await checked(adbClient,['-s',serial,'shell','am','start','-n','com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity']);
     await checked('/bin/sleep',['4']);
     const account=await phone('account-current',`${run}-account`);
     const id=account.match(/^douyin_id=(.+)$/m)?.[1]?.trim();
-    const registry=readFileSync(env.DOUYIN_ACCOUNT_REGISTRY||join(env.HOME,'.config/openclaw/douyin-account-routes.tsv'),'utf8');
-    if(!id||!registry.split('\n').some(s=>{const f=s.split('\t');return f[0]===profile&&f[1]===id;}))throw Error('当前账号未在本profile注册');
+    if(!id)throw Error('当前账号未在本profile注册');
+    // MMV101/102已在首个设备动作前取得本run PG绑定，不要求另维护账号缓存真源。
+    if(!mmvStep){
+      const registry=readFileSync(env.DOUYIN_ACCOUNT_REGISTRY||join(env.HOME,'.config/openclaw/douyin-account-routes.tsv'),'utf8');
+      if(!registry.split('\n').some(s=>{const f=s.split('\t');return f[0]===profile&&f[1]===id;}))throw Error('当前账号未在本profile注册');
+    }
     state.account=id;
     if(state.company_config&&state.company_config.expected_sender!==id)throw Error('COMPANY_ACCOUNT_IDENTITY_MISMATCH');
     const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
@@ -400,10 +423,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
             failures.push({video_id:v.video_id,code:first.exit_code,stage:first.phase,reason:safeExecutionDiagnostic(first.stderr,env).slice(-1500)});
             continue;
           }
-          if(proof.capture_audio_mode!=='playback_dup'||!Number.isSafeInteger(proof.capture_audio_sdk)||proof.capture_audio_sdk<33||proof.capture_audio_required!==true||proof.capture_audio_sdk_evidence_file!==proof.evidence_id+'.capture-sdk.txt'||!/^[a-f0-9]{64}$/.test(proof.capture_audio_sdk_evidence_sha256||''))throw Error('RECORD_CAPTURE_STRATEGY_UNVERIFIED');
-          const captureEnd=proof.capture_audio_end;
-          if(!captureEnd||captureEnd.mode!==proof.capture_audio_mode||captureEnd.sdk!==proof.capture_audio_sdk||captureEnd.required!==true||captureEnd.sdk_evidence_file!==proof.capture_audio_sdk_evidence_file||captureEnd.sdk_evidence_sha256!==proof.capture_audio_sdk_evidence_sha256)throw Error('RECORD_CAPTURE_STRATEGY_UNVERIFIED');
-          if(!Number.isSafeInteger(proof.audio_streams)||proof.audio_streams<1)throw Error('RECORD_AUDIO_TRACK_UNVERIFIED');
+          assertCaptureStrategy(proof);
+          if(proof.capture_audio_mode==='output_pcm_sdk31'&&proof.decoded_audio.requested_seconds!==Number(env.QUEUED_VIDEO_RECORD_SECONDS||25))throw Error('RECORD_AUDIO_DECODE_UNVERIFIED');
           if(proof.capture_audio_verified!==true)throw Error(proof.audio_status==='silent'||Number.isFinite(proof.mean_volume_db)&&proof.mean_volume_db<=-80?'RECORD_CAPTURE_SILENT':'RECORD_CAPTURE_STRATEGY_UNVERIFIED');
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
@@ -412,6 +433,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
             if(p?.state!=='started'||p.package_uid_verified!==true||p.foreign_started!==0||!['uid','pid','piid'].every(k=>Number.isSafeInteger(p[k])&&p[k]>0)
               ||!['evidence','package_uid','uid_owners'].every((k,i)=>p[k+'_file']===prefix+'.'+['audio.txt','package-uid.txt','uid-owners.txt'][i]&&/^[0-9a-f]{64}$/.test(p[k+'_sha256']||'')))throw Error('本轮native音轨或UID/raw证据不符');return p;});
           if(nativePhases[0].uid!==nativePhases[1].uid)throw Error('本轮native音轨UID发生变化');
+          if(proof.capture_audio_mode==='output_pcm_sdk31'){
+            const restored=proof.native_audio_restored,prefix=proof.evidence_id+'-playback-restored';
+            if(!restored||!['started','inactive'].includes(restored.state)||restored.uid!==nativePhases[0].uid||restored.package_uid_verified!==true||restored.foreign_started!==0||!['evidence','package_uid','uid_owners'].every((k,i)=>restored[k+'_file']===prefix+'.'+['audio.txt','package-uid.txt','uid-owners.txt'][i]&&/^[0-9a-f]{64}$/.test(restored[k+'_sha256']||'')))throw Error('RECORD_AUDIO_RESTORE_UNVERIFIED');
+          }
           if(result.code===0&&verdict==='rejected'&&marker[3]==='recording_silent'){
             const receipt=await queue('reject_recording',{video_id:v.video_id,recording:proof});
             if(receipt?.verified!==true||receipt.video_id!==v.video_id||receipt.verdict!=='rejected'||receipt.kind!=='recording_silent')throw Error('本轮录音拒绝缺真实PG回执');
@@ -530,7 +555,7 @@ async function main(){
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
     if(['execution','verification'].includes(r.phase)){
-      const ledgerStatus=['partial','paused','skipped'].includes(r.evidence.result?.status)?'blocked':r.evidence.status;
+      const ledgerStatus=r.evidence.status==='failed'?'failed':[r.evidence.status,r.evidence.result?.status].some(status=>['partial','paused','skipped'].includes(status))?'blocked':r.evidence.status;
       const updated=await execInput(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
         '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
       if(updated.code!==0)throw Error('实际活动账本更新失败');

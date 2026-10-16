@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {withCompanyFixture} from './company-config-fixture.mjs';
 import {createHandlers as rawCreateHandlers} from '../leadgen-workflow.mjs';
 const createHandlers=withCompanyFixture(rawCreateHandlers);
-function native(eid){const sdkFile=eid+'.capture-sdk.txt',sdkSha='b'.repeat(64);return {capture_audio_mode:'playback_dup',capture_audio_sdk:36,capture_audio_required:true,capture_audio_verified:true,audio_streams:1,capture_audio_sdk_evidence_file:sdkFile,capture_audio_sdk_evidence_sha256:sdkSha,capture_audio_end:{mode:'playback_dup',sdk:36,required:true,sdk_evidence_file:sdkFile,sdk_evidence_sha256:sdkSha},playback_proof_kind:'native_audio',native_audio:Object.fromEntries(['start','end'].map(phase=>[phase,{state:'started',uid:10203,pid:528,piid:73615,package_uid_verified:true,foreign_started:0,...Object.fromEntries([['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].flatMap(([k,s])=>[[k+'_file',eid+'-playback-'+phase+'.'+s],[k+'_sha256','a'.repeat(64)]]))}]))};}
+function native(eid){const sdkFile=eid+'.capture-sdk.txt',sdkSha='b'.repeat(64),runtime={client_sha256:'d474146594d6f42ec04eede0049391a647ab27cdcf30c627ac30b281cf5069d7',server_sha256:'8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e',evidence_file:eid+'.capture-runtime.json',evidence_sha256:'e'.repeat(64)};return {capture_runtime:runtime,capture_runtime_end:{...runtime},capture_audio_mode:'playback_dup',capture_audio_sdk:36,capture_audio_required:true,capture_audio_verified:true,audio_streams:1,capture_audio_sdk_evidence_file:sdkFile,capture_audio_sdk_evidence_sha256:sdkSha,capture_audio_end:{mode:'playback_dup',sdk:36,required:true,sdk_evidence_file:sdkFile,sdk_evidence_sha256:sdkSha},playback_proof_kind:'native_audio',native_audio:Object.fromEntries(['start','end'].map(phase=>[phase,{state:'started',uid:10203,pid:528,piid:73615,package_uid_verified:true,foreign_started:0,...Object.fromEntries([['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].flatMap(([k,s])=>[[k+'_file',eid+'-playback-'+phase+'.'+s],[k+'_sha256','a'.repeat(64)]]))}]))};}
 test('actual createHandlers fixture: partial qualification reuses own leases, preserves success and resumes only failed VID',async()=>{
  const d=mkdtempSync(join(tmpdir(),'skill-qualification-')),run='fixture102',vids=['7646309328911907195','7646309328911907196'];let claims=0,repair=false;const calls=[];
  try{
@@ -74,5 +74,21 @@ test('actual original-handler quarantine separately records device marker and ow
   assert.equal(q.op,'quarantine_video');assert.equal(q.run,run);assert.equal(q.video_id,vid);assert.equal(q.line,'jinuo');quarantined++;return {result:{quarantined:true,video_id:vid,process_status:'待人工核验:'+run}};
  },execute:async(cmd,args)=>{if(args.includes('lock-quarantine'))return {code:0,stdout:'lock=quarantined owner=fixture review_required=true\n',stderr:''};throw Error('EXECUTION_OUTPUT_LIMIT');}});
  await assert.rejects(()=>h.qualification(),/EXECUTION_OUTPUT_LIMIT/);const proof=await h.quarantineResources();assert.equal(proof.verified,true);assert.equal(quarantined,1);assert.equal(proof.videos[0].verified,true);assert.deepEqual(JSON.parse(readFileSync(join(d,'resource-quarantine.json'),'utf8')),proof);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+for(const transport of ['returned','thrown'])test('actual recorder termination unknown blocks retry, next VID, Skill and cleanup '+transport,async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');const d=mkdtempSync(join(tmpdir(),'recording-stop-unknown-fixture-'));
+ let actions=0,skills=0,cleanup=0,quarantined=0;
+ try{
+  const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture',P:'fixture',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{
+   if(q.op==='claim_videos')return {result:['7646309328911907195','7646309328911907196'].map(video_id=>({video_id,video_url:'https://www.douyin.com/video/'+video_id,judgment_status:'pending'}))};
+   return {result:{renewed:true}};
+  },execute:async()=>{actions++;if(transport==='thrown')throw Error('RECORD_CAPTURE_EXIT_UNVERIFIED');return {code:2,stdout:'',stderr:'RECORD_CAPTURE_EXIT_UNVERIFIED reason=owned_recorder_stop_unknown'};}});
+  h.cleanup=async()=>{cleanup++;return {done:true};};
+  const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:h,commander:async()=>({action:'retry',reason:'isolated fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',execution_stopped:true};},quarantine:async()=>{quarantined++;return {verified:true};}});
+  assert.equal(actions,1,'cannot record a second VID while the first recorder may remain alive');
+  assert.equal(h.state.executionUnknown,true);assert.equal(skills,0);assert.equal(cleanup,0);assert.equal(quarantined,1);
+  assert.equal(r.results[0].execution_stopped,false);assert.equal(r.results.at(-1).status,'blocked');
  }finally{rmSync(d,{recursive:true,force:true});}
 });

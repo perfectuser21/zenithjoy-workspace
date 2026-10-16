@@ -66,6 +66,33 @@ qv_open(){
   local held
   held="$("$C" --profile "$P" lock-refresh "$TAG" </dev/null)" || return 3
   [[ "$held" == lock=refreshed* ]] || { qv_log 'lock_refresh_unconfirmed'; return 3; }
+  # 显式MMV手机qualification在已核号后冷开目标，避免主页/上一VID音轨残留。
+  # 不猜SDK；此边界不改变M4、identity或collection，不修改唯一音源验收。
+  if [[ "${WFR_HOSTKEY:-}" == mmv && "${LEADGEN_MMV_DEVICE_RUNTIME:-}" == 1 && "$MODE" == qualification ]]; then
+    [[ "$held" == "lock=refreshed owner=$TAG ttl="<->s ]] || { qv_log 'clean_open_owner_unconfirmed'; return 3; }
+    # 只读本profile受管PID；活跃、格式未知或不可读均禁止关闭App，不杀录音进程。
+    python3 - "${DOUYIN_PHONE_TMP_ROOT:-/private/tmp/openclaw-phone}/evidence/$P" <<'PYCLEANOPEN' || { qv_log 'clean_open_capture_not_quiescent'; return 3; }
+import os,sys,stat
+from pathlib import Path
+root=Path(sys.argv[1])
+try:
+ if root.is_symlink():raise ValueError('symlink evidence directory')
+ if root.exists() and not root.is_dir():raise ValueError('invalid evidence directory')
+ for file in root.glob('*.rec.pid'):
+  fd=os.open(file,os.O_RDONLY|os.O_NOFOLLOW)
+  with os.fdopen(fd,'rb') as source:
+   if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):raise ValueError('invalid pid file')
+   raw=source.read(33)
+  if len(raw)>32 or not raw.strip().isdigit():raise ValueError('unknown pid')
+  pid=int(raw.strip())
+  if pid<=1:raise ValueError('invalid pid')
+  try:os.kill(pid,0)
+  except ProcessLookupError:continue
+  raise ValueError('managed recorder active')
+except (OSError,ValueError):sys.exit(1)
+PYCLEANOPEN
+    "$C" --profile "$P" --lock-owner "$TAG" close-app </dev/null >/dev/null || return 4
+  fi
   DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-open" </dev/null >/dev/null || return 4
   DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-identity" || return 4
 }
@@ -79,17 +106,17 @@ qv_qualify(){
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
   if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null 2>"$error_file"; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
-    if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null 2>"$error_file")"; then
+    if started="$("$C" --profile "$P" --lock-owner "$TAG" record-start "$record_eid" "$seconds" </dev/null 2>"$error_file")"; then
       capture_mode="$(print -r -- "$started" | sed -n 's/.*capture_audio_mode=\([^ ]*\).*/\1/p')"
       capture_sdk="$(print -r -- "$started" | sed -n 's/.*capture_audio_sdk=\([^ ]*\).*/\1/p')"
       capture_required="$(print -r -- "$started" | sed -n 's/.*capture_audio_required=\([^ ]*\).*/\1/p')"
-      [[ "$capture_mode" == playback_dup && "$capture_sdk" == <-> && "$capture_required" == true ]] && (( capture_sdk >= 33 )) && capture_ok=1
+      [[ "$capture_sdk" == <-> && "$capture_required" == true ]] && { { [[ "$capture_mode" == playback_dup ]] && (( capture_sdk >= 33 )); } || { [[ "$capture_mode" == output_pcm_sdk31 && "$capture_sdk" == 31 ]]; }; } && capture_ok=1
       media="$(print -r -- "$started" | sed -n 's/.*media_volume=\([^ ]*\).*/\1/p')"
       [[ "$started" == record_started* && "$media" == <-> ]] && (( media > 0 )) && media_ok=1
       playback_start="$(print -r -- "$started" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
       playback_package="$(print -r -- "$started" | sed -n 's/.* playback_package=\([^ ]*\).*/\1/p')"
       qv_nap "$((seconds+2))"
-      stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null 2>"$error_file")" || { first_rc=$?;first_phase=record_stop;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr";stopped=""; }
+      stopped="$("$C" --profile "$P" --lock-owner "$TAG" record-stop "$record_eid" </dev/null 2>"$error_file")" || { first_rc=$?;first_phase=record_stop;first_stderr="$(cat "$error_file")";print -u2 -r -- "$first_stderr";stopped=""; }
       playback_end="$(print -r -- "$stopped" | sed -n 's/.* playback_state=\([^ ]*\).*/\1/p')"
       if python3 - "$started" "$stopped" "$record_eid" <<'PYNATIVEPAIR'
 import sys,re
@@ -112,7 +139,17 @@ import sys,re
 s,e=[dict(x.split('=',1) for x in raw.split() if '=' in x) for raw in sys.argv[1:3]]
 keys=['capture_audio_mode','capture_audio_sdk','capture_audio_required','capture_audio_sdk_evidence_file','capture_audio_sdk_evidence_sha256']
 assert all(s.get(k) and s.get(k)==e.get(k) for k in keys)
-assert s['capture_audio_mode']=='playback_dup' and s['capture_audio_sdk'].isdigit() and int(s['capture_audio_sdk'])>=33 and s['capture_audio_required']=='true'
+assert s['capture_audio_required']=='true' and ((s['capture_audio_mode']=='playback_dup' and s['capture_audio_sdk'].isdigit() and int(s['capture_audio_sdk'])>=33) or (s['capture_audio_mode']=='output_pcm_sdk31' and s['capture_audio_sdk']=='31'))
+keys=['capture_runtime_client_sha256','capture_runtime_server_sha256','capture_runtime_evidence_file','capture_runtime_evidence_sha256']
+assert all(s.get(k) and s.get(k)==e.get(k) for k in keys)
+pins=('2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258','764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536') if s['capture_audio_mode']=='output_pcm_sdk31' else ('d474146594d6f42ec04eede0049391a647ab27cdcf30c627ac30b281cf5069d7','8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e')
+assert (s[keys[0]],s[keys[1]])==pins
+assert s[keys[2]]==sys.argv[3]+'.capture-runtime.json' and re.fullmatch('[a-f0-9]{64}',s[keys[3]])
+if s['capture_audio_mode']=='output_pcm_sdk31':
+ assert e.get('decoded_audio_verified')=='true' and e.get('decoder_exit_code')=='0' and e.get('decoded_audio_sample_rate')=='16000'
+ assert e.get('capture_requested_seconds','').isdigit() and e.get('decoded_audio_samples','').isdigit() and int(e['capture_requested_seconds'])*.8<=int(e['decoded_audio_samples'])/16000<=int(e['capture_requested_seconds'])+3
+ assert e.get('decoded_audio_evidence_file')==sys.argv[3]+'.decode.json' and re.fullmatch('[a-f0-9]{64}',e.get('decoded_audio_evidence_sha256',''))
+ assert e.get('audio_codec')=='pcm_s16le' and e.get('video_streams')=='0' and e.get('audio_streams')=='1'
 assert s['capture_audio_sdk_evidence_file']==sys.argv[3]+'.capture-sdk.txt' and re.fullmatch('[a-f0-9]{64}',s['capture_audio_sdk_evidence_sha256'])
 PYCAPTUREPAIR
         then capture_ok=0;fi
@@ -127,7 +164,7 @@ PYCAPTUREPAIR
         else
           audio_status=usable
           if (( media_ok && playback_ok && capture_ok )) && [[ "$astreams" == <-> ]] && (( astreams >= 1 )); then
-            extracted="$("$C" --profile "$P" record-extract-audio "$record_eid" </dev/null)" || extracted=""
+            extracted="$("$C" --profile "$P" --lock-owner "$TAG" record-extract-audio "$record_eid" </dev/null)" || extracted=""
             audio="$(print -r -- "$extracted" | sed -n 's/^audio_extracted path=\([^ ]*\).*/\1/p')"
           fi
         fi
@@ -153,9 +190,21 @@ p={"version":2,"playback_proof_kind":"native_audio","native_audio":{},"run":run,
 capture_fields=dict(x.split('=',1) for x in started.split() if '=' in x)
 end_fields=dict(x.split('=',1) for x in stopped.split() if '=' in x)
 p['capture_audio_end']={'mode':end_fields.get('capture_audio_mode'),'sdk':int(end_fields.get('capture_audio_sdk','')) if end_fields.get('capture_audio_sdk','').isdigit() else None,'required':end_fields.get('capture_audio_required')=='true','sdk_evidence_file':end_fields.get('capture_audio_sdk_evidence_file'),'sdk_evidence_sha256':end_fields.get('capture_audio_sdk_evidence_sha256')}
+runtime_keys=['client_sha256','server_sha256','evidence_file','evidence_sha256']
+p['capture_runtime']={k:capture_fields.get('capture_runtime_'+k) for k in runtime_keys}
+p['capture_runtime_end']={k:end_fields.get('capture_runtime_'+k) for k in runtime_keys}
+p['video_streams']=int(end_fields['video_streams']) if end_fields.get('video_streams','').isdigit() else None
+p['audio_codec']=end_fields.get('audio_codec')
+p['decoded_audio']={k:number(end_fields.get('decoded_audio_'+k,'')) for k in ('samples','sample_rate','seconds')}
+p['decoded_audio'].update({'verified':end_fields.get('decoded_audio_verified')=='true','decoder_exit_code':number(end_fields.get('decoder_exit_code','')),'requested_seconds':number(end_fields.get('capture_requested_seconds','')),'evidence_file':end_fields.get('decoded_audio_evidence_file'),'evidence_sha256':end_fields.get('decoded_audio_evidence_sha256')})
+p['native_audio_restored']={k:end_fields.get('native_audio_restored_'+k) for k in ('state','evidence_file','evidence_sha256','package_uid_file','package_uid_sha256','uid_owners_file','uid_owners_sha256')}
+p['native_audio_restored'].update({k:number(end_fields.get('native_audio_restored_'+k,'')) for k in ('uid','pid','piid','foreign_started')})
+p['native_audio_restored']['package_uid_verified']=end_fields.get('native_audio_restored_package_uid_verified')=='true'
 p['capture_audio_sdk_evidence_file']=capture_fields.get('capture_audio_sdk_evidence_file')
 p['capture_audio_sdk_evidence_sha256']=capture_fields.get('capture_audio_sdk_evidence_sha256')
-p.update({'capture_audio_mode':capture_mode or None,'capture_audio_sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'capture_audio_required':capture_required=='true','audio_streams':int(astreams) if astreams.isdigit() else None,'capture_audio_verified':capture_mode=='playback_dup' and capture_sdk.isdigit() and int(capture_sdk)>=33 and capture_required=='true' and astreams.isdigit() and int(astreams)>=1 and status=='usable' and p['capture_audio_end']=={'mode':capture_mode,'sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'required':capture_required=='true','sdk_evidence_file':p['capture_audio_sdk_evidence_file'],'sdk_evidence_sha256':p['capture_audio_sdk_evidence_sha256']}})
+pins=('2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258','764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536') if capture_mode=='output_pcm_sdk31' else ('d474146594d6f42ec04eede0049391a647ab27cdcf30c627ac30b281cf5069d7','8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e')
+runtime_ok=(p['capture_runtime']==p['capture_runtime_end'] and (p['capture_runtime']['client_sha256'],p['capture_runtime']['server_sha256'])==pins and p['capture_runtime']['evidence_file']==eid+'.capture-runtime.json' and bool(__import__('re').fullmatch('[a-f0-9]{64}',p['capture_runtime']['evidence_sha256'] or '')))
+p.update({'capture_audio_mode':capture_mode or None,'capture_audio_sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'capture_audio_required':capture_required=='true','audio_streams':int(astreams) if astreams.isdigit() else None,'capture_audio_verified':((capture_mode=='playback_dup' and capture_sdk.isdigit() and int(capture_sdk)>=33) or (capture_mode=='output_pcm_sdk31' and capture_sdk=='31' and p['video_streams']==0 and p['audio_codec']=='pcm_s16le' and astreams=='1')) and runtime_ok and capture_required=='true' and astreams.isdigit() and int(astreams)>=1 and status=='usable' and p['capture_audio_end']=={'mode':capture_mode,'sdk':int(capture_sdk) if capture_sdk.isdigit() else None,'required':capture_required=='true','sdk_evidence_file':p['capture_audio_sdk_evidence_file'],'sdk_evidence_sha256':p['capture_audio_sdk_evidence_sha256']}})
 p['earliest_error']={'phase':first_phase,'exit_code':int(first_rc),'stderr':first_stderr[-4000:]} if first_phase else None
 for phase,raw in [('start',started),('end',stopped)]:
  fields=dict(x.split('=',1) for x in raw.split() if '=' in x)

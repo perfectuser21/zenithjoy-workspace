@@ -1,6 +1,6 @@
 ---
 name: workflow-commander
-version: 2.0.21
+version: 2.0.22
 description: "通用 Commander：接收 Brain 原始 JSON 调度单，核对冻结合同与部署，正式派发 Codex 子会话，持续监督同 run、恢复清理和回执，直到独立核验完成。"
 ---
 
@@ -114,6 +114,6 @@ FAIL/INCONCLUSIVE 返回断言、证据和恢复条件。下个获准 attempt �
 
 当正式leadgen-skill-agent父CLI提供leadgen-activity-v1时，优先处理本节；这是既有冻结run中的失败Activity，不调用wf-launch、wf-agent-run或leadgen-run，不转换新Workflow，也不领/放原run资源。读取指定activity-request及agent-request原件；只调用精确官方内置session_status，不能用Notion等connector的近似名称或tool_search猜别名；真实key必须等于request.parent_session_key。调用本次Source提供的 `node leadgen-skill-agent.mjs claim <本次私有目录>` 校验scope并O_EXCL领取唯一spawn权；已领取而无绑定则只找回原receipt，不再spawn。
 
-使用同一官方sessions_spawn参数及授权模型校验。child任务原样包含request及activity-request（方法Skill与support正文、原Code失败、broker_host/tool/request路径）；上下文隔离，只执行指定slot。child先核agent-binding与自己的session，不能使用裸queue/SQL/原phone自由发送或创建Workflow。其唯一业务工具为原run activity-skill-tool：inspect、受控phone、一次该slot resume；send_dm readback_only不得resume或点击发送。父仍用MMV gateway_exec；child只依据自己本session真实暴露schema选择精确gateway_exec（适配器已固定gateway，不添host）或精确exec且显式host=gateway，缺少或冲突即blocked。不得沿用父工具表或用node_exec/local/auto/connector近似名。只使用本次Source提供的固定command模板；每条先精确核hostname为已登记MMV，再由隔离Python将结构化env转原CLI stdin。工具无stdin字段；env仅用模板固定两键，phone只替换JSON值，不插业务字符串到command，不覆盖PATH/PYTHONPATH/BASH_ENV等环境。入口持久固定本run的surface；结果未知不得换通道重发，process只跟踪同surface实际返回的sessionId，poll超时不证明终止。固定relay自行使用原受管SSH路由，不让模型拼SSH。
+使用同一官方sessions_spawn参数及授权模型校验。child任务原样包含request及activity-request（方法Skill与support正文、原Code失败、broker_host/tool/request路径）；上下文隔离，只执行指定slot。child先核agent-binding与自己的session：只用本session精确官方subagents(action=list)返回的callerIsSubagent===true与callerSessionKey逐字等于binding.child_session_key；binding的run/task/parent/nonce逐项核原request。父session_status规则不继承给child，不拿active列表、模型自报或connector近似工具替代caller字段；缺工具/字段/身份不符仍blocked，不增权限。不能使用裸queue/SQL/原phone自由发送或创建Workflow。其唯一业务工具为原run activity-skill-tool：inspect、受控phone、一次该slot resume；send_dm readback_only不得resume或点击发送。父仍用MMV gateway_exec；child只依据自己本session真实暴露schema选择精确gateway_exec（适配器已固定gateway，不添host）或精确exec且显式host=gateway，缺少或冲突即blocked。不得沿用父工具表或用node_exec/local/auto/connector近似名。只使用本次Source提供的固定command模板；每条先精确核hostname为已登记MMV，再由隔离Python将结构化env转原CLI stdin。工具无stdin字段；env仅用模板固定两键，phone只替换JSON值，不插业务字符串到command，不覆盖PATH/PYTHONPATH/BASH_ENV等环境。入口持久固定本run的surface；结果未知不得换通道重发，process只跟踪同surface实际返回的sessionId，poll超时不证明终止。固定relay自行使用原受管SSH路由，不让模型拼SSH。
 
 原官方spawn receipt原样保存到spawn-receipt.json，resolvedProvider必须精确openai，resolvedModel仅接受精确openai/gpt-6.1-sol或兼容裸名gpt-6.1-sol，不修改原receipt；终态effective.model仍核裸ID gpt-6.1-sol。核验后用本次source提供的commander/wf-agent-handoff.py bind，再await持续官方agent.wait。预算不得重置，父CLI exit0/模型自述不能替代child官方终态。未知/超时精确停止原child并读回；无确证时报告unknown保留原run锁。最终结果由原broker记录的成熟代码返回值和原独立verify决定，不由child输出JSON改写闭包/账本。

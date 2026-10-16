@@ -737,13 +737,16 @@ done
 #  die 会误伤真·无声视频,打点则让新机型翻车当场可见。)
 _RSTOP_BODY="$(sed -n '/^record_stop()/,/^}/p' "$C")"
 grep -q 'mean_volume_db=' <<< "$_RSTOP_BODY" || fail "record_stop 的输出行没有 mean_volume_db 打点(新机型录到死寂会静默通过)"
-# 下面两条必须锚定到 mean_db 赋值语句本身,不能在整个函数体里 grep——
-# 0924 自查实锤: 在函数体里 grep 'volumedetect' 会命中注释里的这个词、
-# grep '|| true' 会命中 record_stop 原有的 ffprobe 行,两条守卫双双假绿。
-_MDB_STMT="$(awk '/mean_db="\$\(/{f=1} f{print; if (!/\\$/) exit}' <<< "$_RSTOP_BODY")"
-[[ -n "$_MDB_STMT" ]] || fail "record_stop 找不到 mean_db=\"\$(...)\" 赋值语句(电平不是实测出来的?)"
-grep -q 'volumedetect' <<< "$_MDB_STMT" || fail "mean_db 不是用 ffmpeg volumedetect 实测的(写死值=假打点,新机型翻车照样看不见)"
-grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || true(set -e 下 ffmpeg 一失败就打死整个控制器,连 record_stopped 都发不出去)"
+# SDK33保留内联volumedetect；SDK31由真实decoder返回电平和样本证明。
+# 分别锚定实际赋值及decoder调用，不能让注释或另一分支替代证明。
+_MDB_STMT="$(awk '/mean_db="\$\("\$FFMPEG"/{f=1} f{print; if (!/\\$/) exit}' <<< "$_RSTOP_BODY")"
+[[ -n "$_MDB_STMT" ]] || fail "record_stop 缺SDK33实测电平赋值"
+grep -q 'volumedetect' <<< "$_MDB_STMT" || fail "SDK33 mean_db 不是用ffmpeg volumedetect实测"
+grep -q '|| true' <<< "$_MDB_STMT" || fail "SDK33电平探测失败缺有界输出保护"
+grep -qF 'decoded_fields="$("$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/decode-recording.py" --media "$out" --ffmpeg "$FFMPEG" --requested-seconds "$requested" --evidence-file "$EVIDENCE_ROOT/$eid.decode.json")" || die RECORD_AUDIO_DECODE_UNVERIFIED' <<< "$_RSTOP_BODY" || fail "SDK31电平未绑定真实decoder成功读回"
+grep -qF 'mean_db="$(print -r -- "$decoded_fields" | sed' <<< "$_RSTOP_BODY" || fail "SDK31电平未消费decoder结果"
+grep -qF "'-af','volumedetect'" "$D/decode-recording.py" || fail "SDK31 decoder缺实际电平探测"
+node --test "$D/__tests__/decoded-recording.test.mjs" || fail "真实decoder样本/静音/损坏回归未通过"
 # 打点不进日志 = 等于没打
 grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
 
