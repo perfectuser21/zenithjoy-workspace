@@ -12,9 +12,9 @@ const company={company_id:'company-a',tenant_id:'tenant-a',version:7,run_id:run,
 const binding={...company,profile,device_serial:serial,douyin_id:account,verification_status:'verified',enabled:true};
 delete binding.policy_id;
 
-async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',receipt={...company,device_binding:binding},observed=account,rpcImpl}={}){
+async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',receipt={...company,device_binding:binding},observed=account,localRegistry=true,rpcImpl}={}){
  const dir=mkdtempSync(join(tmpdir(),'mmv-company-')),calls=[],requests=[];
- const registry=join(dir,'accounts.tsv');writeFileSync(registry,profile+'\t'+observed+'\n');
+ const registry=join(dir,'accounts.tsv');if(localRegistry)writeFileSync(registry,profile+'\t'+observed+'\n');
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_HOSTKEY:host,LEADGEN_MMV_DEVICE_RUNTIME:flag,WF_BRAIN_WORKFLOW:flow,P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/approved/adb'};
  const h=createHandlers({root:dir,env,rpc:async body=>{const {request}=body;if(request)requests.push(request);if(rpcImpl)return rpcImpl(body);if(body.kind==='keywords')return {result:['AI']};if(receipt instanceof Error)throw receipt;return {result:receipt};},execute:async(command,args)=>{
   calls.push({command,args});let stdout='';
@@ -74,4 +74,11 @@ test('MMV101 preflight preserves the real keyword freeze taskInputs instead of f
  }});
  assert.ifError(r.error);assert.deepEqual(operations,['keywords','company_config']);
  assert.deepEqual(frozenInputs,{keywords:null,limit:2});
+});
+
+test('MMV已核公司PG绑定是账号真源，不要求第二份本机账号缓存',async()=>{
+ const r=await preflight({localRegistry:false});assert.ifError(r.error);assert.equal(r.result.douyin_id,account);
+});
+test('原M4路径仍要求本机账号登记，不能借MMV条件跳过',async()=>{
+ const r=await preflight({host:'xian-m4',flag:'1',localRegistry:false});assert.ok(r.error);
 });
