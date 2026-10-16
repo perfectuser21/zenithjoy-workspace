@@ -5,6 +5,7 @@ import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync,existsSync,statS
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
+import {runInNewContext} from 'node:vm';
 
 const controller=new URL('../douyin-phone-adb',import.meta.url).pathname;
 const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
@@ -491,6 +492,24 @@ if [[ "$*" == *pipe:1* ]]; then /usr/bin/python3 -c 'import sys;sys.stdout.buffe
   rmSync(d,{recursive:true,force:true});
  }
 }
+// Exercise the actual fixture cleanup; only OS process observations and clock are controlled.
+function fixtureCleanupSequence(observations){
+ const source=readFileSync(new URL(import.meta.url),'utf8');
+ const start=source.indexOf('  // Stop and observe this isolated fixture');
+ const end=source.indexOf('\n }\n}\n// Exercise the actual fixture cleanup',start);
+ assert.ok(start>=0&&end>start,'locate the real recordBoundary finally body');
+ let index=0,clock=0;const signals=[],removed=[];
+ const samples={owned:{status:0,stdout:'S /bin/zsh /fixture/scrcpy --record=x\n',stderr:''},unknown:{status:0,stdout:'R (zsh)\n',stderr:''},foreign:{status:0,stdout:'S /foreign/secret-argument\n',stderr:''},gone:{status:1,stdout:'',stderr:''},zombie:{status:0,stdout:'Z (zsh)\n',stderr:''},psError:{status:2,stdout:'',stderr:'sensitive ps diagnostic'}};
+ let error;
+ try{runInNewContext(source.slice(start,end),{d:'/fixture',join,assert,Number,existsSync:()=>true,readFileSync:()=>'4321',spawnSync:(program,args)=>{assert.equal(program,'/bin/ps');assert.deepEqual(Array.from(args),['-ww','-p','4321','-o','stat=,command=']);return samples[observations[Math.min(index++,observations.length-1)]];},process:{kill:(pid,signal)=>signals.push([pid,signal])},rmSync:(path)=>removed.push(path),Date:{now:()=>clock+=250},Atomics:{wait:()=>{}},Int32Array,SharedArrayBuffer});}catch(caught){error=caught;}
+ return {signals,removed,error,reads:index};
+}
+for(const sequence of [['owned','unknown','gone'],['unknown','gone'],['foreign','owned','gone'],['owned','gone'],['owned','zombie'],['psError','gone']])test('fixture退出清理只读等待暂态并仅首次owned可TERM '+sequence.join('→'),()=>{
+ const r=fixtureCleanupSequence(sequence);assert.equal(r.error,undefined,r.error?.stack);assert.deepEqual(r.removed,['/fixture']);assert.deepEqual(r.signals,sequence[0]==='owned'?[[4321,'SIGTERM']]:[]);
+});
+for(const sequence of [['unknown'],['foreign'],['psError'],['owned','foreign']])test('fixture退出清理持久未知必须保目录 '+sequence.join('→'),()=>{
+ const r=fixtureCleanupSequence(sequence);assert.ok(r.error,'persistent unverified exit must fail');assert.deepEqual(r.removed,[]);assert.deepEqual(r.signals,sequence[0]==='owned'?[[4321,'SIGTERM']]:[]);assert.ok(r.reads<20,'same two-second bound');assert.doesNotMatch(r.error.message,/secret-argument|sensitive ps diagnostic/,'do not print foreign argv or raw diagnostics');
+});
 // MediaSession只作诊断，保留严格原值解析；不再要求其PLAYING才代表真实native播放。
 for(const [mediaTarget,expected] of [
  ['com.ss.android.ugc.aweme/FeedPlayerSession/8101','3'],
