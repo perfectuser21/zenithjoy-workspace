@@ -4,6 +4,7 @@ import {mkdtempSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs'
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {pinnedRecordingRuntimeFixture} from './fixtures/pinned-recording-runtime.mjs';
 const ctl=new URL('../douyin-phone-adb',import.meta.url).pathname;
 test('real recording CLI returns its guard, refuses foreign stop and permits owned stop',()=>{
  const d=mkdtempSync(join(tmpdir(),'record-cli-guard-')),owner='probe-capture-owned';let pid;
@@ -30,12 +31,14 @@ while :; do sleep .05; done
  writeFileSync(join(d,'ffprobe'),'#!/bin/sh\ncase "$*" in *format=duration*) echo 5.1;; *"-select_streams a"*) echo audio;; *"-select_streams v"*) echo video;; esac\n',{mode:0o755});
  writeFileSync(join(d,'ffmpeg'),'#!/bin/sh\necho "mean_volume: -35 dB" >&2\n',{mode:0o755});
  const env={...process.env,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_PHONE_TMP_ROOT:join(d,'tmp'),DOUYIN_ADB_BIN:join(d,'adb'),DOUYIN_SCRCPY_BIN:join(d,'scrcpy'),DOUYIN_FFPROBE_BIN:join(d,'ffprobe'),DOUYIN_FFMPEG_BIN:join(d,'ffmpeg'),DOUYIN_PYTHON_BIN:'/usr/bin/python3'};
+ Object.assign(env,pinnedRecordingRuntimeFixture(d,new URL('../runtime/scrcpy-runtime.py',import.meta.url).pathname));
  const run=(...args)=>spawnSync('zsh',[ctl,'--profile','p1',...args],{env,encoding:'utf8',timeout:15000});
  try{
   assert.equal(run('lock-acquire',owner).status,0);
   const start=run('--lock-owner',owner,'record-start','guard-probe','5');
   const pidfile=join(d,'tmp/evidence/p1/guard-probe.rec.pid');if(existsSync(pidfile))pid=Number(readFileSync(pidfile,'utf8'));
   assert.equal(start.status,0,start.stderr);assert.match(start.stdout,/record_started/);
+  assert.deepEqual(readFileSync(join(d,'runtime-calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse).map(x=>[x.command,x.kind]),[['verify','sdk33'],['stage-server','sdk33']]);
   assert.equal(run('lock-refresh',owner).status,0,'background recorder must not retain the bounded command guard FD');
   const foreign=run('--lock-owner','other-owner','record-stop','guard-probe');assert.notEqual(foreign.status,0);assert.ok(pid>1);process.kill(pid,0);
   const stop=run('--lock-owner',owner,'record-stop','guard-probe');assert.equal(stop.status,0,stop.stderr);assert.match(stop.stdout,/record_stopped/);
