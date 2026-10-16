@@ -13,16 +13,15 @@ import subprocess
 import tempfile
 
 
-def check(source, build_dir, pkg_config):
+def check(source, build_dir, pkg_config, sdl_package='sdl3'):
     env = os.environ.copy()
     flags = shlex.split(subprocess.check_output(
-        [pkg_config, '--cflags', '--libs', 'libavutil', 'sdl3'],
+        [pkg_config, '--cflags', '--libs', 'libavutil', sdl_package],
         env=env, text=True))
     with tempfile.TemporaryDirectory(prefix='scrcpy-log-flush-') as temp:
         root = Path(temp)
         binary = root / 'logger'
-        subprocess.run(['clang', '-std=c11', '-D_DARWIN_C_SOURCE',
-                        '-D_GNU_SOURCE', '-D_POSIX_C_SOURCE=200809L',
+        subprocess.run(['clang', '-std=c11',
                         '-I' + str(Path(build_dir) / 'app'),
                         '-I' + str(Path(source) / 'app/src'),
                         str(Path(__file__).with_name('log_flush_regression.c')),
@@ -53,4 +52,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for key in ('source', 'build-dir', 'pkg-config'):
         parser.add_argument('--' + key, required=True)
+    parser.add_argument('--sdl-package', choices=['sdl2', 'sdl3'], default='sdl3')
     check(**vars(parser.parse_args()))
