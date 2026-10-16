@@ -17,7 +17,60 @@ case "$(hostname -s)" in
   *) print -u2 '执行机未登记'; exit 1;;
 esac
 if [[ "$WFR_HOSTKEY" == mmv ]]; then
-  [[ "$WF_ARG_CAP" == douyin_comment_scoring && "$P" == mmv-scoring && "$SERIAL" == none ]] || { print -u2 'MMV只执行独立评论评分，禁止借用手机身份'; exit 1; }
+  if [[ "$WF_ARG_CAP" == douyin_comment_scoring && "$P" == mmv-scoring && "$SERIAL" == none ]]; then
+    : # 原独立评分身份不依赖手机registry或ADB。
+  elif [[ "${LEADGEN_MMV_DEVICE_RUNTIME:-}" == 1 && "$WF_ARG_CAP" != douyin_comment_scoring ]]; then
+    [[ "$P" == [A-Za-z0-9_.-]## && "$P" != mmv-scoring && "$SERIAL" == [A-Za-z0-9_.:-]## && "$SERIAL" != none ]] || { print -u2 'MMV_DEVICE_REGISTRY_INVALID: 手机身份必须显式且精确'; exit 1; }
+    export DOUYIN_PHONE_REGISTRY="${DOUYIN_PHONE_REGISTRY:-$HOME/.config/openclaw/douyin-phone-profiles.tsv}"
+    [[ "$DOUYIN_PHONE_REGISTRY" == /* && -f "$DOUYIN_PHONE_REGISTRY" && -r "$DOUYIN_PHONE_REGISTRY" ]] || { print -u2 'MMV_DEVICE_REGISTRY_INVALID: 当前registry不可读'; exit 1; }
+    # 手机入口不为legacy空enabled猜启用；匹配profile和serial均须在当前表唯一。
+    /usr/bin/awk -F'\t' -v profile="$P" -v serial="$SERIAL" '
+      {sub(/\r$/, "")}
+      $1=="profile" || $1=="#profile" {
+        if(header){bad=1;next}
+        header=1;columns=NF
+        for(i=1;i<=NF;i++){name=$i;sub(/^#/,"",name);if(name==""||seen[name]++)bad=1;c[name]=i}
+        if(c["profile"]!=1||!c["serial"]||!c["enabled"])bad=1
+        next
+      }
+      /^#/ || /^[ \t]*$/ {next}
+      !header {bad=1;next}
+      {
+        if(NF!=columns){bad=1;next}
+        for(i=1;i<=NF;i++)gsub(/^[ \t]+|[ \t]+$/, "", $i)
+        if($(c["profile"])==profile)profiles++
+        if($(c["serial"])==serial)serials++
+        if($(c["profile"])==profile&&$(c["serial"])==serial&&$(c["enabled"])=="true")enabled++
+      }
+      END {if(bad||!header||profiles!=1||serials!=1||enabled!=1)exit 1}
+    ' "$DOUYIN_PHONE_REGISTRY" || { print -u2 'MMV_DEVICE_REGISTRY_BINDING_INVALID: profile/serial须唯一精确enabled'; exit 1; }
+    [[ "${DOUYIN_ADB_PORT:-}" == <-> ]] && (( DOUYIN_ADB_PORT >= 1 && DOUYIN_ADB_PORT <= 65535 )) || { print -u2 'MMV_DEVICE_ADB_ROUTE_INVALID: 缺有效显式既有端口'; exit 1; }
+    [[ "${ADB_SERVER_SOCKET:-}" == "tcp:localhost:$DOUYIN_ADB_PORT" || "${ADB_SERVER_SOCKET:-}" == "tcp:127.0.0.1:$DOUYIN_ADB_PORT" ]] || { print -u2 'MMV_DEVICE_ADB_ROUTE_INVALID: socket与本机既有端口不一致'; exit 1; }
+    # 只读smart-socket，不调用adb及其可能自动start-server的客户端路径。
+    node --input-type=module - "$DOUYIN_ADB_PORT" <<'NODE' || { print -u2 'MMV_DEVICE_ADB_UNAVAILABLE: 既有ADB服务不可确认'; exit 1; }
+import net from 'node:net';
+const socket=net.createConnection({host:'127.0.0.1',port:Number(process.argv[2])});
+let bytes=Buffer.alloc(0),done=false;
+const timer=setTimeout(()=>finish(false),1500);
+function finish(ok){if(done)return;done=true;clearTimeout(timer);socket.destroy();process.exitCode=ok?0:1;}
+socket.on('connect',()=>socket.write('000chost:version'));
+socket.on('error',()=>finish(false));
+socket.on('end',()=>finish(false));
+socket.on('data',chunk=>{
+  bytes=Buffer.concat([bytes,chunk]);
+  if(bytes.length>64)return finish(false);
+  if(bytes.length<8)return;
+  const length=bytes.subarray(4,8).toString();
+  if(bytes.subarray(0,4).toString()!=='OKAY'||!/^\d{4}$/.test(length))return finish(false);
+  const n=Number.parseInt(length,16);if(n<1||n>16)return finish(false);
+  if(bytes.length<8+n)return;
+  const version=bytes.subarray(8,8+n).toString();
+  finish(/^[0-9a-fA-F]+$/.test(version)&&Number.parseInt(version,16)===41);
+});
+NODE
+  else
+    print -u2 'MMV只执行独立评论评分，禁止借用手机身份'; exit 1
+  fi
   export LEADGEN_LOCAL_RPC=1
   export NODE_PATH="$HOME/.openclaw/leadgen-scripts/node_modules:$HOME/.openclaw/node_modules${NODE_PATH:+:$NODE_PATH}"
   if [[ -r "$HOME/.credentials/zenithjoy-db.env" ]]; then set -a; source "$HOME/.credentials/zenithjoy-db.env"; set +a; fi
