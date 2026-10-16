@@ -7,11 +7,12 @@ import { loadContractsFromDisk, validateContracts, commanderContractsSpec, COMMA
 
 const keys = ['douyin_video_discovery', 'douyin_video_processing', 'douyin_comment_scoring', 'douyin_lead_outreach'];
 
-test('四个 wf_run 合同通过原机制加载对应0.2.0陪跑Skill，保留执行边界', () => {
+test('四个 wf_run 合同通过原机制加载当前固定陪跑Skill，保留执行边界', () => {
   const ctx = loadContractsFromDisk();
+  const versions = ['0.2.3', '0.2.4', '0.2.2', '0.2.3'];
   for (const [index, key] of keys.entries()) {
     const doc = ctx.contracts[key];
-    assert.deepEqual(doc.commander_skill, { name: `wf-${key}`, version: key==='douyin_video_processing'?'0.2.2':'0.2.1' }, key);
+    assert.deepEqual(doc.commander_skill, { name: `wf-${key}`, version: versions[index] }, key);
     assert.equal(doc.runner.entry, 'leadgen-workflow.mjs');
     assert.notEqual(doc.execution_profile, 'codex_agent');
     const text = readFileSync(join(ctx.repoRoot, COMMANDER_SKILLS_DIR, doc.commander_skill.name, 'SKILL.md'), 'utf8');
