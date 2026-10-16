@@ -474,20 +474,27 @@ if [[ "$*" == *pipe:1* ]]; then /usr/bin/python3 -c 'import sys;sys.stdout.buffe
   if(existsSync(pidFile)){
    const pid=Number(readFileSync(pidFile,'utf8').trim());assert.ok(Number.isSafeInteger(pid)&&pid>1);
    const inspect=()=>{
-    const result=spawnSync('/bin/ps',['-ww','-p',String(pid),'-o','stat=,command='],{encoding:'utf8'});
-    if(result.status===1&&!result.stdout.trim())return null;
-    assert.equal(result.status,0,result.stderr);
-    const [state,...command]=result.stdout.trim().split(/\s+/);
-    if(state.startsWith('Z'))return null;
-    assert.ok(command.includes(join(d,'scrcpy')),'fixture PID identity changed; do not signal or delete evidence');
-    return state;
+    const result=spawnSync('/bin/ps',['-ww','-p',String(pid),'-o','stat=,command='],{encoding:'utf8',timeout:500});
+    const output=(result.stdout??'').trim();
+    if(result.status===1&&!output)return {kind:'gone',ps_exit:1,matched:false};
+    if(result.status!==0)return {kind:'unverified',ps_exit:result.status??null,matched:false,reason:'ps_error'};
+    const [state,...command]=output.split(/\s+/);
+    if(state.startsWith('Z'))return {kind:'gone',ps_exit:0,matched:false};
+    const matched=command.includes(join(d,'scrcpy'));
+    return {kind:matched?'owned':'unverified',ps_exit:0,matched};
    };
-   if(inspect()){
+   let observation=inspect();
+   // Signal eligibility comes only from the first fresh exact observation.
+   // After TERM (or any unverified observation), only observe: never signal a changed PID.
+   if(observation.kind==='owned'){
     try{process.kill(pid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
-    const deadline=Date.now()+2000;
-    while(inspect()&&Date.now()<deadline)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);
-    assert.equal(inspect(),null,'fixture recorder exit unknown; preserve directory');
    }
+   const deadline=Date.now()+2000;
+   while(observation.kind!=='gone'&&Date.now()<deadline){
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);
+    observation=inspect();
+   }
+   assert.equal(observation.kind,'gone','fixture recorder exit unknown; preserve directory '+JSON.stringify(observation));
   }
   rmSync(d,{recursive:true,force:true});
  }
