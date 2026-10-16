@@ -166,6 +166,39 @@ class RuntimeKindTests(RuntimeFixture):
         self.assertEqual(result['version'], '3.3.4')
         self.assertEqual(result['server_sha256'], self.policy33['server_sha256'])
 
+    def test_sdk33_builder_uses_fixed_patch_sdl2_and_official_tests(self):
+        builder = load(self, 'build-scrcpy-runtime.py')
+        source, build = self.root / 'source', self.root / 'build'
+        (source / 'app/src/util').mkdir(parents=True)
+        log = source / 'app/src/util/log.c'
+        log.write_bytes(b'patched sdk33 logger fixture')
+        patch_file = self.root / 'scrcpy-v3.3.4-log-flush.patch'
+        patch_file.write_bytes(b'approved sdk33 patch fixture')
+        policy = dict(self.policy33, source_commit='a' * 40,
+            source_archive_sha256=hashlib.sha256(b'official sdk33 archive').hexdigest(),
+            patch_sha256=hashlib.sha256(patch_file.read_bytes()).hexdigest(),
+            patched_log_sha256=hashlib.sha256(log.read_bytes()).hexdigest())
+        (self.root / 'runtime-policy-sdk33.json').write_text(json.dumps(policy))
+        calls = []
+        def run(args, **kwargs):
+            calls.append((args, kwargs))
+            if args[:2] == ['meson', 'setup']:
+                (build / 'app').mkdir(parents=True)
+                (build / 'app/scrcpy').write_bytes(self.client33)
+        with patch.object(builder, '__file__', str(self.root / 'build-scrcpy-runtime.py')), \
+             patch.object(builder.subprocess, 'check_output', side_effect=['a' * 40, '', b'official sdk33 archive']), \
+             patch.object(builder.subprocess, 'run', side_effect=run), \
+             patch.dict(os.environ, {'PKG_CONFIG_PATH': '/fixture/private/pkgconfig'}):
+            result = builder.rebuild_candidate(source, build, self.sdk33/'scrcpy-server',
+                'meson', 'ninja', 'pkgconf', runtime_kind='sdk33')
+        self.assertTrue(result['candidate_only'])
+        self.assertTrue(result['approved_pin_matches'])
+        self.assertEqual(calls[0][0][-1], str(patch_file))
+        logger = next(args for args, _ in calls if any(str(v).endswith('test_log_flush.py') for v in args))
+        self.assertEqual(logger[-2:], ['--sdl-package', 'sdl2'])
+        self.assertTrue(any(args[:2] == ['meson', 'test'] for args, _ in calls))
+        self.assertFalse((source / 'app/src/recorder.c').exists(), 'sdk33 must not require SDK31 recorder patch')
+
     def test_builder_rejects_cross_package_or_unknown_kind(self):
         builder = load(self, 'build-scrcpy-runtime.py')
         with patch.object(builder, '__file__', str(self.root / 'build-scrcpy-runtime.py')):
