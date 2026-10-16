@@ -105,6 +105,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
+  const mmvDeviceRuntime=env.WFR_HOSTKEY==='mmv'&&env.LEADGEN_MMV_DEVICE_RUNTIME==='1';
+  // MMV入口已核的绝对客户端必须贯穿设备命令，不能再从PATH取另一个adb。
+  const adbClient=mmvDeviceRuntime?(env.DOUYIN_ADB_BIN||'/opt/homebrew/bin/adb'):'adb';
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit};
   let qualificationClaimed=false;const qualificationProgress=new Map(),qualificationAttempts=new Map();
@@ -148,26 +151,36 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       if(existsSync(flag))return {status:'paused',reason:'私信暂停标记生效',sent:0};
       return {status:'paused',reason:'本批私信未授权，保持暂停',sent:0};
     }
-    if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach') {
+    const mmvStep=mmvDeviceRuntime?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
+    if(mmvStep) {
+      const config=await queue('company_config',{step:mmvStep,device_binding:{profile,device_serial:serial}});
+      const binding=config?.device_binding;
+      if(!config?.company_id||!config?.tenant_id||!Number.isSafeInteger(config?.version)||config.version<1||config.run_id!==run
+        ||!binding||binding.company_id!==config.company_id||binding.tenant_id!==config.tenant_id||binding.version!==config.version||binding.run_id!==run
+        ||binding.profile!==profile||binding.device_serial!==serial||binding.verification_status!=='verified'||binding.enabled!==true
+        ||typeof binding.douyin_id!=='string'||!binding.douyin_id||binding.douyin_id.trim()!==binding.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: MMV company/run/account binding missing or mismatched');
+      state.company_config={...config,expected_sender:binding.douyin_id};
+      appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
+    } else if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach') {
       state.company_config=await queue('company_config',{step:'104'});
       const account=state.company_config?.runtime_config?.platform_accounts?.find(a=>a.profile===profile&&a.verification_status==='verified'&&a.enabled===true);
       if(!account||account.device_serial!==serial||!account.douyin_id)throw Error(`COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: profile=${profile} expected=${account?.device_serial||'missing'} actual=${serial}`);
       state.company_config.expected_sender=account.douyin_id;
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
-    const device=await checked('adb',['-s',serial,'get-state']);
+    const device=await checked(adbClient,['-s',serial,'get-state']);
     if(device.trim()!=='device')throw Error('设备未在线');
     const target=await phone('preflight');
     if(!target.split('\n').includes(`serial=${serial}`))throw Error('profile注册设备与本次serial不一致');
     const held=await phone('lock-acquire',run);
     if(!/^lock=(acquired|held)/m.test(held))throw Error('设备锁未确认');
     locked=true;
-    const calls=await checked('adb',['-s',serial,'shell','dumpsys','telephony.registry']);
+    const calls=await checked(adbClient,['-s',serial,'shell','dumpsys','telephony.registry']);
     const call=calls.match(/mCallState=(\d+)/)?.[1];if(call!=='0')throw Error('通话状态未知或设备通话中');
-    await checked('adb',['-s',serial,'shell','input','keyevent','KEYCODE_WAKEUP']);
-    await checked('adb',['-s',serial,'shell','input','swipe','600','2200','600','800','300']);
+    await checked(adbClient,['-s',serial,'shell','input','keyevent','KEYCODE_WAKEUP']);
+    await checked(adbClient,['-s',serial,'shell','input','swipe','600','2200','600','800','300']);
     await phone('close-app');
-    await checked('adb',['-s',serial,'shell','am','start','-n','com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity']);
+    await checked(adbClient,['-s',serial,'shell','am','start','-n','com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity']);
     await checked('/bin/sleep',['4']);
     const account=await phone('account-current',`${run}-account`);
     const id=account.match(/^douyin_id=(.+)$/m)?.[1]?.trim();
