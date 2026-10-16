@@ -641,11 +641,16 @@ for(const sdkRace of ['symlink','file'])test('SDK evidence atomic creation refus
 // Runs the actual record_start function; only transport/clock are isolated fixtures.
 for(const captureMode of ['no_ready','wrong_path','empty_file','no_file','early_exit','completed_alive'])test('capture readiness rejects '+captureMode+' before success and stops only its recorder',()=>{
  const boundedMaximum=['no_ready','wrong_path','empty_file','no_file'].includes(captureMode);
- const r=recordBoundary({captureMode,...(boundedMaximum?{captureMaxSeconds:5}:{})});
+ const r=recordBoundary({captureMode,captureStop:'verified_escalation',...(boundedMaximum?{captureMaxSeconds:5}:{})});
  assert.notEqual(r.status,0,r.stdout);
  assert.doesNotMatch(r.stdout,/record_started/);
  assert.match(r.stderr,/RECORD_AUDIO_CAPTURE_UNAVAILABLE|RECORD_CAPTURE_EXIT_UNVERIFIED/);
  if(captureMode!=='early_exit')assert.equal(r.stoppedBeforeHarnessCleanup,true,'controller must confirm its recorder stopped before returning failure');
+ if(captureMode!=='early_exit'){
+  assert.equal(r.fixtureExitAtReturn,'gone','fresh independent ps must confirm recorder exit before harness cleanup');
+  assert.ok(r.captureSignalSeen?.includes('TERM'),'the controlled negative recorder must survive through TERM before verified escalation');
+  assert.equal(r.captureStartup.execution_stopped,true,'a signal marker alone is not proof of a stopped process');
+ }
  if(boundedMaximum){
   assert.ok(r.scrcpyArgs.includes('--time-limit=5'),'the recorder must receive the same real 5s request maximum');
   assert.equal(r.captureStartup.reason,'readiness_timeout');assert.equal(r.captureStartup.status,'unavailable');assert.equal(r.captureStartup.execution_stopped,true);
@@ -695,12 +700,12 @@ test('capture growth accepts first nonempty media after the former 8s cutoff',()
  assert.ok(r.captureStartup.observations.some(o=>o.media_size>0&&o.media_regular===true&&o.capture_container==='matroska'&&o.artifact_reason==='ready'&&o.log_started===true&&o.log_completed===false),'must observe real growth before returning success');
 });
 test('capture growth observations expose media size plus exact started and completed logs',()=>{
- const r=recordBoundary({captureMode:'completed_alive'});
+ const r=recordBoundary({captureMode:'completed_alive',captureStop:'verified_escalation'});
  assert.equal(r.error,undefined);assert.notEqual(r.status,0);assert.equal(r.stoppedBeforeHarnessCleanup,true);
  assert.ok(r.captureStartup.observations.some(o=>o.media_size>0&&o.log_started===true&&o.log_completed===true));
 });
 test('capture growth still reserves workflow cleanup time before delayed media arrives',()=>{
- const started=Date.now(),r=recordBoundary({captureMode:'delayed_growth',workflowRemainingSeconds:5});
+ const started=Date.now(),r=recordBoundary({captureMode:'delayed_growth',workflowRemainingSeconds:5,captureStop:'verified_escalation'});
  assert.equal(r.error,undefined);assert.notEqual(r.status,0);assert.doesNotMatch(r.stdout,/record_started/);
  assert.equal(r.stoppedBeforeHarnessCleanup,true);assert.equal(r.captureStartup.execution_stopped,true,JSON.stringify(r.captureStartup));
  assert.equal(r.captureStartup.reason,'readiness_timeout');assert.ok(Date.now()-started<7000,'workflow remaining 5s must not wait for 9s growth');
