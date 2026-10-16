@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
-const mocks = vi.hoisted(() => ({ query: vi.fn(), release: vi.fn(), connect: vi.fn() }));
+const mocks = vi.hoisted(() => ({ query: vi.fn(), release: vi.fn(), connect: vi.fn(), session: vi.fn() }));
+vi.mock('../auth', () => ({ auth: { api: { getSession: mocks.session } } }));
 vi.mock('../db/connection', () => ({ default: { query: mocks.query, connect: mocks.connect } }));
 vi.mock('../middleware/tenant-context', () => ({ tenantContext: (req: Request, _res: Response, next: NextFunction) => { req.tenantId=req.header('x-test-tenant'); req.tenantRole=req.header('x-test-role')||'owner'; req.feishuUserId='authenticated-actor'; next(); } }));
 import { companyProfileRouter } from './company-profile';
@@ -9,7 +10,7 @@ const app=express(); app.use(express.json()); app.use('/profile',companyProfileR
 const initial=()=>({ company_id:'company-a',tenant_id:'tenant-a',company_key:'yueshengyun',company_name:'悦升云端',config_version:1,config_status:'draft',config_owner:'owner',city:'',industry:'',description:'',customer_problem:'',customer_portrait:'',products:[],key_advantages:[],qa_list:[],wiki:{markdown:'# Draft',products:[{id:'p',name:'待确认'}]},source_evidence:[],runtime_config:{routing:{line_key:'yuesheng',profiles:['old-profile'],feishu_base:'own-base'},policy_id:'draft-v1',comment_scoring:{status:'draft',criteria:{A:'草稿'}},platform_accounts:[{id:'old-record',fields:{抖音号:'oldaccount',手机Profile:'old-profile',ADB序列号:'old-device'},enabled:false,verification_status:'unverified'}]}});
 const input=()=>({expected_version:1,request_id:'11111111-1111-4111-8111-111111111111',ownership_decision_id:'d6b9c66a-f019-469a-957a-399cbfbcbe39',account:{platform:'douyin',douyin_id:'perfect21xx',nickname:'企业Ai员工智能体',profile:'cloud-phone-test',device_serial:'47.100.213.173:10001',device_instance_id:'acp-f6utus34dgnghc1oc',device_host:'mmv'},evidence_refs:[{uri:'/evidence/fresh-account.stdout',sha256:'a'.repeat(64)}]});
 let row: ReturnType<typeof initial>; let foreign: Array<Record<string,unknown>>;let checkpoint: ReturnType<typeof initial>|null;let failSnapshot=false;let failCas=false;
-beforeEach(()=>{vi.clearAllMocks();row=initial();foreign=[];checkpoint=null;failSnapshot=false;failCas=false;mocks.connect.mockResolvedValue({query:mocks.query,release:mocks.release});mocks.query.mockImplementation(async(sql:string,args:unknown[]=[])=>{
+beforeEach(()=>{vi.clearAllMocks();mocks.session.mockResolvedValue({user:{id:"authenticated-actor"}});row=initial();foreign=[];checkpoint=null;failSnapshot=false;failCas=false;mocks.connect.mockResolvedValue({query:mocks.query,release:mocks.release});mocks.query.mockImplementation(async(sql:string,args:unknown[]=[])=>{
  if(sql==='BEGIN'){checkpoint=structuredClone(row);return {rows:[]};}
  if(sql==='ROLLBACK'){if(checkpoint)row=checkpoint;return {rows:[]};}
  if(sql==='COMMIT'){checkpoint=null;return {rows:[]};}
@@ -24,6 +25,10 @@ const post=(body:unknown=input(),role='owner')=>request(app).post('/profile/plat
 const updates=()=>mocks.query.mock.calls.filter(([sql])=>String(sql).startsWith('UPDATE'));
 describe('正式公司账号归属登记HTTP合同',()=>{
  it('真实入口追加disabled/unverified登记，保留旧账号/草稿/政策并GET读回',async()=>{const before=initial();const r=await post();expect(r.status).toBe(201);expect(r.body.data.verification_required).toBe(true);expect(r.body.data.account).toMatchObject({douyin_id:'perfect21xx',profile:'cloud-phone-test',device_serial:'47.100.213.173:10001',enabled:false,verification_status:'unverified'});expect(row.config_version).toBe(2);expect(row.config_status).toBe('draft');expect(row.wiki).toEqual(before.wiki);expect(row.runtime_config.comment_scoring).toEqual(before.runtime_config.comment_scoring);expect(row.runtime_config.platform_accounts[0]).toEqual(before.runtime_config.platform_accounts[0]);expect(row.runtime_config.routing.profiles).toEqual(['old-profile','cloud-phone-test']);const read=await request(app).get('/profile').set('x-test-tenant','tenant-a');expect(read.body.data.runtime_config.platform_accounts).toHaveLength(2);});
+ it('旧Feishu身份头不能替代真实session',async()=>{mocks.session.mockResolvedValue(null);const r=await post().set('X-Feishu-User-Id','guessed-owner');expect(r.status).toBe(401);expect(mocks.connect).not.toHaveBeenCalled();});
+ it('session主体必须等于解析的租户actor',async()=>{mocks.session.mockResolvedValue({user:{id:'different-actor'}});expect((await post()).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
+ it('带真实session仍拒绝跨站未信任Origin',async()=>{expect((await post().set('Origin','https://untrusted.example')).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
+ it('浏览器跨站且缺Origin拒绝，不能利用全局宽CORS',async()=>{expect((await post().set('Sec-Fetch-Site','cross-site')).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
  it('管理员亦可登记',async()=>{expect((await post(input(),'admin')).status).toBe(201);});
  it('缺认证租户拒绝，不认body租户',async()=>{expect((await request(app).post('/profile/platform-account-registrations').send({...input(),tenant_id:'tenant-a'})).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
  it('普通成员不可登记',async()=>{expect((await post(input(),'member')).status).toBe(403);expect(mocks.connect).not.toHaveBeenCalled();});
