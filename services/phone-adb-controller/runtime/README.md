@@ -42,7 +42,11 @@ python3 runtime/scrcpy-runtime.py stage-server \
 
 helper 每步读回现有 `LOCK_DIR/owner`，只接受 exact owner。
 中央租约及本地 guard 仍由调用控制器持有并校验。
-每次命令前只读查询既有 ADB smart socket；不执行 start/kill-server。
+每次命令前只读查询既有 ADB smart socket，要求其协议为已核的 41；
+本地 `adb version` 也须为 1.0.41，防止 ADB 自行因协议不匹配重启服务。
+实际调用固定 `-H 127.0.0.1 -P PORT` 及数字地址 socket，使连接失败时
+按 AOSP 的远端连接分支返回错误，不自动启动本地 server。
+127.0.0.1 仍指同一个既有本机端口，不创建新桥；不执行 start/kill-server。
 
 接收端使用 `toybox head -c 精确字节数`，无需等待传输通道 EOF。
 唯一临时路径通过 `set -C` 禁止覆盖；发布前核 SHA 和字节数；

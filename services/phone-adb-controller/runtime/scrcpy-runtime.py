@@ -99,10 +99,29 @@ def require_existing_server(port, timeout=1):
             if exact(connection, 4) != b'OKAY':
                 raise RuntimeFailure('existing ADB server did not accept version probe')
             size = int(exact(connection, 4), 16)
-            if not 1 <= size <= 16 or not re.fullmatch(rb'[0-9a-fA-F]+', exact(connection, size)):
+            if not 1 <= size <= 16:
                 raise RuntimeFailure('existing ADB server version is unknown')
+            version = exact(connection, size)
+            if not re.fullmatch(rb'[0-9a-fA-F]+', version) or int(version, 16) != POLICY['adb_server_protocol']:
+                raise RuntimeFailure('existing ADB server protocol does not match approved client protocol')
     except (OSError, ValueError) as error:
         raise RuntimeFailure('required existing ADB server is unavailable') from error
+
+
+def require_adb_client(adb_bin, timeout=2):
+    # "adb version"只读本地程序，不连接server。拒绝协议不匹配的客户端，
+    # 否则ADB自身可能在普通shell调用前kill/restart共享server。
+    child = subprocess.Popen([str(adb_bin), 'version'], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             start_new_session=True)
+    try:
+        stdout, _ = child.communicate(timeout=timeout)
+    except (subprocess.TimeoutExpired, RuntimeFailure) as error:
+        terminate_owned(child)
+        raise RuntimeFailure('local ADB version check did not complete') from error
+    match = re.search(rb'(?m)^Android Debug Bridge version 1\.0\.([0-9]+)\r?$', stdout)
+    if child.returncode or not match or int(match[1]) != POLICY['adb_server_protocol']:
+        raise RuntimeFailure('local ADB protocol does not match approved server protocol')
 
 
 def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
@@ -139,8 +158,10 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
             require_existing_server(adb_port, min(1, remaining))
         except RuntimeFailure as error:
             raise RuntimeFailure(str(error), unknown=touched) from error
-        env = dict(os.environ, ADB_SERVER_SOCKET='tcp:localhost:' + str(adb_port))
-        child = subprocess.Popen([str(adb_bin), '-P', str(adb_port), '-s', serial,
+        # AOSP treats numeric127.0.0.1 as a remote socket: connection failure
+        # returns an error rather than auto-launching a local shared server.
+        env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + str(adb_port))
+        child = subprocess.Popen([str(adb_bin), '-H', '127.0.0.1', '-P', str(adb_port), '-s', serial,
                                   'shell', '-T', script], stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  env=env, start_new_session=True)
@@ -198,6 +219,7 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
         destination = POLICY['remote_server']
         receipt['remote_path'] = destination
         require_owner(lock_dir, owner)
+        require_adb_client(adb_bin, min(2, max(0.1, deadline - time.monotonic())))
         initial = probe(destination)
         if initial == 'conflict':
             raise RuntimeFailure('existing remote server is unverified; refuse replacement')
@@ -306,9 +328,10 @@ def adb_shim(argv):
                                    re.fullmatch(r'localabstract:scrcpy_[0-9a-f]{8}', remote))
         if not allowed:
             raise RuntimeFailure('ADB shim refuses unrelated command or target')
+        require_adb_client(config['adb_bin'])
         require_existing_server(config['adb_port'])
-        env = dict(os.environ, ADB_SERVER_SOCKET='tcp:localhost:' + str(config['adb_port']))
-        os.execve(str(config['adb_bin']), [str(config['adb_bin']), '-P',
+        env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + str(config['adb_port']))
+        os.execve(str(config['adb_bin']), [str(config['adb_bin']), '-H', '127.0.0.1', '-P',
                   str(config['adb_port']), *argv], env)
     except (RuntimeFailure, OSError, ValueError) as error:
         print('pinned ADB shim refused: ' + str(error), file=sys.stderr)
