@@ -14,8 +14,10 @@ export function verificationTrust(): VerificationTrust {
   return { base: url.origin, token, revision, collectors, validators };
 }
 export async function readVerificationTasks(ids: [string, string], trust: VerificationTrust): Promise<[CompanyJsonRecord, CompanyJsonRecord]> {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!ids.every(id => typeof id === 'string' && uuid.test(id)) || ids[0] === ids[1]) throw Error('invalid task IDs');
   const rows = await Promise.all(ids.map(async id => {
-    const response = await axios.get(`${trust.base}/api/brain/tasks/${id}`, {
+    const response = await axios.get(`${trust.base}/api/brain/tasks/${encodeURIComponent(id)}`, {
       headers: { Authorization: `Bearer ${trust.token}` }, timeout: 8000,
       maxRedirects: 0, proxy: false, maxContentLength: 262144, responseType: 'json',
     });
