@@ -153,6 +153,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     }
     const mmvStep=mmvDeviceRuntime?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
     if(mmvStep) {
+      // 101沿原取词入口先冻结归一化taskInputs；不能先以空输入建立同run快照。
+      // getDiscovery只取公司关键词并构造handler，此处不会搜索或执行手机动作。
+      if(mmvStep==='101')await getDiscovery();
       const config=await queue('company_config',{step:mmvStep,device_binding:{profile,device_serial:serial}});
       const binding=config?.device_binding;
       if(!config?.company_id||!config?.tenant_id||!Number.isSafeInteger(config?.version)||config.version<1||config.run_id!==run
