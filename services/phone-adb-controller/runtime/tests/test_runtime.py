@@ -41,6 +41,10 @@ class RuntimeTests(unittest.TestCase):
         self.patcher = patch.object(self.runtime, 'POLICY', self.policy)
         self.patcher.start()
         self.addCleanup(self.patcher.stop)
+        # Network boundary is fake; never contact a real local ADB server.
+        self.bridge = patch.object(self.runtime, 'require_existing_server', lambda *args: None)
+        self.bridge.start()
+        self.addCleanup(self.bridge.stop)
         (self.package / 'scrcpy').write_bytes(self.client)
         (self.package / 'scrcpy').chmod(0o755)
         (self.package / 'scrcpy-server').write_bytes(self.server)

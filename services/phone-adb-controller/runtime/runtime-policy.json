@@ -1,0 +1,12 @@
+{
+  "schema": "scrcpy-sdk31-pinned-v1",
+  "version": "5.0.1",
+  "source_commit": "a60891aea193d92e7e5c3942700eca63f9d19a5f",
+  "source_archive_sha256": "6743a3976ad16eaba42202c4140a2d9cbdbd0c9df69a8163392fb0e070c136a2",
+  "patched_recorder_sha256": "5739279eb7fe6d279db8f6a59d213b5b8ca8af2ea9d0aedea976c68ef2ef51e0",
+  "patch_sha256": "15bfd017f1fdc1504a5eb9290465a97480ea6a9bea6e2b53a79fd166933347d5",
+  "client_sha256": "7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2",
+  "server_sha256": "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536",
+  "server_bytes": 733930,
+  "remote_server": "/data/local/tmp/scrcpy-server.jar"
+}
