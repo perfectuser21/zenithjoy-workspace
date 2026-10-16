@@ -79,3 +79,14 @@ index 1d819ee..e8433d5 100644
          return false;
      }
  
+diff --git a/app/src/util/log.c b/app/src/util/log.c
+index 470f1e6..f0d7845 100644
+--- a/app/src/util/log.c
++++ b/app/src/util/log.c
+@@ -147,4 +147,6 @@ sc_sdl_log_print(void *userdata, int category, SDL_LogPriority priority,
+     assert(priority < SDL_LOG_PRIORITY_COUNT);
+     const char *prio_name = sc_sdl_log_priority_names[priority];
+     fprintf(out, "%s: %s\n", prio_name, message);
++    // Readiness consumers tail redirected logs while recording is alive.
++    fflush(out);
+ }

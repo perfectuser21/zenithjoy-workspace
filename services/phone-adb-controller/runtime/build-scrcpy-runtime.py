@@ -92,6 +92,8 @@ def rebuild_candidate(source, build_dir, server, meson, ninja, pkg_config):
     subprocess.run(['git', '-C', str(source), 'apply', str(patch_file)], check=True)
     if digest(source / 'app/src/recorder.c') != POLICY['patched_recorder_sha256']:
         raise ValueError('patched recorder digest mismatch')
+    if digest(source / 'app/src/util/log.c') != POLICY['patched_log_sha256']:
+        raise ValueError('patched logger digest mismatch')
     tools = [str(Path(tool).resolve().parent) for tool in (meson, ninja, pkg_config)]
     env = dict(os.environ, PKG_CONFIG=str(pkg_config),
                PATH=os.pathsep.join(tools + [os.environ.get('PATH', '')]))
@@ -102,6 +104,9 @@ def rebuild_candidate(source, build_dir, server, meson, ninja, pkg_config):
                     '--prefix=' + str(build_dir / 'prefix'), '-Dcompile_server=false'],
                    env=env, check=True)
     subprocess.run([str(ninja), '-C', str(build_dir)], env=env, check=True)
+    subprocess.run([sys.executable, str(Path(__file__).parent / 'tests/test_log_flush.py'),
+                    '--source', str(source), '--build-dir', str(build_dir),
+                    '--pkg-config', str(pkg_config)], env=env, check=True)
     subprocess.run([str(meson), 'test', '-C', str(build_dir), '--print-errorlogs'],
                    env=env, check=True)
     executable = build_dir / 'app/scrcpy'

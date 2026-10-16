@@ -4,10 +4,11 @@
   "source_commit": "a60891aea193d92e7e5c3942700eca63f9d19a5f",
   "source_archive_sha256": "6743a3976ad16eaba42202c4140a2d9cbdbd0c9df69a8163392fb0e070c136a2",
   "patched_recorder_sha256": "5739279eb7fe6d279db8f6a59d213b5b8ca8af2ea9d0aedea976c68ef2ef51e0",
-  "patch_sha256": "15bfd017f1fdc1504a5eb9290465a97480ea6a9bea6e2b53a79fd166933347d5",
-  "client_sha256": "7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2",
+  "patch_sha256": "6e90dbd4e15ebff9e3ad786da4feff8b7f790e893449befb1b6f2a1720d343b5",
+  "client_sha256": "2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258",
   "server_sha256": "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536",
   "server_bytes": 733930,
   "adb_server_protocol": 41,
-  "remote_server": "/data/local/tmp/scrcpy-server.jar"
+  "remote_server": "/data/local/tmp/scrcpy-server.jar",
+  "patched_log_sha256": "71a36485b01a07856a50505f78e0a72dfdf7ef00fd5810eee0fae44a8ab6dee7"
 }

@@ -6,7 +6,7 @@ helper 不领取、刷新或释放设备锁，不创建 ADB server。
 
 固定对象见 `runtime-policy.json`：官方 scrcpy v5.0.1 commit
 `a60891aea193d92e7e5c3942700eca63f9d19a5f`；客户端 SHA256 为
-`7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2`；
+`2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258`；
 官方同版 server 为
 `764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536`。
 
@@ -67,7 +67,7 @@ helper 每步读回现有 `LOCK_DIR/owner`，只接受 exact owner。
 | 后缀 | 值 |
 |---|---|
 | RUNTIME_ROOT | 独立包绝对目录 |
-| CLIENT_SHA256 | 固定 7c15…；省略时同仓库 pin |
+| CLIENT_SHA256 | 固定 2823…；省略时同仓库 pin |
 | ADB_BIN / ADB_PORT / SERIAL | 成熟控制器实际绑定的既有通道 |
 | OWNER / LOCK_DIR | exact owner 与设备锁绝对目录 |
 | EVIDENCE_ROOT / EVIDENCE_ID | 本次原件目录与 ID |
@@ -124,3 +124,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -W error::ResourceWarning \
 官方来源：[构建说明](https://github.com/Genymobile/scrcpy/blob/v5.0.1/doc/build.md)、
 [录音说明](https://github.com/Genymobile/scrcpy/blob/v5.0.1/doc/recording.md)、
 [recorder 源码](https://github.com/Genymobile/scrcpy/blob/v5.0.1/app/src/recorder.c)。
+
+2026-10-16 日志刷新修复：macOS 的常规文件 stdout 默认全缓冲。固定源码补丁在真实 SDL 日志回调 `fprintf` 后调用 `fflush(out)`，让活进程的精确 recording-start 日志可供启动闸读取。启动上限、完整 argv/进程身份、非空媒体和精确路径日志条件均保持。重建命令会编译并运行 `tests/test_log_flush.py` 的真实 logger 回归（无 ADB/设备）；删除 flush 后该测试在进程仍存活时失败。新 client SHA 须由 controller 同步固定，原 7c15 目录不覆盖。
