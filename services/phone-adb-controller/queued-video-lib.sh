@@ -429,7 +429,7 @@ except Exception: print("medium")' "$count")"
       DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-after-card$total-open" </dev/null >/dev/null || return 4
       DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-after-card$total" || return 4
       "$C" --profile "$P" open-comments "$QV_EID-after-card$total-comments" </dev/null >/dev/null || return 6
-      node "$QV_DIR/queued-recipient-evidence.js" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL" "$P" "$oid" "$onick" "$body" "$identity_started" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$recipient_profile_eid" "$QV_EID-after-card$total" xml_raw || return 8
+      node "$QV_DIR/queued-recipient-evidence.js" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL" "$P" "$oid" "$onick" "$body" "$identity_started" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$recipient_profile_eid" "$QV_EID-after-card$total" xml_raw "${QUEUED_RECIPIENT_COMPANY_BINDING_FILE:-}" "${QUEUED_RECIPIENT_COMPANY_BINDING_SHA:-}" || return 8
       emitted[$oid$'\t'$body]=1; covered=$((covered+1))
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
       # 名片返回后页面重排；下一条重新collect，绝不沿用旧坐标。

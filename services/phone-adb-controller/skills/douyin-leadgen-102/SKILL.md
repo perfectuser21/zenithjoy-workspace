@@ -2,7 +2,7 @@
 name: douyin-leadgen-102
 description: 执行抖音获客102视频处理：验证101来源、领取待处理视频、判断资格并按评论量采集持久化。用于普通、深采或自动策略及代码异常接手；不修改评分标准或执行私信。
 metadata:
-  version: 0.2.3
+  version: 0.2.4
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-102/references/reuse-map.json
@@ -13,6 +13,10 @@ metadata:
 # 102 · 视频处理与评论采集
 
 首版可加载 Skill，本版实机验收待执行；不把文档、局部测速或旧版成功当成本版生产通过。
+
+## 冻结来源绑定
+
+MMV102首个设备动作前把选定profile/serial冻结到本run的company_config_runs.task_inputs.device_binding，再核当前原生抖音号；实号通过后生成本run私有company-binding工件。原生评论证明、解析和PG提交必须消费同一绑定，PG按原102冻结行重验公司/租户/平台与唯一verified enabled账号；不将原件自报字段当授权，不为缺失历史来源新建快照。旧M4无此新工件的路径保持原守卫。
 
 ## Activity 方法配套
 

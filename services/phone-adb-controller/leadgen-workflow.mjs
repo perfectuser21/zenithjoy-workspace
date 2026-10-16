@@ -93,7 +93,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
     const bytes=readFileSync(f[4]);if(createHash('sha256').update(bytes).digest('hex')!==f[5])throw Error('recipient私有工件hash不符');
     const evidence=JSON.parse(bytes),scope={line_key:recipientScope.lineKey,run:recipientScope.run,douyin_id:row.douyinId,nickname:row.nickname,comment_body:row.commentBody,comment_body_sha256:bodyHash,video_url:row.sourceVideoUrl};
     if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(evidence.receipt_id||'')||resolve(f[4])!==resolve(recipientScope.runDir,`${evidence.scope.profile_eid}-recipient-${evidence.receipt_id}.json`))throw Error('recipient工件独享命名不符');
-    recipientProof.validateEvidence(evidence,scope);
+    recipientProof.validateEvidence(evidence,scope,{companyBinding:recipientScope.companyBinding});
     if(evidence.scope.profile!==recipientScope.profile||evidence.scope.video_id!==videoId||evidence.scope.source_run!==(recipientScope.sourceRun||null))throw Error('recipient采集profile或VID错位');
     row.recipientEvidence=evidence;
   }
@@ -195,6 +195,15 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     }
     state.account=id;
     if(state.company_config&&state.company_config.expected_sender!==id)throw Error('COMPANY_ACCOUNT_IDENTITY_MISMATCH');
+    if(mmvStep==='102'){
+      state.recipientCompanyBinding={...state.company_config.device_binding,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN||null};
+      const file=join(env.WFR_RUN_DIR,run+'-company-binding.json'),bytes=JSON.stringify(state.recipientCompanyBinding);
+      try{writeFileSync(file,bytes,{mode:0o600,flag:'wx'});}catch(error){
+        if(error.code!=='EEXIST')throw error;
+        const st=lstatSync(file);if(st.isSymbolicLink()||!st.isFile()||(st.mode&0o777)!==0o600||readFileSync(file,'utf8')!==bytes)throw Error('COMPANY_COLLECTION_BINDING_FILE_CHANGED');
+      }
+      state.recipientCompanyBindingFile=file;state.recipientCompanyBindingSha=createHash('sha256').update(bytes).digest('hex');
+    }
     const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
     return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,...outreachProof};
   };
@@ -310,7 +319,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     return bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
       v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
       {maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),
-        env:{...(mode==='qualification'&&(qualificationAttempts.get(v.video_id)||1)>1?{QUEUED_VIDEO_EVIDENCE_ATTEMPT:String(qualificationAttempts.get(v.video_id)-1)}:{}),...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget)}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
+        env:{...(mode==='qualification'&&(qualificationAttempts.get(v.video_id)||1)>1?{QUEUED_VIDEO_EVIDENCE_ATTEMPT:String(qualificationAttempts.get(v.video_id)-1)}:{}),...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget),QUEUED_RECIPIENT_COMPANY_BINDING_FILE:state.recipientCompanyBindingFile||'',QUEUED_RECIPIENT_COMPANY_BINDING_SHA:state.recipientCompanyBindingSha||''}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
   };
   const archiveQualification=v=>{
     const attempt=(qualificationAttempts.get(v.video_id)||0)-1;
@@ -465,7 +474,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
         collectionTiming();
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
         appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),result.stdout);
-        const rows=parseCollection(result,v.video_id,{allowPartial:true,recipientScope:{runDir:env.WFR_RUN_DIR,lineKey:lineRoutes.routeOf(line).key,run,sourceRun:env.LEADGEN_SOURCE_RUN,profile}});
+        const rows=parseCollection(result,v.video_id,{allowPartial:true,recipientScope:{runDir:env.WFR_RUN_DIR,lineKey:lineRoutes.routeOf(line).key,run,sourceRun:env.LEADGEN_SOURCE_RUN,profile,companyBinding:state.recipientCompanyBinding}});
         const telemetry=result.stdout.split('\n').find(s=>s.startsWith(`RESCAN\t${v.video_id}\t`))?.split('\t')[2];
         if(!/^\d+$/.test(telemetry||''))throw Error('缺实际重扫计数，不能宣称采集通过');
         const avatarLines=result.stdout.split('\n').filter(s=>s.startsWith(`AVATAR_RECOVERY\t${v.video_id}\t`));

@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.2.3
+  version: 0.2.4
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -144,6 +144,10 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/company-config-lib.js
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-preflight/SKILL.md
@@ -930,7 +934,7 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.3.0
+    version: 2.4.0
     compatibility: backward
     owner:
       department: line02 智能获客
@@ -1006,6 +1010,7 @@ activities:
         fields:
           - process_status
     preconditions:
+      - MMV102原生收件人来源须使用首个设备动作前冻结到company_config_runs.task_inputs的本run profile/serial，实号核对后生成私有company-binding工件；capture/parse显式消费，PG提交只读原102快照重验唯一verified enabled抖音账号及公司/租户/平台，不能由原件自报profile授权；旧M4无新绑定保持原静态路径
       - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，可选collection_budget_s仅显式配置时冻结为1..6720整数，默认480和进程960保持，显式进程预算加480收尾并受Activity/真实全局剩余时间限制；配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
       - 仅matched视频可采评论
       - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
@@ -1077,12 +1082,16 @@ activities:
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
         RUN_TAG（队列持久化交接，每活动Commander前后核验）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/company-config-lib.js
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.1.1
+        version: 0.1.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
