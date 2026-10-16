@@ -731,6 +731,7 @@ current_video_link() {
   (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   for i in {1..$tries}; do
     if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
+    (( rc == 64 )) && die "SHARE_PANEL_TARGET_UNVERIFIED: refusing navigation retries for an untrusted link target"
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # keyword结果出口退到外部时，不让外层重试再按两次BACK破坏外部栈。
     if [[ -n "$return_keyword" && "$(foreground_package)" != *"$DOUYIN_PACKAGE"* ]]; then
@@ -751,9 +752,81 @@ current_video_link() {
 
 # 有旧短链时，先在不提交搜索的暂存框中复制新nonce并实际粘贴读回。
 # proof只返回给当前_once调用，绝不持久化/清除last-clip；复制或回原详情失败拒绝继续。
+# Android12 的 input keycombination 会把 Ctrl+A 当普通 a 输入；Google IME 也会改写 ASCII。
+# 仅nonce暂存框走此路径；不放宽通用text-input的字段身份合同。
+nonce_sdk31_field() {
+  "$PYTHON_BIN" - "$1" "${2:-}" "$SCREEN_W" "$SCREEN_H" <<'PY'
+import sys,re,xml.etree.ElementTree as E
+nodes=[n for n in E.parse(sys.argv[1]).iter('node') if n.get('resource-id')=='com.ss.android.ugc.aweme:id/et_search_kw']
+if len(nodes)!=1:sys.exit(2)
+n=nodes[0]
+if any(n.get(k)!=v for k,v in {'package':'com.ss.android.ugc.aweme','class':'android.widget.EditText','enabled':'true','focused':'true','password':'false'}.items()):sys.exit(2)
+if sys.argv[2] and n.get('text')!=sys.argv[2]:sys.exit(2)
+b=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+if not b:sys.exit(2)
+x1,y1,x2,y2=map(int,b.groups())
+w,h=map(int,sys.argv[3:5])
+if not (0<=x1<x2<=w and 0<=y1<y2<=h):sys.exit(2)
+print((x1+x2)//2,(y1+y2)//2)
+PY
+}
+
+nonce_sdk31_input() {
+  # 子shell隔离原IME与EXIT trap；任何异常也尝试还原，还原失败不能放行。
+  (
+    local nonce="$1" eid="$2" b64 enable_out
+    require_held_lock clipboard_nonce
+    require_target_for clipboard_nonce
+    ui_evidence "${eid}-seed-ready" >/dev/null || die "CLIPBOARD_NONCE_READY_UNAVAILABLE"
+    nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-ready.xml" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_UNVERIFIED"
+    _TI_ORIG_IME="$(current_ime)"
+    [[ -n "$_TI_ORIG_IME" && "$_TI_ORIG_IME" != null ]] || die "CLIPBOARD_NONCE_IME_UNREADABLE"
+    trap 'ti_restore_ime || { print -u2 -- CLIPBOARD_NONCE_IME_RESTORE_FAILED; exit 2; }' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    enable_out="$("$ADB" -s "$SERIAL" shell ime enable "$ADBKEYBOARD_IME" 2>&1)" || die "CLIPBOARD_NONCE_IME_ENABLE_FAILED"
+    [[ "$enable_out" == *'now enabled'* || "$enable_out" == *'already enabled'* ]] || die "CLIPBOARD_NONCE_IME_ENABLE_UNVERIFIED"
+    "$ADB" -s "$SERIAL" shell ime set "$ADBKEYBOARD_IME" >/dev/null || die "CLIPBOARD_NONCE_IME_SET_FAILED"
+    [[ "$(current_ime)" == "$ADBKEYBOARD_IME" ]] || die "CLIPBOARD_NONCE_IME_SET_UNVERIFIED"
+    ui_evidence "${eid}-seed-ime-ready" >/dev/null || die "CLIPBOARD_NONCE_READY_UNAVAILABLE"
+    nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-ime-ready.xml" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_UNVERIFIED"
+    b64="$(print -rn -- "$nonce" | /usr/bin/base64 | tr -d '\n')"
+    "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null || die "CLIPBOARD_NONCE_INPUT_CLEAR_FAILED"
+    "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$b64" >/dev/null || die "CLIPBOARD_NONCE_INPUT_FAILED"
+    wait_ms 300
+    ti_restore_ime || die "CLIPBOARD_NONCE_IME_RESTORE_FAILED"
+    trap - EXIT INT TERM
+    ui_evidence "${eid}-seed-input-verified" >/dev/null || die "CLIPBOARD_NONCE_TREE_UNAVAILABLE:input"
+    nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-input-verified.xml" "$nonce" >/dev/null || die "CLIPBOARD_NONCE_READBACK_MISMATCH:input"
+  )
+}
+
+nonce_sdk31_copy() {
+  local eid="$1" nonce="$2" center x y i
+  require_held_lock clipboard_nonce
+  require_target_for clipboard_nonce
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE/"* ]] || die "CLIPBOARD_NONCE_WRONG_FOREGROUND"
+  center="$(nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-typed.xml" "$nonce")" || die "CLIPBOARD_NONCE_COPY_FIELD_UNVERIFIED"
+  read x y <<< "$center"
+  # Android12原生FloatingToolbar不在UIA树中。长按连续nonce单词后用标准COPY，
+  # 不信长按/复制退出码：后续empty→paste精确读回才证明复制了完整nonce。
+  "$ADB" -s "$SERIAL" shell input swipe "$x" "$y" "$x" "$y" 650 >/dev/null || die "CLIPBOARD_NONCE_LONG_PRESS_FAILED"
+  wait_ms 300
+  "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
+  # Copy会取消选区；无需Ctrl+A，移到已验证nonce末尾并删除其确切字符数。
+  "$ADB" -s "$SERIAL" shell input keyevent 123 >/dev/null || die "CLIPBOARD_NONCE_MOVE_END_FAILED"
+  for (( i=0; i<${#nonce}; i++ )); do
+    "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
+  done
+}
+
 seed_clipboard_nonce() {
   local eid="$1" leave_mode="${2:-detail}" nonce xml line text hint center x y phase
   case "$leave_mode" in detail|detail-paused) ;; *) die "CLIPBOARD_NONCE_RETURN_MODE_INVALID" ;; esac
+  if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+    [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
+    require_held_lock clipboard_nonce
+  fi
   nonce="$("$PYTHON_BIN" -c 'import secrets; print("clipnonce" + secrets.token_hex(16))')" || die "CLIPBOARD_NONCE_RANDOM_FAILED"
   [[ "$nonce" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "CLIPBOARD_NONCE_RANDOM_INVALID"
   "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null || die "CLIPBOARD_NONCE_SCRATCH_FAILED"
@@ -765,9 +838,13 @@ seed_clipboard_nonce() {
   center="$(node_center "$line")" || die "CLIPBOARD_NONCE_FIELD_BOUNDS"
   read x y <<< "$center"
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_FAILED"
-  # input help已实测支持keycombination；不能仅以命令退出成功推断copy成功。
-  "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
-  "$ADB" -s "$SERIAL" shell input text "$nonce" >/dev/null || die "CLIPBOARD_NONCE_INPUT_FAILED"
+  if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+    nonce_sdk31_input "$nonce" "$eid" || die "CLIPBOARD_NONCE_INPUT_FAILED"
+  else
+    # SDK33+原有路径保留；退出成功仍必须有下面的精确UI读回。
+    "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
+    "$ADB" -s "$SERIAL" shell input text "$nonce" >/dev/null || die "CLIPBOARD_NONCE_INPUT_FAILED"
+  fi
   for phase in typed empty pasted; do
     wait_ms 300
     ui_evidence "${eid}-seed-${phase}" >/dev/null || die "CLIPBOARD_NONCE_TREE_UNAVAILABLE:$phase"
@@ -775,22 +852,41 @@ seed_clipboard_nonce() {
     line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
     [[ -n "$line" ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT:$phase"
     text="$(print -r -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
+    if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+      nonce_sdk31_field "$xml" >/dev/null || die "CLIPBOARD_NONCE_FIELD_UNVERIFIED:$phase"
+    fi
     if [[ "$phase" == empty ]]; then
       # Android空输入框会把hint同时写成text；仅接受同节点的非空hint，nonce残留仍拒绝。
       hint=""
       if [[ "$line" == *' hint="'* ]]; then
         hint="$(print -r -- "$line" | /usr/bin/sed -E 's/.* hint="([^"]*)".*/\1/')"
       fi
-      [[ -z "$text" || ( -n "$hint" && "$text" == "$hint" && "$text" != clipnonce* ) ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
+      if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+        # SDK31把灰色placeholder放进text但省略hint。先保留候选，不当作已清空。
+        # 非空nonce前缀必须拒绝：否则残留前缀+部分复制的后缀可拼回nonce。
+        [[ -z "$text" || "$nonce" != "$text"* ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
+        print -- 'empty_proof=pending_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
+        # MOVE_END无选择修饰键，消除粘贴替换选区掩盖残留的可能；粘贴只允许追加。
+        "$ADB" -s "$SERIAL" shell input keyevent 123 >/dev/null || die "CLIPBOARD_NONCE_MOVE_END_FAILED"
+      else
+        [[ -z "$text" || ( -n "$hint" && "$text" == "$hint" && "$text" != clipnonce* ) ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
+      fi
       "$ADB" -s "$SERIAL" shell input keyevent 279 >/dev/null || die "CLIPBOARD_NONCE_PASTE_FAILED"
     else
       [[ "$text" == "$nonce" ]] || die "CLIPBOARD_NONCE_READBACK_MISMATCH:$phase"
+      if [[ "$phase" == pasted && "${DEVICE_SDK:-}" == 31 ]]; then
+        print -- 'empty_proof=verified_by_exact_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
+      fi
       if [[ "$phase" == typed ]]; then
-        "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
-        "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
-        # HONOR复制后会取消全选；重新全选后再删除，不能只删掉nonce末尾一个字符。
-        "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_RESELECT_FAILED"
-        "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
+        if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+          nonce_sdk31_copy "$eid" "$nonce" || die "CLIPBOARD_NONCE_COPY_FAILED"
+        else
+          "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
+          "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
+          # HONOR复制后会取消全选；重新全选后再删除，不能只删掉nonce末尾一个字符。
+          "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_RESELECT_FAILED"
+          "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
+        fi
       fi
     fi
   done
@@ -881,6 +977,53 @@ resolve_content_short_url() {
   die "$reason after 2 bounded HEAD attempts (curl_rc=$rc)"
 }
 
+share_panel_link_target() {
+  "$PYTHON_BIN" - "$1" "$2" "$3" <<'PYSHARETARGET'
+import sys,re,xml.etree.ElementTree as ET
+try:
+    root=ET.parse(sys.argv[1]).getroot(); width,height=map(int,sys.argv[2:]); pkg='com.ss.android.ugc.aweme'
+    parents={c:n for n in root.iter() for c in n}
+    def named(n,label): return n.get('text')==label or n.get('content-desc')==label
+    def bounds(n):
+        m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+        if not m: raise ValueError('invalid_bounds')
+        b=tuple(map(int,m.groups()));x1,y1,x2,y2=b
+        if not (0<=x1<x2<=width and 0<=y1<y2<=height): raise ValueError('offscreen_bounds')
+        return b
+    headers=[n for n in root.iter('node') if n.get('package')==pkg and named(n,'分享给')]
+    if len(headers)!=1: raise ValueError('panel_header_unverified')
+    header=bounds(headers[0]); targets={}
+    for label in root.iter('node'):
+        if not named(label,'分享链接'): continue
+        if label.get('package')!=pkg or label.get('enabled')!='true': raise ValueError('untrusted_link_label')
+        label_bounds=bounds(label); ancestors=[];n=label
+        while n is not None:
+            ancestors.append(n);n=parents.get(n)
+        # Function actions and contacts are separate semantic containers. A contact
+        # named 分享链接 must never become a recipient tap.
+        containers=[n for n in ancestors if n.get('resource-id')==pkg+':id/function_container']
+        if len(containers)!=1: raise ValueError('function_container_unverified')
+        container=containers[0];cb=bounds(container)
+        if container.get('package')!=pkg or container.get('enabled')!='true' or cb[1]<header[3]: raise ValueError('untrusted_function_container')
+        candidates=[]
+        for n in ancestors:
+            if n is container: break
+            if n.get('package')!=pkg or n.get('enabled')!='true': raise ValueError('untrusted_link_ancestor')
+            if n.get('clickable')=='true': candidates.append(n);break
+        if not candidates: raise ValueError('link_not_clickable')
+        target=candidates[0];b=bounds(target)
+        if not (cb[0]<=b[0]<=label_bounds[0]<label_bounds[2]<=b[2]<=cb[2] and cb[1]<=b[1]<=label_bounds[1]<label_bounds[3]<=b[3]<=cb[3]): raise ValueError('link_not_contained')
+        path=set(ancestors[:ancestors.index(target)+1])
+        if any(n.get('clickable')=='true' and n not in path for n in target.iter('node')): raise ValueError('other_clickable_descendant')
+        if any((n.get('text') or n.get('content-desc')) and not named(n,'分享链接') for n in target.iter('node')): raise ValueError('ambiguous_click_container')
+        targets[id(target)]=b
+    if len(targets)!=1: raise ValueError('link_target_ambiguous_or_missing')
+    x1,y1,x2,y2=next(iter(targets.values()));print((x1+x2)//2,(y1+y2)//2)
+except (ValueError,ET.ParseError,OSError) as e:
+    print('SHARE_PANEL_TARGET_UNVERIFIED '+str(e),file=sys.stderr);sys.exit(2)
+PYSHARETARGET
+}
+
 _current_video_link_once() {
   local evidence_id share_xml share_line share_center share_x share_y panel_xml panel_line link_line link_bounds
   local link_x1 link_y1 link_x2 link_y2 link_x link_y
@@ -935,15 +1078,8 @@ _current_video_link_once() {
   panel_line="$(/usr/bin/grep -oE '<node[^>]+text="分享给"[^>]*>' "$panel_xml" | /usr/bin/head -1 || true)"
   [[ -n "$panel_line" ]] || die "verified share panel was not found"
 
-  link_line="$(/usr/bin/grep -oE '<node[^>]+text="分享链接"[^>]*>' "$panel_xml" | /usr/bin/head -1 || true)"
-  [[ -n "$link_line" ]] || die "share-link action was not present in the verified panel"
-  link_bounds="$(print -- "$link_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
-  read link_x1 link_y1 link_x2 link_y2 <<< "$link_bounds"
-  require_uint "$link_x1"; require_uint "$link_y1"; require_uint "$link_x2"; require_uint "$link_y2"
-  (( link_x2 > link_x1 && link_y2 > link_y1 && link_x1 <= MAX_X && link_y1 > 200 && link_y2 <= MAX_Y + 1 )) || die "share-link action bounds are outside target screen"
-  link_x=$(( (link_x1 + link_x2) / 2 ))
-  link_y=$(( link_y1 - 96 ))
-  (( link_y > 0 && link_y <= MAX_Y )) || die "share-link action tap point is outside target screen"
+  link_center="$(share_panel_link_target "$panel_xml" "$SCREEN_W" "$SCREEN_H")" || return 64
+  read link_x link_y <<< "$link_center"
   "$ADB" -s "$SERIAL" shell input tap "$link_x" "$link_y"
   wait_ms 800
   copied_path="$(snapshot_evidence "${evidence_id}-link-copied")"
@@ -3973,7 +4109,7 @@ fi
 # media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
 if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   case "$command" in
-    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop) ;;
+    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link) ;;
     *) die 'required lock owner is supported only for standalone read commands';;
   esac
   source "${0:A:h}/phone-lock-lib.sh"
@@ -4185,6 +4321,10 @@ case "$command" in
     ;;
   current-video-link)
     [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE current-video-link EVIDENCE_ID [RETURN_KEYWORD]"
+    if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+      [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
+      require_held_lock clipboard_nonce
+    fi
     check_target
     current_video_link "$2" "${3:-}"
     ;;

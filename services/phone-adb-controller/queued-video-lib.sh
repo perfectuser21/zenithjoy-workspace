@@ -44,7 +44,7 @@ JS
 }
 qv_verify_video(){
   local out actual kind verified=0 cmd_rc=0
-  out="$("$C" --profile "$P" current-video-link "$1" </dev/null)" || cmd_rc=$?
+  out="$("$C" --profile "$P" --lock-owner "$TAG" current-video-link "$1" </dev/null)" || cmd_rc=$?
   actual="$(qv_field "$out" video_id)"
   kind="$(qv_field "$out" content_type)"
   (( cmd_rc == 0 )) && [[ "$actual" == "$VID" && "$kind" == video ]] && verified=1

@@ -26,12 +26,14 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
   const patched=source.replace(wait,controlled);
   assert.equal(patched.split(controlled).length-1,1,'仅替换一处等待函数');
   assert.equal(patched.replace(controlled,wait),source,'归一化等待后所有业务与CLI字节必须完全相同');
-  runner=join(d,'controller-controlled-wait');writeFileSync(runner,patched);
+  runner=join(d,'douyin-phone-adb');writeFileSync(runner,patched);
+  for(const file of ['phone-lock-lib.sh','phone-lock-helper.py'])writeFileSync(join(d,file),readFileSync(join(fixtures,'..','..',file)));
  }
  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
  const head='<hierarchy><node package="com.ss.android.ugc.aweme" bounds="[0,0][1200,2664]">';
  const field=value=>head+`<node text="${value}" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" hint="人工智能" clickable="true" bounds="[0,0][200,200]"/></node></hierarchy>`;
- const panel=head+'<node text="分享给"/><node text="分享链接" clickable="true" bounds="[40,2300][300,2360]"/></node></hierarchy>';
+ // 合成面板遵循真机功能容器合同；不放宽生产selector或nonce核验。
+ const panel=head+'<node text="分享给" package="com.ss.android.ugc.aweme" enabled="true" bounds="[40,1900][300,1960]"/><node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/function_container" enabled="true" bounds="[0,2200][1200,2450]"><node text="分享链接" package="com.ss.android.ugc.aweme" enabled="true" clickable="true" bounds="[40,2300][300,2360]"/></node></node></hierarchy>';
  writeFileSync(join(d,'registry'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
  const guide=readFileSync(join(fixtures,'real-copy-success-guide-13.xml'),'utf8');
  writeFileSync(join(d,'guide.xml'),guideWrongMarker?guide.replace('可以通过分享的链接找到我','其他引导'):guide);
@@ -59,7 +61,7 @@ else if(has('input keyevent 279'))s.field=s.clip;
 else if(has('input keyevent 67'))s.field='';
 else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.scratchReturns=(s.scratchReturns||0)+1;s.page=process.env.COPY_GUIDE==='1'&&s.scratchReturns===2?'guide':'detail';}else if(s.page==='guide'){s.guideDismisses=(s.guideDismisses||0)+1;s.page=process.env.GUIDE_DISMISS_STUCK==='1'?'guide':process.env.GUIDE_DISMISS_FAILS==='1'?'partial':'detail';}else if(s.page==='panel')s.page='detail';else if(process.env.KEYWORD_RESULTS==='1'&&s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
-else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
+else if(has('input tap')&&s.page==='panel'){if(a.slice(-2).join(' ')!=='170 2330'){console.error('UNTRUSTED_FAKE_PANEL_TAP');process.exit(33);}s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){
  if(process.env.GUIDE_DISMISS_IDLE==='1'&&s.page==='detail'&&s.guideDismisses&&!s.guideIdleRecovered){
@@ -82,6 +84,8 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const adbText=readFileSync(adb,'utf8').replace('head+`',JSON.stringify(head)+'+`');writeFileSync(adb,adbText,{mode:0o755});
  const curl=join(d,'curl');writeFileSync(curl,`#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/${wrongId?'7646309328911907196':vid}\\r\\n\\r\\n'\n`,{mode:0o755});
  const wrapper=join(d,'ctl');writeFileSync(wrapper,`#!/bin/zsh
+ original_args=("$@")
+ [[ "$3" != --lock-owner ]] || set -- "$1" "$2" "\${@:5}"
  print -r -- "$3:\${DOUYIN_DETAIL_PLAYBACK:-standard}" >> "$FAKE_PHONE_DIR/command-env"
  case "$3" in
   lock-refresh) print lock=refreshed;exit 0;;
@@ -90,11 +94,13 @@ fs.writeFileSync(sfile,JSON.stringify(s));
   record-stop) print "record_stopped capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true duration_seconds=25.1 audio_streams=1 mean_volume_db=-35 playback_package=com.ss.android.ugc.aweme playback_state=1${fakeBoundaryNativeFields('$4','end')}";exit 0;;
   record-extract-audio) print fixture-audio > "$FAKE_PHONE_DIR/record.wav";print "audio_extracted path=$FAKE_PHONE_DIR/record.wav";exit 0;;
  esac
- exec zsh '${runner}' "$@"
+ exec zsh '${runner}' "\${original_args[@]}"
 `,{mode:0o755});
  const qualify=join(d,'qualify');writeFileSync(qualify,"#!/bin/sh\nprintf 'QUAL_RESULT {\"verdict\":\"matched\"}\\n'\n",{mode:0o755});
  writeFileSync(join(d,'scp'),'#!/usr/bin/env node\nconst fs=require("fs");process.exit(fs.existsSync(process.argv.at(-2))?0:4);\n',{mode:0o755});
  const tmp=join(d,'tmp'),cache=join(d,'.config/openclaw/locate-cache');mkdirSync(cache,{recursive:true});
+ // 队列已持锁：建本测试自己的lease，实际controller/guard仍验证owner。
+ const lock=join(tmp,'locks','SER1.lock');mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),'continuous-run');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)));
  // 同目标旧短链使本次必须走nonce；不得关闭COPY_STALE。
  writeFileSync(join(cache,'legacy-last-clip.txt'),'https://v.douyin.com/Fresh/\n');
  const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,

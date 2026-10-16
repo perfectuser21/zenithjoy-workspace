@@ -38,8 +38,8 @@ const SHARE_BTN = `<node index="3" text="" resource-id="" class="android.widget.
 // （播放键 content-desc 反映当前状态：「暂停视频，按钮」=已暂停，「播放视频，按钮」=在播放，0930 真机证据）
 const playBtn = (state) => `<node index="4" text="" resource-id="" class="android.widget.ImageView" package="${PKG}" content-desc="${state === 'paused' ? '暂停视频' : '播放视频'}，按钮" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[560,1200][640,1280]" />`;
 const detailXml = (state) => `${XML_HEAD}<node index="1" text="${KW}" resource-id="${PKG}:id/et_search_kw" ${NODE_TAIL}${SHARE_BTN}${playBtn(state)}</node></hierarchy>`;
-// 分享面板：分享给 / 分享链接
-const PANEL_XML = `${XML_HEAD}${SHARE_BTN}<node index="5" text="分享给" resource-id="" class="android.widget.TextView" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[40,1900][300,1960]" /><node index="6" text="分享链接" resource-id="" class="android.widget.TextView" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[40,2300][300,2360]" /></node></hierarchy>`;
+// 合成分享面板：按真机功能容器结构建模，保留旧版text标签；坐标仅用于fake ADB动作断言。
+const PANEL_XML = `${XML_HEAD}${SHARE_BTN}<node index="5" text="分享给" resource-id="" class="android.widget.TextView" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[40,1900][300,1960]" /><node package="${PKG}" resource-id="${PKG}:id/function_container" enabled="true" clickable="false" bounds="[0,2200][1200,2450]"><node index="6" text="分享链接" resource-id="" class="android.widget.TextView" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[40,2300][300,2360]" /></node></node></hierarchy>`;
 // 暂存解析页：搜索框里是整段分享文案+短链，没有分享按钮、没有卡片
 const SCRATCH_XML = `${XML_HEAD}<node index="1" text="8.28 复制打开抖音，看看【测试的作品】人工智能怎么学... ${LINK} :4pm 02/25 aNw:/ i@C.hb " resource-id="${PKG}:id/et_search_kw" ${NODE_TAIL}</node></hierarchy>`;
 const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
@@ -114,7 +114,7 @@ case "$*" in
           if [ "${interactiveCenter ? '1' : '0'}" = 1 ];then pop;push feed
           elif [ "$(cat "$D/play_state")" = playing ];then echo paused > "$D/play_state";else echo playing > "$D/play_state";fi
         elif [ "$x $y" = "1130 1550" ];then echo 1 > "$D/panel"
-        elif [ "$x $y" = "170 2204" ];then echo 0 > "$D/panel";fi
+        elif [ "$x $y" = "170 2330" ];then echo 0 > "$D/panel";fi
       fi ;;
   *"uiautomator dump"*)
       t=$(top)
