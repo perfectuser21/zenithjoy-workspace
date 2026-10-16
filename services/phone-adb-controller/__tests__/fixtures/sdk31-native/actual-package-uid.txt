@@ -1,0 +1,2 @@
+package:com.ss.android.ugc.aweme uid:10095
+package:com.ss.android.ugc.aweme.mobile uid:10087

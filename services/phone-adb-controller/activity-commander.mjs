@@ -68,7 +68,7 @@ export function openRouterCommander({ model = 'google/gemini-2.5-flash', timeout
 }
 
 // Exact producer error names: capability/strategy/evidence gaps are not UI repair requests.
-export const isCaptureContractFailure=evidence=>/\b(?:RECORD_AUDIO_STRATEGY_UNSUPPORTED|RECORD_AUDIO_CAPTURE_UNAVAILABLE|RECORD_AUDIO_TRACK_UNVERIFIED|RECORD_CAPTURE_STRATEGY_UNVERIFIED|RECORD_CAPTURE_SILENT)\b/.test(JSON.stringify(evidence));
+export const isCaptureContractFailure=evidence=>/\b(?:RECORD_AUDIO_STRATEGY_UNSUPPORTED|RECORD_AUDIO_CAPTURE_UNAVAILABLE|RECORD_AUDIO_TRACK_UNVERIFIED|RECORD_CAPTURE_STRATEGY_UNVERIFIED|RECORD_CAPTURE_SILENT|RECORD_AUDIO_DECODE_UNVERIFIED)\b/.test(JSON.stringify(evidence));
 
 export async function runActivity({ activity, context, execute, commander, record, recover }) {
   const cleanup = activity.key === 'cleanup';

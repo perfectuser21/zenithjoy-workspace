@@ -13,6 +13,7 @@ import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
+import {assertCaptureStrategy} from './capture-strategy.mjs';
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
 export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine}) {
@@ -402,10 +403,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
             failures.push({video_id:v.video_id,code:first.exit_code,stage:first.phase,reason:safeExecutionDiagnostic(first.stderr,env).slice(-1500)});
             continue;
           }
-          if(proof.capture_audio_mode!=='playback_dup'||!Number.isSafeInteger(proof.capture_audio_sdk)||proof.capture_audio_sdk<33||proof.capture_audio_required!==true||proof.capture_audio_sdk_evidence_file!==proof.evidence_id+'.capture-sdk.txt'||!/^[a-f0-9]{64}$/.test(proof.capture_audio_sdk_evidence_sha256||''))throw Error('RECORD_CAPTURE_STRATEGY_UNVERIFIED');
-          const captureEnd=proof.capture_audio_end;
-          if(!captureEnd||captureEnd.mode!==proof.capture_audio_mode||captureEnd.sdk!==proof.capture_audio_sdk||captureEnd.required!==true||captureEnd.sdk_evidence_file!==proof.capture_audio_sdk_evidence_file||captureEnd.sdk_evidence_sha256!==proof.capture_audio_sdk_evidence_sha256)throw Error('RECORD_CAPTURE_STRATEGY_UNVERIFIED');
-          if(!Number.isSafeInteger(proof.audio_streams)||proof.audio_streams<1)throw Error('RECORD_AUDIO_TRACK_UNVERIFIED');
+          assertCaptureStrategy(proof);
+          if(proof.capture_audio_mode==='output_pcm_sdk31'&&proof.decoded_audio.requested_seconds!==Number(env.QUEUED_VIDEO_RECORD_SECONDS||25))throw Error('RECORD_AUDIO_DECODE_UNVERIFIED');
           if(proof.capture_audio_verified!==true)throw Error(proof.audio_status==='silent'||Number.isFinite(proof.mean_volume_db)&&proof.mean_volume_db<=-80?'RECORD_CAPTURE_SILENT':'RECORD_CAPTURE_STRATEGY_UNVERIFIED');
           if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
           mediaVerified++;
@@ -414,6 +413,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
             if(p?.state!=='started'||p.package_uid_verified!==true||p.foreign_started!==0||!['uid','pid','piid'].every(k=>Number.isSafeInteger(p[k])&&p[k]>0)
               ||!['evidence','package_uid','uid_owners'].every((k,i)=>p[k+'_file']===prefix+'.'+['audio.txt','package-uid.txt','uid-owners.txt'][i]&&/^[0-9a-f]{64}$/.test(p[k+'_sha256']||'')))throw Error('本轮native音轨或UID/raw证据不符');return p;});
           if(nativePhases[0].uid!==nativePhases[1].uid)throw Error('本轮native音轨UID发生变化');
+          if(proof.capture_audio_mode==='output_pcm_sdk31'){
+            const restored=proof.native_audio_restored,prefix=proof.evidence_id+'-playback-restored';
+            if(!restored||!['started','inactive'].includes(restored.state)||restored.uid!==nativePhases[0].uid||restored.package_uid_verified!==true||restored.foreign_started!==0||!['evidence','package_uid','uid_owners'].every((k,i)=>restored[k+'_file']===prefix+'.'+['audio.txt','package-uid.txt','uid-owners.txt'][i]&&/^[0-9a-f]{64}$/.test(restored[k+'_sha256']||'')))throw Error('RECORD_AUDIO_RESTORE_UNVERIFIED');
+          }
           if(result.code===0&&verdict==='rejected'&&marker[3]==='recording_silent'){
             const receipt=await queue('reject_recording',{video_id:v.video_id,recording:proof});
             if(receipt?.verified!==true||receipt.video_id!==v.video_id||receipt.verdict!=='rejected'||receipt.kind!=='recording_silent')throw Error('本轮录音拒绝缺真实PG回执');

@@ -1,0 +1,20 @@
+PlaybackActivityMonitor dump time: 下午1:33:08
+
+  playback listeners:
+ (S)com.android.server.audio.PlaybackActivityMonitor$PlayMonitorClient@1fb5a30 (S)com.android.server.audio.PlaybackActivityMonitor$PlayMonitorClient@ea036a9 (S)com.android.server.audio.PlaybackActivityMonitor$PlayMonitorClient@a94f42e (P)com.android.server.audio.PlaybackActivityMonitor$PlayMonitorClient@d662bcf (P)com.android.server.audio.PlaybackActivityMonitor$PlayMonitorClient@6f3e95c
+
+
+  players:
+  AudioPlaybackConfiguration piid:63 deviceId:0 type:android.media.SoundPool u/pid:1000/669 state:idle attr:AudioAttributes: usage=USAGE_ASSISTANCE_SONIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800 tags= bundle=null sessionId:0
+  AudioPlaybackConfiguration piid:71 deviceId:0 type:android.media.SoundPool u/pid:10072/1398 state:idle attr:AudioAttributes: usage=USAGE_ASSISTANCE_SONIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800 tags= bundle=null sessionId:0
+  AudioPlaybackConfiguration piid:79 deviceId:0 type:unknown player type 0 - FIXME u/pid:10083/2912 state:idle attr:AudioAttributes: usage=USAGE_UNKNOWN content=CONTENT_TYPE_UNKNOWN flags=0x0 tags= bundle=null sessionId:0
+  AudioPlaybackConfiguration piid:303 deviceId:2 type:android.media.AudioTrack u/pid:10095/28604 state:started attr:AudioAttributes: usage=USAGE_MEDIA content=CONTENT_TYPE_MUSIC flags=0x800 tags= bundle=null sessionId:273
+
+  ducked players piids:
+
+  faded out players piids:
+
+  muted player piids:
+
+  banned uids:
+

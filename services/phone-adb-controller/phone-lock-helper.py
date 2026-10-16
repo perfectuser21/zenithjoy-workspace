@@ -54,7 +54,24 @@ def guarded():
         os.execv('/bin/zsh', argv)
 
 
+def is_recording_command(argv):
+    return len(argv) > 6 and argv[4] == '--lock-owner' and argv[6] in ('record-start', 'record-stop')
+
+
+def recording_unknown():
+    print('RECORD_CAPTURE_EXIT_UNVERIFIED guarded recording canceled or guard readback failed; managed recorder requires independent readback; owner lock retained', file=sys.stderr, flush=True)
+
+
 def bounded_command(argv, fd, owner_path=None, expected_owner=None):
+    try:
+        return _bounded_command(argv, fd, owner_path, expected_owner)
+    except Exception:
+        if is_recording_command(argv):
+            recording_unknown()
+        raise
+
+
+def _bounded_command(argv, fd, owner_path=None, expected_owner=None):
     budget = int(os.environ.get('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS', '280'))
     if not 1 <= budget <= 280:
         print('guarded command budget must be 1..280 seconds', file=sys.stderr)
@@ -80,6 +97,8 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
             if not canceled[0]:
                 sys.exit(code if code >= 0 else 128 - code)
         break
+    if is_recording_command(argv):
+        recording_unknown()
     # 不先reap根进程，避免PID被复用；终止整个原进程组后才回收并放开guard。
     for sig in (() if root_reaped else (signal.SIGTERM, signal.SIGKILL)):
         try:
@@ -95,6 +114,11 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
     if not owner_matches(owner_path, expected_owner):
         raise RuntimeError('guarded command owner preservation unproven')
     print('lock=preserved owner=' + expected_owner, file=sys.stderr)
+    # The recorder intentionally owns a separate session. Ending this command's
+    # group cannot prove that recorder ended; propagate unknown to Commander so
+    # the owner/video leases are retained and cleanup/retry/Skill cannot run.
+    if is_recording_command(argv):
+        sys.exit(canceled[0] or 124)
     if not canceled[0]:
         print('guarded command timeout: whole command and children terminated; owner lock retained', file=sys.stderr)
     sys.exit(canceled[0] or 124)

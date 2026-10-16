@@ -2552,7 +2552,13 @@ command="${1:-}"
 # 约束：证据不可覆盖；时长 5..1800s 硬上限；大文件留在节点 evidence 目录不回传 Gateway；
 # 结束必须 ffprobe 双流验证——有视频没音频要明报失败，不得静默当成功（ASR 靠的就是音频）。
 record_pid_file() { print -- "$EVIDENCE_ROOT/$1.rec.pid" }
-record_out_file() { print -- "$EVIDENCE_ROOT/$1.rec.mkv" }
+record_out_file() {
+  if [[ -f "$EVIDENCE_ROOT/$1.capture-sdk.txt" && "$(cat "$EVIDENCE_ROOT/$1.capture-sdk.txt")" == 31 ]]; then
+    print -- "$EVIDENCE_ROOT/$1.rec.wav"
+  else
+    print -- "$EVIDENCE_ROOT/$1.rec.mkv"
+  fi
+}
 
 # set_playback_speed <倍速值如3.0> <evidence_id>：抖音详情页长按调菜单→视觉定位对应倍速档→点。
 # 详情页录制前调用可 N 倍速缩短录制时长（3倍速实测转写清晰）。单手机、零登录依赖。
@@ -2677,17 +2683,21 @@ PYPLAYHASH
 
 # 当前native音轨与包UID独立读回；MediaSession仅保存诊断原值，不充当播放事实。
 record_native_audio() {
-  local eid="$1" uid="" result media_state
+  local eid="$1" uid="" result media_state native_sdk=""
   require_evidence_id "$eid"
   umask 077
   /bin/mkdir -p "$EVIDENCE_ROOT"
   media_state="$(record_playback_state "$eid")"
+  native_sdk="$("$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" || native_sdk=""
+  print -r -- "$native_sdk" > "$EVIDENCE_ROOT/$eid.native-sdk.txt"
+  /bin/chmod 600 "$EVIDENCE_ROOT/$eid.native-sdk.txt"
   "$ADB" -s "$SERIAL" shell cmd package list packages -U "$DOUYIN_PACKAGE" > "$EVIDENCE_ROOT/$eid.package-uid.txt" 2>/dev/null || true
   uid="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.package-uid.txt" "$DOUYIN_PACKAGE" <<'PYUID'
 import re,sys
 lines=open(sys.argv[1]).read().splitlines()
-m=re.fullmatch(r'package:'+re.escape(sys.argv[2])+r' uid:([0-9]+)',lines[0].strip()) if len(lines)==1 else None
-print(m.group(1) if m and int(m.group(1))>0 else '')
+# Android包过滤是前缀/子串匹配；只认唯一完整主包，不把aweme.mobile当主包。
+matches=[m.group(1) for line in lines if (m:=re.fullmatch(r'package:'+re.escape(sys.argv[2])+r' uid:([0-9]+)',line.strip()))]
+print(matches[0] if len(matches)==1 and int(matches[0])>0 else '')
 PYUID
 )"
   : > "$EVIDENCE_ROOT/$eid.uid-owners.txt"
@@ -2696,7 +2706,7 @@ PYUID
   fi
   "$ADB" -s "$SERIAL" shell dumpsys audio > "$EVIDENCE_ROOT/$eid.audio.txt" 2>/dev/null || true
   /bin/chmod 600 "$EVIDENCE_ROOT/$eid.package-uid.txt" "$EVIDENCE_ROOT/$eid.uid-owners.txt" "$EVIDENCE_ROOT/$eid.audio.txt"
-  result="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.audio.txt" "$EVIDENCE_ROOT/$eid.uid-owners.txt" "$uid" "$DOUYIN_PACKAGE" "$EVIDENCE_ROOT/$eid.native-audio.json" "$EVIDENCE_ROOT/$eid.foreground.txt" <<'PYNATIVE'
+  result="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.audio.txt" "$EVIDENCE_ROOT/$eid.uid-owners.txt" "$uid" "$DOUYIN_PACKAGE" "$EVIDENCE_ROOT/$eid.native-audio.json" "$EVIDENCE_ROOT/$eid.foreground.txt" "$native_sdk" <<'PYNATIVE'
 import re,sys,json,os
 raw=open(sys.argv[1]).read();owners=open(sys.argv[2]).read().splitlines();uid=sys.argv[3];pkg=sys.argv[4]
 p={'unparsed_media_tracks':[],'kind':'native_audio','state':'unknown','uid':int(uid) if uid.isdigit() else None,'package_uid_verified':False,'tracks':[],'foreign_started':[]}
@@ -2705,7 +2715,30 @@ fg=open(sys.argv[6]).read();p['foreground_verified']=re.findall(r'(?<![\w.])([A-
 if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 and owners[0].strip()==expected:
  p['package_uid_verified']=True
  monitor=re.search(r'(?m)^PlaybackActivityMonitor[^\n]*$',raw)
- if monitor:
+ if monitor and sys.argv[7]=='31':
+  # SDK31无逐轨mutedState/FormatInfo；只能用本次完整当前players及明确全局静音段。
+  # 旧事件日志不证明当前播放；缺段、未知格式、非空静音/禁用集合都不猜成none。
+  current=re.split(r'(?m)^[ \t]*(?:Audio event log:|Events log:)',raw[monitor.end():],maxsplit=1)[0]
+  names=['players','ducked players piids','faded out players piids','muted player piids','banned uids']
+  headers=list(re.finditer(r'(?m)^[ \t]*('+ '|'.join(map(re.escape,names))+r'):[ \t]*',current))
+  if [m.group(1) for m in headers]==names:
+   sections=[current[m.end():headers[i+1].start() if i+1<len(headers) else len(current)] for i,m in enumerate(headers)]
+   if all(not section.strip() for section in sections[1:]):
+    for line in sections[0].splitlines():
+     if not line.strip():continue
+     m=re.fullmatch(r'[ \t]*AudioPlaybackConfiguration piid:([0-9]+) deviceId:[0-9]+ type:(.+?) u/pid:([0-9]+)/([0-9]+) state:([a-z]+) attr:AudioAttributes: usage=(\w+) .*',line)
+     if not m or m[5] not in ('idle','started','paused','stopped','released') or any(int(m[i])<=0 for i in (1,3,4)):
+      p['unparsed_media_tracks'].append(line);continue
+     track={'piid':int(m[1]),'uid':int(m[3]),'pid':int(m[4]),'state':m[5],'muted':'none'}
+     target=track['uid']==int(uid) and m[2]=='android.media.AudioTrack' and m[6]=='USAGE_MEDIA'
+     if target:p['tracks'].append(track)
+     elif track['state']=='started':p['foreign_started'].append(track)
+    active=[t for t in p['tracks'] if t['state']=='started']
+    if not p['foreign_started'] and not p['unparsed_media_tracks']:
+     if len(active)==1:
+      p['state']='started';p.update({k:active[0][k] for k in ('pid','piid')})
+     elif p['tracks'] and all(t['state'] in ('paused','stopped','idle') for t in p['tracks']):p['state']='inactive'
+ elif monitor:
   tail=raw[monitor.end():];players=re.search(r'(?m)^[ \t]*players:[ \t]*$',tail)
   if players:
    block=re.split(r'(?m)^[ \t]*Events log:',tail[players.end():],maxsplit=1)[0]
@@ -2838,8 +2871,62 @@ record_recover_native() {
   print -r -- "$result"
 }
 
+# SDK31仅启用已实机验收的独立runtime；默认brew与SDK33+策略不变。
+record_sdk31_runtime() {
+  local eid="$1" root="${DOUYIN_SDK31_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk31}" proof="$EVIDENCE_ROOT/$1.capture-runtime.json" verified staged
+  [[ -n "$LOCK_OWNER" ]] || die "RECORD_CAPTURE_STRATEGY_UNVERIFIED explicit_owner_required"
+  [[ "$root" == /* && ! -e "$proof" && ! -L "$proof" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  local helper="${0:A:h}/runtime/scrcpy-runtime.py"
+  verified="$("$PYTHON_BIN" "$helper" verify --runtime-root "$root")" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  staged="$("$PYTHON_BIN" "$helper" stage-server --runtime-root "$root" --adb-bin "$ADB" --adb-port "${DOUYIN_ADB_PORT:-5041}" --serial "$SERIAL" --owner "$LOCK_OWNER" --lock-dir "$LOCK_DIR" --evidence-root "$EVIDENCE_ROOT" --evidence-id "$eid" --timeout 30)" || die "RECORD_CAPTURE_EXIT_UNVERIFIED sdk31_server_stage_failed"
+  "$PYTHON_BIN" - "$proof" "$verified" "$staged" <<'PYRUNTIME' || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+import os,sys,json
+path,raw,stage=sys.argv[1:];v=json.loads(raw);s=json.loads(stage)
+assert v['verified'] is True and s['verified'] is True and not s.get('execution_stop_unknown')
+assert v['client_sha256']=='7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2'
+assert v['server_sha256']=='764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536'
+fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
+with os.fdopen(fd,'w') as f:json.dump({'runtime':v,'stage':s},f);f.flush();os.fsync(f.fileno())
+PYRUNTIME
+  SCRCPY="$(print -r -- "$verified" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["client_path"])')"
+  export SCRCPY_SERVER_PATH="$(print -r -- "$verified" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["server_path"])')"
+  export ZJ_SCRCPY_STAGE_RECEIPT="$(print -r -- "$staged" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["stage_receipt"])')"
+  export ZJ_SCRCPY_STAGE_RECEIPT_SHA256="$(print -r -- "$staged" | "$PYTHON_BIN" -c 'import json,sys;print(json.load(sys.stdin)["stage_receipt_sha256"])')"
+  export ZJ_SCRCPY_RUNTIME_ROOT="$root" ZJ_SCRCPY_ADB_BIN="$ADB" ZJ_SCRCPY_ADB_PORT="${DOUYIN_ADB_PORT:-5041}" ZJ_SCRCPY_SERIAL="$SERIAL" ZJ_SCRCPY_OWNER="$LOCK_OWNER" ZJ_SCRCPY_LOCK_DIR="$LOCK_DIR" ZJ_SCRCPY_EVIDENCE_ROOT="$EVIDENCE_ROOT" ZJ_SCRCPY_EVIDENCE_ID="$eid" ZJ_SCRCPY_STAGE_TIMEOUT=30
+  CAPTURE_ADB="${0:A:h}/runtime/scrcpy-adb-shim.py"
+  CAPTURE_RUNTIME_FIELDS="capture_runtime_client_sha256=7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2 capture_runtime_server_sha256=764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536 capture_runtime_evidence_file=$eid.capture-runtime.json capture_runtime_evidence_sha256=$(record_playback_hash "$eid.capture-runtime.json")"
+}
+
+# 仅终止本eid启动原件中同一UID、出生时间、完整argv的进程；PID文件本身不是执行权。
+record_owned_signal() {
+  "$PYTHON_BIN" - "$EVIDENCE_ROOT/$1.capture-startup.json" "$2" "$3" <<'PYOWNEDSIGNAL'
+import os,sys,json,stat,subprocess,shlex,signal
+path,pid,sig=sys.argv[1:];pid=int(pid)
+fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+with os.fdopen(fd) as f:
+ assert stat.S_ISREG(os.fstat(f.fileno()).st_mode);p=json.load(f)
+assert p['status']=='ready' and p['pid']==pid and p['expected_argv']
+original=p['observations'][-1]['ps'].split(None,8);assert len(original)==9
+assert original[0]==str(os.getuid())
+r=subprocess.run(['/bin/ps','-ww','-p',str(pid),'-o','uid=,ppid=,lstart=,stat=,command='],capture_output=True,text=True,timeout=1)
+if r.returncode==1 and not r.stdout.strip():
+ try:os.kill(pid,0)
+ except ProcessLookupError:sys.exit(0)
+ raise AssertionError('process existence unknown')
+assert r.returncode==0
+now=r.stdout.strip().split(None,8);assert len(now)==9
+assert now[0]==original[0] and now[2:7]==original[2:7] and now[1] in [str(p['parent_pid']),'1']
+if now[7].startswith('Z'):sys.exit(0)
+args=shlex.split(now[8]);expected=p['expected_argv']
+if args and args[0] in ['/bin/zsh','/bin/sh','/bin/bash']:args=args[1:]
+assert args and os.path.realpath(args[0])==os.path.realpath(expected[0]) and args[1:]==expected[1:]
+try:os.kill(pid,{'INT':signal.SIGINT,'TERM':signal.SIGTERM,'KILL':signal.SIGKILL}[sig])
+except ProcessLookupError:pass
+PYOWNEDSIGNAL
+}
+
 record_start() {
-  local eid max out pidf pid sdk="" playback_state=unknown playback_try native="" native_state=unknown
+  local eid max out pidf pid sdk="" capture_mode=playback_dup capture_container=matroska playback_state=unknown playback_try native="" native_state=unknown
   eid="$1"; max="${2:-110}"
   require_evidence_id "$eid"
   require_uint "$max"
@@ -2876,7 +2963,21 @@ except (OSError,AssertionError) as error:
  print('RECORD_CAPTURE_STRATEGY_UNVERIFIED reason=sdk_evidence_'+phase+'_failed errno='+str(getattr(error,'errno',None)),file=sys.stderr)
  sys.exit(1)
 PYSDKCREATE
-  [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die "RECORD_AUDIO_STRATEGY_UNSUPPORTED sdk=${sdk:-unknown} minimum=33"
+  CAPTURE_RUNTIME_FIELDS=""; CAPTURE_ADB="$ADB"
+  if [[ "$sdk" == 31 ]]; then
+    record_sdk31_runtime "$eid" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+    capture_mode=output_pcm_sdk31; capture_container=wav
+  else
+    [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die "RECORD_AUDIO_STRATEGY_UNSUPPORTED sdk=${sdk:-unknown} minimum=33_or_verified_sdk31"
+  fi
+  out="$(record_out_file "$eid")"
+  [[ ! -e "$out" && ! -L "$out" ]] || die "recording artifact already exists: $out"
+  local -a capture_args
+  if [[ "$capture_mode" == output_pcm_sdk31 ]]; then
+    capture_args=(-s "$SERIAL" --no-window --no-playback --no-video --audio-source=output --audio-codec=raw --record-format=wav --require-audio --record="$out" --time-limit="$max")
+  else
+    capture_args=(-s "$SERIAL" --no-window --no-playback --audio-source=playback --audio-dup --require-audio --record="$out" --time-limit="$max")
+  fi
   # 媒体音量必须非 0，否则录到 -91dB 死寂、ASR 必挂；幂等驱动到最低非零档，
   # 稳态零按键、不再形成音量棘轮。依据见 ensure_media_volume 注释。
   _foreground_is_exact_douyin "$(foreground_package)" || die "RECORD_PLAYBACK_WRONG_FOREGROUND"
@@ -2918,15 +3019,37 @@ PYSDKCREATE
   playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
   # --no-window：无头 Mac 上禁止起 Metal 渲染窗口。实测教训：带窗口连录数轮后整机离网
   # （m4 于 20260831 录制中失联 1 小时+），无头图形渲染是 Mac mini 经典死法。
-  ADB="$ADB" "$SCRCPY" -s "$SERIAL" --no-window --no-playback --audio-source=playback --audio-dup --require-audio --record="$out" --time-limit="$max" \
-    > "$EVIDENCE_ROOT/$eid.rec.log" 2>&1 &
-  pid=$!
-  print -- "$pid" > "$pidf"
+  # Popen等待exec确认，再返PID；录制独立session且不继承guard FD，命令返回后可重新取guard。
+  pid="$(ADB="$CAPTURE_ADB" "$PYTHON_BIN" - "$pidf" "$EVIDENCE_ROOT/$eid.rec.log" "$SCRCPY" "${capture_args[@]}" <<'PYLAUNCHREC'
+import os,sys,subprocess,signal
+pidfile,log,*argv=sys.argv[1:];child=None
+pfd=os.open(pidfile,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
+try:
+ lfd=os.open(log,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
+ try:
+  env=os.environ.copy()
+  for key in ['DOUYIN_LOCK_GUARD_FD','DOUYIN_LOCK_GUARDED']:env.pop(key,None)
+  child=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=lfd,stderr=subprocess.STDOUT,env=env,start_new_session=True,close_fds=True)
+ finally:os.close(lfd)
+ os.write(pfd,(str(child.pid)+'\n').encode());os.fsync(pfd)
+ print(child.pid)
+except BaseException:
+ if child is not None:
+  try:os.killpg(child.pid,signal.SIGTERM);child.wait(timeout=1)
+  except ProcessLookupError:pass
+  except BaseException:
+   try:os.killpg(child.pid,signal.SIGKILL);child.wait(timeout=1)
+   except BaseException:print('RECORD_CAPTURE_EXIT_UNVERIFIED launch_cleanup_unknown',file=sys.stderr)
+ raise
+finally:os.close(pfd)
+PYLAUNCHREC
+)" || die "RECORD_CAPTURE_EXIT_UNVERIFIED launch_failed"
+  [[ "$pid" == <-> ]] && (( pid > 1 )) || die RECORD_CAPTURE_EXIT_UNVERIFIED
   local ready_rc=0
-  "$PYTHON_BIN" - "$pid" "$$" "$SCRCPY" "$SERIAL" "$out" "$EVIDENCE_ROOT/$eid.rec.log" "$max" "$EVIDENCE_ROOT/$eid.capture-startup.json" <<'PYCAPTUREREADY' || ready_rc=$?
+  "$PYTHON_BIN" - "$pid" "1" "$SCRCPY" "$SERIAL" "$out" "$EVIDENCE_ROOT/$eid.rec.log" "$max" "$EVIDENCE_ROOT/$eid.capture-startup.json" "$capture_container" "${capture_args[@]}" <<'PYCAPTUREREADY' || ready_rc=$?
 import os,sys,time,stat,subprocess,shlex,signal,json,errno
 pid,parent=int(sys.argv[1]),int(sys.argv[2]);binary,serial,out,log=sys.argv[3:7];maximum=int(sys.argv[7]);proof=sys.argv[8]
-expected=[binary,'-s',serial,'--no-window','--no-playback','--audio-source=playback','--audio-dup','--require-audio','--record='+out,'--time-limit='+str(maximum)]
+container=sys.argv[9];expected=[binary,*sys.argv[10:]]
 observations=[];identity=None;reason='readiness_timeout';stopped=False
 # Startup is capped at 8s and reserves workflow time for owned termination.
 # Stop observations are separately bounded; the outer action still owns the deadline.
@@ -2963,8 +3086,8 @@ def ready():
   media=os.lstat(out);journal=os.lstat(log)
   if not stat.S_ISREG(media.st_mode) or media.st_size<=0 or not stat.S_ISREG(journal.st_mode):return False
   with open(log) as source:lines=[line.rstrip('\r\n') for line in source]
-  if 'INFO: Recording complete to matroska file: '+out in lines:return 'complete'
-  return 'INFO: Recording started to matroska file: '+out in lines
+  if 'INFO: Recording complete to '+container+' file: '+out in lines:return 'complete'
+  return 'INFO: Recording started to '+container+' file: '+out in lines
  except (OSError,UnicodeError):return False
 def save(status):
  value={'pid':pid,'parent_pid':parent,'expected_argv':expected,'status':status,'reason':reason,'execution_stopped':stopped,'observations':observations}
@@ -3007,7 +3130,7 @@ PYCAPTUREREADY
     fi
     die "RECORD_CAPTURE_EXIT_UNVERIFIED recorder startup/termination unknown; see $EVIDENCE_ROOT/$eid.capture-startup.json"
   fi
-  print -- "record_started capture_audio_mode=playback_dup capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
+  print -- "record_started capture_audio_mode=$capture_mode $CAPTURE_RUNTIME_FIELDS capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
 }
 
 record_status() {
@@ -3022,7 +3145,7 @@ record_status() {
 }
 
 record_stop() {
-  local eid pidf out pid i dur vstreams astreams playback_state native sdk
+  local eid pidf out pid i dur vstreams astreams playback_state native sdk capture_mode=playback_dup runtime_fields=""
   eid="$1"; require_evidence_id "$eid"
   native="$(record_native_audio "$eid-playback-end")"
   playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
@@ -3030,7 +3153,7 @@ record_stop() {
   if [[ -f "$pidf" ]]; then
     pid="$(cat "$pidf")"
     if kill -0 "$pid" 2>/dev/null; then
-      kill -INT "$pid" 2>/dev/null
+      record_owned_signal "$eid" "$pid" INT || die RECORD_CAPTURE_EXIT_UNVERIFIED
       for i in {1..20}; do
         kill -0 "$pid" 2>/dev/null || break
         wait_ms 500
@@ -3038,8 +3161,9 @@ record_stop() {
     fi
     if kill -0 "$pid" 2>/dev/null; then
       # SIGINT 未退（HONOR 长录实测）：升级 TERM→KILL，绝不留僵尸录制进程；文件靠下方 remux 救活。
-      kill -TERM "$pid" 2>/dev/null; wait_ms 2000
-      kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+      record_owned_signal "$eid" "$pid" TERM || die RECORD_CAPTURE_EXIT_UNVERIFIED
+      wait_ms 2000
+      if kill -0 "$pid" 2>/dev/null; then record_owned_signal "$eid" "$pid" KILL || die RECORD_CAPTURE_EXIT_UNVERIFIED; fi
       wait_ms 500
     fi
     kill -0 "$pid" 2>/dev/null && die "RECORD_CAPTURE_EXIT_UNVERIFIED"
@@ -3066,11 +3190,26 @@ record_stop() {
   [[ -f "$out" ]] || die "no recording artifact at $out"
   [[ -f "$EVIDENCE_ROOT/$eid.capture-sdk.txt" && ! -L "$EVIDENCE_ROOT/$eid.capture-sdk.txt" ]] || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
   sdk="$(cat "$EVIDENCE_ROOT/$eid.capture-sdk.txt")"
-  [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  if [[ "$sdk" == 31 ]]; then
+    capture_mode=output_pcm_sdk31
+    runtime_fields="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.capture-runtime.json" "$eid" <<'PYSTOPRUNTIME'
+import json,sys,os,stat,hashlib
+path,eid=sys.argv[1:];fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+with os.fdopen(fd,'rb') as f:
+ assert stat.S_ISREG(os.fstat(f.fileno()).st_mode);raw=f.read(65537);assert len(raw)<=65536
+v=json.loads(raw);r=v['runtime'];assert r['verified'] is True and v['stage']['verified'] is True and not v['stage'].get('execution_stop_unknown')
+assert r['client_sha256']=='7c15cbe29c58495b329fcd0737feeb3d10ddbf9d27ff1f6c6438b3c49dc2edb2' and r['server_sha256']=='764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536'
+print('capture_runtime_client_sha256='+r['client_sha256']+' capture_runtime_server_sha256='+r['server_sha256']+' capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+hashlib.sha256(raw).hexdigest())
+PYSTOPRUNTIME
+)" || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  else
+    [[ "$sdk" =~ '^[0-9]{2}$' ]] && (( 10#$sdk >= 33 )) || die RECORD_CAPTURE_STRATEGY_UNVERIFIED
+  fi
   vstreams="$("$FFPROBE" -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c video || true)"
   astreams="$("$FFPROBE" -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c audio || true)"
   dur="$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$out" 2>/dev/null || true)"
   if [[ -z "$dur" || "$dur" == "N/A" ]]; then
+    [[ "$capture_mode" != output_pcm_sdk31 ]] || die RECORD_AUDIO_DECODE_UNVERIFIED
     # 未封尾 mkv（scrcpy 被硬杀）：无损 remux 重建索引即可救活（实测有效）。
     "$FFMPEG" -v error -y -i "$out" -c copy "${out}.fixed.mkv" 2>/dev/null && /bin/mv -f "${out}.fixed.mkv" "$out"
     vstreams="$("$FFPROBE" -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c video || true)"
@@ -3078,7 +3217,14 @@ record_stop() {
     dur="$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$out" 2>/dev/null || true)"
     print -u2 -- "warning: recording remuxed to recover unfinalized container (duration=${dur:-unknown})"
   fi
-  (( vstreams >= 1 )) || die "recording has no video stream: $out"
+  if [[ "$capture_mode" == output_pcm_sdk31 ]]; then
+    (( vstreams == 0 && astreams == 1 )) || die RECORD_AUDIO_TRACK_UNVERIFIED
+    local codec
+    codec="$("$FFPROBE" -v error -select_streams a -show_entries stream=codec_name -of csv=p=0 "$out")" || die RECORD_AUDIO_TRACK_UNVERIFIED
+    [[ "$codec" == pcm_s16le ]] || die RECORD_AUDIO_TRACK_UNVERIFIED
+  else
+    (( vstreams >= 1 )) || die "recording has no video stream: $out"
+  fi
   # 电平打点（0924 扩机护栏）：音量↔采集电平的开关关系只在 HONOR MAA-AN00/Android 15
   # 实测过（音量0=-91dB 死寂 / 音量1=-35.4dB / 音量4=-35.3dB）。换机型若真录到死寂，
   # 下面 astreams>=1 照样通过——音轨"存在"但全是静音，通义 ASR 报
@@ -3089,10 +3235,24 @@ record_stop() {
   # volumedetect 的结果是 info 级 stderr，用 -v error 会把它一起吞掉。
   # || true 不可省：本脚本 set -euo pipefail，函数内命令替换失败会直接打死整个进程，
   # 那样连 record_stopped 这行都发不出去，比没打点更糟。
-  local mean_db
+  local mean_db restored_fields
+  restored_fields="$(print -r -- "$restored" | "$PYTHON_BIN" -c 'import sys; print(" ".join("native_audio_restored_"+x[len("native_audio_"):] for x in sys.stdin.read().split() if x.startswith("native_audio_")))')"
+  local decoded_fields="" requested
+  if [[ "$capture_mode" == output_pcm_sdk31 ]]; then
+    requested="$("$PYTHON_BIN" - "$EVIDENCE_ROOT/$eid.capture-startup.json" <<'PYREQUESTED'
+import json,sys
+p=json.load(open(sys.argv[1]));assert p['status']=='ready'
+a=[x.split('=',1)[1] for x in p['expected_argv'] if x.startswith('--time-limit=')];assert len(a)==1 and a[0].isdigit() and 5<=int(a[0])<=320
+print(a[0])
+PYREQUESTED
+)" || die RECORD_AUDIO_DECODE_UNVERIFIED
+    decoded_fields="$("$PYTHON_BIN" "${0:A:h}/decode-recording.py" --media "$out" --ffmpeg "$FFMPEG" --requested-seconds "$requested" --evidence-file "$EVIDENCE_ROOT/$eid.decode.json")" || die RECORD_AUDIO_DECODE_UNVERIFIED
+    mean_db="$(print -r -- "$decoded_fields" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
+  else
   mean_db="$("$FFMPEG" -hide_banner -nostats -v info -i "$out" -vn -af volumedetect -f null - 2>&1 \
     | /usr/bin/grep -o 'mean_volume: [-0-9.]* dB' | /usr/bin/tail -1 | /usr/bin/awk '{print $2}' || true)"
-  print -- "record_stopped capture_audio_mode=playback_dup capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") playback_restored=true path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown} playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
+  fi
+  print -- "record_stopped capture_audio_mode=$capture_mode $runtime_fields $restored_fields $decoded_fields capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") playback_restored=true path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams audio_codec=${codec:-unknown} mean_volume_db=${mean_db:-unknown} playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-end.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-end.media-session.txt") playback_foreground_file=$eid-playback-end.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-end.foreground.txt")"
   if [[ -n "$mean_db" ]] && (( $(print -- "$mean_db" | /usr/bin/awk '{print ($1 <= -80) ? 1 : 0}') )); then
     print -u2 -- "warning: recording is near-silent (mean_volume=${mean_db} dB); ASR will likely return no words — check the phone's speaker-stream volume is non-zero"
   fi
@@ -4190,7 +4350,7 @@ fi
 # media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
 if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   case "$command" in
-    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link) ;;
+    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio) ;;
     *) die 'required lock owner is supported only for standalone read commands';;
   esac
   source "${0:A:h}/phone-lock-lib.sh"

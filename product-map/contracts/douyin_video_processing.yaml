@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.2.2
+  version: 0.2.3
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -217,6 +217,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -508,6 +512,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-activity.sh
         revision: contract
       - kind: code
@@ -585,8 +593,8 @@ activities:
   - key: qualification
     name: 判定视频
     order: 3
-    version: 3.1.0
-    compatibility: breaking
+    version: 3.2.0
+    compatibility: backward
     owner:
       department: line02 智能获客
       agent: 视频判定员
@@ -614,6 +622,7 @@ activities:
           - judgment_reason
           - transcript
     preconditions:
+      - SDK≥33使用playback_dup；SDK31仅使用精确SHA固定的已验output_pcm_sdk31运行时，缺原件或SDK32保持pending
       - 从PG认领pending视频，租约绑定本run
       - 深链打开后current-video-link读到的实际video_id必须等于认领ID，不能认控制器回显的期望ID
     postconditions:
@@ -671,7 +680,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-qualification
-        version: 0.1.2
+        version: 0.1.3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -748,6 +757,26 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/queued-video-lib.sh
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/decode-recording.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/scrcpy-runtime.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/scrcpy-adb-shim.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/runtime-policy.json
+        revision: contract
     model:
       - provider: dashscope
         model: qwen-audio-3.0-asr-flash
@@ -802,12 +831,12 @@ activities:
               op: <=
               value: 0
       - key: record_triple_speed
-        name: 3倍速录屏
+        name: 采集口播音频
         order: 3
         reads:
           - Video.video_url
         writes: []
-        check: 录屏文件存在且时长 ≥ 预算的 80%
+        check: 真实媒体时长 ≥ 预算的 80%；SDK31须唯一pcm_s16le音轨、无视频轨及首末固定运行时原件，SDK≥33保留原录屏音轨约束
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh
@@ -1114,6 +1143,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -1463,6 +1496,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/capture-strategy.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
