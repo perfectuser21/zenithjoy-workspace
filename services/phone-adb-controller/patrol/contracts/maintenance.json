@@ -4,7 +4,7 @@
   "capability_id": "2173a385-a743-41f3-bb7d-d0e4b1d51d4e",
   "channel": "Brain",
   "form": "运行维护检查",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "runtime": {
     "skill_id": "23656d5a-6d61-4f7e-82a1-b8ace4e7669e",
     "entrypoint": "/usr/bin/python3 /Users/administrator/.local/share/infra-workflow-commander/releases/f38c5a5635d2f57554efcfee4b09163d10cfe39b/openclaw_native.py maintain --execution-script \"$0\"",
