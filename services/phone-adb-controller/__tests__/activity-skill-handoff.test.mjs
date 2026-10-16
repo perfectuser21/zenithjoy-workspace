@@ -59,7 +59,7 @@ for(const ok of [true,false])test('unknown execution invokes persistent quaranti
 });
 
 // Names fixed by the audio producer contract; producer implementation is separately pending.
-for(const name of ['RECORD_AUDIO_STRATEGY_UNSUPPORTED','RECORD_AUDIO_CAPTURE_UNAVAILABLE','RECORD_AUDIO_TRACK_UNVERIFIED','RECORD_CAPTURE_STRATEGY_UNVERIFIED','RECORD_CAPTURE_SILENT'])test('audio capability or capture-evidence gap cannot trigger Code retry or UI Skill '+name,async()=>{
+for(const name of ['RECORD_AUDIO_STRATEGY_UNSUPPORTED','RECORD_AUDIO_CAPTURE_UNAVAILABLE','RECORD_AUDIO_TRACK_UNVERIFIED','RECORD_CAPTURE_STRATEGY_UNVERIFIED','RECORD_CAPTURE_SILENT','RECORD_AUDIO_DECODE_UNVERIFIED'])test('audio capability or capture-evidence gap cannot trigger Code retry or UI Skill '+name,async()=>{
  const {classifyActivityFailure}=await import('../activity-skill-recovery.mjs');
  const evidence={status:'partial',result:{failures:[{stage:'record_start',reason:name}],matched:1}};
  assert.equal(classifyActivityFailure({key:'qualification'},evidence),'blocked');
