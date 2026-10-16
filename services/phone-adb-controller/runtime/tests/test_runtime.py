@@ -181,12 +181,60 @@ class ShimTests(RuntimeFixture):
         with contextlib.redirect_stderr(io.StringIO()):
             return function(args)
 
-    def test_exact_push_uses_fixed_byte_stage(self):
-        code = self.shim(['-s', self.config['serial'], 'push',
+    def prepare_stage(self):
+        config = dict(self.config, evidence_id='shim-test')
+        result = self.runtime.stage_server(**config)
+        self.assertTrue(result['verified'])
+        path = Path(result['stage_receipt'])
+        os.environ['ZJ_SCRCPY_STAGE_RECEIPT'] = str(path)
+        os.environ['ZJ_SCRCPY_STAGE_RECEIPT_SHA256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.log.unlink()
+        return path
+
+    def exact_push(self):
+        return self.shim(['-s', self.config['serial'], 'push',
                           str(self.package / 'scrcpy-server'),
                           '/data/local/tmp/scrcpy-server.jar'])
+
+    def test_exact_push_only_reuses_bound_prestage_receipt(self):
+        self.prepare_stage()
+        before = sorted(self.evidence.iterdir())
+        code = self.exact_push()
         self.assertEqual(code, 0)
         self.assertEqual((self.remote / 'scrcpy-server.jar').read_bytes(), self.server)
+        self.assertNotIn('head -c', self.log.read_text())
+        self.assertEqual(sorted(self.evidence.iterdir()), before)
+
+    def test_push_missing_prestage_receipt_is_readonly_refusal(self):
+        os.environ.pop('ZJ_SCRCPY_STAGE_RECEIPT', None)
+        os.environ.pop('ZJ_SCRCPY_STAGE_RECEIPT_SHA256', None)
+        self.assertEqual(self.exact_push(), 64)
+        self.assertFalse(self.log.exists())
+        self.assertFalse((self.remote / 'scrcpy-server.jar').exists())
+
+    def test_push_never_reuploads_if_prestaged_server_disappeared(self):
+        self.prepare_stage()
+        (self.remote / 'scrcpy-server.jar').unlink()
+        self.assertEqual(self.exact_push(), 64)
+        self.assertFalse((self.remote / 'scrcpy-server.jar').exists())
+        self.assertNotIn('head -c', self.log.read_text())
+
+    def test_push_rejects_changed_canonical_receipt_without_remote_call(self):
+        receipt = self.prepare_stage()
+        receipt.write_bytes(receipt.read_bytes() + b'\n')
+        self.assertEqual(self.exact_push(), 64)
+        self.assertFalse(self.log.exists())
+
+    def test_push_rejects_unknown_or_other_eid_canonical(self):
+        receipt = self.prepare_stage()
+        value = json.loads(receipt.read_text())
+        value['execution_stop_unknown'] = True
+        receipt.write_text(json.dumps(value))
+        os.environ['ZJ_SCRCPY_STAGE_RECEIPT_SHA256'] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+        self.assertEqual(self.exact_push(), 64)
+        os.environ['ZJ_SCRCPY_EVIDENCE_ID'] = 'another-eid'
+        self.assertEqual(self.exact_push(), 64)
+        self.assertFalse(self.log.exists())
 
     def test_other_serial_and_arbitrary_push_are_refused(self):
         self.assertEqual(self.shim(['-s', 'foreign', 'push',
