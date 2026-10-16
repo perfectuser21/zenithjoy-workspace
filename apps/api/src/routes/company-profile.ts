@@ -2,6 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
+import { companyAccountVerification } from './company-account-verification';
 import { companyAccountRegistration, companyAccountRegistrationSession } from './company-account-registration';
 import { validateCompanyIdentity, validateEnabledCompany, companyRecord, companyObject, type CompanyJsonRecord } from './company-profile-validation';
 import { tenantContext } from '../middleware/tenant-context';
@@ -140,3 +141,5 @@ companyProfileRouter.put('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn
 
 // 独立登记入口；普通PUT继续拒绝身份变更，核验/启用另走独立协议。
 companyProfileRouter.post('/platform-account-registrations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountRegistration({ pool, profile, snapshot }));
+
+companyProfileRouter.post('/platform-account-verifications', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountVerification({ pool, profile, snapshot }));
