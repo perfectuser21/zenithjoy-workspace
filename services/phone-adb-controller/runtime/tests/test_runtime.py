@@ -24,7 +24,7 @@ def load(test, filename):
     return module
 
 
-class RuntimeTests(unittest.TestCase):
+class RuntimeFixture(unittest.TestCase):
     def setUp(self):
         self.runtime = load(self, 'scrcpy-runtime.py')
         self.temp = tempfile.TemporaryDirectory()
@@ -71,6 +71,8 @@ class RuntimeTests(unittest.TestCase):
     def stage(self):
         return self.runtime.stage_server(**self.config)
 
+
+class RuntimeTests(RuntimeFixture):
     def test_verify_hashes_files_and_rejects_tampered_client(self):
         result = self.runtime.verify_runtime(self.package, self.client_sha)
         self.assertTrue(result['verified'])
@@ -140,6 +142,55 @@ class RuntimeTests(unittest.TestCase):
         receipt = json.loads(Path(result['stage_receipt']).read_text())
         self.assertTrue(receipt['execution_stop_unknown'])
         self.assertFalse((self.remote / 'scrcpy-server.jar').exists())
+
+
+class ShimTests(RuntimeFixture):
+    def setUp(self):
+        super().setUp()
+        self.shimenv = patch.dict(os.environ, {
+            'ZJ_SCRCPY_RUNTIME_ROOT': str(self.package),
+            'ZJ_SCRCPY_CLIENT_SHA256': self.client_sha,
+            'ZJ_SCRCPY_ADB_BIN': str(self.config['adb_bin']),
+            'ZJ_SCRCPY_ADB_PORT': '5041',
+            'ZJ_SCRCPY_SERIAL': self.config['serial'],
+            'ZJ_SCRCPY_OWNER': self.config['owner'],
+            'ZJ_SCRCPY_LOCK_DIR': str(self.lock),
+            'ZJ_SCRCPY_EVIDENCE_ROOT': str(self.evidence),
+            'ZJ_SCRCPY_EVIDENCE_ID': 'shim-test',
+            'ZJ_SCRCPY_STAGE_TIMEOUT': '4',
+        })
+        self.shimenv.start()
+        self.addCleanup(self.shimenv.stop)
+
+    def shim(self, args):
+        function = getattr(self.runtime, 'adb_shim', None)
+        self.assertTrue(callable(function), 'exact pinned ADB push shim is missing')
+        with contextlib.redirect_stderr(io.StringIO()):
+            return function(args)
+
+    def test_exact_push_uses_fixed_byte_stage(self):
+        code = self.shim(['-s', self.config['serial'], 'push',
+                          str(self.package / 'scrcpy-server'),
+                          '/data/local/tmp/scrcpy-server.jar'])
+        self.assertEqual(code, 0)
+        self.assertEqual((self.remote / 'scrcpy-server.jar').read_bytes(), self.server)
+
+    def test_other_serial_and_arbitrary_push_are_refused(self):
+        self.assertEqual(self.shim(['-s', 'foreign', 'push',
+            str(self.package / 'scrcpy-server'), '/data/local/tmp/scrcpy-server.jar']), 64)
+        self.assertEqual(self.shim(['-s', self.config['serial'], 'push',
+            str(self.package / 'scrcpy-server'), '/data/local/tmp/arbitrary']), 64)
+        self.assertFalse(self.log.exists())
+
+    def test_server_start_request_only_checks_existing_bridge(self):
+        self.assertEqual(self.shim(['start-server']), 0)
+        self.assertFalse(self.log.exists())
+
+    def test_destructive_or_unexpected_shell_commands_are_refused(self):
+        for args in (['kill-server'], ['keygen', 'anything'],
+                     ['-s', self.config['serial'], 'shell', 'rm', '-rf', '/']):
+            self.assertEqual(self.shim(args), 64)
+        self.assertFalse(self.log.exists())
 
 
 class BuildTests(unittest.TestCase):
