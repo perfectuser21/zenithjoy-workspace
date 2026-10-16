@@ -24,6 +24,23 @@ class RuntimeFailure(Exception):
         self.unknown = unknown
 
 
+def runtime_policy(runtime_kind='sdk31'):
+    """只允许仓库内两个固定策略；环境不能指定任意policy文件。"""
+    if runtime_kind == 'sdk31':
+        policy, expected = POLICY, ('scrcpy-sdk31-pinned-v1', '5.0.1')
+    elif runtime_kind == 'sdk33':
+        try:
+            policy = json.loads(Path(__file__).with_name('runtime-policy-sdk33.json').read_text())
+        except (OSError, ValueError) as error:
+            raise RuntimeFailure('fixed sdk33 runtime policy is unavailable') from error
+        expected = ('scrcpy-sdk33-pinned-v1', '3.3.4')
+    else:
+        raise RuntimeFailure('unknown pinned runtime kind')
+    if not isinstance(policy, dict) or (policy.get('schema'), policy.get('version')) != expected:
+        raise RuntimeFailure('fixed runtime policy identity does not match selected kind')
+    return policy
+
+
 def regular_bytes(path):
     path = Path(path)
     try:
@@ -36,18 +53,19 @@ def regular_bytes(path):
         raise RuntimeFailure('runtime artifact is unavailable: ' + str(error)) from error
 
 
-def verify_runtime(runtime_root, client_sha256=None):
+def verify_runtime(runtime_root, client_sha256=None, runtime_kind='sdk31'):
+    policy = runtime_policy(runtime_kind)
     root = Path(runtime_root)
     if not root.is_absolute() or root.is_symlink() or not root.is_dir():
         raise RuntimeFailure('runtime root must be an existing absolute non-symlink directory')
-    expected = client_sha256 or POLICY['client_sha256']
-    if expected != POLICY['client_sha256']:
+    expected = client_sha256 or policy['client_sha256']
+    if expected != policy['client_sha256']:
         raise RuntimeFailure('client pin is not approved by repository runtime policy')
     paths = {'client': root / 'scrcpy', 'server': root / 'scrcpy-server'}
-    result = {'verified': True, 'schema': POLICY['schema'], 'version': POLICY['version']}
+    result = {'verified': True, 'schema': policy['schema'], 'version': policy['version']}
     for kind, path in paths.items():
         digest = hashlib.sha256(regular_bytes(path)).hexdigest()
-        if digest != POLICY[kind + '_sha256']:
+        if digest != policy[kind + '_sha256']:
             raise RuntimeFailure(kind + ' SHA256 does not match pinned runtime')
         if kind == 'client' and not os.access(path, os.X_OK):
             raise RuntimeFailure('runtime client is not executable')
@@ -125,7 +143,7 @@ def require_adb_client(adb_bin, timeout=2):
 
 
 def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
-                 evidence_root, evidence_id, timeout=45, client_sha256=None):
+                 evidence_root, evidence_id, timeout=45, client_sha256=None, runtime_kind='sdk31'):
     receipt = {'verified': False, 'execution_stop_unknown': False, 'phase': 'planned',
                'serial': serial, 'owner': owner, 'adb_port': adb_port,
                'evidence_id': evidence_id}
@@ -193,11 +211,12 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
             return 'conflict'
         if len(lines) != 2 or not re.fullmatch(r'[0-9a-f]{64}  ' + re.escape(path), lines[0]) or not lines[1].strip().isdigit():
             raise RuntimeFailure('remote checksum reply is unknown', unknown=touched)
-        if lines[0].split('  ', 1)[0] == POLICY['server_sha256'] and int(lines[1]) == len(server):
+        if lines[0].split('  ', 1)[0] == policy['server_sha256'] and int(lines[1]) == len(server):
             return 'matching'
         return 'conflict'
 
     try:
+        policy = runtime_policy(runtime_kind)
         if not re.fullmatch(r'[A-Za-z0-9_.:@-]{1,160}', serial) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,120}', owner):
             raise RuntimeFailure('invalid serial or owner')
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,120}', evidence_id):
@@ -214,10 +233,10 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
         os.close(fd)
         receipt['stage_receipt'] = str(receipt_path)
         save()
-        receipt.update(verify_runtime(runtime_root, client_sha256))
+        receipt.update(verify_runtime(runtime_root, client_sha256, runtime_kind))
         receipt['verified'] = False
         server = regular_bytes(receipt['server_path'])
-        destination = POLICY['remote_server']
+        destination = policy['remote_server']
         receipt['remote_path'] = destination
         require_owner(lock_dir, owner)
         require_adb_client(adb_bin, min(2, max(0.1, deadline - time.monotonic())))
@@ -283,6 +302,7 @@ def stage_server(*, runtime_root, adb_bin, adb_port, serial, owner, lock_dir,
 
 def verify_prestaged_server(config, verified):
     """内部push只读复用C同步阶段原件；此处没有上传/发布/删除路径。"""
+    policy = runtime_policy(config.get('runtime_kind', 'sdk31'))
     raw_path = os.environ.get('ZJ_SCRCPY_STAGE_RECEIPT', '')
     expected_sha = os.environ.get('ZJ_SCRCPY_STAGE_RECEIPT_SHA256', '')
     path = Path(raw_path)
@@ -302,10 +322,11 @@ def verify_prestaged_server(config, verified):
         raise RuntimeFailure('canonical prestage receipt is invalid') from error
     expected = {'phase': 'verified', 'serial': config['serial'], 'owner': config['owner'],
                 'adb_port': config['adb_port'], 'evidence_id': config['evidence_id'],
-                'remote_path': POLICY['remote_server'], 'stage_receipt': str(path),
+                'remote_path': policy['remote_server'], 'stage_receipt': str(path),
                 'client_sha256': verified['client_sha256'], 'server_sha256': verified['server_sha256'],
                 'client_path': verified['client_path'], 'server_path': verified['server_path'],
-                'received_bytes': len(regular_bytes(verified['server_path']))}
+                'received_bytes': len(regular_bytes(verified['server_path'])),
+                'schema': policy['schema'], 'version': policy['version']}
     if (not isinstance(receipt, dict) or receipt.get('verified') is not True
             or receipt.get('execution_stop_unknown') is not False
             or any(receipt.get(key) != value for key, value in expected.items())):
@@ -314,7 +335,7 @@ def verify_prestaged_server(config, verified):
     require_owner(config['lock_dir'], config['owner'])
     require_adb_client(config['adb_bin'], min(2, max(0.1, deadline - time.monotonic())))
     require_existing_server(config['adb_port'], min(1, max(0.1, deadline - time.monotonic())))
-    target = shlex.quote(POLICY['remote_server'])
+    target = shlex.quote(policy['remote_server'])
     script = (f'[ ! -L {target} ] && [ -f {target} ] && '
               f'toybox sha256sum {target} && toybox wc -c < {target}')
     env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + str(config['adb_port']))
@@ -331,26 +352,28 @@ def verify_prestaged_server(config, verified):
     require_owner(config['lock_dir'], config['owner'])
     lines = stdout.decode('utf-8', errors='strict').splitlines()
     if (child.returncode or len(lines) != 2
-            or lines[0] != POLICY['server_sha256'] + '  ' + POLICY['remote_server']
+            or lines[0] != policy['server_sha256'] + '  ' + policy['remote_server']
             or not lines[1].strip().isdigit()
             or int(lines[1]) != expected['received_bytes']):
         raise RuntimeFailure('prestaged remote server is missing or changed; push shim is read-only')
     return {'verified': True, 'mode': 'prestaged_readonly_reuse',
             'stage_receipt': str(path), 'stage_receipt_sha256': expected_sha,
-            'server_sha256': POLICY['server_sha256']}
+            'server_sha256': policy['server_sha256']}
 
 
 def shim_config():
+    runtime_kind = os.environ.get('ZJ_SCRCPY_RUNTIME_KIND', 'sdk31')
+    policy = runtime_policy(runtime_kind)
     keys = {'runtime_root': 'RUNTIME_ROOT', 'client_sha256': 'CLIENT_SHA256',
             'adb_bin': 'ADB_BIN', 'adb_port': 'ADB_PORT', 'serial': 'SERIAL',
             'owner': 'OWNER', 'lock_dir': 'LOCK_DIR', 'evidence_root': 'EVIDENCE_ROOT',
             'evidence_id': 'EVIDENCE_ID', 'timeout': 'STAGE_TIMEOUT'}
-    config = {}
+    config = {'runtime_kind': runtime_kind}
     for key, suffix in keys.items():
         value = os.environ.get('ZJ_SCRCPY_' + suffix)
         if value is None:
             if key == 'client_sha256':
-                value = POLICY['client_sha256']
+                value = policy['client_sha256']
             elif key == 'timeout':
                 value = '45'
             else:
@@ -365,14 +388,15 @@ def adb_shim(argv):
     """只替代ADB进程；从不包裹或启动scrcpy，保留真实录制PID。"""
     try:
         config = shim_config()
-        verified = verify_runtime(config['runtime_root'], config['client_sha256'])
+        policy = runtime_policy(config['runtime_kind'])
+        verified = verify_runtime(config['runtime_root'], config['client_sha256'], config['runtime_kind'])
         require_owner(config['lock_dir'], config['owner'])
         serial = config['serial']
         if argv == ['start-server']:
             require_existing_server(config['adb_port'])
             return 0  # 既有桥只读检查，绝不调用start-server。
         if len(argv) >= 3 and argv[:2] == ['-s', serial] and argv[2] == 'push':
-            if len(argv) != 5 or os.path.abspath(argv[3]) != verified['server_path'] or argv[4] != POLICY['remote_server']:
+            if len(argv) != 5 or os.path.abspath(argv[3]) != verified['server_path'] or argv[4] != policy['remote_server']:
                 raise RuntimeFailure('ADB shim refuses a non-pinned server push')
             result = verify_prestaged_server(config, verified)
             print('runtime server reused verified prestage: ' + json.dumps(result, ensure_ascii=False), file=sys.stderr)
@@ -380,8 +404,8 @@ def adb_shim(argv):
         allowed = argv == ['devices', '-l']
         if argv[:2] == ['-s', serial]:
             rest = argv[2:]
-            prefix = ['shell', 'CLASSPATH=' + POLICY['remote_server'], 'app_process',
-                      '/', 'com.genymobile.scrcpy.Server', POLICY['version']]
+            prefix = ['shell', 'CLASSPATH=' + policy['remote_server'], 'app_process',
+                      '/', 'com.genymobile.scrcpy.Server', policy['version']]
             if rest[:6] == prefix and all(re.fullmatch(r'[A-Za-z0-9_./:@=,+-]+', token) for token in rest[6:]):
                 allowed = True
             elif rest and rest[0] in ('forward', 'reverse'):
@@ -408,6 +432,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['verify', 'stage-server'])
     parser.add_argument('--runtime-root', required=True)
+    parser.add_argument('--runtime-kind', choices=['sdk31', 'sdk33'], default='sdk31')
     parser.add_argument('--client-sha256')
     parser.add_argument('--adb-bin')
     parser.add_argument('--adb-port', type=int)
@@ -420,7 +445,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'verify':
-            result = verify_runtime(args.runtime_root, args.client_sha256)
+            result = verify_runtime(args.runtime_root, args.client_sha256, args.runtime_kind)
         else:
             for field in ('adb_bin', 'adb_port', 'serial', 'owner', 'lock_dir', 'evidence_root', 'evidence_id'):
                 if getattr(args, field) is None:
