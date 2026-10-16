@@ -329,7 +329,7 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
-function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal',volumeUpSaturated=false,sdk='36',scrcpyOptOut=false,sdkRace='',captureMode='ready',captureOwner='normal',sdk31Runtime=false,sdk33Runtime=true,sdk31Codec='pcm_s16le'}={}){
+function recordBoundary({session='playing',playFails=false,mediaTarget='com.ss.android.ugc.aweme/FeedPlayerSession/8101',targetChanges=false,native='started',nativeSequence=[],uidMode='unique',playControl=true,nativeAfterTap='started',nativeAfterTapSequence=[],probeMode='record',foregroundChanges=false,recoveryAfterVolume='started',activeRecording=false,initialWrong=false,volumeReadAfterUp='normal',volumeUpSaturated=false,sdk='36',scrcpyOptOut=false,sdkRace='',captureMode='ready',captureOwner='normal',sdk31Runtime=false,sdk33Runtime=true,sdk31Codec='pcm_s16le',workflowRemainingSeconds=null}={}){
  const d=mkdtempSync(join(tmpdir(),'record-playback-boundary-'));
  try{
   // 只读RED可指定冻结git源的私有副本；生产及默认GREEN仍用仓库实际控制器。
@@ -433,6 +433,7 @@ case "$CAPTURE_MODE" in
   no_ready) ;;
   completed_alive) print media > "$record_path"; print "INFO: Recording started to $container file: $record_path"; print "INFO: Recording complete to $container file: $record_path" ;;
   wrong_path) print media > "$record_path"; print "INFO: Recording started to $container file: $FIXTURE/wrong.rec.mkv" ;;
+  delayed_growth) touch "$record_path"; print "INFO: Recording started to $container file: $record_path"; for tick in {1..90}; do /bin/sleep 0.1; done; print media > "$record_path" ;;
   empty_file) touch "$record_path"; print "INFO: Recording started to $container file: $record_path" ;;
   no_file) print "INFO: Recording started to $container file: $record_path" ;;
   *) print media > "$record_path"; print "INFO: Recording started to $container file: $record_path" ;;
@@ -460,11 +461,11 @@ if [[ "$*" == *pipe:1* ]]; then /usr/bin/python3 -c 'import sys;sys.stdout.buffe
   if(approved)writeFileSync(join(d,'probe.capture-runtime.json'),JSON.stringify({runtime:{verified:true,schema:approved.schema,version:approved.version,client_sha256:approved.client_sha256,server_sha256:approved.server_sha256},stage:{verified:true}}));
   const runtimeStub=approved?`record_sdk31_runtime(){ [[ "$2" == ${pinnedKind} ]] || return 1; SCRCPY=$FIXTURE/scrcpy; CAPTURE_RUNTIME_FIELDS='capture_runtime_client_sha256=${approved.client_sha256} capture_runtime_server_sha256=${approved.server_sha256}'; }`:'';
   const script=`setopt NO_UNSET\nADB=$FIXTURE/adb\nSCRCPY=$FIXTURE/scrcpy\nFFPROBE=$FIXTURE/ffprobe\nFFMPEG=$FIXTURE/ffmpeg\nSERIAL=test\nLOCK_OWNER=fixture-sdk31-owner\nDOUYIN_PACKAGE=com.ss.android.ugc.aweme\nEVIDENCE_ROOT=$FIXTURE\nRECORD_MEDIA_VOLUME=1\nPYTHON_BIN=/usr/bin/python3\nREMOTE_UI=/fake/ui\nSCREEN_W=1200\nSCREEN_H=2664\nrequire_evidence_id(){ return 0; }\nrequire_uint(){ return 0; }\ndie(){ print -u2 -- "$*"; exit 2; }\nwait_ms(){ if [[ "$1" == (500|2000) ]]; then /bin/sleep 0.02; fi; if [[ "$1" == 1500 ]]; then for i in {1..20}; do [[ ! -f "$FIXTURE/scrcpy-started" ]] || return 0; /bin/sleep 0.01; done; fi; return 0; }\n${volumeHelpers}\nforeground_package(){ if [[ -f "$FIXTURE/fg-switched" ]]; then print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity}"; else print "mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.detail.ui.DetailActivity}"; fi; }\n_foreground_is_exact_douyin(){ return 0; }\n_on_video_detail(){ return 0; }\nforeground_gate(){ return 0; }\n${helpers}\n${extra}\n${runtimeStub}\n${fn}\n${stopFn}\n${activeRecording?'print $$ > $FIXTURE/other.rec.pid':''}\n${initialWrong?'touch $FIXTURE/fg-switched':''}\n${sdkRace?`print ORIGINAL > $FIXTURE/sdk-protected\nTRAPDEBUG(){ if [[ \"$ZSH_DEBUG_CMD\" == *'capture-sdk.txt'* && \"$ZSH_DEBUG_CMD\" == *'$sdk'* && \"$ZSH_DEBUG_CMD\" != '[['* && ! -e $FIXTURE/sdk-race-injected ]]; then touch $FIXTURE/sdk-race-injected; ${sdkRace==='symlink'?'ln -s $FIXTURE/sdk-protected $FIXTURE/probe.capture-sdk.txt':'print PREEXISTING > $FIXTURE/probe.capture-sdk.txt'}; fi; }`:''}\n${probeMode==='session'?'record_playback_state probe':probeMode==='stop'?'record_start probe 25; record_stop probe':'record_start probe 25'}\n`;
-  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0',SDK:sdk,SDK31_RUNTIME:sdk31Runtime?'1':'0',SDK31_CODEC:sdk31Codec,SCRCPY_OPTOUT:scrcpyOptOut?'1':'0',CAPTURE_MODE:captureMode,CAPTURE_OWNER:captureOwner},timeout:20000});
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,FIXTURE:d,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,SESSION:session,MEDIA_TARGET:mediaTarget,TARGET_CHANGES:targetChanges?'1':'0',NATIVE:native,UID_MODE:uidMode,AFTER_TAP:nativeAfterTap,FG_CHANGES:foregroundChanges?'1':'0',AFTER_VOLUME:recoveryAfterVolume,READ_AFTER_UP:volumeReadAfterUp,UP_SATURATED:volumeUpSaturated?'1':'0',SDK:sdk,SDK31_RUNTIME:sdk31Runtime?'1':'0',SDK31_CODEC:sdk31Codec,SCRCPY_OPTOUT:scrcpyOptOut?'1':'0',CAPTURE_MODE:captureMode,CAPTURE_OWNER:captureOwner,...(workflowRemainingSeconds===null?{}:{WF_RUN_START_TS:String(Date.now()/1000),WF_RUN_MAX_SECONDS:String(workflowRemainingSeconds)})},timeout:20000});
   const readyPath=join(d,sdk31Runtime?'probe.rec.wav':'probe.rec.mkv');const captureReadyAtReturn=existsSync(readyPath)&&statSync(readyPath).size>0;const stoppedBeforeHarnessCleanup=existsSync(join(d,'capture-stopped'));
 
   const rawEvidence=Object.fromEntries(['media-session.txt','foreground.txt'].map(kind=>{const f=join(d,'probe-playback-start.'+kind);return [kind,existsSync(f)?{sha256:createHash('sha256').update(readFileSync(f)).digest('hex'),mode:statSync(f).mode&0o777}:null];}));
-  return {...r,captureReadyAtReturn,stoppedBeforeHarnessCleanup,sdkRaceInjected:existsSync(join(d,'sdk-race-injected')),sdkProtected:existsSync(join(d,'sdk-protected'))?readFileSync(join(d,'sdk-protected'),'utf8').trim():null,sdkOriginal:existsSync(join(d,'probe.capture-sdk.txt'))?readFileSync(join(d,'probe.capture-sdk.txt'),'utf8').trim():null,scrcpyArgs:existsSync(join(d,'scrcpy-args'))?readFileSync(join(d,'scrcpy-args'),'utf8').trim().split('\n'):[],finalVolume:existsSync(join(d,'volume'))?readFileSync(join(d,'volume'),'utf8').trim():'1',restoredEvidence:existsSync(join(d,'probe-playback-restored.native-audio.json')),rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
+  return {...r,captureStartup:existsSync(join(d,'probe.capture-startup.json'))?JSON.parse(readFileSync(join(d,'probe.capture-startup.json'),'utf8')):null,captureReadyAtReturn,stoppedBeforeHarnessCleanup,sdkRaceInjected:existsSync(join(d,'sdk-race-injected')),sdkProtected:existsSync(join(d,'sdk-protected'))?readFileSync(join(d,'sdk-protected'),'utf8').trim():null,sdkOriginal:existsSync(join(d,'probe.capture-sdk.txt'))?readFileSync(join(d,'probe.capture-sdk.txt'),'utf8').trim():null,scrcpyArgs:existsSync(join(d,'scrcpy-args'))?readFileSync(join(d,'scrcpy-args'),'utf8').trim().split('\n'):[],finalVolume:existsSync(join(d,'volume'))?readFileSync(join(d,'volume'),'utf8').trim():'1',restoredEvidence:existsSync(join(d,'probe-playback-restored.native-audio.json')),rawEvidence,started:existsSync(join(d,'scrcpy-started')),calls:existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):''};
  }finally{
   // Stop and observe this isolated fixture before deleting files its TERM trap can write.
   // Never retry rmSync while a live writer is still using the directory.
@@ -650,4 +651,27 @@ test('SDK33录制缺固定同版runtime时拒绝，不借原brew路径启动',()
  const r=recordBoundary({sdk:'36',sdk33Runtime:false});
  assert.notEqual(r.status,0);assert.equal(r.started,false);
  assert.match(r.stderr,/RECORD_CAPTURE_STRATEGY_UNVERIFIED/);
+});
+
+// 真实Matroska现场：日志已开始但首cluster尚未flush；9s首次增长必须在有界窗口内取得。
+// 8s旧窗口会对持续owned且实际增长的录制产生假阴性；仍不得把零字节文件当ready。
+test('capture growth accepts first nonempty media after the former 8s cutoff',()=>{
+ const r=recordBoundary({captureMode:'delayed_growth'});
+ assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
+ assert.match(r.stdout,/record_started/);assert.equal(r.captureReadyAtReturn,true);
+ assert.equal(r.captureStartup.status,'ready');assert.equal(r.stoppedBeforeHarnessCleanup,false);
+ assert.ok(r.captureStartup.observations.some(o=>o.media_size===0&&o.media_regular===true&&o.capture_container==='matroska'&&o.artifact_reason==='media_empty'&&o.log_started===true&&o.log_completed===false),'must observe zero-byte started media before growth');
+ assert.ok(r.captureStartup.observations.some(o=>o.media_size>0&&o.media_regular===true&&o.capture_container==='matroska'&&o.artifact_reason==='ready'&&o.log_started===true&&o.log_completed===false),'must observe real growth before returning success');
+});
+test('capture growth observations expose media size plus exact started and completed logs',()=>{
+ const r=recordBoundary({captureMode:'completed_alive'});
+ assert.equal(r.error,undefined);assert.notEqual(r.status,0);assert.equal(r.stoppedBeforeHarnessCleanup,true);
+ assert.ok(r.captureStartup.observations.some(o=>o.media_size>0&&o.log_started===true&&o.log_completed===true));
+});
+test('capture growth still reserves workflow cleanup time before delayed media arrives',()=>{
+ const started=Date.now(),r=recordBoundary({captureMode:'delayed_growth',workflowRemainingSeconds:5});
+ assert.equal(r.error,undefined);assert.notEqual(r.status,0);assert.doesNotMatch(r.stdout,/record_started/);
+ assert.equal(r.stoppedBeforeHarnessCleanup,true);assert.equal(r.captureStartup.execution_stopped,true,JSON.stringify(r.captureStartup));
+ assert.equal(r.captureStartup.reason,'readiness_timeout');assert.ok(Date.now()-started<7000,'workflow remaining 5s must not wait for 9s growth');
+ assert.ok(r.captureStartup.observations.some(o=>o.media_size===0&&o.media_regular===true&&o.capture_container==='matroska'&&o.artifact_reason==='media_empty'&&o.log_started===true&&o.log_completed===false));
 });
