@@ -161,7 +161,7 @@ test('MMV102真实preflight只在PG和当前原生账号均相等后写私有bin
 });
 test('PG来源授权helper进入三个实际消费Activity的固定Code集合，兼容新增方法有版本',()=>{
  const root=new URL('../../../',import.meta.url);
- for(const [flow,key,version] of [['douyin_video_processing','preflight','2.0.0'],['douyin_video_processing','collection','2.4.0'],['douyin_comment_scoring','mark_leads','3.1.0']]){
+ for(const [flow,key,version] of [['douyin_video_processing','preflight','2.0.0'],['douyin_video_processing','collection','2.4.1'],['douyin_comment_scoring','mark_leads','3.1.0']]){
   const d=parseYaml(readFileSync(new URL('product-map/contracts/'+flow+'.yaml',root),'utf8')),a=d.activities.find(a=>a.key===key);
   assert.equal(a.version,version);assert.ok(a.implementation_bindings.some(b=>b.kind==='code'&&b.path==='services/phone-adb-controller/company-config-lib.js'));
  }
