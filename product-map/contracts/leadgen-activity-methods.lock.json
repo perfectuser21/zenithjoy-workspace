@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "bda18ed1d7972660404fc617eeee01105e99b21730da94e8d8bde2d64480e524",
+      "code_digest": "209743618339424aebc345382d07d18a1df41eb081abe0f2c005ed58351d1ea2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "76b6a5c020b8e96c75a8c6aee1702856689c86375b4319cd25c7a5452d9f272f",
-        "current_code_digest": "bda18ed1d7972660404fc617eeee01105e99b21730da94e8d8bde2d64480e524"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "bda18ed1d7972660404fc617eeee01105e99b21730da94e8d8bde2d64480e524",
+        "current_code_digest": "209743618339424aebc345382d07d18a1df41eb081abe0f2c005ed58351d1ea2"
       }
     },
     "douyin_video_processing.preflight": {
@@ -270,7 +270,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -294,7 +294,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "3e40a817112c13e70d48e7cf664002565fa5bc82f41c4ebec03b9f4b9f452a52",
+      "code_digest": "60e9211ee107f073cea957b68633a8bfd915532098a892fb44d3b61ee30ce596",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "2a8952964de667dea442e2f07fd3cb5677df34152db79086ef65a4ce0fe94398",
-        "current_code_digest": "3e40a817112c13e70d48e7cf664002565fa5bc82f41c4ebec03b9f4b9f452a52"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "3e40a817112c13e70d48e7cf664002565fa5bc82f41c4ebec03b9f4b9f452a52",
+        "current_code_digest": "60e9211ee107f073cea957b68633a8bfd915532098a892fb44d3b61ee30ce596"
       }
     },
     "douyin_video_processing.dedup": {
@@ -434,7 +434,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "5c7f1443b02f0806e1bdaa411bb98465cb3bab0080863f5547d9dd8da3927c64",
+      "code_digest": "b634e0ef5ea8198953b98c18bd48f14fb8f5e6f6995ccd044d10fe95754c5ea5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "b92c71c46f197522ee8453206e0394c3109b625557d4df22bd3e09c8bde30f92",
-        "current_code_digest": "5c7f1443b02f0806e1bdaa411bb98465cb3bab0080863f5547d9dd8da3927c64"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "5c7f1443b02f0806e1bdaa411bb98465cb3bab0080863f5547d9dd8da3927c64",
+        "current_code_digest": "b634e0ef5ea8198953b98c18bd48f14fb8f5e6f6995ccd044d10fe95754c5ea5"
       }
     },
     "douyin_video_processing.qualification": {
@@ -595,7 +595,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -689,13 +689,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "9652ff2a1eefe7c9b18fcf46854a9827659df61396c7e8ddcf98dfa32fa3d3ea",
+      "code_digest": "5bba157dda03d9ca7c1d7ec5fabf345f886e5c093dd661cd5deeffb41c30e126",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "5acfc2eee3f28901437c4e636e8b312e06c79c761f5d16a21e413fb891534d06",
-        "current_code_digest": "9652ff2a1eefe7c9b18fcf46854a9827659df61396c7e8ddcf98dfa32fa3d3ea"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "9652ff2a1eefe7c9b18fcf46854a9827659df61396c7e8ddcf98dfa32fa3d3ea",
+        "current_code_digest": "5bba157dda03d9ca7c1d7ec5fabf345f886e5c093dd661cd5deeffb41c30e126"
       }
     },
     "douyin_video_processing.collection": {
@@ -827,7 +827,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -879,13 +879,13 @@
           "sha256": "fdc75f935ec9cac3e6c10815cbd85f2becb30edb9c16af2f90db0c76f8100b92"
         }
       ],
-      "code_digest": "32c1b236786359dbf55fa87bd7f68545a406b947a4d299e9c7a3d9b5d666aa7e",
+      "code_digest": "58fc3470b032be2e473c513cd0f76ad6d0fe5e55a9486516b4a1b5ded7216e78",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "d8da387850facdf7361672103492eee26949ccab2563262add6ee41e0395e9c5",
-        "current_code_digest": "32c1b236786359dbf55fa87bd7f68545a406b947a4d299e9c7a3d9b5d666aa7e"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "32c1b236786359dbf55fa87bd7f68545a406b947a4d299e9c7a3d9b5d666aa7e",
+        "current_code_digest": "58fc3470b032be2e473c513cd0f76ad6d0fe5e55a9486516b4a1b5ded7216e78"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -989,7 +989,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -1036,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "3e3099f1b364ac26e5821cc88e18a4ad071d166511c79b01698d71423c38a500",
+      "code_digest": "19a63c8cd80c962f23ebe23d0aa8f160f5d260746891ddf4862a7342107ea293",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "604fed565186b819e9786e4c950df1e3df1dcbfedf2ee475ed65ef301aeb3689",
-        "current_code_digest": "3e3099f1b364ac26e5821cc88e18a4ad071d166511c79b01698d71423c38a500"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "3e3099f1b364ac26e5821cc88e18a4ad071d166511c79b01698d71423c38a500",
+        "current_code_digest": "19a63c8cd80c962f23ebe23d0aa8f160f5d260746891ddf4862a7342107ea293"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1482,7 +1482,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -1506,7 +1506,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -1565,13 +1565,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "9a534c0bca0bfedd4bbdf3f8a368260c61b131381359ecd080bf2291a2ccca78",
+      "code_digest": "929a36498ff9303d5749545a5cf4a209595a723055d872693fc9056f26aefbec",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "58bc3d192c97c6da56872a2ed54bf3bd2a61fd684d608ab9ce6f3e824dc49a48",
-        "current_code_digest": "9a534c0bca0bfedd4bbdf3f8a368260c61b131381359ecd080bf2291a2ccca78"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "9a534c0bca0bfedd4bbdf3f8a368260c61b131381359ecd080bf2291a2ccca78",
+        "current_code_digest": "929a36498ff9303d5749545a5cf4a209595a723055d872693fc9056f26aefbec"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1674,7 +1674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -1733,13 +1733,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee",
+      "code_digest": "90205b0df2c80d8bb8da46fef00afe4900cd3e6baeba92efaf2a843453a0fad1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
-        "current_code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee",
+        "current_code_digest": "90205b0df2c80d8bb8da46fef00afe4900cd3e6baeba92efaf2a843453a0fad1"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1842,7 +1842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -1901,13 +1901,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee",
+      "code_digest": "90205b0df2c80d8bb8da46fef00afe4900cd3e6baeba92efaf2a843453a0fad1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
-        "current_code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee",
+        "current_code_digest": "90205b0df2c80d8bb8da46fef00afe4900cd3e6baeba92efaf2a843453a0fad1"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2011,7 +2011,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "a7960ef11d5cfe5bbbdb045ca9d160380c1ecf7e691d2d24afb253ffb59ea93b"
+          "sha256": "c53d66beb2817f41d2fdc8041909e3c827bc17d06b2c75741dcb7f22b5629a37"
         },
         {
           "kind": "code",
@@ -2072,13 +2072,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "d3cc84891f9c33bc57b07db711b9d828fee89dae87b5bfdcb0f7ca23a1b03d6c",
+      "code_digest": "b6312400a2030c5c02443938ef13f9bbc954e002ab84471142aceb3fcfa4282b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "5b2e794df5700604aff28986731fc97309d747126ff808e285bca65de5dcb8ae",
-        "current_code_digest": "d3cc84891f9c33bc57b07db711b9d828fee89dae87b5bfdcb0f7ca23a1b03d6c"
+        "reason": "仅现有筛选面板列间隙按截图宽度适配；不改变此 Activity 的 Skill 方法、输入输出、动作与业务判断。",
+        "reviewed_by": "Codex build",
+        "previous_code_digest": "d3cc84891f9c33bc57b07db711b9d828fee89dae87b5bfdcb0f7ca23a1b03d6c",
+        "current_code_digest": "b6312400a2030c5c02443938ef13f9bbc954e002ab84471142aceb3fcfa4282b"
       }
     }
   },
