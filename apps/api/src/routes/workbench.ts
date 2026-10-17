@@ -1,5 +1,6 @@
 /**
- * 路③ 结构化工作台路由 —— 挂在 /api/knowledge/db，十七个端点（9 写 + 8 读）
+ * 路③ 结构化工作台路由 —— 挂在 /api/knowledge/db，28 个端点（15 写 + 13 读）
+ * （行内改名 cp-08230010 补 PATCH /tables/:id 改表名 + PATCH /tables/:id/fields/:fieldId 改字段名）
  *
  * 表层（Sprint A）
  *   写：POST /tables、POST /tables/:id/fields、DELETE /tables/:id、POST /trash/:id/restore
@@ -29,6 +30,8 @@ import {
   addFields,
   softDeleteTable,
   softDeleteField,
+  renameTable,
+  renameField,
   listTrash,
   restoreTable,
   WorkbenchValidationError,
@@ -277,6 +280,43 @@ router.delete('/tables/:id/fields/:fieldId', async (req: Request, res: Response)
     ok(res, 200, { field_id: outcome.fieldId, deleted_at: outcome.deletedAt });
   } catch (err) {
     serverError(res, 'softDeleteField', err);
+  }
+});
+
+// ── 写：改字段名（行内改名，cp-08230010）───────────────────────────────────
+//   表不可见/字段不属该表/已软删 → 404 notFoundBody；空名 → 400 VALIDATION_FAILED。
+//   只改 name，field_type/options/顺序一字不动。请求体里的 org_id 等一律不读。
+router.patch('/tables/:id/fields/:fieldId', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const outcome = await renameField(
+      identity.orgId,
+      identity.memberId,
+      req.params.id,
+      req.params.fieldId,
+      body.name
+    );
+    if (outcome.kind === 'not_found') return notFound(res);
+    ok(res, 200, outcome.field);
+  } catch (err) {
+    if (err instanceof WorkbenchValidationError) return badRequest(res, err);
+    serverError(res, 'renameField', err);
+  }
+});
+
+// ── 写：改表名（行内改名，cp-08230010）─────────────────────────────────────
+//   表不可见/跨企业/他人私有/已软删 → 404；空名 → 400。返回整表详情供前端就地回填。
+router.patch('/tables/:id', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const outcome = await renameTable(identity.orgId, identity.memberId, req.params.id, body.name);
+    if (outcome.kind === 'not_found') return notFound(res);
+    ok(res, 200, outcome.detail);
+  } catch (err) {
+    if (err instanceof WorkbenchValidationError) return badRequest(res, err);
+    serverError(res, 'renameTable', err);
   }
 });
 
