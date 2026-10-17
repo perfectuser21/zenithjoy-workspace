@@ -22,7 +22,7 @@ if a[:1]==['test-ui']:
  source=os.environ['SAMPLE'] if phase in ['empty','field'] else os.environ['SAMPLE'].replace('-empty.xml','-typed.xml')
  tree=E.parse(source);nodes=[n for n in tree.iter('node') if n.get('resource-id')=='com.ss.android.ugc.aweme:id/et_search_kw'];n=nodes[0]
  if phase not in ['empty','field'] or s['field']:n.set('text',s['field'])
- if phase in ['empty','pasted']:
+ if phase in ['empty','pasted'] and (not f.get('phase') or phase==f['phase']):
   for k,v in f.get('attrs',{}).items():n.set(k,v)
   if f.get('duplicate'):tree.getroot().append(E.fromstring(E.tostring(n)))
  tree.write(a[1],encoding='unicode')
@@ -60,5 +60,17 @@ for(const sample of samples)test('SDK33真实无hint动态占位 '+sample,()=>{
 });
 for(const [name,flags] of Object.entries({真实残留:{residual:true},选区残留不能被替换掩盖:{residual:true,selectedResidual:true},nonce前缀加复制后缀:{prefixResidual:true},部分剪贴板:{partialCopy:true},旧剪贴板:{pasteOld:true},复制失败:{copyFail:true},移动失败:{moveEndFail:true},失焦:{attrs:{focused:'false'}},禁用:{attrs:{enabled:'false'}},错包:{attrs:{package:'other'}},错class:{attrs:{class:'android.widget.TextView'}},密码:{attrs:{password:'true'}},越界:{attrs:{bounds:'[1,1][1081,99]'}},重复resource:{duplicate:true}}))test('SDK33拒绝'+name,()=>{
  const r=run(samples[0],flags);assert.notEqual(r.status,0,r.stdout);assert.match(r.stderr,/CLIPBOARD_NONCE/);
+ if(flags.attrs||flags.duplicate)assert.match(r.stderr,/CLIPBOARD_NONCE_FIELD_UNVERIFIED:empty/);
+ if(flags.moveEndFail)assert.match(r.stderr,/CLIPBOARD_NONCE_MOVE_END_FAILED/);
+ if(flags.residual||flags.partialCopy||flags.pasteOld||flags.copyFail)assert.match(r.stderr,/CLIPBOARD_NONCE_READBACK_MISMATCH:pasted/);
  if(flags.prefixResidual)assert.ok(!r.state.events.includes('shell input keyevent 279'),'前缀不得进入粘贴');
+});
+
+for(const [name,attrs] of Object.entries({失焦:{focused:'false'},禁用:{enabled:'false'},错包:{package:'other'},错class:{class:'android.widget.TextView'},密码:{password:'true'},纵向越界:{bounds:'[1,1][99,2401]'}}))test('SDK33粘贴后拒绝'+name,()=>{
+ const r=run(samples[0],{phase:'pasted',attrs});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_FIELD_UNVERIFIED:pasted/);
+ assert.match(readFileSync(join(r.dir,'fixture-seed-empty-proof.txt'),'utf8'),/pending_nonce_append/);
+});
+test('SDK33粘贴后重复resource拒绝，保留pending',()=>{
+ const r=run(samples[0],{phase:'pasted',duplicate:true});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_FIELD_UNVERIFIED:pasted/);
+ assert.match(readFileSync(join(r.dir,'fixture-seed-empty-proof.txt'),'utf8'),/pending_nonce_append/);
 });
