@@ -55,6 +55,13 @@ test('真实ZIP只读取固定JSON，不释放旁带代码或路径',async()=>{
  assert.deepEqual(readArtifactJson(readFileSync(join(dir,'bundle.zip')),'head.json'),{snapshot:{revision:'fixed'}});
  assert.throws(()=>readArtifactJson(readFileSync(join(dir,'bundle.zip')),'receipt.json'));
 });
+test('固定JSON重复、损坏ZIP及超限正文均拒绝',async()=>{
+ const {readArtifactJson}=await implementation();const dir=mkdtempSync(join(tmpdir(),'phone-artifact-bad-')),file=join(dir,'duplicate.zip');
+ execFileSync('python3',['-c','import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1],"w") as z:\n z.writestr("head.json","{}")\n z.writestr("head.json","{}")',file]);
+ assert.throws(()=>readArtifactJson(readFileSync(file),'head.json'));
+ assert.throws(()=>readArtifactJson(Buffer.from('not a zip'),'head.json'));
+ assert.throws(()=>readArtifactJson(Buffer.alloc(32*1024*1024),'head.json'));
+});
 test('同main成功run精确下载三个scope完整证据，保留原两scope，忽略旧名',async()=>{
  const {downloadDeploymentEvidence}=await implementation();const {github,requests}=githubFixture(['commander-generic','','zenithjoy','cecelia-device-patrol-definitions']);
  const result=await downloadDeploymentEvidence('42',github);assert.equal(result.run.sha,sha);
