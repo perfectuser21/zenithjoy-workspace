@@ -4934,28 +4934,57 @@ PYCARDFOCUS
     #   先试读树取「视频」tab 的 bounds；综合 tab 读不出树时才退到视觉定位。
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE search-video-tab EVIDENCE_ID"
     check_target
-    vt_src=""
+    require_evidence_id "$2"
+    vt_eid="$2"
+    _vtab_fail() {
+      local message="$1" last_xml="${2:-${vt_after:-${vt_retry_xml:-${vt_xml:-}}}}" shot=""
+      /bin/mkdir -p "$EVIDENCE_ROOT"
+      if [[ -n "$last_xml" && -s "$last_xml" ]]; then
+        /bin/cp "$last_xml" "$EVIDENCE_ROOT/${vt_eid}-failure.xml" || true
+        print -u2 -- "failure_xml=$EVIDENCE_ROOT/${vt_eid}-failure.xml"
+      else print -u2 -- "failure_xml=unavailable"; fi
+      shot="$(snapshot_evidence "${vt_eid}-failure")" || true
+      [[ -n "$shot" && -s "$shot" ]] || shot=""
+      print -u2 -- "failure_screenshot=${shot:-unavailable}"
+      foreground_package > "$EVIDENCE_ROOT/${vt_eid}-failure.foreground.txt" 2>&1 || true
+      print -u2 -- "failure_foreground=$EVIDENCE_ROOT/${vt_eid}-failure.foreground.txt"
+      die "$message"
+    }
+    vt_src=""; vt_relocalized=0
     # 这里是「机会性读树」：综合 tab 上明知读不到（feed 永不 idle），
     # 所以只用单波快速失败，立刻退到视觉兜底；不能用带三波重试的 ui_evidence，
     # 否则每次切 tab 都要先白烧约 180 秒（0912 我改三波时引入的回归，已修）。
     if vt_xml="$(_ui_evidence_wave "$2-tabs" opportunistic-search-tab)"; then
-      vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_xml" | /usr/bin/head -1)"
+      vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_xml" || true)"
+      [[ "$(print -r -- "$vt_line" | /usr/bin/grep -c '<node' || true)" == 1 ]] || _vtab_fail "video tab missing or ambiguous in fresh tree"
       if [[ -n "$vt_line" ]]; then
         read vt_x1 vt_y1 vt_x2 vt_y2 <<< "$(print -- "$vt_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
         vt_x=$(( (vt_x1 + vt_x2) / 2 )); vt_y=$(( (vt_y1 + vt_y2) / 2 )); vt_src=tree
       fi
     fi
     if [[ -z "$vt_src" ]]; then
-      vt_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "$2-vtab")" || die "video tab locate failed (tree unreadable and vision fallback failed)"
+      vt_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "$2-vtab")" || _vtab_fail "video tab locate failed (tree unreadable and vision fallback failed)"
       read vt_x vt_y <<< "$vt_center"; vt_src=vision
     fi
     "$ADB" -s "$SERIAL" shell input tap "$vt_x" "$vt_y"
     wait_ms 1500
     # 打开后验证：切成功的标志是树能读出来且「视频」处于 selected
-    vt_after="$(ui_evidence "$2-aftertab")" || die "video tab tap did not settle into a readable page"
+    vt_after="$(ui_evidence "$2-aftertab")" || _vtab_fail "video tab tap did not settle into a readable page"
+    if ! /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after"; then
+      # 搜索结果加载可能重排页签；旧坐标已失效，只按另一份新鲜树重定位一次。
+      vt_retry_xml="$(_ui_evidence_wave "$2-tabs-retry" opportunistic-search-tab)" || _vtab_fail "video tab relocation tree unreadable"
+      vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_retry_xml" || true)"
+      [[ "$(print -r -- "$vt_line" | /usr/bin/grep -c '<node' || true)" == 1 ]] || _vtab_fail "video tab missing or ambiguous in fresh relocation tree" "$vt_retry_xml"
+      read vt_x1 vt_y1 vt_x2 vt_y2 <<< "$(print -- "$vt_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+      vt_x=$(( (vt_x1 + vt_x2) / 2 )); vt_y=$(( (vt_y1 + vt_y2) / 2 )); vt_src=tree; vt_relocalized=1
+      "$ADB" -s "$SERIAL" shell input tap "$vt_x" "$vt_y"
+      wait_ms 1500
+      vt_after="$(_ui_evidence_wave "$2-aftertab-retry" opportunistic-search-tab)" || _vtab_fail "video tab relocation tap did not settle into a readable page"
+    fi
     /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after" \
-      || die "video tab is not selected after tap"
+      || _vtab_fail "video tab is not selected after tap"
     print -- "video_tab=1"
+    print -- "video_tab_relocalized=$vt_relocalized"
     print -- "coord_source=$vt_src"
     print -- "tapped=$vt_x $vt_y"
     print -- "evidence=$vt_after"

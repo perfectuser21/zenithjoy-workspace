@@ -1,0 +1,16 @@
+{
+  "observed_on": "2026-10-17",
+  "device_kind": "cloud Android SDK31 720px",
+  "records": [
+    {
+      "fixture": "search-tabs-before-reorder.xml",
+      "source_sha256": "84b91606db175b0f173f9eb18e3098401461b20dcb251f5ce0eb8d9401211c31",
+      "extraction": "only original search tab Button nodes retained, all attributes unchanged; unrelated public search result contents omitted"
+    },
+    {
+      "fixture": "search-tabs-after-reorder.xml",
+      "source_sha256": "61ff40cf5038cdc7ac5bf2271cfd6b0c209e49bf7aacc883b9231afad79617e0",
+      "extraction": "only original search tab Button nodes retained, all attributes unchanged; unrelated public search result contents omitted"
+    }
+  ]
+}
