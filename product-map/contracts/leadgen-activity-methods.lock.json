@@ -185,7 +185,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/company-config-lib.js",
           "revision": "contract",
-          "sha256": "19cd7e4e87ae9f327705e7d8cdb39ac4c698901274b4c56d09a9b02316464076"
+          "sha256": "dedf93ad05d9d0c1e9808beff2ec30658e9da43927e7115d6f98d791efa763fa"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "24a7499f28c0a25e272c9a4a92e5a98ff3dab007007cf043a0ac9cb6d47734ef",
+      "code_digest": "2a8952964de667dea442e2f07fd3cb5677df34152db79086ef65a4ce0fe94398",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "预检仍核公司、账号、SDK、锁与通话状态，未调用record_start；相同C文件被重复绑定的结构未更改。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "392fac45c0e16f40e21d71843e8a4a5f3177d692eb4193404e1bce81a70bcfee",
-        "current_code_digest": "24a7499f28c0a25e272c9a4a92e5a98ff3dab007007cf043a0ac9cb6d47734ef"
+        "previous_code_digest": "24a7499f28c0a25e272c9a4a92e5a98ff3dab007007cf043a0ac9cb6d47734ef",
+        "current_code_digest": "2a8952964de667dea442e2f07fd3cb5677df34152db79086ef65a4ce0fe94398",
+        "reviewed_by": "codex:/root",
+        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
       }
     },
     "douyin_video_processing.dedup": {
@@ -483,16 +483,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "d6d01a2d43061bea2e346d8a20da9b8f4df2050bcfbc74ef55eda6a1004da699"
+          "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "6b92d03559528b6e05f8be39da0a3b60b7cc5a5ca48de6a0a418a1590d79877e",
+      "code_digest": "b92c71c46f197522ee8453206e0394c3109b625557d4df22bd3e09c8bde30f92",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "判重仍按原来源、历史、自身账号及run集合选取视频，未调用record_start；历史/认领规则不变。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "632c4115e3c6a2f9024802313bd3250b5f335fea98fc9f8b839e58954bd0b4a2",
-        "current_code_digest": "6b92d03559528b6e05f8be39da0a3b60b7cc5a5ca48de6a0a418a1590d79877e"
+        "previous_code_digest": "6b92d03559528b6e05f8be39da0a3b60b7cc5a5ca48de6a0a418a1590d79877e",
+        "current_code_digest": "b92c71c46f197522ee8453206e0394c3109b625557d4df22bd3e09c8bde30f92",
+        "reviewed_by": "codex:/root",
+        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
       }
     },
     "douyin_video_processing.qualification": {
@@ -721,7 +721,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/company-config-lib.js",
           "revision": "contract",
-          "sha256": "19cd7e4e87ae9f327705e7d8cdb39ac4c698901274b4c56d09a9b02316464076"
+          "sha256": "dedf93ad05d9d0c1e9808beff2ec30658e9da43927e7115d6f98d791efa763fa"
         },
         {
           "kind": "code",
@@ -879,13 +879,13 @@
           "sha256": "fdc75f935ec9cac3e6c10815cbd85f2becb30edb9c16af2f90db0c76f8100b92"
         }
       ],
-      "code_digest": "cd492669b1aa5d6ea2c0b77946db16d4908a559d2baecd2e343cf5ab02153c45",
+      "code_digest": "d8da387850facdf7361672103492eee26949ccab2563262add6ee41e0395e9c5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "采集仍只消费合格视频并核原生身份/PG冻结绑定后保存评论；评论数量、筛选、用户身份及交付字段不变，未调用record_start。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "dd33db42949e790198a74af946c41b8adb87a52aa73170e0a8d33d86eb587902",
-        "current_code_digest": "cd492669b1aa5d6ea2c0b77946db16d4908a559d2baecd2e343cf5ab02153c45"
+        "previous_code_digest": "cd492669b1aa5d6ea2c0b77946db16d4908a559d2baecd2e343cf5ab02153c45",
+        "current_code_digest": "d8da387850facdf7361672103492eee26949ccab2563262add6ee41e0395e9c5",
+        "reviewed_by": "codex:/root",
+        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1173,16 +1173,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "d6d01a2d43061bea2e346d8a20da9b8f4df2050bcfbc74ef55eda6a1004da699"
+          "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "ef46df4fd669c677c966c9ab8dbbb56af8ae71d157bf75f4347194a43503d699",
+      "code_digest": "144faa962f3ff18bfb909ab94d898bc203a7fe41d3f23ba5fab47b97a2686d4f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享queue变化只影响设备来源和collect授权；103独立评分调用/规则/分值写回未修改。",
+        "previous_code_digest": "ef46df4fd669c677c966c9ab8dbbb56af8ae71d157bf75f4347194a43503d699",
+        "current_code_digest": "144faa962f3ff18bfb909ab94d898bc203a7fe41d3f23ba5fab47b97a2686d4f",
         "reviewed_by": "codex:/root",
-        "previous_code_digest": "5837d7db2c6c99dadaa19ae0066bf94555d4488c3051e4bdbf616662ac5a2729",
-        "current_code_digest": "ef46df4fd669c677c966c9ab8dbbb56af8ae71d157bf75f4347194a43503d699"
+        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1208,7 +1208,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/company-config-lib.js",
           "revision": "contract",
-          "sha256": "19cd7e4e87ae9f327705e7d8cdb39ac4c698901274b4c56d09a9b02316464076"
+          "sha256": "dedf93ad05d9d0c1e9808beff2ec30658e9da43927e7115d6f98d791efa763fa"
         },
         {
           "kind": "code",
@@ -1320,7 +1320,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "d6d01a2d43061bea2e346d8a20da9b8f4df2050bcfbc74ef55eda6a1004da699"
+          "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         },
         {
           "kind": "code",
@@ -1372,7 +1372,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6f85a6b6643c58535dfd02994096c695a029db47f485036bd47fe33fcd91d099"
+      "code_digest": "f07c837856bc30ddb4a303519b5dd0a41180262adaae14a8009c56197c152582",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "6f85a6b6643c58535dfd02994096c695a029db47f485036bd47fe33fcd91d099",
+        "current_code_digest": "f07c837856bc30ddb4a303519b5dd0a41180262adaae14a8009c56197c152582",
+        "reviewed_by": "codex:/root",
+        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "4.0.0",

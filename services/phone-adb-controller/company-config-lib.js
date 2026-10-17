@@ -82,7 +82,8 @@ async function readCollectionAccountBinding(pool,{lineKey,run,sourceRun}) {
     ||!pick||Object.keys(pick).sort().join(',')!=='device_serial,profile'
     ||typeof pick.profile!=='string'||!pick.profile||typeof pick.device_serial!=='string'||!pick.device_serial)fail();
   const routing=s.runtime_config.routing.profiles,accounts=s.runtime_config.platform_accounts;
-  const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===pick.profile):[];
+  // 仅排除明确停用历史，仍由下面的唯一性及身份守卫拒绝未核验/非法状态的当前行。
+  const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===pick.profile&&a.enabled!==false):[];
   const a=matches[0];
   if(!Array.isArray(routing)||routing.filter(p=>p===pick.profile).length!==1||matches.length!==1
     ||a.enabled!==true||a.verification_status!=='verified'||a.device_serial!==pick.device_serial
