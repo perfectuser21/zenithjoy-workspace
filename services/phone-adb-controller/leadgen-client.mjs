@@ -111,7 +111,18 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
         response=JSON.parse(result.stdout.trim());
         if(!response||typeof response.ok!=='boolean')throw Error('INVALID_RECEIPT');
       }catch{
-        const error=Error('远端没有合法回执');error.receiptMissing=true;throw error;
+        const kind=['queue','commander','keywords','verify','qualify','outreach','outreach_policy','resolve_share_link','activity_skill','activity_skill_authority'].includes(payload.kind)?payload.kind:'unknown';
+        const stderr=String(result.stderr??'');
+        const transport=/timed? out|timeout/i.test(stderr)?'timeout'
+          :/permission denied|authentication failed/i.test(stderr)?'authentication'
+          :/connection refused/i.test(stderr)?'connection_refused'
+          :/could not resolve|name or service not known/i.test(stderr)?'name_resolution'
+          :/connection (?:reset|closed)|broken pipe|mux_client.*failed/i.test(stderr)?'connection_closed'
+          :result.stdout.trim()?'invalid_receipt':'empty_stdout';
+        // 只把固定分类和计数写入回执；远端输出与请求正文不得进入错误或模型。
+        const exit=Number.isSafeInteger(result.code)?result.code:'unknown';
+        const error=Error(`远端没有合法回执: kind=${kind}; exit=${exit}; stdout_bytes=${Buffer.byteLength(result.stdout)}; transport=${transport}`);
+        error.receiptMissing=true;throw error;
       }
       if(result.code!==0||response.ok!==true)throw Error(response.error||'远端执行失败');
       return response;

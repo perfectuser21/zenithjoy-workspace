@@ -91,3 +91,25 @@ test('单次SSH超时已关闭进程后可读回，但总预算用尽不再发�
   else {const r=await rpc(discovery,{timeoutMs:1000});assert.equal(r.result.recovered,true);assert.equal(calls,2);}
  }
 });
+
+
+test('缺RPC回执保留固定诊断而不泄漏远端stdout、stderr或任务输入',async()=>{
+ const cases=[
+  {code:255,stdout:'',stderr:'Connection reset by peer secret-remote-token',transport:'connection_closed'},
+  {code:255,stdout:'',stderr:'Permission denied (publickey). secret-remote-token',transport:'authentication'},
+  {code:255,stdout:'',stderr:'Connection timed out secret-remote-token',transport:'timeout'},
+  {code:0,stdout:'secret-remote-token',stderr:'secret-remote-token',transport:'invalid_receipt'},
+  {code:0,stdout:'',stderr:'secret-remote-token',transport:'empty_stdout'},
+ ];
+ for(const row of cases){
+  let calls=0;const rpc=createRpc({frozen,execute:async()=>{calls++;return row;}});
+  await assert.rejects(rpc({kind:'outreach_policy',private_input:'private-task-content'},{timeoutMs:1000}),error=>{
+   assert.equal(error.receiptMissing,true);assert.match(error.message,/远端没有合法回执/);
+   assert.ok(error.message.includes('kind=outreach_policy'));assert.ok(error.message.includes('exit='+row.code));
+   assert.ok(error.message.includes('stdout_bytes='+Buffer.byteLength(row.stdout)));
+   assert.ok(error.message.includes('transport='+row.transport));
+   assert.ok(!error.message.includes('secret-remote-token')&&!error.message.includes('private-task-content'));
+   return true;
+  });assert.equal(calls,1,'诊断不能引入重发或重试');
+ }
+});
