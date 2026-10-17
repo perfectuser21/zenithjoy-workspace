@@ -54,7 +54,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ...(requestedBinding!==undefined&&String(input.step)==='102'?{taskInputs:{device_binding:{...requestedBinding}}}:{})});
     if(requestedBinding!==undefined){
       const accounts=snapshot.runtime_config?.platform_accounts;
-      const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===requestedBinding.profile):[];
+      // 明确停用的历史账号保留在快照中；其余同profile行都参与唯一性检查，不能隐藏未核验或非法状态的冲突。
+      const matches=Array.isArray(accounts)?accounts.filter(a=>a?.profile===requestedBinding.profile&&a.enabled!==false):[];
       const account=matches[0];
       if(!snapshot.company_id||!snapshot.tenant_id||!Number.isSafeInteger(snapshot.version)||snapshot.version<1||matches.length!==1
         ||account.verification_status!=='verified'||account.enabled!==true||account.device_serial!==requestedBinding.device_serial

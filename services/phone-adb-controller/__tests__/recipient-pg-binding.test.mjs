@@ -50,6 +50,28 @@ test('MMV102预检把本run选定设备冻结进已有task_inputs，不能事后
  assert.deepEqual(options.taskInputs,{device_binding:{profile:b.profile,device_serial:b.device_serial}});
  assert.equal(r.device_binding.douyin_id,b.douyin_id);
 });
+for(const step of ['101','102'])test(`MMV${step}允许同profile明确停用的旧账号历史，冻结当前唯一启用已核验账号`,async()=>{
+ const row=frozenRow(),b=binding();
+ row.snapshot.runtime_config.platform_accounts[0].douyin_id='77980009922';
+ row.snapshot.runtime_config.platform_accounts.unshift({...row.snapshot.runtime_config.platform_accounts[0],douyin_id:'perfect21xx',enabled:false,verification_status:'unverified'});
+ const before=structuredClone(row.snapshot);
+ const result=await queueRequest({}, {op:'company_config',line:'yuesheng',run,source_run:sourceRun,step,device_binding:{profile:b.profile,device_serial:b.device_serial}},{freezeCompanyConfig:async()=>row.snapshot});
+ assert.equal(result.device_binding.douyin_id,'77980009922');
+ assert.deepEqual(row.snapshot,before,'选择当前账号不能改写冻结快照或删除历史');
+});
+test('102原冻结来源读回允许明确停用历史账号，且不修改原快照',async()=>{
+ const {readCollectionAccountBinding}=require('../company-config-lib.js'),row=frozenRow();
+ row.snapshot.runtime_config.platform_accounts.unshift({...row.snapshot.runtime_config.platform_accounts[0],douyin_id:'old_disabled',enabled:false});
+ const before=structuredClone(row);
+ const result=await readCollectionAccountBinding({query:async()=>({rows:[row]})},{lineKey:'yuesheng',run,sourceRun});
+ assert.deepEqual(result,binding());assert.deepEqual(row,before);
+});
+for(const enabled of [true,undefined,null,'false','true',0,1])test(`当前同profile第二行enabled=${String(enabled)}不能被verified过滤隐藏`,async()=>{
+ const {readCollectionAccountBinding}=require('../company-config-lib.js'),row=frozenRow(),b=binding();
+ row.snapshot.runtime_config.platform_accounts.push({...row.snapshot.runtime_config.platform_accounts[0],douyin_id:'other',enabled,verification_status:'unverified'});
+ await assert.rejects(()=>queueRequest({}, {op:'company_config',line:'yuesheng',run,step:'102',device_binding:{profile:b.profile,device_serial:b.device_serial}},{freezeCompanyConfig:async()=>row.snapshot}),/COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED/);
+ await assert.rejects(()=>readCollectionAccountBinding({query:async()=>({rows:[row]})},{lineKey:'yuesheng',run,sourceRun}),/COMPANY_COLLECTION_BINDING_INVALID/);
+});
 for(const field of ['company_id','tenant_id','platform'])test('MMV102首次绑定拒绝账号声明异公司/平台 '+field,async()=>{
  const s=frozenRow().snapshot;s.runtime_config.platform_accounts[0][field]='other';
  await assert.rejects(()=>queueRequest({}, {op:'company_config',line:'yuesheng',run,source_run:sourceRun,step:'102',device_binding:{profile:binding().profile,device_serial:binding().device_serial}},{freezeCompanyConfig:async()=>s}),/COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED/);
