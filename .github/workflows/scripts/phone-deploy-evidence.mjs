@@ -6,6 +6,8 @@ import {mkdtempSync,writeFileSync,rmSync,realpathSync,appendFileSync} from 'node
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {digest} from '../../../services/phone-adb-controller/runtime-definition.mjs';
+import {deploymentAssertionPlan} from '../../../services/phone-adb-controller/deployment-preflight.mjs';
 const REPO='perfectuser21/zenithjoy-workspace',WORKFLOW='.github/workflows/pilot-release-verification.yml';
 const ensure=(ok,why)=>{if(!ok)throw Error(`部署CI来源拒绝: ${why}`);};
 export function validateSourceRun(run,mainSha){
@@ -35,18 +37,23 @@ function scopedEvidence(zip,scope,sha){
  ensure(receipt?.scope==='declared_pilot_regressions'&&sourceMatches(receipt.source),'receipt scope/来源');
  ensure(/^[0-9a-f]{64}$/.test(snapshot.snapshot_sha256||'')&&report.snapshot_sha256===snapshot.snapshot_sha256&&receipt.snapshot_sha256===snapshot.snapshot_sha256,'scope快照回执绑定');
  ensure(/^[0-9a-f]{64}$/.test(report.assertion_plan_sha256||'')&&receipt.assertion_plan_sha256===report.assertion_plan_sha256&&receipt.report_sha256===createHash('sha256').update(JSON.stringify(report)).digest('hex'),'scope报告回执绑定');
+ if(scope==='cecelia-device-patrol-definitions'){
+  const {snapshot_sha256,...body}=snapshot;
+  ensure(snapshot_sha256===digest(body),'第三scope快照正文摘要');
+  ensure(report.assertion_plan_sha256===digest(deploymentAssertionPlan(report,snapshot)),'第三scope断言计划摘要');
+ }
  return {snapshot,report,receipt};
 }
 export async function downloadDeploymentEvidence(runId,github){
- ensure(/^\d+$/.test(String(runId)),'run_id');
+ ensure(/^[1-9]\d{0,14}$/.test(String(runId))&&Number.isSafeInteger(Number(runId)),'run_id');
  const run=validateSourceRun(await github(`repos/${REPO}/actions/runs/${runId}`),(await github(`repos/${REPO}/git/ref/heads/main`)).object.sha);
  const listing=await github(`repos/${REPO}/actions/runs/${run.id}/artifacts?per_page=100`);
  ensure(listing.total_count===listing.artifacts?.length,'artifact分页不完整');
  ensure(run.id===Number(runId),'请求run身份');
- // 两份唯一scope都准入后才下载；缺任何一份不回退旧命名或另一范围。
- const selected=['zenithjoy','commander-generic'].map(scope=>({scope,artifact:selectArtifact(listing.artifacts,`pilot-release-verification-${scope}-${run.head_sha}`,run)}));
- const [zenithjoy,commander]=await Promise.all(selected.map(async({scope,artifact})=>scopedEvidence(await github(`repos/${REPO}/actions/artifacts/${artifact.id}/zip`,true),scope,run.head_sha)));
- return {run:{id:run.id,sha:run.head_sha,repo:REPO,event:run.event,path:run.path,branch:'main'},...zenithjoy,commander};
+ // 三份唯一scope都准入后才下载；缺任何一份不回退旧命名或另一范围。
+ const selected=['zenithjoy','commander-generic','cecelia-device-patrol-definitions'].map(scope=>({scope,artifact:selectArtifact(listing.artifacts,`pilot-release-verification-${scope}-${run.head_sha}`,run)}));
+ const [zenithjoy,commander,patrol]=await Promise.all(selected.map(async({scope,artifact})=>scopedEvidence(await github(`repos/${REPO}/actions/artifacts/${artifact.id}/zip`,true),scope,run.head_sha)));
+ return {run:{id:run.id,sha:run.head_sha,repo:REPO,event:run.event,path:run.path,branch:'main'},...zenithjoy,commander,patrol};
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
  try{const github=async(path,binary=false)=>{const bytes=execFileSync('gh',['api',path],{maxBuffer:32*1024*1024,stdio:['ignore','pipe','pipe']});return binary?bytes:JSON.parse(bytes.toString());};
