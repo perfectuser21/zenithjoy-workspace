@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.2.4
+  version: 0.2.5
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -934,7 +934,7 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.4.0
+    version: 2.4.1
     compatibility: backward
     owner:
       department: line02 智能获客
@@ -1091,7 +1091,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.1.2
+        version: 0.1.3
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -1205,7 +1205,7 @@ activities:
           readback:
             type: evidence
             glob: "{tag}-v*-collection-comments-panel.xml"
-            match: '(?=[\s\S]*<node(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ety")(?=[^>]*\bclass="android\.widget\.EditText")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)(?:<node(?=[^>]*\btext="[0-9万.]+条评论")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/title")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>|<node(?=[^>]*\btext="评论
+            match: '(?=[\s\S]*<node(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/(?:ety|e19|eyi)")(?=[^>]*\bclass="android\.widget\.EditText")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)(?:<node(?=[^>]*\btext="[0-9万.]+条评论")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/title")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>|<node(?=[^>]*\btext="评论
               [0-9万.]+")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ez-")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)'
             expect:
               op: ">="

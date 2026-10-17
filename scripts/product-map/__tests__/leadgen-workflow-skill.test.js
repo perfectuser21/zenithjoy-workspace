@@ -9,7 +9,7 @@ const keys = ['douyin_video_discovery', 'douyin_video_processing', 'douyin_comme
 
 test('四个 wf_run 合同通过原机制加载当前固定陪跑Skill，保留执行边界', () => {
   const ctx = loadContractsFromDisk();
-  const versions = ['0.2.3', '0.2.4', '0.2.2', '0.2.3'];
+  const versions = ['0.2.3', '0.2.5', '0.2.2', '0.2.3'];
   for (const [index, key] of keys.entries()) {
     const doc = ctx.contracts[key];
     assert.deepEqual(doc.commander_skill, { name: `wf-${key}`, version: versions[index] }, key);

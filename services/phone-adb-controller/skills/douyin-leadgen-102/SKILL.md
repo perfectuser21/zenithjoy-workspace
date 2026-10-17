@@ -2,7 +2,7 @@
 name: douyin-leadgen-102
 description: 执行抖音获客102视频处理：验证101来源、领取待处理视频、判断资格并按评论量采集持久化。用于普通、深采或自动策略及代码异常接手；不修改评分标准或执行私信。
 metadata:
-  version: 0.2.4
+  version: 0.2.5
   validation: awaiting-real-run
   support_files:
     - services/phone-adb-controller/skills/douyin-leadgen-102/references/reuse-map.json
