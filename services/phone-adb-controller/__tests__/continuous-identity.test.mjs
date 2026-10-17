@@ -32,7 +32,7 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
  }
  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
  const head='<hierarchy><node package="com.ss.android.ugc.aweme" bounds="[0,0][1200,2664]">';
- const field=value=>head+`<node text="${value}" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" hint="人工智能" clickable="true" bounds="[0,0][200,200]"/></node></hierarchy>`;
+ const field=value=>head+`<node text="${value}" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" hint="人工智能" package="com.ss.android.ugc.aweme" class="android.widget.EditText" enabled="true" focused="true" password="false" clickable="true" bounds="[0,0][200,200]"/></node></hierarchy>`;
  // 合成面板遵循真机功能容器合同；不放宽生产selector或nonce核验。
  const panel=head+'<node text="分享给" package="com.ss.android.ugc.aweme" enabled="true" bounds="[40,1900][300,1960]"/><node package="com.ss.android.ugc.aweme" resource-id="com.ss.android.ugc.aweme:id/function_container" enabled="true" bounds="[0,2200][1200,2450]"><node text="分享链接" package="com.ss.android.ugc.aweme" enabled="true" clickable="true" bounds="[40,2300][300,2360]"/></node></node></hierarchy>';
  writeFileSync(join(d,'registry'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
@@ -42,7 +42,7 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
  writeFileSync(join(d,'results.xml'),readFileSync(join(fixtures,'real-search-results-grid.xml')));
  writeFileSync(join(d,'detail.xml'),detail);writeFileSync(join(d,'panel.xml'),panel);
  writeFileSync(join(d,'skeleton.xml'),readFileSync(join(fixtures,'real-keyword-return-skeleton-13.xml')));
- writeFileSync(join(d,'state.json'),JSON.stringify({page:'detail',play:'playing',field:'',clip:'https://v.douyin.com/Fresh/',backs:0}));
+ writeFileSync(join(d,'state.json'),JSON.stringify({page:'detail',play:'playing',field:'',clip:'https://v.douyin.com/Fresh/',selected:false,backs:0}));
  const adb=join(d,'adb');
  writeFileSync(adb,`#!/usr/bin/env node
 const fs=require('fs'),p=require('path'),d=process.env.FAKE_PHONE_DIR,a=process.argv.slice(2),sfile=p.join(d,'state.json');
@@ -56,10 +56,12 @@ else if(has('am start')&&has('search/tabs')){s.page='scratch';s.field='';s.backs
 else if(has('input keyevent 127')){s.play='paused';s.pauseCount=(s.pauseCount||0)+1;}
 else if(has('input keyevent 126')){if(process.env.PLAY_FAILS==='1')process.exit(1);s.play='playing';}
 else if(has('input keyevent 85')){s.play=s.play==='playing'?'paused':'playing';s.media85=(s.media85||0)+1;}
-else if(has('input text '))s.field=a.at(-1);
-else if(has('input keyevent 278'))s.clip=s.field;
-else if(has('input keyevent 279'))s.field=s.clip;
-else if(has('input keyevent 67'))s.field='';
+else if(has('input keycombination 113 29'))s.selected=true;
+else if(has('input text ')){s.field=s.selected?a.at(-1):s.field+a.at(-1);s.selected=false;}
+else if(has('input keyevent 278')){if(s.selected)s.clip=s.field;s.selected=false;}
+else if(has('input keyevent 123'))s.selected=false;
+else if(has('input keyevent 279')){s.field=s.selected?s.clip:s.field+s.clip;s.selected=false;}
+else if(has('input keyevent 67')){s.field=s.selected?'':s.field.slice(0,-1);s.selected=false;}
 else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.scratchReturns=(s.scratchReturns||0)+1;s.page=process.env.COPY_GUIDE==='1'&&s.scratchReturns===2?'guide':'detail';}else if(s.page==='guide'){s.guideDismisses=(s.guideDismisses||0)+1;s.page=process.env.GUIDE_DISMISS_STUCK==='1'?'guide':process.env.GUIDE_DISMISS_FAILS==='1'?'partial':'detail';}else if(s.page==='panel')s.page='detail';else if(process.env.KEYWORD_RESULTS==='1'&&s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
 else if(has('input tap')&&s.page==='panel'){if(a.slice(-2).join(' ')!=='170 2330'){console.error('UNTRUSTED_FAKE_PANEL_TAP');process.exit(33);}s.clip='https://v.douyin.com/Fresh/';s.page='detail';}

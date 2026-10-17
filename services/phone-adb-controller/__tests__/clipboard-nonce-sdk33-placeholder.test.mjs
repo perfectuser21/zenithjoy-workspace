@@ -8,6 +8,8 @@ const controller=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'ut
 const fn=name=>controller.match(new RegExp(name+'\\(\\) \\{[\\s\\S]*?\\n\\}'))[0];
 const fixtures=new URL('./fixtures/sdk33-nonce/',import.meta.url).pathname;
 const samples=readdirSync(fixtures).filter(x=>x.endsWith('-empty.xml'));
+const optionalFixtures=new URL('./fixtures/nonce-optional-sdk/',import.meta.url).pathname;
+const registryParsing=controller.slice(controller.indexOf('_registry_row="'),controller.indexOf('[[ "$registry_profile"'));
 function run(sample=samples[0],flags={}) {
  const dir=mkdtempSync(join(tmpdir(),'nonce-sdk33-')),adb=join(dir,'adb');
  writeFileSync(join(dir,'state.json'),JSON.stringify({field:'',clip:'https://v.douyin.com/Old/',selected:false,events:[]}));
@@ -15,7 +17,7 @@ function run(sample=samples[0],flags={}) {
 import os,sys,json,xml.etree.ElementTree as E
 from pathlib import Path
 p=Path(os.environ['D'])/'state.json';s=json.loads(p.read_text());a=sys.argv[1:];f=json.loads(os.environ['FLAGS'])
-if a[:2]==['-s','FAKE']:a=a[2:]
+if a[:1]==['-s']:a=a[2:]
 s['events'].append(' '.join(a));rc=0
 if a[:1]==['test-ui']:
  phase=Path(a[1]).stem.split('-')[-1]
@@ -49,8 +51,10 @@ node_center(){ print '200 200'; }
 ui_evidence(){ "$ADB" test-ui "$EVIDENCE_ROOT/$1.xml"; }
 _leave_scratch_route(){ :; }
 ${['nonce_sdk31_field','seed_clipboard_nonce'].map(fn).join('\n')}
+${flags.registryProfile?registryParsing:flags.sdkMode==='unset'?'unset DEVICE_SDK':''}
+print -r -- "\${DEVICE_SDK-unset}|$SCREEN_W|$SCREEN_H" > "$EVIDENCE_ROOT/fixture-context.txt"
 seed_clipboard_nonce fixture`;
- const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),SAMPLE:join(fixtures,sample),DEVICE_SDK:'33',LOCK_OWNER:'fixture-only',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,SCREEN_W:'1080',SCREEN_H:'2400'}});
+ const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),SAMPLE:join(flags.optional?optionalFixtures:fixtures,sample),REGISTRY:join(optionalFixtures,'profiles.tsv'),PROFILE:flags.registryProfile||'',DEVICE_SDK:flags.sdkMode==='empty'?'':flags.sdkMode==='35'?'35':'33',LOCK_OWNER:'fixture-only',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,SCREEN_W:String(flags.width||1080),SCREEN_H:String(flags.height||2400)}});
  return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'),'utf8')),dir};
 }
 for(const sample of samples)test('SDK33真实无hint动态占位 '+sample,()=>{
@@ -73,4 +77,26 @@ for(const [name,attrs] of Object.entries({失焦:{focused:'false'},禁用:{enabl
 test('SDK33粘贴后重复resource拒绝，保留pending',()=>{
  const r=run(samples[0],{phase:'pasted',duplicate:true});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_FIELD_UNVERIFIED:pasted/);
  assert.match(readFileSync(join(r.dir,'fixture-seed-empty-proof.txt'),'utf8'),/pending_nonce_append/);
+});
+
+const liveCases=[
+ {profile:'xiaolongxia',width:1200,height:2664,sample:'v8db6ea76_xiaolongxia_101_20261017T175329Z-candidate1-link-t4-seed-empty.xml'},
+ {profile:'yueshengyun-work',width:1080,height:2412,sample:'v8db6ea76_yueshengyun_work_101_20261017T175330Z-candidate1-link-t3-seed-empty.xml'}
+];
+for(const c of liveCases)for(const sdkMode of ['registry','empty','unset'])test(`可选SDK ${c.profile} ${sdkMode} 原生无hint占位须完整追加证明`,()=>{
+ const flags={...c,optional:true,sdkMode,registryProfile:sdkMode==='registry'?c.profile:undefined};
+ const r=run(c.sample,flags);assert.equal(readFileSync(join(r.dir,'fixture-context.txt'),'utf8').trim(),`${sdkMode==='unset'?'unset':''}|${c.width}|${c.height}`);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/^clipnonce[a-f0-9]{32}\n$/);
+ assert.equal(r.state.field,r.state.clip);assert.match(readFileSync(join(r.dir,'fixture-seed-empty-proof.txt'),'utf8'),/verified_by_exact_nonce_append/);
+});
+for(const sdkMode of ['empty','unset'])for(const [name,negative] of Object.entries({真实残留:{residual:true},选区残留:{residual:true,selectedResidual:true},nonce前缀加复制后缀:{prefixResidual:true},部分复制:{partialCopy:true},旧剪贴板:{pasteOld:true},移动失败:{moveEndFail:true},失焦:{attrs:{focused:'false'}},禁用:{attrs:{enabled:'false'}},错包:{attrs:{package:'other'}},错类:{attrs:{class:'android.widget.TextView'}},密码:{attrs:{password:'true'}},横向越界:{attrs:{bounds:'[1,1][1201,99]'}},纵向越界:{attrs:{bounds:'[1,1][99,2665]'}},重复字段:{duplicate:true},粘贴后失焦:{phase:'pasted',attrs:{focused:'false'}},粘贴后重复:{phase:'pasted',duplicate:true}}))test(`可选SDK ${sdkMode} 拒绝${name}`,()=>{
+ const c=liveCases[0],r=run(c.sample,{...c,optional:true,sdkMode,...negative});assert.notEqual(r.status,0,r.stdout);assert.match(r.stderr,/CLIPBOARD_NONCE/);
+ if(negative.attrs||negative.duplicate)assert.ok(r.stderr.includes('CLIPBOARD_NONCE_FIELD_UNVERIFIED:'+(negative.phase||'empty')),r.stderr);
+ if(negative.moveEndFail)assert.match(r.stderr,/CLIPBOARD_NONCE_MOVE_END_FAILED/);
+ if(negative.residual||negative.partialCopy||negative.pasteOld)assert.match(r.stderr,/CLIPBOARD_NONCE_READBACK_MISMATCH:pasted/);
+ if(negative.prefixResidual)assert.ok(!r.state.events.includes('shell input keyevent 279'));
+});
+
+test('未知非空SDK35不借缺省能力分支自动放行',()=>{
+ const c=liveCases[0],r=run(c.sample,{...c,optional:true,sdkMode:'35'});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_CLEAR_UNVERIFIED/);
+ assert.ok(!r.state.events.includes('shell input keyevent 279'));
 });

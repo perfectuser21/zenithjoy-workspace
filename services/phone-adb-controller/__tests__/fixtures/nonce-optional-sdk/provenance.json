@@ -1,0 +1,27 @@
+{
+  "source": "8db6ea76f2995d9410add276b800abbe26a1f3aa",
+  "originals": [
+    {
+      "file": "v8db6ea76_xiaolongxia_101_20261017T175329Z-candidate1-link-t4-seed-empty.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/xiaolongxia/v8db6ea76_xiaolongxia_101_20261017T175329Z-candidate1-link-t4-seed-empty.xml",
+      "sha256": "79a58373782b5a5de97bce9b68ca95f3153ac644f91649f166c4e39508dc00fc"
+    },
+    {
+      "file": "v8db6ea76_xiaolongxia_101_20261017T175329Z-candidate1-link-t4-seed-typed.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/xiaolongxia/v8db6ea76_xiaolongxia_101_20261017T175329Z-candidate1-link-t4-seed-typed.xml",
+      "sha256": "aa5ea2a1fe1ec0fd283451f504994b811c748f04fac8ca7c0f78a4fa3f68dff9"
+    },
+    {
+      "file": "v8db6ea76_yueshengyun_work_101_20261017T175330Z-candidate1-link-t3-seed-empty.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/yueshengyun-work/v8db6ea76_yueshengyun_work_101_20261017T175330Z-candidate1-link-t3-seed-empty.xml",
+      "sha256": "a28e0810aac2dce64703af99c35b67d1cd94ad2379cdd04e7afe22b073257ab7"
+    },
+    {
+      "file": "v8db6ea76_yueshengyun_work_101_20261017T175330Z-candidate1-link-t3-seed-typed.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/yueshengyun-work/v8db6ea76_yueshengyun_work_101_20261017T175330Z-candidate1-link-t3-seed-typed.xml",
+      "sha256": "4f2eefd3dc09ddb09029662cdc81116d90acf871f7ca630662108c738c609141"
+    }
+  ],
+  "registry_excerpt_original": "/Users/administrator/research/five-device-leadgen-acceptance-20261017/publication-8db6ea76/five-device-independent-business-review/approved-two-profile-registry-excerpt.tsv",
+  "registry_excerpt_sha256": "78f8c0b72b66e61368ecfe05edcea1ce26eac41d5fff47b989251c57cbc7c1fc"
+}
