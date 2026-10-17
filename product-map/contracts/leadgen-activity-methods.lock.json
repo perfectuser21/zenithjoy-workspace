@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "76b6a5c020b8e96c75a8c6aee1702856689c86375b4319cd25c7a5452d9f272f",
+      "code_digest": "bda18ed1d7972660404fc617eeee01105e99b21730da94e8d8bde2d64480e524",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "发现Activity仍搜索/筛选/取真实链接及保存视频，record_start不属本方法执行路径；其所有定位、nonce、数量、指标和入库代码不变。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "537c1238a2a62d2f4e5c4c24f48f703ef0a80046593b7da02e6bbc41b888d05c",
-        "current_code_digest": "76b6a5c020b8e96c75a8c6aee1702856689c86375b4319cd25c7a5452d9f272f"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "76b6a5c020b8e96c75a8c6aee1702856689c86375b4319cd25c7a5452d9f272f",
+        "current_code_digest": "bda18ed1d7972660404fc617eeee01105e99b21730da94e8d8bde2d64480e524"
       }
     },
     "douyin_video_processing.preflight": {
@@ -220,7 +220,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "2a8952964de667dea442e2f07fd3cb5677df34152db79086ef65a4ce0fe94398",
+      "code_digest": "3e40a817112c13e70d48e7cf664002565fa5bc82f41c4ebec03b9f4b9f452a52",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "24a7499f28c0a25e272c9a4a92e5a98ff3dab007007cf043a0ac9cb6d47734ef",
-        "current_code_digest": "2a8952964de667dea442e2f07fd3cb5677df34152db79086ef65a4ce0fe94398",
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
         "reviewed_by": "codex:/root",
-        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
+        "previous_code_digest": "2a8952964de667dea442e2f07fd3cb5677df34152db79086ef65a4ce0fe94398",
+        "current_code_digest": "3e40a817112c13e70d48e7cf664002565fa5bc82f41c4ebec03b9f4b9f452a52"
       }
     },
     "douyin_video_processing.dedup": {
@@ -385,7 +385,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "b92c71c46f197522ee8453206e0394c3109b625557d4df22bd3e09c8bde30f92",
+      "code_digest": "5c7f1443b02f0806e1bdaa411bb98465cb3bab0080863f5547d9dd8da3927c64",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "6b92d03559528b6e05f8be39da0a3b60b7cc5a5ca48de6a0a418a1590d79877e",
-        "current_code_digest": "b92c71c46f197522ee8453206e0394c3109b625557d4df22bd3e09c8bde30f92",
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
         "reviewed_by": "codex:/root",
-        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
+        "previous_code_digest": "b92c71c46f197522ee8453206e0394c3109b625557d4df22bd3e09c8bde30f92",
+        "current_code_digest": "5c7f1443b02f0806e1bdaa411bb98465cb3bab0080863f5547d9dd8da3927c64"
       }
     },
     "douyin_video_processing.qualification": {
@@ -546,7 +546,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -689,13 +689,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "5acfc2eee3f28901437c4e636e8b312e06c79c761f5d16a21e413fb891534d06",
+      "code_digest": "9652ff2a1eefe7c9b18fcf46854a9827659df61396c7e8ddcf98dfa32fa3d3ea",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "资格方法仍先核原生播放与runtime，再有界录音/提取真实音轨/原ASR与公司判断；仅内部首次非空媒体等待8→12秒并新增诊断，准入、终止、decoder及资格政策不变。Skill只要求有界就绪未固定8秒。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "7f1c6546bce0ee1e6b5511b235980db253e78d3e5c8e3f0ad965acb2026d961c",
-        "current_code_digest": "5acfc2eee3f28901437c4e636e8b312e06c79c761f5d16a21e413fb891534d06"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "5acfc2eee3f28901437c4e636e8b312e06c79c761f5d16a21e413fb891534d06",
+        "current_code_digest": "9652ff2a1eefe7c9b18fcf46854a9827659df61396c7e8ddcf98dfa32fa3d3ea"
       }
     },
     "douyin_video_processing.collection": {
@@ -756,7 +756,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -879,13 +879,13 @@
           "sha256": "fdc75f935ec9cac3e6c10815cbd85f2becb30edb9c16af2f90db0c76f8100b92"
         }
       ],
-      "code_digest": "d8da387850facdf7361672103492eee26949ccab2563262add6ee41e0395e9c5",
+      "code_digest": "32c1b236786359dbf55fa87bd7f68545a406b947a4d299e9c7a3d9b5d666aa7e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "cd492669b1aa5d6ea2c0b77946db16d4908a559d2baecd2e343cf5ab02153c45",
-        "current_code_digest": "d8da387850facdf7361672103492eee26949ccab2563262add6ee41e0395e9c5",
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
         "reviewed_by": "codex:/root",
-        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
+        "previous_code_digest": "d8da387850facdf7361672103492eee26949ccab2563262add6ee41e0395e9c5",
+        "current_code_digest": "32c1b236786359dbf55fa87bd7f68545a406b947a4d299e9c7a3d9b5d666aa7e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -939,7 +939,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -1036,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "604fed565186b819e9786e4c950df1e3df1dcbfedf2ee475ed65ef301aeb3689",
+      "code_digest": "3e3099f1b364ac26e5821cc88e18a4ad071d166511c79b01698d71423c38a500",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "收尾停止/核本人进程、关闭应用并归还本人锁原逻辑未改；record_start失败后的逐signal身份核验整段与原版相同，未知仍保锁。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "03f3bc5ceff8b3fa9fe75c8dae8a0a38cd79f8683a74e953452ed99d840795cd",
-        "current_code_digest": "604fed565186b819e9786e4c950df1e3df1dcbfedf2ee475ed65ef301aeb3689"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "604fed565186b819e9786e4c950df1e3df1dcbfedf2ee475ed65ef301aeb3689",
+        "current_code_digest": "3e3099f1b364ac26e5821cc88e18a4ad071d166511c79b01698d71423c38a500"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1096,7 +1096,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -1176,13 +1176,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "144faa962f3ff18bfb909ab94d898bc203a7fe41d3f23ba5fab47b97a2686d4f",
+      "code_digest": "0008d442a0dd888abec145ca129a4e079187b7404d62f29a6cf0bd44ab59c4cd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "ef46df4fd669c677c966c9ab8dbbb56af8ae71d157bf75f4347194a43503d699",
-        "current_code_digest": "144faa962f3ff18bfb909ab94d898bc203a7fe41d3f23ba5fab47b97a2686d4f",
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
         "reviewed_by": "codex:/root",
-        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
+        "previous_code_digest": "144faa962f3ff18bfb909ab94d898bc203a7fe41d3f23ba5fab47b97a2686d4f",
+        "current_code_digest": "0008d442a0dd888abec145ca129a4e079187b7404d62f29a6cf0bd44ab59c4cd"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1243,7 +1243,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -1372,13 +1372,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f07c837856bc30ddb4a303519b5dd0a41180262adaae14a8009c56197c152582",
+      "code_digest": "570f629754eb9dcdc38ee6e5e741cec253503d192d604a6b6a0cc568d83cfa26",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "previous_code_digest": "6f85a6b6643c58535dfd02994096c695a029db47f485036bd47fe33fcd91d099",
-        "current_code_digest": "f07c837856bc30ddb4a303519b5dd0a41180262adaae14a8009c56197c152582",
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
         "reviewed_by": "codex:/root",
-        "reason": "修复同profile明确停用历史账号被误判当前冲突；仅读原冻结快照，不修改Skill输入输出、身份授权或评分/发送合同；多活跃及非法状态仍拒，新增101/102和来源读回回归覆盖。"
+        "previous_code_digest": "f07c837856bc30ddb4a303519b5dd0a41180262adaae14a8009c56197c152582",
+        "current_code_digest": "570f629754eb9dcdc38ee6e5e741cec253503d192d604a6b6a0cc568d83cfa26"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1432,7 +1432,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -1565,13 +1565,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "58bc3d192c97c6da56872a2ed54bf3bd2a61fd684d608ab9ce6f3e824dc49a48",
+      "code_digest": "9a534c0bca0bfedd4bbdf3f8a368260c61b131381359ecd080bf2291a2ccca78",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "触达预检的公司、账号、发送授权、暂停与日限额全部不变；未调用record_start，无新增发送授权。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "bbc3ed1eab1a066247445dafdb7b111b03b0afc21822d7fbd6f7c6bbbc1dcd58",
-        "current_code_digest": "58bc3d192c97c6da56872a2ed54bf3bd2a61fd684d608ab9ce6f3e824dc49a48"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "58bc3d192c97c6da56872a2ed54bf3bd2a61fd684d608ab9ce6f3e824dc49a48",
+        "current_code_digest": "9a534c0bca0bfedd4bbdf3f8a368260c61b131381359ecd080bf2291a2ccca78"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1625,7 +1625,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -1733,13 +1733,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
+      "code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本次只改录音首次就绪内部函数，私信对象、批准话术、一次发送与未知只读回的代码和Skill均不变，未调用record_start。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924",
-        "current_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
+        "current_code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1793,7 +1793,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -1901,13 +1901,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
+      "code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "已发结果写回仍按原订单身份独立读回，未调用record_start；发送未知处理、PG写回与幂等约束不变。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "c207d511ba5843ef5ba45913603471d4f57953d84f01b6182d8fbf8f80b0c924",
-        "current_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "ae1c1a92098816c5c77e2b92931e621bf9632ec9643061b2332d05e777bd57f0",
+        "current_code_digest": "aab0f1972b495ba42a07dc5dce3a466a658b42997c9f50805f39a0a580698fee"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1961,7 +1961,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "e52c961289c456949e26088a4fb68c00a4ad4b6f9e2e15c3e9e947b4ae796eb1"
+          "sha256": "2ddbeac0cb582c0bf47ce919a0a25507a5ebbc1af9967dc15a9127b7a0ca3442"
         },
         {
           "kind": "code",
@@ -2072,13 +2072,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "5b2e794df5700604aff28986731fc97309d747126ff808e285bca65de5dcb8ae",
+      "code_digest": "d3cc84891f9c33bc57b07db711b9d828fee89dae87b5bfdcb0f7ca23a1b03d6c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "触达收尾的应用归位、本人锁释放及未决发送保留逻辑未改；record_start的观测新增不改变本方法。共享C唯一生产变更为record_start内部有界就绪窗口8→12秒和只读artifact观测，仍min(maximum,12)且服从WF剩余-2秒reserve；原UID/ppid/lstart/完整argv、regular非零媒体、精确started且未complete、二次身份/就绪、逐signal核验及unknown保锁不变；不改业务输入输出、方法、合同或Skill。",
-        "reviewed_by": "codex:/root/sdk31_nonce_repair_review",
-        "previous_code_digest": "deba2f4d5d99b97005a3f76ab05e07e6fa7f7c73534c04eaaf809085d82ecaa1",
-        "current_code_digest": "5b2e794df5700604aff28986731fc97309d747126ff808e285bca65de5dcb8ae"
+        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "5b2e794df5700604aff28986731fc97309d747126ff808e285bca65de5dcb8ae",
+        "current_code_digest": "d3cc84891f9c33bc57b07db711b9d828fee89dae87b5bfdcb0f7ca23a1b03d6c"
       }
     }
   },
