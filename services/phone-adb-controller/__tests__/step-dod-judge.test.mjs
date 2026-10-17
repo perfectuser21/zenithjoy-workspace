@@ -275,3 +275,29 @@ test('正式102属性重排合法，exact头字段不可拆分拼接',()=>{
  const split=original.replace('text="评论 4"','text="评论 4个想法"');
  assert.equal(processCommentPanelJudgment(split).pass,false);
 });
+
+const APPROVED_PANEL_LAYOUTS = [
+ ['SDK31 e19', join(HERE,'fixtures','comment-panel','cloud-e19-184653.xml'), 'e19'],
+ ['蓝 eyi', join(HERE,'fixtures','blue-recipient','returned.xml'), 'eyi'],
+ ['旧 ety', join(HERE,'fixtures','comment-panel','legacy-header-861.xml'), 'ety'],
+];
+for (const [layout,path,input] of APPROVED_PANEL_LAYOUTS) {
+ test(`正式102 ${layout}真实原生header与EditText配对通过`,()=>{
+  assert.deepEqual([processCommentPanelJudgment(readFileSync(path,'utf8')).observed,
+    processCommentPanelJudgment(readFileSync(path,'utf8')).pass],[1,true]);
+ });
+ test(`正式102 ${layout}精确资源/包/class/header与逐VID边界仍拒绝负例`,()=>{
+  const xml=readFileSync(path,'utf8');
+  const inputRid=`resource-id="com.ss.android.ugc.aweme:id/${input}"`;
+  assert.ok(xml.includes(inputRid));
+  const bad=[
+   xml.replace(inputRid,`resource-id="com.ss.android.ugc.aweme:id/${input}-unapproved"`),
+   xml.replaceAll('com.ss.android.ugc.aweme','com.ss.android.ugc.aweme.evil'),
+   xml.replace(/class="android.widget.EditText"/g,'class="android.widget.TextView"'),
+   xml.replace(/text="[0-9万.]+条评论"/g,'text="相关搜索"').replace(/text="评论 [0-9万.]+"/g,'text="相关搜索"'),
+   xml.replace(/resource-id="com.ss.android.ugc.aweme:id\/(?:title|ez-)"/g,'resource-id="com.ss.android.ugc.aweme:id/comment_body"'),
+  ];
+  for(const wrong of bad) assert.deepEqual([processCommentPanelJudgment(wrong).observed,processCommentPanelJudgment(wrong).pass],[0,false]);
+  assert.equal(processCommentPanelJudgment(xml,{scoped:false}).pass,false);
+ });
+}
