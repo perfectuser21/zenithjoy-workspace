@@ -1,0 +1,16 @@
+{
+  "source": "24267b528952d77c1e4038d8f3f9a081802ace16",
+  "run": "v24267b52cloud102_20261017T163901Z",
+  "originals": [
+    {
+      "file": "profile.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/cloud-phone-test/v24267b52cloud102_20261017T163901Z-v7697504901894573362-collection-person1-t1-profile.xml",
+      "sha256": "3ac16de0381ad3b0bb12ba0dbafb893c7862b519e2f770e587b2f16ea4c0d71a"
+    },
+    {
+      "file": "returned.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/cloud-phone-test/v24267b52cloud102_20261017T163901Z-v7697504901894573362-collection-person1-t1-returned.xml",
+      "sha256": "ea1293665d90aa45a999e663e151d75b054a8cc1f63c3983e120c159ed7ddafb"
+    }
+  ]
+}

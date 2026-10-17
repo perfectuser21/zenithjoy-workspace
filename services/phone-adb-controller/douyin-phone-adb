@@ -853,7 +853,7 @@ seed_clipboard_nonce() {
     line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
     [[ -n "$line" ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT:$phase"
     text="$(print -r -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
-    if [[ "${DEVICE_SDK:-}" == 31 ]]; then
+    if [[ "${DEVICE_SDK:-}" == 31 || ( "${DEVICE_SDK:-}" == 33 && "$phase" != typed ) ]]; then
       nonce_sdk31_field "$xml" >/dev/null || die "CLIPBOARD_NONCE_FIELD_UNVERIFIED:$phase"
     fi
     if [[ "$phase" == empty ]]; then
@@ -862,8 +862,8 @@ seed_clipboard_nonce() {
       if [[ "$line" == *' hint="'* ]]; then
         hint="$(print -r -- "$line" | /usr/bin/sed -E 's/.* hint="([^"]*)".*/\1/')"
       fi
-      if [[ "${DEVICE_SDK:-}" == 31 ]]; then
-        # SDK31把灰色placeholder放进text但省略hint。先保留候选，不当作已清空。
+      if [[ "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 33 ]]; then
+        # SDK31/33把灰色placeholder放进text但省略hint。先保留候选，不当作已清空。
         # 非空nonce前缀必须拒绝：否则残留前缀+部分复制的后缀可拼回nonce。
         [[ -z "$text" || "$nonce" != "$text"* ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
         print -- 'empty_proof=pending_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
@@ -875,7 +875,7 @@ seed_clipboard_nonce() {
       "$ADB" -s "$SERIAL" shell input keyevent 279 >/dev/null || die "CLIPBOARD_NONCE_PASTE_FAILED"
     else
       [[ "$text" == "$nonce" ]] || die "CLIPBOARD_NONCE_READBACK_MISMATCH:$phase"
-      if [[ "$phase" == pasted && "${DEVICE_SDK:-}" == 31 ]]; then
+      if [[ "$phase" == pasted && ( "${DEVICE_SDK:-}" == 31 || "${DEVICE_SDK:-}" == 33 ) ]]; then
         print -- 'empty_proof=verified_by_exact_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
       fi
       if [[ "$phase" == typed ]]; then
