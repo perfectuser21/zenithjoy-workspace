@@ -1337,7 +1337,7 @@ row_height = bottom - top + 1
 for x in range(x0, x1):
     chip_pixels = sum(is_chip(image.getpixel((x, y))) for y in range(top, bottom + 1, 2))
     column_flags.append(chip_pixels >= row_height * 0.32 / 2)
-column_bands = [(a + x0, b + x0) for a, b in groups(column_flags, max_gap=12, min_size=max(45, int(w * 0.10)))]
+column_bands = [(a + x0, b + x0) for a, b in groups(column_flags, max_gap=max(3, min(12, round(w / 120))), min_size=max(45, int(w * 0.10)))]
 if column_index >= len(column_bands):
     raise SystemExit(f"filter option locator failed: row {row_index} has {len(column_bands)} visual chips")
 left, right = column_bands[column_index]
@@ -1532,7 +1532,7 @@ def _column_bands(top, bottom):
     for x in range(_x0, _x1):
         hit = sum(_is_chip(image.getpixel((x, y))) for y in range(top, bottom + 1, 2))
         flags.append(hit >= height * 0.32 / 2)
-    return [(a + _x0, b + _x0) for a, b in _groups(flags, 12, max(45, int(w * 0.10)))]
+    return [(a + _x0, b + _x0) for a, b in _groups(flags, max(3, min(12, round(w / 120))), max(45, int(w * 0.10)))]
 
 for category, value in (("sort", sort_mode), ("time", time_layer), ("duration", duration), ("scope", scope), ("location", location)):
     row_index, column_index = CHIP_GRID[(category, value)]
