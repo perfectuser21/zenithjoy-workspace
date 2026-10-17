@@ -293,6 +293,9 @@ for (const [layout,path,input] of APPROVED_PANEL_LAYOUTS) {
   const bad=[
    xml.replace(inputRid,`resource-id="com.ss.android.ugc.aweme:id/${input}-unapproved"`),
    xml.replaceAll('com.ss.android.ugc.aweme','com.ss.android.ugc.aweme.evil'),
+   xml.replace(/<node[^>]*class="android.widget.EditText"[^>]*>/g,node=>node.replace('package="com.ss.android.ugc.aweme"','package="foreign.app"')),
+   xml.replace(/<node[^>]*resource-id="com.ss.android.ugc.aweme:id\/(?:title|ez-)"[^>]*>/g,node=>node.replace('class="android.widget.TextView"','class="android.widget.EditText"')),
+
    xml.replace(/class="android.widget.EditText"/g,'class="android.widget.TextView"'),
    xml.replace(/text="[0-9万.]+条评论"/g,'text="相关搜索"').replace(/text="评论 [0-9万.]+"/g,'text="相关搜索"'),
    xml.replace(/resource-id="com.ss.android.ugc.aweme:id\/(?:title|ez-)"/g,'resource-id="com.ss.android.ugc.aweme:id/comment_body"'),
