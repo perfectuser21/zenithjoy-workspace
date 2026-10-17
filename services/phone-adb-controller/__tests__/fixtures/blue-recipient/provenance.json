@@ -1,0 +1,16 @@
+{
+  "source": "8db6ea76f2995d9410add276b800abbe26a1f3aa",
+  "run": "v8db6ea76_jinoshengyuan_work_102_20261017T180118Z",
+  "originals": [
+    {
+      "file": "profile.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/jinoshengyuan-work/v8db6ea76_jinoshengyuan_work_102_20261017T180118Z-v7691237147096960271-collection-person1-t1-profile.xml",
+      "sha256": "525594699fc8a4e0776303ab79b8dafe7653b1683171d7470ceb625a500aef58"
+    },
+    {
+      "file": "returned.xml",
+      "original_path": "/private/tmp/openclaw-phone/evidence/jinoshengyuan-work/v8db6ea76_jinoshengyuan_work_102_20261017T180118Z-v7691237147096960271-collection-person1-t1-returned.xml",
+      "sha256": "57d15386667bab933ba211fdb5a2ace2a9f9ee4801566643cdbc6f67756b31e5"
+    }
+  ]
+}
