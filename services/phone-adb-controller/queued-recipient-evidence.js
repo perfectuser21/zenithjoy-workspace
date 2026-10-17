@@ -20,17 +20,20 @@ ids=[n.get('text','')[4:] for n in p if n.get('text','').startswith('抖音号�
 if ids!=[v['douyinId']]: raise ValueError('uid')
 if sum(n.get('text')==v['nickname'] and n.get('content-desc')==v['nickname']+'，复制名字和修改备注' for n in p)!=1: raise ValueError('nickname')
 headers=[n for n in b if n.get('class')=='android.widget.TextView' and ((n.get('resource-id')==pkg+':id/title' and re.fullmatch(r'[0-9万.]+条评论',n.get('text',''))) or (n.get('resource-id')==pkg+':id/ez-' and re.fullmatch(r'评论 [0-9万.]+',n.get('text',''))))]
-# 两套原生布局成对识别；SDK31必须在同一唯一评论面板内，不能借全局搜索卡拼接。
+# 明确原生布局成对识别；同一唯一面板内核验，不能借全局搜索卡或混合资源拼接。
 legacy_input=[n for n in b if n.get('resource-id')==pkg+':id/ety']
-sdk31_input=[n for n in b if n.get('resource-id')==pkg+':id/e19']
-comment_nodes=b;row_id='fhn';sdk31=False
-if sdk31_input:
- sdk31=True
- panels=[n for n in b if n.get('resource-id')==pkg+':id/jqe']
- if legacy_input or len(sdk31_input)!=1 or len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or sdk31_input[0].get('class')!='android.widget.EditText' or any(n.get('resource-id')==pkg+':id/fhn' for n in b): raise ValueError('layout')
- comment_nodes=list(panels[0].iter('node'));row_id='fpa'
- if sdk31_input[0] not in comment_nodes or len(headers)!=1 or headers[0] not in comment_nodes: raise ValueError('panel')
- for rid,desc in [('back_btn','关闭'),('kkg','放大评论区')]:
+layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8')}
+strict_input=[n for n in b if n.get('resource-id') in [pkg+':id/'+i for i in layouts]]
+comment_nodes=b;row_id='fhn';strict_layout=False
+if strict_input:
+ strict_layout=True
+ if legacy_input or len(strict_input)!=1 or strict_input[0].get('class')!='android.widget.EditText': raise ValueError('layout')
+ row_id,panel_id,expand_id=layouts[strict_input[0].get('resource-id').split(':id/')[1]]
+ panels=[n for n in b if n.get('resource-id')==pkg+':id/'+panel_id]
+ if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq') if r!=row_id] for n in b): raise ValueError('layout')
+ comment_nodes=list(panels[0].iter('node'))
+ if strict_input[0] not in comment_nodes or len(headers)!=1 or headers[0] not in comment_nodes: raise ValueError('panel')
+ for rid,desc in [('back_btn','关闭'),(expand_id,'放大评论区')]:
   anchors=[n for n in b if n.get('resource-id')==pkg+':id/'+rid]
   if len(anchors)!=1 or anchors[0] not in comment_nodes or anchors[0].get('class')!='android.widget.ImageView' or anchors[0].get('content-desc')!=desc: raise ValueError('panel')
 else:
@@ -40,7 +43,7 @@ def exact_comment(n):
  m=re.fullmatch(re.escape(v['nickname'])+r',(.+),[^,]*, · [^,]*,回复 按钮(?:,.*)?',n.get('content-desc',''))
  return bool(m and m.group(1)==v['commentBody'])
 matches=sum(exact_comment(n) for n in comment_nodes)
-if matches==0 or (sdk31 and matches!=1): raise ValueError('returned_comment')
+if matches==0 or (strict_layout and matches!=1): raise ValueError('returned_comment')
 texts=list(dict.fromkeys(s for n in p for s in [n.get('text',''),n.get('content-desc','')] if s))
 print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'returned_comment_verified':True},ensure_ascii=False))
 `],{input:JSON.stringify({profile,returned,nickname,douyinId,commentBody:commentEncoding==='xml_raw'?decodeXmlEntities(commentBody):commentBody}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});

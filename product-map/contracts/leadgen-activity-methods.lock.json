@@ -876,16 +876,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "a707a7a61216747dbee8817e74fd961e57972805c2a9f5016dd82a292b36dbc7"
+          "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "18c3eb81e78af8ee2e8b11bd052b8f4bc964b37e784f780ffa279f4136a020df",
+      "code_digest": "8e6300fb4185246453a118f9d437e373474bbc875aee64fb1c51956630e6dd99",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "可选SDK元数据缺省时仍严格核原生字段和整nonce追加后验；不猜SDK，原31输入复制及公司/资源/业务合同保持。",
+        "reason": "仅新增真实蓝机eyi/flq/jn1/ki8完整原生布局严格配对；保持旧布局、唯一同面板、UID昵称全文和公司来源时效视频身份边界不变。",
         "reviewed_by": "codex:/root/yellow_stop_verify (author assessment; independent review separate)",
         "previous_code_digest": "f9c022d31be34c4a70bbbd175ee5e8f4c8b20848a0c194e539b837a2ccf5509b",
-        "current_code_digest": "18c3eb81e78af8ee2e8b11bd052b8f4bc964b37e784f780ffa279f4136a020df"
+        "current_code_digest": "8e6300fb4185246453a118f9d437e373474bbc875aee64fb1c51956630e6dd99"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1327,7 +1327,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "a707a7a61216747dbee8817e74fd961e57972805c2a9f5016dd82a292b36dbc7"
+          "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         },
         {
           "kind": "code",
@@ -1372,13 +1372,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "7e22ece57c2b496aca9b56188299237506b637c9b44c50d7b6e2a5bebc627521",
+      "code_digest": "9f6625f72649e5fb791fdcb76fda4cbc7b3b6c28cbe5401146f22cd4f2700495",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅原生评论证据SDK31明确布局兼容，唯一同面板输入/关闭/放大/昵称全文均严格核验；原UID、公司、来源、时间、视频身份及Activity合同不变。",
+        "reason": "仅新增真实蓝机eyi/flq/jn1/ki8完整原生布局严格配对；保持旧布局、唯一同面板、UID昵称全文和公司来源时效视频身份边界不变。",
         "reviewed_by": "codex:/root/yellow_stop_verify (author assessment; independent review separate)",
-        "previous_code_digest": "570f629754eb9dcdc38ee6e5e741cec253503d192d604a6b6a0cc568d83cfa26",
-        "current_code_digest": "7e22ece57c2b496aca9b56188299237506b637c9b44c50d7b6e2a5bebc627521"
+        "previous_code_digest": "7e22ece57c2b496aca9b56188299237506b637c9b44c50d7b6e2a5bebc627521",
+        "current_code_digest": "9f6625f72649e5fb791fdcb76fda4cbc7b3b6c28cbe5401146f22cd4f2700495"
       }
     },
     "douyin_lead_outreach.preflight": {
