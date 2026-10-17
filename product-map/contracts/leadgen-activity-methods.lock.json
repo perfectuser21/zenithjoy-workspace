@@ -876,16 +876,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "fdc75f935ec9cac3e6c10815cbd85f2becb30edb9c16af2f90db0c76f8100b92"
+          "sha256": "a707a7a61216747dbee8817e74fd961e57972805c2a9f5016dd82a292b36dbc7"
         }
       ],
-      "code_digest": "cdf500980009e15afffbd847c19cd056f6265ba8e91787053a6bede742aeae85",
+      "code_digest": "f9c022d31be34c4a70bbbd175ee5e8f4c8b20848a0c194e539b837a2ccf5509b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅SDK33空框候选与精确nonce追加证明兼容修复；Activity输入输出、Skill合同、评分及触达授权保持原值。",
-        "reviewed_by": "codex:/root/yellow_stop_verify (author compatibility assessment; independent review separate)",
+        "reason": "仅原生评论证据SDK31明确布局兼容，唯一同面板输入/关闭/放大/昵称全文均严格核验；原UID、公司、来源、时间、视频身份及Activity合同不变。",
+        "reviewed_by": "codex:/root/yellow_stop_verify (author assessment; independent review separate)",
         "previous_code_digest": "8b0f48000b07516122bab16352576352260f7d66a7b26ec825a3ce13f958f801",
-        "current_code_digest": "cdf500980009e15afffbd847c19cd056f6265ba8e91787053a6bede742aeae85"
+        "current_code_digest": "f9c022d31be34c4a70bbbd175ee5e8f4c8b20848a0c194e539b837a2ccf5509b"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1327,7 +1327,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "fdc75f935ec9cac3e6c10815cbd85f2becb30edb9c16af2f90db0c76f8100b92"
+          "sha256": "a707a7a61216747dbee8817e74fd961e57972805c2a9f5016dd82a292b36dbc7"
         },
         {
           "kind": "code",
@@ -1372,13 +1372,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "570f629754eb9dcdc38ee6e5e741cec253503d192d604a6b6a0cc568d83cfa26",
+      "code_digest": "7e22ece57c2b496aca9b56188299237506b637c9b44c50d7b6e2a5bebc627521",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅补RPC缺合法回执时的固定诊断：白名单kind、整数exit、stdout字节数和固定transport分类；不输出原stdout/stderr/请求内容，不改变RPC载荷、来源校验、预算、重试或发送行为。保留真实receiptMissing失败与原安全恢复规则；所有Activity合同和Skill字节不变。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "f07c837856bc30ddb4a303519b5dd0a41180262adaae14a8009c56197c152582",
-        "current_code_digest": "570f629754eb9dcdc38ee6e5e741cec253503d192d604a6b6a0cc568d83cfa26"
+        "reason": "仅原生评论证据SDK31明确布局兼容，唯一同面板输入/关闭/放大/昵称全文均严格核验；原UID、公司、来源、时间、视频身份及Activity合同不变。",
+        "reviewed_by": "codex:/root/yellow_stop_verify (author assessment; independent review separate)",
+        "previous_code_digest": "570f629754eb9dcdc38ee6e5e741cec253503d192d604a6b6a0cc568d83cfa26",
+        "current_code_digest": "7e22ece57c2b496aca9b56188299237506b637c9b44c50d7b6e2a5bebc627521"
       }
     },
     "douyin_lead_outreach.preflight": {
