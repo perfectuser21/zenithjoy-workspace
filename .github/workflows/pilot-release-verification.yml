@@ -29,10 +29,71 @@ jobs:
       - run: npm ci --ignore-scripts --workspaces=false
       - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
 
+  authoring-main-source:
+    name: Register fixed main authoring sources
+    if: github.ref == 'refs/heads/main'
+    needs: caller-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: source-test-only
+          POSTGRES_DB: cecelia_scratch
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DB_NAME: cecelia_scratch
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USER: cecelia
+      DB_PASSWORD: source-test-only
+      AUTHORING_BRAIN_ROOT: ${{ github.workspace }}/.ci-brain-tooling
+      AUTHORING_BRAIN_REVISION: 8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          repository: perfectuser21/cecelia
+          ref: 8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+          fetch-depth: 0
+          path: .ci-brain-tooling
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --workspace packages/brain
+        working-directory: .ci-brain-tooling
+      - run: node packages/brain/src/migrate.js
+        working-directory: .ci-brain-tooling
+      - uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+      - run: node scripts/ci/authoring-main-source.mjs
+        env:
+          AUTHORING_ALLOW_WRITE: '1'
+          BRAIN_URL: ${{ secrets.BRAIN_DEPLOY_URL || 'http://100.79.41.61:5221' }}
+          CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: authoring-source-${{ github.sha }}
+          path: evidence/authoring-source/
+          if-no-files-found: error
+
   verify:
     name: Complete pilot release verification
     if: github.ref == 'refs/heads/main'
-    needs: caller-contract
+    needs: [caller-contract, authoring-main-source]
     uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
     with:
       source_repo: perfectuser21/zenithjoy-workspace
@@ -48,7 +109,7 @@ jobs:
   verify-commander:
     name: Complete commander release verification
     if: github.ref == 'refs/heads/main'
-    needs: caller-contract
+    needs: [caller-contract, authoring-main-source]
     uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
     with:
       source_repo: perfectuser21/zenithjoy-workspace
@@ -64,7 +125,7 @@ jobs:
   verify-patrol-definitions:
     name: Complete patrol definitions release verification
     if: github.ref == 'refs/heads/main'
-    needs: caller-contract
+    needs: [caller-contract, authoring-main-source]
     uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
     with:
       source_repo: perfectuser21/zenithjoy-workspace

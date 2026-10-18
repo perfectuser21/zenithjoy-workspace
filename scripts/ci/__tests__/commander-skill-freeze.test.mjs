@@ -37,8 +37,8 @@ function definition(name){
  return {...JSON.parse(readFile({repo,revision,path:ref})),source:{repo,ref,revision}};
 }
 
-test('真实Brain绑定校验器接受原Commander技能2.0.22与续版合同2.0.32',async()=>{
- const doc=definition('workflow-commander');assert.equal(doc.version,'2.0.32');
+test('真实Brain绑定校验器接受原Commander技能2.0.22与固定main续版合同',async()=>{
+ const doc=definition('workflow-commander');assert.match(doc.version,/^2\.0\.[0-9]+$/);
  const execution=doc.activities.find(a=>a.implementation_bindings?.some(b=>b.kind==='skill'));
  const rows=await validateFixedImplementationBindings(execution,{repo,commit:revision},{readFile});
  const skill=rows.find(b=>b.kind==='skill');
@@ -62,8 +62,8 @@ test('真实prepareDefinitionFreeze读取Commander全部固定源码并产出绑
  assert.ok(reads.some(s=>s.repo===skill.resolved_source.repo&&s.path===skill.resolved_source.path&&s.revision===skill.resolved_source.revision));
  assert.ok(!reads.some(s=>s.repo===repo&&s.path===skill.path),'迁出Skill不能再交由业务bootstrap重定向');
 });
-test('已登记报告升至1.0.33后可按本次固定源码重新冻结',async()=>{
- const doc=definition('workflow-report');assert.equal(doc.version,'1.0.33');
+test('已登记报告续版后可按本次固定源码重新冻结',async()=>{
+ const doc=definition('workflow-report');assert.match(doc.version,/^1\.0\.[0-9]+$/);
  const proof=await prepareDefinitionFreeze(doc,{readFile});
  assert.equal(proof.source.commit,revision);assert.equal(proof.bindings.size,doc.activities.length);
 });

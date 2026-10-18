@@ -44,6 +44,7 @@ jobs:
       - run: node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/orphan-test-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
+      - run: node --test scripts/ci/__tests__/authoring-main-source.test.mjs scripts/ci/__tests__/authoring-source-version.test.mjs
       - run: node --test scripts/ci/__tests__/implementation-patrol-scope.test.mjs
       - run: node --test scripts/ci/__tests__/implementation-skill-source.test.mjs
       - name: 固定已合并Brain真实冻结校验器

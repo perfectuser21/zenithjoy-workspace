@@ -17,13 +17,13 @@ test('完整发布固定实际合并SHA，工具uses与tooling_revision同源且
  const j=config().jobs.verify;
  assert.equal(j.uses,`perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@${revision}`);
  assert.deepEqual(j.with,{source_repo:'perfectuser21/zenithjoy-workspace',scope:'zenithjoy',head_revision:'${{ github.sha }}',tooling_revision:revision});
- assert.equal(j['continue-on-error'],undefined);assert.equal(j.needs,'caller-contract');
+ assert.equal(j['continue-on-error'],undefined);assert.deepEqual(j.needs,['caller-contract','authoring-main-source']);
 });
 test('通用Commander复用完整发布验证并保留原zenithjoy范围',()=>{
  const w=config(),j=w.jobs['verify-commander'];
  assert.ok(j,'commander-generic须有独立完整发布验证');
  assert.equal(j.if,"github.ref == 'refs/heads/main'");
- assert.equal(j.needs,'caller-contract');
+ assert.deepEqual(j.needs,['caller-contract','authoring-main-source']);
  assert.equal(j.uses,w.jobs.verify.uses);
  assert.deepEqual(j.with,{...w.jobs.verify.with,scope:'commander-generic'});
  assert.deepEqual(j.secrets,w.jobs.verify.secrets);
@@ -48,7 +48,7 @@ test('巡查定义有独立完整发布证明，保留现有范围且不以影�
  const w=config(),j=w.jobs['verify-patrol-definitions'];
  assert.ok(j,'cecelia-device-patrol-definitions须有独立完整发布验证');
  assert.equal(j.if,"github.ref == 'refs/heads/main'");
- assert.equal(j.needs,'caller-contract');
+ assert.deepEqual(j.needs,['caller-contract','authoring-main-source']);
  assert.equal(j.uses,w.jobs.verify.uses);
  assert.deepEqual(j.with,{...w.jobs.verify.with,scope:'cecelia-device-patrol-definitions'});
  assert.deepEqual(j.secrets,w.jobs.verify.secrets);
