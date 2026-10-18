@@ -48,3 +48,18 @@ test('已登记报告升至1.0.33后可按本次固定源码重新冻结',async(
  const proof=await prepareDefinitionFreeze(doc,{readFile});
  assert.equal(proof.source.commit,revision);assert.equal(proof.bindings.size,doc.activities.length);
 });
+
+test('注入reader按原始中央repo/commit/path读目录与Skill，拒绝伪造身份',()=>{
+ const lock=JSON.parse(readFile({repo,revision,path:'.skills-source.json'}));
+ const catalogSource={repo:lock.repository,revision:lock.revision,path:'distribution/catalog.json'};
+ const catalog=JSON.parse(readFile(catalogSource));
+ const entry=catalog.profiles[lock.profile].files.find(row=>row.path===`${prefix}skills/workflow-commander/SKILL.md`);
+ assert.ok(entry,'固定profile必须分发Commander Skill');
+ const location={repo:lock.repository,revision:lock.revision,path:entry.source};
+ const bytes=readFile(location);
+ assert.match(bytes,/name: workflow-commander/);
+ assert.throws(()=>readFile({...location,repo:'other/repo'}));
+ assert.throws(()=>readFile({...location,revision:'0'.repeat(40)}));
+ assert.equal(readFile({repo,revision,path:'.absent-skill-source-lock.json'},{allowMissing:true}),null);
+ assert.throws(()=>readFile({repo,revision,path:'.absent-skill-source-lock.json'}));
+});
