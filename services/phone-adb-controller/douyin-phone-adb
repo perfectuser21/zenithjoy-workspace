@@ -2724,7 +2724,8 @@ if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 
   headers=list(re.finditer(r'(?m)^[ \t]*('+ '|'.join(map(re.escape,names))+r'):[ \t]*',current))
   if [m.group(1) for m in headers]==names:
    sections=[current[m.end():headers[i+1].start() if i+1<len(headers) else len(current)] for i,m in enumerate(headers)]
-   if all(not section.strip() for section in sections[1:]):
+   if sections[0].strip():
+    notifications=[]
     for line in sections[0].splitlines():
      if not line.strip():continue
      m=re.fullmatch(r'[ \t]*AudioPlaybackConfiguration piid:([0-9]+) deviceId:[0-9]+ type:(.+?) u/pid:([0-9]+)/([0-9]+) state:([a-z]+) attr:AudioAttributes: usage=(\w+) .*',line)
@@ -2733,12 +2734,18 @@ if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 
      track={'piid':int(m[1]),'uid':int(m[3]),'pid':int(m[4]),'state':m[5],'muted':'none'}
      target=track['uid']==int(uid) and m[2]=='android.media.AudioTrack' and m[6]=='USAGE_MEDIA'
      if target:p['tracks'].append(track)
-     elif track['state']=='started':p['foreign_started'].append(track)
+     elif track['state']=='started':
+      p['foreign_started'].append(track)
+      if m[2]=='android.media.MediaPlayer' and m[6]=='USAGE_NOTIFICATION':notifications.append(track)
     active=[t for t in p['tracks'] if t['state']=='started']
-    if not p['foreign_started'] and not p['unparsed_media_tracks']:
+    if all(not section.strip() for section in sections[1:]) and not p['foreign_started'] and not p['unparsed_media_tracks']:
      if len(active)==1:
       p['state']='started';p.update({k:active[0][k] for k in ('pid','piid')})
      elif p['tracks'] and all(t['state'] in ('paused','stopped','idle') for t in p['tracks']):p['state']='inactive'
+    # 只标明确的通知焦点瞬态，state仍unknown，绝不当作可录或已恢复。
+    if len(active)==1 and len(p['foreign_started'])==1 and len(notifications)==1 and notifications[0]['uid']!=int(uid) and not p['unparsed_media_tracks'] and all(not section.strip() for section in sections[2:]):
+     expected_duck=r'\s*uid:'+re.escape(uid)+r' piids: '+str(active[0]['piid'])+r'\s*'
+     if re.fullmatch(expected_duck,sections[1]):p['transient_notification']=True
  elif monitor:
   tail=raw[monitor.end():];players=re.search(r'(?m)^[ \t]*players:[ \t]*$',tail)
   if players:
@@ -2762,7 +2769,7 @@ if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 
    elif not p['foreign_started'] and not p['unparsed_media_tracks'] and p['tracks'] and all(t['state'] in ('paused','stopped','idle') and t['muted']=='none' for t in p['tracks']):p['state']='inactive'
 with open(sys.argv[5],'w') as f:json.dump(p,f)
 os.chmod(sys.argv[5],0o600)
-print('native_audio_state='+p['state']+' native_audio_uid='+str(p['uid'] or 'unknown')+' native_audio_pid='+str(p.get('pid','unknown'))+' native_audio_piid='+str(p.get('piid','unknown'))+' native_audio_package_uid_verified='+str(p['package_uid_verified']).lower()+' native_audio_foreign_started='+str(len(p['foreign_started'])))
+print('native_audio_state='+p['state']+' native_audio_uid='+str(p['uid'] or 'unknown')+' native_audio_pid='+str(p.get('pid','unknown'))+' native_audio_piid='+str(p.get('piid','unknown'))+' native_audio_package_uid_verified='+str(p['package_uid_verified']).lower()+' native_audio_foreign_started='+str(len(p['foreign_started']))+' native_audio_transient_notification='+str(p.get('transient_notification',False)).lower())
 PYNATIVE
 )"
   _foreground_is_exact_douyin "$(cat "$EVIDENCE_ROOT/$eid.foreground.txt")" || result="native_audio_state=unknown native_audio_uid=unknown native_audio_pid=unknown native_audio_piid=unknown native_audio_package_uid_verified=false native_audio_foreign_started=unknown"
@@ -2773,15 +2780,31 @@ PYNATIVE
 # 通知会短暂抢占焦点并duck抖音。只被动复读，不把unknown推定为已恢复，
 # 不点击或改音量；每次独立留证，最后固定名原件仍须由原合同验证。
 record_native_audio_settled() {
-  local eid="$1" result state attempt
-  result="$(record_native_audio "$eid-initial")"
+  local eid="$1" result state attempt suffix
+  result="$(record_native_audio "$eid")"
   state="$(print -r -- "$result" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  if [[ "$state" != unknown || "$result" != *"native_audio_transient_notification=true"* ]]; then
+    print -r -- "$result"
+    return 0
+  fi
+  # 仅明确通知瞬态允许复读；先归档完整首帧，不能覆盖初错。
+  for suffix in audio.txt package-uid.txt uid-owners.txt foreground.txt media-session.txt native-audio.json native-sdk.txt; do
+    [[ -f "$EVIDENCE_ROOT/$eid.$suffix" && ! -L "$EVIDENCE_ROOT/$eid.$suffix" && ! -e "$EVIDENCE_ROOT/$eid-initial.$suffix" && ! -L "$EVIDENCE_ROOT/$eid-initial.$suffix" ]] || return 1
+  done
+  for suffix in audio.txt package-uid.txt uid-owners.txt foreground.txt media-session.txt native-audio.json native-sdk.txt; do
+    /bin/mv "$EVIDENCE_ROOT/$eid.$suffix" "$EVIDENCE_ROOT/$eid-initial.$suffix" || return 1
+  done
   for attempt in 1 2 3 4; do
     [[ "$state" == unknown ]] || break
+    [[ "$result" == *"native_audio_transient_notification=true"* ]] || break
     wait_ms 500
     result="$(record_native_audio "$eid-wait$attempt")"
     state="$(print -r -- "$result" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
   done
+  if [[ "$state" == unknown ]]; then
+    print -r -- "$result"
+    return 0
+  fi
   record_native_audio "$eid"
 }
 
@@ -3192,9 +3215,9 @@ record_status() {
 }
 
 record_stop() {
-  local eid pidf out pid i dur vstreams astreams playback_state native sdk capture_mode=playback_dup runtime_fields=""
+  local eid pidf out pid i dur vstreams astreams playback_state native sdk capture_mode=playback_dup runtime_fields="" native_read_rc=0
   eid="$1"; require_evidence_id "$eid"
-  native="$(record_native_audio_settled "$eid-playback-end")"
+  native="$(record_native_audio_settled "$eid-playback-end")" || native_read_rc=$?
   playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
   pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
   if [[ -f "$pidf" ]]; then
@@ -3216,6 +3239,10 @@ record_stop() {
     kill -0 "$pid" 2>/dev/null && die "RECORD_CAPTURE_EXIT_UNVERIFIED"
     /bin/rm -f "$pidf"
   fi
+  local end_state
+  (( native_read_rc == 0 )) || die "RECORD_NATIVE_AUDIO_UNVERIFIED phase=end native_readback_failed code=$native_read_rc"
+  end_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  [[ "$end_state" == started ]] || die "RECORD_NATIVE_AUDIO_UNVERIFIED phase=end state=$end_state"
   # 退出后另留原件，不用停止前的end证据假定设备音轨已经恢复。
   local restored restored_state restore_try
   restored="$(record_native_audio_settled "$eid-playback-restore-check")"
