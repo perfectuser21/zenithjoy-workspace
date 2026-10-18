@@ -105,6 +105,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
 
   // —— Notion ——
   { name: 'NOTION_INTEGRATION_TOKEN', reason: 'Notion 集成 token，缺则 Notion 同步不可用' },
+  { name: 'CUSTOMER_WORKSPACE_PROVISIONING_ENABLED', reason: '客户独立工作台开户worker开关，只有true启用，缺省关闭' },
+  { name: 'FEISHU_TENANT_ACCESS_TOKEN', reason: '客户工作台飞书默认有效访问令牌；可由每公司凭据引用覆盖，缺则开户停止待核对' },
   { name: 'NOTION_PARENT_PAGE_ID', reason: 'Notion 父页面 ID，缺则用默认/跳过' },
   { name: 'NOTION_PUBLISH_ORCH_DB_ID', reason: 'Notion 发布编排台 database id，缺则编排台同步器红日志跳过启动' },
   { name: 'NOTION_ORCH_TENANT_ID', reason: '编排台同步的租户范围（v1 仅主理人私人租户），缺则同步器红日志跳过启动' },

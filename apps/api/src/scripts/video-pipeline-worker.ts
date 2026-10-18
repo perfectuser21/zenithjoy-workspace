@@ -14,7 +14,6 @@ import fs from 'fs';
 import https from 'https';
 import http from 'http';
 import path from 'path';
-import os from 'os';
 
 const execFileAsync = promisify(execFile);
 
