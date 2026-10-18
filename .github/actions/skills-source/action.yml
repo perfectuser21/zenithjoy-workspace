@@ -12,10 +12,7 @@ runs:
         SKILLS_SOURCE_SSH_KEY: ${{ inputs.ssh-key }}
         GIT_TERMINAL_PROMPT: "0"
       run: |
-        SKILLS_PYTHON=python3
-        command -v python3 >/dev/null 2>&1 || SKILLS_PYTHON=python
-        "$SKILLS_PYTHON" scripts/skills-source.py install
-        "$SKILLS_PYTHON" scripts/skills-source.py verify
+        bash scripts/ensure-skills-source.sh "$GITHUB_WORKSPACE"
         if [ -n "$(git ls-files '**/SKILL.md' 'SKILL.md')" ]; then
           echo "Skill bodies must be maintained in zenithjoy-skills" >&2
           exit 1

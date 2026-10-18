@@ -67,7 +67,9 @@ def bootstrap(workspace, source, command, ref="HEAD", read_path=None):
         sys.stdout.buffer.write(payload)
         return
     if actual != revision:
-        subprocess.run(["git", "-C", str(source), "checkout", "--quiet", "--detach", revision], check=True)
+        # Distribution digests cover Git blob bytes, including on Windows runners.
+        subprocess.run(["git", "-C", str(source), "-c", "core.autocrlf=false",
+                        "checkout", "--quiet", "--detach", revision], check=True)
     loader = source / "distribution/skills_source.py"
     if hashlib.sha256(loader.read_bytes()).hexdigest() != lock["loader_sha256"]:
         raise ValueError("skill loader checksum mismatch")
