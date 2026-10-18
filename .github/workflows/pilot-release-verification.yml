@@ -33,43 +33,46 @@ jobs:
     name: Complete pilot release verification
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@a72ff8372d4eb2100e1b9b7572d88a22969bef2f
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: zenithjoy
       head_revision: ${{ github.sha }}
-      tooling_revision: 8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+      tooling_revision: a72ff8372d4eb2100e1b9b7572d88a22969bef2f
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
 
   verify-commander:
     name: Complete commander release verification
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@a72ff8372d4eb2100e1b9b7572d88a22969bef2f
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: commander-generic
       head_revision: ${{ github.sha }}
-      tooling_revision: 8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+      tooling_revision: a72ff8372d4eb2100e1b9b7572d88a22969bef2f
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
 
   verify-patrol-definitions:
     name: Complete patrol definitions release verification
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@a72ff8372d4eb2100e1b9b7572d88a22969bef2f
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: cecelia-device-patrol-definitions
       head_revision: ${{ github.sha }}
-      tooling_revision: 8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d
+      tooling_revision: a72ff8372d4eb2100e1b9b7572d88a22969bef2f
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
