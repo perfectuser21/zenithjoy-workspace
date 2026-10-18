@@ -1,13 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync,readlinkSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync,readlinkSync,existsSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 function fixture(t){
- const top=mkdtempSync(join(tmpdir(),'publish-release-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
+ const top=realpathSync(mkdtempSync(join(tmpdir(),'publish-release-')));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const home=join(top,'home'),source=join(top,'business'),central=join(source,'.skills-source');mkdirSync(central,{recursive:true});mkdirSync(home);
  const git=(root,...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
  for(const root of [source,central]){git(root,'init','-q','-b','cp-fixture');git(root,'config','core.hooksPath','/dev/null');}
@@ -49,4 +49,11 @@ test('activation rejects foreign directories and package symlink escape without 
  const entry=join(f.home,'.openclaw/skills/multi-platform-publish');mkdirSync(entry,{recursive:true});writeFileSync(join(entry,'keep'),'existing directory');
  assert.throws(()=>m.activatePublishRelease(result.package,{home:f.home}),/链接|目录/);assert.equal(readFileSync(join(entry,'keep'),'utf8'),'existing directory');
  rmSync(entry,{recursive:true});rmSync(join(result.package,f.runtime));symlinkSync(join(f.top,'outside'),join(result.package,f.runtime));assert.throws(()=>m.activatePublishRelease(result.package,{home:f.home}),/链接/);
+});
+test('package materialization preserves raw Git bytes despite checkout eol attributes',async t=>{
+ const f=fixture(t),m=await import('../deployment-publish-release.mjs');
+ f.put(f.source,'.gitattributes','*.bat text eol=crlf\n');f.put(f.source,'runner.bat','echo fixed\n');const revision=f.commit(f.source);
+ const result=m.buildPublishRelease(f.source,revision,{home:f.home});
+ assert.equal(readFileSync(join(result.package,'runner.bat'),'utf8'),f.git(f.source,'show',revision+':runner.bat')+'\n');
+ m.verifyPublishRelease(result.package,revision);
 });
