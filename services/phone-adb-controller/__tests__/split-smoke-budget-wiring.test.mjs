@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -62,12 +62,20 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/workflow-result-span.test.mjs",
   "services/phone-adb-controller/__tests__/workflow-result.test.mjs"
 ];
-function run(fail='') {
- const dir=mkdtempSync(join(tmpdir(),'split-smoke-wiring-')); const bin=join(dir,'bin'), log=join(dir,'calls.jsonl'); mkdirSync(bin);
- const shim=`#!${process.execPath}\nimport fs from 'node:fs';\nconst args=process.argv.slice(2);fs.appendFileSync(process.env.SMOKE_WIRING_LOG,JSON.stringify({args,home:process.env.HOME??null})+'\\n');if(process.env.SMOKE_WIRING_FAIL&&(args.includes(process.env.SMOKE_WIRING_FAIL)||(process.env.SMOKE_WIRING_FAIL==='home-free'&&process.env.HOME===undefined)))process.exit(13);\n`;
+function run(fail='',bootstrapExit=0) {
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'split-smoke-wiring-'))); const bin=join(dir,'bin'), log=join(dir,'calls.jsonl'); mkdirSync(bin);
+ const shim=`#!${process.execPath}\nimport fs from 'node:fs';\nconst args=process.argv.slice(2);if(!fs.existsSync(process.env.SMOKE_BOOTSTRAP_LOG))process.exit(19);fs.appendFileSync(process.env.SMOKE_WIRING_LOG,JSON.stringify({args,home:process.env.HOME??null})+'\\n');if(process.env.SMOKE_WIRING_FAIL&&(args.includes(process.env.SMOKE_WIRING_FAIL)||(process.env.SMOKE_WIRING_FAIL==='home-free'&&process.env.HOME===undefined)))process.exit(13);\n`;
  writeFileSync(join(bin,'node'),shim,{mode:0o755});
- const result=spawnSync('/bin/bash',['scripts/smoke/leadgen-split-smoke.sh'],{cwd:root,encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,HOME:join(dir,'caller-home'),SMOKE_WIRING_LOG:log,SMOKE_WIRING_FAIL:fail},timeout:10000});
- const calls=readFileSync(log,'utf8').trim().split('\n').map(x=>JSON.parse(x));rmSync(dir,{recursive:true,force:true});return {result,calls};
+ const bootstrap=join(dir,'bootstrap.log');
+ mkdirSync(join(dir,'scripts/smoke'),{recursive:true});
+ writeFileSync(join(dir,'scripts/smoke/leadgen-split-smoke.sh'),readFileSync(join(root,'scripts/smoke/leadgen-split-smoke.sh')));
+ writeFileSync(join(dir,'scripts/ensure-skills-source.sh'),'printf \"%s\\n\" \"$1\" >> \"$SMOKE_BOOTSTRAP_LOG\"\nexit \"$SMOKE_BOOTSTRAP_EXIT\"\n');
+ writeFileSync(log,'');
+ const result=spawnSync('/bin/bash',['scripts/smoke/leadgen-split-smoke.sh'],{cwd:dir,encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,HOME:join(dir,'caller-home'),SMOKE_WIRING_LOG:log,SMOKE_WIRING_FAIL:fail,SMOKE_BOOTSTRAP_LOG:bootstrap,SMOKE_BOOTSTRAP_EXIT:String(bootstrapExit)},timeout:10000});
+ const entries=readFileSync(log,'utf8').trim();
+ const calls=entries?entries.split('\n').map(x=>JSON.parse(x)):[];
+ const bootstraps=readFileSync(bootstrap,'utf8').trim().split('\n');
+ rmSync(dir,{recursive:true,force:true});return {result,calls,bootstraps,dir};
 }
 test('split smoke executes every original complete test file once in one ordinary node:test invocation',()=>{
  const {result,calls}=run();assert.equal(result.status,0,result.stderr);
@@ -93,4 +101,13 @@ test('split smoke propagates both methods validation and complete-suite failures
  for(const fail of ['scripts/product-map/leadgen-methods.mjs','services/phone-adb-controller/__tests__/continuous-identity.test.mjs','home-free']){
   const {result}=run(fail);assert.equal(result.status,13,result.stderr);
  }
+});
+
+test('split smoke bootstraps its own workspace once before methods and refuses bootstrap failure',()=>{
+ const ok=run();assert.equal(ok.result.status,0,ok.result.stderr);
+ assert.deepEqual(ok.bootstraps,[ok.dir]);
+ assert.equal(ok.calls[0].args[0],'scripts/product-map/leadgen-methods.mjs');
+ const failed=run('',23);assert.equal(failed.result.status,23,failed.result.stderr);
+ assert.deepEqual(failed.bootstraps,[failed.dir]);assert.deepEqual(failed.calls,[]);
+ assert.ok(!failed.result.stdout.includes('PASS'));
 });
