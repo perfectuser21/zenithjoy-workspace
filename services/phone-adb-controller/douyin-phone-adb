@@ -2770,6 +2770,21 @@ PYNATIVE
   print -r -- "$result media_session_state=$media_state native_audio_evidence_file=$eid.audio.txt native_audio_evidence_sha256=$(record_playback_hash "$eid.audio.txt") native_audio_package_uid_file=$eid.package-uid.txt native_audio_package_uid_sha256=$(record_playback_hash "$eid.package-uid.txt") native_audio_uid_owners_file=$eid.uid-owners.txt native_audio_uid_owners_sha256=$(record_playback_hash "$eid.uid-owners.txt")"
 }
 
+# 通知会短暂抢占焦点并duck抖音。只被动复读，不把unknown推定为已恢复，
+# 不点击或改音量；每次独立留证，最后固定名原件仍须由原合同验证。
+record_native_audio_settled() {
+  local eid="$1" result state attempt
+  result="$(record_native_audio "$eid-initial")"
+  state="$(print -r -- "$result" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  for attempt in 1 2 3 4; do
+    [[ "$state" == unknown ]] || break
+    wait_ms 500
+    result="$(record_native_audio "$eid-wait$attempt")"
+    state="$(print -r -- "$result" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  done
+  record_native_audio "$eid"
+}
+
 record_detail_foreground() {
   "$PYTHON_BIN" - "$(foreground_package)" "$DOUYIN_PACKAGE" <<'PYRECORDDETAIL'
 import sys,re
@@ -3179,7 +3194,7 @@ record_status() {
 record_stop() {
   local eid pidf out pid i dur vstreams astreams playback_state native sdk capture_mode=playback_dup runtime_fields=""
   eid="$1"; require_evidence_id "$eid"
-  native="$(record_native_audio "$eid-playback-end")"
+  native="$(record_native_audio_settled "$eid-playback-end")"
   playback_state="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
   pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
   if [[ -f "$pidf" ]]; then
@@ -3203,7 +3218,7 @@ record_stop() {
   fi
   # 退出后另留原件，不用停止前的end证据假定设备音轨已经恢复。
   local restored restored_state restore_try
-  restored="$(record_native_audio "$eid-playback-restored-initial")"
+  restored="$(record_native_audio_settled "$eid-playback-restore-check")"
   restored_state="$(print -r -- "$restored" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
   for restore_try in 1 2; do
     [[ "$restored_state" == recoverable_muted ]] || break
@@ -3216,7 +3231,7 @@ record_stop() {
     restored_state=started
   fi
   [[ "$restored_state" == (started|inactive) ]] || die "RECORD_AUDIO_RESTORE_UNVERIFIED state=$restored_state"
-  restored="$(record_native_audio "$eid-playback-restored")"
+  restored="$(record_native_audio_settled "$eid-playback-restored")"
   restored_state="$(print -r -- "$restored" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
   [[ "$restored_state" == (started|inactive) ]] || die "RECORD_AUDIO_RESTORE_UNVERIFIED state=$restored_state"
   [[ -f "$out" ]] || die "no recording artifact at $out"
