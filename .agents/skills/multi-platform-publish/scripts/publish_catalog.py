@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""发布分支只读索引；不导入、启动发布脚本，不联网，不读取凭据。"""
+"""发布分支只读索引；核对固定 Skill 来源，不导入或启动发布脚本。"""
 import argparse
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -27,11 +29,75 @@ def normalize_type(value):
     return result
 
 
-def load_catalog():
-    return json.loads(CATALOG.read_text(encoding="utf-8"))
+def git_blob(workspace, revision, path):
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(workspace), "show", f"{revision}:{path}"], stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as error:
+        raise ValueError("无法读取固定发布文件：" + path) from error
 
 
-def resolve_source(source, workspace, skills):
+def has_lock(workspace):
+    if (workspace / ".skills-source.json").exists():
+        return True
+    try:
+        git_blob(workspace, "HEAD", ".skills-source.json")
+        return True
+    except ValueError:
+        return False
+
+
+class PinnedRelease:
+    """Git 发布版本是信任根；可变安装状态和相邻开发目录均不是。"""
+    def __init__(self, workspace, ref):
+        self.workspace = workspace.resolve()
+        try:
+            self.ref = subprocess.check_output(
+                ["git", "-C", str(workspace), "rev-parse", "--verify", str(ref) + "^{commit}"],
+                stderr=subprocess.PIPE).decode().strip()
+        except subprocess.CalledProcessError as error:
+            raise ValueError("无法解析固定 Workflow 发布版本") from error
+        self.bootstrap = git_blob(workspace, self.ref, "scripts/skills-source.py")
+        self.lock = json.loads(git_blob(workspace, self.ref, ".skills-source.json"))
+
+    def installed(self, relative):
+        relative = Path(relative)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("发布路径越界")
+        path = self.workspace / relative
+        current = self.workspace
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                raise ValueError("发布文件不能通过符号链接覆盖：" + str(relative))
+        if not path.is_file():
+            raise ValueError("固定发布源文件不存在：" + str(path))
+        bootstrap = "__file__ = " + repr(str(self.workspace / "scripts/skills-source.py")) + "\n" + self.bootstrap.decode()
+        try:
+            expected = subprocess.check_output(
+                [sys.executable, "-c", bootstrap, "cat", "--workspace", str(self.workspace),
+                 "--ref", self.ref, "--path", relative.as_posix()], stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError:
+            raise ValueError("固定 Skill 来源校验失败：" + str(relative)) from None
+        if path.read_bytes() != expected:
+            raise ValueError("安装文件与固定 Skill 版本不一致：" + str(relative))
+        return path
+
+
+def load_catalog(release=None):
+    if release is None and has_lock(WORKSPACE):
+        release = PinnedRelease(WORKSPACE, "HEAD")
+    path = release.installed(".agents/skills/multi-platform-publish/references/catalog.json") if release else CATALOG
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def resolve_source(source, workspace, skills, release=None):
+    if source["root"] not in {"workspace", "skills"}:
+        raise ValueError("不可信的源文件根目录")
+    if release and source["root"] == "skills":
+        return str(release.installed(Path(".skills-runtime") / source["path"]))
+    if release and source["root"] == "workspace" and source["path"].startswith(".agents/skills/"):
+        return str(release.installed(source["path"]))
     root = workspace if source["root"] == "workspace" else skills
     path = (root / source["path"]).resolve()
     if not path.is_file():
@@ -39,24 +105,31 @@ def resolve_source(source, workspace, skills):
     return str(path)
 
 
-def plan(platform, content_type, channel, workspace=None, skills=None):
-    workspace = Path(workspace or os.environ.get("ZENITHJOY_WORKSPACE_ROOT", WORKSPACE))
+def plan(platform, content_type, channel, workspace=None, skills=None, ref="HEAD"):
+    workspace = Path(workspace or os.environ.get("ZENITHJOY_WORKSPACE_ROOT", WORKSPACE)).resolve()
+    locked = has_lock(WORKSPACE) or has_lock(workspace)
+    if locked:
+        if workspace != WORKSPACE.resolve() or skills is not None or os.environ.get("ZENITHJOY_SKILLS_ROOT"):
+            raise ValueError("固定发布禁止开发目录覆盖；请使用独立的无锁探索工作区")
+        release = PinnedRelease(workspace, ref)
+    else:
+        release = None
     skills = Path(skills or os.environ.get("ZENITHJOY_SKILLS_ROOT", SKILLS))
     content_type = normalize_type(content_type)
-    routes = load_catalog()["routes"]
+    routes = load_catalog(release)["routes"]
     route = next((r for r in routes if r["platform"] == platform and r["type"] == content_type), None)
     if route is None:
         raise ValueError("未找到此平台与类型的发布分支：" + platform + "/" + content_type)
     selected = route["channels"].get(channel)
     if selected is None:
         raise ValueError("未找到该类型的独立通道：" + platform + "/" + content_type + "/" + channel)
-    entrypoint = resolve_source(selected["source"], workspace, skills)
+    entrypoint = resolve_source(selected["source"], workspace, skills, release)
     instructions = []
     if channel == "phone":
-        instructions.append(resolve_source({"root": "skills", "path": "android-publish/SKILL.md"}, workspace, skills))
+        instructions.append(resolve_source({"root": "skills", "path": "android-publish/SKILL.md"}, workspace, skills, release))
     instruction = selected.get("instruction")
     if instruction:
-        instructions.append(resolve_source(instruction, workspace, skills))
+        instructions.append(resolve_source(instruction, workspace, skills, release))
     return {
         "route": platform + "." + content_type,
         "name": route["name"], "channel": channel,
@@ -74,6 +147,7 @@ def main(argv=None):
     sub.add_parser("list")
     sub.add_parser("matrix")
     p = sub.add_parser("plan")
+    p.add_argument("--ref", default="HEAD", help="本次 Workflow 固定的 Git 发布版本")
     p.add_argument("--platform", required=True)
     p.add_argument("--type", required=True)
     p.add_argument("--channel", choices=["phone", "browser", "api"], required=True)
@@ -93,7 +167,7 @@ def main(argv=None):
         print("\n安卓补充模式见 [补充手册](android-additional-modes.md)：小红书图文/原生长文、头条文章、微博原生文章和知乎三类。发表效果、字段保真、权限、审核终态及安全收尾分别验收；未全验的严格断言与限制保留。公众号本轮只走官方API，群发、草稿及链接模式分开判定。")
         return 0
     try:
-        result = load_catalog() if args.command == "list" else plan(args.platform, args.type, args.channel)
+        result = load_catalog() if args.command == "list" else plan(args.platform, args.type, args.channel, ref=args.ref)
     except ValueError as error:
         print(json.dumps({"error": str(error), "executed": False}, ensure_ascii=False))
         return 2

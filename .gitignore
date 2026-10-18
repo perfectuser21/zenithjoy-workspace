@@ -289,3 +289,6 @@ services/phone-adb-controller/commander/.admission.lock
 /workflows/content-rewriter/SKILL.md
 /workflows/image-gen/SKILL.md
 /workflows/platform-data/skill/SKILL.md
+
+# Installed immutable Skill dependencies; source lives in zenithjoy-skills.
+/.skills-runtime/
