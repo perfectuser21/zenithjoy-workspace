@@ -9,16 +9,24 @@ class Tests(unittest.TestCase):
  def test_installed_package_identity_and_actual_paths(self):
   with tempfile.TemporaryDirectory() as tmp:
    home=Path(tmp).resolve();package=home/'.local/share/zenithjoy/publish-releases'/('a'*40);root=package/'.agents/skills/multi-platform-publish';root.mkdir(parents=True)
-   for name in p.ATTACHMENTS:
+   for name in p.ATTACHMENTS+p.CONTROLLERS:
     file=package/name;file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(b'installed')
    managed=home/'.openclaw/skills/multi-platform-publish';managed.parent.mkdir(parents=True);managed.symlink_to(root)
+   codex=home/'.codex-team1/skills/multi-platform-publish';codex.parent.mkdir(parents=True);codex.symlink_to(root)
+   runtime=package/'.skills-runtime/android-publish/SKILL.md';runtime.parent.mkdir(parents=True);runtime.write_bytes(b'installed')
+   closure=dict(schema_version=1,source_repo='perfectuser21/zenithjoy-workspace',source_commit='a'*40,files=[dict(path=x,sha256=hashlib.sha256(b'installed').hexdigest()) for x in p.ATTACHMENTS+p.CONTROLLERS+('.skills-runtime/android-publish/SKILL.md',)])
+   (package/'publish-source-manifest.json').write_text(json.dumps(closure))
    info=dict(source='openclaw-managed',eligible=True,modelVisible=True,baseDir=str(root),filePath=str(root/'SKILL.md'))
    digest=hashlib.sha256(b'installed').hexdigest();entries=[dict(path=x,content_sha256=digest) for x in p.ATTACHMENTS+p.CONTROLLERS]
    remote=dict(manifest={'source_commit':'b'*40},execution_copies=[dict(repo_path=x,path=d+'/'+Path(x).name,sha256=digest) for x in p.CONTROLLERS for d in ('bin-harvest','.local/bin')])
-   def call(args,**kw):return json.dumps(info if args[0]=='openclaw' else remote).encode()
+   def call(args,**kw):return json.dumps(info if args[0]=='openclaw' else closure if args[0]=='node' else remote).encode()
    with patch.object(p.subprocess,'check_output',side_effect=call):
     result=p.collect_publish(home,entries,c.read_regular);self.assertEqual(result['installed_package_revision'],'a'*40);self.assertEqual(len(result['files']),8)
     self.assertEqual(result['locations'][p.CONTROLLERS[0]]['installed_revision'],'b'*40)
+    self.assertGreater(result['source_closure']['file_count'],len(p.ATTACHMENTS));self.assertNotIn('files',result['source_closure'])
+    runtime.write_bytes(b'changed dependency')
+    with self.assertRaisesRegex(ValueError,'依赖闭包'):p.collect_publish(home,entries,c.read_regular)
+    runtime.write_bytes(b'installed')
     remote['execution_copies'][0]['sha256']='c'*64
     with self.assertRaisesRegex(ValueError,'执行字节'):p.collect_publish(home,entries,c.read_regular)
     remote['execution_copies'][0]['sha256']=digest
@@ -33,13 +41,18 @@ class AggregateTests(unittest.TestCase):
   import subprocess,os,shlex,sys
   original=subprocess.check_output
   with tempfile.TemporaryDirectory() as tmp:
-   home=Path(tmp).resolve();remote=home/'phone';remote.mkdir();package=home/'.local/share/zenithjoy/publish-releases'/('a'*40)
+   home=Path(tmp).resolve();remote=home/'phone';remote.mkdir();package=home/'.local/share/zenithjoy/publish-releases'/('b'*40)
    runtime=home/'.openclaw/commander';workspace=home/'openclaw-root/workspaces-root/clawd-work-commander'
    data=b'fixed production source';h=hashlib.sha256(data).hexdigest()
    def put(root,name):
     file=root/name;file.parent.mkdir(parents=True,exist_ok=True);file.write_bytes(data)
-   for name in p.ATTACHMENTS:put(package,name)
+   for name in p.ATTACHMENTS+p.CONTROLLERS:put(package,name)
    managed=home/'.openclaw/skills/multi-platform-publish';managed.parent.mkdir(parents=True);managed.symlink_to(package/'.agents/skills/multi-platform-publish')
+   codex=home/'.codex-team1/skills/multi-platform-publish';codex.parent.mkdir(parents=True);codex.symlink_to(package/'.agents/skills/multi-platform-publish')
+   for name in p.CONTROLLERS:put(package,name)
+   put(package,'.skills-runtime/android-publish/SKILL.md')
+   closure=dict(schema_version=1,source_repo='perfectuser21/zenithjoy-workspace',source_commit='b'*40,files=[dict(path=n,sha256=h) for n in p.ATTACHMENTS+p.CONTROLLERS+('.skills-runtime/android-publish/SKILL.md',)])
+   (package/'publish-source-manifest.json').write_text(json.dumps(closure))
    controller_entries=[dict(path=n,deployed_path=Path(n).name,content_sha256=h) for n in p.CONTROLLERS]
    for n in p.CONTROLLERS:
     for folder in ('bin-harvest','.local/bin'):put(remote/folder,Path(n).name)
@@ -64,13 +77,14 @@ class AggregateTests(unittest.TestCase):
     if args[0]=='openclaw':
      if 'work-commander' in args:return json.dumps(work_info).encode()
      return json.dumps(dict(source='openclaw-managed',eligible=True,modelVisible=True,baseDir=str(package/'.agents/skills/multi-platform-publish'),filePath=str(package/p.ATTACHMENTS[0]))).encode()
+    if args[0]=='node':return json.dumps(closure).encode()
     code=shlex.split(args[-1])[2]
     return original([sys.executable,'-c',"import socket;socket.gethostname=lambda:'mac-mini-m4-xian';"+code],env=dict(os.environ,HOME=str(remote)))
    with patch.object(p.socket,'gethostname',return_value='r10-7.macminivault.com'),patch.object(p.subprocess,'check_output',side_effect=call):
     for actual_hostname in ('aad17-2.macminivault.com','r10-7.macminivault.com'):
      with self.subTest(hostname=actual_hostname),patch.object(p.socket,'gethostname',return_value=actual_hostname):
       self.assertEqual(len(p.collect(spec,home)['files']),len(paths))
-    result=p.collect(spec,home);self.assertEqual(len(result['files']),len(paths));self.assertEqual(result['publish_readback']['installed_package_revision'],'a'*40)
+    result=p.collect(spec,home);self.assertEqual(len(result['files']),len(paths));self.assertEqual(result['publish_readback']['installed_package_revision'],'b'*40)
     for file in sql_copies:
      with self.subTest(sql_copy=str(file)):
       file.unlink()

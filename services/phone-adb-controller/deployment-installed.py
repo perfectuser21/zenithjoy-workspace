@@ -36,23 +36,33 @@ if p.read_bytes()!=raw:raise ValueError('采集期间xian manifest切换')
 print(json.dumps(dict(hostname=socket.gethostname(),manifest=m,manifest_sha256=hashlib.sha256(raw).hexdigest(),installed_files=rows,execution_copies=pairs)))
 '''
 
-def collect_publish(home, entries, read_regular):
+def collect_publish(home, entries, read_regular, expected_revision=None):
  info=json.loads(subprocess.check_output(['openclaw','skills','--agent','skill-factory','--json','info','multi-platform-publish'],timeout=30))
  if info.get('source')!='openclaw-managed' or not info.get('eligible') or not info.get('modelVisible') or info.get('blockedByAgentFilter'):
   raise ValueError('正式skill-factory未加载发布skill')
  root=Path(info['baseDir']);suffix=Path('.agents/skills/multi-platform-publish');package=root.parents[2]
  if root!=package/suffix or package.parent!=home/'.local/share/zenithjoy/publish-releases' or not re.fullmatch('[0-9a-f]{40}',package.name):raise ValueError('managed发布安装根不合法')
- if Path(info['filePath'])!=root/'SKILL.md' or (home/'.openclaw/skills/multi-platform-publish').resolve()!=root:raise ValueError('实际managed链接与官方加载路径不同')
+ if Path(info['filePath'])!=root/'SKILL.md' or any((home/entry).resolve()!=root for entry in ('.openclaw/skills/multi-platform-publish','.codex-team1/skills/multi-platform-publish')):raise ValueError('实际managed链接与官方加载路径不同')
  # 允许managed入口链接；落点与附件每段必须是真实普通文件，不能链接回checkout。
  current=home
  for part in package.relative_to(home).parts:
   current=current/part
   if current.is_symlink():raise ValueError('发布安装包落点不能经软链接')
+ expected_revision=expected_revision or package.name
+ if package.name!=expected_revision:raise ValueError('发布包不是本次固定业务版本')
+ original_closure=read_regular(package,'publish-source-manifest.json')
+ verifier=home/'.openclaw/leadgen-scripts/deployment-publish-release.mjs'
+ closure=json.loads(subprocess.check_output(['node',str(verifier),'verify',str(package),expected_revision],timeout=90))
+ if closure.get('schema_version')!=1 or closure.get('source_repo')!='perfectuser21/zenithjoy-workspace' or closure.get('source_commit')!=expected_revision or not closure.get('files'):raise ValueError('发布闭包来源不符')
+ closure_files={entry['path']:entry['sha256'] for entry in closure['files']}
+ if len(closure_files)!=len(closure['files']) or not any(path.startswith('.skills-runtime/') for path in closure_files):raise ValueError('发布闭包缺少固定运行依赖')
+ for path,expected in closure_files.items():
+  if hashlib.sha256(read_regular(package,path)).hexdigest()!=expected:raise ValueError('发布依赖闭包漂移: '+path)
  remote=json.loads(subprocess.check_output(['ssh','-T','-o','BatchMode=yes','-o','ConnectTimeout=10','xian-m4','python3 -c '+shlex.quote(REMOTE)],timeout=30))
  measured={};locations={}
  for entry in entries:
   path=entry['path'];expected=entry['content_sha256']
-  if path in ATTACHMENTS:
+  if path in closure_files and path not in CONTROLLERS:
    actual=hashlib.sha256(read_regular(package,path)).hexdigest()
    locations[path]=dict(kind='loaded_skill' if path.startswith('.agents/') else 'installed_verification_source',host='mmv',actual_path=str(package/path),installed_revision=package.name)
   elif path in CONTROLLERS:
@@ -63,7 +73,8 @@ def collect_publish(home, entries, read_regular):
   if actual!=expected:raise ValueError('发布安装文件与final binding不符: '+path)
   measured[path]=actual
   locations[path]['source_equivalence']=dict(expected_final_sha256=expected,actual_sha256=actual,matched=True)
- return dict(files=measured,locations=locations,official_skill_info=info,installed_package_revision=package.name,xian_readback=remote)
+ if read_regular(package,'publish-source-manifest.json')!=original_closure:raise ValueError('采集期间发布依赖闭包切换')
+ return dict(files=measured,locations=locations,official_skill_info=info,installed_package_revision=package.name,source_closure=dict(schema_version=1,source_repo=closure['source_repo'],source_commit=closure['source_commit'],skills_source=closure.get('skills_source'),file_count=len(closure_files),manifest_sha256=hashlib.sha256(original_closure).hexdigest()),xian_readback=remote)
 
 import socket,sys
 
@@ -109,8 +120,8 @@ def collect(spec, home):
    official[key]=info
  canonical=json.dumps(spec['commander_files'],sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
  if installed.get('runtime_snapshot_sha256')!=hashlib.sha256(canonical).hexdigest():raise ValueError('Commander runtime snapshot漂移')
- extra=[entry for entry in spec['manifest']['files'] if entry['path'] in ATTACHMENTS+CONTROLLERS]
- publishing=collect_publish(home,extra,read_regular)
+ extra=[entry for entry in spec['manifest']['files'] if entry['path'] in ATTACHMENTS+CONTROLLERS or entry['path'].startswith(('.agents/skills/multi-platform-publish/','.skills-runtime/')) or entry['path']=='.skills-source.json']
+ publishing=collect_publish(home,extra,read_regular,spec['manifest']['source_commit'])
  for path,value in publishing['files'].items():
   if path in measured and measured[path]!=value:raise ValueError('跨主机同component执行字节不同')
   measured[path]=value;locations[path]=dict(publishing['locations'][path],local_copies=locations.get(path))

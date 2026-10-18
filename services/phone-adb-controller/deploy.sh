@@ -226,7 +226,7 @@ MMV_JS_FILES=(
   queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs activity-skill-recovery.mjs activity-skill-broker.mjs activity-skill-tool.mjs leadgen-skill-agent.mjs leadgen-client.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py
   leadgen-outreach-orders.js
   pg-notion-mirror-lib.js leadgen-notion-mirror.js
-  deployment-manifest.mjs deployment-fixed-source.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs
+  deployment-manifest.mjs deployment-fixed-source.mjs deployment-publish-release.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 # 0930(任务 975aa6ec): mmv 本机 launchd 拉起的两支脚本。escort-claude-escalation.sh 此前列在 DEVICE_SH_FILES 发去执行机
@@ -355,7 +355,24 @@ python3 "$D/deployment-guard.py" check
 
 DEPLOY_MANIFEST=$(mktemp)
 MMV_MANIFEST=$(mktemp)
-trap 'rm -f "$DEPLOY_MANIFEST" "$MMV_MANIFEST"' EXIT
+PUBLISH_PENDING_SHA=''
+cleanup_deployment() {
+  local status=$?
+  if [[ -n "$PUBLISH_PENDING_SHA" ]]; then
+    ssh mmv node '~/.openclaw/leadgen-scripts/deployment-publish-release.mjs' rollback "$PUBLISH_PENDING_SHA" || echo '❌ 发布链接回退未完成，保留部署admission' >&2
+  fi
+  rm -f "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
+  return "$status"
+}
+trap cleanup_deployment EXIT
+activate_publish_package() {
+  ssh mmv 'mkdir -p ~/.openclaw/leadgen-scripts'
+  for file in deployment-publish-release.mjs deployment-fixed-source.mjs; do
+    push_atomic "$D/$file" mmv '~/.openclaw/leadgen-scripts' "$file"
+  done
+  PUBLISH_PENDING_SHA="$(git rev-parse HEAD)"
+  python3 -c 'import json,sys;print(json.dumps(dict(source=sys.argv[1],revision=sys.argv[2])))' "$REPO_ROOT" "$PUBLISH_PENDING_SHA" | ssh mmv node '~/.openclaw/leadgen-scripts/deployment-publish-release.mjs' deploy-stdin
+}
 : "${WF_RELEASE_IDS:?必须提供全部部署目标的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${RELEASE_EVIDENCE_ARGS[@]}" > "$DEPLOY_MANIFEST"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" "${RELEASE_EVIDENCE_ARGS[@]}" > "$MMV_MANIFEST"
@@ -373,7 +390,9 @@ deploy_release_evidence
 if [[ "${1:-}" == "--commander-only" ]]; then
   deploy_commander
   [[ "$FAILED" == 0 ]] || exit 1
+  activate_publish_package
   node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
+  PUBLISH_PENDING_SHA=''
   ssh mmv "rm -f ~/.openclaw/commander/.deploying"
   echo "✅ Commander与既有本机视图已绑定同一正式release/ACK"
   exit 0
@@ -607,6 +626,8 @@ if [[ "$FAILED" == "1" ]]; then
   exit 1
 fi
 # 完整安装实读后：先xian ACK，后唯一MMV聚合ACK；旧本机视图不含远端files。
+activate_publish_package
 node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
+PUBLISH_PENDING_SHA=''
 ssh mmv "rm -f ~/.openclaw/commander/.deploying"
 echo "✅ 同一目标完整release已部署，旧运行包与Commander共享正式观测。"
