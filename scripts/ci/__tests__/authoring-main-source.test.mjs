@@ -146,7 +146,7 @@ test('正式main CLI真实Git origin预检接受checkout规范三形态，拒绝
  const environment={GITHUB_SHA:business.sha,AUTHORING_BRAIN_REVISION:brain.sha,GITHUB_REF:'refs/heads/main',GITHUB_REPOSITORY:businessRepo,AUTHORING_ALLOW_WRITE:'1'};
  const prior=Object.fromEntries(Object.keys(environment).map(k=>[k,process.env[k]]));Object.assign(process.env,environment);
  const valid=repo=>[`https://github.com/${repo}`,`https://github.com/${repo}.git`,`git@github.com:${repo}.git`];
- const invalid=repo=>[`https://gitlab.com/${repo}.git`,`https://github.com.evil.invalid/${repo}.git`,`https://github.com/evil/${repo.split('/')[1]}.git`,`https://github.com/${repo}.git.evil`,`https://github.com/prefix${repo}`,`https://user:secret@github.com/${repo}.git`,`https://github.com/${repo}.git?ref=main`,`https://github.com/${repo}.git#main`,`git@evil.invalid:${repo}.git`,`git@github.com:${repo}.git?ref=main`,`https://github.com/${repo}/`];
+ const invalid=repo=>[`https://gitlab.com/${repo}.git`,`https://github.com.evil.invalid/${repo}.git`,`https://github.com/evil/${repo.split('/')[1]}.git`,`https://github.com/${repo}.git.evil`,`https://github.com/prefix${repo}`,`https://user:secret@github.com/${repo}.git`,`https://github.com/${repo}.git?ref=main`,`https://github.com/${repo}.git#main`,`git@evil.invalid:${repo}.git`,`git@github.com:${repo}.git?ref=main`,`https://github.com/${repo}/`,` https://github.com/${repo}`,`https://github.com/${repo} `];
  const run=()=>runMainSource({repoRoot:business.root,brainRoot:brain.root,output:join(directory,'must-not-write')});
  try{
   for(const origin of valid(businessRepo)){git(business.root,'remote','set-url','origin',origin);await assert.rejects(run(),/AUTHORING_FIXTURE_ORIGIN_PREFLIGHT_REACHED/);}

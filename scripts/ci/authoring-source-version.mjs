@@ -10,13 +10,19 @@ export const AUTHORING_FILES=[
 ];
 export function gitSource(root,args){
  const env={...process.env};for(const k of Object.keys(env))if(k.startsWith('GIT_'))delete env[k];
- return execFileSync('git',['--no-replace-objects','-C',root,...args],{encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024,env:{...env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_NO_REPLACE_OBJECTS:'1',GIT_TERMINAL_PROMPT:'0'},stdio:['ignore','pipe','pipe']}).trim();
+ const value=execFileSync('git',['--no-replace-objects','-C',root,...args],{encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024,env:{...env,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_NO_REPLACE_OBJECTS:'1',GIT_TERMINAL_PROMPT:'0'},stdio:['ignore','pipe','pipe']});
+ return args.length===3&&args.join(' ')==='remote get-url origin'?value.replace(/\r?\n$/,''):value.trim();
+}
+// Exact canonical GitHub origins only: checkout omits .git; no URL normalization may widen trust.
+export function isAuthoringRepositoryOrigin(origin,repo){
+ if(!['perfectuser21/zenithjoy-workspace','perfectuser21/cecelia'].includes(repo))return false;
+ return [`https://github.com/${repo}`,`https://github.com/${repo}.git`,`git@github.com:${repo}.git`].includes(origin);
 }
 const parts=v=>{if(!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(v))throw Error('AUTHORING_SOURCE_VERSION_INVALID');return v.split('.').map(BigInt);};
 export const greaterVersion=(a,b)=>{a=parts(a);b=parts(b);for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]>b[i];return false;};
 export function checkAuthoringVersions(root,{base='origin/main',fix=false}={}){
  root=resolve(root);const remote=gitSource(root,['remote','get-url','origin']);
- if(!['https://github.com/perfectuser21/zenithjoy-workspace.git','git@github.com:perfectuser21/zenithjoy-workspace.git'].includes(remote))throw Error('AUTHORING_SOURCE_REPOSITORY_INVALID');
+ if(!isAuthoringRepositoryOrigin(remote,'perfectuser21/zenithjoy-workspace'))throw Error('AUTHORING_SOURCE_REPOSITORY_INVALID');
  if(!/^(origin\/main|[a-f0-9]{40})$/.test(base))throw Error('AUTHORING_SOURCE_BASE_INVALID');
  const sha=gitSource(root,['rev-parse','--verify',`${base}^{commit}`]);
  gitSource(root,['merge-base','--is-ancestor',sha,'HEAD']);
