@@ -30,9 +30,9 @@ test('通用Commander复用完整发布验证并保留原zenithjoy范围',()=>{
  assert.equal(j['continue-on-error'],undefined);
  assert.equal(w.jobs.verify.with.scope,'zenithjoy');
 });
-test('发布caller只传三项显式secret，保read权限和实际main拒绝闸',()=>{
+test('发布caller显式传递中央Skill只读密钥，保read权限和实际main拒绝闸',()=>{
  const w=config();assert.deepEqual(w.permissions,{contents:'read',actions:'read'});
- assert.deepEqual(w.jobs.verify.secrets,{TS_AUTHKEY:'${{ secrets.TS_AUTHKEY }}',CECELIA_INTERNAL_TOKEN:'${{ secrets.CECELIA_INTERNAL_TOKEN }}',BRAIN_DEPLOY_URL:'${{ secrets.BRAIN_DEPLOY_URL }}'});
+ assert.deepEqual(w.jobs.verify.secrets,{TS_AUTHKEY:'${{ secrets.TS_AUTHKEY }}',CECELIA_INTERNAL_TOKEN:'${{ secrets.CECELIA_INTERNAL_TOKEN }}',BRAIN_DEPLOY_URL:'${{ secrets.BRAIN_DEPLOY_URL }}',SKILLS_SOURCE_SSH_KEY:'${{ secrets.SKILLS_SOURCE_SSH_KEY }}'});
  const guard=w.jobs['caller-contract'].steps.find(s=>s.env?.RUN_REF==='${{ github.ref }}');
  assert.equal(guard.run,'test "$RUN_REF" = refs/heads/main');
 });
