@@ -1,0 +1,19 @@
+name: Skill Source Ownership
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ownership:
+    name: Skill source ownership
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test ownership guard
+        run: python3 -m unittest discover -s scripts -p test_skill_source_ownership.py
+      - name: Reject business-owned skill definitions
+        run: python3 scripts/skill_source_ownership.py

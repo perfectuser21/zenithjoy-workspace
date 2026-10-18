@@ -179,8 +179,10 @@ jobs:
             exit 0
           fi
 
+          # Dependency source caches are not workspace-owned tests.
           # Find all test/spec files, exclude node_modules and generated dirs
           FOUND_FILES=$(find . \
+            -path "./.skills-source" -prune -o \
             \( -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.tsx" -o -name "*.spec.js" \) \
             -not -path "*/.skills-source/*" \
             -not -path "*/.skills-runtime/*" \
@@ -188,7 +190,7 @@ jobs:
             -not -path "*/.git/*" \
             -not -path "*/dist/*" \
             -not -path "*/build/*" \
-            -not -path "*/coverage/*" \
+            -not -path "*/coverage/*" -print \
             2>/dev/null | sed 's|^\./||' | sort)
 
           if [ -z "$FOUND_FILES" ]; then
@@ -204,7 +206,7 @@ jobs:
           # Find orphans: test files not in registry
           ORPHANS=""
           while IFS= read -r file; do
-            if ! echo "$REGISTERED" | grep -qF "$file"; then
+            if ! grep -Fx -- "$file" <<< "$REGISTERED" > /dev/null; then
               ORPHANS="$ORPHANS\n  - $file"
             fi
           done <<< "$FOUND_FILES"
