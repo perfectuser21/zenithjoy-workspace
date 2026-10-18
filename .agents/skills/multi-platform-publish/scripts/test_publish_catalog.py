@@ -6,6 +6,7 @@ import json
 import hashlib
 import os
 import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -251,6 +252,66 @@ class PinnedReleaseSmoke(unittest.TestCase):
                     self.plan()
         with self.assertRaises(ValueError):
             self.plan(skills=self.root)
+
+    def test_explicit_shared_cache_reads_git_blobs_despite_dirty_checkout(self):
+        cache = self.workspace / ".skills-source"
+        shared = self.root / "shared-cache"
+        cache.rename(shared)
+        (shared / "source-1").write_text("dirty checkout must not be read")
+        (shared / "distribution/catalog.json").write_text("dirty catalog must not be read")
+        with patch.dict(os.environ, {"SKILLS_SOURCE_DIR": str(shared)}):
+            result = self.plan()
+        self.assertEqual(result["entrypoint"], str(self.workspace / ".skills-runtime/android-douyin-publish/SKILL.md"))
+
+    def assert_cache_rejected_before_bootstrap(self, cache_env=None):
+        actual = subprocess.check_output
+        def guarded(command, **kwargs):
+            if command[0] == sys.executable:
+                self.fail("missing Git objects must fail before bootstrap can fetch")
+            return actual(command, **kwargs)
+        context = patch.dict(os.environ, {"SKILLS_SOURCE_DIR": str(cache_env)}) if cache_env else contextlib.nullcontext()
+        with context, patch.object(self.catalog.subprocess, "check_output", side_effect=guarded):
+            with self.assertRaisesRegex(ValueError, "缓存"):
+                self.plan()
+
+    def test_missing_default_cache_is_offline_failure_even_with_valid_installed_files(self):
+        (self.workspace / ".skills-source").rename(self.root / "unavailable-cache")
+        self.assert_cache_rejected_before_bootstrap()
+
+    def test_explicit_cache_without_pinned_commit_cannot_use_another_source(self):
+        empty = self.root / "empty-cache"
+        empty.mkdir()
+        self.git(empty, "init", "-q")
+        self.assert_cache_rejected_before_bootstrap(empty)
+
+    def test_read_subprocesses_have_timeouts_and_timeout_is_clear_error(self):
+        actual = subprocess.check_output
+        def timeout_bootstrap(command, **kwargs):
+            self.assertGreater(kwargs.get("timeout", 0), 0)
+            if command[0] == sys.executable:
+                raise subprocess.TimeoutExpired("trusted skill read", kwargs["timeout"])
+            return actual(command, **kwargs)
+        with patch.object(self.catalog.subprocess, "check_output", side_effect=timeout_bootstrap):
+            with self.assertRaisesRegex(ValueError, "超时"):
+                self.plan()
+
+    def test_git_replace_cannot_forge_pinned_source_and_installed_bytes(self):
+        cache = self.workspace / ".skills-source"
+        self.git(cache, "config", "user.email", "fixture@example.invalid")
+        self.git(cache, "config", "user.name", "fixture")
+        manifest_path = cache / "distribution/catalog.json"
+        manifest = json.loads(manifest_path.read_text())
+        for entry in manifest["profiles"]["zenithjoy"]["files"]:
+            if entry["path"].startswith(".skills-runtime/"):
+                payload = b"forged through replace refs"
+                (cache / entry["source"]).write_bytes(payload)
+                (self.workspace / entry["path"]).write_bytes(payload)
+                entry["sha256"] = hashlib.sha256(payload).hexdigest()
+        manifest_path.write_text(json.dumps(manifest))
+        malicious = self.commit(cache)
+        self.git(cache, "replace", self.versions[1][1]["revision"], malicious)
+        with self.assertRaises(ValueError):
+            self.plan()
 
     def test_runtime_symlink_is_rejected_and_mutable_bootstrap_not_executed(self):
         target = self.workspace / ".skills-runtime/android-publish/SKILL.md"
