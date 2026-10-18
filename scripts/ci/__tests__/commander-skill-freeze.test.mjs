@@ -8,7 +8,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 const sourceRoot=fileURLToPath(new URL('../../../',import.meta.url));
 const brainRoot=process.env.COMMANDER_BRAIN_ROOT;
 assert.ok(brainRoot,'必须显式提供固定Brain checkout，不得跳过跨仓校验');
-const brainRevision='f99f372689b895751bcb30a8e1bb429aaf8edfaa';
+const brainRevision='0ed23d135ba1fa977db71d70bb742e8522c07917';
 const git=(root,args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8'}).trim();
 assert.equal(git(brainRoot,['rev-parse','HEAD']),brainRevision,'只使用已合并固定Brain校验器');
 const {prepareDefinitionFreeze}=await import(pathToFileURL(resolve(brainRoot,'packages/brain/src/workflow-authoring/freeze.js')));

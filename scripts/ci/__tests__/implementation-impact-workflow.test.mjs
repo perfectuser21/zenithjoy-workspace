@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import YAML from 'yaml';
 
 const path = new URL('../../../.github/workflows/implementation-impact.yml', import.meta.url);
-const fixedRevision = '07b294a6a454e9ad3464111f48cfef9602931a37';
+const fixedRevision = '0ed23d135ba1fa977db71d70bb742e8522c07917';
 function workflow() {
   assert.ok(existsSync(path), '必须存在真实跨仓 implementation-impact caller');
   return YAML.parse(readFileSync(path, 'utf8'));
@@ -55,7 +55,7 @@ test('Commander冻结回归固定真实Brain源码且CI不可缺席',()=>{
  const source=steps.find(s=>s.uses==='actions/checkout@v4'&&!s.with?.repository);
  assert.equal(source.with.ref,'${{ github.event.pull_request.head.sha || github.sha }}');
  const tooling=steps.find(s=>s.with?.repository==='perfectuser21/cecelia');
- assert.equal(tooling?.with.ref,'f99f372689b895751bcb30a8e1bb429aaf8edfaa');
+ assert.equal(tooling?.with.ref,'0ed23d135ba1fa977db71d70bb742e8522c07917');
  assert.equal(tooling.with.path,'.ci-brain-tooling');assert.equal(tooling.with['persist-credentials'],false);
  const run=steps.find(s=>s.run==='node --test scripts/ci/__tests__/commander-skill-freeze.test.mjs');
  assert.equal(run?.env.COMMANDER_BRAIN_ROOT,'${{ github.workspace }}/.ci-brain-tooling');
