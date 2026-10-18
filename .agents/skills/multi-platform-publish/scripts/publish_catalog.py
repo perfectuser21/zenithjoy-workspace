@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -29,12 +30,30 @@ def normalize_type(value):
     return result
 
 
+READ_TIMEOUT_SECONDS = 15
+
+
+class MissingGitBlob(ValueError):
+    pass
+
+
+def read_output(command):
+    # A cache location is not authority: disable object replacements and ambient Git redirects.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update({"GIT_NO_REPLACE_OBJECTS": "1", "GIT_ALLOW_PROTOCOL": "", "GIT_TERMINAL_PROMPT": "0"})
+    try:
+        return subprocess.check_output(command, stderr=subprocess.PIPE, timeout=READ_TIMEOUT_SECONDS, env=env)
+    except subprocess.TimeoutExpired:
+        raise ValueError("固定 Skill 来源读取超时") from None
+    except OSError:
+        raise ValueError("无法启动固定 Skill 来源读取程序") from None
+
+
 def git_blob(workspace, revision, path):
     try:
-        return subprocess.check_output(
-            ["git", "-C", str(workspace), "show", f"{revision}:{path}"], stderr=subprocess.PIPE)
+        return read_output(["git", "-C", str(workspace), "show", f"{revision}:{path}"])
     except subprocess.CalledProcessError as error:
-        raise ValueError("无法读取固定发布文件：" + path) from error
+        raise MissingGitBlob("无法读取固定发布文件：" + path) from error
 
 
 def has_lock(workspace, ref="HEAD"):
@@ -43,15 +62,14 @@ def has_lock(workspace, ref="HEAD"):
     try:
         git_blob(workspace, ref, ".skills-source.json")
         return True
-    except ValueError:
+    except MissingGitBlob:
         return False
 
 
 def resolve_ref(workspace, ref):
     try:
-        return subprocess.check_output(
-            ["git", "-C", str(workspace), "rev-parse", "--verify", str(ref) + "^{commit}"],
-            stderr=subprocess.PIPE).decode().strip()
+        return read_output(
+            ["git", "-C", str(workspace), "rev-parse", "--verify", str(ref) + "^{commit}"]).decode().strip()
     except subprocess.CalledProcessError as error:
         raise ValueError("无法解析固定 Workflow 发布版本") from error
 
@@ -63,6 +81,16 @@ class PinnedRelease:
         self.ref = resolve_ref(workspace, ref)
         self.bootstrap = git_blob(workspace, self.ref, "scripts/skills-source.py")
         self.lock = json.loads(git_blob(workspace, self.ref, ".skills-source.json"))
+        revision = self.lock.get("revision", "")
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise ValueError("Skill 来源必须固定完整 Git SHA")
+        self.source = Path(os.environ.get("SKILLS_SOURCE_DIR") or self.workspace / ".skills-source").resolve()
+        if not (self.source / ".git").exists():
+            raise ValueError("Skill Git 对象缓存不存在；请先安装固定版本")
+        try:
+            read_output(["git", "-C", str(self.source), "cat-file", "-e", revision + "^{commit}"])
+        except subprocess.CalledProcessError:
+            raise ValueError("Skill Git 对象缓存缺少锁定版本；请先安装固定版本") from None
 
     def installed(self, relative):
         relative = Path(relative)
@@ -78,9 +106,9 @@ class PinnedRelease:
             raise ValueError("固定发布源文件不存在：" + str(path))
         bootstrap = "__file__ = " + repr(str(self.workspace / "scripts/skills-source.py")) + "\n" + self.bootstrap.decode()
         try:
-            expected = subprocess.check_output(
+            expected = read_output(
                 [sys.executable, "-c", bootstrap, "cat", "--workspace", str(self.workspace),
-                 "--ref", self.ref, "--path", relative.as_posix()], stderr=subprocess.PIPE)
+                 "--source", str(self.source), "--ref", self.ref, "--path", relative.as_posix()])
         except subprocess.CalledProcessError:
             raise ValueError("固定 Skill 来源校验失败：" + str(relative)) from None
         if path.read_bytes() != expected:

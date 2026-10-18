@@ -278,6 +278,13 @@ class PinnedReleaseSmoke(unittest.TestCase):
         (self.workspace / ".skills-source").rename(self.root / "unavailable-cache")
         self.assert_cache_rejected_before_bootstrap()
 
+    def test_default_cache_without_pinned_commit_fails_without_fetch(self):
+        cache = self.workspace / ".skills-source"
+        cache.rename(self.root / "unavailable-cache")
+        cache.mkdir()
+        self.git(cache, "init", "-q")
+        self.assert_cache_rejected_before_bootstrap()
+
     def test_explicit_cache_without_pinned_commit_cannot_use_another_source(self):
         empty = self.root / "empty-cache"
         empty.mkdir()
