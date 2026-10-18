@@ -71,7 +71,7 @@ test('caller永久执行并仅根据成功分类控制巡查；所有事件保�
  assert.equal(w.jobs.impact.if,"needs['scope-classification'].outputs.classification == 'applicable'");assert.equal(w.jobs.impact.with.scope,'cecelia-device-patrol');
  const scope=w.jobs['scope-classification'];assert.equal(scope.needs,'caller-contract');assert.equal(scope['continue-on-error'],undefined);
  const step=scope.steps.find(s=>s.id==='scope');assert.equal(step['continue-on-error'],undefined);assert.equal(step.run,'node scripts/ci/implementation-patrol-scope.mjs "$GITHUB_WORKSPACE" "$BASE" "$HEAD" "$RUNNER_TEMP/implementation-scope"');
- assert.deepEqual(step.env,{BASE:'${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}',HEAD:'${{ github.event.pull_request.head.sha || github.sha }}'});
+ assert.deepEqual(step.env,{SKILLS_SOURCE_SSH_KEY:'${{ secrets.SKILLS_SOURCE_SSH_KEY }}',BASE:'${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}',HEAD:'${{ github.event.pull_request.head.sha || github.sha }}'});
 });
 test('共享smoke真实隔离消费者守卫：正常执行且巡查失败必非零',async()=>{
  const {verifyPatrolSmokeConsumer}=await api();const root=new URL('../../../',import.meta.url).pathname;
@@ -91,11 +91,14 @@ test('真实共享glob paths-ignore不能伪装永久执行',async t=>{
 });
 test('真实caller配置关掉job或node步骤必须被永久协议守卫拒绝',async()=>{
  const {validatePatrolCaller}=await api();assert.equal(validatePatrolCaller(caller()),true);
- for(const target of ['paths-ignore','caller-if','caller-continue','test-if','test-continue','scope-if','scope-step-if']){
+ for(const target of ['paths-ignore','caller-if','caller-continue','test-if','test-continue','scope-if','scope-step-if','restore-removed','restore-disabled','reader-key-removed']){
   const w=caller();if(target==='paths-ignore')w.on.pull_request['paths-ignore']=['**'];
   if(target==='caller-if')w.jobs['caller-contract'].if='false';if(target==='caller-continue')w.jobs['caller-contract']['continue-on-error']=true;
   const step=w.jobs['caller-contract'].steps.find(s=>s.run?.includes('implementation-patrol-scope.test.mjs'));
   if(target==='test-if')step.if='false';if(target==='test-continue')step['continue-on-error']=true;
+  if(target==='restore-removed')w.jobs['scope-classification'].steps=w.jobs['scope-classification'].steps.filter(s=>s.uses!=='./.github/actions/skills-source');
+  if(target==='reader-key-removed')delete w.jobs['scope-classification'].steps.find(s=>s.id==='scope').env.SKILLS_SOURCE_SSH_KEY;
+  if(target==='restore-disabled')w.jobs['scope-classification'].steps.find(s=>s.uses==='./.github/actions/skills-source').if='false';
   if(target==='scope-if')w.jobs['scope-classification'].if='false';if(target==='scope-step-if')w.jobs['scope-classification'].steps.find(s=>s.id==='scope').if='false';
   assert.throws(()=>validatePatrolCaller(w),/PATROL_SCOPE_/);
  }
@@ -116,4 +119,58 @@ for(const target of ['worker-if','worker-continue','worker-count','matrix','fail
  if(target==='coverage-check')verify.run=verify.run.replace('sorted(row[0] for row in rows) == assigned','True').replace('len(all_rows) == len(inventory)','True');
  if(target==='failure-check')verify.run=verify.run.replace('os.environ["SMOKE_SHARDS_RESULT"] == "success"','True');
  f.put(path,YAML.stringify(w));assert.throws(()=>verifyPatrolSmokeConsumer(f.root),/PATROL_SCOPE_/);
+});
+const patrolSkill='scripts/phone-account-patrol/SKILL.md';
+for(const mode of ['same','changed','unmapped','runtime','new-file','dedicated-ci','lock-only-changed','lock-only-same'])test('固定中心迁移证明边界：'+mode,async t=>{
+ const f=fixture(t),{classifyPatrolDiff}=await api();
+ // The real contract registers SKILL.md as an auxiliary source.
+ assert.ok(f.contract.auxiliary_paths.includes(patrolSkill));
+ if(mode.startsWith('lock-only')){
+  rmSync(join(f.root,patrolSkill));f.put('.skills-source.json','old');f.base=f.commit();
+ }else rmSync(join(f.root,patrolSkill));
+ f.put('.skills-source.json','new');
+ if(mode==='runtime')f.put(f.contract.workflows[0].activities[0].bindings[0],'changed runtime');
+ if(mode==='dedicated-ci')f.put('.github/workflows/phone-account-patrol.yml','changed dedicated CI');
+ if(mode==='new-file')f.put('scripts/phone-account-patrol/new.py','new runtime');
+ const head=f.commit();const resolveSkill=({ref,path})=>{
+  assert.equal(path,patrolSkill);
+  if(mode==='unmapped')throw Error('unmapped');
+  return Buffer.from(ref===head&&(mode==='changed'||mode==='lock-only-changed')?'changed':'fixture\n');
+ };
+ const args={repoRoot:f.root,base:f.base,head,registeredRevision:f.registeredRevision,resolveSkill};
+ if(mode==='unmapped'){assert.throws(()=>classifyPatrolDiff(args),/PATROL_SCOPE_/);return;}
+ const r=classifyPatrolDiff(args);
+ if(['same','lock-only-same'].includes(mode)){
+  assert.equal(r.classification,'not_applicable');assert.equal(r.reason,'verified_unchanged_skill_relocation');
+  assert.ok(r.proof.owned_paths.every(p=>p.base_sha256===p.head_sha256));assert.equal(r.verdict,undefined);
+ }else assert.equal(r.classification,'applicable');
+});
+
+test('固定catalog已映射RUNBOOK迁移与正文具有相同证明边界',async t=>{
+ const f=fixture(t),{classifyPatrolDiff}=await api(),path='scripts/phone-account-patrol/RUNBOOK.md';
+ assert.ok(f.contract.auxiliary_paths.includes(path));rmSync(join(f.root,path));f.put('.skills-source.json','pinned catalog');const head=f.commit();
+ const args={repoRoot:f.root,base:f.base,head,registeredRevision:f.registeredRevision};
+ const r=classifyPatrolDiff({...args,resolveSkill:source=>{assert.equal(source.path,path);return Buffer.from('fixture\n')}});
+ assert.equal(r.reason,'verified_unchanged_skill_relocation');assert.equal(r.classification,'not_applicable');
+ assert.throws(()=>classifyPatrolDiff({...args,resolveSkill:()=>{throw Error('not in catalog')}}),/PATROL_SCOPE_SKILL_READ_FAILED/);
+ assert.equal(classifyPatrolDiff({...args,resolveSkill:()=>Buffer.from('changed')}).classification,'applicable');
+});
+for(const mode of ['same','changed-run','removed-test','disabled-restore','extra-permission','extra-path','tampered-action','tampered-loader','tampered-ensure'])test('专属CI仅固定依赖加载等价变换：'+mode,async t=>{
+ const f=fixture(t),{classifyPatrolDiff}=await api(),path='.github/workflows/phone-account-patrol.yml';
+ for(const p of ['.github/actions/skills-source/action.yml','scripts/skills-source.py','scripts/ensure-skills-source.sh'])f.put(p,readFileSync(new URL('../../../'+p,import.meta.url)));
+ const before={on:{pull_request:{paths:['scripts/phone-account-patrol/**']},push:{branches:['main'],paths:['scripts/phone-account-patrol/**']}},permissions:{contents:'read'},jobs:{contract:{steps:[{uses:'actions/checkout@v4'},{run:'python3 -m unittest discover'},{run:'node --test real.test.mjs'}]}}};
+ f.put(path,YAML.stringify(before));f.base=f.commit();
+ const after=structuredClone(before);for(const event of ['pull_request','push'])after.on[event].paths.unshift('.skills-source.json');
+ after.jobs.contract.steps.splice(1,0,{name:'Restore pinned skill sources',if:"hashFiles('.skills-source.json') != ''",uses:'./.github/actions/skills-source',with:{'ssh-key':'${{ secrets.SKILLS_SOURCE_SSH_KEY }}'}});
+ if(mode==='changed-run')after.jobs.contract.steps[2].run='echo skipped';
+ if(mode==='removed-test')after.jobs.contract.steps.pop();
+ if(mode==='disabled-restore')after.jobs.contract.steps[1].if='false';
+ if(mode==='extra-permission')after.permissions.contents='write';
+ if(mode==='extra-path')after.on.pull_request.paths.push('unrelated/**');
+ const tamper={'tampered-action':'.github/actions/skills-source/action.yml','tampered-loader':'scripts/skills-source.py','tampered-ensure':'scripts/ensure-skills-source.sh'};
+ if(tamper[mode])f.put(tamper[mode],'tampered dependency loader');
+ f.put(path,YAML.stringify(after));rmSync(join(f.root,patrolSkill));f.put('.skills-source.json','pinned');
+ const r=classifyPatrolDiff({repoRoot:f.root,base:f.base,head:f.commit(),registeredRevision:f.registeredRevision,resolveSkill:()=>Buffer.from('fixture\n')});
+ assert.equal(r.classification,mode==='same'?'not_applicable':'applicable');
+ if(mode==='same'){assert.equal(r.reason,'verified_unchanged_skill_relocation');assert.ok(r.proof.owned_paths.some(p=>p.equivalence==='pinned_skill_dependency_loading'));assert.equal(r.verdict,undefined);}
 });

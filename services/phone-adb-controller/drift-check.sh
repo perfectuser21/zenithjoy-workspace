@@ -114,12 +114,32 @@ main() {
   # launchd 下是 /bin/bash 3.2,没有关联数组——期望/实际 md5 全部落临时文件,用 awk 连接比对
   local work; work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
-  local f
-  awk '{print $3}' <<< "$targets" | sort -u | while read -r f; do
-    local source="$SUBDIR/$f"
+  local f source baseline
+  awk '{print $3}' <<< "$targets" | sort -u > "$work/sources"
+  : > "$work/want"
+  while IFS= read -r f; do
+    source="$SUBDIR/$f"
     [[ "$f" == apps/api/db/migrations/*.sql ]] && source="$f"
-    echo "$f $(git -C "$REPO" show "$REF:$source" 2>/dev/null | md5_stdin)"
-  done > "$work/want"
+    # Read immutable baseline bytes before making any remote calls. Migrated
+    # skills are resolved using the bootstrap and lock from this same Git ref.
+    if [[ "$(git -C "$REPO" cat-file -t "$REF:$source" 2>/dev/null)" == blob ]]; then
+      git -C "$REPO" show "$REF:$source" > "$work/baseline" 2>/dev/null || {
+        log "读不到基准 $REF:$source"; exit 2;
+      }
+    else
+      if [[ ! -f "$work/skills-source.py" ]]; then
+        git -C "$REPO" show "$REF:scripts/skills-source.py" > "$work/skills-source.py" 2>/dev/null || {
+          log "读不到基准或技能加载器 $REF:$source"; exit 2;
+        }
+      fi
+      python3 "$work/skills-source.py" cat --workspace "$REPO" --ref "$REF" --path "$source" > "$work/baseline" || {
+        log "技能基准读取或校验失败 $REF:$source"; exit 2;
+      }
+    fi
+    baseline="$(md5_stdin < "$work/baseline")" || { log "基准摘要失败 $REF:$source"; exit 2; }
+    [[ "$baseline" =~ ^[[:xdigit:]]{32}$ ]] || { log "基准摘要无效 $REF:$source"; exit 2; }
+    printf '%s %s\n' "$f" "$baseline" >> "$work/want"
+  done < "$work/sources"
 
   local total=0 hosts h paths out line
   : > "$work/problems"

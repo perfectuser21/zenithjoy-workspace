@@ -24,6 +24,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs \
  services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs \
  services/phone-adb-controller/__tests__/deployment-preflight.test.mjs \
+ services/phone-adb-controller/__tests__/deployment-fixed-source.test.mjs \
  services/phone-adb-controller/__tests__/deployment-prepare.test.mjs \
  services/phone-adb-controller/__tests__/deployment-release-evidence.test.mjs \
  services/phone-adb-controller/__tests__/deployment-unified.test.mjs \

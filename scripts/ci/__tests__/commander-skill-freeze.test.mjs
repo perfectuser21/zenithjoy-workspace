@@ -15,9 +15,14 @@ const {validateImplementationBindings}=await import(pathToFileURL(resolve(brainR
 const revision=git(sourceRoot,['rev-parse','HEAD']);
 const repo='perfectuser21/zenithjoy-workspace';
 const prefix='services/phone-adb-controller/commander/';
-// 两仓都读实际固定Git提交；没有数据库、替身校验器或内存补元数据。
+// 业务实现读固定Git提交；技能正文按该提交的lock读取中心Git blob并校验摘要。
+// 没有数据库、替身校验器或内存补元数据。
 function readFile(source){
  assert.equal(source.repo,repo);assert.equal(source.revision,revision);
+ if(source.path.startsWith(`${prefix}skills/`)){
+  return execFileSync('python3',[resolve(sourceRoot,'scripts/skills-source.py'),'cat',
+   '--workspace',sourceRoot,'--ref',revision,'--path',source.path],{encoding:'utf8'});
+ }
  return execFileSync('git',['-C',sourceRoot,'show',`${revision}:${source.path}`],{encoding:'utf8'});
 }
 function definition(name){

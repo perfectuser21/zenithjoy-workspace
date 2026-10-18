@@ -61,3 +61,11 @@ test('Commander冻结回归固定真实Brain源码且CI不可缺席',()=>{
  assert.equal(run.if,undefined);assert.equal(run['continue-on-error'],undefined);
  assert.ok(steps.some(s=>s['working-directory']==='.ci-brain-tooling'&&s.run==='npm ci --ignore-scripts --workspace packages/brain'));
 });
+test('固定Commander skill来源先还原，孤儿测试回归永久执行',()=>{
+  const steps=workflow().jobs['caller-contract'].steps;
+  const restore=steps.findIndex(step=>step.uses==='./.github/actions/skills-source');
+  const freeze=steps.findIndex(step=>step.run==='node --test scripts/ci/__tests__/commander-skill-freeze.test.mjs');
+  assert.ok(restore>=0&&restore<freeze,'真实冻结校验前必须还原中心固定来源');
+  assert.equal(steps[restore].with['ssh-key'],'${{ secrets.SKILLS_SOURCE_SSH_KEY }}');
+  assert.ok(steps.some(step=>step.run==='node --test scripts/ci/__tests__/orphan-test-workflow.test.mjs'));
+});

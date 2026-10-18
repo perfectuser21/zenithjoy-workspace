@@ -25,6 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Check tsconfig.base.json exists
         run: |
           if [ ! -f "tsconfig.base.json" ]; then
@@ -66,6 +71,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Check Node.js version consistency
         run: |
           echo "Checking engines.node consistency across workspace..."
@@ -101,6 +111,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Check for sensitive files
         run: |
           echo "Checking for sensitive files..."
@@ -122,7 +137,9 @@ jobs:
               -not -path "./.git/*" \
               -not -path "./.github/*" \
               -not -path "./.claude/*" \
-              -not -path "*/node_modules/*" \
+              -not -path "*/.skills-source/*" \
+            -not -path "*/.skills-runtime/*" \
+            -not -path "*/node_modules/*" \
               -not -path "*/.env.example" 2>/dev/null || true)
             if [ -n "$MATCHES" ]; then
               echo "WARN: Found files matching '$pattern':"
@@ -145,6 +162,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - name: Verify orphan scanner excludes generated source cache
+        run: node --test scripts/ci/__tests__/orphan-cache-filter.test.mjs
+
       - name: Check all test files are registered in test-registry.yaml
         run: |
           echo "Scanning for unregistered test files..."
@@ -154,14 +179,18 @@ jobs:
             exit 0
           fi
 
+          # Dependency source caches are not workspace-owned tests.
           # Find all test/spec files, exclude node_modules and generated dirs
           FOUND_FILES=$(find . \
+            -path "./.skills-source" -prune -o \
             \( -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.tsx" -o -name "*.spec.js" \) \
+            -not -path "*/.skills-source/*" \
+            -not -path "*/.skills-runtime/*" \
             -not -path "*/node_modules/*" \
             -not -path "*/.git/*" \
             -not -path "*/dist/*" \
             -not -path "*/build/*" \
-            -not -path "*/coverage/*" \
+            -not -path "*/coverage/*" -print \
             2>/dev/null | sed 's|^\./||' | sort)
 
           if [ -z "$FOUND_FILES" ]; then
@@ -177,7 +206,7 @@ jobs:
           # Find orphans: test files not in registry
           ORPHANS=""
           while IFS= read -r file; do
-            if ! echo "$REGISTERED" | grep -qF "$file"; then
+            if ! grep -Fx -- "$file" <<< "$REGISTERED" > /dev/null; then
               ORPHANS="$ORPHANS\n  - $file"
             fi
           done <<< "$FOUND_FILES"
@@ -204,6 +233,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -220,6 +254,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -260,6 +299,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
