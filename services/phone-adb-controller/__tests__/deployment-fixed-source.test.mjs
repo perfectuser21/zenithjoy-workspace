@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -35,6 +35,8 @@ test('fixed source refuses mutable installed skill, bootstrap, symlink and unmap
  writeFileSync(join(f.root,file),'mutable skill');
  assert.throws(()=>readDeploymentSource(f.root,f.revision,file),/漂移/);
  assert.throws(()=>deploymentManifest(f.root,['commander/skills/workflow-commander/SKILL.md'],{commit:f.revision}),/漂移/);
+ rmSync(join(f.root,file));symlinkSync(join(f.root,'missing-target'),join(f.root,file));
+ assert.throws(()=>readDeploymentSource(f.root,f.revision,file,{materialize:true}),/符号链接/);
  assert.throws(()=>readDeploymentSource(f.root,f.revision,'not-in-catalog.md',{materialize:true}));
  assert.throws(()=>readDeploymentSource(f.root,f.revision,'../outside',{materialize:true}),/路径/);
 });

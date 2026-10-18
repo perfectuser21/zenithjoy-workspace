@@ -3,9 +3,10 @@
 import {readFileSync,realpathSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {execFileSync,spawn} from 'node:child_process';
 import {homedir,tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readDeploymentToken,brainRequest,DEPLOY_REPO} from './deployment-preflight.mjs';
+import {readDeploymentSource} from './deployment-fixed-source.mjs';
 import {prepareTargetReleases} from './deployment-targets.mjs';
 export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath}){
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
@@ -16,8 +17,7 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  if(bundle.run?.repo!==DEPLOY_REPO||bundle.run.sha!==sha||bundle.run.branch!=='main'||!['push','workflow_dispatch'].includes(bundle.run.event)||bundle.run.path!=='.github/workflows/pilot-release-verification.yml'||!Number.isSafeInteger(bundle.run.id)||!attemptKey.startsWith(`github:${bundle.run.id}:`))throw Error('部署证据与受信run不符');
  const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
  const plan=await prepareTargetReleases({bundle,sha,environment:'production',attemptKey,request,readFile:path=>{
-  const fixed=execFileSync('git',['-C',root,'show',`${sha}:${path}`],{stdio:['ignore','pipe','pipe']});
-  const actual=readFileSync(resolve(root,path));if(!fixed.equals(actual))throw Error('部署工作区字节漂移');return actual;
+  return readDeploymentSource(root,sha,path,{materialize:true});
  }});
  if(git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署预检期间工作区变化');
  const folder=mkdtempSync(join(tmpdir(),'phone-deployment-plan-'));

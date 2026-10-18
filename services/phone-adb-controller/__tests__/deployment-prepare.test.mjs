@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -10,9 +10,19 @@ import {digest} from '../runtime-definition.mjs';
 import {normalizedDescriptions} from './fixtures/normalized-description-bindings.mjs';
 const repo='perfectuser21/zenithjoy-workspace';
 const uuid=n=>`${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
-async function fixture(t){
+async function fixture(t,{migrated=false}={}){
  const temp=mkdtempSync(join(tmpdir(),'phone-prepare-http-')),root=join(temp,'repo'),dir=join(root,'services/phone-adb-controller');mkdirSync(dir,{recursive:true});
- const marker=join(temp,'deployed.json'),path='services/phone-adb-controller/entry.sh';writeFileSync(join(root,path),'fixed implementation\n');
+ const marker=join(temp,'deployed.json'),path=migrated?'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md':'services/phone-adb-controller/entry.sh';mkdirSync(join(root,path,'..'),{recursive:true});writeFileSync(join(root,path),'fixed implementation\n');
+ if(migrated){
+  const source=join(root,'.skills-source');mkdirSync(join(source,'distribution'),{recursive:true});mkdirSync(join(root,'scripts'));
+  writeFileSync(join(root,'scripts/skills-source.py'),readFileSync(new URL('../../../scripts/skills-source.py',import.meta.url)));
+  writeFileSync(join(source,'manual.md'),'fixed implementation\n');
+  writeFileSync(join(source,'distribution/catalog.json'),JSON.stringify({profiles:{zenithjoy:{files:[{path,source:'manual.md',sha256:digest(Buffer.from('fixed implementation\n'))}]}}}));
+  const sg=(...args)=>execFileSync('git',['-C',source,...args],{encoding:'utf8'}).trim();
+  sg('init','-q','-b','cp-fixture');sg('config','core.hooksPath','/dev/null');sg('add','.');sg('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','source');
+  writeFileSync(join(root,'.skills-source.json'),JSON.stringify({repository:'perfectuser21/zenithjoy-skills',revision:sg('rev-parse','HEAD'),profile:'zenithjoy',loader_sha256:'0'.repeat(64)}));
+  writeFileSync(join(root,'.gitignore'),'.skills-source/\n'+path+'\n');
+ }
  // 假部署入口仅记录显式参数；不调用任何机器或设备。
  writeFileSync(join(dir,'deploy.sh'),`#!/bin/bash\nnode -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({ids:JSON.parse(process.env.WF_RELEASE_IDS),plan:JSON.parse(fs.readFileSync(process.env.WF_DEPLOY_PLAN_FILE)),map:JSON.parse(fs.readFileSync(process.env.WF_COMMANDER_RELEASES_FILE)),collector:process.env.WF_DEPLOY_COLLECTOR,environment:process.env.WF_DEPLOY_ENVIRONMENT,attempt:process.env.WF_DEPLOY_ATTEMPT_KEY,token_present:process.env.BRAIN_INTERNAL_TOKEN==="fixture-private-token"}))' '${marker}'\n`);
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();git('init','-q','-b','cp-fixture');git('config','core.hooksPath','/dev/null');git('add','.');git('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture');
@@ -46,6 +56,7 @@ async function fixture(t){
   }else release=releases.get(req.url.split('/').at(-1));
   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({release}));
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
+ if(migrated)rmSync(join(root,path));
  return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,setMode:value=>mode=value};
 }
 test('真实normalized描述保留unknown，Git+HTTP两release回读后才部署固定组件',async t=>{
@@ -59,4 +70,9 @@ for(const mode of ['unknown','wrong_target'])test(`真实Brain ${mode}回执阻�
 });
 test('工作区字节漂移在创建release前拒绝',async t=>{
  const f=await fixture(t);writeFileSync(join(f.root,'services/phone-adb-controller/entry.sh'),'changed');await assert.rejects(prepareAndDeploy(f));assert.equal(f.requests.length,0);assert.equal(existsSync(f.marker),false);
+});
+
+test('真实prepareAndDeploy在全新迁移checkout从固定catalog恢复Skill后才构造正式release',async t=>{
+ const f=await fixture(t,{migrated:true});await prepareAndDeploy(f);assert.ok(existsSync(f.marker));
+ assert.equal(readFileSync(join(f.root,'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md'),'utf8'),'fixed implementation\n');
 });

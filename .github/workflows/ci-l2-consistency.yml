@@ -137,7 +137,9 @@ jobs:
               -not -path "./.git/*" \
               -not -path "./.github/*" \
               -not -path "./.claude/*" \
-              -not -path "*/node_modules/*" \
+              -not -path "*/.skills-source/*" \
+            -not -path "*/.skills-runtime/*" \
+            -not -path "*/node_modules/*" \
               -not -path "*/.env.example" 2>/dev/null || true)
             if [ -n "$MATCHES" ]; then
               echo "WARN: Found files matching '$pattern':"
@@ -165,6 +167,9 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - name: Verify orphan scanner excludes generated source cache
+        run: node --test scripts/ci/__tests__/orphan-cache-filter.test.mjs
+
       - name: Check all test files are registered in test-registry.yaml
         run: |
           echo "Scanning for unregistered test files..."
@@ -177,6 +182,8 @@ jobs:
           # Find all test/spec files, exclude node_modules and generated dirs
           FOUND_FILES=$(find . \
             \( -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.tsx" -o -name "*.spec.js" \) \
+            -not -path "*/.skills-source/*" \
+            -not -path "*/.skills-runtime/*" \
             -not -path "*/node_modules/*" \
             -not -path "*/.git/*" \
             -not -path "*/dist/*" \

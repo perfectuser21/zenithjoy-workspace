@@ -43,8 +43,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 D="."
 # Materialize the pinned skill bundle before copying any runtime documents.
-python3 ../../scripts/skills-source.py install
-python3 ../../scripts/skills-source.py verify
+python3 ../../scripts/skills-source.py install >&2
+python3 ../../scripts/skills-source.py verify >&2
 FAILED=0
 
 # push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]
@@ -226,7 +226,7 @@ MMV_JS_FILES=(
   queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs activity-skill-recovery.mjs activity-skill-broker.mjs activity-skill-tool.mjs leadgen-skill-agent.mjs leadgen-client.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py
   leadgen-outreach-orders.js
   pg-notion-mirror-lib.js leadgen-notion-mirror.js
-  deployment-manifest.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs
+  deployment-manifest.mjs deployment-fixed-source.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 # 0930(任务 975aa6ec): mmv 本机 launchd 拉起的两支脚本。escort-claude-escalation.sh 此前列在 DEVICE_SH_FILES 发去执行机
@@ -287,7 +287,7 @@ DEVICE_SH_FILES=(
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 # 同一 RPC 源文件在设备冻结、MMV执行；不能依赖未登记的远端副本。
 RPC_FILES=(capture-strategy.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs commander/AGENTS.md commander/skills/workflow-commander/SKILL.md skills/leadgen-activity-execution.md skills/douyin-leadgen-activity-101-collect-videos/SKILL.md skills/douyin-leadgen-activity-102-preflight/SKILL.md skills/douyin-leadgen-activity-102-dedup/SKILL.md skills/douyin-leadgen-activity-102-qualification/SKILL.md skills/douyin-leadgen-activity-102-collection/SKILL.md skills/douyin-leadgen-activity-102-cleanup/SKILL.md skills/douyin-leadgen-activity-103-scoring/SKILL.md skills/douyin-leadgen-activity-103-mark-leads/SKILL.md skills/douyin-leadgen-activity-104-preflight/SKILL.md skills/douyin-leadgen-activity-104-send-dm/SKILL.md skills/douyin-leadgen-activity-104-write-back/SKILL.md skills/douyin-leadgen-activity-104-cleanup/SKILL.md activity-skill-recovery.mjs activity-skill-broker.mjs activity-skill-tool.mjs leadgen-skill-agent.mjs leadgen-client.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-rpc.mjs leadgen-queue.js leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js verify-step.mjs step-judge.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
-DEVICE_NODE_FILES=(capture-strategy.mjs activity-skill-recovery.mjs activity-skill-broker.mjs activity-skill-tool.mjs leadgen-skill-agent.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-client.mjs leadgen-workflow.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
+DEVICE_NODE_FILES=(capture-strategy.mjs activity-skill-recovery.mjs activity-skill-broker.mjs activity-skill-tool.mjs leadgen-skill-agent.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py outreach-order-lock.py queued-recipient-evidence.js judge-recipient.js leadgen-outreach-bridge.js lead-fields-lib.js nickname-match-lib.js queued-comment-history.js leadgen-client.mjs leadgen-workflow.mjs leadgen-outreach.mjs leadgen-outreach-orders.js next-outreach-lib.js dm-rate-ramp-lib.js config/leadgen-outreach-rate-ramp.json leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js company-config-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs deployment-fixed-source.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
 # 探针与配套Skill同属需保留嵌套路径的发布文件；设备/MMV均采集实际字节。
 DEVICE_RPC_PROBE_FILES=(
   commander/AGENTS.md

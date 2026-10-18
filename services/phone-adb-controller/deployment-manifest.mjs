@@ -4,6 +4,7 @@ import { readFileSync,realpathSync } from 'node:fs';
 import { resolve,sep,basename } from 'node:path';
 import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import {readDeploymentSource} from './deployment-fixed-source.mjs';
 import { digest } from './runtime-definition.mjs';
 export function deploymentManifest(root,files,{commit,repo='perfectuser21/zenithjoy-workspace',repositoryFiles=[]}={}){
   const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:null});
@@ -18,8 +19,7 @@ export function deploymentManifest(root,files,{commit,repo='perfectuser21/zenith
   const entries=sources.map(({path,deployed_path:name})=>{
     if(name.startsWith('/')||name.split('/').includes('..'))throw Error('非法部署文件路径');
     if(seen.has(name))throw Error('重复部署落点');seen.add(name);
-    const actual=readFileSync(resolve(root,path)); const fixed=git('show',`${commit}:${path}`);
-    if(digest(actual)!==digest(fixed))throw Error(`部署文件不属于固定commit: ${path}`);
+    const actual=readDeploymentSource(root,commit,path);
     return {path,deployed_path:name,content_sha256:digest(actual)};
   });
   return {schema_version:1,source_repo:repo,source_commit:commit,files:entries};
