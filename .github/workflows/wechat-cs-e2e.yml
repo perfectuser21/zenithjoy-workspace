@@ -31,7 +31,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Verify agent scope classification
+        run: node --test scripts/ci/__tests__/wechat-agent-scope.test.mjs
       - id: filter
+        env:
+          SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -56,10 +60,17 @@ jobs:
 
           echo "$FILES"
           AGENT=false; AGENT_OR_API=false
-          if echo "$FILES" | grep -qE '^services/agent/'; then AGENT=true; fi
+          AGENT=$(node scripts/ci/wechat-agent-scope.mjs "$GITHUB_WORKSPACE" "$BASE" "$HEAD" "$RUNNER_TEMP/wechat-agent-scope.json")
           if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml$|\.github/workflows/scripts/smoke/wechat-cs-hardening-smoke\.sh$)'; then AGENT_OR_API=true; fi
           echo "agent=$AGENT" >> "$GITHUB_OUTPUT"
           echo "agent_or_api=$AGENT_OR_API" >> "$GITHUB_OUTPUT"
+      - name: Preserve fixed-source scope proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wechat-agent-scope-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/wechat-agent-scope.json
+          if-no-files-found: ignore
 
   middleware-chain:
     name: job1 — 中台链路模拟用户（curl + mode 透传）
