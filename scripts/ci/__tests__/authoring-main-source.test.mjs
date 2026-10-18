@@ -130,3 +130,31 @@ test('真实本地HTTP六阶段完整执行，写后断线GET恢复且同任务�
   assert.equal(registrations,1);assert.equal(state.receipts.length,6);
  }finally{await new Promise(r=>server.close(r));}
 });
+
+test('正式main CLI真实Git origin预检接受checkout规范三形态，拒绝外源且不会调用生产API',async()=>{
+ const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');
+ const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const {runMainSource}=await import('../authoring-main-source.mjs');
+ const directory=mkdtempSync(join(tmpdir(),'authoring-origin-preflight-'));
+ const git=(root,...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-c','commit.gpgsign=false','-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ const make=(name,repo,files)=>{const root=join(directory,name);mkdirSync(root);git(root,'init','-q','-b','main');git(root,'config','user.email','fixture@example.invalid');git(root,'config','user.name','Fixture');git(root,'remote','add','origin',`https://github.com/${repo}`);for(const [p,body]of Object.entries(files)){const file=join(root,p);mkdirSync(join(file,'..'),{recursive:true});writeFileSync(file,body);}git(root,'add','.');git(root,'commit','-qm','fixture');const sha=git(root,'rev-parse','HEAD');git(root,'update-ref','refs/remotes/origin/main',sha);return{root,sha};};
+ const businessRepo='perfectuser21/zenithjoy-workspace',brainRepo='perfectuser21/cecelia';
+ const business=make('business',businessRepo,{'fixture.txt':'business'});
+ // Import sentinel is reached only after both actual remote/SHA checks and tooling ancestry.
+ // It prevents API initialization or any source task creation in this real CLI entry test.
+ const brain=make('brain',brainRepo,{'package.json':'{"type":"module"}','packages/brain/src/workflow-authoring/registration.js':"throw new Error('AUTHORING_FIXTURE_ORIGIN_PREFLIGHT_REACHED'); export const registrationDigest=()=>'';"});
+ const environment={GITHUB_SHA:business.sha,AUTHORING_BRAIN_REVISION:brain.sha,GITHUB_REF:'refs/heads/main',GITHUB_REPOSITORY:businessRepo,AUTHORING_ALLOW_WRITE:'1'};
+ const prior=Object.fromEntries(Object.keys(environment).map(k=>[k,process.env[k]]));Object.assign(process.env,environment);
+ const valid=repo=>[`https://github.com/${repo}`,`https://github.com/${repo}.git`,`git@github.com:${repo}.git`];
+ const invalid=repo=>[`https://gitlab.com/${repo}.git`,`https://github.com.evil.invalid/${repo}.git`,`https://github.com/evil/${repo.split('/')[1]}.git`,`https://github.com/${repo}.git.evil`,`https://github.com/prefix${repo}`,`https://user:secret@github.com/${repo}.git`,`https://github.com/${repo}.git?ref=main`,`https://github.com/${repo}.git#main`,`git@evil.invalid:${repo}.git`,`git@github.com:${repo}.git?ref=main`,`https://github.com/${repo}/`];
+ const run=()=>runMainSource({repoRoot:business.root,brainRoot:brain.root,output:join(directory,'must-not-write')});
+ try{
+  for(const origin of valid(businessRepo)){git(business.root,'remote','set-url','origin',origin);await assert.rejects(run(),/AUTHORING_FIXTURE_ORIGIN_PREFLIGHT_REACHED/);}
+  git(business.root,'remote','set-url','origin',valid(businessRepo)[0]);
+  for(const origin of valid(brainRepo)){git(brain.root,'remote','set-url','origin',origin);await assert.rejects(run(),/AUTHORING_FIXTURE_ORIGIN_PREFLIGHT_REACHED/);}
+  git(brain.root,'remote','set-url','origin',valid(brainRepo)[0]);
+  for(const origin of invalid(businessRepo)){git(business.root,'remote','set-url','origin',origin);await assert.rejects(run(),/AUTHORING_SOURCE_REPOSITORY_INVALID/);}
+  git(business.root,'remote','set-url','origin',valid(businessRepo)[0]);
+  for(const origin of invalid(brainRepo)){git(brain.root,'remote','set-url','origin',origin);await assert.rejects(run(),/AUTHORING_TOOLING_REPOSITORY_INVALID/);}
+ }finally{for(const[k,v]of Object.entries(prior)){if(v===undefined)delete process.env[k];else process.env[k]=v;}rmSync(directory,{recursive:true,force:true});}
+});

@@ -23,3 +23,17 @@ test('真实PR缺版头红、fix只改五个version、重跑幂等、main拒绝�
   git('remote','set-url','origin','https://github.com/fork/repo.git');assert.throws(()=>checkAuthoringVersions(root,{base,fix:true}),/REPOSITORY_INVALID/);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
+
+test('真实checkout无.git HTTPS origin经过原版头/祖先检查且fix保持幂等',()=>{
+ const root=mkdtempSync(join(tmpdir(),'source-version-checkout-'));
+ const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-c','commit.gpgsign=false','-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ try{
+  git('init','-q','-b','cp-fixture');git('config','user.email','fixture@example.invalid');git('config','user.name','Fixture');git('remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace');
+  for(const p of AUTHORING_FILES){mkdirSync(dirname(join(root,p)),{recursive:true});writeFileSync(join(root,p),JSON.stringify({key:p,version:'1.0.0',runtime:{revision:'unchanged'}}));}
+  git('add','.');git('commit','-qm','fixture');const base=git('rev-parse','HEAD');git('update-ref','refs/remotes/origin/main',base);
+  assert.throws(()=>checkAuthoringVersions(root,{base}),/VERSION_BUMP_REQUIRED/);
+  checkAuthoringVersions(root,{base,fix:true});const bytes=AUTHORING_FILES.map(p=>readFileSync(join(root,p),'utf8'));
+  checkAuthoringVersions(root,{base,fix:true});assert.deepEqual(AUTHORING_FILES.map(p=>readFileSync(join(root,p),'utf8')),bytes);
+  checkAuthoringVersions(root,{base});
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
