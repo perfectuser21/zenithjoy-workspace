@@ -6,6 +6,8 @@ import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import YAML from 'yaml';
+import {isDeepStrictEqual} from 'node:util';
+import {readImplementationSource} from './implementation-skill-source.mjs';
 
 export const CONTRACT_PATH='scripts/phone-account-patrol/implementation-contract.json';
 const REGISTERED_REVISION='f0923e5396bade1986ba5452e766cabb5f4a30b3';
@@ -39,10 +41,30 @@ export function validatePatrolCaller(w){
   if(!s||s.if!==undefined||s['continue-on-error']!==undefined)fail('CALLER_DISABLED');
  }
  const s=scope.steps?.find(s=>s.id==='scope');
+ const restore=scope.steps?.findIndex(s=>s.uses==='./.github/actions/skills-source');
+ if(!(restore>=0)||restore>=scope.steps.findIndex(s=>s.id==='scope')||scope.steps[restore]['continue-on-error']!==undefined||scope.steps[restore].if!=="hashFiles('.skills-source.json') != ''"||scope.steps[restore].with?.['ssh-key']!=='${{ secrets.SKILLS_SOURCE_SSH_KEY }}')fail('CALLER_DISABLED');
+ if(s?.env?.SKILLS_SOURCE_SSH_KEY!=='${{ secrets.SKILLS_SOURCE_SSH_KEY }}')fail('CALLER_DISABLED');
  if(scope.needs!=='caller-contract'||!s||s.if!==undefined||s['continue-on-error']!==undefined||s.run!=='node scripts/ci/implementation-patrol-scope.mjs "$GITHUB_WORKSPACE" "$BASE" "$HEAD" "$RUNNER_TEMP/implementation-scope"')fail('CALLER_DISABLED');
  return true;
 }
-export function classifyPatrolDiff({repoRoot,base,head,registeredRevision=REGISTERED_REVISION}){
+function dependencyOnlyPatrolWorkflow(before,after){
+ try{
+  const b=YAML.parse(before.toString()),a=YAML.parse(after.toString());
+  const expected={name:'Restore pinned skill sources',if:"hashFiles('.skills-source.json') != ''",uses:'./.github/actions/skills-source',with:{'ssh-key':'${{ secrets.SKILLS_SOURCE_SSH_KEY }}'}};
+  const steps=a.jobs?.contract?.steps;
+  if(!Array.isArray(steps))return false;
+  const matches=steps.map((s,i)=>isDeepStrictEqual(s,expected)?i:-1).filter(i=>i>=0);
+  if(matches.length!==1||matches[0]!==steps.findIndex(s=>s.uses==='actions/checkout@v4')+1||matches[0]===0)return false;
+  steps.splice(matches[0],1);
+  for(const event of ['pull_request','push']){
+   const paths=a.on?.[event]?.paths,old=b.on?.[event]?.paths;
+   if(!Array.isArray(paths)||!Array.isArray(old)||old.includes('.skills-source.json')||paths.filter(p=>p==='.skills-source.json').length!==1)return false;
+   a.on[event].paths=paths.filter(p=>p!=='.skills-source.json');
+  }
+  return isDeepStrictEqual(a,b);
+ }catch{return false}
+}
+export function classifyPatrolDiff({repoRoot,base,head,registeredRevision=REGISTERED_REVISION,resolveSkill}){
  if(![base,head,registeredRevision].every(revision))fail('REVISION_INVALID');
  const git=(...args)=>{try{return execFileSync('git',args,{cwd:repoRoot,maxBuffer:16*1024*1024,stdio:['ignore','pipe','pipe']})}catch{fail('GIT_READ_FAILED')}};
  const remote=git('remote','get-url','origin').toString().trim();
@@ -56,7 +78,38 @@ export function classifyPatrolDiff({repoRoot,base,head,registeredRevision=REGIST
  const changed=git('diff','--no-renames','--name-only','-z',base,head,'--').toString().split('\0').filter(Boolean);
  // 未登记的巡查目录新增也交原门禁拒绝；不得因未在bindings里就悄悄N/A。
  const touched=changed.filter(p=>owned.has(p)||p.startsWith(PREFIX));
- return {schema_version:1,scope:SCOPE,source_repo:REPO,base_revision:base,head_revision:head,classification:touched.length?'applicable':'not_applicable',
+ const lockChanged=changed.includes('.skills-source.json');
+ let relocation;
+ if(lockChanged||touched.some(p=>p.endsWith('.md'))){
+  const inventories=new Map([base,head].map(ref=>[ref,new Set(git('ls-tree','-r','--name-only','-z',ref).toString().split('\0').filter(Boolean))]));
+  const read=(ref,path)=>{
+   if(inventories.get(ref).has(path))return git('show',`${ref}:${path}`);
+   // cat accepts only this fixed lock's catalog mappings; an unmapped document fails closed.
+   if(path.endsWith('.md')){
+    try{
+     const bytes=resolveSkill?resolveSkill({repoRoot,ref,path}):readImplementationSource(repoRoot,ref,path);
+     if(!Buffer.isBuffer(bytes))fail('SKILL_READ_FAILED');return bytes;
+    }catch{fail('SKILL_READ_FAILED')}
+   }
+   return null;
+  };
+  // Every scope-owned blob is checked, including dedicated CI and both contracts' bindings.
+  const rows=[...owned].sort().map(path=>{
+   const b=read(base,path),h=read(head,path);
+   const reviewed={'.github/actions/skills-source/action.yml':'90e9d125ed3346871e88d975773796d2c14ee46adf0efe23bd2b92bb2e7ae435','scripts/skills-source.py':'500517f4b1493696062d36aa0c1c45d9b1d63f0093f96ae290aa0f5d8f022ab6','scripts/ensure-skills-source.sh':'d605139c61e0567e8ec0fbe94356ca63f81ece4d613dc6307814a54f20c233d0'};
+   const reviewedLoading=()=>Object.entries(reviewed).every(([p,digest])=>inventories.get(head).has(p)&&sha(git('show',`${head}:${p}`))===digest);
+   const dependency_only=path==='.github/workflows/phone-account-patrol.yml'&&b!==null&&h!==null&&dependencyOnlyPatrolWorkflow(b,h)&&reviewedLoading();
+   return {path,base_sha256:b===null?null:sha(b),head_sha256:h===null?null:sha(h),...(dependency_only?{equivalence:'pinned_skill_dependency_loading'}:{})};
+  });
+  const equal=r=>r.base_sha256===r.head_sha256||r.equivalence==='pinned_skill_dependency_loading';
+  const onlyRelocated=touched.every(path=>owned.has(path)&&((path.endsWith('.md')&&inventories.get(base).has(path)&&!inventories.get(head).has(path))||rows.find(r=>r.path===path)?.equivalence==='pinned_skill_dependency_loading'));
+  if(onlyRelocated&&rows.every(equal))relocation={owned_paths:rows,owned_paths_sha256:sha(JSON.stringify(rows))};
+  // A lock-only update that changes resolved business bytes must enter the original gate.
+  if(lockChanged&&!rows.every(equal))for(const r of rows)if(!equal(r)&&!touched.includes(r.path))touched.push(r.path);
+ }
+
+ return {schema_version:1,scope:SCOPE,source_repo:REPO,base_revision:base,head_revision:head,classification:relocation?'not_applicable':touched.length?'applicable':'not_applicable',
+  ...(relocation?{reason:'verified_unchanged_skill_relocation',proof:relocation}:{}),
   meaning:'仅分类该固定差异是否触及巡查；不证明仓库或共享CI全部通过',changed_files:changed,patrol_paths:touched,
   contract_source:{path:CONTRACT_PATH,registered_revision:registeredRevision,registered_sha256:sha(registered.bytes),base_sha256:sha(before.bytes),head_sha256:sha(after.bytes)}};
 }
