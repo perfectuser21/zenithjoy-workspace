@@ -139,6 +139,11 @@ class PinnedReleaseSmoke(unittest.TestCase):
         return self.git(root, "rev-parse", "HEAD")
 
     def setUp(self):
+        # 每个夹具自造两个固定源SHA；外部执行缓存不属于该夹具。
+        source_environment = patch.dict(os.environ)
+        source_environment.start()
+        self.addCleanup(source_environment.stop)
+        os.environ.pop("SKILLS_SOURCE_DIR", None)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
