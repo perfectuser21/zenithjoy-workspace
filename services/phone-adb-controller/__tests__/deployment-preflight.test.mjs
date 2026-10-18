@@ -206,7 +206,7 @@ const realCentralBinding={"raw":{"kind":"skill","path":"services/phone-adb-contr
 const realCentralSourceRow={"activity_id":"d842e3e7-72bc-4130-91e1-7f36a73506ee","activity_definition_version_id":"b2baac2c-d775-4ae3-83db-63e929a89c8e","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","revision":"2d8c15dc1a0e9405f2f673ef6d8bea46ea60eea2","digest":"sha256:91e4434b42635e55c8f9d1cf963454a63b4abb9b62fbd7d513a560f5218aa967","scope":"activity","field":"implementation_bindings","index":0,"resolved_source":{"path":"business-skills/zenithjoy/services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","repo":"perfectuser21/zenithjoy-skills","revision":"6ab363b826fa9be40799fd998d64ef42ff783d3a"}};
 const derivedPlanKeys=['scope','source','definition_versions','expected_usages','required_assertions','assertion_source','implementation_source_set'];
 function centralPlanFixture(){
- const binding=structuredClone(realCentralBinding),activity={id:realCentralSourceRow.activity_definition_version_id,activity_id:realCentralSourceRow.activity_id,payload:{activity_id:realCentralSourceRow.activity_id,steps:[],implementation_bindings:[binding]}};
+ const binding=structuredClone(realCentralBinding),activity={id:realCentralSourceRow.activity_definition_version_id,activity_id:realCentralSourceRow.activity_id,payload:{activity_id:realCentralSourceRow.activity_id,registration_protocol:'definition-freeze-v1',steps:[],implementation_bindings:[binding]}};
  const snapshot={repo,revision:binding.revision,definitions:{workflows:[],activities:[activity]}};
  const report={scope:'commander-generic',source:{repo,head_revision:binding.revision},definition_versions:{workflows:[],activities:[{id:activity.id,activity_id:activity.activity_id,source_repo:repo,source_commit:binding.revision}]},expected_usages:[{activity_id:activity.activity_id}],required_assertions:[{assertion_ref:'services/phone-adb-controller/commander/commander-v2.test.mjs'}],assertion_source:'current_registration',implementation_source_set:[structuredClone(realCentralSourceRow)]};
  report.assertion_plan_sha256=digest(Object.fromEntries(derivedPlanKeys.map(k=>[k,report[k]])));
@@ -240,9 +240,22 @@ test('snapshot/report共同伪造也必须拒非规范中央身份、Code派生�
   ['null',b=>b.resolved_source=null],['array',b=>b.resolved_source=[]],
   ['code',b=>b.kind='code'],['non-skill-path',b=>b.path='entry.js'],
   ['digest',b=>b.digest='sha256:'+'0'.repeat(64)],['content-hash',b=>b.content_sha256='bad'],
+  ['missing-content-hash',b=>delete b.content_sha256],['missing-name',b=>delete b.name],['missing-version',b=>delete b.version],
  ]){const f=centralPlanFixture();mutate(f.binding);const v=f.report.implementation_source_set[0];for(const k of ['kind','path','digest','resolved_source'])if(f.binding[k]!==undefined)v[k]=structuredClone(f.binding[k]);assert.throws(()=>deploymentAssertionPlan(f.report,f.snapshot),undefined,label);}
 });
 test('历史无派生来源的完整Skill计划继续兼容',async()=>{
  const {deploymentAssertionPlan}=await implementation(),f=centralPlanFixture();delete f.binding.resolved_source;delete f.report.implementation_source_set[0].resolved_source;
  const expected=digest(Object.fromEntries(derivedPlanKeys.map(k=>[k,f.report[k]])));assert.equal(digest(deploymentAssertionPlan(f.report,f.snapshot)),expected);
+});
+
+test('中央派生绑定不能删除整个source_set伪降格旧计划',async()=>{
+ const {deploymentAssertionPlan}=await implementation(),f=centralPlanFixture();delete f.report.implementation_source_set;
+ f.report.assertion_plan_sha256=digest(Object.fromEntries(derivedPlanKeys.filter(k=>k!=='implementation_source_set').map(k=>[k,f.report[k]])));
+ assert.throws(()=>deploymentAssertionPlan(f.report,f.snapshot));
+});
+
+test('真实旧zenithjoy格式可无source_set但保留snapshot中央绑定，不改原计划',async()=>{
+ const {deploymentAssertionPlan}=await implementation(),f=centralPlanFixture();delete f.snapshot.definitions.activities[0].payload.registration_protocol;delete f.report.implementation_source_set;
+ const expected=digest(Object.fromEntries(derivedPlanKeys.filter(k=>k!=='implementation_source_set').map(k=>[k,f.report[k]])));
+ assert.equal(digest(deploymentAssertionPlan(f.report,f.snapshot)),expected);assert.deepEqual(f.binding.resolved_source,realCentralBinding.resolved_source);
 });
