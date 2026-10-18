@@ -1,12 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 const path='.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh';
 function run(fail){
- const dir=mkdtempSync(join(tmpdir(),'commander-bootstrap-'));
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-bootstrap-')));
  try{
   mkdirSync(join(dir,'.github/workflows/scripts/smoke'),{recursive:true});mkdirSync(join(dir,'scripts'),{recursive:true});mkdirSync(join(dir,'bin'));
   writeFileSync(join(dir,path),readFileSync(new URL('../../../'+path,import.meta.url)));

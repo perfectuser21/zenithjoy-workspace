@@ -1,0 +1,5 @@
+# Commander回归也须准备固定中央Skill
+
+正式Pilot只准备Git对象缓存，不能满足直接读生成Skill路径的原回归。Commander入口在冷checkout触发四条存在/版本断言失败。与现有业务smoke相同，在原测试前调用既有ensure安装并验证固定中央版本；失败立即停止。不能以改断言、跳过测试或业务目录重新提交Skill正文代替准备。
+
+代码归属现有根任务2639d238-fc63-4b2b-b946-b1899511426b：正常dev登记先repo_unknown，改现役hint后routing_evidence_unavailable；保原拒绝，按已授权根任务修复，不改类型绕过。
