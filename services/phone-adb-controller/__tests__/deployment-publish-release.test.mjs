@@ -57,3 +57,10 @@ test('package materialization preserves raw Git bytes despite checkout eol attri
  assert.equal(readFileSync(join(result.package,'runner.bat'),'utf8'),f.git(f.source,'show',revision+':runner.bat')+'\n');
  m.verifyPublishRelease(result.package,revision);
 });
+test('unrelated central symlink is not materialized into the independent Skill cache',async t=>{
+ const f=fixture(t),m=await import('../deployment-publish-release.mjs'),central=join(f.source,'.skills-source');
+ symlinkSync('/outside/device-runtime',join(central,'douyin-phone-runtime'));const centralRevision=f.commit(central);
+ const lock=JSON.parse(readFileSync(join(f.source,'.skills-source.json')));lock.revision=centralRevision;f.put(f.source,'.skills-source.json',JSON.stringify(lock));
+ const revision=f.commit(f.source),result=m.buildPublishRelease(f.source,revision,{home:f.home});
+ assert.equal(existsSync(join(result.package,'.skills-source/douyin-phone-runtime')),false);m.verifyPublishRelease(result.package,revision);
+});
