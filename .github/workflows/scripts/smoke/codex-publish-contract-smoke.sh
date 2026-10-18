@@ -3,5 +3,7 @@
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO_ROOT"
+# Pilot提供固定中央Git对象；沿用原安装器还原测试读取的文档。
+bash scripts/ensure-skills-source.sh "$REPO_ROOT"
 node --test scripts/product-map/__tests__/publishing-contracts.test.js
 node scripts/product-map/cli.mjs check
