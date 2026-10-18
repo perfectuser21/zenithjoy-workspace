@@ -66,7 +66,13 @@ export function deploymentAssertionPlan(report,snapshot){
     requireThat(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===snapshot.repo&&SHA.test(b.revision)&&/^sha256:[0-9a-f]{64}$/.test(b.digest||'')&&typeof b.path==='string'&&b.path.length&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(p=>['.','..',''].includes(p)),'实现来源绑定无效');
     requireThat(['activity','step'].includes(b.scope)&&['implementation','implementation_bindings'].includes(b.field)&&(b.index===undefined||(Number.isInteger(b.index)&&b.index>=0)),'实现来源定位无效');
     if(b.scope==='step')requireThat(typeof b.step_key==='string'&&a.payload.steps?.some(s=>s.locator?.step_key===b.step_key),'实现来源缺固定Step');
-    expected.push({activity_id:a.activity_id,activity_definition_version_id:a.id,...Object.fromEntries(['kind','repo','path','revision','digest','scope','step_key','field','index'].filter(k=>b[k]!==undefined).map(k=>[k,b[k]]))});
+    // 派生来源只能来自已冻结绑定；保留声明身份，不能以中央路径替换业务绑定。
+    if(Object.hasOwn(b,'resolved_source')){
+     const r=b.resolved_source;
+     requireThat(b.kind==='skill'&&r&&typeof r==='object'&&!Array.isArray(r)&&equal(Object.keys(r).sort(),['path','repo','revision'])
+      &&r.repo==='perfectuser21/zenithjoy-skills'&&r.path===`business-skills/zenithjoy/${b.path}`&&typeof r.revision==='string'&&SHA.test(r.revision),'Skill派生来源身份无效');
+    }
+    expected.push({activity_id:a.activity_id,activity_definition_version_id:a.id,...Object.fromEntries(['kind','repo','path','revision','digest','scope','step_key','field','index','resolved_source'].filter(k=>b[k]!==undefined).map(k=>[k,b[k]]))});
    }
   }
   expected.sort((a,b)=>digest(a).localeCompare(digest(b)));

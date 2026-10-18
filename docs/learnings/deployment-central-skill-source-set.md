@@ -1,0 +1,7 @@
+# 来源证明生产者和部署消费者必须同时保留双身份
+
+固定中央Skill迁移后，正规发布证明同时保留业务声明身份及resolved_source。生产者严格校验它与业务锁/catalog，部署消费者若丢字段再比较完整来源集合，会拒绝真实成功的Pilot。
+
+部署从冻结snapshot绑定重建原完整双身份，限制Skill类型/中央仓/规范精确profile路径/固定SHA，并保留完整集合、排序、摘要和receipt校验。不能删除报告字段、重写摘要、跳预检或以只读回放冒设备安装。
+
+本修复记既有根任务2639d238-fc63-4b2b-b946-b1899511426b，执行者codex:/root/source_publication_review；正常dev登记routing_evidence_unavailable原件保留，不变更类型绕过。

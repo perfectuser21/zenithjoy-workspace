@@ -134,7 +134,7 @@ test('中央派生身份仅允许规范Skill三字段，错来源/穿越/坏SHA/
  for(const [label,mutate]of [
   ['repo',x=>x.resolved_source.repo='evil/skills'],['path',x=>x.resolved_source.path='business-skills/cecelia/'+x.path],
   ['traversal',x=>x.resolved_source.path='business-skills/zenithjoy/../'+x.path],['sha',x=>x.resolved_source.revision='main'],
-  ['extra',x=>x.resolved_source.extra=true],['null',x=>x.resolved_source=null],['array',x=>x.resolved_source=[]],['code',x=>x.kind='code'],
+  ['array-sha',x=>x.resolved_source.revision=['c'.repeat(40)]],['extra',x=>x.resolved_source.extra=true],['null',x=>x.resolved_source=null],['array',x=>x.resolved_source=[]],['code',x=>x.kind='code'],
  ]){
   const b=centralSkillCommander(),e=b.commander,binding=e.snapshot.definitions.activities[0].payload.implementation_bindings[0],entry=e.report.implementation_source_set.find(x=>x.kind==='skill');mutate(binding);Object.assign(entry,structuredClone(binding));delete entry.status;resealSnapshot(e);e.report.implementation_source_set.sort((x,y)=>digest(x).localeCompare(digest(y)));sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,label);
  }
