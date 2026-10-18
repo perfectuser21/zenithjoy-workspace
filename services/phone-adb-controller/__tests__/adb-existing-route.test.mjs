@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
@@ -44,6 +44,25 @@ test('离线、重复行、未知协议、外host及超时均拒绝',async t=>{
  const hanging=await server(t,'',{hang:true}),start=Date.now();assert.notEqual((await route([hanging.port])).status,0);assert.ok(Date.now()-start<1800);
  const good=await server(t,'431\tdevice\n');assert.notEqual((await route([good.port,hanging.port])).status,0,'另一既有server未核实不能假定唯一');
  assert.notEqual((await route([good.port,bad.port])).status,0,'另一既有server未知协议不能静默跳过');
+});
+test('六份旧controller夹具使用child专用Python环境，不依赖Mac默认路径且保留override',()=>{
+ const suites=['account-current-nickname','back-to-results','benchmark-profile-discovery','foreground-anr-history','return-safe-desktop','screenshot-jpeg-sidecar'];
+ for(const name of suites){
+  const source=readFileSync(new URL('./'+name+'.test.mjs',import.meta.url),'utf8');
+  assert.match(source,/\.\.\.fixturePythonEnv\(\)/,name+' must select Python explicitly in child env');
+ }
+ const before=process.env.DOUYIN_PYTHON_BIN;
+ assert.deepEqual(fixturePythonEnv({}),{DOUYIN_PYTHON_BIN:'python3'});
+ assert.deepEqual(fixturePythonEnv({DOUYIN_PYTHON_BIN:'/explicit/python'}),{DOUYIN_PYTHON_BIN:'/explicit/python'});
+ assert.equal(process.env.DOUYIN_PYTHON_BIN,before,'selection must not mutate the test process environment');
+ const controller=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
+ const assignment=controller.match(/^PYTHON_BIN=.*$/m)[0].replace('/opt/homebrew/bin/python3','/fixture-missing-homebrew/python3');
+ const script=assignment+'\nexec "$PYTHON_BIN" -c "print(173)"';
+ const env={...process.env};delete env.DOUYIN_PYTHON_BIN;
+ const missing=spawnSync('zsh',['-c',script],{env,encoding:'utf8'});
+ assert.notEqual(missing.status,0);assert.match(missing.stderr,/fixture-missing-homebrew/);
+ const selected=spawnSync('zsh',['-c',script],{env:{...env,...fixturePythonEnv({})},encoding:'utf8'});
+ assert.equal(selected.status,0,selected.stderr);assert.equal(selected.stdout.trim(),'173');
 });
 test('真实controller先验证既有socket再用该路由，customclient也不能免probe；锁命令不探设备',async t=>{
  const s=await server(t,'431\tdevice\n'),dir=mkdtempSync(join(tmpdir(),'adb-route-controller-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
