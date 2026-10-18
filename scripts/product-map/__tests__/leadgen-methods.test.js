@@ -6,6 +6,8 @@ import {join,dirname} from 'node:path';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {parse,stringify} from 'yaml';
+import {createHash} from 'node:crypto';
+import {checkMethods} from '../leadgen-methods.mjs';
 
 const source=fileURLToPath(new URL('../../../',import.meta.url));
 const cli=join(source,'scripts/product-map/leadgen-methods.mjs');
@@ -73,3 +75,26 @@ test('one ordinary method upgrade affects only its method and actual Workflow co
 test('support declarations reject duplicate, traversal, removal and symlink escape',t=>{const {root}=fixture(t);const p=skillRoot+'douyin-leadgen-activity-101-collect-videos/SKILL.md';for(const paths of [[policy,policy],['../outside.md'],[]]){editFront(root,p,f=>f.metadata.support_files=paths);assert.notEqual(call(root,'--write').status,0);}editFront(root,p,f=>f.metadata.support_files=[policy]);const external=mkdtempSync(join(tmpdir(),'method-outside-fixture-'));t.after(()=>rmSync(external,{recursive:true,force:true}));put(external,'outside.md','Fixture external file.');rmSync(join(root,policy));symlinkSync(join(external,'outside.md'),join(root,policy));const r=call(root,'--write');assert.notEqual(r.status,0);assert.match(r.stderr,/METHOD_SYMLINK_REJECTED/);});
 test('business Activity contract drift cannot be passed by merely refreshing lock hashes',t=>{const {root,base}=fixture(t);const p='product-map/contracts/douyin_video_processing.yaml',c=parse(readFileSync(join(root,p),'utf8'));c.activities.find(a=>a.key==='dedup').postconditions.push({probe:'fixture_new_contract',asserts:'A changed business promise'});put(root,p,stringify(c));refresh(root);const r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/ACTIVITY_CONTRACT_VERSION_NOT_ADVANCED/);});
 test('explicit but missing or empty --base cannot silently disable history checks',t=>{const {root}=fixture(t);for(const args of [['--base'],['--base','']]){const r=call(root,...args);assert.notEqual(r.status,0);assert.match(r.stderr,/BASE_SHA_INVALID/);}});
+
+// Historical migrated source is read from its pinned Git objects, never the hydrated checkout.
+test('migrated baseline still validates every method against pinned central Skill bytes',t=>{
+  const {root}=fixture(t),central=mkdtempSync(join(tmpdir(),'method-central-fixture-'));
+  t.after(()=>rmSync(central,{recursive:true,force:true}));git(central,'init','-q');
+  git(root,'remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace.git');
+  const paths=git(root,'ls-files').split('\n').filter(p=>p.endsWith('/SKILL.md'));
+  const saved=new Map(),files=[];put(central,'distribution/catalog.json',{});
+  for(const [i,path] of paths.entries()){const body=readFileSync(join(root,path)),source='bodies/'+i+'.md';saved.set(path,body);put(central,source,body);files.push({path,source,sha256:createHash('sha256').update(body).digest('hex')});rmSync(join(root,path));}
+  put(central,'distribution/catalog.json',{profiles:{zenithjoy:{files}}});git(central,'add','.');git(central,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','central pinned methods');
+  put(root,'.skills-source.json',{version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:git(central,'rev-parse','HEAD'),loader_sha256:'0'.repeat(64)});
+  git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','migrated baseline');const base=git(root,'rev-parse','HEAD');
+  for(const [path,body] of saved)put(root,path,body);
+  assert.equal(checkMethods(root,{base,skillSource:central}).status,'PASS');
+  const poisoned=structuredClone(json(root,lockPath));poisoned.activities[Object.keys(poisoned.activities)[0]].skill.sha256='0'.repeat(64);put(root,lockPath,poisoned);git(root,'add',lockPath);git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','corrupt historical lock');const corrupt=git(root,'rev-parse','HEAD');refresh(root);
+  assert.throws(()=>checkMethods(root,{base:corrupt,skillSource:central}),/BASE_METHOD_LOCK_DRIFT/);
+});
+test('first method-lock adoption still checks tracked historical Skills without requiring a source lock',t=>{
+  const {root}=fixture(t);rmSync(join(root,lockPath));git(root,'add',lockPath);git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','pre-method-lock baseline');const base=git(root,'rev-parse','HEAD');refresh(root);assert.equal(checkMethods(root,{base}).status,'PASS');
+});
+test('a Workflow Skill absent before first adoption is allowed only when no historical central lock exists',t=>{
+  const {root}=fixture(t),path=skillRoot+'douyin-leadgen-101/SKILL.md',body=readFileSync(join(root,path));rmSync(join(root,lockPath));rmSync(join(root,path));git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','before first workflow skill');const base=git(root,'rev-parse','HEAD');put(root,path,body);refresh(root);assert.equal(checkMethods(root,{base}).status,'PASS');
+});
