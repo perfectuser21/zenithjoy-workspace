@@ -202,6 +202,34 @@ class PinnedReleaseSmoke(unittest.TestCase):
         adjacent.write_text("another-change")
         self.assertEqual(before, self.plan(ref=self.versions[0][0]))
 
+    def remove_current_lock(self):
+        self.git(self.workspace, "rm", ".skills-source.json")
+        self.git(self.workspace, "commit", "-qm", "new HEAD without lock")
+
+    def test_old_locked_ref_remains_locked_after_current_head_removes_lock(self):
+        self.install(0)
+        self.remove_current_lock()
+        result = self.plan(ref=self.versions[0][0])
+        self.assertEqual(result["entrypoint"], str(self.workspace / ".skills-runtime/android-douyin-publish/SKILL.md"))
+        with self.assertRaises(ValueError):
+            self.plan(ref=self.versions[0][0], skills=self.catalog.SKILLS)
+
+    def test_explicit_invalid_ref_cannot_downgrade_to_unlocked_mode(self):
+        self.remove_current_lock()
+        for ref in ("missing-release", "f" * 40):
+            with self.subTest(ref=ref), self.assertRaises(ValueError):
+                self.plan(ref=ref)
+
+    def test_matrix_corruption_returns_only_structured_error(self):
+        self.catalog.CATALOG.write_text("corrupted")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = self.catalog.main(["matrix"])
+        self.assertEqual(code, 2)
+        result = json.loads(output.getvalue())
+        self.assertFalse(result["executed"])
+        self.assertIn("error", result)
+
     def test_tampered_or_missing_runtime_rejected_even_with_forged_state(self):
         target = self.workspace / ".skills-runtime/android-publish/SKILL.md"
         (self.workspace / ".skills-source-state.json").write_text(json.dumps({"verified": True}))
