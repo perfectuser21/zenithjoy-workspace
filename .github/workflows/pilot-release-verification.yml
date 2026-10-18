@@ -43,6 +43,7 @@ jobs:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
 
   verify-commander:
     name: Complete commander release verification
@@ -58,6 +59,7 @@ jobs:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
 
   verify-patrol-definitions:
     name: Complete patrol definitions release verification
@@ -73,3 +75,4 @@ jobs:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
