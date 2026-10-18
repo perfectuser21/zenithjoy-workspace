@@ -83,11 +83,8 @@ grep -Fq 'git diff --name-only "$BASE" "$HEAD"' "$WORKFLOW" \
   || { echo "FAIL: 非 PR 事件仍硬编码 run all"; exit 1; }
 grep -q 'github.event_name.*workflow_dispatch' "$WORKFLOW" \
   || { echo "FAIL: workflow_dispatch 未显式保留全量真机验收"; exit 1; }
-agent_rule=$(grep 'then AGENT=true' "$WORKFLOW")
-[[ "$agent_rule" == *'services/agent/'* ]] \
-  || { echo "FAIL: agent 代码变更未路由到真机 Gate"; exit 1; }
-[[ "$agent_rule" != *'wechat-cs-e2e'* ]] \
-  || { echo "FAIL: 仅工作流编排变更不应冒充 agent runtime 变更"; exit 1; }
+# Exercise real Git fixtures and workflow wiring rather than matching the old inline implementation.
+node --test scripts/ci/__tests__/wechat-agent-scope.test.mjs
 echo "  PASS push diff / workflow_dispatch / agent runtime 三类路由"
 
 echo ""
