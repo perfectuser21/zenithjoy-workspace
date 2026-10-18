@@ -31,13 +31,16 @@ jobs:
 
   authoring-main-source:
     name: Register fixed main authoring sources
+    concurrency:
+      group: authoring-main-source-${{ github.repository }}
+      cancel-in-progress: false
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:17
+        image: mirror.gcr.io/pgvector/pgvector:pg15
         env:
           POSTGRES_USER: cecelia
           POSTGRES_PASSWORD: source-test-only
