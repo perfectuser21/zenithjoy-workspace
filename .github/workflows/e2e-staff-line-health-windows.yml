@@ -11,6 +11,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".skills-source.json"
       - 'apps/api/src/routes/staff.ts'
       - 'apps/api/src/services/line-health.ts'
       - 'apps/api/src/services/staff-health.ts'
@@ -46,6 +47,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -129,6 +135,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

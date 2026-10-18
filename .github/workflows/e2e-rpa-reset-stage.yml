@@ -9,11 +9,13 @@ on:
   push:
     branches: [main, 'cp-*']
     paths:
+      - ".skills-source.json"
       - 'services/agent/wechat-rpa/**'
       - '.github/workflows/e2e-rpa-reset-stage.yml'
   pull_request:
     branches: [main]
     paths:
+      - ".skills-source.json"
       - 'services/agent/wechat-rpa/**'
       - '.github/workflows/e2e-rpa-reset-stage.yml'
   workflow_dispatch:
@@ -28,6 +30,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -51,6 +58,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: 碰 wechat-rpa src 但没改/加逻辑单测 → 红
         env:
           BASE_REF: ${{ github.base_ref }}

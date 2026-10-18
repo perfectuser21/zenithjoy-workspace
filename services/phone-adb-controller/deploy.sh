@@ -42,6 +42,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 D="."
+# Materialize the pinned skill bundle before copying any runtime documents.
+python3 ../../scripts/skills-source.py install
+python3 ../../scripts/skills-source.py verify
 FAILED=0
 
 # push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]

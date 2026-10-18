@@ -9,11 +9,13 @@ name: two-column-gate selftest（五情形自检）
 on:
   push:
     paths:
+      - ".skills-source.json"
       - 'scripts/release-gate/two-column-gate.sh'
       - 'scripts/release-gate/fixtures/**'
       - '.github/workflows/two-column-gate-selftest.yml'
   pull_request:
     paths:
+      - ".skills-source.json"
       - 'scripts/release-gate/two-column-gate.sh'
       - 'scripts/release-gate/fixtures/**'
       - '.github/workflows/two-column-gate-selftest.yml'
@@ -28,6 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       # 情形1：未定案（finalized=false）→ 期望 exit 1
       - name: "情形1: 未定案 → 期望 exit 1"
         id: case1

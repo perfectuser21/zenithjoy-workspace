@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, 'cp-*']
     paths:
+      - ".skills-source.json"
       - 'services/agent/wechat-rpa/preflight.py'
       - 'services/agent/install-pack/start.bat'
       - 'apps/dashboard/src/config/navigation.config.ts'
@@ -13,6 +14,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".skills-source.json"
       - 'services/agent/wechat-rpa/preflight.py'
       - 'services/agent/install-pack/start.bat'
       - 'apps/dashboard/src/config/navigation.config.ts'
@@ -29,6 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -128,6 +135,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

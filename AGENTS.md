@@ -45,3 +45,7 @@ ZenithJoy 是一个综合性的业务管理和自动化平台。技术栈详见�
 ---
 
 最后更新: 2026-07-28
+
+## 技能维护源
+
+技能正文与参考资料只在 `perfectuser21/zenithjoy-skills` 维护。本仓 `.skills-source.json` 固定版本；首次使用运行 `python3 scripts/skills-source.py install`，原路径为生成文件。修改技能应改中心仓后更新本仓版本引用，禁止把正文重新提交到本仓。运行实现仍在本仓。

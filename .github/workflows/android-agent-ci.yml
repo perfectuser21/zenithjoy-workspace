@@ -14,6 +14,7 @@ on:
   push:
     branches: [main]
     paths:
+      - ".skills-source.json"
       - 'services/agent-android/**'
       - '.github/workflows/android-agent-ci.yml'
   pull_request:
@@ -33,6 +34,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - id: filter
         shell: bash
         run: |
@@ -63,6 +69,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

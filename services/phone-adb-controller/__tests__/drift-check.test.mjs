@@ -278,3 +278,47 @@ test("固定源SQL附件三副本均参与真实drift，缺失或篡改拒绝", 
   }
  } finally {c.cleanup();}
 });
+
+
+test("缺失Git基准时在远端读取和通知前exit 2", () => {
+  const c = setup();
+  try {
+    git(c.repo, "rm", "services/phone-adb-controller/a.js");
+    git(c.repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "--no-verify", "-qm", "missing baseline");
+    const r = c.run();
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.equal(existsSync(join(c.fake, "ssh-calls.log")), false, "不得读取远端或发送告警");
+  } finally { c.cleanup(); }
+});
+
+test("迁走基准从固定ref加载器读取原始字节，忽略工作树加载器", () => {
+  const c = setup();
+  try {
+    const loader = join(c.repo, "scripts", "skills-source.py");
+    mkdirSync(dirname(loader), { recursive: true });
+    writeFileSync(loader, `import sys\nassert sys.argv[1:] == ['cat', '--workspace', ${JSON.stringify(c.repo)}, '--ref', 'HEAD', '--path', 'services/phone-adb-controller/a.js']\nsys.stdout.buffer.write(b'A1\\n')\n`);
+    git(c.repo, "rm", "services/phone-adb-controller/a.js");
+    git(c.repo, "add", "scripts/skills-source.py");
+    git(c.repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "--no-verify", "-qm", "migrated baseline");
+    writeFileSync(loader, "raise Exception('working tree must not execute')\n");
+    const r = c.run();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /DRIFT_CHECK OK/);
+    assert.equal(c.barks().length, 0);
+  } finally { c.cleanup(); }
+});
+
+test("中心基准校验失败丢弃部分输出并在远端访问前exit 2", () => {
+  const c = setup();
+  try {
+    const loader = join(c.repo, "scripts", "skills-source.py");
+    mkdirSync(dirname(loader), { recursive: true });
+    writeFileSync(loader, "import sys\nsys.stdout.buffer.write(b'A1\\n')\nsys.exit(1)\n");
+    git(c.repo, "rm", "services/phone-adb-controller/a.js");
+    git(c.repo, "add", "scripts/skills-source.py");
+    git(c.repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "--no-verify", "-qm", "broken source");
+    const r = c.run();
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.equal(existsSync(join(c.fake, "ssh-calls.log")), false);
+  } finally { c.cleanup(); }
+});

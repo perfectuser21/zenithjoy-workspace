@@ -1,0 +1,22 @@
+name: Restore pinned skills
+description: Restore and verify the business repository's locked skill documents
+inputs:
+  ssh-key:
+    description: Read-only deploy key for zenithjoy-skills
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SKILLS_SOURCE_SSH_KEY: ${{ inputs.ssh-key }}
+        GIT_TERMINAL_PROMPT: "0"
+      run: |
+        SKILLS_PYTHON=python3
+        command -v python3 >/dev/null 2>&1 || SKILLS_PYTHON=python
+        "$SKILLS_PYTHON" scripts/skills-source.py install
+        "$SKILLS_PYTHON" scripts/skills-source.py verify
+        if [ -n "$(git ls-files '**/SKILL.md' 'SKILL.md')" ]; then
+          echo "Skill bodies must be maintained in zenithjoy-skills" >&2
+          exit 1
+        fi

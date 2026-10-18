@@ -2,11 +2,13 @@ name: Phone Account Patrol
 on:
   pull_request:
     paths:
+      - ".skills-source.json"
       - 'scripts/phone-account-patrol/**'
       - '.github/workflows/phone-account-patrol.yml'
   push:
     branches: [main]
     paths:
+      - ".skills-source.json"
       - 'scripts/phone-account-patrol/**'
       - '.github/workflows/phone-account-patrol.yml'
   workflow_dispatch:
@@ -18,6 +20,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
