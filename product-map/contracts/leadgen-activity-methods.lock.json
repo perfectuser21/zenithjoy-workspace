@@ -31,7 +31,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -45,7 +45,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -122,7 +122,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "704261c7bc40230120a0ae6470a9e1d90f049928fba8807f0bc33586a993bc5d",
+      "code_digest": "3ad685326d1313b41c61f5ba8673e232b1dc37089d26e53378389829afd64e88",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "342794ebf8f94d730074ff8262102b668faaaa5e2ec8c3cac2c2475e81b2855f",
-        "current_code_digest": "704261c7bc40230120a0ae6470a9e1d90f049928fba8807f0bc33586a993bc5d"
+        "current_code_digest": "3ad685326d1313b41c61f5ba8673e232b1dc37089d26e53378389829afd64e88"
       }
     },
     "douyin_video_processing.preflight": {
@@ -199,7 +199,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -213,7 +213,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -270,7 +270,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -294,14 +294,14 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "4f10be6399cc3e72dae1911de5b958585e035099cfa513ce6395d948e862e887",
+      "code_digest": "705996c8903ea51ca5379fb72281c1b2916cd6212f5c722c0e992c13939ad1da",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "b49797a261a1d1ab39c26ec63dd9ddad15681d2fd6908ae4cc0447829adb0e74",
-        "current_code_digest": "4f10be6399cc3e72dae1911de5b958585e035099cfa513ce6395d948e862e887"
+        "current_code_digest": "705996c8903ea51ca5379fb72281c1b2916cd6212f5c722c0e992c13939ad1da"
       }
     },
     "douyin_video_processing.dedup": {
@@ -364,7 +364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -378,7 +378,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -434,7 +434,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -455,7 +455,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "94ca12da1d0cf47c69dfe41d0793a178ce3dc22e5e3c3becec84c4cf6cb86c05",
+      "code_digest": "510ae14bd557c884bba372336952567e44e0d619d3ade93d7fe9fff74d82d4fe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "40e2d430667233efb0234a10daee09c45a44042705c32454cc6472f1e84d0547",
-        "current_code_digest": "94ca12da1d0cf47c69dfe41d0793a178ce3dc22e5e3c3becec84c4cf6cb86c05"
+        "current_code_digest": "510ae14bd557c884bba372336952567e44e0d619d3ade93d7fe9fff74d82d4fe"
       }
     },
     "douyin_video_processing.qualification": {
@@ -525,7 +525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -539,7 +539,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -595,7 +595,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -616,7 +616,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -689,13 +689,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "b281a788fd1bd57fe01b4149f36b31b5750e300a3267402aed4540f44e3ba729",
+      "code_digest": "b95f313984f808d39e4dcb01b5a52d1e166f67ed8081fb2e4107a81a0636b351",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "3157c3401c38c55d602e107246b037bce8ffffda3148d4bd884378dbc0081af9",
-        "current_code_digest": "b281a788fd1bd57fe01b4149f36b31b5750e300a3267402aed4540f44e3ba729"
+        "current_code_digest": "b95f313984f808d39e4dcb01b5a52d1e166f67ed8081fb2e4107a81a0636b351"
       }
     },
     "douyin_video_processing.collection": {
@@ -735,7 +735,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -749,7 +749,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -827,14 +827,14 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -879,13 +879,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "ad0fe360afe5f5b25e2dd63c052b755d4aa8bc0a1f63ea77a27d95a073e43223",
+      "code_digest": "c4a6ad9fa160e45f331f6275470418b7a2b80f8f22886e8e7cd9021ea52b350a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "8e6300fb4185246453a118f9d437e373474bbc875aee64fb1c51956630e6dd99",
-        "current_code_digest": "ad0fe360afe5f5b25e2dd63c052b755d4aa8bc0a1f63ea77a27d95a073e43223"
+        "current_code_digest": "c4a6ad9fa160e45f331f6275470418b7a2b80f8f22886e8e7cd9021ea52b350a"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -918,7 +918,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -932,7 +932,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -989,7 +989,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -1012,7 +1012,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -1036,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "63cfb0dd63d723a08234a425a8ddf7244b6de3a92011e3c4231ee5c1b9fbb4d4",
+      "code_digest": "513a7cecb84d63c9b9607932ea35c4c9b8d55a6d0d30cd7445b2e2a8499d4261",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "2722e5cae62378ec564122d71f827b99a5a533edf2b1b43ed88aa124d3596792",
-        "current_code_digest": "63cfb0dd63d723a08234a425a8ddf7244b6de3a92011e3c4231ee5c1b9fbb4d4"
+        "current_code_digest": "513a7cecb84d63c9b9607932ea35c4c9b8d55a6d0d30cd7445b2e2a8499d4261"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1075,7 +1075,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -1089,7 +1089,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -1145,7 +1145,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -1176,13 +1176,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "5f25122db015930c4045022391bbc7e141c60032a52ead3ad90bb0304b25e7a0",
+      "code_digest": "80b78460630217e64c482d323784b9db9fd15876d7062acc5bbc6971af05104e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "0008d442a0dd888abec145ca129a4e079187b7404d62f29a6cf0bd44ab59c4cd",
-        "current_code_digest": "5f25122db015930c4045022391bbc7e141c60032a52ead3ad90bb0304b25e7a0"
+        "current_code_digest": "80b78460630217e64c482d323784b9db9fd15876d7062acc5bbc6971af05104e"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1222,7 +1222,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -1236,7 +1236,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -1292,7 +1292,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -1372,13 +1372,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "24a939bbf2fda819175fc9d4c91c38c9c4684685632485669d0b16b114d9e6fe",
+      "code_digest": "63e9fe6af78b4b7019a957969386a082c3b85ac369f743d5bfdd89a97800c6bd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "9f6625f72649e5fb791fdcb76fda4cbc7b3b6c28cbe5401146f22cd4f2700495",
-        "current_code_digest": "24a939bbf2fda819175fc9d4c91c38c9c4684685632485669d0b16b114d9e6fe"
+        "current_code_digest": "63e9fe6af78b4b7019a957969386a082c3b85ac369f743d5bfdd89a97800c6bd"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1411,7 +1411,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -1425,7 +1425,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -1482,7 +1482,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -1506,14 +1506,14 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -1565,13 +1565,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c5e4940ad9acaf31114d5ce49fb77d6274f8a6a33d4d66cd4bf474018f09bf7f",
+      "code_digest": "75abcbed9ed721cec5967ad1d2d65950ede9e170abb42c6f310f4ae35e6668cb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "64bf1b6e84f07bc118a4e839203eaad0259be4f448ba7601e83334881bbc6a5f",
-        "current_code_digest": "c5e4940ad9acaf31114d5ce49fb77d6274f8a6a33d4d66cd4bf474018f09bf7f"
+        "current_code_digest": "75abcbed9ed721cec5967ad1d2d65950ede9e170abb42c6f310f4ae35e6668cb"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1604,7 +1604,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -1618,7 +1618,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -1674,7 +1674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -1695,7 +1695,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -1733,13 +1733,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "d5d495a6304aff3c0e0de9c910c623fe00c664f65bf730586828247e66a728d8",
+      "code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "7f9eeaf7e85b160ee6ef50d144fc828d0519104e38b5f4fa8581a9f82d8bcbf7",
-        "current_code_digest": "d5d495a6304aff3c0e0de9c910c623fe00c664f65bf730586828247e66a728d8"
+        "current_code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1772,7 +1772,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -1786,7 +1786,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -1842,7 +1842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -1863,7 +1863,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -1901,13 +1901,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "d5d495a6304aff3c0e0de9c910c623fe00c664f65bf730586828247e66a728d8",
+      "code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "7f9eeaf7e85b160ee6ef50d144fc828d0519104e38b5f4fa8581a9f82d8bcbf7",
-        "current_code_digest": "d5d495a6304aff3c0e0de9c910c623fe00c664f65bf730586828247e66a728d8"
+        "current_code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1940,7 +1940,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-broker.mjs",
           "revision": "contract",
-          "sha256": "bbf761ea57cec19a153ac3101ce56c9b7e7d34afbf875ed7db522b22e817969a"
+          "sha256": "afbdc664bbd98cd048a1e41a4d40127fc484e2a8230872d9b9eb54d483ba255b"
         },
         {
           "kind": "code",
@@ -1954,7 +1954,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "57dc9f9117f8ed1b2ccc331692ca88a8f315cef4d98e82daef37d100f8ae8145"
+          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
         },
         {
           "kind": "code",
@@ -2011,7 +2011,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c0d09179a0af12e5adac963b7976a423919c382c2509054f8d2649fcb0e750b0"
+          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
         },
         {
           "kind": "code",
@@ -2034,7 +2034,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "13f3f1d0c34fc51f9362fc222acfd610efeb244f329f5755b0b99ed9387e96f1"
+          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
         },
         {
           "kind": "code",
@@ -2072,13 +2072,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "e14d3cdf0cd431f4aa56350ee9265e5617ccc43d4986ab8bbf8face048dd52bd",
+      "code_digest": "10bb6a282868b87e04a991b930592aaec294e5fa3056460f83a70f40467086f4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅对原生证据明确的外UID通知duck增加有界被动复读；普通unknown立即拒绝，停止后end仍严格验证started；归档失败先确认本轮录制退出。同run子Skill阻断只作诊断，不改权限、方法正文、业务输入输出及合格判据。",
+        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
         "reviewed_by": "codex:/root/source_publication_review",
         "previous_code_digest": "8f15807c65b04395aa855c34028448cdf0d8bf22eb4e6caa47451cadf51ea0c8",
-        "current_code_digest": "e14d3cdf0cd431f4aa56350ee9265e5617ccc43d4986ab8bbf8face048dd52bd"
+        "current_code_digest": "10bb6a282868b87e04a991b930592aaec294e5fa3056460f83a70f40467086f4"
       }
     }
   },

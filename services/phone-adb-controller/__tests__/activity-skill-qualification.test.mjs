@@ -46,6 +46,26 @@ test('handoff heartbeat rejects a code-zero phone receipt for another owner',asy
  }finally{rmSync(d,{recursive:true,force:true});}
 });
 
+test('native Skill readback keeps the original owner and generates its own unique run evidence IDs',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-native-owner-')),registry=join(d,'accounts.tsv'),reads=[];
+ writeFileSync(registry,'fixture\tfixture-account\n');
+ try{
+  const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture-run',P:'fixture',SERIAL:'fixture-serial',LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller'},rpc:async()=>({result:{}}),execute:async(cmd,args)=>{
+   let stdout='';if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
+   if(cmd==='/fixture/controller'){
+    const op=args[2]==='--lock-owner'?args[4]:args[2];
+    if(op==='preflight')stdout='serial=fixture-serial\n';if(op==='lock-acquire')stdout='lock=acquired\n';if(op==='lock-refresh')stdout='lock=refreshed owner=fixture-run ttl=3600s\n';if(op==='account-current')stdout='douyin_id=fixture-account\n';
+    if(op==='native-audio-evidence'){reads.push(args);stdout='native_audio_state=started\n';}
+   }
+   return {code:0,stdout,stderr:''};
+  }});
+  await h.preflight();await assert.rejects(()=>h.handoffPhone('native-audio-evidence','foreign-eid'));
+  await h.handoffPhone('native-audio-evidence');await h.handoffPhone('native-audio-evidence');
+  await assert.rejects(()=>h.handoffPhone('native-audio-evidence'));
+  assert.deepEqual(reads,[1,2].map(n=>['--profile','fixture','--lock-owner','fixture-run','native-audio-evidence',`fixture-run-qualification-skill-native${n}`]));
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
 test('handoff heartbeat requires acknowledged renewal of the original video lease',async()=>{
  const d=mkdtempSync(join(tmpdir(),'skill-video-heartbeat-'));let heartbeat=false;
  try{const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture-run',P:'fixture',LEADGEN_LINE:'jinuo'},rpc:async({request:q})=>{

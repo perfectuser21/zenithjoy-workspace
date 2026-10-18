@@ -4429,7 +4429,7 @@ fi
 # media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
 if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   case "$command" in
-    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio) ;;
+    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop|current-video-link|record-start|record-stop|record-extract-audio|native-audio-evidence) ;;
     *) die 'required lock owner is supported only for standalone read commands';;
   esac
   source "${0:A:h}/phone-lock-lib.sh"
@@ -4852,6 +4852,13 @@ case "$command" in
     [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE set-playback-speed SPEED EVIDENCE_ID"
     check_target
     set_playback_speed "$2" "$3"
+    ;;
+  native-audio-evidence)
+    [[ "$#" == 2 && -n "$LOCK_OWNER" ]] || die 'NATIVE_AUDIO_READBACK_OWNER_REQUIRED'
+    check_target_fast
+    record_detail_foreground || die 'NATIVE_AUDIO_READBACK_WRONG_FOREGROUND'
+    record_no_active_capture || die 'NATIVE_AUDIO_READBACK_CAPTURE_NOT_STOPPED'
+    record_native_audio_settled "$2"
     ;;
   record-start)
     [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE record-start EVIDENCE_ID [MAX_SECONDS]"
