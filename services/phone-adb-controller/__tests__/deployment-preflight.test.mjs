@@ -199,3 +199,50 @@ test('新公司发布schema失败阻断，schema通过但draft按disabled回执�
  const releases=await preflightDeploymentReleases({...args,companyReadiness:async()=>({schema_verified:true,business_runtime_status:'disabled',gaps:[{code:'COMPANY_CONFIG_NOT_ENABLED'}]})});
  assert.equal(releases.company_readiness.business_runtime_status,'disabled');assert.equal(releases.company_readiness.gaps.length,1);
 });
+
+// 从官方Pilot39168880088的commander-generic产物抽取一条真实绑定及来源行。
+// 仅构造pure plan所需最小字段；保留真实逻辑/中央SHA、内容摘要、元数据及定位，不冒充完整生产快照。
+const realCentralBinding={"raw":{"kind":"skill","path":"services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","repo":"perfectuser21/zenithjoy-workspace","revision":"contract"},"kind":"skill","name":"workflow-commander","path":"services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","repo":"perfectuser21/zenithjoy-workspace","field":"implementation_bindings","index":0,"scope":"activity","digest":"sha256:91e4434b42635e55c8f9d1cf963454a63b4abb9b62fbd7d513a560f5218aa967","status":"verified","version":"2.0.22","revision":"2d8c15dc1a0e9405f2f673ef6d8bea46ea60eea2","content_sha256":"91e4434b42635e55c8f9d1cf963454a63b4abb9b62fbd7d513a560f5218aa967","resolved_source":{"path":"business-skills/zenithjoy/services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","repo":"perfectuser21/zenithjoy-skills","revision":"6ab363b826fa9be40799fd998d64ef42ff783d3a"},"validation_scope":"reference_only"};
+const realCentralSourceRow={"activity_id":"d842e3e7-72bc-4130-91e1-7f36a73506ee","activity_definition_version_id":"b2baac2c-d775-4ae3-83db-63e929a89c8e","kind":"skill","repo":"perfectuser21/zenithjoy-workspace","path":"services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","revision":"2d8c15dc1a0e9405f2f673ef6d8bea46ea60eea2","digest":"sha256:91e4434b42635e55c8f9d1cf963454a63b4abb9b62fbd7d513a560f5218aa967","scope":"activity","field":"implementation_bindings","index":0,"resolved_source":{"path":"business-skills/zenithjoy/services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md","repo":"perfectuser21/zenithjoy-skills","revision":"6ab363b826fa9be40799fd998d64ef42ff783d3a"}};
+const derivedPlanKeys=['scope','source','definition_versions','expected_usages','required_assertions','assertion_source','implementation_source_set'];
+function centralPlanFixture(){
+ const binding=structuredClone(realCentralBinding),activity={id:realCentralSourceRow.activity_definition_version_id,activity_id:realCentralSourceRow.activity_id,payload:{activity_id:realCentralSourceRow.activity_id,steps:[],implementation_bindings:[binding]}};
+ const snapshot={repo,revision:binding.revision,definitions:{workflows:[],activities:[activity]}};
+ const report={scope:'commander-generic',source:{repo,head_revision:binding.revision},definition_versions:{workflows:[],activities:[{id:activity.id,activity_id:activity.activity_id,source_repo:repo,source_commit:binding.revision}]},expected_usages:[{activity_id:activity.activity_id}],required_assertions:[{assertion_ref:'services/phone-adb-controller/commander/commander-v2.test.mjs'}],assertion_source:'current_registration',implementation_source_set:[structuredClone(realCentralSourceRow)]};
+ report.assertion_plan_sha256=digest(Object.fromEntries(derivedPlanKeys.map(k=>[k,report[k]])));
+ return {snapshot,report,binding};
+}
+test('真实中央Skill来源行必须从snapshot完整重建，保留原plan摘要与Skill元数据',async()=>{
+ const {deploymentAssertionPlan}=await implementation(),f=centralPlanFixture(),before=digest(f);
+ const plan=deploymentAssertionPlan(f.report,f.snapshot);
+ assert.deepEqual(plan.implementation_source_set,[realCentralSourceRow]);assert.equal(digest(plan),f.report.assertion_plan_sha256);assert.equal(digest(f),before);
+ assert.equal(f.binding.name,'workflow-commander');assert.equal(f.binding.version,'2.0.22');assert.equal(f.binding.content_sha256,f.binding.digest.slice(7));
+});
+test('仅report篡改/漏派生来源、重复、额外字段不能通过完整来源重建',async()=>{
+ const {deploymentAssertionPlan}=await implementation();
+ for(const [label,mutate]of [
+  ['missing',r=>delete r.implementation_source_set[0].resolved_source],
+  ['repo',r=>r.implementation_source_set[0].resolved_source.repo='foreign/repo'],
+  ['revision',r=>r.implementation_source_set[0].resolved_source.revision='b'.repeat(40)],
+  ['path',r=>r.implementation_source_set[0].resolved_source.path='other/SKILL.md'],
+  ['extra',r=>r.implementation_source_set[0].resolved_source.extra=true],
+  ['row-extra',r=>r.implementation_source_set[0].extra=true],
+  ['duplicate',r=>r.implementation_source_set.push(structuredClone(r.implementation_source_set[0]))],
+ ]){const f=centralPlanFixture();mutate(f.report);assert.throws(()=>deploymentAssertionPlan(f.report,f.snapshot),undefined,label);}
+});
+test('snapshot/report共同伪造也必须拒非规范中央身份、Code派生来源及内容摘要冲突',async()=>{
+ const {deploymentAssertionPlan}=await implementation();
+ for(const [label,mutate]of [
+  ['foreign-repo',b=>b.resolved_source.repo=repo],['moving-ref',b=>b.resolved_source.revision='main'],
+  ['uppercase-sha',b=>b.resolved_source.revision='A'.repeat(40)],['absolute',b=>b.resolved_source.path='/SKILL.md'],
+  ['escape',b=>b.resolved_source.path='../SKILL.md'],['query',b=>b.resolved_source.path='skill/SKILL.md?raw=1'],
+  ['extra',b=>b.resolved_source.extra=true],['missing',b=>delete b.resolved_source.revision],
+  ['null',b=>b.resolved_source=null],['array',b=>b.resolved_source=[]],
+  ['code',b=>b.kind='code'],['non-skill-path',b=>b.path='entry.js'],
+  ['digest',b=>b.digest='sha256:'+'0'.repeat(64)],['content-hash',b=>b.content_sha256='bad'],
+ ]){const f=centralPlanFixture();mutate(f.binding);const v=f.report.implementation_source_set[0];for(const k of ['kind','path','digest','resolved_source'])if(f.binding[k]!==undefined)v[k]=structuredClone(f.binding[k]);assert.throws(()=>deploymentAssertionPlan(f.report,f.snapshot),undefined,label);}
+});
+test('历史无派生来源的完整Skill计划继续兼容',async()=>{
+ const {deploymentAssertionPlan}=await implementation(),f=centralPlanFixture();delete f.binding.resolved_source;delete f.report.implementation_source_set[0].resolved_source;
+ const expected=digest(Object.fromEntries(derivedPlanKeys.map(k=>[k,f.report[k]])));assert.equal(digest(deploymentAssertionPlan(f.report,f.snapshot)),expected);
+});
