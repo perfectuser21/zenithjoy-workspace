@@ -258,4 +258,5 @@ test('真实旧zenithjoy格式可无source_set但保留snapshot中央绑定，�
  const {deploymentAssertionPlan}=await implementation(),f=centralPlanFixture();delete f.snapshot.definitions.activities[0].payload.registration_protocol;delete f.report.implementation_source_set;
  const expected=digest(Object.fromEntries(derivedPlanKeys.filter(k=>k!=='implementation_source_set').map(k=>[k,f.report[k]])));
  assert.equal(digest(deploymentAssertionPlan(f.report,f.snapshot)),expected);assert.deepEqual(f.binding.resolved_source,realCentralBinding.resolved_source);
+ for(const mutate of [b=>b.kind='code',b=>b.resolved_source.extra=true,b=>b.content_sha256='bad']){const copy=structuredClone(f);mutate(copy.snapshot.definitions.activities[0].payload.implementation_bindings[0]);assert.throws(()=>deploymentAssertionPlan(copy.report,copy.snapshot));}
 });
