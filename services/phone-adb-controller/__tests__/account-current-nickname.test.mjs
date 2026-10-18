@@ -1,3 +1,4 @@
+import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
 // douyin-phone-adb account-current 昵称误读回归测试（0929 新建）。
 //
 // 事故（0929 17:20，小蓝 profile jinoshengyuan-work）：account-current 读出 nickname=11，
@@ -86,7 +87,7 @@ function run(ctx) {
       env: {
         ...process.env,
         DOUYIN_PHONE_REGISTRY: ctx.reg,
-        DOUYIN_ADB_BIN: ctx.adb,
+        DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),
         FIXTURE_DIR: ctx.dir,
         DUMP_COUNT: ctx.count,

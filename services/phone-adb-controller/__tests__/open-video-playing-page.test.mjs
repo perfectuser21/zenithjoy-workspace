@@ -1,3 +1,4 @@
+import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
@@ -35,7 +36,7 @@ else if(a.includes('stat -c %s'))console.log(fs.existsSync(p.join(d,'remote.xml'
 else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.argv[n+1].endsWith('.xml'))fs.copyFileSync(p.join(d,'remote.xml'),process.argv[n+2]);else fs.writeFileSync(process.argv[n+2],'png');}
 `, {mode: 0o755});
     const r = spawnSync('zsh', [script, '--profile', 'legacy', 'open-video', '7681632828384394202', 'fresh-after-card-open'], {
-      env: {...process.env, HOME: dir, DOUYIN_PYTHON_BIN: pythonBin, DOUYIN_PHONE_REGISTRY: join(dir,'registry.tsv'), DOUYIN_ADB_BIN: adb,
+      env: {...process.env, HOME: dir, DOUYIN_PYTHON_BIN: pythonBin, DOUYIN_PHONE_REGISTRY: join(dir,'registry.tsv'), DOUYIN_ADB_BIN: fixtureAdb(adb),
         DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir,'tmp'), FAKE_PHONE_DIR: dir, FAKE_DETAIL_XML: fixture},
       encoding: 'utf8', timeout: 8000,
     });
@@ -56,6 +57,7 @@ function pausedIdle({command='open-video',policy='paused-detail',error='idle',wr
     const controlled='wait_ms() { require_uint "$1"; (( $1 <= 5000 )) || die "wait must be <= 5000 ms"; }';
     const patched=source.replace(wait,controlled);assert.equal(patched.replace(controlled,wait),source);
     const runner=join(dir,'controller');writeFileSync(runner,patched,{mode:0o755});
+    writeFileSync(join(dir,'adb-existing-route.py'),readFileSync(new URL('../adb-existing-route.py',import.meta.url)));
     writeFileSync(join(dir,'registry.tsv'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
     writeFileSync(join(dir,'state.json'),JSON.stringify({play:command==='wave'?'paused':'playing',toggled:false,dumps:0,toggles:0,page:shareOverlay?'share':'detail'}));
     const panel='<hierarchy><node package="com.ss.android.ugc.aweme" text="23条评论"/><node package="com.ss.android.ugc.aweme" class="android.widget.EditText" text="发条评论"/></hierarchy>';
@@ -99,7 +101,7 @@ save();
     const evidence=join(dir,'evidence');mkdirSync(evidence,{recursive:true});
     if(stale){writeFileSync(join(evidence,'read.xml'),detail);writeFileSync(join(dir,'remote.xml'),detail);}
     const key=join(dir,'fixture-key');writeFileSync(key,'FIXTURE_ONLY=1\n');const locator=join(dir,'locate.py');writeFileSync(locator,`import os\nwith open(os.path.join(os.environ['FAKE_PHONE_DIR'],'calls'),'a') as f:f.write('LOCATE\\n')\nprint('1100 1600')\n`);
-    const env={...process.env,HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:adb,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
+    const env={...process.env,HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
     let args=[runner,'--profile','legacy',command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
     if(command==='wave'){
       const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];

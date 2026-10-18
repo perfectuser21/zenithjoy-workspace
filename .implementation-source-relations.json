@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "repo": "perfectuser21/zenithjoy-workspace",
+  "relations": [
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "scripts/smoke/leadgen-split-smoke.sh",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/account-current-nickname.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/account-current-own-profile.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/adb-existing-route.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/back-to-results.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/benchmark-profile-discovery.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/bypass-report.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/clipboard-nonce-sdk31.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/continuous-identity.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/deployment-manifest.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/foreground-anr-history.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/media-push-text-input.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/open-video-playing-page.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/outward-ledger-lock-receipt.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/phone-lock-lifecycle.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/recording-guard-timeout.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/recording-guard.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/return-safe-desktop.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/runtime-path.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/screenshot-jpeg-sidecar.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/adb-existing-route.py",
+      "path": "services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs",
+      "role": "verification"
+    }
+  ]
+}

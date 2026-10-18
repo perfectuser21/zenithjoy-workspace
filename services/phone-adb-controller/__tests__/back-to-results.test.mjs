@@ -1,3 +1,4 @@
+import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
 // services/phone-adb-controller/__tests__/back-to-results.test.mjs
 //
 // 采收循环处理完一个视频后的**归位**守卫。
@@ -124,7 +125,7 @@ function runBackToResults(opts, maxArg) {
   const args = [SCRIPT, '--profile', 'legacy', 'back-to-results'];
   if (maxArg) args.push(String(maxArg));
   return new Promise((resolve) => {
-    const p = spawn('zsh', args, { env: { ...process.env, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: adb.path } });
+    const p = spawn('zsh', args, { env: { ...process.env, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: fixtureAdb(adb.path) } });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { err += d; });

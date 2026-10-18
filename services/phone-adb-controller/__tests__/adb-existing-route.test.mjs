@@ -24,6 +24,8 @@ test('离线、重复行、未知协议、外host及超时均拒绝',async t=>{
  const bad=await server(t,'431\tdevice\n',{version:'0028'});assert.notEqual((await route([bad.port])).status,0);
  assert.notEqual((await route([], 'tcp:evil.example:5037')).status,0);
  const hanging=await server(t,'',{hang:true}),start=Date.now();assert.notEqual((await route([hanging.port])).status,0);assert.ok(Date.now()-start<1800);
+ const good=await server(t,'431\tdevice\n');assert.notEqual((await route([good.port,hanging.port])).status,0,'另一既有server未核实不能假定唯一');
+ assert.notEqual((await route([good.port,bad.port])).status,0,'另一既有server未知协议不能静默跳过');
 });
 import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -38,4 +40,6 @@ test('真实controller先验证既有socket再用该路由，customclient也不�
  const before=readFileSync(log,'utf8');assert.doesNotMatch(before,/start-server|kill-server/);
  const bad=await call('status','tcp:evil.example:5037');assert.notEqual(bad.status,0);assert.equal(readFileSync(log,'utf8'),before);
  const lock=await call('lock-status','tcp:evil.example:5037');assert.equal(lock.status,0,lock.err);assert.match(lock.out,/lock=free/);assert.equal(readFileSync(log,'utf8'),before);
+ const refresh=await call('refresh',base.EXPECTED_SOCKET);assert.notEqual(refresh.status,0);assert.equal(readFileSync(log,'utf8'),before);
+ writeFileSync(adb,readFileSync(adb,'utf8').replace('1.0.41','1.0.40'));const wrongClient=await call('status',base.EXPECTED_SOCKET);assert.notEqual(wrongClient.status,0);assert.match(wrongClient.err,/ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH/);assert.equal(readFileSync(log,'utf8'),before+'version\n');
 });

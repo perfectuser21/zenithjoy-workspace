@@ -59,10 +59,10 @@
       }
     },
     "douyin_video_publish": {
-      "sha256": "37ae78c04a017aaa168e5524c69523501f6e3541368304ab34936d4fbfd818f1",
+      "sha256": "024040336e69c86b71c2949032b1c7474c01d72a7d51ee77c12db719b98833af",
       "activities": {
         "preflight": "c6a195fd2dc87f6880691ad745e826ac059324e7354182b19b2e127e49f04a0a",
-        "prepare": "db39a0fa0b836a64b8f818e3f1df4c14d39f5e100a82dda819ee2c3e8d967ecd",
+        "prepare": "a8ac30290f8fb5fac2be14b4b3227d6ce89bcdd69587fe843e2b87e7be6993c8",
         "publish": "23544f5c2017f88f2c145efc5e07223f79844b49ef3cd09e4dd0b2e8a4126998",
         "verify": "26258a2559e3c58fda5a6d7efe4afd8863c79ffbf1e5aefaa124440b14f4e142",
         "cleanup": "6c0102623e33c97d8b0e1026b6a45fc39b201ce7cb80e8e83789dd9ee1e9e55e"

@@ -269,7 +269,7 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
+  phone-lock-lib.sh phone-lock-helper.py adb-existing-route.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
   decode-recording.py runtime/scrcpy-runtime.py runtime/scrcpy-adb-shim.py runtime/runtime-policy.json runtime/runtime-policy-sdk33.json
   bypass-report.sh
 )

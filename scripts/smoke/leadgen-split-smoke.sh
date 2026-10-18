@@ -6,6 +6,7 @@ cd "$(dirname "$0")/../.."
 node scripts/product-map/leadgen-methods.mjs
 # 完整文件只调度一次；并发仅限文件，保留每个文件的原断言、内部顺序与超时。
 node --test --test-concurrency=4 \
+ services/phone-adb-controller/__tests__/adb-existing-route.test.mjs \
  scripts/product-map/__tests__/leadgen-methods.test.js \
  scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  scripts/product-map/__tests__/leadgen-workflow-skill.test.js \

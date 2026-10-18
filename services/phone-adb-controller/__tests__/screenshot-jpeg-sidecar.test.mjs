@@ -1,3 +1,4 @@
+import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
 // douyin-phone-adb 截图回传 JPEG 副本回归测试（0929 新建）。
 //
 // 事故形状（0929 实证）：截图命令只产出原图 PNG（荣耀 1200x2664 约 3MB），agent 用
@@ -69,7 +70,7 @@ function run(ctx, args, extraEnv = {}) {
       env: {
         ...process.env,
         DOUYIN_PHONE_REGISTRY: ctx.reg,
-        DOUYIN_ADB_BIN: ctx.adb,
+        DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_SIPS_BIN: ctx.sips,
         DOUYIN_PHONE_TMP_ROOT: ctx.root,
         SIPS_LOG: ctx.sipsLog,

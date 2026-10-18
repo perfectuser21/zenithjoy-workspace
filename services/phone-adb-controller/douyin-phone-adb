@@ -128,11 +128,7 @@ LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
 check_target_fast() {
   local state
   state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
-  if [[ "$state" != "device" ]]; then
-    "$ADB" start-server >/dev/null 2>&1 || true
-    state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
-  fi
-  [[ "$state" == "device" ]] || die "target phone is offline after adb auto-refresh"
+  [[ "$state" == "device" ]] || die "target phone is offline on verified existing ADB route"
 }
 
 check_target() {
@@ -4410,6 +4406,23 @@ if [[ "$command" == close-app && -z "$LOCK_OWNER" ]]; then
   [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock requires explicit owner cleanup'
 fi
 
+# SDK31取链的原锁前置保持在任何ADB客户端调用之前。
+if [[ "$command" == current-video-link && "${DEVICE_SDK:-}" == 31 ]]; then
+  [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
+  require_held_lock clipboard_nonce
+fi
+
+# 所有触设备分支先核既有server；纯本地分析/锁/账本命令不探设备。
+case "$command" in
+  runtime-contract|lock-acquire|lock-acquire-new|lock-quarantine|lock-release|lock-release-exact|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock|outward-ledger|search-kw-matches|*-from-xml|on-search-results|detail-restored|on-user-profile|filter-panel-location|own-profile|profile-check|profile-grid-cards|resolve-sec-uid|record-status|record-extract-audio) ;;
+  refresh) die 'refresh refuses shared ADB server restart; use existing target route' ;;
+  *)
+    _adb_port="$("$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/adb-existing-route.py" "$SERIAL" "$ADB")" || die 'existing target ADB route could not be verified'
+    export ADB_SERVER_SOCKET="tcp:127.0.0.1:$_adb_port" DOUYIN_ADB_PORT="$_adb_port"
+    unset ANDROID_ADB_SERVER_PORT ANDROID_ADB_SERVER_ADDRESS
+    ;;
+esac
+
 case "$command" in
   runtime-contract)
     [[ "$#" == 1 ]] || die 'usage: runtime-contract'
@@ -4458,9 +4471,7 @@ case "$command" in
     exec "$PYTHON_BIN" "$OUTWARD_HELPER" outward-ledger-read "$EVIDENCE_ROOT/${ol_run}-outward-ledger.jsonl" "$ol_run" "${ol_run}-outward-ledger"
     ;;
   refresh)
-    "$ADB" kill-server
-    "$ADB" start-server
-    exec "$ADB" devices -l
+    die 'refresh refuses shared ADB server restart; use existing target route'
     ;;
   telecom)
     check_target
@@ -4599,10 +4610,6 @@ case "$command" in
     ;;
   current-video-link)
     [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE current-video-link EVIDENCE_ID [RETURN_KEYWORD]"
-    if [[ "${DEVICE_SDK:-}" == 31 ]]; then
-      [[ -n "$LOCK_OWNER" ]] || die "CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED"
-      require_held_lock clipboard_nonce
-    fi
     check_target
     current_video_link "$2" "${3:-}"
     ;;

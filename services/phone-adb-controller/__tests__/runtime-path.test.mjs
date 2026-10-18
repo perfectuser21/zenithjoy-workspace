@@ -1,3 +1,4 @@
+import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
@@ -37,7 +38,7 @@ case "$1" in
 esac
 exec /usr/bin/python3 "$@"
 `,{mode:0o755});
- const env={...process.env,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_PHONE_TMP_ROOT:join(d,'tmp'),DOUYIN_ADB_BIN:join(d,'adb'),DOUYIN_SCRCPY_BIN:join(d,'scrcpy'),DOUYIN_FFPROBE_BIN:join(d,'ffprobe'),DOUYIN_FFMPEG_BIN:join(d,'ffmpeg'),DOUYIN_PYTHON_BIN:join(d,'python'),EXPECTED_RUNTIME_HELPER:new URL('../runtime/scrcpy-runtime.py',import.meta.url).pathname};
+ const env={...process.env,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_PHONE_TMP_ROOT:join(d,'tmp'),DOUYIN_ADB_BIN:fixtureAdb(join(d,'adb')),DOUYIN_SCRCPY_BIN:join(d,'scrcpy'),DOUYIN_FFPROBE_BIN:join(d,'ffprobe'),DOUYIN_FFMPEG_BIN:join(d,'ffmpeg'),DOUYIN_PYTHON_BIN:join(d,'python'),EXPECTED_RUNTIME_HELPER:new URL('../runtime/scrcpy-runtime.py',import.meta.url).pathname};
  const run=(...args)=>spawnSync('zsh',[ctl,'--profile','p1',...args],{env,cwd:d,encoding:'utf8',timeout:15000});
  try{
   assert.equal(run('lock-acquire',owner).status,0);
