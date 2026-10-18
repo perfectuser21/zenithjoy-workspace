@@ -7663,3 +7663,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "真实HTTP内部模板11/16、鉴权和非法绑定；不以此证明外部建库/数据同步"
+
+- id: api-error-handler-http-contract
+  path: apps/api/src/middleware/error.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "Express真实路由验证四参数错误中间件、业务details/数据库409及未知异常不暴露内部文本"
