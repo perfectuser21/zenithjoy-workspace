@@ -64,3 +64,14 @@ test('unrelated central symlink is not materialized into the independent Skill c
  const revision=f.commit(f.source),result=m.buildPublishRelease(f.source,revision,{home:f.home});
  assert.equal(existsSync(join(result.package,'.skills-source/douyin-phone-runtime')),false);m.verifyPublishRelease(result.package,revision);
 });
+
+test('CLI durable receipt restores managed entries after official observation failure',t=>{
+ const f=fixture(t),script=new URL('../deployment-publish-release.mjs',import.meta.url);
+ const run=(args,input)=>JSON.parse(execFileSync(process.execPath,[script.pathname,...args],{env:{...process.env,HOME:f.home},input,encoding:'utf8'}));
+ const first=run(['deploy-stdin'],JSON.stringify({source:f.source,revision:f.revision}));
+ const link=join(f.home,'.openclaw/skills/multi-platform-publish'),before=readlinkSync(link);
+ f.put(f.source,'extra-runtime-contract.json','{"fixed":"cli-new"}\n');const next=f.commit(f.source);
+ run(['deploy-stdin'],JSON.stringify({source:f.source,revision:next}));assert.notEqual(readlinkSync(link),before);
+ const result=run(['rollback',next]);assert.equal(result.status,'rolled_back');assert.equal(readlinkSync(link),before);
+ assert.equal(run(['rollback',next]).status,'rolled_back');assert.ok(existsSync(first.package));
+});
