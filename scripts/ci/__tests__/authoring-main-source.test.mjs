@@ -20,6 +20,8 @@ test('三个Pilot必须等待main正式来源续版，PR也永久执行前置契
  assert.equal(j['continue-on-error'],undefined);
  assert.ok(j.steps.some(s=>s.run==='node scripts/ci/authoring-main-source.mjs'));
  assert.equal(j.services.postgres.env.POSTGRES_DB,'cecelia_scratch');
+ assert.equal(j.services.postgres.image,'mirror.gcr.io/pgvector/pgvector:pg15');
+ assert.deepEqual(j.concurrency,{group:'authoring-main-source-${{ github.repository }}','cancel-in-progress':false});
  for(const key of ['verify','verify-commander','verify-patrol-definitions'])assert.deepEqual(w.jobs[key].needs,['caller-contract','authoring-main-source']);
  const impact=YAML.parse(readFileSync(new URL('.github/workflows/implementation-impact.yml',root),'utf8'));
  assert.ok(impact.jobs['caller-contract'].steps.some(s=>s.run==='node --test scripts/ci/__tests__/authoring-main-source.test.mjs scripts/ci/__tests__/authoring-source-version.test.mjs'));
