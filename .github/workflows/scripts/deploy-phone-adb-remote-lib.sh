@@ -33,8 +33,10 @@ prepare_deployment_checkout() {
 import fcntl,os,re,subprocess,sys,json
 from pathlib import Path
 
+git_env={key:value for key,value in os.environ.items() if not key.startswith('GIT_')}
+git_env.update(GIT_NO_REPLACE_OBJECTS='1',GIT_ALLOW_PROTOCOL='',GIT_TERMINAL_PROMPT='0',PYTHONDONTWRITEBYTECODE='1')
 def git(root,*args):
- return subprocess.check_output(['git','-C',str(root),*args],text=True,stderr=subprocess.PIPE).strip()
+ return subprocess.check_output(['git','-C',str(root),*args],text=True,stderr=subprocess.PIPE,env=git_env,timeout=15).strip()
 def need(value,message):
  if not value:raise ValueError(message)
 def canonical(path):return Path(path).resolve(strict=True)
@@ -63,7 +65,7 @@ def clean(target):
   need(json.loads(state.read_text())=={'revision':lock['revision'],'files':expected},'分发状态不等于固定清单')
   allowed.add('.skills-source-state.json')
  # status collapses ignored directories; inspect every child rather than accepting a broad prefix.
- rows=subprocess.check_output(['git','-C',str(target),'status','--porcelain=v1','-z','--untracked-files=all','--ignored=matching']).decode().split('\0')
+ rows=subprocess.check_output(['git','-C',str(target),'status','--porcelain=v1','-z','--untracked-files=all','--ignored=matching'],env=git_env,timeout=15).decode().split('\0')
  for row in filter(None,rows):
   need(row[:2] in ('??','!!'),'部署树有非生成改动')
   relative=row[3:].rstrip('/')
@@ -76,8 +78,8 @@ def clean(target):
    if child.is_file():need(child.relative_to(target).as_posix() in allowed,'部署树有未知额外文件')
  bootstrap=git(target,'show',revision+':scripts/skills-source.py')
  code='__file__ = '+repr(str(target/'scripts/skills-source.py'))+'\n'+bootstrap
- env=os.environ.copy();env['PYTHONDONTWRITEBYTECODE']='1'
- subprocess.run(['python3','-c',code,'verify','--workspace',str(target),'--source',str(cache)],env=env,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+ env=git_env.copy();env.pop('PYTHONPATH',None);env.pop('PYTHONHOME',None);env.pop('SKILLS_SOURCE_DIR',None);env.pop('SKILLS_SOURCE_SSH_KEY',None)
+ subprocess.run(['python3','-I','-c',code,'verify','--workspace',str(target),'--source',str(cache)],env=env,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
 
 try:
  repo=canonical(sys.argv[1]);sha=sys.argv[2];base=Path(sys.argv[3]).absolute()
@@ -94,13 +96,13 @@ try:
   current(repo,sha);target=base/sha
   need(not target.is_symlink(),'部署目标不能是软链')
   if not target.exists():
-   subprocess.run(['git','-C',str(repo),'worktree','add','--detach',str(target),sha],check=True,stdout=sys.stderr)
+   subprocess.run(['git','-C',str(repo),'worktree','add','--detach',str(target),sha],check=True,stdout=sys.stderr,env=git_env,timeout=30)
   need(canonical(target)==target and target.stat().st_uid==os.getuid(),'部署目标路径或属主不同')
   need(canonical(git(target,'rev-parse','--show-toplevel'))==target,'部署目标不是独立仓库根')
   need(canonical(git(target,'rev-parse','--path-format=absolute','--git-common-dir'))==canonical(git(repo,'rev-parse','--path-format=absolute','--git-common-dir')),'部署目标不是原仓共同Git目录')
   registered=git(repo,'worktree','list','--porcelain').splitlines()
   need('worktree '+str(target) in registered,'部署目标未登记为原仓worktree')
-  need(subprocess.run(['git','-C',str(target),'symbolic-ref','-q','HEAD'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==1,'部署目标不是detached HEAD')
+  need(subprocess.run(['git','-C',str(target),'symbolic-ref','-q','HEAD'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=git_env,timeout=15).returncode==1,'部署目标不是detached HEAD')
   need(git(target,'rev-parse','HEAD')==sha,'部署目标HEAD不符')
   clean(target);current(repo,sha)
   print(target)

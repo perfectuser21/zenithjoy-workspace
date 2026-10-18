@@ -44,10 +44,16 @@ test('Git replace cannot forge pinned skill bytes and ambient Git redirects cann
  const f=fixture(t);const {readDeploymentSource}=await import('../deployment-fixed-source.mjs');
  readDeploymentSource(f.root,f.revision,file,{materialize:true});
  const original=process.env.GIT_DIR;process.env.GIT_DIR=join(f.root,'.skills-source/.git');
- try{assert.deepEqual(readDeploymentSource(f.root,f.revision,file),f.payload);}finally{if(original===undefined)delete process.env.GIT_DIR;else process.env.GIT_DIR=original;}
+ try{assert.deepEqual(readDeploymentSource(f.root,f.revision,file),f.payload);assert.equal(deploymentManifest(f.root,['commander/skills/workflow-commander/SKILL.md']).source_commit,f.revision);}finally{if(original===undefined)delete process.env.GIT_DIR;else process.env.GIT_DIR=original;}
  const cache=join(f.root,'.skills-source'),old=f.git(cache,'rev-parse','HEAD'),forged=Buffer.from('forged runtime skill\n');
  writeFileSync(join(cache,'manual.md'),forged);writeFileSync(join(cache,'distribution/catalog.json'),JSON.stringify({profiles:{zenithjoy:{files:[{path:file,source:'manual.md',sha256:digest(forged)}]}}}));
  f.git(cache,'add','.');f.git(cache,'-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','forged object');
  f.git(cache,'replace',old,f.git(cache,'rev-parse','HEAD'));writeFileSync(join(f.root,file),forged);
  assert.throws(()=>readDeploymentSource(f.root,f.revision,file),/漂移/);
+});
+
+test('deployment source plan rejects missing local cache without attempting a fetch',async t=>{
+ const f=fixture(t);const {readDeploymentSource}=await import('../deployment-fixed-source.mjs');
+ rmSync(join(f.root,'.skills-source'),{recursive:true});
+ assert.throws(()=>readDeploymentSource(f.root,f.revision,file,{materialize:true}),/缓存不存在/);
 });

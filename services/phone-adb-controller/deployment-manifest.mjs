@@ -4,10 +4,10 @@ import { readFileSync,realpathSync } from 'node:fs';
 import { resolve,sep,basename } from 'node:path';
 import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import {readDeploymentSource} from './deployment-fixed-source.mjs';
+import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
 import { digest } from './runtime-definition.mjs';
 export function deploymentManifest(root,files,{commit,repo='perfectuser21/zenithjoy-workspace',repositoryFiles=[]}={}){
-  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:null});
+  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:null,env:fixedSourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024});
   commit=commit||git('rev-parse','HEAD').toString().trim();
   if(!/^[a-f0-9]{40}$/.test(commit))throw Error('部署必须使用固定commit');
   const sources=files.map(name=>({path:`services/phone-adb-controller/${name}`,deployed_path:name}));
