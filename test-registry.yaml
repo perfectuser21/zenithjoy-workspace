@@ -7615,3 +7615,43 @@ agent_suite:
   status: active
   product: AI员工
   note: "GP-Anchor: line02/keyword_acquisition keep-green；云102–103原生评论来源的同run PG账号绑定、跨公司/平台拒绝及104未授权闭合；不代替真机或生产验收"
+
+- id: customer-workspace-provisioning
+  path: apps/api/src/services/__tests__/customer-workspace.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "客户11/16对象模板与可恢复开户；创建意图、未知响应、明确拒绝及逐库读回"
+
+- id: customer-workspace-platform-adapters
+  path: apps/api/src/services/__tests__/customer-workspace-adapters.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "Notion/飞书HTTP协议模拟；字段身份及分页异常，不冒充真实外部验收"
+
+- id: customer-workspace-service-auth
+  path: apps/api/src/routes/customer-workspaces.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "内部开户接口缺token配置失败关闭、拒绝伪租户与公司不匹配"
+
+- id: customer-workspace-source-whitelist
+  path: apps/api/src/services/__tests__/customer-workspace-source-rows.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "公司产品/画像/关键词初次资料白名单，保留原ID/停用词/版本并拒绝串租户和重复原ID"
+
+- id: customer-workspace-operation-store
+  path: apps/api/src/services/__tests__/customer-workspace-store.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "开户worker排他锁、缺凭据待核对、解锁失败销毁连接与默认关闭"

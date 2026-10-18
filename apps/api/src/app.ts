@@ -66,6 +66,7 @@ import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
 import { acquisitionDispatchRouter } from './routes/acquisition-dispatch';
 import { companyProfileRouter } from './routes/company-profile';
+import { customerWorkspacesRouter } from './routes/customer-workspaces';
 import { line02Router } from './routes/line02';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
 // Line 00 Session Health Medium WS2 — 运营中枢 8 平台 session 端点
@@ -304,6 +305,7 @@ app.use('/api/workbench/documents', documentsRouter);
 app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态
 app.use('/api/company-profile', companyProfileRouter);
+app.use('/api/internal/customer-workspaces', customerWorkspacesRouter);
 app.use('/api/line02', line02Router);
 // (operatorSessionsRouter 已在 operatorRouter 之前注册，见上方)
 
