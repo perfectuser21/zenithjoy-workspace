@@ -2,9 +2,11 @@
 import { Router } from 'express';
 import pool from '../db/connection';
 import { internalAuth } from '../middleware/internal-auth';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { workspaceTemplate, normalizeWorkspaceParent, WORKSPACE_TEMPLATE_VERSION, type WorkspaceState } from '../services/customer-workspace';
 
 export const customerWorkspacesRouter = Router();
+customerWorkspacesRouter.use(simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn }));
 customerWorkspacesRouter.use((req, res, next) => {
   if (!process.env.ZENITHJOY_INTERNAL_TOKEN) { res.status(503).json({ success: false, error: 'WORKSPACE_SERVICE_AUTH_UNCONFIGURED' }); return; }
   internalAuth(req, res, next);
