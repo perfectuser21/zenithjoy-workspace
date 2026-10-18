@@ -107,3 +107,27 @@ test('伪装目标：软链、其它Git common目录或非detached树一律拒�
  git(other,'worktree','add','--detach',target);assert.notEqual(prepare(f).status,0);git(other,'worktree','remove',target);
  assert.equal(prepare(f).status,0);git(target,'checkout','-qb','cp-foreign-branch');assert.notEqual(prepare(f).status,0);
 });
+
+test('same fixed deployment checkout accepts only verified generated Skills and clean pinned cache on retry',t=>{
+ const f=deploymentFixture(t),source=path.join(f.base,'source');fs.mkdirSync(path.join(source,'distribution'),{recursive:true});
+ const payload='fixed runtime skill\n',destination='.skills-runtime/android-publish/SKILL.md';
+ const sha256=bytes=>execFileSync('python3',['-c','import hashlib,sys;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'],{input:bytes,encoding:'utf8'}).trim();
+ const loader='import argparse,pathlib,hashlib,json\np=argparse.ArgumentParser();p.add_argument("command");p.add_argument("--workspace");p.add_argument("--source");a=p.parse_args();w=pathlib.Path(a.workspace);s=pathlib.Path(a.source);c=json.loads((s/"distribution/catalog.json").read_text());e=c["profiles"]["zenithjoy"]["files"][0];assert hashlib.sha256((w/e["path"]).read_bytes()).hexdigest()==e["sha256"]\n';
+ fs.writeFileSync(path.join(source,'distribution/skills_source.py'),loader);fs.writeFileSync(path.join(source,'manual.md'),payload);
+ const entry={path:destination,source:'manual.md',sha256:sha256(payload),mode:'100644'};
+ fs.writeFileSync(path.join(source,'distribution/catalog.json'),JSON.stringify({version:1,profiles:{zenithjoy:{files:[entry]}}}));
+ git(source,'init','-q','-b','cp-fixture');git(source,'config','core.hooksPath','/dev/null');git(source,'add','.');git(source,'-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','source');
+ const revision=git(source,'rev-parse','HEAD');fs.mkdirSync(path.join(f.repo,'scripts'));fs.copyFileSync(path.join(__dirname,'../../../../scripts/skills-source.py'),path.join(f.repo,'scripts/skills-source.py'));
+ fs.writeFileSync(path.join(f.repo,'.skills-source.json'),JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',revision,profile:'zenithjoy',loader_sha256:sha256(loader)}));
+ fs.writeFileSync(path.join(f.repo,'.gitignore'),'.skills-source/\n.skills-runtime/\n.skills-source-state.json\nforeign/\n');
+ git(f.repo,'add','scripts/skills-source.py','.skills-source.json','.gitignore');git(f.repo,'commit','-qm','pin skills');f.sha=git(f.repo,'rev-parse','HEAD');git(f.repo,'update-ref','refs/remotes/origin/main',f.sha);
+ const first=prepare(f);assert.equal(first.status,0,first.stderr);const target=first.stdout.trim();
+ git(f.base,'clone','-q',source,path.join(target,'.skills-source'));
+ fs.mkdirSync(path.join(target,'.skills-runtime/android-publish'),{recursive:true});fs.writeFileSync(path.join(target,destination),payload);
+ fs.writeFileSync(path.join(target,'.skills-source-state.json'),JSON.stringify({revision,files:{[destination]:entry.sha256}}));
+ const retry=prepare(f);assert.equal(retry.status,0,retry.stderr);assert.equal(retry.stdout.trim(),target);
+ fs.writeFileSync(path.join(target,destination),'dirty generated skill');assert.notEqual(prepare(f).status,0);fs.writeFileSync(path.join(target,destination),payload);
+ fs.writeFileSync(path.join(target,'.skills-source/manual.md'),'dirty source cache');assert.notEqual(prepare(f).status,0);fs.writeFileSync(path.join(target,'.skills-source/manual.md'),payload);
+ fs.mkdirSync(path.join(target,'foreign'));fs.writeFileSync(path.join(target,'foreign/ignored'),'must remain');assert.notEqual(prepare(f).status,0);
+ assert.equal(fs.readFileSync(path.join(target,'foreign/ignored'),'utf8'),'must remain');
+});
