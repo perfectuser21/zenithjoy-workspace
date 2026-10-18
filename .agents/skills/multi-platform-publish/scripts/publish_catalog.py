@@ -37,26 +37,30 @@ def git_blob(workspace, revision, path):
         raise ValueError("无法读取固定发布文件：" + path) from error
 
 
-def has_lock(workspace):
+def has_lock(workspace, ref="HEAD"):
     if (workspace / ".skills-source.json").exists():
         return True
     try:
-        git_blob(workspace, "HEAD", ".skills-source.json")
+        git_blob(workspace, ref, ".skills-source.json")
         return True
     except ValueError:
         return False
+
+
+def resolve_ref(workspace, ref):
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(workspace), "rev-parse", "--verify", str(ref) + "^{commit}"],
+            stderr=subprocess.PIPE).decode().strip()
+    except subprocess.CalledProcessError as error:
+        raise ValueError("无法解析固定 Workflow 发布版本") from error
 
 
 class PinnedRelease:
     """Git 发布版本是信任根；可变安装状态和相邻开发目录均不是。"""
     def __init__(self, workspace, ref):
         self.workspace = workspace.resolve()
-        try:
-            self.ref = subprocess.check_output(
-                ["git", "-C", str(workspace), "rev-parse", "--verify", str(ref) + "^{commit}"],
-                stderr=subprocess.PIPE).decode().strip()
-        except subprocess.CalledProcessError as error:
-            raise ValueError("无法解析固定 Workflow 发布版本") from error
+        self.ref = resolve_ref(workspace, ref)
         self.bootstrap = git_blob(workspace, self.ref, "scripts/skills-source.py")
         self.lock = json.loads(git_blob(workspace, self.ref, ".skills-source.json"))
 
@@ -105,13 +109,14 @@ def resolve_source(source, workspace, skills, release=None):
     return str(path)
 
 
-def plan(platform, content_type, channel, workspace=None, skills=None, ref="HEAD"):
+def plan(platform, content_type, channel, workspace=None, skills=None, ref=None):
     workspace = Path(workspace or os.environ.get("ZENITHJOY_WORKSPACE_ROOT", WORKSPACE)).resolve()
-    locked = has_lock(WORKSPACE) or has_lock(workspace)
+    fixed_ref = resolve_ref(workspace, ref) if ref is not None else None
+    locked = has_lock(WORKSPACE) or has_lock(workspace, fixed_ref or "HEAD")
     if locked:
         if workspace != WORKSPACE.resolve() or skills is not None or os.environ.get("ZENITHJOY_SKILLS_ROOT"):
             raise ValueError("固定发布禁止开发目录覆盖；请使用独立的无锁探索工作区")
-        release = PinnedRelease(workspace, ref)
+        release = PinnedRelease(workspace, fixed_ref or "HEAD")
     else:
         release = None
     skills = Path(skills or os.environ.get("ZENITHJOY_SKILLS_ROOT", SKILLS))
@@ -147,11 +152,17 @@ def main(argv=None):
     sub.add_parser("list")
     sub.add_parser("matrix")
     p = sub.add_parser("plan")
-    p.add_argument("--ref", default="HEAD", help="本次 Workflow 固定的 Git 发布版本")
+    p.add_argument("--ref", help="本次 Workflow 固定的 Git 发布版本")
     p.add_argument("--platform", required=True)
     p.add_argument("--type", required=True)
     p.add_argument("--channel", choices=["phone", "browser", "api"], required=True)
     args = parser.parse_args(argv)
+    try:
+        catalog = load_catalog() if args.command in {"list", "matrix"} else None
+        result = plan(args.platform, args.type, args.channel, ref=args.ref) if args.command == "plan" else catalog
+    except ValueError as error:
+        print(json.dumps({"error": str(error), "executed": False}, ensure_ascii=False))
+        return 2
     if args.command == "matrix":
         print("<!-- 由 scripts/publish_catalog.py matrix 生成；真身为 catalog.json -->")
         print("# 发布内容分支清单\n")
@@ -160,17 +171,12 @@ def main(argv=None):
         print("| 平台与类型 | 已找到的源文件通道 | 状态 |")
         print("|---|---|---|")
         labels = {"phone": "手机手册", "browser": "浏览器脚本", "api": "公众号 API"}
-        for route in load_catalog()["routes"]:
+        for route in catalog["routes"]:
             channels = "、".join(labels[c] for c in route["channels"])
             print("| " + route["name"] + " | " + channels + " | 源文件已定位 |")
         print("\n长图片归 image，渲染成品视频归 video；是否是新的独立工作流，要看触发、输入、编辑入口和结果，不能仅按叫法增加条数。")
         print("\n安卓补充模式见 [补充手册](android-additional-modes.md)：小红书图文/原生长文、头条文章、微博原生文章和知乎三类。发表效果、字段保真、权限、审核终态及安全收尾分别验收；未全验的严格断言与限制保留。公众号本轮只走官方API，群发、草稿及链接模式分开判定。")
         return 0
-    try:
-        result = load_catalog() if args.command == "list" else plan(args.platform, args.type, args.channel, ref=args.ref)
-    except ValueError as error:
-        print(json.dumps({"error": str(error), "executed": False}, ensure_ascii=False))
-        return 2
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
