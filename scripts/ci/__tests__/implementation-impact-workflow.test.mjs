@@ -36,6 +36,7 @@ test('只传约定认证和独立只读来源 token，artifact 来源校验路�
     CECELIA_INTERNAL_TOKEN: '${{ secrets.CECELIA_INTERNAL_TOKEN }}',
     BRAIN_DEPLOY_URL: '${{ secrets.BRAIN_DEPLOY_URL }}',
     CECELIA_ACTIONS_READ_TOKEN: '${{ secrets.CECELIA_ACTIONS_READ_TOKEN }}',
+    SKILLS_SOURCE_SSH_KEY: '${{ secrets.SKILLS_SOURCE_SSH_KEY }}',
   });
   assert.equal(path.pathname.endsWith('/.github/workflows/implementation-impact.yml'), true);
   assert.equal(config.concurrency, undefined, '并发组仅由受信callee控制，防止嵌套调用自行取消');
