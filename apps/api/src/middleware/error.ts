@@ -6,7 +6,7 @@ export class ApiError extends Error {
     public code: string,
     public message: string,
     public statusCode: number,
-    public details?: any
+    public details?: unknown
   ) {
     super(message);
     this.name = 'ApiError';
@@ -19,6 +19,7 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ) {
+  void next; // Express错误中间件保留四参数签名。
   // Zod validation errors
   if (err instanceof ZodError) {
     return res.status(400).json({

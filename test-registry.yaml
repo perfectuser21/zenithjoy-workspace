@@ -7655,3 +7655,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "开户worker排他锁、缺凭据待核对、解锁失败销毁连接与默认关闭"
+
+- id: customer-workspace-http-smoke
+  path: .github/workflows/scripts/smoke/customer-workspace-http-smoke.sh
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "真实HTTP内部模板11/16、鉴权和非法绑定；不以此证明外部建库/数据同步"
