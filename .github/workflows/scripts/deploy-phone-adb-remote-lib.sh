@@ -30,7 +30,7 @@ check_clean_checkout() {
 # 原仓仅提供objects和origin/main；独立SHA目录不切换用户分支、不清理现场。
 prepare_deployment_checkout() {
   python3 - "$1" "$2" "${3:-$HOME/.local/share/zenithjoy/deploy-checkouts}" <<'PY'
-import fcntl,os,re,subprocess,sys
+import fcntl,os,re,subprocess,sys,json
 from pathlib import Path
 
 def git(root,*args):
@@ -41,7 +41,44 @@ def canonical(path):return Path(path).resolve(strict=True)
 def current(repo,sha):
  need(git(repo,'rev-parse','origin/main')==sha,'目标SHA已不是当前origin/main')
 def clean(target):
- need(not git(target,'status','--porcelain=v1','--untracked-files=all','--ignored=matching'),'部署树有改动或额外文件；保留现场并拒绝')
+ status=git(target,'status','--porcelain=v1','--untracked-files=all','--ignored=matching')
+ if not status:return
+ need(not git(target,'status','--porcelain=v1','--untracked-files=no'),'部署树已跟踪文件有改动；保留现场并拒绝')
+ revision=git(target,'rev-parse','HEAD')
+ fixed_lock=git(target,'show',revision+':.skills-source.json')
+ need((target/'.skills-source.json').read_text().strip()==fixed_lock,'Skill锁已改变')
+ lock=json.loads(fixed_lock);cache=target/'.skills-source'
+ need(lock.get('repository')=='perfectuser21/zenithjoy-skills' and re.fullmatch('[0-9a-f]{40}',lock.get('revision','')),'Skill固定源无效')
+ need(cache.is_dir() and not cache.is_symlink() and (cache/'.git').is_dir() and not (cache/'.git').is_symlink(),'缓存不是独立真实Git目录')
+ need(canonical(git(cache,'rev-parse','--show-toplevel'))==cache,'缓存仓库根不符')
+ need(git(cache,'rev-parse','HEAD')==lock['revision'],'缓存不是固定Skill提交')
+ need(not git(cache,'status','--porcelain=v1','--untracked-files=all','--ignored=matching'),'Skill缓存有漂移或额外文件')
+ catalog=json.loads(git(cache,'show',lock['revision']+':distribution/catalog.json'))
+ entries=catalog['profiles'][lock['profile']]['files']
+ allowed={entry['path'] for entry in entries}
+ state=target/'.skills-source-state.json'
+ if state.exists():
+  need(not state.is_symlink(),'分发状态不能是软链')
+  expected={entry['path']:entry['sha256'] for entry in entries}
+  need(json.loads(state.read_text())=={'revision':lock['revision'],'files':expected},'分发状态不等于固定清单')
+  allowed.add('.skills-source-state.json')
+ # status collapses ignored directories; inspect every child rather than accepting a broad prefix.
+ rows=subprocess.check_output(['git','-C',str(target),'status','--porcelain=v1','-z','--untracked-files=all','--ignored=matching']).decode().split('\0')
+ for row in filter(None,rows):
+  need(row[:2] in ('??','!!'),'部署树有非生成改动')
+  relative=row[3:].rstrip('/')
+  if relative=='.skills-source':continue
+  path=target/relative
+  need(not path.is_symlink(),'生成路径不能是软链')
+  children=list(path.rglob('*')) if path.is_dir() else [path]
+  for child in children:
+   need(not child.is_symlink(),'生成路径不能含软链')
+   if child.is_file():need(child.relative_to(target).as_posix() in allowed,'部署树有未知额外文件')
+ bootstrap=git(target,'show',revision+':scripts/skills-source.py')
+ code='__file__ = '+repr(str(target/'scripts/skills-source.py'))+'\n'+bootstrap
+ env=os.environ.copy();env['PYTHONDONTWRITEBYTECODE']='1'
+ subprocess.run(['python3','-c',code,'verify','--workspace',str(target),'--source',str(cache)],env=env,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+
 try:
  repo=canonical(sys.argv[1]);sha=sys.argv[2];base=Path(sys.argv[3]).absolute()
  need(re.fullmatch('[0-9a-f]{40}',sha),'非法部署SHA')
