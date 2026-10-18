@@ -44,3 +44,15 @@ test('slow authorization cannot start a phone or Code operation after the origin
  const b=await startActivityBroker({directory:d,request:{...request,deadline_ms:Date.now()+80},authorize:async()=>{await new Promise(r=>setTimeout(r,120));return true;},inspect:async()=>({}),resume:async()=>{started++;return {};},phone:async()=>{started++;}});
  try{await assert.rejects(()=>call(b,'resume'));await new Promise(r=>setTimeout(r,150));assert.equal(started,0);}finally{await b.close();rmSync(d,{recursive:true,force:true});}
 });
+
+test('qualification Skill can inspect fresh native audio only twice with parent-owned evidence identity',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-native-'));let phones=0;
+ const b=await startActivityBroker({directory:d,request:{...request,activity_key:'qualification',deadline_ms:Date.now()+20000},authorize:async()=>true,inspect:async()=>({video_id:'fixture-video'}),resume:async()=>({}),phone:async(command,...args)=>{assert.equal(command,'native-audio-evidence');assert.deepEqual(args,[]);phones++;return 'native_audio_state=started';}});
+ try{
+  assert.ok((await call(b,'inspect')).result.phone_capabilities.includes('native-audio-evidence'));
+  await assert.rejects(()=>callActivityTool(b.requestPath,'phone',{command:'native-audio-evidence',args:['foreign-evidence']}));
+  for(let i=0;i<2;i++)assert.match((await callActivityTool(b.requestPath,'phone',{command:'native-audio-evidence',args:[]})).result,/native_audio_state=started/);
+  await assert.rejects(()=>callActivityTool(b.requestPath,'phone',{command:'native-audio-evidence',args:[]}));assert.equal(phones,2);
+ }finally{await b.close();rmSync(d,{recursive:true,force:true});}
+ for(const activity_key of ['collection','scoring','send_dm'])await using(async(b)=>{await assert.rejects(()=>callActivityTool(b.requestPath,'phone',{command:'native-audio-evidence',args:[]}));},{activity_key});
+});

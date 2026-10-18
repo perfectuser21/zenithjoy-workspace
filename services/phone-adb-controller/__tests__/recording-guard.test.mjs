@@ -36,9 +36,15 @@ while :; do sleep .05; done
  const run=(...args)=>spawnSync('zsh',[ctl,'--profile','p1',...args],{env,encoding:'utf8',timeout:15000});
  try{
   assert.equal(run('lock-acquire',owner).status,0);
+  assert.notEqual(run('native-audio-evidence','native-no-owner').status,0);
+  assert.notEqual(run('--lock-owner','other-owner','native-audio-evidence','native-wrong-owner').status,0);
+  const nativeRead=run('--lock-owner',owner,'native-audio-evidence','native-readback');
+  assert.equal(nativeRead.status,0,nativeRead.stderr);assert.match(nativeRead.stdout,/native_audio_state=started/);
   const start=run('--lock-owner',owner,'record-start','guard-probe','5');
   const pidfile=join(d,'tmp/evidence/p1/guard-probe.rec.pid');if(existsSync(pidfile))pid=Number(readFileSync(pidfile,'utf8'));
   assert.equal(start.status,0,start.stderr);assert.match(start.stdout,/record_started/);
+  const busyRead=run('--lock-owner',owner,'native-audio-evidence','native-busy');
+  assert.notEqual(busyRead.status,0);assert.match(busyRead.stderr,/CAPTURE_NOT_STOPPED/);
   assert.deepEqual(readFileSync(join(d,'runtime-calls.jsonl'),'utf8').trim().split('\n').map(JSON.parse).map(x=>[x.command,x.kind]),[['verify','sdk33'],['stage-server','sdk33']]);
   assert.equal(run('lock-refresh',owner).status,0,'background recorder must not retain the bounded command guard FD');
   const foreign=run('--lock-owner','other-owner','record-stop','guard-probe');assert.notEqual(foreign.status,0);assert.ok(pid>1);process.kill(pid,0);
