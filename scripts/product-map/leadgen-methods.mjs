@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {resolve,join,posix} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
+import {readImplementationSource} from '../ci/implementation-skill-source.mjs';
 
 const repository='perfectuser21/zenithjoy-workspace';
 const prefix='services/phone-adb-controller/';
@@ -111,7 +112,7 @@ export function writeMethodsLock(root,{compatibility={}}={}){
   }
   writeFileSync(join(root,LOCK_PATH),JSON.stringify(current,null,2)+'\n');return current;
 }
-export function checkMethods(root,{base=null}={}){
+export function checkMethods(root,{base=null,skillSource}={}){
   const read=reader(root),actual=collectMethods(root),lock=json(read,LOCK_PATH),stripped=structuredClone(lock);
   for(const a of Object.values(stripped.activities??{}))delete a.code_compatibility;
   if(!same(actual,stripped))fail('METHOD_LOCK_DRIFT','run explicit lock generation and review source changes');
@@ -119,7 +120,13 @@ export function checkMethods(root,{base=null}={}){
   if(base){
     if(!/^[a-f0-9]{40}$/.test(base))fail('BASE_SHA_INVALID');
     try{execFileSync('git',['rev-parse','--verify',base+'^{commit}'],{cwd:root,stdio:'pipe'});}catch{fail('BASE_COMMIT_UNAVAILABLE',base);}
-    const readBase=path=>execFileSync('git',['show',base+':'+safePath(path)],{cwd:root,stdio:['ignore','pipe','pipe'],maxBuffer:32*1024*1024});
+    const centralLock=execFileSync('git',['ls-tree',base,'--','.skills-source.json'],{cwd:root,stdio:['ignore','pipe','pipe']}).toString();
+    const readBase=path=>{safePath(path);
+      // Before migration, preserve ordinary Git absence for first method adoption.
+      // With a historical source lock, every Skill read remains pinned and strict.
+      if(path===LOCK_PATH||!centralLock)return execFileSync('git',['show',base+':'+path],{cwd:root,stdio:['ignore','pipe','pipe'],maxBuffer:32*1024*1024});
+      return readImplementationSource(root,base,path,{source:skillSource});
+    };
     const bytes=optional(readBase,LOCK_PATH);let before=null;
     if(bytes){before=JSON.parse(bytes);const baseActual=collectMethods(root,{read:readBase}),strippedBase=structuredClone(before);for(const a of Object.values(strippedBase.activities??{}))delete a.code_compatibility;if(!same(baseActual,strippedBase))fail('BASE_METHOD_LOCK_DRIFT');}
     evolution(lock,before,readBase);

@@ -110,7 +110,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
   const adbClient=mmvDeviceRuntime?(env.DOUYIN_ADB_BIN||'/opt/homebrew/bin/adb'):'adb';
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit};
-  let qualificationClaimed=false;const qualificationProgress=new Map(),qualificationAttempts=new Map();
+  let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{
     const file=join(env.WFR_RUN_DIR,'activity.log');
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
@@ -138,7 +138,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       const held=await checked(ctl,['--profile',profile,'lock-refresh',run]);
       if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
     }
-    const ownerArgs=['close-app','return-safe-desktop','current-video-link'].includes(command)?['--lock-owner',run]:[];
+    const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
       command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{});
@@ -366,7 +366,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     proof.verified=proof.device.verified&&proof.videos.every(v=>v.verified)&&!proof.claim_receipt_unknown;
     writeFileSync(join(env.WFR_RUN_DIR,'resource-quarantine.json'),JSON.stringify(proof),{mode:0o600});return proof;
   };
-  return {state,preflight,quarantineResources,handoffPhone:phone,handoffHeartbeat:async activity=>{
+  return {state,preflight,quarantineResources,handoffPhone:async(command,...args)=>{
+      if(command==='native-audio-evidence'){
+        if(args.length||nativeSkillReads>=2)throw Error('SKILL_NATIVE_READBACK_NOT_ALLOWED');
+        return phone(command,`${run}-qualification-skill-native${++nativeSkillReads}`);
+      }
+      return phone(command,...args);
+    },handoffHeartbeat:async activity=>{
       if(locked){const raw=(await phone('lock-refresh',run)).trim().split(/\s+/),fields=Object.fromEntries(raw.map(token=>token.split('=')));
         if(raw.length!==3||fields.lock!=='refreshed'||fields.owner!==run||!/^\d+s$/.test(fields.ttl||''))throw Error('Skill接手设备锁所有权续期未确认');}
       if(activity.key!=='cleanup')for(const v of leased){const receipt=await queue('renew_video',{video_id:v.video_id});if(receipt?.renewed!==true)throw Error('Skill接手原视频租约续期未确认');}

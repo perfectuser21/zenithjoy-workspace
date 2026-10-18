@@ -6,6 +6,15 @@ import {safeExecutionDiagnostic} from './leadgen-client.mjs';
 import {isCaptureContractFailure} from './activity-commander.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const noLaunch=message=>{const e=Error(message);e.executionStopped=true;throw e;};
+// Child prose is diagnostic only. It never satisfies the Activity result contract.
+export function skillBlockedDiagnostic(receipt,request,env){
+ if(receipt?.execution_stopped!==true||receipt?.status!=='ok')return null;
+ let reply;try{reply=JSON.parse(receipt.terminal?.terminalReply?.text);}catch{return null;}
+ if(reply?.result!=='blocked'||reply.run_id!==request.run_id||(reply.activity_key||reply.activity)!==request.activity_key||reply.source_commit!==request.source_commit||reply.runtime_snapshot_sha256!==request.runtime_snapshot_sha256)return null;
+ const reason=[reply.earliest_error?.reason,reply.blocked_reason].filter(x=>typeof x==='string').join('; ');
+ if(!reason)return null;
+ return {status:'blocked',reason:safeExecutionDiagnostic(reason,env).slice(0,1500)};
+}
 export function classifyActivityFailure(activity,failure){
  const text=JSON.stringify(failure);
  if(isCaptureContractFailure(failure))return 'blocked';
@@ -61,7 +70,10 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc})
    const actual=broker.getResult();stopped=receipt?.execution_stopped===true&&actual.active===0;
    if(!stopped)return {status:'failed',execution_stopped:false,reason:'Skill或原操作终止未知',skill_receipt:receipt};
    if(heartbeatError)return {status:'failed',execution_stopped:true,reason:'Skill执行期间原资源续期未验证',skill_receipt:receipt};
-   if(receipt.status!=='ok'||!actual.reserved||!actual.result)return {status:'partial',execution_stopped:true,reason:'Skill未交付当前Activity实际执行结果',skill_receipt:receipt};
+   if(receipt.status!=='ok'||!actual.reserved||!actual.result){
+    const blocked=skillBlockedDiagnostic(receipt,request,env);
+    return {status:'partial',execution_stopped:true,reason:blocked?'Skill接手后阻断: '+blocked.reason:'Skill未交付当前Activity实际执行结果',recovery_outcome:blocked?'skill_blocked':'skill_result_missing',skill_receipt:receipt};
+   }
    const result=actual.result;
    return {status:['failed','partial','paused'].includes(result.status)?'partial':'completed',result,execution_stopped:true,skill_receipt:receipt};
   }catch(error){error.executionStopped=stopped;throw error;}

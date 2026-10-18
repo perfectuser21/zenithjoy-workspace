@@ -38,6 +38,12 @@ test('真实SDK31片段：前缀包查询两行仍精确识别主UID及原生sta
 });
 test('SDK31相同精确主包即使无前缀包也必须解析真实旧格式',()=>assert.equal(run({packages:'package:'+pkg+' uid:10095\n'}).proof.state,'started'));
 test('SDK31原生paused是inactive，不以MediaSession state=1冒充started',()=>assert.equal(run({audio:original.replace('state:started','state:paused')}).proof.state,'inactive'));
+test('SDK31明确通知焦点只标瞬态，原生状态仍unknown',()=>{
+ const notification=track.replace('piid:303','piid:304').replace('android.media.AudioTrack','android.media.MediaPlayer').replace('10095/28604','10072/1398').replace('USAGE_MEDIA','USAGE_NOTIFICATION');
+ const audio=original.replace(track,track+'\n'+notification).replace('  ducked players piids:\n','  ducked players piids:\n uid:10095 piids: 303\n');
+ const r=run({audio});assert.equal(r.proof.state,'unknown');assert.equal(r.proof.transient_notification,true);
+ for(const bad of [audio.replace('piids: 303','piids: 999'),audio.replace('10072/1398 state:started','10095/1398 state:started'),audio.replace('USAGE_NOTIFICATION','USAGE_MEDIA'),audio.replace('  muted player piids:\n','  muted player piids: 303\n')])assert.notEqual(run({audio:bad}).proof.transient_notification,true);
+});
 for(const [name,options] of Object.entries({
  缺静音段:{audio:original.replace('  muted player piids:\n','')},
  缺banned段:{audio:original.replace('  banned uids:\n','')},

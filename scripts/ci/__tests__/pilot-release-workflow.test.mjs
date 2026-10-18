@@ -4,8 +4,8 @@ import {existsSync,readFileSync} from 'node:fs';
 import YAML from 'yaml';
 import {validatePatrolCaller} from '../implementation-patrol-scope.mjs';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
-// Cecelia PR #6435 的实际 squash 合并提交；不能固定已删除开发分支中的中途提交。
-const revision='8caa91023f6e11a8d54d78d49f3f9d5f5291ea3d';
+// Cecelia PR #6555 的实际合并提交；固定已合主线，不使用开发分支中途提交。
+const revision='a72ff8372d4eb2100e1b9b7572d88a22969bef2f';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
 test('完整发布caller名称与路径固定，仅main push/手动触发，不借PR影响结果',()=>{
  const w=config();assert.equal(w.name,'Pilot release verification');
@@ -30,9 +30,9 @@ test('通用Commander复用完整发布验证并保留原zenithjoy范围',()=>{
  assert.equal(j['continue-on-error'],undefined);
  assert.equal(w.jobs.verify.with.scope,'zenithjoy');
 });
-test('发布caller只传三项显式secret，保read权限和实际main拒绝闸',()=>{
+test('发布caller显式传递中央Skill只读密钥，保read权限和实际main拒绝闸',()=>{
  const w=config();assert.deepEqual(w.permissions,{contents:'read',actions:'read'});
- assert.deepEqual(w.jobs.verify.secrets,{TS_AUTHKEY:'${{ secrets.TS_AUTHKEY }}',CECELIA_INTERNAL_TOKEN:'${{ secrets.CECELIA_INTERNAL_TOKEN }}',BRAIN_DEPLOY_URL:'${{ secrets.BRAIN_DEPLOY_URL }}'});
+ assert.deepEqual(w.jobs.verify.secrets,{TS_AUTHKEY:'${{ secrets.TS_AUTHKEY }}',CECELIA_INTERNAL_TOKEN:'${{ secrets.CECELIA_INTERNAL_TOKEN }}',BRAIN_DEPLOY_URL:'${{ secrets.BRAIN_DEPLOY_URL }}',SKILLS_SOURCE_SSH_KEY:'${{ secrets.SKILLS_SOURCE_SSH_KEY }}'});
  const guard=w.jobs['caller-contract'].steps.find(s=>s.env?.RUN_REF==='${{ github.ref }}');
  assert.equal(guard.run,'test "$RUN_REF" = refs/heads/main');
 });
