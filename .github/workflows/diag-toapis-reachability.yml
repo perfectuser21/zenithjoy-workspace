@@ -17,7 +17,6 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - ".skills-source.json"
       - '.github/workflows/diag-toapis-reachability.yml'
 
 permissions:

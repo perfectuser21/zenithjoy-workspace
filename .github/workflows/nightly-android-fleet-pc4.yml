@@ -56,11 +56,6 @@ jobs:
             .github/workflows/scripts/smoke
           sparse-checkout-cone-mode: false
 
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: 关闭 exit-node（不常驻占用）
         if: always()
         shell: bash
@@ -153,11 +148,6 @@ jobs:
             .github/workflows/scripts/smoke
           sparse-checkout-cone-mode: false
 
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: 关闭 exit-node（不常驻占用）
         if: always()
         shell: bash

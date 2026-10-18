@@ -18,7 +18,6 @@ on:
   push:
     branches: [main]
     paths:
-      - ".skills-source.json"
       - 'services/agent/src/handlers/douyin-publish.ts'
       - 'services/agent/src/handlers/qr-bind-douyin.ts'
       - 'services/agent/publishers/douyin-publisher/**'
@@ -35,11 +34,6 @@ jobs:
         working-directory: services/agent
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -67,11 +61,6 @@ jobs:
         working-directory: services/agent
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

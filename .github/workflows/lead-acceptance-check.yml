@@ -8,7 +8,6 @@ name: lead-acceptance-check
 on:
   pull_request:
     paths:
-      - ".skills-source.json"
       - '.agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md'
       - 'scripts/check-lead-acceptance.sh'
       - '.github/workflows/lead-acceptance-check.yml'
@@ -18,11 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - name: Validate lead acceptance evidence files
         run: |
           for f in .agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md; do

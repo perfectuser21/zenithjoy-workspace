@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - ".skills-source.json"
       - 'apps/dashboard/**'
       - 'sprints/06251400-line04-crm-redo-frontend/**'
       - '.github/workflows/e2e-line04-crm-redo.yml'
@@ -22,11 +21,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

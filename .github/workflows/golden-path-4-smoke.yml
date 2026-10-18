@@ -34,11 +34,6 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - name: Run ws1 smoke
@@ -50,11 +45,6 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
@@ -68,11 +58,6 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - name: Run ws3 smoke
@@ -84,11 +69,6 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - name: Run ws4 smoke
@@ -100,11 +80,6 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
@@ -118,11 +93,6 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: actions/setup-python@v5
@@ -170,11 +140,6 @@ jobs:
       ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
     steps:
       - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       # 2026-08-04 修复（Fix 4）：本 job 真正装的依赖来自两个 lockfile——根 package-lock.json
       # （覆盖 apps/api + apps/agent-panel）和 services/agent/package-lock.json（独立项目）。
       # 只声明后者会让根 lockfile 那部分装依赖走不了 npm cache。

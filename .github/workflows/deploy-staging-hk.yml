@@ -15,7 +15,6 @@ on:
   push:
     branches: [main]
     paths:
-      - ".skills-source.json"
       - 'apps/api/**'
       - 'deploy/docker-compose.staging-api.yml'
   workflow_dispatch: {}
@@ -99,11 +98,6 @@ jobs:
       - name: Checkout (payment smoke script)
         uses: actions/checkout@v4
 
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       # 从 GHA runner 公网出口验证部署后的支付回调端点——上面 [4/4] 那步是容器起来了没
       # （SSH 进 HK 内网 curl 127.0.0.1），这步验的是完全不同的另一件事：公网域名/nginx
       # 反代路径有没有漂移、验签中间件有没有真的挂上，只有走公网才能测出来。
