@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // douyin-phone-adb 截图回传 JPEG 副本回归测试（0929 新建）。
 //
 // 事故形状（0929 实证）：截图命令只产出原图 PNG（荣耀 1200x2664 约 3MB），agent 用

@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // douyin-phone-adb account-current 误读他人主页回归测试（0930 新建）。
 //
 // 事故（0930 00:39 后，xian-m4 legacy）：抖音重开时恢复到了**别人的主页**（outreach-tick 刚私信过的

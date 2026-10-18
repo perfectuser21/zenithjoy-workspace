@@ -1,7 +1,25 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {spawn} from 'node:child_process';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+const self=fileURLToPath(import.meta.url), direct=process.argv[1]===self, worker=direct&&process.argv[2]==='--fixture-worker';
+if(worker){
+const [file,parent]=process.argv.slice(3);
+const s=net.createServer(c=>{let b=Buffer.alloc(0);c.on('error',()=>{});c.on('data',value=>{
+ b=Buffer.concat([b,value]);if(b.length<4)return;const n=parseInt(b.subarray(0,4).toString(),16);if(b.length<4+n)return;
+ const q=b.subarray(4,4+n).toString(),v=q==='host:version'?'0029':q==='host:devices'?'SER1\tdevice\n47.100.213.173:10001\tdevice\n':null;
+ if(v===null){c.end('FAIL0007invalid');return;}const data=Buffer.from(v);c.end(Buffer.concat([Buffer.from('OKAY'+data.length.toString(16).padStart(4,'0')),data]));
+});});
+s.listen(0,'127.0.0.1',()=>writeFileSync(file,String(s.address().port)));
+setInterval(()=>{try{process.kill(Number(parent),0);}catch{process.exit(0);}},500).unref();
+
+
+}else if(direct){
 const helper=new URL('../adb-existing-route.py',import.meta.url).pathname;
 async function server(t,devices,{version='0029',hang=false}={}){
  const requests=[];const sockets=new Set();const s=net.createServer(c=>{sockets.add(c);c.on('close',()=>sockets.delete(c));let b=Buffer.alloc(0);c.on('data',v=>{b=Buffer.concat([b,v]);if(b.length<4)return;const n=parseInt(b.subarray(0,4).toString(),16);if(b.length<4+n)return;const q=b.subarray(4,4+n).toString();requests.push(q);assert.ok(['host:version','host:devices'].includes(q));if(hang)return;const value=q==='host:version'?version:devices;const data=Buffer.from(value);c.end(Buffer.concat([Buffer.from('OKAY'+data.length.toString(16).padStart(4,'0')),data]));});});
@@ -27,9 +45,6 @@ test('离线、重复行、未知协议、外host及超时均拒绝',async t=>{
  const good=await server(t,'431\tdevice\n');assert.notEqual((await route([good.port,hanging.port])).status,0,'另一既有server未核实不能假定唯一');
  assert.notEqual((await route([good.port,bad.port])).status,0,'另一既有server未知协议不能静默跳过');
 });
-import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
 test('真实controller先验证既有socket再用该路由，customclient也不能免probe；锁命令不探设备',async t=>{
  const s=await server(t,'431\tdevice\n'),dir=mkdtempSync(join(tmpdir(),'adb-route-controller-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const adb=join(dir,'adb'),reg=join(dir,'profiles'),log=join(dir,'calls');writeFileSync(reg,'p\t431\tMODEL\t1199\t2663\n');
@@ -43,3 +58,23 @@ test('真实controller先验证既有socket再用该路由，customclient也不�
  const refresh=await call('refresh',base.EXPECTED_SOCKET);assert.notEqual(refresh.status,0);assert.equal(readFileSync(log,'utf8'),before);
  writeFileSync(adb,readFileSync(adb,'utf8').replace('1.0.41','1.0.40'));const wrongClient=await call('status',base.EXPECTED_SOCKET);assert.notEqual(wrongClient.status,0);assert.match(wrongClient.err,/ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH/);assert.equal(readFileSync(log,'utf8'),before+'version\n');
 });
+}
+let fixtureRoot, fixture;
+function initializeFixture(){
+fixtureRoot=mkdtempSync(join(tmpdir(),'adb-socket-fixture-'));
+const root=fixtureRoot,ready=join(root,'ready');
+const child=spawn(process.execPath,[self,'--fixture-worker',ready,String(process.pid)],{stdio:'ignore'});child.unref();
+const deadline=Date.now()+5000;while(!existsSync(ready)&&Date.now()<deadline)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);
+if(!existsSync(ready))throw Error('fake existing ADB socket did not become ready');
+process.env.ADB_SERVER_SOCKET='tcp:127.0.0.1:'+readFileSync(ready,'utf8').trim();
+process.on('exit',()=>{try{child.kill('SIGTERM');}catch{}rmSync(root,{recursive:true,force:true});});
+fixture=function(bin){
+ const file=join(root,createHash('sha256').update(bin).digest('hex'));
+ // fake旧客户端显式声明相同ADB协议，其余参数/输出原样交原fixture。
+ writeFileSync(file,'#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = version ]; then printf "Android Debug Bridge version 1.0.41\\n"; exit 0; fi\nexec '+"'"+bin.replaceAll("'","'\\''")+"'"+' "$@"\n',{mode:0o755});
+ return file;
+}
+
+}
+if(!direct)initializeFixture();
+export function fixtureAdb(bin){if(!fixture)initializeFixture();return fixture(bin);}

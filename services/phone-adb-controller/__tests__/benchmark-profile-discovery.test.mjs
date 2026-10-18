@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // 对标发现（对标链接获客 · discovery 活动）控制器子命令守卫。
 //
 // 0929 真机探明（xian-m4 legacy 机）：

@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
 //
 // 归位根因守卫（0930，任务 45ee7653，决策 f425e3fd）。

@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';

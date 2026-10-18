@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // services/phone-adb-controller/__tests__/back-to-results.test.mjs
 //
 // 采收循环处理完一个视频后的**归位**守卫。

@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // douyin-phone-adb account-current 昵称误读回归测试（0929 新建）。
 //
 // 事故（0929 17:20，小蓝 profile jinoshengyuan-work）：account-current 读出 nickname=11，

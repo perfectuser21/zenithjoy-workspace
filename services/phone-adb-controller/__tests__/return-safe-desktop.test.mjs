@@ -1,4 +1,4 @@
-import {fixtureAdb} from './helpers/adb-socket-fixture.mjs';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // douyin-phone-adb return-safe-desktop 子命令回归测试（0929 DoD 审计批次4新建）。
 // 事故形状：契约"回安全桌面"(cleanup 活动 step 3)从建成起就是零实现——
 // close-app 虽然也按 HOME 键，但只验证"前台不再是抖音"，不验证"真的回到了桌面"
