@@ -54,7 +54,7 @@ test('MMV完整正式部署清单用固定Git字节覆盖CORE/SH/PLAN/CTL及原�
  const arrays=source.slice(source.indexOf('MMV_JS_FILES=('),source.indexOf('# 在任何SSH前'));
  const files=execFileSync('bash',['-c',arrays+'\nprintf "%s\\n" "${MMV_RUNTIME_FILES[@]}"'],{encoding:'utf8'}).trim().split('\n');
  assert.equal(new Set(files).size,files.length);
- for(const path of ['leadgen-run.sh','leadgen-workflow.mjs','runtime-receipts.mjs','douyin-phone-adb','phone-lock-helper.py','leadgen-rpc.mjs','leadgen-queue.js','sort-comments.js','plans/douyin_comment_scoring.plan','checks/douyin-comment-scoring.yaml'])assert.ok(files.includes(path),`MMV正式包缺 ${path}`);
+ for(const path of ['leadgen-run.sh','leadgen-workflow.mjs','runtime-receipts.mjs','douyin-phone-adb','adb-existing-route.py','phone-lock-helper.py','leadgen-rpc.mjs','leadgen-queue.js','sort-comments.js','plans/douyin_comment_scoring.plan','checks/douyin-comment-scoring.yaml'])assert.ok(files.includes(path),`MMV正式包缺 ${path}`);
  const root=mkdtempSync(join(tmpdir(),'mmv-full-fixed-')),prefix=join(root,'services/phone-adb-controller'),runner=mkdtempSync(join(tmpdir(),'mmv-full-runner-')),rpc=mkdtempSync(join(tmpdir(),'mmv-full-rpc-'));
  for(const path of files){const dest=join(prefix,path);mkdirSync(dirname(dest),{recursive:true});copyFileSync(new URL('../'+path,import.meta.url),dest);}
  const git=(...args)=>execFileSync('git',['-C',root,...args],{stdio:'pipe'});git('init','-b','cp-mmv-full-fixture');git('add','.');const tree=git('write-tree').toString().trim();
