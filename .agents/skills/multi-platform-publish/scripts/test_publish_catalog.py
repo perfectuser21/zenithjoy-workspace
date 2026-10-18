@@ -119,6 +119,17 @@ class CatalogSmoke(unittest.TestCase):
 
 class PinnedReleaseSmoke(unittest.TestCase):
     """用两个真实 Git 源版本验证发布路由；不访问网络、不启动发布。"""
+    def test_fixture_ignores_external_source_cache_and_restores_environment(self):
+        with tempfile.TemporaryDirectory() as external:
+            with patch.dict(os.environ, {"SKILLS_SOURCE_DIR": external}):
+                fixture = type(self)("test_routes_resolve_to_verified_local_release_files_for_both_source_shas")
+                try:
+                    fixture.setUp()
+                    fixture.test_routes_resolve_to_verified_local_release_files_for_both_source_shas()
+                finally:
+                    fixture.doCleanups()
+                self.assertEqual(os.environ["SKILLS_SOURCE_DIR"], external)
+
     def git(self, root, *args):
         return subprocess.check_output(["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-C", str(root), *args], stderr=subprocess.PIPE).decode().strip()
 
