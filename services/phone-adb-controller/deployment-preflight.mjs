@@ -164,7 +164,14 @@ export function readDeploymentToken(path){
 }
 export function brainRequest(base,token){
  const url=new URL(base);requireThat(['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&token,'Brain地址/凭据未配置');
- return async(path,body)=>{const response=await fetch(new URL(path,url),{method:body?'POST':'GET',redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});requireThat(response.ok,`Brain HTTP ${response.status}`);return response.json();};
+ return async(path,body)=>{
+  const target=new URL(path,url),method=body?'POST':'GET';let response;
+  // 同步SSH采集会阻塞socket关闭事件；每次独立连接，未知POST不重发。
+  try{response=await fetch(target,{method,redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`,Connection:'close'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});}
+  catch(error){const code=error?.cause?.code;throw Error(`Brain request failed ${method} ${target.pathname} code=${typeof code==='string'&&/^[A-Z][A-Z0-9_]{0,63}$/.test(code)?code:'TRANSPORT_ERROR'}`);}
+  requireThat(response.ok,`Brain HTTP ${response.status}`);
+  try{return await response.json();}catch{throw Error(`Brain response invalid ${method} ${target.pathname}`);}
+ };
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
  try{await preflightDeploymentReleases({manifest:JSON.parse(readFileSync(process.argv[2],'utf8')),environment:process.env.WF_DEPLOY_ENVIRONMENT,releaseIds:JSON.parse(process.env.WF_RELEASE_IDS||'{}'),request:brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN),companyReadiness:async()=>{const readiness=await checkDeploymentCompanyReadiness({requireEnabled:(process.env.WF_COMPANY_REQUIRE_ENABLED||'').split(',').filter(Boolean)});process.stderr.write(JSON.stringify({company_readiness:readiness})+'\n');return readiness;}});}

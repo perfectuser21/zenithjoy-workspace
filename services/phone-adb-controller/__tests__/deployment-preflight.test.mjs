@@ -266,15 +266,14 @@ async function isolatedBrain(t){
   import{createServer}from'node:http';
   const sockets=new Set();let count=0,nextSocket=0;
   const server=createServer((req,res)=>{count++;if(req.url==='/conflict'){res.writeHead(409);res.end('fixture-private-response');return;}if(req.url.startsWith('/invalid')){res.end('fixture-private-response');return;}if(req.url.startsWith('/reset')){req.socket.destroy();return;}
-   if(req.url==='/warm')setTimeout(()=>{for(const s of sockets)s.resetAndDestroy();},50);
+   if(req.url==='/warm'){const old=req.socket;setTimeout(()=>{if(!old.destroyed)old.resetAndDestroy();},50);}
    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({connection:req.headers.connection,count,method:req.method,socket:req.socket.fixtureId}));});
   server.keepAliveTimeout=60000;server.on('connection',s=>{s.fixtureId=++nextSocket;sockets.add(s);s.on('close',()=>sockets.delete(s));});
-  process.on('message',m=>{if(m==='expire')for(const s of sockets)s.destroy();});
   server.listen(0,'127.0.0.1',()=>process.send({port:server.address().port}));
  `],{stdio:['ignore','ignore','inherit','ipc']});
  t.after(()=>child.kill());
  const {port}=await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);child.once('exit',code=>reject(Error('HTTP fixture early exit '+code)));});
- return{base:`http://127.0.0.1:${port}`,expire:()=>child.send('expire')};
+ return{base:`http://127.0.0.1:${port}`};
 }
 test('真实独立HTTP服务关闭旧idle连接且同步命令阻塞时，下一请求仍成功',async t=>{
  const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
