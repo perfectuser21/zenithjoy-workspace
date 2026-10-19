@@ -1,4 +1,4 @@
-import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
 // 对标发现（对标链接获客 · discovery 活动）控制器子命令守卫。
 //
 // 0929 真机探明（xian-m4 legacy 机）：
@@ -35,7 +35,7 @@ function ctl(args, extraEnv = {}) {
   const { dir, reg } = registry();
   const r = spawnSync("zsh", [SCRIPT, "--profile", "legacy", ...args], {
     encoding: "utf8",
-    env: { ...process.env, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), ...extraEnv },
+    env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), ...extraEnv },
   });
   return { code: r.status, out: r.stdout.replace(/\n+$/, ""), err: r.stderr.trim(), dir };
 }

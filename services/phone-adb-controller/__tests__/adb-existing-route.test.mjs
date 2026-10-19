@@ -63,6 +63,12 @@ test('六份旧controller夹具使用child专用Python环境，不依赖Mac默�
  assert.notEqual(missing.status,0);assert.match(missing.stderr,/fixture-missing-homebrew/);
  const selected=spawnSync('zsh',['-c',script],{env:{...env,...fixturePythonEnv({})},encoding:'utf8'});
  assert.equal(selected.status,0,selected.stderr);assert.equal(selected.stdout.trim(),'173');
+ const override=spawnSync('python3',['-c','import sys; print(sys.executable)'],{encoding:'utf8'});
+ assert.equal(override.status,0,override.stderr);
+ const explicit=spawnSync('zsh',['-c',script],{env:{...env,...fixturePythonEnv({DOUYIN_PYTHON_BIN:override.stdout.trim()})},encoding:'utf8'});
+ assert.equal(explicit.status,0,explicit.stderr);assert.equal(explicit.stdout.trim(),'173');
+ const refused=spawnSync('zsh',['-c',script],{env:{...env,...fixturePythonEnv({DOUYIN_PYTHON_BIN:'/fixture-explicit-missing/python3'})},encoding:'utf8'});
+ assert.notEqual(refused.status,0);assert.match(refused.stderr,/fixture-explicit-missing/);
 });
 test('真实controller先验证既有socket再用该路由，customclient也不能免probe；锁命令不探设备',async t=>{
  const s=await server(t,'431\tdevice\n'),dir=mkdtempSync(join(tmpdir(),'adb-route-controller-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
@@ -97,3 +103,5 @@ fixture=function(bin){
 }
 if(!direct)initializeFixture();
 export function fixtureAdb(bin){if(!fixture)initializeFixture();return fixture(bin);}
+
+export function fixturePythonEnv(env=process.env){return {DOUYIN_PYTHON_BIN:env.DOUYIN_PYTHON_BIN || 'python3'};}

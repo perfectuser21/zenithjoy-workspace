@@ -1,4 +1,4 @@
-import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -31,7 +31,7 @@ esac
   try {
     return spawnSync('zsh', [SCRIPT, '--profile', 'legacy', command], {
       env: {
-        ...process.env,
+        ...process.env, ...fixturePythonEnv(),
         DOUYIN_ADB_BIN: fixtureAdb(adb),
         DOUYIN_PHONE_REGISTRY: registry,
         DOUYIN_PHONE_TMP_ROOT: join(dir, 'phone'),
