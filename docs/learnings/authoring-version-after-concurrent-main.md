@@ -1,0 +1,5 @@
+# 并发主线合并后的共享Source续版
+
+PR2211的9304正式三scope回归成功后，PR2210以022合入新主线，五共享合同版本与9304相等。022正式authoring被AUTHORING_SOURCE_VERSION_BUMP_REQUIRED拒绝；旧9304自动部署在新main预检失败，未发起安装。
+
+每次形成新的待登记main，必须相对当前实际main用既有authoring-source-version工具检查和续版。只递增五合同顶层patch，正文深比较不变；不得复用旧主线回执或修改门禁。此修复不证明新Source登记、部署或评论成功。
