@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runWorkflow} from './activity-commander.mjs';
