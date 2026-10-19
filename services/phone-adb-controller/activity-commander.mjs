@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import {readFileSync,writeFileSync,mkdirSync,lstatSync,openSync,closeSync,fstatSync,unlinkSync,renameSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -7,7 +5,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash,randomUUID } from 'node:crypto';
 
-const exec = promisify(execFile);
+import {execFileReceipt,executionDidNotStart} from './leadgen-client.mjs';
+const exec = execFileReceipt;
 const require = createRequire(import.meta.url);
 const safeError = error => String(error?.message || error)
   .replace(/Bearer\s+[^\s"']+/gi, 'Bearer ***')
@@ -56,14 +55,19 @@ export function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
   const stat=fstatSync(fd),record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
   writeFileSync(fd,JSON.stringify(record));
   let closed=false;
+  const archive=(status,details)=>{
+    const current=lstatSync(file);
+    if(current.isSymbolicLink()||current.dev!==stat.dev||current.ino!==stat.ino||readFileSync(file,'utf8')!==JSON.stringify(record))throw unresolved();
+    const receipt={...record,status,...details};
+    const tmp=file+'.'+nonce+'.tmp',target=file+'.'+nonce+'.'+status+'.json';
+    writeFileSync(tmp,JSON.stringify(receipt),{flag:'wx',mode:0o600});renameSync(tmp,target);
+    unlinkSync(file);
+  };
   return {
-    returned:raw=>{
-      const current=lstatSync(file);
-      if(current.isSymbolicLink()||current.dev!==stat.dev||current.ino!==stat.ino||readFileSync(file,'utf8')!==JSON.stringify(record))throw unresolved();
-      const receipt={...record,status:'returned',returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex')};
-      const tmp=file+'.'+nonce+'.tmp',target=file+'.'+nonce+'.returned.json';
-      writeFileSync(tmp,JSON.stringify(receipt),{flag:'wx',mode:0o600});renameSync(tmp,target);
-      unlinkSync(file);
+    returned:raw=>archive('returned',{returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex')}),
+    notStarted:(error,command,args)=>{
+      if(!executionDidNotStart(error,command,args))throw unresolved();
+      archive('not_started',{failed_at:new Date().toISOString(),failure:'native_pre_spawn_error'});
     },
     close:()=>{if(!closed){closed=true;closeSync(fd);}},
   };
@@ -85,8 +89,10 @@ export function openClawCommander({ agent = 'work-commander', model, timeoutMs =
       const decision=parseCommanderResponse(stdout);reservation.returned(stdout);return decision;
     } catch (error) {
       // execFile错误通常包含完整prompt/argv；绝不把它原样写进回执。
+      const notStarted=executionDidNotStart(error,'openclaw',args);
+      if(notStarted)reservation.notStarted(error,'openclaw',args);
       const unavailable=Error(`COMMANDER_UNAVAILABLE code=${String(error.code || 'invalid_response')} signal=${String(error.signal || '')}`);
-      unavailable.executionStopped=error.code==='ENOENT';
+      unavailable.executionStopped=notStarted;
       throw unavailable;
     }finally{reservation.close();}
   };

@@ -5,7 +5,7 @@ import {join,dirname,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {execInput} from './leadgen-client.mjs';
+import {execInput,executionDidNotStart} from './leadgen-client.mjs';
 import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './activity-commander.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 export const skillRunKey=q=>createHash('sha256').update(JSON.stringify([q.run_id,q.activity_key,q.nonce])).digest('hex');
@@ -157,9 +157,10 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  ].join('\n');
  const messagePath=join(dir,'parent-message.txt');writeFileSync(messagePath,message,{mode:0o600});
  let parentResult;
- try{parentResult=await execute('openclaw',['agent','--agent','work-commander','--session-key',parent,'--message-file',messagePath,'--json','--timeout',String(Math.max(1,Math.floor((q.deadline_ms-Date.now())/1000)))],{timeoutMs:Math.max(1,q.deadline_ms-Date.now()),env:process.env});
+ const parentArgs=['agent','--agent','work-commander','--session-key',parent,'--message-file',messagePath,'--json','--timeout',String(Math.max(1,Math.floor((q.deadline_ms-Date.now())/1000)))];
+ try{parentResult=await execute('openclaw',parentArgs,{timeoutMs:Math.max(1,q.deadline_ms-Date.now()),env:process.env});
   writeFileSync(join(dir,'parent-cli-result.json'),JSON.stringify(parentResult),{mode:0o600});
- }catch(error){writeFileSync(join(dir,'parent-cli-error.json'),JSON.stringify({reason:String(error.message).slice(0,200)}),{mode:0o600});if(error.message==='EXECUTION_START_FAILED')return {status:'blocked',execution_stopped:true,reason:'parent_cli_not_started'};}
+ }catch(error){writeFileSync(join(dir,'parent-cli-error.json'),JSON.stringify({reason:String(error.message).slice(0,200)}),{mode:0o600});if(executionDidNotStart(error,'openclaw',parentArgs)){ownerTurn.notStarted(error,'openclaw',parentArgs);return {status:'blocked',execution_stopped:true,reason:'parent_cli_not_started'};}}
  try{
   const binding=official(q,dir);
   const awaited=await execute('python3',[helper,'await',dir],{timeoutMs:Math.max(1,q.deadline_ms-Date.now())});
