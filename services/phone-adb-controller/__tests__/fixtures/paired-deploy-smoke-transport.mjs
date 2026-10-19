@@ -88,7 +88,6 @@ export function transport(root,mode,args){
    return ok(JSON.stringify(inventory)+'\n');
   }
   const evidenceResult=sqlRemote(root,host,cmd);if(evidenceResult)return evidenceResult;
-  if(host==='mmv'&&cmd==='python3'&&process.env.PAIR_DEPLOY_STOP_AT_ADMISSION==='1')return {status:3,stdout:'',stderr:'explicit fixture admission denied after readiness\n'};
   if(host==='xian-m4'&&cmd==='mktemp -d /tmp/input-runtime-deploy.XXXXXX')return ok(p.stage+'\n');
   if(cmd?.includes(p.stage)){
    if(host!=='xian-m4')throw Error('unexpected paired host');
@@ -132,7 +131,14 @@ if(process.argv[1]&&resolve(process.argv[1])===self){
   else if(command==='verify')console.log(JSON.stringify(verify(root)));
   else if(command==='transport'&&mode==='ssh'&&args.at(-1)?.startsWith('python3 -u -c ')){
    // 执行真实内核部署锁与流式握手，HOME指向隔离远端目录。
-   const child=spawn('sh',['-c',args.at(-1)],{stdio:'inherit',env:{...process.env,HOME:paths(resolve(root)).home}});
+   const home=paths(resolve(root)).home;
+   if(process.env.PAIR_DEPLOY_STOP_AT_ADMISSION==='1'){
+    // A real unresolved original run must be rejected by the production consumer.
+    const busy=join(home,'wf-agent-runs/fixture-unresolved');mkdirSync(busy,{recursive:true});
+    writeFileSync(join(busy,'runtime.json'),JSON.stringify({phase:'blocked',execution_stopped:false}));writeFileSync(join(busy,'.worker.lock'),'');
+   }
+   const child=spawn('sh',['-c',args.at(-1)],{stdio:['pipe','inherit','inherit'],env:{...process.env,HOME:home}});
+   process.stdin.on('data',data=>appendFileSync(join(resolve(root),'admission.log'),data));process.stdin.pipe(child.stdin);
    process.exitCode=await new Promise(r=>child.on('close',r));
   }
   else if(command==='transport'){const r=transport(root,mode,args);process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status;}

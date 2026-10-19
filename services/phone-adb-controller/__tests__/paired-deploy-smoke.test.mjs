@@ -65,14 +65,16 @@ for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实d
  if(mode==='schema-ready') {
   assert.match(output,/"business_runtime_status":"disabled"/);assert.match(output,/"schema_verified":true/);
   assert.equal(result.error,undefined,'正向readiness必须真正结束，不能靠超时后的旧receipt通过');
-  assert.match(output,/explicit fixture admission denied after readiness/);
-  assert.match(ssh,/^mmv python3$/m,'schema通过后真实进入admission，显式busy夹具在安装前停止');
+  assert.match(output,/Commander仍有在途执行/);
+  const messages=readFileSync(join(root,'admission.log'),'utf8').trim().split('\n').map(x=>JSON.parse(x));
+  assert.deepEqual(messages,[{action:'admit'}],'schema通过后真实进入持锁准入，原未决run在安装前拒绝');
   assert.throws(()=>verify(root),/not verified/,'仅readiness通过不生成配套安装receipt');
  } else {
   assert.notEqual(result.status,0);
   assert.match(output,new RegExp(mode==='missing-schema'?'COMPANY_SCHEMA_NOT_READY':'COMPANY_READINESS_RESPONSE_INVALID'));
   assert.throws(()=>verify(root),/not verified/);
-  assert.doesNotMatch(ssh,/^mmv python3$/m,'readiness失败不得执行远端admission');
+  let admission='';try{admission=readFileSync(join(root,'admission.log'),'utf8');}catch{}
+  assert.equal(admission,'','readiness失败不得发出实际准入请求');
   let uploads='';try{uploads=readFileSync(join(root,'scp.log'),'utf8');}catch{}
   assert.equal(uploads,'','readiness失败不得执行任何安装上传');
  }

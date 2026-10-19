@@ -355,7 +355,7 @@ class FailedAdmissionTests(unittest.TestCase):
    with g.commander_admission(home,get):pass
    self.assertEqual({x.name:x.read_bytes() for x in directory.iterdir() if x.is_file()},original)
  def test_later_runtime_cannot_be_self_signed_or_use_wrong_release_observation_host_or_unknown_api(self):
-  for case in ('missing-runtime-map','wrong-runtime-map','wrong-observation','wrong-release','wrong-host','wrong-evidence','partial-gate','api'):
+  for case in ('missing-runtime-map','wrong-runtime-map','wrong-observation','wrong-release','wrong-host','wrong-evidence','self-signed-current','wrong-source','wrong-repo','partial-gate','api'):
    with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
     home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
     extra,obs,gate,file,local=self.official_install(home,root,1);base_get=get
@@ -370,6 +370,10 @@ class FailedAdmissionTests(unittest.TestCase):
     elif case=='wrong-release':obs['release_id']='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     elif case=='wrong-host':obs['payload']['target']='xian-m4'
     elif case=='wrong-evidence':file.write_text('{}')
+    elif case=='self-signed-current':
+     data=b'self-signed-runtime';(root/'wf-v2.py').write_bytes(data);manifest=json.loads((root/'runtime-manifest.json').read_text());manifest['files']['wf-v2.py']=hashlib.sha256(data).hexdigest();manifest['runtime_snapshot_sha256']=hashlib.sha256(json.dumps(manifest['files'],sort_keys=True,separators=(',',':')).encode()).hexdigest();(root/'runtime-manifest.json').write_text(json.dumps(manifest))
+    elif case in ('wrong-source','wrong-repo'):
+     local['source_commit' if case=='wrong-source' else 'source_repo']='f'*40 if case=='wrong-source' else 'outsider/zenithjoy-workspace';(home/'.openclaw/leadgen-scripts/deployment-manifest.json').write_text(json.dumps(local))
     elif case=='partial-gate':gate['gaps']=[{'code':'unknown'}]
     with self.assertRaises((ValueError,OSError)):
      with module('deployment-guard').commander_admission(home,get):self.fail('untrusted later runtime admitted')
