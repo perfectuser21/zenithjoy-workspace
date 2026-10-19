@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -22,6 +22,7 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/clipboard-nonce.test.mjs",
   "services/phone-adb-controller/__tests__/commander-workflow-progress.test.mjs",
   "services/phone-adb-controller/__tests__/continuous-identity.test.mjs",
+  "services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs",
   "services/phone-adb-controller/__tests__/copied-share-link.test.mjs",
   "services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs",
   "services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs",
@@ -129,6 +130,10 @@ test('七类非时序身份断言显式复用唯一wait_ms副本，真实录制�
  }
  assert.ok(source.includes("assert.equal(patched.replace(controlled,wait),source"),'副本必须可逆还原生产全部字节');
  assert.match(source,/controlledWait=false/,'不能泛化所有case为无等待');
- assert.match(source,/recordBoundary\(\{captureMode:'delayed_growth'\}\)/,'迟到媒体保留真实等待');
- assert.match(source,/workflowRemainingSeconds:5/,'cleanup预算边界仍真实等待');
+ const recording=join(root,'services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs');
+ assert.ok(existsSync(recording),'完整录音边界必须是独立真实test入口');
+ const records=readFileSync(recording,'utf8');
+ for(const [name,body] of [['identity',source],['recording',records]])assert.ok(body.split('\n').length<=501,name+'必须不超过500行');
+ assert.match(records,/recordBoundary\(\{captureMode:'delayed_growth'\}\)/,'迟到媒体保留真实等待');
+ assert.match(records,/workflowRemainingSeconds:5/,'cleanup预算边界仍真实等待');
 });
