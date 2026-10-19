@@ -23,6 +23,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/clipboard-nonce.test.mjs \
  services/phone-adb-controller/__tests__/commander-workflow-progress.test.mjs \
  services/phone-adb-controller/__tests__/continuous-identity.test.mjs \
+ services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs \
  services/phone-adb-controller/__tests__/copied-share-link.test.mjs \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs \
  services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs \
