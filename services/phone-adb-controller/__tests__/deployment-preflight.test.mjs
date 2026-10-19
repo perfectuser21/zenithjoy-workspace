@@ -260,3 +260,57 @@ test('真实旧zenithjoy格式可无source_set但保留snapshot中央绑定，�
  assert.equal(digest(deploymentAssertionPlan(f.report,f.snapshot)),expected);assert.deepEqual(f.binding.resolved_source,realCentralBinding.resolved_source);
  for(const mutate of [b=>b.kind='code',b=>b.resolved_source.extra=true,b=>b.content_sha256='bad']){const copy=structuredClone(f);mutate(copy.snapshot.definitions.activities[0].payload.implementation_bindings[0]);assert.throws(()=>deploymentAssertionPlan(copy.report,copy.snapshot));}
 });
+
+async function isolatedBrain(t){
+ const child=spawn(process.execPath,['--input-type=module','-e',`
+  import{createServer}from'node:http';
+  const sockets=new Set();let count=0,nextSocket=0;
+  const server=createServer((req,res)=>{count++;if(req.url==='/conflict'){res.writeHead(409);res.end('fixture-private-response');return;}if(req.url.startsWith('/invalid')){res.end('fixture-private-response');return;}if(req.url.startsWith('/reset')){req.socket.destroy();return;}
+   res.setHeader('Content-Type','application/json');res.end(JSON.stringify({connection:req.headers.connection,count,method:req.method,socket:req.socket.fixtureId}));});
+  server.keepAliveTimeout=60000;server.on('connection',s=>{s.fixtureId=++nextSocket;sockets.add(s);s.on('close',()=>sockets.delete(s));});
+  process.on('message',m=>{if(m==='expire')for(const s of sockets)s.destroy();});
+  server.listen(0,'127.0.0.1',()=>process.send({port:server.address().port}));
+ `],{stdio:['ignore','ignore','inherit','ipc']});
+ t.after(()=>child.kill());
+ const {port}=await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);child.once('exit',code=>reject(Error('HTTP fixture early exit '+code)));});
+ return{base:`http://127.0.0.1:${port}`,expire:()=>child.send('expire')};
+}
+test('真实独立HTTP服务关闭旧idle连接且同步命令阻塞时，下一请求仍成功',async t=>{
+ const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
+ const first=await request('/api/brain/releases/fixture');
+ await new Promise(resolve=>setImmediate(resolve));
+ server.expire();execFileSync(process.execPath,['-e','Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,500)']);
+ const next=await request('/api/brain/releases/fixture');
+ assert.equal(first.connection,'close');assert.equal(next.connection,'close');assert.equal(next.count,2);assert.notEqual(first.socket,next.socket,'独立真实TCP连接，未复用旧socket');
+});
+test('真实POST只发一次且要求关闭连接，不自动重试未知写入',async t=>{
+ const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
+ const posted=await request('/observations',{evidence:'fixture-private-body'});
+ assert.equal(posted.method,'POST');assert.equal(posted.connection,'close');assert.equal(posted.count,1);
+ await assert.rejects(request('/reset?token=fixture-secret-query',{evidence:'fixture-private-body'}),error=>{
+  assert.match(error.message,/Brain request failed POST \/reset/);assert.match(error.message,/code=[A-Z_]+/);
+  assert.doesNotMatch(error.message,/fixture-token|fixture-secret-query|fixture-private-body|\?/);return true;
+ });
+ const after=await request('/count');assert.equal(after.count,3,'reset POST未发生自动重发');
+});
+test('transport诊断仅含方法/路径/白名单code，保持原30秒signal且不泄漏任意cause文本',async t=>{
+ const {brainRequest}=await implementation(),original=globalThis.fetch,calls=[];
+ t.after(()=>globalThis.fetch=original);
+ globalThis.fetch=async(url,options)=>{calls.push({url,options});throw Object.assign(Error('fixture-secret-top'),{cause:{code:'ECONNRESET',message:'fixture-secret-cause'}});};
+ const request=brainRequest('http://127.0.0.1:1','fixture-token-not-for-output');
+ await assert.rejects(request('/release?token=fixture-secret-query'),error=>{
+  assert.match(error.message,/Brain request failed GET \/release code=ECONNRESET/);assert.doesNotMatch(error.message,/fixture-secret|fixture-token|\?/);return true;
+ });
+ assert.equal(calls.length,1);assert.equal(calls[0].options.headers.Connection,'close');assert.equal(calls[0].options.redirect,'error');
+ const signal=calls[0].options.signal;assert.equal(signal.aborted,false);assert.equal(signal.reason,undefined);
+ globalThis.fetch=async()=>{throw Object.assign(Error('fixture-secret-top'),{cause:{code:'ECONNRESET\nfixture-secret-cause'}});};
+ await assert.rejects(request('/release'),error=>{assert.match(error.message,/code=TRANSPORT_ERROR/);assert.doesNotMatch(error.message,/fixture-secret|\n/);return true;});
+ assert.match(readFileSync(moduleUrl,'utf8'),/AbortSignal\.timeout\(30000\)/,'原30秒请求预算不变');
+});
+
+test('真实HTTP冲突保留状态且不重试，非法JSON诊断不泄漏响应内容',async t=>{
+ const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
+ await assert.rejects(request('/conflict',{observation:'fixture-private-body'}),/Brain HTTP 409/);
+ await assert.rejects(request('/invalid?token=fixture-private-query'),error=>{assert.match(error.message,/Brain response invalid GET \/invalid/);assert.doesNotMatch(error.message,/fixture-private|\?/);return true;});
+ const after=await request('/count');assert.equal(after.count,3);
+});
