@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
+import {withDeploymentPrefixFixture} from './deployment-prefix-fixture.mjs';
 
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const flows=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'];
@@ -53,10 +54,12 @@ test('101共享102预检/收尾，接手文档明确Activity范围与原部署�
 });
 
 test('Skill和引用文件进入设备及MMV的实际发布清单，103不要求手机锁',()=>{
+ return withDeploymentPrefixFixture((directory,env)=>{
+  const root=directory+'/';
   const path=root+'services/phone-adb-controller/deploy.sh';
   const source=readFileSync(path,'utf8');
   const prefix=source.slice(0,source.indexOf('# 在任何SSH前核验部署源字节'));
-  const names=execFileSync('/bin/bash',['-c',prefix+'\nprintf "%s\\n" "${DEVICE_RPC_PROBE_FILES[@]}" "${MMV_RUNTIME_FILES[@]}"',path],{encoding:'utf8'}).trim().split('\n');
+  const names=execFileSync('/bin/bash',['-c',prefix+'\nprintf "%s\\n" "${DEVICE_RPC_PROBE_FILES[@]}" "${MMV_RUNTIME_FILES[@]}"',path],{encoding:'utf8',env}).trim().split('\n');
   for(const number of Object.values(numbers))for(const suffix of ['SKILL.md','references/reuse-map.json','references/runtime-calls.json']){
     const name='skills/douyin-leadgen-'+number+'/'+suffix;
     assert.equal(names.filter(x=>x===name).length,2,'设备与MMV必须各自发布 '+name);
@@ -64,6 +67,7 @@ test('Skill和引用文件进入设备及MMV的实际发布清单，103不要求
   }
   const scoring=JSON.parse(readFileSync(root+'services/phone-adb-controller/skills/douyin-leadgen-103/references/runtime-calls.json','utf8'));
   assert.ok(scoring.guards[0].includes('不取手机'),'103不得锁serial=none或占真实手机');
+ });
 });
 
 
