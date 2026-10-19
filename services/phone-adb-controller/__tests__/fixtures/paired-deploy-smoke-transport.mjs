@@ -136,6 +136,7 @@ if(process.argv[1]&&resolve(process.argv[1])===self){
     // A real unresolved original run must be rejected by the production consumer.
     const busy=join(home,'wf-agent-runs/fixture-unresolved');mkdirSync(busy,{recursive:true});
     writeFileSync(join(busy,'runtime.json'),JSON.stringify({phase:'blocked',execution_stopped:false}));writeFileSync(join(busy,'.worker.lock'),'');
+    writeFileSync(join(busy,'cleanup.json'),JSON.stringify({_shell:{files:[]}}));
    }
    const child=spawn('sh',['-c',args.at(-1)],{stdio:['pipe','inherit','inherit'],env:{...process.env,HOME:home}});
    process.stdin.on('data',data=>appendFileSync(join(resolve(root),'admission.log'),data));process.stdin.pipe(child.stdin);

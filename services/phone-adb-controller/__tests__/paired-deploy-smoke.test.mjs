@@ -65,10 +65,14 @@ for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实d
  if(mode==='schema-ready') {
   assert.match(output,/"business_runtime_status":"disabled"/);assert.match(output,/"schema_verified":true/);
   assert.equal(result.error,undefined,'正向readiness必须真正结束，不能靠超时后的旧receipt通过');
-  assert.match(output,/Commander仍有在途执行/);
+  assert.notEqual(result.status,0,'explicit unresolved proof must fail closed');
+  assert.match(output,/Commander deployment admission: bounded cleanup references/,'must be the deliberate unresolved-proof rejection, not an unrelated script error');
+  assert.match(output,/Commander部署准入通道关闭|MMV部署锁通道丢失|Commander仍有在途执行/,'must stop through the real guarded admission failure path');
   const messages=readFileSync(join(root,'admission.log'),'utf8').trim().split('\n').map(x=>JSON.parse(x));
   assert.deepEqual(messages,[{action:'admit'}],'schema通过后真实进入持锁准入，原未决run在安装前拒绝');
   assert.throws(()=>verify(root),/not verified/,'仅readiness通过不生成配套安装receipt');
+  let uploads='';try{uploads=readFileSync(join(root,'scp.log'),'utf8');}catch{}
+  assert.equal(uploads,'','rejected admission must perform zero uploads/installations');
  } else {
   assert.notEqual(result.status,0);
   assert.match(output,new RegExp(mode==='missing-schema'?'COMPANY_SCHEMA_NOT_READY':'COMPANY_READINESS_RESPONSE_INVALID'));

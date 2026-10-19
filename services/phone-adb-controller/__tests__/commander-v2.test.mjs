@@ -299,9 +299,16 @@ assert r.io.read(d/'child-stop-readback.json')['endedAt']==1
 });
 test('部署准入拒绝业务已停但cleanup_pending且无delivery的包',()=>{
  const f=fixture(),dir=start(f);writeFileSync(join(dir,'runtime.json'),JSON.stringify({phase:'cleanup_pending',execution_stopped:true}));
- const deploy=readFileSync(resolve('services/phone-adb-controller/deploy.sh'),'utf8');const script=deploy.split("<<'PYADMISSION'\n")[1].split('\nPYADMISSION')[0];
+ const guard=resolve('services/phone-adb-controller/deployment-guard.py'),forbidden=join(f.home,'installation-forbidden');
+ writeFileSync(join(dir,'.worker.lock'),'');
+ const script=`import runpy
+from pathlib import Path
+g=runpy.run_path(${JSON.stringify(guard)})
+def no_authority(path):raise AssertionError('pending cleanup cannot query failure authority')
+with g['commander_admission'](Path.home(),no_authority):Path(${JSON.stringify(forbidden)}).touch()
+`;
  writeFileSync(join(f.home,'pgrep'),'#!/bin/sh\nexit 1\n',{mode:0o755});f.env.PATH=f.home+':'+process.env.PATH;
- const result=spawnSync('python3',['-c',script],{env:f.env,encoding:'utf8'});assert.notEqual(result.status,0,'cleanup pending deployment was admitted');assert.equal(existsSync(join(f.home,'.openclaw/commander/.deploying')),false);
+ const result=spawnSync('python3',['-c',script],{env:f.env,encoding:'utf8'});assert.notEqual(result.status,0,'cleanup pending deployment was admitted');assert.match(result.stderr,/FileNotFoundError:.*cleanup\.json/,'must execute the real consumer and reject the absent pending-cleanup proof');assert.equal(existsSync(forbidden),false,'zero installation after rejected admission');assert.equal(existsSync(join(f.home,'.openclaw/commander/.deploying')),false);
 });
 test('外壳绑定缺失先拒绝；失败preflight重入仍失败且不重复设备动作',()=>{
  const f=fixture(),dir=start(f);
