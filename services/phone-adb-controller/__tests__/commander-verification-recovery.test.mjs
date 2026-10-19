@@ -24,6 +24,15 @@ test('产出核验失败由原任务接手，修复核验通过后继续剩余�
  assert.ok(records.some(r=>r.phase==='verification'&&r.evidence.code_failure));
 });
 
+test('采样partial策略阻断后核验失败不能转成repair再接手',async()=>{
+ let recovered=0;
+ const result=await runWorkflow({context:{run_id:'sample-run'},activities:[{key:'collection'},{key:'cleanup'}],
+  handlers:{collection:async()=>({status:'partial',sampling_receipts:[{video_id:'fixture'}],failures:[{reason:'incomplete'}]}),cleanup:async()=>({})},
+  commander:async()=>({action:'continue',reason:'保留真实部分结果'}),record:async()=>{},verify:async()=>({verified:false}),
+  recover:async()=>{recovered++;const error=Error('SKILL_COLLECTION_PARTIAL_READBACK_REQUIRED');error.executionStopped=true;throw error;}});
+ assert.equal(recovered,1,'原partial禁止Skill恢复的决定不能被verifyfalse抹掉');assert.equal(result.status,'failed');
+});
+
 test('Skill自报完成仍须核验，产出不符不得执行剩余业务',async()=>{
  let recovered=0,collected=0,cleaned=0;
  const result=await runWorkflow({context:{run_id:'same-run'},
