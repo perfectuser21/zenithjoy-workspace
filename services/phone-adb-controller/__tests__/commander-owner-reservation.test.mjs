@@ -30,3 +30,12 @@ test('真实子进程重启不清未知owner，咨询与Skill接手均零新增C
   assert.equal(readFileSync(join(home,'launches'),'utf8').trim().split('\n').length,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
+
+test('Skill父调用未知后新进程不能继续咨询同一owner',()=>{
+ const home=mkdtempSync(join(tmpdir(),'owner-handoff-restart-'));
+ try{
+  child(home,'handoff');
+  assert.match(child(home,'consult'),/COMMANDER_OWNER_TURN_UNRESOLVED/);
+  assert.equal(readFileSync(join(home,'launches'),'utf8').trim().split('\n').length,1);
+ }finally{rmSync(home,{recursive:true,force:true});}
+});
