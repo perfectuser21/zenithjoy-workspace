@@ -151,3 +151,22 @@ test('已有固定HEAD的正确外部Git worktree保留原安装兼容，不改�
   assert.equal(git(source,'rev-parse','HEAD'),f.pin);assert.deepEqual(readFileSync(join(f.central,'.git/config')),config);
  }finally{f.cleanup();}
 });
+
+
+test('真实部署prefix消费固定对象cache，不重建默认源；坏cache在SSH前拒绝',()=>{
+ for(const bad of [false,true]){const f=regressionFixture();try{
+  const folder=join(f.business,'services/phone-adb-controller');mkdirSync(folder,{recursive:true});mkdirSync(join(f.business,'scripts/ci'),{recursive:true});
+  const deployment=readFileSync(new URL('../../../services/phone-adb-controller/deploy.sh',import.meta.url),'utf8');
+  const marker='# 在任何SSH前核验部署源字节';assert.ok(deployment.includes(marker));
+  const path=join(folder,'deploy.sh');writeFileSync(path,deployment);
+  writeFileSync(join(f.business,'scripts/ci/implementation-skill-source.mjs'),readFileSync(new URL('../implementation-skill-source.mjs',import.meta.url)));commit(f.business);
+  const before=readFileSync(join(f.cache,'.git/config'));
+  if(bad){rmSync(f.cache,{recursive:true});mkdirSync(f.cache);git(f.cache,'init','-q');}
+  const prefix=deployment.slice(0,deployment.indexOf(marker));
+  const env={PATH:`${dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`,CI:'true',NODE_ENV:'test',LANG:'C.UTF-8',SKILLS_SOURCE_DIR:f.cache,GIT_ALLOW_PROTOCOL:'file'};
+  const result=spawnSync('/bin/bash',['-c',prefix+'\nprintf "PREFIX_READY:%s\\n" "${MMV_RUNTIME_FILES[0]}"',path],{env,encoding:'utf8'});
+  if(bad){assert.notEqual(result.status,0);assert.ok(!result.stdout.includes('PREFIX_READY:'));assert.equal(existsSync(join(f.business,'installer-phases')),false);}
+  else {assert.equal(result.status,0,result.stderr);assert.ok(result.stdout.includes('PREFIX_READY:'));assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');assert.deepEqual(readFileSync(join(f.cache,'.git/config')),before);assert.throws(()=>git(f.cache,'rev-parse','--verify','HEAD'));}
+  assert.equal(existsSync(join(f.business,'.skills-source')),false,'不得回退默认缓存或联网取源');
+ }finally{f.cleanup();}}
+});
