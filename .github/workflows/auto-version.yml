@@ -100,9 +100,8 @@ jobs:
           git diff --cached --quiet && exit 0
 
           NEW_VERSION=$(node -e "process.stdout.write(require('./package.json').version)")
-          BRANCH_NAME="cp-auto-version-bump-${NEW_VERSION}"
+          BRANCH_NAME="cp-$(date -u +%m%d%H%M%S)-auto-version-bump-${NEW_VERSION//./-}"
 
-          git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
           git checkout -b "$BRANCH_NAME"
           node scripts/ci/authoring-source-version.mjs --fix --base origin/main
           git add services/phone-adb-controller/commander/contracts/workflow-commander.json services/phone-adb-controller/commander/contracts/workflow-report.json services/phone-adb-controller/patrol/contracts/single.json services/phone-adb-controller/patrol/contracts/batch.json services/phone-adb-controller/patrol/contracts/maintenance.json
@@ -112,16 +111,27 @@ jobs:
           PR_TITLE="chore: auto-version ${{ steps.bump.outputs.type }} bump to ${NEW_VERSION}"
           PR_BODY="Automated version bump to ${NEW_VERSION}."
 
-          PR_URL=$(gh pr create \
+          CREATE_ERROR=$(mktemp)
+          trap 'rm -f "$CREATE_ERROR"' EXIT
+          if PR_URL=$(gh pr create \
             --base main \
             --head "$BRANCH_NAME" \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
-            2>&1) \
-            || PR_URL=$(gh pr view "$BRANCH_NAME" --json url -q '.url' 2>/dev/null \
-               || echo "PR creation failed and no existing PR found")
+            2>"$CREATE_ERROR"); then
+            CREATE_STATUS=0
+          else
+            CREATE_STATUS=$?
+            cat "$CREATE_ERROR" >&2
+            if ! PR_URL=$(gh pr view "$BRANCH_NAME" --json url -q '.url'); then
+              exit "$CREATE_STATUS"
+            fi
+          fi
+          if [[ ! "$PR_URL" =~ ^https://github\.com/perfectuser21/zenithjoy-workspace/pull/[1-9][0-9]*$ ]]; then
+            echo "Invalid auto-version PR URL; refusing false publication success" >&2
+            exit 1
+          fi
 
           echo "PR URL: $PR_URL"
 
-          gh pr merge "$BRANCH_NAME" --squash --auto --delete-branch \
-            || echo "Note: auto-merge request failed. PR: $PR_URL"
+          gh pr merge "$PR_URL" --squash --auto --delete-branch
