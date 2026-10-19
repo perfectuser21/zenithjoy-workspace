@@ -64,7 +64,7 @@ const originalFiles=[
 ];
 function run(fail='',bootstrapExit=0) {
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'split-smoke-wiring-'))); const bin=join(dir,'bin'), log=join(dir,'calls.jsonl'); mkdirSync(bin);
- const shim=`#!${process.execPath}\nimport fs from 'node:fs';\nconst args=process.argv.slice(2);if(!fs.existsSync(process.env.SMOKE_BOOTSTRAP_LOG))process.exit(19);fs.appendFileSync(process.env.SMOKE_WIRING_LOG,JSON.stringify({args,home:process.env.HOME??null})+'\\n');if(process.env.SMOKE_WIRING_FAIL&&(args.includes(process.env.SMOKE_WIRING_FAIL)||(process.env.SMOKE_WIRING_FAIL==='home-free'&&process.env.HOME===undefined)))process.exit(13);\n`;
+ const shim=`#!${process.execPath}\nimport fs from 'node:fs';\nimport {spawnSync} from 'node:child_process';\nconst args=process.argv.slice(2);if(args[0]==='scripts/ci/implementation-skill-source.mjs'&&args[1]==='--install-regression-skills'){const r=spawnSync('/bin/bash',['scripts/ensure-skills-source.sh',args[2]],{stdio:'inherit'});process.exit(r.status??1);}if(!fs.existsSync(process.env.SMOKE_BOOTSTRAP_LOG))process.exit(19);fs.appendFileSync(process.env.SMOKE_WIRING_LOG,JSON.stringify({args,home:process.env.HOME??null})+'\\n');if(process.env.SMOKE_WIRING_FAIL&&(args.includes(process.env.SMOKE_WIRING_FAIL)||(process.env.SMOKE_WIRING_FAIL==='home-free'&&process.env.HOME===undefined)))process.exit(13);\n`;
  writeFileSync(join(bin,'node'),shim,{mode:0o755});
  const bootstrap=join(dir,'bootstrap.log');
  mkdirSync(join(dir,'scripts/smoke'),{recursive:true});

@@ -111,7 +111,7 @@ test('离线对象缓存错pin/loader/repo/缺commit/replace均在安装前拒�
 });
 test('ambient Git重定向与源local config不能执行hook/filter或污染私有安装',()=>{
  const f=regressionFixture(),previous=process.env.GIT_DIR;try{
-  const poison=join(f.business,'poisoned');git(f.cache,'config','core.hooksPath',poison);git(f.cache,'config','core.autocrlf','true');
+  const poison=join(f.business,'poisoned');git(f.cache,'config','core.hooksPath',poison);git(f.cache,'config','core.autocrlf','true');git(f.cache,'config','uploadpack.packObjectsHook',`touch ${poison}`);
   process.env.GIT_DIR=poison;
   sourceApi.installRegressionSkills(f.business,{source:f.cache});
   assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');

@@ -90,7 +90,12 @@ export function installRegressionSkills(root,{source=process.env.SKILLS_SOURCE_D
    if(head&&head!==lock.revision)fail('explicit source revision does not match lock; refusing to change its checkout');
    if(!head){
     temporary=mkdtempSync(join(tmpdir(),'regression-skills-'));checkout=join(temporary,'source');
-    run('git',['-c','core.hooksPath=/dev/null','clone','--local','--no-hardlinks','--no-checkout','--quiet',source,checkout]);
+    // clone treats a shallow repository without refs as empty. Fetch the exact
+    // object into a fresh repository instead; file transport copies packs and
+    // never borrows objects, refs, config, hooks or a checkout from the cache.
+    run('git',['-c','core.hooksPath=/dev/null','init','--quiet','--template=',checkout]);
+    local(checkout,'fetch','--quiet','--no-tags','--depth=1',
+     '--upload-pack=git -c core.hooksPath=/dev/null upload-pack',source,lock.revision);
     if(existsSync(join(checkout,'.git/objects/info/alternates')))fail('SKILL_REGRESSION_ALTERNATES');
     local(checkout,'-c','core.autocrlf=false','checkout','--quiet','--detach',lock.revision);
     source=checkout;
