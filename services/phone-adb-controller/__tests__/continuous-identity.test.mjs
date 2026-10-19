@@ -332,3 +332,12 @@ test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍
 });
 
 // 真实record_start函数边界：调速已完成且可能暂停，ADB126退出0不代表播放。
+test('视频tab机会性策略只做一次dump，失败不发送全局媒体toggle',()=>{
+ const r=shareWave({policy:'opportunistic-search-tab',fallback:'none'});
+ assert.equal(r.status,1,r.stderr);assert.equal(r.state.dumps,1);assert.deepEqual(r.state.keys,[]);
+});
+test('视频tab机会性策略接受完整新鲜树，不额外dump或toggle',()=>{
+ const r=shareWave({policy:'opportunistic-search-tab',freshFirst:true});
+ assert.equal(r.status,0,r.stderr);assert.equal(r.state.dumps,1);assert.deepEqual(r.state.keys,[]);assert.match(r.xml,/<hierarchy/);
+});
+

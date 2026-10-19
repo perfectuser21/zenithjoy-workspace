@@ -11,16 +11,24 @@ function run(fail){
   mkdirSync(join(dir,'.github/workflows/scripts/smoke'),{recursive:true});mkdirSync(join(dir,'scripts'),{recursive:true});mkdirSync(join(dir,'bin'));
   writeFileSync(join(dir,path),readFileSync(new URL('../../../'+path,import.meta.url)));
   writeFileSync(join(dir,'scripts/ensure-skills-source.sh'),'printf "bootstrap:%s\\n" "$1" >> "$TRACE"\nexit "${BOOTSTRAP_EXIT:-0}"\n');
-  for(const name of ['node','python3'])writeFileSync(join(dir,'bin',name),'#!/bin/sh\nprintf "'+name+':%s\\n" "$*" >> "$TRACE"\n',{mode:0o755});
+  for(const name of ['node','python3'])writeFileSync(join(dir,'bin',name),'#!/bin/sh\nprintf "'+name+':%s\\n" "$*" >> "$TRACE"\n[ "$1" != scripts/ci/implementation-skill-source.mjs ] || exec /bin/bash scripts/ensure-skills-source.sh "$3"\n',{mode:0o755});
   writeFileSync(join(dir,'bin/bash'),'#!/bin/sh\n[ \"$1\" = -n ] && exit 0\nexec /bin/bash \"$@\"\n',{mode:0o755});
   const trace=join(dir,'trace');const r=spawnSync('/bin/bash',[path],{cwd:dir,encoding:'utf8',env:{...process.env,PATH:join(dir,'bin')+':'+process.env.PATH,TRACE:trace,BOOTSTRAP_EXIT:String(fail)},timeout:10000});
   const lines=readFileSync(trace,'utf8').trim().split('\n');return {r,lines,dir};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
 test('Commander回归先执行固定Skill安装核验，再保留完整原测试链',()=>{
- const {r,lines,dir}=run(0);assert.equal(r.status,0,r.stderr);assert.equal(lines[0],'bootstrap:'+dir);
+ const {r,lines,dir}=run(0);assert.equal(r.status,0,r.stderr);assert.deepEqual(lines.slice(0,2),['node:scripts/ci/implementation-skill-source.mjs --install-regression-skills '+dir,'bootstrap:'+dir]);
+ assert.equal(lines.filter(x=>x.startsWith('bootstrap:')).length,1);
+ assert.deepEqual(lines.slice(2,6),[
+  'node:scripts/product-map/gen-commander-contracts.mjs --check',
+  'node:--test scripts/product-map/__tests__/commander-skill-contracts.test.js',
+  'node:--test services/phone-adb-controller/__tests__/commander-report.test.mjs services/phone-adb-controller/__tests__/commander-v2.test.mjs services/phone-adb-controller/__tests__/commander-codex-agent.test.mjs services/phone-adb-controller/__tests__/commander-handoff.test.mjs',
+  'node:--test services/phone-adb-controller/__tests__/deployment-unified.test.mjs services/phone-adb-controller/__tests__/deployment-prepare.test.mjs',
+ ]);
+ assert.equal(lines.length,7);assert.match(lines[6],/^python3:-c .*wf-agent-lib\.py$/);
  assert.ok(lines.some(x=>x.includes('commander-skill-contracts.test.js')));assert.ok(lines.some(x=>x.includes('commander-v2.test.mjs')));assert.ok(lines.some(x=>x.includes('deployment-prepare.test.mjs')));
 });
 test('固定Skill安装核验失败立即拒绝，不能继续测试或报PASS',()=>{
- const {r,lines}=run(23);assert.equal(r.status,23);assert.equal(lines.length,1);assert.ok(!r.stdout.includes('commander-codex-agent-smoke: PASS'));
+ const {r,lines}=run(23);assert.equal(r.status,23);assert.equal(lines.length,2);assert.match(lines[0],/^node:scripts\/ci\/implementation-skill-source\.mjs --install-regression-skills /);assert.match(lines[1],/^bootstrap:/);assert.ok(!r.stdout.includes('commander-codex-agent-smoke: PASS'));
 });
