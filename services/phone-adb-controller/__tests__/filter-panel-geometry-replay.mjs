@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync, chmodSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -96,9 +97,10 @@ Image.new('RGB',(width,1600),(45,45,45)).save(results)
     const branch = source.slice(0, caseAt) + injected + '\n' + source.slice(caseAt);
     const tempSource = join(dir, 'douyin-phone-adb');
     writeFileSync(tempSource, branch);
+    writeFileSync(join(dir, 'adb-existing-route.py'), readFileSync(new URL('../adb-existing-route.py', import.meta.url)));
     const adb = join(dir, 'adb');
     writeFileSync(adb, '#!/bin/sh\nexit 0\n'); chmodSync(adb, 0o755);
-    const shell = run('zsh', [tempSource, '--profile', 'replay', 'search-time-layer', 'six_months', 'replay-filter', 'latest', 'unlimited', 'unlimited', 'same_city'], { env: { ...env, DOUYIN_ADB_BIN: adb } });
+    const shell = run('zsh', [tempSource, '--profile', 'replay', 'search-time-layer', 'six_months', 'replay-filter', 'latest', 'unlimited', 'unlimited', 'same_city'], { env: { ...env, DOUYIN_ADB_BIN: fixtureAdb(adb) } });
     output.command = ['--profile', 'replay', 'search-time-layer', 'six_months', 'replay-filter', 'latest', 'unlimited', 'unlimited', 'same_city'];
     output.shell = { code: shell.status, stdout: shell.stdout.trim(), stderr: shell.stderr.trim() };
     output.received = shell.status === 0 || shell.status === 2 ? readFileSync(join(dir, 'received.txt'), 'utf8').trim().split('\n') : [];

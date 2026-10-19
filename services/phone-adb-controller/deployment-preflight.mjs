@@ -11,6 +11,19 @@ export const WORKFLOWS=[101,102,103,104].map(n=>`b1000000-0000-4000-8000-${Strin
 const requireThat=(ok,message)=>{if(!ok)throw Error(`部署预检: ${message}`);};
 const equal=(a,b)=>digest(a)===digest(b);
 const key=c=>`${c.kind}:${c.repo}:${c.path||''}`;
+const fixedSourcePath=path=>typeof path==='string'&&path.length>0&&path.length<=1000&&/^[A-Za-z0-9_./-]+$/.test(path)&&path.split('/').every(part=>part&&part!=='.'&&part!=='..');
+function validateResolvedSource(binding){
+ if(!Object.hasOwn(binding,'resolved_source'))return;
+ const source=binding.resolved_source;
+ // 派生身份来自官方固定锁/catalog已核验的snapshot绑定；报告不能自行增加身份。
+ // 本部署协议只消费业务自有Skill镜像路径；不是允许任意catalog.source的通用resolver。
+ requireThat(binding.kind==='skill'&&fixedSourcePath(binding.path)&&(binding.path==='SKILL.md'||binding.path.endsWith('/SKILL.md')),'仅固定Skill可携派生来源');
+ requireThat(source&&typeof source==='object'&&!Array.isArray(source)&&Object.keys(source).sort().join(',')==='path,repo,revision'
+  &&source.repo==='perfectuser21/zenithjoy-skills'&&typeof source.revision==='string'&&SHA.test(source.revision)&&fixedSourcePath(source.path)
+  &&source.path===`business-skills/zenithjoy/${binding.path}`,'中央Skill派生来源无效');
+ requireThat(typeof binding.content_sha256==='string'&&/^[0-9a-f]{64}$/.test(binding.content_sha256)&&binding.digest==='sha256:'+binding.content_sha256
+  &&typeof binding.name==='string'&&binding.name.trim()&&typeof binding.version==='string'&&binding.version.trim(),'中央Skill内容摘要或元数据无效');
+}
 function deploymentDefinitions(full,sha){
  requireThat(Array.isArray(full?.workflows)&&Array.isArray(full?.activities),'缺固定定义');
  const workflows=full.workflows.filter(w=>WORKFLOWS.includes(w.workflow_id));
@@ -66,12 +79,7 @@ export function deploymentAssertionPlan(report,snapshot){
     requireThat(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===snapshot.repo&&SHA.test(b.revision)&&/^sha256:[0-9a-f]{64}$/.test(b.digest||'')&&typeof b.path==='string'&&b.path.length&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(p=>['.','..',''].includes(p)),'实现来源绑定无效');
     requireThat(['activity','step'].includes(b.scope)&&['implementation','implementation_bindings'].includes(b.field)&&(b.index===undefined||(Number.isInteger(b.index)&&b.index>=0)),'实现来源定位无效');
     if(b.scope==='step')requireThat(typeof b.step_key==='string'&&a.payload.steps?.some(s=>s.locator?.step_key===b.step_key),'实现来源缺固定Step');
-    // 派生来源只能来自已冻结绑定；保留声明身份，不能以中央路径替换业务绑定。
-    if(Object.hasOwn(b,'resolved_source')){
-     const r=b.resolved_source;
-     requireThat(b.kind==='skill'&&r&&typeof r==='object'&&!Array.isArray(r)&&equal(Object.keys(r).sort(),['path','repo','revision'])
-      &&r.repo==='perfectuser21/zenithjoy-skills'&&r.path===`business-skills/zenithjoy/${b.path}`&&typeof r.revision==='string'&&SHA.test(r.revision),'Skill派生来源身份无效');
-    }
+    validateResolvedSource(b);
     expected.push({activity_id:a.activity_id,activity_definition_version_id:a.id,...Object.fromEntries(['kind','repo','path','revision','digest','scope','step_key','field','index','resolved_source'].filter(k=>b[k]!==undefined).map(k=>[k,b[k]]))});
    }
   }
@@ -79,8 +87,12 @@ export function deploymentAssertionPlan(report,snapshot){
   requireThat(new Set(expected.map(r=>digest(r))).size===expected.length&&equal(supplied,expected),'实现来源集合与完整固定绑定不符');
   keys.push('implementation_source_set');
  }else{
-  // 官方旧格式只兼容同HEAD实现；跨版本不可删来源集合降格绕过。
-  requireThat(snapshot?.definitions?.activities?.every(a=>(a.payload?.implementation_bindings||[]).every(b=>!['code','skill'].includes(b.kind)||(b.repo===snapshot.repo&&b.revision===snapshot.revision))),'跨版本实现缺完整来源集合');
+  // 旧登记器报告没有来源集合；作者协议及跨版本实现不能删除集合降格。
+  requireThat(snapshot?.definitions?.activities?.every(a=>
+   a.payload?.registration_protocol!=='definition-freeze-v1'&&(a.payload?.implementation_bindings||[]).every(b=>{
+    validateResolvedSource(b);
+    return !['code','skill'].includes(b.kind)||(b.repo===snapshot.repo&&b.revision===snapshot.revision);
+   })),'作者协议或跨版本实现缺完整来源集合');
  }
  return Object.fromEntries(keys.map(k=>[k,report[k]]));
 }

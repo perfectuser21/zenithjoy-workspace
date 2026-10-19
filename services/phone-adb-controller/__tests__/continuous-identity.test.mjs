@@ -1,3 +1,4 @@
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
@@ -28,7 +29,7 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
   assert.equal(patched.split(controlled).length-1,1,'仅替换一处等待函数');
   assert.equal(patched.replace(controlled,wait),source,'归一化等待后所有业务与CLI字节必须完全相同');
   runner=join(d,'douyin-phone-adb');writeFileSync(runner,patched);
-  for(const file of ['phone-lock-lib.sh','phone-lock-helper.py'])writeFileSync(join(d,file),readFileSync(join(fixtures,'..','..',file)));
+  for(const file of ['phone-lock-lib.sh','phone-lock-helper.py','adb-existing-route.py'])writeFileSync(join(d,file),readFileSync(join(fixtures,'..','..',file)));
  }
  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
  const head='<hierarchy><node package="com.ss.android.ugc.aweme" bounds="[0,0][1200,2664]">';
@@ -106,7 +107,7 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const lock=join(tmp,'locks','SER1.lock');mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),'continuous-run');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)));
  // 同目标旧短链使本次必须走nonce；不得关闭COPY_STALE。
  writeFileSync(join(cache,'legacy-last-clip.txt'),'https://v.douyin.com/Fresh/\n');
- const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,
+ const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:fixtureAdb(adb),
   DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
   COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',GUIDE_DISMISS_STUCK:guideDismissStuck?'1':'0',GUIDE_DISMISS_IDLE:guideDismissIdle?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};

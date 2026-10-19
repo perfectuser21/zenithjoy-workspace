@@ -8,6 +8,7 @@ bash scripts/ensure-skills-source.sh "$PWD"
 node scripts/product-map/leadgen-methods.mjs
 # 完整文件只调度一次；并发仅限文件，保留每个文件的原断言、内部顺序与超时。
 node --test --test-concurrency=4 \
+ services/phone-adb-controller/__tests__/adb-existing-route.test.mjs \
  scripts/product-map/__tests__/leadgen-methods.test.js \
  scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  scripts/product-map/__tests__/leadgen-workflow-skill.test.js \
@@ -26,6 +27,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs \
  services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs \
  services/phone-adb-controller/__tests__/deployment-preflight.test.mjs \
+ services/phone-adb-controller/__tests__/deployment-publish-release.test.mjs \
  services/phone-adb-controller/__tests__/deployment-fixed-source.test.mjs \
  services/phone-adb-controller/__tests__/deployment-prepare.test.mjs \
  services/phone-adb-controller/__tests__/deployment-release-evidence.test.mjs \

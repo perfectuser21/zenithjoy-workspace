@@ -67,7 +67,7 @@ class Phone:
         meta = {'host': self.host, 'command': command, 'started_at': shell.now()}
         try:
             result = subprocess.run(['ssh', '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', self.host, command],
-                                    capture_output=True, timeout=min(25, budget))
+                                    capture_output=True, timeout=budget)
             stdout, stderr = result.stdout, getattr(result, 'stderr', b'')
             meta.update(returncode=result.returncode)
         except subprocess.TimeoutExpired as error:

@@ -104,6 +104,8 @@ jobs:
 
           git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
           git checkout -b "$BRANCH_NAME"
+          node scripts/ci/authoring-source-version.mjs --fix --base origin/main
+          git add services/phone-adb-controller/commander/contracts/workflow-commander.json services/phone-adb-controller/commander/contracts/workflow-report.json services/phone-adb-controller/patrol/contracts/single.json services/phone-adb-controller/patrol/contracts/batch.json services/phone-adb-controller/patrol/contracts/maintenance.json
           git commit -m "chore: auto-version ${{ steps.bump.outputs.type }} bump to ${NEW_VERSION}"
           git push -u origin "$BRANCH_NAME"
 

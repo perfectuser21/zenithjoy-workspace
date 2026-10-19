@@ -1,3 +1,4 @@
+import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
 // douyin-phone-adb account-current 昵称误读回归测试（0929 新建）。
 //
 // 事故（0929 17:20，小蓝 profile jinoshengyuan-work）：account-current 读出 nickname=11，
@@ -84,9 +85,9 @@ function run(ctx) {
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", PROFILE, "account-current", "acct-t"], {
       env: {
-        ...process.env,
+        ...process.env, ...fixturePythonEnv(),
         DOUYIN_PHONE_REGISTRY: ctx.reg,
-        DOUYIN_ADB_BIN: ctx.adb,
+        DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),
         FIXTURE_DIR: ctx.dir,
         DUMP_COUNT: ctx.count,

@@ -1,3 +1,4 @@
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
 //
 // 归位根因守卫（0930，任务 45ee7653，决策 f425e3fd）。
@@ -149,7 +150,7 @@ case "$*" in
 esac
 exit 0
 `, { mode: 0o755 });
-  const env = { ...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: adb, DOUYIN_CURL_BIN: curl, DOUYIN_PYTHON_BIN: 'python3', DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir, 'tmp') };
+  const env = { ...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: fixtureAdb(adb), DOUYIN_CURL_BIN: curl, DOUYIN_PYTHON_BIN: 'python3', DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir, 'tmp') };
   if(peerUrl){
     const runDir=join(dir,'run');mkdirSync(join(runDir,'runtime'),{recursive:true});
     writeFileSync(join(runDir,'run-definition.json'),'{}');

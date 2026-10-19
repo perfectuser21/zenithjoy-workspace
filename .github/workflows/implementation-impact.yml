@@ -44,13 +44,14 @@ jobs:
       - run: node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/orphan-test-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
+      - run: node --test scripts/ci/__tests__/authoring-main-source.test.mjs scripts/ci/__tests__/authoring-source-version.test.mjs
       - run: node --test scripts/ci/__tests__/implementation-patrol-scope.test.mjs
       - run: node --test scripts/ci/__tests__/implementation-skill-source.test.mjs
       - name: 固定已合并Brain真实冻结校验器
         uses: actions/checkout@v4
         with:
           repository: perfectuser21/cecelia
-          ref: f99f372689b895751bcb30a8e1bb429aaf8edfaa
+          ref: 0ed23d135ba1fa977db71d70bb742e8522c07917
           path: .ci-brain-tooling
           persist-credentials: false
       - run: npm ci --ignore-scripts --workspace packages/brain
@@ -101,16 +102,17 @@ jobs:
     name: Implementation impact
     needs: [caller-contract, scope-classification]
     if: needs['scope-classification'].outputs.classification == 'applicable'
-    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@07b294a6a454e9ad3464111f48cfef9602931a37
+    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@0ed23d135ba1fa977db71d70bb742e8522c07917
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: cecelia-device-patrol
       base_revision: ${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}
       head_revision: ${{ github.event.pull_request.head.sha || github.sha }}
       mode: ${{ github.event_name == 'pull_request' && 'pr' || 'main' }}
-      tooling_revision: 07b294a6a454e9ad3464111f48cfef9602931a37
+      tooling_revision: 0ed23d135ba1fa977db71d70bb742e8522c07917
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
       BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
+      SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
       CECELIA_ACTIONS_READ_TOKEN: ${{ secrets.CECELIA_ACTIONS_READ_TOKEN }}

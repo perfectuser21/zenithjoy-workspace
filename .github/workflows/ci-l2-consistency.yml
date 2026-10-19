@@ -18,6 +18,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  authoring-source-version:
+    name: Fixed authoring source version precheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/ci/authoring-source-version.mjs --base "$BASE"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+
   tsconfig-inheritance:
     name: TSConfig Inheritance Check
     runs-on: ubuntu-latest
@@ -327,7 +343,7 @@ jobs:
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract, acceptance-spec-contract]
+    needs: [authoring-source-version, tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract, acceptance-spec-contract]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -339,6 +355,10 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
           FAILED=false
+          if [ "${{ needs.authoring-source-version.result }}" != "success" ]; then
+            echo "FAIL: 固定authoring版头预检；在PR分支运行 node scripts/ci/authoring-source-version.mjs --fix --base origin/main，提交五份JSON后重验（CW cifix读取本失败日志自动修复）"
+            FAILED=true
+          fi
 
           if [ "${{ needs.tsconfig-inheritance.result }}" != "success" ]; then
             echo "FAIL: TSConfig Inheritance (${{ needs.tsconfig-inheritance.result }})"

@@ -7671,3 +7671,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "Express真实路由验证四参数错误中间件、业务details/数据库409及未知异常不暴露内部文本"
+
+- id: authoring-main-source
+  path: scripts/ci/__tests__/authoring-main-source.test.mjs
+  type: integration
+  ci: L2
+  status: active
+  product: AI员工
+  note: "固定main来源续版先记账真实验证、CAS登记与版头PR自修，不代表手机执行"
+
+- id: authoring-source-version
+  path: scripts/ci/__tests__/authoring-source-version.test.mjs
+  type: integration
+  ci: L2
+  status: active
+  product: AI员工
+  note: "固定main来源续版先记账真实验证、CAS登记与版头PR自修，不代表手机执行"

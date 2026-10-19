@@ -1,3 +1,4 @@
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // douyin-phone-adb media-push / text-input 受控命令单元测试（1010 新建，Brain 任务 8fdeaeb4）。
 //
 // 背景：技能工厂首个样板「试跑 抖音·视频发布」(d4b74ac5) blocked——工位规定手机操作必须经控制器，
@@ -192,7 +193,7 @@ function run(ctx, args, extraEnv = {}, { owner = RUN } = {}) {
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", ...pre, ...args], {
       env: {
-        ...process.env, STATE_DIR: ctx.state, DOUYIN_PHONE_REGISTRY: ctx.reg, DOUYIN_ADB_BIN: ctx.adb,
+        ...process.env, STATE_DIR: ctx.state, DOUYIN_PHONE_REGISTRY: ctx.reg, DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PHONE_TMP_ROOT: ctx.tmpRoot, DOUYIN_PYTHON_BIN: TEST_PYTHON_BIN, ...extraEnv,
       },
     });

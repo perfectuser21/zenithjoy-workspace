@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "3ad685326d1313b41c61f5ba8673e232b1dc37089d26e53378389829afd64e88",
+      "code_digest": "6e76abc07b2b786ffb90f7256ddf8664e93aa74c317d39395ffbe1e4aee9c263",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "342794ebf8f94d730074ff8262102b668faaaa5e2ec8c3cac2c2475e81b2855f",
-        "current_code_digest": "3ad685326d1313b41c61f5ba8673e232b1dc37089d26e53378389829afd64e88"
+        "previous_code_digest": "3ad685326d1313b41c61f5ba8673e232b1dc37089d26e53378389829afd64e88",
+        "current_code_digest": "6e76abc07b2b786ffb90f7256ddf8664e93aa74c317d39395ffbe1e4aee9c263",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_video_processing.preflight": {
@@ -270,7 +270,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -294,7 +294,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "705996c8903ea51ca5379fb72281c1b2916cd6212f5c722c0e992c13939ad1da",
+      "code_digest": "22c1aae657118211dcc4acc861865668d078470bc234fe622c3f76638e70a840",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "b49797a261a1d1ab39c26ec63dd9ddad15681d2fd6908ae4cc0447829adb0e74",
-        "current_code_digest": "705996c8903ea51ca5379fb72281c1b2916cd6212f5c722c0e992c13939ad1da"
+        "previous_code_digest": "705996c8903ea51ca5379fb72281c1b2916cd6212f5c722c0e992c13939ad1da",
+        "current_code_digest": "22c1aae657118211dcc4acc861865668d078470bc234fe622c3f76638e70a840",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_video_processing.dedup": {
@@ -434,7 +434,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "510ae14bd557c884bba372336952567e44e0d619d3ade93d7fe9fff74d82d4fe",
+      "code_digest": "32eecdb335a3f3a601e63d688ce793b4f365a695ff4aaf40f437fe44caf91a24",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "40e2d430667233efb0234a10daee09c45a44042705c32454cc6472f1e84d0547",
-        "current_code_digest": "510ae14bd557c884bba372336952567e44e0d619d3ade93d7fe9fff74d82d4fe"
+        "previous_code_digest": "510ae14bd557c884bba372336952567e44e0d619d3ade93d7fe9fff74d82d4fe",
+        "current_code_digest": "32eecdb335a3f3a601e63d688ce793b4f365a695ff4aaf40f437fe44caf91a24",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_video_processing.qualification": {
@@ -595,7 +595,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -689,7 +689,14 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "b95f313984f808d39e4dcb01b5a52d1e166f67ed8081fb2e4107a81a0636b351"
+      "code_digest": "17c5f9f177276fcd206a68cccf4d76cc9cc74eda18f021307c495bdc77a7a0f6",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "previous_code_digest": "b95f313984f808d39e4dcb01b5a52d1e166f67ed8081fb2e4107a81a0636b351",
+        "current_code_digest": "17c5f9f177276fcd206a68cccf4d76cc9cc74eda18f021307c495bdc77a7a0f6",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
+      }
     },
     "douyin_video_processing.collection": {
       "activity_version": "2.4.1",
@@ -820,7 +827,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -872,13 +879,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "c4a6ad9fa160e45f331f6275470418b7a2b80f8f22886e8e7cd9021ea52b350a",
+      "code_digest": "94cf267ba7e6b0c76ea1ebba7bccfb5893a6c7967184aa693ce8e5fd7c88751e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "8e6300fb4185246453a118f9d437e373474bbc875aee64fb1c51956630e6dd99",
-        "current_code_digest": "c4a6ad9fa160e45f331f6275470418b7a2b80f8f22886e8e7cd9021ea52b350a"
+        "previous_code_digest": "c4a6ad9fa160e45f331f6275470418b7a2b80f8f22886e8e7cd9021ea52b350a",
+        "current_code_digest": "94cf267ba7e6b0c76ea1ebba7bccfb5893a6c7967184aa693ce8e5fd7c88751e",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -982,7 +989,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -1029,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "513a7cecb84d63c9b9607932ea35c4c9b8d55a6d0d30cd7445b2e2a8499d4261",
+      "code_digest": "094ca8210cad3eb8024f17a73433de4140424bcd061e21300a88dfa89c220d65",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "2722e5cae62378ec564122d71f827b99a5a533edf2b1b43ed88aa124d3596792",
-        "current_code_digest": "513a7cecb84d63c9b9607932ea35c4c9b8d55a6d0d30cd7445b2e2a8499d4261"
+        "previous_code_digest": "513a7cecb84d63c9b9607932ea35c4c9b8d55a6d0d30cd7445b2e2a8499d4261",
+        "current_code_digest": "094ca8210cad3eb8024f17a73433de4140424bcd061e21300a88dfa89c220d65",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1475,7 +1482,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -1499,7 +1506,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -1558,13 +1565,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "75abcbed9ed721cec5967ad1d2d65950ede9e170abb42c6f310f4ae35e6668cb",
+      "code_digest": "10371f434a7c0624812eb7cc2ee45c77733d53d68c4d14f9caf078b093c32213",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "64bf1b6e84f07bc118a4e839203eaad0259be4f448ba7601e83334881bbc6a5f",
-        "current_code_digest": "75abcbed9ed721cec5967ad1d2d65950ede9e170abb42c6f310f4ae35e6668cb"
+        "previous_code_digest": "75abcbed9ed721cec5967ad1d2d65950ede9e170abb42c6f310f4ae35e6668cb",
+        "current_code_digest": "10371f434a7c0624812eb7cc2ee45c77733d53d68c4d14f9caf078b093c32213",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1667,7 +1674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -1726,13 +1733,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf",
+      "code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "7f9eeaf7e85b160ee6ef50d144fc828d0519104e38b5f4fa8581a9f82d8bcbf7",
-        "current_code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf"
+        "previous_code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf",
+        "current_code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1835,7 +1842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -1894,13 +1901,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf",
+      "code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "7f9eeaf7e85b160ee6ef50d144fc828d0519104e38b5f4fa8581a9f82d8bcbf7",
-        "current_code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf"
+        "previous_code_digest": "0eb26fae976a26199006c55aa25070025828f60be412950f3e485623808a92cf",
+        "current_code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2004,7 +2011,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "d229439814b243ef07194d9ca4b4ea97010d30e4451aa4e2c92d4370b40d4308"
+          "sha256": "2d842c40f7862c48cd3af860ad34465aba9e9995d4b30d8a13ded417d966314c"
         },
         {
           "kind": "code",
@@ -2065,13 +2072,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "10bb6a282868b87e04a991b930592aaec294e5fa3056460f83a70f40467086f4",
+      "code_digest": "5844a950073c02a3fb1067576e237fc904a854c8fea56c2b6ecb4aff03b21c0a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "8f15807c65b04395aa855c34028448cdf0d8bf22eb4e6caa47451cadf51ea0c8",
-        "current_code_digest": "10bb6a282868b87e04a991b930592aaec294e5fa3056460f83a70f40467086f4"
+        "previous_code_digest": "10bb6a282868b87e04a991b930592aaec294e5fa3056460f83a70f40467086f4",
+        "current_code_digest": "5844a950073c02a3fb1067576e237fc904a854c8fea56c2b6ecb4aff03b21c0a",
+        "reason": "仅既有ADBserver按目标serial只读唯一选路，离线与歧义拒绝、refresh禁止重启，SDK31原nonce锁先于任何ADB；业务输入输出、阶段顺序与成功证据不变。",
+        "reviewed_by": "codex:release_validation_review"
       }
     }
   },

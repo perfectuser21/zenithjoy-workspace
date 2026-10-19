@@ -1,3 +1,4 @@
+import {fixtureAdb} from './adb-existing-route.test.mjs';
 // 旁路报警执行机侧（派发总闸 H，Brain 任务 865b502c）回归测试。
 // 契约：动手机的公共入口 douyin-phone-adb 在①领锁成功 ②对外动作（--outward）点击前，旁路调用 bypass-report.sh
 //      把「谁（run/持有者）在哪台手机做了什么」上报 Brain；是否关联 Brain 任务由 Brain 侧判定，只记旁路。
@@ -63,7 +64,7 @@ function run(ctx, args, { owner = RUN, env = {} } = {}) {
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", ...pre, ...args], {
       env: {
-        ...process.env, STATE_DIR: ctx.state, DOUYIN_PHONE_REGISTRY: ctx.reg, DOUYIN_ADB_BIN: ctx.adb,
+        ...process.env, STATE_DIR: ctx.state, DOUYIN_PHONE_REGISTRY: ctx.reg, DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PHONE_TMP_ROOT: ctx.tmpRoot, DOUYIN_PYTHON_BIN: PYTHON, DOUYIN_SIPS_BIN: ctx.sips,
         DOUYIN_BYPASS_REPORT_BIN: ctx.reporter, ...env,
       },

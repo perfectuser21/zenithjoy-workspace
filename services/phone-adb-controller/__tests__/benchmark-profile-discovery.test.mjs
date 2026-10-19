@@ -1,3 +1,4 @@
+import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
 // 对标发现（对标链接获客 · discovery 活动）控制器子命令守卫。
 //
 // 0929 真机探明（xian-m4 legacy 机）：
@@ -34,7 +35,7 @@ function ctl(args, extraEnv = {}) {
   const { dir, reg } = registry();
   const r = spawnSync("zsh", [SCRIPT, "--profile", "legacy", ...args], {
     encoding: "utf8",
-    env: { ...process.env, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), ...extraEnv },
+    env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), ...extraEnv },
   });
   return { code: r.status, out: r.stdout.replace(/\n+$/, ""), err: r.stderr.trim(), dir };
 }
@@ -143,7 +144,7 @@ exit 0
 test("back-to-profile：取链后多压两层（详情→暂存搜索→详情）→ 退到主页为止", () => {
   const { dir } = registry();
   const { adb, cnt } = backAdb(dir, ["detail.DetailActivity", "search.activity.SearchActivity", "detail.ultra.ui.UltraDetailActivity", "profile.ui.UserProfileActivity"]);
-  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: adb });
+  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: fixtureAdb(adb) });
   assert.equal(r.code, 0, r.err);
   assert.match(r.out, /back_to_profile=1 backs=3/);
   assert.equal(readFileSync(cnt, "utf8").trim(), "3");
@@ -158,7 +159,7 @@ test("back-to-profile：0930 真机实测取链后要按 7 次 back（暂存搜�
     "detail.ultra.ui.UltraDetailActivity", "detail.ultra.ui.UltraDetailActivity",
     "profile.ui.UserProfileActivity",
   ]);
-  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: adb });
+  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: fixtureAdb(adb) });
   assert.equal(r.code, 0, r.err);
   assert.match(r.out, /back_to_profile=1 backs=7/);
 });
@@ -166,7 +167,7 @@ test("back-to-profile：0930 真机实测取链后要按 7 次 back（暂存搜�
 test("back-to-profile：已在 feed（主页被顶掉）→ 报错且一次 back 都不按（再按就退出抖音）", () => {
   const { dir } = registry();
   const { adb, cnt } = backAdb(dir, ["main.MainActivity"]);
-  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: adb });
+  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: fixtureAdb(adb) });
   assert.notEqual(r.code, 0);
   assert.match(r.err, /profile page is gone/);
   assert.equal(existsSync(cnt), false, "看见 feed 还在按 back");
@@ -200,7 +201,7 @@ exit 0
 test("open-user-profile：先归位 feed 再 deeplink，落他人主页 → 输出 sec_uid/抖音号/昵称/作品数", () => {
   const { dir } = registry();
   const { adb, log } = profileAdb(dir, FIX + "profile-other-collection-bar.xml");
-  const r = ctl(["open-user-profile", `https://www.douyin.com/user/${SU}`, "t1"], { DOUYIN_ADB_BIN: adb });
+  const r = ctl(["open-user-profile", `https://www.douyin.com/user/${SU}`, "t1"], { DOUYIN_ADB_BIN: fixtureAdb(adb) });
   assert.equal(r.code, 0, r.err);
   assert.match(r.out, new RegExp(`^sec_uid=${SU}$`, "m"));
   assert.match(r.out, /^douyin_id=aidayu000$/m);
@@ -214,7 +215,7 @@ test("open-user-profile：先归位 feed 再 deeplink，落他人主页 → 输�
 test("open-user-profile：给了期望抖音号但页面不符 → 拒绝", () => {
   const { dir } = registry();
   const { adb } = profileAdb(dir, FIX + "profile-other-collection-bar.xml");
-  const r = ctl(["open-user-profile", SU, "t2", "someoneelse"], { DOUYIN_ADB_BIN: adb });
+  const r = ctl(["open-user-profile", SU, "t2", "someoneelse"], { DOUYIN_ADB_BIN: fixtureAdb(adb) });
   assert.notEqual(r.code, 0);
   assert.match(r.err, /identity mismatch/);
 });
@@ -222,7 +223,7 @@ test("open-user-profile：给了期望抖音号但页面不符 → 拒绝", () =
 test("open-user-profile：deeplink 被吞回「我」页 → 报错，不当成对标主页", () => {
   const { dir } = registry();
   const { adb } = profileAdb(dir, FIX + "own-me-page.xml");
-  const r = ctl(["open-user-profile", SU, "t3"], { DOUYIN_ADB_BIN: adb });
+  const r = ctl(["open-user-profile", SU, "t3"], { DOUYIN_ADB_BIN: fixtureAdb(adb) });
   assert.notEqual(r.code, 0);
   assert.match(r.err, /did not land on a verified user profile/);
 });

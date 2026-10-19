@@ -153,6 +153,35 @@ test('deadline跨重启不变：只补预算内官方终态，晚终态拒绝冒
  }
 });
 function python(f,body){return spawnSync('python3',['-c',`import importlib.util,json,pathlib,time\nspec=importlib.util.spec_from_file_location('runtime',${JSON.stringify(join(f.dir,'wf-v2.py'))})\nr=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)\n`+body],{env:f.env,encoding:'utf8'});}
+test('手机SSH允许预算内慢取证，并由执行或收尾截止时间限制',()=>{
+ const f=fixture(),dir=start(f);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+e=r.io.read(d/'envelope.json');e['contract']['resources']={'machine':'xian-m4','profile':'test','device_serial':'ABC123','account_ref':'授权测试'}
+p=r.phone_module.Phone(d,e);calls=[]
+r.phone_module.time.time=lambda:1000.0
+def ssh(args,**options):
+ calls.append(options['timeout'])
+ if options['timeout'] < 30:raise r.phone_module.subprocess.TimeoutExpired(args,options['timeout'],output=b'partial',stderr=b'slow evidence')
+ return type('Result',(),{'stdout':b'original evidence','stderr':b'','returncode':0})()
+r.phone_module.subprocess.run=ssh
+for phase,deadline in [('preflight',1090.0),('cleanup',1200.0)]:
+ p.stage=phase;p.deadline=deadline
+ assert p.ssh('read-only evidence')==b'original evidence'
+ assert calls[-1]==deadline-1000.0,'SSH must retain the actual phase budget'
+p.stage='cleanup';p.deadline=1003.0
+try:p.ssh('read-only evidence')
+except r.phone_module.subprocess.TimeoutExpired:pass
+else:raise AssertionError('remaining cleanup budget was exceeded')
+assert calls[-1]==3.0
+meta=r.io.read(p.control_receipts[-1]);assert meta['timed_out'] is True
+assert p.control_receipts[-3].read_bytes()==b'partial'
+before=len(calls);p.deadline=999.0
+try:p.ssh('must not launch')
+except ValueError:pass
+else:raise AssertionError('expired phase launched SSH')
+assert len(calls)==before
+`);assert.equal(result.status,0,result.stdout+result.stderr);
+});
 test('清理取证异常仍精确放锁；已失败的清理可重入且不重复业务',()=>{
  const f=fixture(),dir=start(f);
  const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})

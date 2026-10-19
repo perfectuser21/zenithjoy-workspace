@@ -105,7 +105,7 @@ test('第三scope证据必须完整，但其固定历史实现不混入七/四�
 function centralSkillCommander(){
  const b=authoringCommander(fixture()),e=b.commander,a=e.snapshot.definitions.activities[0];
  const binding=a.payload.implementation_bindings[0];
- Object.assign(binding,{kind:'skill',path:'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md',resolved_source:{repo:'perfectuser21/zenithjoy-skills',path:'business-skills/zenithjoy/services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md',revision:'c'.repeat(40)}});
+ Object.assign(binding,{kind:'skill',name:'workflow-commander',version:'2.0.22',content_sha256:binding.digest.slice(7),path:'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md',resolved_source:{repo:'perfectuser21/zenithjoy-skills',path:'business-skills/zenithjoy/services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md',revision:'c'.repeat(40)}});
  resealSnapshot(e);
  e.report.implementation_source_set=e.snapshot.definitions.activities.flatMap(a=>a.payload.implementation_bindings.map(x=>({activity_id:a.activity_id,activity_definition_version_id:a.id,...Object.fromEntries(['kind','repo','path','revision','digest','scope','step_key','field','index','resolved_source'].filter(k=>x[k]!==undefined).map(k=>[k,x[k]]))})));
  e.report.implementation_source_set.sort((x,y)=>digest(x).localeCompare(digest(y)));sealPlan(e);return b;
@@ -134,9 +134,9 @@ test('中央派生身份仅允许规范Skill三字段，错来源/穿越/坏SHA/
  for(const [label,mutate]of [
   ['repo',x=>x.resolved_source.repo='evil/skills'],['path',x=>x.resolved_source.path='business-skills/cecelia/'+x.path],
   ['traversal',x=>x.resolved_source.path='business-skills/zenithjoy/../'+x.path],['sha',x=>x.resolved_source.revision='main'],
-  ['array-sha',x=>x.resolved_source.revision=['c'.repeat(40)]],['extra',x=>x.resolved_source.extra=true],['null',x=>x.resolved_source=null],['array',x=>x.resolved_source=[]],['code',x=>x.kind='code'],
+  ['array-sha',x=>x.resolved_source.revision=['c'.repeat(40)]],['undefined',x=>x.resolved_source=undefined],['extra',x=>x.resolved_source.extra=true],['null',x=>x.resolved_source=null],['array',x=>x.resolved_source=[]],['code',x=>x.kind='code'],
  ]){
-  const b=centralSkillCommander(),e=b.commander,binding=e.snapshot.definitions.activities[0].payload.implementation_bindings[0],entry=e.report.implementation_source_set.find(x=>x.kind==='skill');mutate(binding);Object.assign(entry,structuredClone(binding));delete entry.status;resealSnapshot(e);e.report.implementation_source_set.sort((x,y)=>digest(x).localeCompare(digest(y)));sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,label);
+  const b=centralSkillCommander(),e=b.commander,binding=e.snapshot.definitions.activities[0].payload.implementation_bindings[0],entry=e.report.implementation_source_set.find(x=>x.kind==='skill');mutate(binding);for(const key of ['kind','repo','path','revision','digest','scope','step_key','field','index','resolved_source'])if(Object.hasOwn(binding,key))entry[key]=structuredClone(binding[key]);else delete entry[key];resealSnapshot(e);e.report.implementation_source_set.sort((x,y)=>digest(x).localeCompare(digest(y)));sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,label);
  }
  for(const mode of ['missing-row','duplicate-row','missing-resolved']){
   const b=centralSkillCommander(),e=b.commander,index=e.report.implementation_source_set.findIndex(x=>x.kind==='skill');if(mode==='missing-row')e.report.implementation_source_set.splice(index,1);else if(mode==='duplicate-row')e.report.implementation_source_set.push(structuredClone(e.report.implementation_source_set[index]));else delete e.report.implementation_source_set[index].resolved_source;sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,mode);
