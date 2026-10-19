@@ -99,9 +99,7 @@
     "scripts/phone-account-patrol/openclaw_commander.py",
     "scripts/phone-account-patrol/test_openclaw_commander.py",
     "scripts/phone-account-patrol/openclaw_native.py",
-    "scripts/phone-account-patrol/test_openclaw_native.py",
-    "scripts/phone-account-patrol/fixtures/frozen-864154c57e88e8085d2add741a79103a28891a44/collector.py.txt",
-    "scripts/phone-account-patrol/fixtures/frozen-864154c57e88e8085d2add741a79103a28891a44/preflight.py.txt"
+    "scripts/phone-account-patrol/test_openclaw_native.py"
   ],
   "maintenance_owner": "主理人",
   "schedule": {

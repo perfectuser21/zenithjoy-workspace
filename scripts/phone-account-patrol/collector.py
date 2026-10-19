@@ -1,10 +1,7 @@
-import subprocess,sys,time,json,re,datetime,os,xml.etree.ElementTree as E
+import subprocess,sys,time,json,re,datetime,xml.etree.ElementTree as E
 from pathlib import Path
 PACKAGES={'抖音':'com.ss.android.ugc.aweme','小红书':'com.xingin.xhs','微信':'com.tencent.mm','快手':'com.smile.gifmaker','今日头条':'com.ss.android.article.news','知乎':'com.zhihu.android','微博':'com.sina.weibo','B站':'tv.danmaku.bili'}
-# 管理策略存在时只能消费共享client；显式空/坏配置由client严格拒绝。
-MANAGED_ADB = 'ZJ_ADB_HOST_CONFIG' in os.environ or os.path.lexists(Path.home()/'.config/zenithjoy/adb-service.json')
-ADB=str(Path.home()/'.local/bin/adb-managed-client.py') if MANAGED_ADB else '/opt/homebrew/bin/adb'
-BASE=Path.home()/'.local/share/phone-account-patrol'
+ADB='/opt/homebrew/bin/adb'; BASE=Path.home()/'.local/share/phone-account-patrol'
 def is_home_foreground(focus):
  # 只检查组件的包名；微信LauncherUI不是桌面，不能按组件含Launcher判空闲。
  packages=re.findall(r'\b([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/',focus)
@@ -92,7 +89,6 @@ class Probe:
  def inspect(self,platform):
   package=PACKAGES[platform];at=stamp()
   package_query=subprocess.run([ADB,'-s',self.serial,'shell','pm','path',package],capture_output=True,timeout=25)
-  if MANAGED_ADB and package_query.returncode:raise RuntimeError('受管ADB不可确认，禁止把取证失败当作未安装')
   if package_query.returncode and any(x in package_query.stderr.lower() for x in [b'offline',b'not found',b'closed']):raise RuntimeError('ADB设备离线或不可达')
   if not package_query.stdout.strip():return {'state':'未安装','installed':False,'checked_at':at,'reason':'ADB包管理器无此应用包','evidence':package}
   self.adb('shell','input','keyevent','224');self.adb('shell','input','keyevent','3')
