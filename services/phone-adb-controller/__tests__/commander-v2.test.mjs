@@ -501,3 +501,20 @@ before=(d/'events.json').read_bytes();r.worker(d);assert (d/'events.json').read_
 assert calls==['agent.wait','tools.invoke']
 `);assert.equal(result.status,0,result.stderr+result.stdout);
 });
+test('cleanup截止后重复正式status零唤醒，原blocked未知状态与未停止事实不被伪改',()=>{
+ const f=fixture(),dir=start(f);helper(f,'claim-spawn',dir);bind(f,dir);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+from datetime import datetime,timezone
+state=r.io.read(d/'runtime.json');state.update(phase='blocked',execution_stopped=False);r.io.write(d/'runtime.json',state)
+e=r.io.read(d/'envelope.json');e['cleanup_deadline_at']=datetime.fromtimestamp(time.time()-1,timezone.utc).isoformat();r.io.write(d/'envelope.json',e)
+before=(d/'runtime.json').read_bytes();calls=[];r.start_worker=lambda directory:calls.append(directory)
+r.sys.argv=['wf-v2.py','status',${JSON.stringify(f.envelope.run_id)}]
+r.main();r.main()
+assert calls==[],'expired status relaunched a worker'
+assert (d/'runtime.json').read_bytes()==before
+assert r.current(d)['state']=='blocked' and r.current(d)['execution_stopped'] is False
+assert not (d/'delivery.json').exists()
+e['cleanup_deadline_at']=datetime.fromtimestamp(time.time()+60,timezone.utc).isoformat();r.io.write(d/'envelope.json',e)
+r.main();assert calls==[d],'within-budget supervision no longer resumes'
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
