@@ -101,3 +101,44 @@ test('第三scope证据必须完整，但其固定历史实现不混入七/四�
  const out=targetDefinitions(b,sha,()=>bytes);assert.equal(out.mmv.definitions.workflows.length,7);assert.ok(out.mmv.components.every(c=>c.revision===sha));
  for(const [label,mutate]of [['missing',x=>delete x.patrol],['missing-source-set',x=>{delete x.patrol.report.implementation_source_set;sealPlan(x.patrol);}],['scope',x=>x.patrol.report.scope='other'],['receipt',x=>x.patrol.receipt.assertions[0].exit_code=1],['source_set',x=>{x.patrol.report.implementation_source_set[0].revision='c'.repeat(40);sealPlan(x.patrol);}]] ) {const invalid=structuredClone(b);mutate(invalid);assert.throws(()=>targetDefinitions(invalid,sha,()=>bytes),undefined,label);}
 });
+
+function centralSkillCommander(){
+ const b=authoringCommander(fixture()),e=b.commander,a=e.snapshot.definitions.activities[0];
+ const binding=a.payload.implementation_bindings[0];
+ Object.assign(binding,{kind:'skill',name:'workflow-commander',version:'2.0.22',content_sha256:binding.digest.slice(7),path:'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md',resolved_source:{repo:'perfectuser21/zenithjoy-skills',path:'business-skills/zenithjoy/services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md',revision:'c'.repeat(40)}});
+ resealSnapshot(e);
+ e.report.implementation_source_set=e.snapshot.definitions.activities.flatMap(a=>a.payload.implementation_bindings.map(x=>({activity_id:a.activity_id,activity_definition_version_id:a.id,...Object.fromEntries(['kind','repo','path','revision','digest','scope','step_key','field','index','resolved_source'].filter(k=>x[k]!==undefined).map(k=>[k,x[k]]))})));
+ e.report.implementation_source_set.sort((x,y)=>digest(x).localeCompare(digest(y)));sealPlan(e);return b;
+}
+function resealSnapshot(e){
+ for(const a of e.snapshot.definitions.activities)a.payload_sha256=digest({source:{repo:a.source_repo,path:a.source_path,commit:a.source_commit},payload:a.payload});
+ const {snapshot_sha256,...body}=e.snapshot;e.snapshot.snapshot_sha256=digest(body);e.report.snapshot_sha256=e.snapshot.snapshot_sha256;e.receipt.snapshot_sha256=e.snapshot.snapshot_sha256;
+}
+test('正规中央Skill双来源原字段进入严格计划，七/四流程仍完整且旧无派生来源兼容',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');
+ for(const b of [fixture(),authoringCommander(fixture()),centralSkillCommander()]){
+  const actual=targetDefinitions(b,sha,()=>bytes);assert.equal(actual.mmv.definitions.workflows.length,7);assert.equal(actual['xian-m4'].definitions.workflows.length,4);
+ }
+});
+test('report或snapshot单边篡改派生来源即使自洽重算摘要也拒绝',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');
+ for(const side of ['report','snapshot']){
+  const b=centralSkillCommander(),e=b.commander;
+  e.report.implementation_source_set.find(x=>x.kind==='skill').resolved_source=structuredClone(e.report.implementation_source_set.find(x=>x.kind==='skill').resolved_source);
+  const r=side==='report'?e.report.implementation_source_set.find(x=>x.kind==='skill').resolved_source:e.snapshot.definitions.activities[0].payload.implementation_bindings[0].resolved_source;
+  r.revision='d'.repeat(40);resealSnapshot(e);sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,side);
+ }
+});
+test('中央派生身份仅允许规范Skill三字段，错来源/穿越/坏SHA/代码冒充/漏项均拒绝',async()=>{
+ const {targetDefinitions}=await import('../deployment-targets.mjs');
+ for(const [label,mutate]of [
+  ['repo',x=>x.resolved_source.repo='evil/skills'],['path',x=>x.resolved_source.path='business-skills/cecelia/'+x.path],
+  ['traversal',x=>x.resolved_source.path='business-skills/zenithjoy/../'+x.path],['sha',x=>x.resolved_source.revision='main'],
+  ['array-sha',x=>x.resolved_source.revision=['c'.repeat(40)]],['extra',x=>x.resolved_source.extra=true],['null',x=>x.resolved_source=null],['array',x=>x.resolved_source=[]],['code',x=>x.kind='code'],
+ ]){
+  const b=centralSkillCommander(),e=b.commander,binding=e.snapshot.definitions.activities[0].payload.implementation_bindings[0],entry=e.report.implementation_source_set.find(x=>x.kind==='skill');mutate(binding);Object.assign(entry,structuredClone(binding));delete entry.status;resealSnapshot(e);e.report.implementation_source_set.sort((x,y)=>digest(x).localeCompare(digest(y)));sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,label);
+ }
+ for(const mode of ['missing-row','duplicate-row','missing-resolved']){
+  const b=centralSkillCommander(),e=b.commander,index=e.report.implementation_source_set.findIndex(x=>x.kind==='skill');if(mode==='missing-row')e.report.implementation_source_set.splice(index,1);else if(mode==='duplicate-row')e.report.implementation_source_set.push(structuredClone(e.report.implementation_source_set[index]));else delete e.report.implementation_source_set[index].resolved_source;sealPlan(e);assert.throws(()=>targetDefinitions(b,sha,()=>bytes),undefined,mode);
+ }
+});

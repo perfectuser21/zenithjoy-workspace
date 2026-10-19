@@ -16,9 +16,11 @@ function validateResolvedSource(binding){
  if(binding.resolved_source===undefined)return;
  const source=binding.resolved_source;
  // 派生身份来自官方固定锁/catalog已核验的snapshot绑定；报告不能自行增加身份。
+ // 本部署协议只消费业务自有Skill镜像路径；不是允许任意catalog.source的通用resolver。
  requireThat(binding.kind==='skill'&&fixedSourcePath(binding.path)&&(binding.path==='SKILL.md'||binding.path.endsWith('/SKILL.md')),'仅固定Skill可携派生来源');
  requireThat(source&&typeof source==='object'&&!Array.isArray(source)&&Object.keys(source).sort().join(',')==='path,repo,revision'
-  &&source.repo==='perfectuser21/zenithjoy-skills'&&typeof source.revision==='string'&&SHA.test(source.revision)&&fixedSourcePath(source.path),'中央Skill派生来源无效');
+  &&source.repo==='perfectuser21/zenithjoy-skills'&&typeof source.revision==='string'&&SHA.test(source.revision)&&fixedSourcePath(source.path)
+  &&source.path===`business-skills/zenithjoy/${binding.path}`,'中央Skill派生来源无效');
  requireThat(typeof binding.content_sha256==='string'&&/^[0-9a-f]{64}$/.test(binding.content_sha256)&&binding.digest==='sha256:'+binding.content_sha256
   &&typeof binding.name==='string'&&binding.name.trim()&&typeof binding.version==='string'&&binding.version.trim(),'中央Skill内容摘要或元数据无效');
 }
