@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {openClawCommander} from '../activity-commander.mjs';
@@ -42,9 +42,18 @@ test('负责人CLI超时结果未知时不再次咨询、不派Skill、不清理
 
 test('正式获客RPC调用同一work-commander且来源不匹配时零派发',async()=>{
  const calls=[];const receipt={run_id:'rpc-workflow__a1',binding_id:'rpc-binding',source_commit:'a'.repeat(40),activity:'preflight',phase:'before'};
- const deps={verify:()=>{},commanderExecute:async(_cmd,args)=>{calls.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"原任务"}'}]})};}};
+ const home=mkdtempSync(join(tmpdir(),'owner-workspace-'));
+ for(const directory of ['.openclaw/commander','openclaw-root/workspaces-root/clawd-work-commander'])for(const file of ['AGENTS.md','skills/workflow-commander/SKILL.md']){
+  const target=join(home,directory,file);mkdirSync(join(target,'..'),{recursive:true});writeFileSync(target,readFileSync(new URL('../commander/'+file,import.meta.url)));
+ }
+ const deps={verify:()=>{},commanderHome:home,commanderExecute:async(_cmd,args)=>{calls.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"原任务"}'}]})};}};
+ try{
  const ok=await handleRpc({source:{commit:receipt.source_commit},kind:'commander',receipt},deps);
  assert.equal(ok.decision.action,'continue');assert.equal(calls.length,1);
  await assert.rejects(()=>handleRpc({source:{commit:'b'.repeat(40)},kind:'commander',receipt},deps),/COMMANDER_SOURCE_MISMATCH/);
  assert.equal(calls.length,1);
+ writeFileSync(join(home,'.openclaw/commander/AGENTS.md'),'drift');
+ await assert.rejects(()=>handleRpc({source:{commit:receipt.source_commit},kind:'commander',receipt},deps),/COMMANDER_WORKSPACE_DRIFT/);
+ assert.equal(calls.length,1);
+ }finally{rmSync(home,{recursive:true,force:true});}
 });
