@@ -13,7 +13,7 @@ const equal=(a,b)=>digest(a)===digest(b);
 const key=c=>`${c.kind}:${c.repo}:${c.path||''}`;
 const fixedSourcePath=path=>typeof path==='string'&&path.length>0&&path.length<=1000&&/^[A-Za-z0-9_./-]+$/.test(path)&&path.split('/').every(part=>part&&part!=='.'&&part!=='..');
 function validateResolvedSource(binding){
- if(binding.resolved_source===undefined)return;
+ if(!Object.hasOwn(binding,'resolved_source'))return;
  const source=binding.resolved_source;
  // 派生身份来自官方固定锁/catalog已核验的snapshot绑定；报告不能自行增加身份。
  // 本部署协议只消费业务自有Skill镜像路径；不是允许任意catalog.source的通用resolver。
