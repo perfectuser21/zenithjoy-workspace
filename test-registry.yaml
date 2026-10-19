@@ -39,6 +39,14 @@ api_suite:
 
 tests:
 
+- id: search-video-tab-canonical-checkpoint
+  path: services/phone-adb-controller/__tests__/search-video-tab-checkpoint.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实控制器case联动原step-judge固定checkpoint；保留重定位原件，提交失败拒绝成功，来源配额不足仍失败"
+
 - id: acquisition-cancel-android-uuid-integration
   path: apps/api/tests/integration/acquisition-cancel-uuid-agent.integration.test.ts
   type: integration
