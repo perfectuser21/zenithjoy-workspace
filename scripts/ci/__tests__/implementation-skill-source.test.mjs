@@ -75,7 +75,7 @@ function regressionFixture(){
  const pin=commit(f.central),lock={version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:pin,loader_sha256:createHash('sha256').update(loader).digest('hex')};
  writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(lock));
  for(const path of ['scripts/skills-source.py','scripts/ensure-skills-source.sh'])writeFileSync(join(f.business,path),readFileSync(new URL('../../../'+path,import.meta.url)));
- commit(f.business);const cache=join(f.business,'../objects');mkdirSync(cache);git(cache,'init','-q');git(cache,'fetch','--quiet',f.central,pin);
+ commit(f.business);const cache=join(f.business,'../objects');mkdirSync(cache);git(cache,'init','-q');git(cache,'fetch','--quiet','--depth=1',f.central,pin);
  return {...f,cache,pin,lock};
 }
 test('Pilot白名单无HEAD对象缓存经私有checkout执行原install/verify，保持共享缓存不变并清理',()=>{
@@ -131,4 +131,12 @@ test('实际白名单CLI只继承对象cache，拒绝relative/missing且finally�
   assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.cache}),/Command failed/);
   assert.deepEqual(readdirSync(tmpdir()).filter(x=>x.startsWith('regression-skills-')).sort(),before);
  }finally{f.cleanup();}
+});
+
+test('三个正式scope smoke全部经同一离线适配入口，不能直装对象cache',()=>{
+ for(const path of ['.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh','.github/workflows/scripts/smoke/codex-publish-contract-smoke.sh','scripts/smoke/leadgen-split-smoke.sh']){
+  const source=readFileSync(new URL('../../../'+path,import.meta.url),'utf8');
+  assert.match(source,/^node scripts\/ci\/implementation-skill-source\.mjs --install-regression-skills "\$(?:REPO_ROOT|PWD)"$/m,path);
+  assert.doesNotMatch(source,/^bash scripts\/ensure-skills-source\.sh/m,path);
+ }
 });
