@@ -798,18 +798,29 @@ nonce_sdk31_input() {
   )
 }
 
-nonce_sdk31_copy() {
-  local eid="$1" nonce="$2" center x y i
-  require_held_lock clipboard_nonce
+nonce_native_copy() {
+  local eid="$1" nonce="$2" center x y i phase
+  # 保持既有入口权限：SDK31或显式owner必须验锁；其余旧入口不新增owner前置。
+  if [[ "${DEVICE_SDK:-}" == 31 || -n "${LOCK_OWNER:-}" ]]; then
+    require_held_lock clipboard_nonce
+  fi
   require_target_for clipboard_nonce
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE/"* ]] || die "CLIPBOARD_NONCE_WRONG_FOREGROUND"
   center="$(nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-typed.xml" "$nonce")" || die "CLIPBOARD_NONCE_COPY_FIELD_UNVERIFIED"
   read x y <<< "$center"
-  # Android12原生FloatingToolbar不在UIA树中。长按连续nonce单词后用标准COPY，
-  # 不信长按/复制退出码：后续empty→paste精确读回才证明复制了完整nonce。
-  "$ADB" -s "$SERIAL" shell input swipe "$x" "$y" "$x" "$y" 650 >/dev/null || die "CLIPBOARD_NONCE_LONG_PRESS_FAILED"
-  wait_ms 300
-  "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
+  # 原生复制按实际字段证明使用，不按SDK猜能力。每个阶段读回上下文，
+  # 系统小组件框或焦点丢失时不能继续COPY/MOVE_END/DEL。
+  for phase in selected copied; do
+    if [[ "$phase" == selected ]]; then
+      "$ADB" -s "$SERIAL" shell input swipe "$x" "$y" "$x" "$y" 650 >/dev/null || die "CLIPBOARD_NONCE_LONG_PRESS_FAILED"
+    else
+      "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
+    fi
+    wait_ms 300
+    ui_evidence "${eid}-seed-copy-${phase}" >/dev/null || die "CLIPBOARD_NONCE_TREE_UNAVAILABLE:copy-$phase"
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE/"* ]] || die "CLIPBOARD_NONCE_WRONG_FOREGROUND:copy-$phase"
+    nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-copy-${phase}.xml" "$nonce" >/dev/null || die "CLIPBOARD_NONCE_COPY_FIELD_UNVERIFIED:$phase"
+  done
   # Copy会取消选区；无需Ctrl+A，移到已验证nonce末尾并删除其确切字符数。
   "$ADB" -s "$SERIAL" shell input keyevent 123 >/dev/null || die "CLIPBOARD_NONCE_MOVE_END_FAILED"
   for (( i=0; i<${#nonce}; i++ )); do
@@ -875,15 +886,7 @@ seed_clipboard_nonce() {
         print -- 'empty_proof=verified_by_exact_nonce_append' > "$EVIDENCE_ROOT/${eid}-seed-empty-proof.txt"
       fi
       if [[ "$phase" == typed ]]; then
-        if [[ "${DEVICE_SDK:-}" == 31 ]]; then
-          nonce_sdk31_copy "$eid" "$nonce" || die "CLIPBOARD_NONCE_COPY_FAILED"
-        else
-          "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
-          "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
-          # HONOR复制后会取消全选；重新全选后再删除，不能只删掉nonce末尾一个字符。
-          "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_RESELECT_FAILED"
-          "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
-        fi
+        nonce_native_copy "$eid" "$nonce" || die "CLIPBOARD_NONCE_COPY_FAILED"
       fi
     fi
   done
