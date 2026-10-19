@@ -166,4 +166,88 @@ class GuardTests(unittest.TestCase):
       try:os.killpg(child_pid,signal.SIGKILL)
       except ProcessLookupError:pass
 
+class FailedAdmissionTests(unittest.TestCase):
+ def fixture(self,home):
+  import time
+  root=home/'.openclaw/commander';root.mkdir(parents=True)
+  run='wfd-11111111-1111-4111-8111-111111111111';task_id='22222222-2222-4222-8222-222222222222';directory=home/'wf-agent-runs'/run;directory.mkdir(parents=True)
+  def put(path,obj):path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(obj,ensure_ascii=False))
+  def digest(obj):return hashlib.sha256(json.dumps(obj,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+  files={'wf-v2.py':hashlib.sha256(b'original-runtime').hexdigest()};(root/'wf-v2.py').write_bytes(b'original-runtime')
+  manifest=dict(protocol='commander-v2',files=files,runtime_snapshot_sha256=digest(files));put(root/'runtime-manifest.json',manifest)
+  env=dict(protocol='commander-v2',task_id=task_id,run_id=run,attempt=1,owner_epoch=1,input={'text':'原输入'},input_sha256=digest({'text':'原输入'}),definition=dict(snapshot_sha256='a'*64,runtime_snapshot_sha256=digest(files)),deadline_at='2000-01-01T00:00:00Z',cleanup_deadline_at='2000-01-01T00:01:00Z')
+  binding=dict(task_id=task_id,run_id=run,nonce='closed-nonce',parent_session_key='agent:work-commander:'+run,child_run_id='33333333-3333-4333-8333-333333333333',child_session_key='agent:skill-factory:subagent:44444444-4444-4444-8444-444444444444')
+  request=dict(binding,protocol='commander-v2',expires_at=946684800)
+  evidence=directory/'evidence/cleanup.png';evidence.parent.mkdir();evidence.write_bytes(b'actual-cleanup')
+  refs=[dict(path=str(evidence),sha256=hashlib.sha256(evidence.read_bytes()).hexdigest())]
+  cleanup=dict(completed=True,failure=None,lock_status='free',evidence=[str(evidence)],_shell=dict(run_id=run,attempt=1,activity_key='cleanup',files=refs,started_at='2000-01-01T00:00:02Z',ended_at='2000-01-01T00:00:03Z'))
+  for name,obj in [('envelope.json',env),('input.json',env['input']),('contract.json',{}),('runtime.json',dict(phase='blocked',execution_stopped=False,cleanup_completed=True)),('agent-binding.json',binding),('agent-request.json',request),('spawn-claimed.json',{'nonce':binding['nonce']}),('handoff-closed.json',{'nonce':binding['nonce'],'at':946684804}),('cleanup.json',cleanup)]:put(directory/name,obj)
+  (directory/'.worker.lock').touch()
+  identity={key:env[key] for key in ('task_id','run_id','attempt','owner_epoch','input_sha256')};identity['definition_snapshot_sha256']=env['definition']['snapshot_sha256']
+  proof=dict(schema_version=1,**identity,runtime_snapshot_sha256=digest(files),verdict='FAIL',effects='unknown',retry_safe=False,verification_task_id='55555555-5555-4555-8555-555555555555',attestation_sha256='b'*64,cleanup_sha256=hashlib.sha256((directory/'cleanup.json').read_bytes()).hexdigest(),files=refs,terminal_sha256='c'*64,binding_sha256=digest(binding),original_child=dict(run_id=binding['child_run_id'],session_key=binding['child_session_key'],status='error',started_at=946684800000,ended_at=946684801000),actor='codex:operator',principal='internal-controller',reason='真实失败清理对账',observed_at='2000-01-01T00:02:00Z',request_sha256='d'*64,previous_control_sha256='e'*64)
+  def seal():proof['sha256']=digest({k:v for k,v in proof.items() if k!='sha256'})
+  seal()
+  control=dict(envelope=env,phase='final',verdict='FAIL',effects='unknown',retry_safe=False,execution_stopped=True,failed_reconciliation=proof)
+  task=dict(id=task_id,status='failed',task_type='workflow_dispatch',payload={'commander_protocol':'commander-v2'},result=dict(workflow_control=control,commander_failure_reconciliation=dict(operator_actor='codex:operator',verification_task_id=proof['verification_task_id'],**identity)))
+  runrow=dict(id='66666666-6666-4666-8666-666666666666',run_id=run,task_id=task_id,status='failed',ended_at='2000-01-01T00:02:00Z',context={'commander_envelope':env},result={'failed_reconciliation':proof})
+  reconciliation=dict(run_id=run,run_binding_id='77777777-7777-4777-8777-777777777777',release_id='88888888-8888-4888-8888-888888888888',task_run=runrow,links=dict(task_id=task_id,task_run_id=runrow['id']),evidence_status='incomplete',business_outcome='unknown')
+  calls=[]
+  def get(path):calls.append(path);return task if path=='/api/brain/tasks/'+task_id else reconciliation if path=='/api/brain/runs/'+run+'/reconciliation' else self.fail('unexpected GET '+path)
+  return root,directory,task,proof,get,calls,seal
+ def test_original_blocked_runtime_admitted_only_by_exact_authoritative_failure_proof_and_held_worker(self):
+  import fcntl
+  g=module('deployment-guard')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp);root,directory,task,proof,get,calls,seal=self.fixture(home)
+   with g.commander_admission(home,get):
+    self.assertTrue((root/'.deploying').is_file());self.assertEqual(len(calls),2)
+    for path in (root/'.admission.lock',directory/'.worker.lock'):
+     with open(path,'r') as fd:
+      with self.assertRaises(BlockingIOError):fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    self.assertFalse(json.loads((directory/'runtime.json').read_text())['execution_stopped']);self.assertFalse((directory/'delivery.json').exists())
+   with open(directory/'.worker.lock','r') as fd:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+ def test_fail_closed_for_each_identity_hash_active_state_and_api_error(self):
+  import fcntl
+  cases=['unreconciled','proof-hash','envelope','cleanup','runtime','nonce','deadline','other-active','run-not-failed','binding','authority','api']
+  for case in cases:
+   with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp);root,directory,task,proof,get,calls,seal=self.fixture(home)
+    if case=='unreconciled':task['result']['workflow_control'].pop('failed_reconciliation')
+    elif case=='proof-hash':proof['effects']='none'
+    elif case=='envelope':task['result']['workflow_control']['envelope']['owner_epoch']=2
+    elif case=='cleanup':(directory/'cleanup.json').write_text('{}')
+    elif case=='runtime':(root/'wf-v2.py').write_bytes(b'tamper')
+    elif case=='nonce':(directory/'handoff-closed.json').unlink()
+    elif case=='deadline':
+     env=json.loads((directory/'envelope.json').read_text());env['cleanup_deadline_at']='2999-01-01T00:00:00Z';(directory/'envelope.json').write_text(json.dumps(env));task['result']['workflow_control']['envelope']=env
+    elif case=='other-active':
+     other=home/'wf-agent-runs/other';other.mkdir();(other/'runtime.json').write_text('{"phase":"running","execution_stopped":false}')
+    elif case=='run-not-failed':
+     old=get
+     def get(path):
+      result=old(path)
+      if '/runs/' in path:result['task_run']['status']='running'
+      return result
+    elif case=='binding':(directory/'agent-binding.json').write_text('{}')
+    elif case=='authority':task['result']['commander_failure_reconciliation']['operator_actor']='codex:other'
+    elif case=='api':
+     def get(path):raise OSError('API unavailable')
+    with self.assertRaises((ValueError,OSError,KeyError)):
+     with module('deployment-guard').commander_admission(home,get):self.fail('unsafe install admitted')
+    self.assertFalse((root/'.deploying').exists())
+ def test_busy_original_worker_and_unrelated_active_run_never_exempted(self):
+  import fcntl
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp);root,directory,task,proof,get,calls,seal=self.fixture(home)
+   with open(directory/'.worker.lock','r') as fd:
+    fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    with self.assertRaises((BlockingIOError,ValueError)):
+     with module('deployment-guard').commander_admission(home,get):self.fail('live worker admitted')
+   self.assertEqual(calls,[]);self.assertFalse((root/'.deploying').exists())
+ def test_original_success_delivery_lane_needs_no_failure_api(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp);directory=home/'wf-agent-runs/completed';directory.mkdir(parents=True)
+   (directory/'runtime.json').write_text('{"phase":"awaiting_verify","execution_stopped":true}');(directory/'delivery.json').write_text('{}')
+   with module('deployment-guard').commander_admission(home,lambda _:self.fail('success lane called failure API')):pass
+
 if __name__=='__main__':unittest.main()
