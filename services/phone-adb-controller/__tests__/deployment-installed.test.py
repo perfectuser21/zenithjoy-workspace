@@ -181,7 +181,7 @@ class FailedAdmissionTests(unittest.TestCase):
   evidence=directory/'evidence/cleanup.png';evidence.parent.mkdir();evidence.write_bytes(b'actual-cleanup')
   refs=[dict(path=str(evidence),sha256=hashlib.sha256(evidence.read_bytes()).hexdigest())]
   cleanup=dict(completed=True,failure=None,lock_status='free',evidence=[str(evidence)],_shell=dict(run_id=run,attempt=1,activity_key='cleanup',files=refs,started_at='2000-01-01T00:00:02Z',ended_at='2000-01-01T00:00:03Z'))
-  for name,obj in [('envelope.json',env),('input.json',env['input']),('contract.json',{}),('runtime.json',dict(phase='blocked',execution_stopped=False,cleanup_completed=True)),('agent-binding.json',binding),('agent-request.json',request),('spawn-claimed.json',{'nonce':binding['nonce']}),('handoff-closed.json',{'nonce':binding['nonce'],'at':946684804}),('cleanup.json',cleanup)]:put(directory/name,obj)
+  for name,obj in [('envelope.json',env),('input.json',env['input']),('contract.json',{}),('runtime.json',dict(phase='blocked',execution_stopped=False,cleanup_completed=True)),('agent-binding.json',binding),('agent-request.json',request),('spawn-claimed.json',{'nonce':binding['nonce']}),('handoff-closed.json',{'at':946684804}),('cleanup.json',cleanup)]:put(directory/name,obj)
   (directory/'.worker.lock').touch()
   identity={key:env[key] for key in ('task_id','run_id','attempt','owner_epoch','input_sha256')};identity['definition_snapshot_sha256']=env['definition']['snapshot_sha256']
   proof=dict(schema_version=1,**identity,runtime_snapshot_sha256=digest(files),verdict='FAIL',effects='unknown',retry_safe=False,verification_task_id='55555555-5555-4555-8555-555555555555',attestation_sha256='b'*64,cleanup_sha256=hashlib.sha256((directory/'cleanup.json').read_bytes()).hexdigest(),files=refs,terminal_sha256='c'*64,binding_sha256=digest(binding),original_child=dict(run_id=binding['child_run_id'],session_key=binding['child_session_key'],status='error',started_at=946684800000,ended_at=946684801000),actor='codex:operator',principal='internal-controller',reason='真实失败清理对账',observed_at='2000-01-01T00:02:00Z',request_sha256='d'*64,previous_control_sha256='e'*64)
@@ -198,9 +198,9 @@ class FailedAdmissionTests(unittest.TestCase):
   import fcntl
   g=module('deployment-guard')
   with tempfile.TemporaryDirectory() as tmp:
-   home=Path(tmp);root,directory,task,proof,get,calls,seal=self.fixture(home)
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
    with g.commander_admission(home,get):
-    self.assertTrue((root/'.deploying').is_file());self.assertEqual(len(calls),2)
+    self.assertTrue((root/'.deploying').is_file());self.assertEqual(len(calls),4)
     for path in (root/'.admission.lock',directory/'.worker.lock'):
      with open(path,'r') as fd:
       with self.assertRaises(BlockingIOError):fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -208,10 +208,10 @@ class FailedAdmissionTests(unittest.TestCase):
    with open(directory/'.worker.lock','r') as fd:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
  def test_fail_closed_for_each_identity_hash_active_state_and_api_error(self):
   import fcntl
-  cases=['unreconciled','proof-hash','envelope','cleanup','runtime','nonce','deadline','other-active','run-not-failed','binding','authority','api']
+  cases=['unreconciled','proof-hash','envelope','cleanup','runtime','nonce','deadline','other-active','run-not-failed','binding','authority','child-stop-readback','api']
   for case in cases:
    with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
-    home=Path(tmp);root,directory,task,proof,get,calls,seal=self.fixture(home)
+    home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
     if case=='unreconciled':task['result']['workflow_control'].pop('failed_reconciliation')
     elif case=='proof-hash':proof['effects']='none'
     elif case=='envelope':task['result']['workflow_control']['envelope']['owner_epoch']=2
@@ -230,6 +230,7 @@ class FailedAdmissionTests(unittest.TestCase):
       return result
     elif case=='binding':(directory/'agent-binding.json').write_text('{}')
     elif case=='authority':task['result']['commander_failure_reconciliation']['operator_actor']='codex:other'
+    elif case=='child-stop-readback':(directory/'child-stop-readback.json').write_text('{}')
     elif case=='api':
      def get(path):raise OSError('API unavailable')
     with self.assertRaises((ValueError,OSError,KeyError)):
@@ -238,7 +239,7 @@ class FailedAdmissionTests(unittest.TestCase):
  def test_busy_original_worker_and_unrelated_active_run_never_exempted(self):
   import fcntl
   with tempfile.TemporaryDirectory() as tmp:
-   home=Path(tmp);root,directory,task,proof,get,calls,seal=self.fixture(home)
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
    with open(directory/'.worker.lock','r') as fd:
     fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
     with self.assertRaises((BlockingIOError,ValueError)):
@@ -246,7 +247,7 @@ class FailedAdmissionTests(unittest.TestCase):
    self.assertEqual(calls,[]);self.assertFalse((root/'.deploying').exists())
  def test_original_success_delivery_lane_needs_no_failure_api(self):
   with tempfile.TemporaryDirectory() as tmp:
-   home=Path(tmp);directory=home/'wf-agent-runs/completed';directory.mkdir(parents=True)
+   home=Path(tmp).resolve();directory=home/'wf-agent-runs/completed';directory.mkdir(parents=True)
    (directory/'runtime.json').write_text('{"phase":"awaiting_verify","execution_stopped":true}');(directory/'delivery.json').write_text('{}')
    with module('deployment-guard').commander_admission(home,lambda _:self.fail('success lane called failure API')):pass
 
