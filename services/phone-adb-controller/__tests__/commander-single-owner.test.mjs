@@ -68,3 +68,36 @@ test('正式获客RPC调用同一work-commander且来源不匹配时零派发',a
  assert.equal(calls.length,1);
  }finally{rmSync(home,{recursive:true,force:true});}
 });
+
+
+test('真实Workflow main在原stop文件存在时保留partial，不进入业务handler',async t=>{
+ const {spawnSync}=await import('node:child_process');
+ const home=mkdtempSync(join(tmpdir(),'commander-main-stop-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const root=join(home,'runtime');mkdirSync(root);writeFileSync(join(home,'stop'),'stop');
+ const script=`import vm from 'node:vm';import * as fs from 'node:fs';import * as path from 'node:path';import * as url from 'node:url';import assert from 'node:assert/strict';
+ const directory=process.argv[1],root=path.join(directory,'runtime');
+ const filename=path.join(root,'leadgen-workflow.mjs'),env={WFR_RUN_DIR:directory,WFR_RUN_ID:'original-run',WFR_ATTEMPT:'a1',WF_HOME:root,WF_BRAIN_WORKFLOW:'fixture',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'120',WF_STOP_FILE:path.join(directory,'stop')};
+ let ended;const done=new Promise(r=>ended=r);
+ const fakeProcess={env,argv:[process.execPath,filename],execPath:process.execPath,stdout:{write:()=>ended()},stderr:{write:()=>ended()}};
+ const context=vm.createContext({process:fakeProcess,console,Buffer,setTimeout,clearTimeout,Date});
+ const frozen={deployment:{source_commit:'a'.repeat(40)},activities:[{reference:{slot_key:'work'},version:{payload:{contract:{key:'work',budget:{max_duration_s:60}}}}}]};
+ const modules={
+  'node:fs':fs,'node:path':path,'node:url':url,
+  './activity-commander.mjs':{runWorkflow:async options=>{let result;try{result=await options.handlers.work();}catch(error){fs.writeFileSync(path.join(directory,'actual-error.json'),JSON.stringify({name:error.name,message:error.message}));throw error;}assert.equal(result.status,'partial');return {status:'partial',results:[]};}},
+  './leadgen-handlers.mjs':{parseCollection:()=>{},createHandlers:()=>({state:{},work:async()=>{throw Error('business after stop');}})},
+  './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{throw Error('recovery after stop');}},
+  './runtime-definition.mjs':{readFrozen:()=>frozen,assertCommentSampling:()=>{}},
+  './runtime-binding.mjs':{readBinding:()=>({run_id:'original-run__a1',id:'fixed-binding'})},
+  './leadgen-client.mjs':{createRpc:()=>async()=>({}),execInput:async()=>({code:0,stdout:'WFR_EVIDENCE_STATUS=sent'})},
+  './step-judge.mjs':{judgeSteps:()=>{throw Error('unexpected verifier');}}
+ };
+ const source=fs.readFileSync(process.argv[2],'utf8');
+ const module=new vm.SourceTextModule(source,{context,identifier:url.pathToFileURL(filename).href,initializeImportMeta:meta=>meta.url=url.pathToFileURL(filename).href});
+ const cached=new Map();await module.link(name=>{assert.ok(modules[name],'unreviewed module import '+name);if(!cached.has(name)){const values=modules[name];cached.set(name,new vm.SyntheticModule(Object.keys(values),function(){for(const [k,v]of Object.entries(values))this.setExport(k,v);},{context}));}return cached.get(name);});
+ await module.evaluate();await Promise.race([done,new Promise((_,reject)=>setTimeout(()=>reject(Error('main did not terminate')),2000))]);
+ assert.ok(fs.existsSync(path.join(directory,'split-result.json')),'real main failed: '+(fs.existsSync(path.join(directory,'actual-error.json'))?fs.readFileSync(path.join(directory,'actual-error.json'),'utf8'):'before handler'));
+ assert.equal(JSON.parse(fs.readFileSync(path.join(directory,'split-result.json'))).status,'partial');
+ `;
+ const result=spawnSync(process.execPath,['--experimental-vm-modules','--input-type=module','-e',script,home,new URL('../leadgen-workflow.mjs',import.meta.url).pathname],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr+result.stdout);
+});

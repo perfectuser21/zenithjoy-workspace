@@ -7,7 +7,7 @@ import {execFileSync,spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {parse,stringify} from 'yaml';
 import {createHash} from 'node:crypto';
-import {checkMethods} from '../leadgen-methods.mjs';
+import {checkMethods,collectMethods} from '../leadgen-methods.mjs';
 
 const source=fileURLToPath(new URL('../../../',import.meta.url));
 const cli=join(source,'scripts/product-map/leadgen-methods.mjs');
@@ -97,4 +97,19 @@ test('first method-lock adoption still checks tracked historical Skills without 
 });
 test('a Workflow Skill absent before first adoption is allowed only when no historical central lock exists',t=>{
   const {root}=fixture(t),path=skillRoot+'douyin-leadgen-101/SKILL.md',body=readFileSync(join(root,path));rmSync(join(root,lockPath));rmSync(join(root,path));git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','before first workflow skill');const base=git(root,'rev-parse','HEAD');put(root,path,body);refresh(root);assert.equal(checkMethods(root,{base}).status,'PASS');
+});
+
+// The extracted implementation is business code, so every frozen method must
+// change its code identity when those exact handler bytes change.
+test('real extracted handlers belong to every consumer method source closure',t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/leadgen-handlers.mjs';
+ put(root,path,readFileSync(join(source,path)));
+ const before=collectMethods(root);
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated handler-byte mutation\n');
+ const after=collectMethods(root);
+ for(const [ref,method] of Object.entries(before.activities)){
+  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted actual handler bytes');
+  assert.equal(after.activities[ref].contract_digest,method.contract_digest);
+  assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
+ }
 });
