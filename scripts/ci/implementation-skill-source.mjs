@@ -81,14 +81,14 @@ export function installRegressionSkills(root,{source=process.env.SKILLS_SOURCE_D
   if(source){
    if(!isAbsolute(source))fail('SKILL_REGRESSION_CACHE_INVALID');source=realpathSync(source);
    if(!existsSync(join(source,'.git')))fail('SKILL_REGRESSION_CACHE_INVALID');
-   for(const path of ['.git','.git/objects'])if(lstatSync(join(source,path)).isSymbolicLink()||!lstatSync(join(source,path)).isDirectory())fail('SKILL_REGRESSION_CACHE_INVALID');
-   if(existsSync(join(source,'.git/objects/info/alternates')))fail('SKILL_REGRESSION_ALTERNATES');
    if(local(source,'for-each-ref','--format=%(refname)','refs/replace').toString().trim())fail('SKILL_REGRESSION_REPLACE_REF');
    local(source,'cat-file','-e',lock.revision+'^{commit}');
    if(checksum(local(source,'show',`${lock.revision}:distribution/skills_source.py`))!==lock.loader_sha256)fail('SKILL_REGRESSION_LOADER_CHANGED');
    let head;try{head=local(source,'rev-parse','--verify','HEAD').toString().trim();}catch{}
    if(head&&head!==lock.revision)fail('explicit source revision does not match lock; refusing to change its checkout');
    if(!head){
+    for(const path of ['.git','.git/objects'])if(lstatSync(join(source,path)).isSymbolicLink()||!lstatSync(join(source,path)).isDirectory())fail('SKILL_REGRESSION_CACHE_INVALID');
+    if(existsSync(join(source,'.git/objects/info/alternates')))fail('SKILL_REGRESSION_ALTERNATES');
     temporary=mkdtempSync(join(tmpdir(),'regression-skills-'));checkout=join(temporary,'source');
     // clone treats a shallow repository without refs as empty. Fetch the exact
     // object into a fresh repository instead; file transport copies packs and
