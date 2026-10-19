@@ -393,4 +393,13 @@ class FailedAdmissionTests(unittest.TestCase):
      g.guarded([sys.executable,'-c',"import time;from pathlib import Path;time.sleep(2);Path("+repr(str(marker))+").touch()"],transport=transport)
    self.assertTrue(seen);self.assertFalse(marker.exists())
 
+ def test_isolated_home_fixture_is_not_polluted_by_an_unrelated_parallel_test_worker(self):
+  import subprocess,sys
+  child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(20)','wf-v2.py','worker'])
+  try:
+   with tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+    with module('deployment-guard').commander_admission(home,get):pass
+  finally:child.terminate();child.wait()
+
 if __name__=='__main__':unittest.main()
