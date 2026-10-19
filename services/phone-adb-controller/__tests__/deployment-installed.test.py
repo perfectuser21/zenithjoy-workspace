@@ -175,16 +175,17 @@ class FailedAdmissionTests(unittest.TestCase):
   def digest(obj):return hashlib.sha256(json.dumps(obj,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
   files={'wf-v2.py':hashlib.sha256(b'original-runtime').hexdigest()};(root/'wf-v2.py').write_bytes(b'original-runtime')
   manifest=dict(protocol='commander-v2',files=files,runtime_snapshot_sha256=digest(files));put(root/'runtime-manifest.json',manifest)
-  env=dict(protocol='commander-v2',task_id=task_id,run_id=run,attempt=1,owner_epoch=1,input={'text':'原输入'},input_sha256=digest({'text':'原输入'}),definition=dict(snapshot_sha256='a'*64,runtime_snapshot_sha256=digest(files)),deadline_at='2000-01-01T00:00:00Z',cleanup_deadline_at='2000-01-01T00:01:00Z')
+  env=dict(protocol='commander-v2',task_id=task_id,run_id=run,attempt=1,owner_epoch=1,input={'text':'原输入'},input_sha256=digest({'text':'原输入'}),contract={},definition=dict(release_id='88888888-8888-4888-8888-888888888888',snapshot_sha256='a'*64,runtime_snapshot_sha256=digest(files)),deadline_at='2000-01-01T00:00:00Z',cleanup_deadline_at='2000-01-01T00:01:00Z')
   binding=dict(task_id=task_id,run_id=run,nonce='closed-nonce',parent_session_key='agent:work-commander:'+run,child_run_id='33333333-3333-4333-8333-333333333333',child_session_key='agent:skill-factory:subagent:44444444-4444-4444-8444-444444444444')
   request=dict(binding,protocol='commander-v2',expires_at=946684800)
   evidence=directory/'evidence/cleanup.png';evidence.parent.mkdir();evidence.write_bytes(b'actual-cleanup')
-  refs=[dict(path=str(evidence),sha256=hashlib.sha256(evidence.read_bytes()).hexdigest())]
+  roots={name:dict(realpath=str(path),st_dev=path.stat().st_dev,st_ino=path.stat().st_ino) for name,path in [('run',directory),('evidence',evidence.parent),('commander',root)]};put(directory/'root-identity.json',roots)
+  refs=[dict(path=str(path),sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in (evidence,directory/'root-identity.json')]
   cleanup=dict(completed=True,failure=None,lock_status='free',evidence=[str(evidence)],_shell=dict(run_id=run,attempt=1,activity_key='cleanup',files=refs,started_at='2000-01-01T00:00:02Z',ended_at='2000-01-01T00:00:03Z'))
   for name,obj in [('envelope.json',env),('input.json',env['input']),('contract.json',{}),('runtime.json',dict(phase='blocked',execution_stopped=False,cleanup_completed=True)),('agent-binding.json',binding),('agent-request.json',request),('spawn-claimed.json',{'nonce':binding['nonce']}),('handoff-closed.json',{'at':946684804}),('cleanup.json',cleanup)]:put(directory/name,obj)
   (directory/'.worker.lock').touch()
   identity={key:env[key] for key in ('task_id','run_id','attempt','owner_epoch','input_sha256')};identity['definition_snapshot_sha256']=env['definition']['snapshot_sha256']
-  proof=dict(schema_version=1,**identity,runtime_snapshot_sha256=digest(files),verdict='FAIL',effects='unknown',retry_safe=False,verification_task_id='55555555-5555-4555-8555-555555555555',attestation_sha256='b'*64,cleanup_sha256=hashlib.sha256((directory/'cleanup.json').read_bytes()).hexdigest(),files=refs,terminal_sha256='c'*64,binding_sha256=digest(binding),original_child=dict(run_id=binding['child_run_id'],session_key=binding['child_session_key'],status='error',started_at=946684800000,ended_at=946684801000),actor='codex:operator',principal='internal-controller',reason='真实失败清理对账',observed_at='2000-01-01T00:02:00Z',request_sha256='d'*64,previous_control_sha256='e'*64)
+  proof=dict(schema_version=1,**identity,runtime_snapshot_sha256=digest(files),runtime_files=files,verdict='FAIL',effects='unknown',retry_safe=False,verification_task_id='55555555-5555-4555-8555-555555555555',attestation_sha256='b'*64,cleanup_sha256=hashlib.sha256((directory/'cleanup.json').read_bytes()).hexdigest(),files=refs,terminal_sha256='c'*64,binding_sha256=digest(binding),original_child=dict(run_id=binding['child_run_id'],session_key=binding['child_session_key'],status='error',started_at=946684800000,ended_at=946684801000),actor='codex:operator',principal='internal-controller',reason='真实失败清理对账',observed_at='2000-01-01T00:02:00Z',request_sha256='d'*64,previous_control_sha256='e'*64)
   def seal():proof['sha256']=digest({k:v for k,v in proof.items() if k!='sha256'})
   seal()
   control=dict(envelope=env,phase='final',verdict='FAIL',effects='unknown',retry_safe=False,execution_stopped=True,failed_reconciliation=proof)
@@ -200,7 +201,7 @@ class FailedAdmissionTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
    with g.commander_admission(home,get):
-    self.assertTrue((root/'.deploying').is_file());self.assertEqual(len(calls),4)
+    self.assertTrue((root/'.deploying').is_file());self.assertEqual(len(calls),2)
     for path in (root/'.admission.lock',directory/'.worker.lock'):
      with open(path,'r') as fd:
       with self.assertRaises(BlockingIOError):fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -208,7 +209,7 @@ class FailedAdmissionTests(unittest.TestCase):
    with open(directory/'.worker.lock','r') as fd:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
  def test_fail_closed_for_each_identity_hash_active_state_and_api_error(self):
   import fcntl
-  cases=['unreconciled','proof-hash','envelope','cleanup','runtime','nonce','deadline','other-active','run-not-failed','binding','authority','child-stop-readback','api']
+  cases=['unreconciled','proof-hash','envelope','cleanup','runtime','nonce','deadline','other-active','run-not-failed','binding','authority','child-stop-readback','input','contract','api']
   for case in cases:
    with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
     home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
@@ -231,6 +232,7 @@ class FailedAdmissionTests(unittest.TestCase):
     elif case=='binding':(directory/'agent-binding.json').write_text('{}')
     elif case=='authority':task['result']['commander_failure_reconciliation']['operator_actor']='codex:other'
     elif case=='child-stop-readback':(directory/'child-stop-readback.json').write_text('{}')
+    elif case in ('input','contract'):(directory/(case+'.json')).write_text('{"changed":true}')
     elif case=='api':
      def get(path):raise OSError('API unavailable')
     with self.assertRaises((ValueError,OSError,KeyError)):
@@ -250,5 +252,141 @@ class FailedAdmissionTests(unittest.TestCase):
    home=Path(tmp).resolve();directory=home/'wf-agent-runs/completed';directory.mkdir(parents=True)
    (directory/'runtime.json').write_text('{"phase":"awaiting_verify","execution_stopped":true}');(directory/'delivery.json').write_text('{}')
    with module('deployment-guard').commander_admission(home,lambda _:self.fail('success lane called failure API')):pass
+
+ def test_guard_lease_protocol_holds_real_admission_through_child_and_completes_marker(self):
+  import os,subprocess,sys,fcntl
+  g=module('deployment-guard')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp).resolve();script=home/'child.py';marker=home/'.openclaw/commander/.deploying'
+   script.write_text("import importlib.util,fcntl,os;from pathlib import Path;spec=importlib.util.spec_from_file_location('guard',"+repr(g.__file__)+");g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g);g.request_admission();root=Path.home()/'.openclaw/commander';assert (root/'.deploying').is_file();fd=open(root/'.admission.lock','r');\ntry: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB);raise AssertionError('lock released before installation')\nexcept BlockingIOError: pass\ng.request_admission('complete');assert not (root/'.deploying').exists()")
+   with patch.dict(os.environ,HOME=str(home)):
+    self.assertEqual(g.guarded([sys.executable,str(script)],transport=[sys.executable,'-u','-c',g.SERVER]),0)
+   self.assertFalse(marker.exists())
+ def test_marker_or_held_lock_replacement_ends_guard_before_installation_continues(self):
+  import os,sys
+  g=module('deployment-guard')
+  for name in ('.deploying','.admission.lock','.deployment.lock'):
+   with self.subTest(name=name),tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp).resolve();marker=home/'forbidden';script=home/'child.py'
+    script.write_text("import importlib.util,time;from pathlib import Path;spec=importlib.util.spec_from_file_location('guard',"+repr(g.__file__)+");g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g);g.request_admission();p=Path.home()/'.openclaw/commander'/"+repr(name)+";p.rename(p.with_name(p.name+'.replaced'));p.touch();time.sleep(2);Path("+repr(str(marker))+").touch()")
+    with patch.dict(os.environ,HOME=str(home)):
+     with self.assertRaisesRegex(ValueError,'锁通道丢失'):
+      g.guarded([sys.executable,str(script)],transport=[sys.executable,'-u','-c',g.SERVER])
+    self.assertFalse(marker.exists())
+ def test_frozen_failed_evidence_change_is_detected_while_worker_lock_is_held(self):
+  g=module('deployment-guard')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+   with g.commander_admission(home,get) as verify:
+    (directory/'cleanup.json').write_text('{}')
+    with self.assertRaisesRegex(ValueError,'evidence changed'):verify()
+ def test_actual_authority_gets_use_fixed_paths_close_connection_and_no_mutation(self):
+  import http.server,threading,urllib.request
+  g=module('deployment-guard')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+   cache=home/'.credentials/cecelia-internal.env';cache.parent.mkdir();cache.write_text('CECELIA_INTERNAL_TOKEN=fixture-secret\n');cache.chmod(0o600)
+   requests=[]
+   class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self,*args):pass
+    def do_GET(self):
+     requests.append((self.command,self.path,self.headers.get('Connection'),self.headers.get('Authorization')))
+     data=json.dumps(get(self.path),ensure_ascii=False).encode();self.send_response(200);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
+   server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();request=urllib.request.Request
+   def local_request(url,*args,**kwargs):
+    self.assertTrue(url.startswith('http://localhost:5221/api/brain/'))
+    return request(url.replace('http://localhost:5221','http://127.0.0.1:'+str(server.server_port)),*args,**kwargs)
+   try:
+    with patch.object(g.Path,'home',return_value=home),patch.object(g.urllib.request,'Request',side_effect=local_request):
+     with g.commander_admission(home):pass
+    self.assertEqual(len(requests),2);self.assertTrue(all(x[0]=='GET' and x[2]=='close' and x[3]=='Bearer fixture-secret' for x in requests))
+   finally:server.shutdown();thread.join();server.server_close()
+
+ def test_marker_fifo_directory_or_symlink_cannot_hang_or_admit(self):
+  import os,time
+  for kind in ('fifo','directory','symlink'):
+   with self.subTest(kind=kind),tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp).resolve();root=home/'.openclaw/commander';root.mkdir(parents=True);marker=root/'.deploying'
+    if kind=='fifo':os.mkfifo(marker)
+    elif kind=='directory':marker.mkdir()
+    else:marker.symlink_to(home/'elsewhere')
+    started=time.monotonic()
+    with self.assertRaises((OSError,ValueError)):
+     with module('deployment-guard').commander_admission(home,lambda _:self.fail('unexpected GET')):self.fail('bad marker admitted')
+    self.assertLess(time.monotonic()-started,1)
+ def test_actual_failed_run_worker_mutex_stays_held_over_full_guard_child_lifetime(self):
+  import os,sys
+  g=module('deployment-guard')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+   values={'/api/brain/tasks/'+task['id']:task,'/api/brain/runs/'+proof['run_id']+'/reconciliation':get('/api/brain/runs/'+proof['run_id']+'/reconciliation')}
+   inject='def fixture_get(path):return json.loads('+repr(json.dumps(values))+')[path]\n'
+   # Only the authority response transport is replaced; the production SERVER and kernel locks execute unchanged.
+   code=g.SERVER.replace('import sys,select\n','import sys,select\n'+inject).replace('commander_admission(Path.home())','commander_admission(Path.home(),fixture_get)')
+   script=home/'worker-check.py';script.write_text("import importlib.util,fcntl;from pathlib import Path;spec=importlib.util.spec_from_file_location('guard',"+repr(g.__file__)+");g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g);g.request_admission();fd=open("+repr(str(directory/'.worker.lock'))+",'r');\ntry: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB);raise AssertionError('original worker became runnable during replacement')\nexcept BlockingIOError: pass\ng.request_admission('complete')")
+   with patch.dict(os.environ,HOME=str(home)):
+    self.assertEqual(g.guarded([sys.executable,str(script)],transport=[sys.executable,'-u','-c',code]),0)
+   with open(directory/'.worker.lock','r') as fd:__import__('fcntl').flock(fd,__import__('fcntl').LOCK_EX|__import__('fcntl').LOCK_NB)
+
+ def official_install(self,home,root,version):
+  def digest(x):return hashlib.sha256(json.dumps(x,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+  release='99999999-9999-4999-8999-'+str(version).zfill(12);obs_id='aaaaaaaa-aaaa-4aaa-8aaa-'+str(version).zfill(12)
+  data=('official-runtime-'+str(version)).encode();(root/'wf-v2.py').write_bytes(data)
+  manifest=dict(protocol='commander-v2',files={'wf-v2.py':hashlib.sha256(data).hexdigest()},releases={release:{'workflows':{'frozen':{'snapshot_sha256':'a'*64}}}});manifest['runtime_snapshot_sha256']=digest(manifest['files']);(root/'runtime-manifest.json').write_text(json.dumps(manifest))
+  local=dict(release_id=release,observation_id=obs_id,target='mmv',environment='production',source_repo='perfectuser21/zenithjoy-workspace',source_commit=str(version)*40)
+  file=home/'.openclaw/leadgen-scripts/deployment-manifest.json';file.parent.mkdir(parents=True,exist_ok=True);file.write_text(json.dumps(local))
+  evidence=dict(source_repo=local['source_repo'],source_commit=local['source_commit'],installed_runtime_manifest_sha256=hashlib.sha256((root/'runtime-manifest.json').read_bytes()).hexdigest(),files=[])
+  payload=dict(environment='production',target='mmv',attempt_key='github:123:1',components=[dict(kind='repo',repo=local['source_repo'],revision=local['source_commit'])],evidence_ref='deployment-sha256:'+digest(evidence))
+  obs=dict(id=obs_id,release_id=release,payload=payload,payload_sha256=digest(payload));gate=dict(release_id=release,deployed=True,actual_matches=True,current_status='deployed',current_observation_id=obs_id,gaps=[])
+  file=home/'.config/zenithjoy/deployments'/(digest(dict(release_id=release,host='mmv',attempt_key=payload['attempt_key']))+'.evidence.json');file.parent.mkdir(parents=True,exist_ok=True);file.write_text(json.dumps(evidence))
+  return {'/api/brain/releases/'+release+'/gate':gate,'/api/brain/releases/'+release+'/observations/'+obs_id:{'observation':obs}},obs,gate,file,local
+ def test_repeat_deployment_uses_old_authoritative_map_and_new_official_observation_without_rewriting_old_run(self):
+  g=module('deployment-guard')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+   original={x.name:x.read_bytes() for x in directory.iterdir() if x.is_file()}
+   with g.commander_admission(home,get):self.official_install(home,root,1)
+   (root/'.deploying').unlink()
+   extra,_,_,_,_=self.official_install(home,root,1);base_get=get
+   def get(path):return extra[path] if path in extra else base_get(path)
+   with g.commander_admission(home,get):self.official_install(home,root,2)
+   (root/'.deploying').unlink()
+   extra,_,_,_,_=self.official_install(home,root,2)
+   with g.commander_admission(home,get):pass
+   self.assertEqual({x.name:x.read_bytes() for x in directory.iterdir() if x.is_file()},original)
+ def test_later_runtime_cannot_be_self_signed_or_use_wrong_release_observation_host_or_unknown_api(self):
+  for case in ('missing-runtime-map','wrong-runtime-map','wrong-observation','wrong-release','wrong-host','wrong-evidence','partial-gate','api'):
+   with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+    extra,obs,gate,file,local=self.official_install(home,root,1);base_get=get
+    def get(path):
+     if path in extra:
+      if case=='api':raise OSError('authority unavailable')
+      return extra[path]
+     return base_get(path)
+    if case=='missing-runtime-map':proof.pop('runtime_files');seal()
+    elif case=='wrong-runtime-map':proof['runtime_files']={'wf-v2.py':'f'*64};seal()
+    elif case=='wrong-observation':obs['id']='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    elif case=='wrong-release':obs['release_id']='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    elif case=='wrong-host':obs['payload']['target']='xian-m4'
+    elif case=='wrong-evidence':file.write_text('{}')
+    elif case=='partial-gate':gate['gaps']=[{'code':'unknown'}]
+    with self.assertRaises((ValueError,OSError)):
+     with module('deployment-guard').commander_admission(home,get):self.fail('untrusted later runtime admitted')
+    self.assertFalse((root/'.deploying').exists())
+
+ def test_transient_eperm_from_zero_signal_probe_is_not_mistaken_for_terminated_or_abort_cleanup(self):
+  import errno,os,signal,sys
+  g=module('deployment-guard');original=os.killpg;seen=[]
+  with tempfile.TemporaryDirectory() as tmp:
+   marker=Path(tmp)/'forbidden'
+   def probe(pgid,sig):
+    if sig==0 and not seen:seen.append(True);raise PermissionError(errno.EPERM,'Darwin exiting-process probe')
+    return original(pgid,sig)
+   transport=[sys.executable,'-u','-c',"import json,time;print(json.dumps({'locked':True,'target':'mmv'}),flush=True);time.sleep(.2)"]
+   with patch.object(g.os,'killpg',side_effect=probe):
+    with self.assertRaisesRegex(ValueError,'锁通道丢失'):
+     g.guarded([sys.executable,'-c',"import time;from pathlib import Path;time.sleep(2);Path("+repr(str(marker))+").touch()"],transport=transport)
+   self.assertTrue(seen);self.assertFalse(marker.exists())
 
 if __name__=='__main__':unittest.main()
