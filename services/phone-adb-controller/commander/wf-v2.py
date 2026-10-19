@@ -362,7 +362,8 @@ def main():
     elif command == 'status':
         directory = run_directory(sys.argv[2])
         result = current(directory)
-        if result['state'] == 'cleanup_pending' or (not result['execution_stopped'] and (directory / 'agent-binding.json').exists()):
+        within_cleanup = time.time() < timestamp(io.read(directory / 'envelope.json')['cleanup_deadline_at'])
+        if within_cleanup and (result['state'] == 'cleanup_pending' or (not result['execution_stopped'] and (directory / 'agent-binding.json').exists())):
             try:
                 with io.lock(directory / '.worker.lock', blocking=False):
                     start_worker(directory)  # 仅续接官方child监督，不产生新业务会话

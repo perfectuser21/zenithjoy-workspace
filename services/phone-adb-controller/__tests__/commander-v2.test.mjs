@@ -478,3 +478,43 @@ test('同一release ready按workflow固定摘要握手，多workflow未知或串
  seal({'release-test':{workflows}});writeFileSync(join(f.dir,'wf-agent-lib.py'),'# component changed');assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
  assert.equal(existsSync(join(f.home,'wf-agent-runs')),false,'ready must not start any run');
 });
+test('同v2原worker从官方持久失败进入cleanup-only并幂等，不新spawn或消费后续turn',()=>{
+ const f=fixture(),dir=start(f);helper(f,'claim-spawn',dir);const receipt=bind(f,dir);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+request=(d/'agent-request.json').read_bytes();now=time.time();calls=[]
+r.io.write(d/'handoff-closed.json',{'reason':'original admission already closed'})
+def rpc(method,params,timeout=20):
+ calls.append(method)
+ if method=='agent.wait':return {'runId':${JSON.stringify(receipt.child_run_id)},'status':'timeout'}
+ assert method=='tools.invoke'
+ assert params=={'name':'subagents','sessionKey':'agent:work-commander:test','args':{'action':'wait','runIds':[${JSON.stringify(receipt.child_run_id)}],'timeoutSeconds':0}}
+ return {'ok':True,'source':'core','toolName':'subagents','output':{'details':{'status':'ok','action':'wait','reason':'completed','runs':[{'runId':${JSON.stringify(receipt.child_run_id)},'sessionKey':${JSON.stringify(receipt.child_session_key)},'status':'terminal','outcome':{'status':'error','error':'original interrupted run'},'startedAt':(now-2)*1000,'endedAt':(now-1)*1000}],'completed':[${JSON.stringify(receipt.child_run_id)}],'attention':[]}}}
+r.handoff.rpc=rpc
+r.worker(d)
+assert r.io.read(d/'runtime.json')['execution_stopped'] is True
+assert r.io.read(d/'delivery.json')['status']=='failed'
+assert r.io.read(d/'delivery.json')['cleanup']['completed'] is True
+assert not (d/'agent-completion.json').exists()
+assert (d/'agent-request.json').read_bytes()==request
+assert calls==['agent.wait','tools.invoke']
+before=(d/'events.json').read_bytes();r.worker(d);assert (d/'events.json').read_bytes()==before
+assert calls==['agent.wait','tools.invoke']
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('cleanup截止后重复正式status零唤醒，原blocked未知状态与未停止事实不被伪改',()=>{
+ const f=fixture(),dir=start(f);helper(f,'claim-spawn',dir);bind(f,dir);
+ const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
+from datetime import datetime,timezone
+state=r.io.read(d/'runtime.json');state.update(phase='blocked',execution_stopped=False);r.io.write(d/'runtime.json',state)
+e=r.io.read(d/'envelope.json');e['cleanup_deadline_at']=datetime.fromtimestamp(time.time()-1,timezone.utc).isoformat();r.io.write(d/'envelope.json',e)
+before=(d/'runtime.json').read_bytes();calls=[];r.start_worker=lambda directory:calls.append(directory)
+r.sys.argv=['wf-v2.py','status',${JSON.stringify(f.envelope.run_id)}]
+r.main();r.main()
+assert calls==[],'expired status relaunched a worker'
+assert (d/'runtime.json').read_bytes()==before
+assert r.current(d)['state']=='blocked' and r.current(d)['execution_stopped'] is False
+assert not (d/'delivery.json').exists()
+e['cleanup_deadline_at']=datetime.fromtimestamp(time.time()+60,timezone.utc).isoformat();r.io.write(d/'envelope.json',e)
+r.main();assert calls==[d],'within-budget supervision no longer resumes'
+`);assert.equal(result.status,0,result.stderr+result.stdout);
+});

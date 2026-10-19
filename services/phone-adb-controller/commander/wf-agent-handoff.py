@@ -7,6 +7,7 @@ stop 只精确取消已绑定的子 run；取消和只读等待均为官方非�
 import fcntl
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -137,6 +138,55 @@ def rpc(method, payload, timeout=20):
     return json.loads(result.stdout)
 
 
+def cleanup_end(directory):
+    from datetime import datetime
+    return datetime.fromisoformat(load(directory / 'envelope.json')['cleanup_deadline_at'].replace('Z', '+00:00')).timestamp()
+
+
+def durable_failure(directory, request, binding):
+    # agent.wait is an expiring process cache; only the official registry can prove
+    # this exact child's failure. A missing record or a later session turn proves nothing.
+    timeout = min(5, cleanup_end(directory) - time.time() - 2.05)
+    if timeout <= 0:
+        raise ValueError('durable failure readback budget exhausted; termination unknown')
+    query = dict(name='subagents', sessionKey=request['parent_session_key'],
+                 args=dict(action='wait', runIds=[binding['child_run_id']], timeoutSeconds=0))
+    response = rpc('tools.invoke', query, timeout)
+    if len(json.dumps(response)) > 1000000:
+        raise ValueError('durable terminal response too large')
+    write(directory / 'child-durable-readback.json', dict(request=query, response=response))
+    if response.get('ok') is not True or response.get('toolName') != 'subagents' or response.get('source') != 'core':
+        raise ValueError('official durable terminal wrapper invalid')
+    details = (response.get('output') or {}).get('details') or {}
+    if details.get('status') == 'ok' and details.get('action') == 'wait' and details.get('reason') in ('timeout', 'unavailable', 'attention'):
+        return None  # Registry uncertainty preserves the original await/lock, never terminalizes it.
+    runs = details.get('runs')
+    if (details.get('status') != 'ok' or details.get('action') != 'wait'
+            or details.get('reason') != 'completed' or details.get('completed') != [binding['child_run_id']]
+            or details.get('attention') != [] or details.get('unavailable') not in (None, [])
+            or not isinstance(runs, list) or len(runs) != 1 or not isinstance(runs[0], dict)):
+        raise ValueError('official durable terminal proof incomplete')
+    run = runs[0]
+    outcome = run.get('outcome') or {}
+    if (run.get('runId') != binding['child_run_id'] or run.get('sessionKey') != binding['child_session_key']
+            or run.get('status') != 'terminal' or outcome.get('status') not in ('error', 'timeout', 'aborted')):
+        raise ValueError('official durable failure run/session mismatch or not failed')
+    started, ended = run.get('startedAt'), run.get('endedAt')
+    if (any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (started, ended))
+            or not 0 < started <= ended <= min(time.time(), cleanup_end(directory)) * 1000):
+        raise ValueError('official durable terminal time outside frozen cleanup budget')
+    return dict(runId=binding['child_run_id'], status=outcome['status'], startedAt=started, endedAt=ended,
+                terminalSource='subagents.wait', terminalEvidence=str(directory / 'child-durable-readback.json'))
+
+
+def validate_current_binding(directory, request, binding):
+    if request_at(directory) != request or load(directory / 'agent-binding.json') != binding:
+        raise ValueError('handoff identity changed during official readback')
+    validate_identity(request, binding)
+    if request.get('protocol') == 'commander-v2' and time.time() >= cleanup_end(directory):
+        raise ValueError('official readback completed outside frozen cleanup budget')
+
+
 def await_result(directory, once=False):
     # 不持文件锁等待网络，否则会阻塞外壳续租/超时检查；完成时重新校验全部身份。
     binding = load(directory / 'agent-binding.json')
@@ -154,12 +204,18 @@ def await_result(directory, once=False):
             if seconds <= 0:
                 raise ValueError('official await cleanup budget exhausted')
         terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(seconds * 1000)), seconds + 5)
+        write(directory / 'child-await-readback.json', terminal)
         if terminal.get('runId') != binding['child_run_id']:
             raise ValueError('official terminal run mismatch')
         if terminal.get('endedAt') is not None:
             break
         if terminal.get('status') not in ('pending', 'timeout'):
             raise ValueError('official terminal receipt missing')
+        if request.get('protocol') == 'commander-v2':
+            failure = durable_failure(directory, request, binding)
+            if failure is not None:
+                terminal = failure
+                break
         if once:
             return None
         if terminal['status'] == 'pending':
@@ -174,6 +230,7 @@ def await_result(directory, once=False):
         raise ValueError('official terminalReply text invalid')
     with open(directory / '.handoff.lock', 'a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)
+        validate_current_binding(directory, request, binding)
         write(directory / 'agent-terminal.json', terminal)
         complete(directory, dict(binding, status=terminal['status'], result=text))
     print(json.dumps(dict(run_id=binding['run_id'], child_run_id=binding['child_run_id'],
@@ -188,6 +245,8 @@ def stop(directory):
     if not binding_path.exists() or (directory / 'agent-completion.json').exists():
         return 0
     binding = load(binding_path)
+    request = request_at(directory)
+    validate_identity(request, binding)
     params = dict(key=binding['child_session_key'], runId=binding['child_run_id'])
     if request_at(directory).get('protocol') == 'commander-v2':
         from datetime import datetime
@@ -205,12 +264,19 @@ def stop(directory):
         write(directory / 'child-abort.json', abort)
     except Exception as error:
         write(directory / 'child-abort-error.json', {'reason': str(error)})
-    timeout = min(10, end - time.time() - 2.05)
+    # Keep part of the unchanged cleanup budget for a zero-wait durable readback.
+    remaining = end - time.time() - 2.05
+    timeout = min(10, remaining / 2 if request.get('protocol') == 'commander-v2' else remaining)
     if timeout <= 0:
         raise ValueError('official stop readback budget exhausted; termination unknown')
     terminal = rpc('agent.wait', dict(runId=binding['child_run_id'], timeoutMs=int(min(10, timeout) * 1000)), timeout)
+    write(directory / 'child-stop-wait-readback.json', terminal)
+    if (request.get('protocol') == 'commander-v2' and terminal.get('runId') == binding['child_run_id']
+            and terminal.get('endedAt') is None and terminal.get('status') in ('pending', 'timeout')):
+        terminal = durable_failure(directory, request, binding) or terminal
+    validate_current_binding(directory, request, binding)
     write(directory / 'child-stop-readback.json', terminal)
-    if terminal.get('runId') != binding['child_run_id'] or terminal.get('endedAt') is None or terminal.get('status') not in ('ok', 'error', 'timeout'):
+    if terminal.get('runId') != binding['child_run_id'] or terminal.get('endedAt') is None or terminal.get('status') not in ('ok', 'error', 'timeout', 'aborted'):
         raise ValueError('child termination unconfirmed; retain controller lock')
     return 0
 

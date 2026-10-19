@@ -66,7 +66,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "a8a5751b5d92292cee3ec7fdf591f6e460cb3784fe6d54f30ed8372983db02a1",
+      "code_digest": "c74a154fe918dcca8893b8398510a9b61b197af5fa4c65449ece165fab15d7fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "6e76abc07b2b786ffb90f7256ddf8664e93aa74c317d39395ffbe1e4aee9c263",
-        "current_code_digest": "a8a5751b5d92292cee3ec7fdf591f6e460cb3784fe6d54f30ed8372983db02a1"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "a8a5751b5d92292cee3ec7fdf591f6e460cb3784fe6d54f30ed8372983db02a1",
+        "current_code_digest": "c74a154fe918dcca8893b8398510a9b61b197af5fa4c65449ece165fab15d7fa"
       }
     },
     "douyin_video_processing.preflight": {
@@ -234,7 +234,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "b240c1d6b0e87530e52b7e564715bb857abf2fc58145cd332d7515411d98be86",
+      "code_digest": "0fde76adb4ba5cb3342ca7a6017d87bc9f23971288f2e78fe1a5798d1e79ae71",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "22c1aae657118211dcc4acc861865668d078470bc234fe622c3f76638e70a840",
-        "current_code_digest": "b240c1d6b0e87530e52b7e564715bb857abf2fc58145cd332d7515411d98be86"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "b240c1d6b0e87530e52b7e564715bb857abf2fc58145cd332d7515411d98be86",
+        "current_code_digest": "0fde76adb4ba5cb3342ca7a6017d87bc9f23971288f2e78fe1a5798d1e79ae71"
       }
     },
     "douyin_video_processing.dedup": {
@@ -399,7 +399,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "54fe240be49d5adca6c7ae8597d59b0f2f7b2760ace3178efc6c638067b617d8",
+      "code_digest": "6ef0069e00398e75609b72acd567b1208ede55e057c28a8d9a5a0740072dcde7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "32eecdb335a3f3a601e63d688ce793b4f365a695ff4aaf40f437fe44caf91a24",
-        "current_code_digest": "54fe240be49d5adca6c7ae8597d59b0f2f7b2760ace3178efc6c638067b617d8"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "54fe240be49d5adca6c7ae8597d59b0f2f7b2760ace3178efc6c638067b617d8",
+        "current_code_digest": "6ef0069e00398e75609b72acd567b1208ede55e057c28a8d9a5a0740072dcde7"
       }
     },
     "douyin_video_processing.qualification": {
@@ -560,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -689,13 +689,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "f3dfb581d005c963ed71f44f59c68816775c60a6c2412cd5e1a0ea34d87bb7c1",
+      "code_digest": "4153dba67bb25880c78cc76892ea5ba313af483299d3ff271f67c91ad994e87c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "17c5f9f177276fcd206a68cccf4d76cc9cc74eda18f021307c495bdc77a7a0f6",
-        "current_code_digest": "f3dfb581d005c963ed71f44f59c68816775c60a6c2412cd5e1a0ea34d87bb7c1"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "f3dfb581d005c963ed71f44f59c68816775c60a6c2412cd5e1a0ea34d87bb7c1",
+        "current_code_digest": "4153dba67bb25880c78cc76892ea5ba313af483299d3ff271f67c91ad994e87c"
       }
     },
     "douyin_video_processing.collection": {
@@ -770,7 +770,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -879,13 +879,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "a2a71480b4d9f8360fd8bd283075f782f98fdc352d5c7d1c57a5730b39319d88",
+      "code_digest": "d7ece542a57547bf8d146894617955e60e84bd9a5608ab295905f95357541fe2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "94cf267ba7e6b0c76ea1ebba7bccfb5893a6c7967184aa693ce8e5fd7c88751e",
-        "current_code_digest": "a2a71480b4d9f8360fd8bd283075f782f98fdc352d5c7d1c57a5730b39319d88"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "a2a71480b4d9f8360fd8bd283075f782f98fdc352d5c7d1c57a5730b39319d88",
+        "current_code_digest": "d7ece542a57547bf8d146894617955e60e84bd9a5608ab295905f95357541fe2"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -953,7 +953,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -1036,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "821f0398b3e3d1a590150fb1d111009273a957f8227468415c3b6698ed9b2a2b",
+      "code_digest": "982ae103a67cfd1b7eaf1acdd9e5736bd55c5b645cc9408aa09fbdbc0712df70",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "094ca8210cad3eb8024f17a73433de4140424bcd061e21300a88dfa89c220d65",
-        "current_code_digest": "821f0398b3e3d1a590150fb1d111009273a957f8227468415c3b6698ed9b2a2b"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "821f0398b3e3d1a590150fb1d111009273a957f8227468415c3b6698ed9b2a2b",
+        "current_code_digest": "982ae103a67cfd1b7eaf1acdd9e5736bd55c5b645cc9408aa09fbdbc0712df70"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1110,7 +1110,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -1176,13 +1176,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "80b78460630217e64c482d323784b9db9fd15876d7062acc5bbc6971af05104e",
+      "code_digest": "955f6e7795fcd4a8ab22529ed99c5e27962068dd567fb19820a8a68df77ec45a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "0008d442a0dd888abec145ca129a4e079187b7404d62f29a6cf0bd44ab59c4cd",
-        "current_code_digest": "80b78460630217e64c482d323784b9db9fd15876d7062acc5bbc6971af05104e"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "80b78460630217e64c482d323784b9db9fd15876d7062acc5bbc6971af05104e",
+        "current_code_digest": "955f6e7795fcd4a8ab22529ed99c5e27962068dd567fb19820a8a68df77ec45a"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1257,7 +1257,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -1372,13 +1372,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "63e9fe6af78b4b7019a957969386a082c3b85ac369f743d5bfdd89a97800c6bd",
+      "code_digest": "c062c0d6dddd0cfa427deaffe15832444f98d7f7bf33756dd14914de21388337",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "实现已声明的qualification原生读证方法：补同slot受限只读phone入口，父run生成EID/同owner/最多两次/拒活录制；不新增点击音量等恢复动作或业务提交权限。仅明确外UID通知duck可被动复读，普通unknown与原合格判据不放宽；子Skill blocked保具体诊断。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "9f6625f72649e5fb791fdcb76fda4cbc7b3b6c28cbe5401146f22cd4f2700495",
-        "current_code_digest": "63e9fe6af78b4b7019a957969386a082c3b85ac369f743d5bfdd89a97800c6bd"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "63e9fe6af78b4b7019a957969386a082c3b85ac369f743d5bfdd89a97800c6bd",
+        "current_code_digest": "c062c0d6dddd0cfa427deaffe15832444f98d7f7bf33756dd14914de21388337"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1446,7 +1446,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -1565,13 +1565,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "2128a4624f35d11ec24aae6eb746ef98c9ccc31ea0466a86507dee3b41047836",
+      "code_digest": "da9089f333a8de6913620e6440546574ab99a8e4ab6147ad7c197076d83b9774",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "10371f434a7c0624812eb7cc2ee45c77733d53d68c4d14f9caf078b093c32213",
-        "current_code_digest": "2128a4624f35d11ec24aae6eb746ef98c9ccc31ea0466a86507dee3b41047836"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "2128a4624f35d11ec24aae6eb746ef98c9ccc31ea0466a86507dee3b41047836",
+        "current_code_digest": "da9089f333a8de6913620e6440546574ab99a8e4ab6147ad7c197076d83b9774"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1639,7 +1639,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -1733,13 +1733,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845",
+      "code_digest": "abf3e29ff0f6972554ece81d91740d1fd399369478e4c05e536aea9a6ab15798",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
-        "current_code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845",
+        "current_code_digest": "abf3e29ff0f6972554ece81d91740d1fd399369478e4c05e536aea9a6ab15798"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1807,7 +1807,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -1901,13 +1901,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845",
+      "code_digest": "abf3e29ff0f6972554ece81d91740d1fd399369478e4c05e536aea9a6ab15798",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
-        "current_code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845",
+        "current_code_digest": "abf3e29ff0f6972554ece81d91740d1fd399369478e4c05e536aea9a6ab15798"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1975,7 +1975,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander/wf-agent-handoff.py",
           "revision": "contract",
-          "sha256": "c8d90d4cdcf48f1116f59ac3cddb5b1cd6a81a340531be1a198e05b719530d30"
+          "sha256": "8ccefc60249230640e43c206c45de972c345a300a6a5e9b763a91e5cf45f7955"
         },
         {
           "kind": "code",
@@ -2072,13 +2072,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "d3dcf220edd3fc953396a842bd50b0ccf1b871557d5154a6d70650b02cfb4284",
+      "code_digest": "63514568af698a9bfcdba797c886509d6baa204c645ee5b73cfc12b4053d412f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
-        "reviewed_by": "codex:/root",
-        "previous_code_digest": "5844a950073c02a3fb1067576e237fc904a854c8fea56c2b6ecb4aff03b21c0a",
-        "current_code_digest": "d3dcf220edd3fc953396a842bd50b0ccf1b871557d5154a6d70650b02cfb4284"
+        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
+        "reviewed_by": "codex:/root/fixed_source_final_review",
+        "previous_code_digest": "d3dcf220edd3fc953396a842bd50b0ccf1b871557d5154a6d70650b02cfb4284",
+        "current_code_digest": "63514568af698a9bfcdba797c886509d6baa204c645ee5b73cfc12b4053d412f"
       }
     }
   },
