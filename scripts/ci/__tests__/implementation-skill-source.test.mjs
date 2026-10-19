@@ -61,3 +61,57 @@ test('Cecelia identity must select the Cecelia profile at the pinned revision',(
   assert.deepEqual(readImplementationSource(f.business,revision,f.path,{source:f.central}),f.payload);
  }finally{f.cleanup();}
 });
+
+// The Pilot capability is an object repository with an unborn HEAD, not a checkout.
+import * as sourceApi from '../implementation-skill-source.mjs';
+import {readFileSync,existsSync} from 'node:fs';
+function regressionFixture(){
+ const f=fixture();mkdirSync(join(f.central,'distribution'),{recursive:true});
+ const loader=Buffer.from("import argparse,pathlib\np=argparse.ArgumentParser();p.add_argument('command');p.add_argument('--workspace');p.add_argument('--source');a=p.parse_args();w=pathlib.Path(a.workspace);x=w/'installer-phases';x.write_text((x.read_text() if x.exists() else '')+a.command+'\\n')\n");
+ writeFileSync(join(f.central,'distribution/skills_source.py'),loader);
+ const pin=commit(f.central),lock={version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:pin,loader_sha256:createHash('sha256').update(loader).digest('hex')};
+ writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(lock));
+ for(const path of ['scripts/skills-source.py','scripts/ensure-skills-source.sh'])writeFileSync(join(f.business,path),readFileSync(new URL('../../../'+path,import.meta.url)));
+ commit(f.business);const cache=join(f.business,'../objects');mkdirSync(cache);git(cache,'init','-q');git(cache,'fetch','--quiet',f.central,pin);
+ return {...f,cache,pin,lock};
+}
+test('Pilot白名单无HEAD对象缓存经私有checkout执行原install/verify，保持共享缓存不变并清理',()=>{
+ const f=regressionFixture();try{
+  const config=readFileSync(join(f.cache,'.git/config')),objects=git(f.cache,'count-objects','-v');
+  assert.throws(()=>git(f.cache,'rev-parse','--verify','HEAD'));
+  assert.equal(typeof sourceApi.installRegressionSkills,'function');
+  const result=sourceApi.installRegressionSkills(f.business,{source:f.cache});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.ok(result.privateCheckout);assert.equal(existsSync(result.privateCheckout),false);
+  assert.deepEqual(readFileSync(join(f.cache,'.git/config')),config);assert.equal(git(f.cache,'count-objects','-v'),objects);
+  assert.throws(()=>git(f.cache,'rev-parse','--verify','HEAD'));
+ }finally{f.cleanup();}
+});
+test('正确外部checkout沿原行为，错误HEAD仍拒绝且不能用缓存适配掩盖',()=>{
+ for(const wrong of [false,true]){const f=regressionFixture();try{
+  if(wrong){writeFileSync(join(f.central,'new'),'new');commit(f.central);}
+  if(wrong)assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.central}),/explicit source revision/);
+  else {sourceApi.installRegressionSkills(f.business,{source:f.central});assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');}
+ }finally{f.cleanup();}}
+});
+test('离线对象缓存错pin/loader/repo/缺commit/replace均在安装前拒绝',()=>{
+ for(const mode of ['pin','loader','repo','missing','replace']){const f=regressionFixture();try{
+  if(mode==='pin')f.lock.revision='a'.repeat(40);
+  if(mode==='loader')f.lock.loader_sha256='0'.repeat(64);
+  if(mode==='repo')f.lock.repository='evil/skills';
+  if(['pin','loader','repo'].includes(mode)){writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(f.lock));commit(f.business);}
+  if(mode==='missing'){rmSync(f.cache,{recursive:true});mkdirSync(f.cache);git(f.cache,'init','-q');}
+  if(mode==='replace')git(f.cache,'replace',f.pin,f.pin);
+  assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.cache}),undefined,mode);
+  assert.equal(existsSync(join(f.business,'installer-phases')),false,mode);
+ }finally{f.cleanup();}}
+});
+test('ambient Git重定向与源local config不能执行hook/filter或污染私有安装',()=>{
+ const f=regressionFixture(),previous=process.env.GIT_DIR;try{
+  const poison=join(f.business,'poisoned');git(f.cache,'config','core.hooksPath',poison);git(f.cache,'config','core.autocrlf','true');
+  process.env.GIT_DIR=poison;
+  sourceApi.installRegressionSkills(f.business,{source:f.cache});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.equal(existsSync(poison),false);assert.equal(git(f.cache,'config','core.autocrlf'),'true');
+ }finally{if(previous===undefined)delete process.env.GIT_DIR;else process.env.GIT_DIR=previous;f.cleanup();}
+});
