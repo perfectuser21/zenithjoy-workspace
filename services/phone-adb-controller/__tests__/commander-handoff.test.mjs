@@ -105,6 +105,7 @@ function durableFixture(variant='error'){
  if(variant==='not-completed')details.completed=[];
  if(variant==='attention')details.attention=[run.runId];
  if(variant==='bad-wrapper')response.ok=false;
+ if(variant==='pending'){details.reason='timeout';details.completed=[];run.status='running';delete run.outcome;delete run.endedAt;}
  const cli=join(f.dir,'openclaw');
  writeFileSync(cli,`#!/usr/bin/env python3
 import json,sys,pathlib
@@ -147,4 +148,30 @@ test('持久fallback拒绝其他turn、伪terminal、成功文本与不完整证
   const f=durableFixture(variant),r=awaitOnce(f);assert.notEqual(r.status,0,variant);
   assert.equal(existsSync(join(f.dir,'agent-terminal.json')),false,variant);assert.equal(existsSync(join(f.dir,'agent-completion.json')),false,variant);
  }
+});
+test('闭nonce的await只保留失败证明，绑定竞争或预算耗尽不得伪造停止',()=>{
+ const closed=durableFixture();writeFileSync(join(closed.dir,'handoff-closed.json'),'{}');const cr=awaitOnce(closed);
+ assert.notEqual(cr.status,0);assert.match(cr.stderr,/handoff already closed/);assert.equal(JSON.parse(readFileSync(join(closed.dir,'agent-terminal.json'))).status,'error');assert.equal(existsSync(join(closed.dir,'agent-completion.json')),false);
+ const expired=durableFixture();writeFileSync(join(expired.dir,'envelope.json'),JSON.stringify({cleanup_deadline_at:new Date(Date.now()-1000).toISOString()}));const er=awaitOnce(expired);
+ assert.notEqual(er.status,0);assert.equal(existsSync(join(expired.dir,'rpc-calls.jsonl')),false);assert.equal(existsSync(join(expired.dir,'agent-terminal.json')),false);
+ const raced=durableFixture(),cli=join(raced.dir,'openclaw');writeFileSync(cli,readFileSync(cli,'utf8').replace(' print('," binding=json.loads((root/'agent-binding.json').read_text());binding['nonce']='changed';(root/'agent-binding.json').write_text(json.dumps(binding))\n print("));const rr=awaitOnce(raced);
+ assert.notEqual(rr.status,0);assert.match(rr.stderr,/identity changed/);assert.equal(existsSync(join(raced.dir,'agent-terminal.json')),false);
+});
+
+test('原child仍运行或持久记录不可用时保持await，不从缓存miss推断失败',()=>{
+ const f=durableFixture('pending'),r=awaitOnce(f);assert.equal(r.status,0,r.stderr);
+ assert.equal(existsSync(join(f.dir,'agent-terminal.json')),false);assert.equal(existsSync(join(f.dir,'agent-completion.json')),false);
+});
+
+test('官方durable读回耗尽原cleanup预算后拒绝落停止证明',()=>{
+ const f=durableFixture();const r=spawnSync('python3',['-c',`import importlib.util,pathlib,json
+s=importlib.util.spec_from_file_location('h',${JSON.stringify(HELPER)});h=importlib.util.module_from_spec(s);s.loader.exec_module(h)
+d=pathlib.Path(${JSON.stringify(f.dir)});now=h.time.time();end=h.cleanup_end(d)
+def rpc(method,params,timeout=20):
+ if method=='agent.wait':return {'runId':${JSON.stringify(f.receipt.child_run_id)},'status':'timeout'}
+ h.time.time=lambda:end+1
+ return json.loads(${JSON.stringify(JSON.stringify(f.response))})
+h.rpc=rpc
+h.await_result(d,once=True)
+`],{encoding:'utf8'});assert.notEqual(r.status,0);assert.match(r.stderr,/outside frozen cleanup budget/);assert.equal(existsSync(join(f.dir,'agent-terminal.json')),false);assert.equal(existsSync(join(f.dir,'agent-completion.json')),false);
 });
