@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import {spawn} from 'node:child_process';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,rmSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -30,13 +30,13 @@ function fixture(t,primary,forbidden){
  writeFileSync(path,JSON.stringify({schema_version:1,host_id:'xian-m4',transport:'usb',endpoint:`tcp:127.0.0.1:${primary}`,forbidden_ports:forbidden}),{mode:0o600});
  return path;
 }
-async function select(config,ports,configured=''){
+async function select(config,ports,configured='',extraEnv={}){
  const code=`import importlib.util,sys,json
 s=importlib.util.spec_from_file_location('route',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 try: print(m.select_route('431',sys.argv[2],ports=json.loads(sys.argv[3]),budget=1.5))
 except Exception as e: print(str(e),file=sys.stderr);sys.exit(2)`;
  return new Promise(resolve=>{
-  const child=spawn('python3',['-c',code,helper,configured,JSON.stringify(ports)],{env:{...process.env,ZJ_ADB_HOST_CONFIG:config}});
+  const child=spawn('python3',['-c',code,helper,configured,JSON.stringify(ports)],{env:{...process.env,ZJ_ADB_HOST_CONFIG:config,...extraEnv}});
   let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);
   child.on('close',status=>resolve({status,stdout:stdout.trim(),stderr}));
  });
@@ -59,4 +59,12 @@ test('显式受管配置缺失时拒绝，不退回扫描三端口',async t=>{
  assert.notEqual(result.status,0,'a missing managed policy must not silently enable legacy routing');
  assert.match(result.stderr,/ADB_HOST_CONFIG/);
  assert.deepEqual(a.requests,[],'fail before contacting any device transport');
+});
+test('默认宿主配置也约束controller前置选路，不退回多端口扫描',async t=>{
+ const a=await socket(t,'431\tdevice\n'),b=await socket(t,'422\tdevice\n');
+ const home=mkdtempSync(join(tmpdir(),'managed-default-home-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ mkdirSync(join(home,'.config/zenithjoy'),{recursive:true});
+ writeFileSync(join(home,'.config/zenithjoy/adb-service.json'),JSON.stringify({schema_version:1,host_id:'xian-m4',transport:'usb',endpoint:`tcp:127.0.0.1:${a.port}`,forbidden_ports:[b.port]}),{mode:0o600});
+ const result=await select(undefined,[a.port,b.port],'',{HOME:home});
+ assert.notEqual(result.status,0);assert.match(result.stderr,/ADB_HOST_EXTRA_SERVER/);
 });
