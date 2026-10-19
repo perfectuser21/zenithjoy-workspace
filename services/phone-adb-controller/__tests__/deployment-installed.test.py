@@ -167,6 +167,13 @@ class GuardTests(unittest.TestCase):
       except ProcessLookupError:pass
 
 class FailedAdmissionTests(unittest.TestCase):
+ def setUp(self):
+  import os
+  # This Python fixture subprocess owns its census. Other HOME namespaces in the
+  # parallel Node test lane must not be mistaken for the MMV production host.
+  self.census=tempfile.TemporaryDirectory();self.addCleanup(self.census.cleanup)
+  self.pgrep=Path(self.census.name)/'pgrep';self.pgrep.write_text('#!/bin/sh\nexit 1\n');self.pgrep.chmod(0o700)
+  env=patch.dict(os.environ,PATH=self.census.name+os.pathsep+os.environ['PATH']);env.start();self.addCleanup(env.stop)
  def fixture(self,home):
   import time
   root=home/'.openclaw/commander';root.mkdir(parents=True)
@@ -401,5 +408,13 @@ class FailedAdmissionTests(unittest.TestCase):
     home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
     with module('deployment-guard').commander_admission(home,get):pass
   finally:child.terminate();child.wait()
+
+ def test_explicit_active_host_census_still_rejects_before_authority_or_installation(self):
+  self.pgrep.write_text('#!/bin/sh\nexit 0\n')
+  with tempfile.TemporaryDirectory() as tmp:
+   home=Path(tmp).resolve();root,directory,task,proof,get,calls,seal=self.fixture(home)
+   with self.assertRaisesRegex(ValueError,'active Commander process'):
+    with module('deployment-guard').commander_admission(home,get):self.fail('active host admitted')
+   self.assertEqual(calls,[]);self.assertFalse((root/'.deploying').exists())
 
 if __name__=='__main__':unittest.main()
