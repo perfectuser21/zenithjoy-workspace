@@ -167,7 +167,8 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const terminal=JSON.parse(readFileSync(join(dir,'agent-terminal.json'),'utf8'));
   if(terminal.runId!==binding.child_run_id||terminal.endedAt==null||!['ok','error','aborted','timeout'].includes(terminal.status))throw Error('RPC_SKILL_TERMINAL_INVALID');
   if(terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id||terminal.terminalReceipt?.effective?.provider!=='openai'||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_MODEL_INVALID');
-  if(parentResult?.code===0)ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
+  if(parentResult?.code!==0)return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
+  ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
   return {status:terminal.status,execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
  }catch{
   if(existsSync(join(dir,'agent-binding.json'))){
