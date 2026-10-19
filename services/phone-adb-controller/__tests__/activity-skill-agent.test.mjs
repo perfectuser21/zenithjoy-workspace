@@ -65,7 +65,7 @@ test('real public inspect CLI validates without waiting for an unrelated open st
 
 test('official spawn raw full model reference is accepted without rewriting; exact provider/model negatives remain blocked (isolated lifecycle fixture)',async()=>{
  const {dirname}=await import('node:path');
- for(const [provider,model,accepted] of [['openai','openai/gpt-6.1-sol',true],['openai','gpt-6.1-sol',true],['anthropic','openai/gpt-6.1-sol',false],['openai','openrouter/gpt-6.1-sol',false],['openai','openai/openai/gpt-6.1-sol',false],['openai','openai/gpt-6.1-sol ',false],['openai','openai/gpt-6.1-sol-fallback',false]]){
+ for(const [provider,model,accepted,parentUnknown=false] of [['openai','openai/gpt-6.1-sol',true],['openai','gpt-6.1-sol',true],['anthropic','openai/gpt-6.1-sol',false],['openai','openrouter/gpt-6.1-sol',false],['openai','openai/openai/gpt-6.1-sol',false],['openai','openai/gpt-6.1-sol ',false],['openai','openai/gpt-6.1-sol-fallback',false],['openai','openai/gpt-6.1-sol',false,true]]){
   const home=mkdtempSync(join(tmpdir(),'spawn-model-raw-fixture-'));let dir,raw;
   try{
    const q={protocol:'leadgen-activity-v1',run_id:'fixture__a1',task_id:null,binding_id:'fixture-binding',activity_key:'scoring',nonce:'f'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'a'.repeat(40),broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'isolated method'}};
@@ -78,11 +78,12 @@ test('official spawn raw full model reference is accepted without rewriting; exa
      raw=JSON.stringify({status:'accepted',runId:child,childSessionKey:session,resolvedProvider:provider,resolvedModel:model});writeFileSync(join(dir,'spawn-receipt.json'),raw);
      // Official wait effective.model is bare ID, unlike spawn resolvedModel.
      writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'ok',endedAt:1,terminalReceipt:{runId:child,effective:{provider:'openai',model:'gpt-6.1-sol'}}}));
-     return {code:0,stdout:'isolated parent transport',stderr:''};
+     return {code:parentUnknown?1:0,stdout:'isolated parent transport',stderr:''};
     }
     return {code:args.includes('await')?0:1,stdout:'',stderr:''};
    }});
    assert.equal(r.status,accepted?'ok':'unknown',provider+' '+model);assert.equal(r.execution_stopped,accepted);
+   if(parentUnknown){assert.equal(r.child_execution_stopped,true);assert.equal(r.owner_execution_stopped,false);}
    assert.equal(readFileSync(join(dir,'spawn-receipt.json'),'utf8'),raw,'original official receipt remains unchanged');
   }finally{rmSync(home,{recursive:true,force:true});}
  }
