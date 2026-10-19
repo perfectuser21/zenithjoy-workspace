@@ -1,9 +1,11 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,lstatSync,openSync,closeSync,fstatSync,unlinkSync,renameSync} from 'node:fs';
+import {homedir} from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash,randomUUID } from 'node:crypto';
 
 const exec = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -24,23 +26,69 @@ export function parseCommanderResponse(raw) {
   return { action: decision.action, reason: decision.reason.slice(0, 400) };
 }
 
-// 会话按run+活动隔离；活动前后共用上下文。执行权仍属于已冻结的脚本，模型不产生shell命令。
-export function openClawCommander({ agent = 'media', model, timeoutMs = 60000, execute = exec } = {}) {
+// Activity changes do not create a new owner. Source changes cannot adopt an
+// existing owner's context; the run's frozen source is part of the identity.
+export function workflowCommanderSession(receipt) {
+  if(!/^\w[\w.-]{0,150}$/.test(receipt?.run_id||'')||!/^[a-f0-9]{40}$/.test(receipt?.source_commit||''))throw Error('COMMANDER_WORKFLOW_IDENTITY_INVALID');
+  if(typeof receipt.binding_id!=='string'||!receipt.binding_id||receipt.binding_id.length>160)throw Error('COMMANDER_BINDING_IDENTITY_INVALID');
+  const key=createHash('sha256').update(JSON.stringify([receipt.run_id,receipt.source_commit,receipt.binding_id,receipt.task_id??null])).digest('hex').slice(0,32);
+  return `agent:work-commander:workflow-${key}`;
+}
+
+function ownerPending(scope,home){
+  const session=workflowCommanderSession(scope),name=session.split(':').at(-1);
+  for(const path of [resolve(home,'.openclaw'),resolve(home,'.openclaw','leadgen-owner-turns')]){
+    mkdirSync(path,{recursive:true,mode:0o700});
+    const stat=lstatSync(path);if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid())throw Error('COMMANDER_OWNER_STATE_INVALID');
+  }
+  return {session,file:resolve(home,'.openclaw','leadgen-owner-turns',name+'.pending.json')};
+}
+const unresolved=()=>{const error=Error('COMMANDER_OWNER_TURN_UNRESOLVED');error.executionStopped=false;return error;};
+export function assertWorkflowOwnerAvailable(scope,{home=homedir()}={}){
+  const {file}=ownerPending(scope,home);
+  try{lstatSync(file);throw unresolved();}catch(error){if(error.code!=='ENOENT')throw error;}
+}
+// A reservation can only deny another transport launch. It is never evidence
+// that business succeeded, a child stopped, or resources may be released.
+export function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
+  const {file,session}=ownerPending(scope,home),nonce=randomUUID();let fd;
+  try{fd=openSync(file,'wx',0o600);}catch(error){if(error.code==='EEXIST')throw unresolved();throw error;}
+  const stat=fstatSync(fd),record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
+  writeFileSync(fd,JSON.stringify(record));
+  let closed=false;
+  return {
+    returned:raw=>{
+      const current=lstatSync(file);
+      if(current.isSymbolicLink()||current.dev!==stat.dev||current.ino!==stat.ino||readFileSync(file,'utf8')!==JSON.stringify(record))throw unresolved();
+      const receipt={...record,status:'returned',returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex')};
+      const tmp=file+'.'+nonce+'.tmp',target=file+'.'+nonce+'.returned.json';
+      writeFileSync(tmp,JSON.stringify(receipt),{flag:'wx',mode:0o600});renameSync(tmp,target);
+      unlinkSync(file);
+    },
+    close:()=>{if(!closed){closed=true;closeSync(fd);}},
+  };
+}
+
+export function openClawCommander({ agent = 'work-commander', model, timeoutMs = 60000, execute = exec,home=homedir() } = {}) {
+  if(agent!=='work-commander')throw Error('COMMANDER_OWNER_AGENT_INVALID');
   return async receipt => {
-    const key = `leadgen-${receipt.run_id}-${receipt.activity}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const prompt = `你是智能获客逐活动Commander。只分析提供的本次证据，不调用任何工具、不自行发私信或改网络、账号、代码、定时器。`
+    const key = workflowCommanderSession(receipt);
+    const prompt = `你是本Workflow唯一的Commander负责人，本轮是节点证据判读，不是新的执行任务。当前判读只分析提供的证据，不调用任何工具、不自行发私信或改网络、账号、代码、定时器。`
       + `只输出JSON {"action":"continue|retry|finish|escalate","reason":"证据与理由"}。`
       + `retry仅建议失败活动重试，finish要求执行器保留产物并清场。读不到必须写读不到，不得编造成功。\n${JSON.stringify(receipt)}`;
-    const args = ['agent', '--agent', agent, '--session-id', key, '--thinking', 'low',
+    const args = ['agent', '--agent', agent, '--session-key', key, '--thinking', 'low',
       '--timeout', String(Math.floor(timeoutMs / 1000)), '--json', '--message', workflowProgressRule+prompt];
     if (model) args.push('--model', model);
+    const reservation=reserveWorkflowCommanderTurn(receipt,{home});
     try {
       const { stdout } = await execute('openclaw', args, { timeout: timeoutMs + 5000, maxBuffer: 1024 * 1024 });
-      return parseCommanderResponse(stdout);
+      const decision=parseCommanderResponse(stdout);reservation.returned(stdout);return decision;
     } catch (error) {
       // execFile错误通常包含完整prompt/argv；绝不把它原样写进回执。
-      throw Error(`COMMANDER_UNAVAILABLE code=${String(error.code || 'invalid_response')} signal=${String(error.signal || '')}`);
-    }
+      const unavailable=Error(`COMMANDER_UNAVAILABLE code=${String(error.code || 'invalid_response')} signal=${String(error.signal || '')}`);
+      unavailable.executionStopped=error.code==='ENOENT';
+      throw unavailable;
+    }finally{reservation.close();}
   };
 }
 
@@ -83,7 +131,7 @@ export async function runActivity({ activity, context, execute, commander, recor
     } catch (error) {
       commanderStatus = 'unavailable';
       await record({ ...receipt, commander_status: commanderStatus, error: safeError(error) });
-      if (!cleanup) throw error;
+      if (!cleanup||error.executionStopped===false) throw error;
       return { action: 'continue', reason: 'Commander不可达，仍必须在持锁状态下清场' };
     }
   };
@@ -134,3 +182,83 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exitCode = 1;
   }
 }
+
+// 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
+export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine}) {
+  const results=[];let status='completed',stopped=false;
+  const ordered=[...activities.filter(a=>a.key!=='cleanup'),...activities.filter(a=>a.key==='cleanup')];
+  const execute=async activity=>{
+    if(typeof handlers[activity.key]!=='function')throw Error(`活动缺实现: ${activity.key}`);
+    try {
+      const remaining=ordered.slice(ordered.indexOf(activity)+1).map(a=>a.key);
+      const activityContext={...context,workflow_progress:{completed_activity_keys:results.filter(r=>['completed','skipped'].includes(r.status)).map(r=>r.activity),
+        remaining_activity_keys:remaining}};
+      let result=await runActivity({activity,context:activityContext,execute:handlers[activity.key],commander,record,
+        recover:recover?failure=>recover({activity,failure,context:activityContext,execute:handlers[activity.key]}):undefined});
+      if(['paused','partial'].includes(result.result?.status))result.status='partial';
+      if(result.result?.status==='skipped')result.status='skipped';
+      const verifySamplePartial=activity.key==='collection'&&result.status==='partial'&&result.result?.sampling_receipts?.length>0;
+      if((result.status==='completed'||verifySamplePartial)&&verify){
+        const completedCode=result.status==='completed';
+        result.verification=await verify(activity,result);
+        if(result.verification.verified!==true){
+          result.status='failed';
+          // Reuse the original run's restricted handoff. Never replay Code here,
+          // reopen an already attempted Skill, or hand off an unknown executor.
+          const mayRecover=completedCode&&recover&&activity.key!=='cleanup'&&!result.code_failure&&!result.skill_error
+            &&result.execution_stopped!==false&&result.result?.execution_stopped!==false
+            &&!['finish','escalate'].includes(result.decision?.action);
+          if(mayRecover){
+            const codeFailure=result;
+            await record({...activityContext,activity:activity.key,phase:'verification',evidence:codeFailure});
+            try{
+              const candidate=await recover({activity,failure:codeFailure,context:activityContext,execute:handlers[activity.key]});
+              if(!candidate||!['completed','failed','partial'].includes(candidate.status)||typeof candidate.execution_stopped!=='boolean')throw Error('SKILL_RECOVERY_RECEIPT_INVALID');
+              result={...candidate,code_failure:codeFailure,commander_status:codeFailure.commander_status,decision:codeFailure.decision};
+              await record({...activityContext,activity:activity.key,phase:'skill_execution',evidence:result});
+              if(result.status==='completed'&&result.execution_stopped===true){
+                result.verification=await verify(activity,result);
+                if(result.verification.verified!==true)result.status='failed';
+              }
+            }catch(error){
+              result={...codeFailure,code_failure:codeFailure,execution_stopped:error.executionStopped===true,skill_error:safeError(error)};
+              await record({...activityContext,activity:activity.key,phase:'skill_failure',error:safeError(error),code_failure:codeFailure});
+            }
+          }
+        }
+      }
+      if(result.code_failure)await record({...activityContext,activity:activity.key,phase:'verification',evidence:result});
+      results.push({activity:activity.key,...result});
+      // 清场完成后Commander正常finish是收尾结果；业务提前停止、失败与升级仍如实保留。
+      const normalCleanupFinish=activity.key==='cleanup'&&['completed','skipped'].includes(result.status)&&result.decision?.action==='finish';
+      const normalFinalFinish=remaining.length===0&&result.status==='completed'&&result.decision?.action==='finish';
+      if(result.status==='failed'){status='failed';stopped=true;}
+      else if(result.status==='partial'||(['finish','escalate'].includes(result.decision?.action)&&!normalCleanupFinish&&!normalFinalFinish)
+        ||result.result?.status==='partial'||result.result?.status==='paused'){
+        if(status!=='failed')status='partial';stopped=true;
+      }
+      if(result.execution_stopped===false){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
+    }catch(error){
+      if(error.executionStopped===false)context={...context,skill_execution_unknown:true};
+      status='failed';stopped=true;
+      const result={activity:activity.key,status:'failed',error:String(error.message).slice(0,400)};
+      results.push(result);await record({...context,...result,phase:'failure'});
+    }
+  };
+  try {for(const a of activities.filter(a=>a.key!=='cleanup')){
+    if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
+    await execute(a);
+  }}finally{for(const a of activities.filter(a=>a.key==='cleanup')){
+    if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'原执行或Skill子会话终止未知，禁止清场并记录资源隔离'});status='failed';}
+    else await execute(a);
+  }}
+  let resource_quarantine;
+  if(context.skill_execution_unknown){
+    try{resource_quarantine=quarantine?await quarantine():{verified:false,reason:'persistent quarantine adapter unavailable'};}
+    catch(error){resource_quarantine={verified:false,reason:String(error.message).slice(0,400)};}
+    await record({...context,phase:'resource_quarantine',evidence:resource_quarantine});
+  }
+  return {status,results,...(resource_quarantine?{resource_quarantine}:{})};
+}
+
+

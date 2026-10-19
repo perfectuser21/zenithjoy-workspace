@@ -6,6 +6,7 @@ import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {execInput} from './leadgen-client.mjs';
+import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './activity-commander.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 export const skillRunKey=q=>createHash('sha256').update(JSON.stringify([q.run_id,q.activity_key,q.nonce])).digest('hex');
 function validate(q){
@@ -123,8 +124,10 @@ export async function relayActivityTool(dir,op,body={}, {home=homedir(),authoriz
 }
 export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace}={}){
  validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
+ const ownerTurn=reserveWorkflowCommanderTurn(q,{home});
+ try{
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
- const parent='agent:work-commander:leadgen-activity-'+skillRunKey(q).slice(0,24);
+ const parent=workflowCommanderSession(q);
  const request={run_id:q.run_id,task_id:q.task_id??null,parent_session_key:parent,nonce:q.nonce,agent_id:'skill-factory',expires_at:q.deadline_ms/1000};
  // An ambiguous CLI launch is not replayed. The same run is only inspected/stopped.
  if(existsSync(join(dir,'launch-reserved.json')))return {status:'unknown',execution_stopped:false,reason:'existing_launch_requires_readback'};
@@ -164,6 +167,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const terminal=JSON.parse(readFileSync(join(dir,'agent-terminal.json'),'utf8'));
   if(terminal.runId!==binding.child_run_id||terminal.endedAt==null||!['ok','error','aborted','timeout'].includes(terminal.status))throw Error('RPC_SKILL_TERMINAL_INVALID');
   if(terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id||terminal.terminalReceipt?.effective?.provider!=='openai'||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_MODEL_INVALID');
+  if(parentResult?.code===0)ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
   return {status:terminal.status,execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
  }catch{
   if(existsSync(join(dir,'agent-binding.json'))){
@@ -175,6 +179,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   }
   return {status:'unknown',execution_stopped:false,reason:'official_child_terminal_missing'};
  }
+ }finally{ownerTurn.close();}
 }
 
 if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){

@@ -71,8 +71,11 @@ export async function handleRpc(input, deps = {}) {
       return input.kind==='activity_skill_authority'?{ok:true,authorized:skillAuthority(input.request)}:{ok:true,result:await runSkillAgent(input.request)};
     }
     if (input.kind === 'commander') {
-      const { openRouterCommander } = await import('./activity-commander.mjs');
-      return { ok: true, decision: await openRouterCommander()(input.receipt) };
+      if(input.receipt?.source_commit!==input.source.commit)throw Error('COMMANDER_SOURCE_MISMATCH');
+      const {verifyCommanderWorkspace}=await import('./leadgen-skill-agent.mjs');
+      verifyCommanderWorkspace({home:deps.commanderHome});
+      const { openClawCommander } = await import('./activity-commander.mjs');
+      return { ok: true, decision: await openClawCommander({execute:deps.commanderExecute,home:deps.commanderHome})(input.receipt) };
     }
     if (input.kind === 'keywords') {
       pool = deps.pool || require('./leadgen-db-connect.js').getPool();
