@@ -29,6 +29,7 @@ if a[:1]==['test-ui']:
   if f.get('duplicate'):tree.getroot().append(E.fromstring(E.tostring(n)))
  tree.write(a[1],encoding='unicode')
 elif a[:3]==['shell','input','keycombination']:s['selected']=True
+elif a[:3]==['shell','input','swipe']:s['selected']=True
 elif a[:3]==['shell','input','text']:s['field']=a[3];s['selected']=False
 elif a[:3]==['shell','input','keyevent']:
  k=a[3]
@@ -48,13 +49,16 @@ p.write_text(json.dumps(s));sys.exit(rc)
 die(){ print -u2 -- "$1";exit 2; }
 wait_ms(){ :; }
 node_center(){ print '200 200'; }
+require_held_lock(){ :; }
+require_target_for(){ :; }
+foreground_package(){ print 'com.ss.android.ugc.aweme/.Search'; }
 ui_evidence(){ "$ADB" test-ui "$EVIDENCE_ROOT/$1.xml"; }
 _leave_scratch_route(){ :; }
-${['nonce_sdk31_field','seed_clipboard_nonce'].map(fn).join('\n')}
+${['nonce_sdk31_field','nonce_native_copy','seed_clipboard_nonce'].map(fn).join('\n')}
 ${flags.registryProfile?registryParsing:flags.sdkMode==='unset'?'unset DEVICE_SDK':''}
 print -r -- "\${DEVICE_SDK-unset}|$SCREEN_W|$SCREEN_H" > "$EVIDENCE_ROOT/fixture-context.txt"
 seed_clipboard_nonce fixture`;
- const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),SAMPLE:join(flags.optional?optionalFixtures:fixtures,sample),REGISTRY:join(optionalFixtures,'profiles.tsv'),PROFILE:flags.registryProfile||'',DEVICE_SDK:flags.sdkMode==='empty'?'':flags.sdkMode==='35'?'35':'33',LOCK_OWNER:'fixture-only',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,SCREEN_W:String(flags.width||1080),SCREEN_H:String(flags.height||2400)}});
+ const r=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),SAMPLE:join(flags.optional?optionalFixtures:fixtures,sample),REGISTRY:join(optionalFixtures,'profiles.tsv'),PROFILE:flags.registryProfile||'',DEVICE_SDK:flags.sdkMode==='empty'?'':flags.sdkMode==='35'?'35':'33',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',LOCK_OWNER:'fixture-only',ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,SCREEN_W:String(flags.width||1080),SCREEN_H:String(flags.height||2400)}});
  return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'),'utf8')),dir};
 }
 for(const sample of samples)test('SDK33真实无hint动态占位 '+sample,()=>{
