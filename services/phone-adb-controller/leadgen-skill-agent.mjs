@@ -175,7 +175,11 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
    try{const stopped=await execute('python3',[helper,'stop',dir],{timeoutMs:48000});
     const terminal=JSON.parse(readFileSync(join(dir,'child-stop-readback.json'),'utf8'));
     const binding=official(q,dir);
-    if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null)return {status:'failed',execution_stopped:true,reason:'child_stopped_after_failed_handoff',child_run_id:binding.child_run_id};
+    if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null){
+     if(parentResult?.code!==0)return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
+     ownerTurn.returned(JSON.stringify({parent_result:parentResult,stop_readback:terminal}));
+     return {status:'failed',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,reason:'child_stopped_after_failed_handoff',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key};
+    }
    }catch{/* no proof of termination: retain original resources */}
   }
   return {status:'unknown',execution_stopped:false,reason:'official_child_terminal_missing'};

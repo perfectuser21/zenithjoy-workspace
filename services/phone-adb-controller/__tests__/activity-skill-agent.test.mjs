@@ -144,7 +144,7 @@ test('authorized relay durably pins its gateway surface before transport; unknow
 });
 
 for(const parentState of ['completed','nonzero','thrown'])test(`官方停止child后仍区分原owner ${parentState}，只在双方真停止时归还reservation`,async t=>{
- const {assertWorkflowOwnerAvailable}=await import('../activity-commander.mjs');
+ const {assertWorkflowOwnerAvailable,openClawCommander}=await import('../activity-commander.mjs');
  const home=mkdtempSync(join(tmpdir(),'owner-stop-branch-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
  const q={protocol:'leadgen-activity-v1',run_id:'stopped-child__a1',task_id:null,binding_id:'fixed-stop-binding',activity_key:'scoring',nonce:'1'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'a'.repeat(40),broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'isolated method'}};
  let dir,raw,launches=0,awaits=0,stops=0;
@@ -170,5 +170,9 @@ for(const parentState of ['completed','nonzero','thrown'])test(`官方停止chil
  assert.equal(result.child_execution_stopped,true);assert.equal(result.owner_execution_stopped,parentState==='completed');
  if(parentState==='completed')assert.doesNotThrow(()=>assertWorkflowOwnerAvailable(q,{home}));
  else assert.throws(()=>assertWorkflowOwnerAvailable(q,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
+ let consultations=0;const consult=openClawCommander({home,execute:async()=>{consultations++;return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"原run清理"}'}]})};}});
+ if(parentState==='completed')await consult({...q,activity:'cleanup',phase:'before'});
+ else await assert.rejects(()=>consult({...q,activity:'cleanup',phase:'before'}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
+ assert.equal(consultations,parentState==='completed'?1:0);
  assert.deepEqual([launches,awaits,stops],[1,1,1]);assert.equal(readFileSync(join(dir,'spawn-receipt.json'),'utf8'),raw);
 });
