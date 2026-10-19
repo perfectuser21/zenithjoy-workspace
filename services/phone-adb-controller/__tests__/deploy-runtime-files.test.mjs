@@ -4,10 +4,11 @@ import {readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:
 import {tmpdir} from 'node:os';
 import {join, dirname} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
+import {withDeploymentPrefixFixture} from './deployment-prefix-fixture.mjs';
 
 test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包，SSH 前不报空数组错误', () => {
-  const path = fileURLToPath(new URL('../deploy.sh', import.meta.url));
+ return withDeploymentPrefixFixture((root,env)=>{
+  const path = join(root,'services/phone-adb-controller/deploy.sh');
   const source = readFileSync(path, 'utf8');
   const marker = '# 在任何SSH前核验部署源字节';
   assert.ok(source.includes(marker));
@@ -15,7 +16,7 @@ test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包�
   const result = spawnSync('/bin/bash', ['-c', prefix + `
     printf 'RUNTIME:%s\n' "\${MMV_RUNTIME_FILES[@]}"
     printf 'EXPECTED:%s\n' "\${DEVICE_SH_FILES[@]}" "\${DEVICE_NODE_FILES[@]}" "\${DEVICE_PLAN_FILES[@]}" "\${DEVICE_RPC_PROBE_FILES[@]}" "\${DEVICE_CTL_FILES[@]}" "\${MMV_JS_FILES[@]}" "\${MMV_PROBE_FILES[@]}"
-  `, path], {encoding:'utf8'});
+  `, path], {encoding:'utf8',env});
   assert.equal(result.status, 0, result.stderr);
   const lines = result.stdout.trim().split('\n');
   const runtime = lines.filter(x=>x.startsWith('RUNTIME:')).map(x=>x.slice(8));
@@ -26,6 +27,7 @@ test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包�
   assert.ok(runtime.includes('company-config-sync-lib.js'),'公司同步lib必须进入MMV发布源manifest');
   assert.ok(!runtime.some(path=>/company-config-sync\.test\./.test(path)),'测试不作为生产运行包发布');
   assert.ok(runtime.includes('plans/douyin_comment_scoring.plan'));
+ });
 });
 
 // Execute the syntax command selected by each real deployment loop locally.

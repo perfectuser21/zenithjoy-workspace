@@ -7488,6 +7488,14 @@ agent_suite:
   product: AI员工
   note: "GP-Anchor: line02/keyword_acquisition#step4；四业务Skill/12Activity配套、共享开头收尾、设备/MMV实际manifest覆盖；不是现场fallback测试"
 
+- id: deployment-prefix-cold-cache
+  path: services/phone-adb-controller/__tests__/deployment-prefix-cold-cache.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition keep-green；无HOME/外置无HEAD固定对象下执行原部署数组用例，隔离正式内部cache前置；原Python固定loader失败必须阻断数组输出"
+
 - id: line04-crm-analysis
   path: apps/api/src/services/wechat/__tests__/crm-analysis.test.ts
   type: unit
