@@ -88,3 +88,63 @@ test('官方await拒绝串run、错误模型和缺失终态；错误终态不能
   }
  }
 });
+
+function durableFixture(variant='error'){
+ const f=setup();assert.equal(call(f.dir,'bind',f.receipt).status,0);
+ const now=Date.now();writeFileSync(join(f.dir,'agent-request.json'),JSON.stringify({...f.request,protocol:'commander-v2',expires_at:now/1000+40}));
+ writeFileSync(join(f.dir,'envelope.json'),JSON.stringify({cleanup_deadline_at:new Date(now+60000).toISOString()}));
+ const run={runId:f.receipt.child_run_id,sessionKey:f.receipt.child_session_key,status:'terminal',outcome:{status:variant==='timeout'?'timeout':'error',error:'original failure'},startedAt:now-2000,endedAt:now-1000};
+ const details={status:'ok',action:'wait',reason:'completed',runs:[run],completed:[run.runId],attention:[]};
+ const response={ok:true,toolName:'subagents',source:'core',output:{details}};
+ if(variant==='cross-run')run.runId='00000000-0000-4000-8000-000000000099';
+ if(variant==='cross-session')run.sessionKey='agent:skill-factory:subagent:other-turn';
+ if(['ok','unknown','aborted'].includes(variant))run.outcome.status=variant;
+ if(variant==='missing-end')delete run.endedAt;
+ if(variant==='future-end')run.endedAt=now+120000;
+ if(variant==='duplicate')details.runs.push({...run});
+ if(variant==='not-completed')details.completed=[];
+ if(variant==='attention')details.attention=[run.runId];
+ if(variant==='bad-wrapper')response.ok=false;
+ const cli=join(f.dir,'openclaw');
+ writeFileSync(cli,`#!/usr/bin/env python3
+import json,sys,pathlib
+root=pathlib.Path(${JSON.stringify(f.dir)})
+method=sys.argv[3];params=json.loads(sys.argv[sys.argv.index('--params')+1])
+with (root/'rpc-calls.jsonl').open('a') as out:out.write(json.dumps({'method':method,'params':params})+'\\n')
+if method=='agent.wait':print(json.dumps({'runId':${JSON.stringify(run.runId===f.receipt.child_run_id?run.runId:f.receipt.child_run_id)},'status':'timeout'}))
+elif method=='sessions.abort':print(json.dumps({'aborted':False,'reason':'no-active-run'}))
+elif method=='tools.invoke':
+ assert params=={'name':'subagents','sessionKey':${JSON.stringify(parent)},'args':{'action':'wait','runIds':[${JSON.stringify(f.receipt.child_run_id)}],'timeoutSeconds':0}}
+ print(${JSON.stringify(JSON.stringify(response))})
+else:raise AssertionError('unexpected lifecycle method')
+`,{mode:0o755});
+ f.env={...process.env,OPENCLAW:cli};f.response=response;return f;
+}
+function awaitOnce(f){return spawnSync('python3',['-c',`import importlib.util,pathlib
+s=importlib.util.spec_from_file_location('handoff',${JSON.stringify(HELPER)});h=importlib.util.module_from_spec(s);s.loader.exec_module(h)
+h.await_result(pathlib.Path(${JSON.stringify(f.dir)}),once=True)
+`],{env:f.env,encoding:'utf8'});}
+test('网关wait缓存丢失后官方持久失败精确收口，原wait及tools回执永久保留',()=>{
+ for(const variant of ['error','timeout','aborted']){
+  const f=durableFixture(variant),r=awaitOnce(f);assert.equal(r.status,0,r.stderr);
+  const completion=JSON.parse(readFileSync(join(f.dir,'agent-completion.json')));assert.equal(completion.status,variant);assert.equal(completion.result,'');
+  const terminal=JSON.parse(readFileSync(join(f.dir,'agent-terminal.json')));assert.equal(terminal.runId,f.receipt.child_run_id);assert.equal(terminal.terminalSource,'subagents.wait');
+  assert.deepEqual(JSON.parse(readFileSync(join(f.dir,'child-durable-readback.json'))).response,f.response);
+  assert.equal(JSON.parse(readFileSync(join(f.dir,'child-await-readback.json'))).status,'timeout');
+  assert.notEqual(JSON.parse(readFileSync(join(f.dir,'agent-delivery.json'))).claimed_result,'success');
+ }
+});
+test('闭nonce的stop在无活跃run且wait缓存丢失时只核实原失败，不重新开放交付',()=>{
+ const f=durableFixture();const before=readFileSync(join(f.dir,'agent-request.json'),'utf8');
+ const r=spawnSync('python3',[HELPER,'stop',f.dir],{env:f.env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ assert.equal(existsSync(join(f.dir,'handoff-closed.json')),true);assert.equal(existsSync(join(f.dir,'agent-completion.json')),false);
+ assert.equal(JSON.parse(readFileSync(join(f.dir,'child-stop-readback.json'))).status,'error');assert.equal(readFileSync(join(f.dir,'agent-request.json'),'utf8'),before);
+ assert.notEqual(call(f.dir,'complete',{...f.receipt,status:'ok',result:'WF_DELIVERY {"claimed_result":"success"}'}).status,0);
+ assert.deepEqual(readFileSync(join(f.dir,'rpc-calls.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l).method),['sessions.abort','agent.wait','tools.invoke']);
+});
+test('持久fallback拒绝其他turn、伪terminal、成功文本与不完整证明，未知仍保留锁',()=>{
+ for(const variant of ['cross-run','cross-session','ok','unknown','missing-end','future-end','duplicate','not-completed','attention','bad-wrapper']){
+  const f=durableFixture(variant),r=awaitOnce(f);assert.notEqual(r.status,0,variant);
+  assert.equal(existsSync(join(f.dir,'agent-terminal.json')),false,variant);assert.equal(existsSync(join(f.dir,'agent-completion.json')),false,variant);
+ }
+});
