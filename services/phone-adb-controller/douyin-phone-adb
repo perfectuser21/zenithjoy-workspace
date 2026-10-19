@@ -800,7 +800,10 @@ nonce_sdk31_input() {
 
 nonce_native_copy() {
   local eid="$1" nonce="$2" center x y i phase
-  require_held_lock clipboard_nonce
+  # 保持既有入口权限：SDK31或显式owner必须验锁；其余旧入口不新增owner前置。
+  if [[ "${DEVICE_SDK:-}" == 31 || -n "${LOCK_OWNER:-}" ]]; then
+    require_held_lock clipboard_nonce
+  fi
   require_target_for clipboard_nonce
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE/"* ]] || die "CLIPBOARD_NONCE_WRONG_FOREGROUND"
   center="$(nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-seed-typed.xml" "$nonce")" || die "CLIPBOARD_NONCE_COPY_FIELD_UNVERIFIED"
