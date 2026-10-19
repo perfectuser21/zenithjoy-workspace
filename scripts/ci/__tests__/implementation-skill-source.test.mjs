@@ -140,3 +140,12 @@ test('三个正式scope smoke全部经同一离线适配入口，不能直装对
   assert.doesNotMatch(source,/^bash scripts\/ensure-skills-source\.sh/m,path);
  }
 });
+test('已有固定HEAD的正确外部Git worktree保留原安装兼容，不改共享身份',()=>{
+ const f=regressionFixture();try{
+  const source=join(f.business,'../external-worktree');git(f.central,'worktree','add','--quiet','--detach',source,f.pin);
+  const config=readFileSync(join(f.central,'.git/config'));
+  sourceApi.installRegressionSkills(f.business,{source});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.equal(git(source,'rev-parse','HEAD'),f.pin);assert.deepEqual(readFileSync(join(f.central,'.git/config')),config);
+ }finally{f.cleanup();}
+});
