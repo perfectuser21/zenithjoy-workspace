@@ -266,6 +266,7 @@ async function isolatedBrain(t){
   import{createServer}from'node:http';
   const sockets=new Set();let count=0,nextSocket=0;
   const server=createServer((req,res)=>{count++;if(req.url==='/conflict'){res.writeHead(409);res.end('fixture-private-response');return;}if(req.url.startsWith('/invalid')){res.end('fixture-private-response');return;}if(req.url.startsWith('/reset')){req.socket.destroy();return;}
+   if(req.url==='/warm')setTimeout(()=>{for(const s of sockets)s.resetAndDestroy();},50);
    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({connection:req.headers.connection,count,method:req.method,socket:req.socket.fixtureId}));});
   server.keepAliveTimeout=60000;server.on('connection',s=>{s.fixtureId=++nextSocket;sockets.add(s);s.on('close',()=>sockets.delete(s));});
   process.on('message',m=>{if(m==='expire')for(const s of sockets)s.destroy();});
@@ -277,11 +278,17 @@ async function isolatedBrain(t){
 }
 test('真实独立HTTP服务关闭旧idle连接且同步命令阻塞时，下一请求仍成功',async t=>{
  const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
- const first=await request('/api/brain/releases/fixture');
- await new Promise(resolve=>setImmediate(resolve));
- server.expire();execFileSync(process.execPath,['-e','Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,500)']);
- const next=await request('/api/brain/releases/fixture');
- assert.equal(first.connection,'close');assert.equal(next.connection,'close');assert.equal(next.count,2);assert.notEqual(first.socket,next.socket,'独立真实TCP连接，未复用旧socket');
+ const connections=[];
+ // 独立server在每个warm响应后关idle；父同步阻塞期间不能消费close事件。
+ // 有界多轮也覆盖Undici交替使用pool socket的行为，旧实现须真实GET失败。
+ for(let round=0;round<6;round++){
+  const first=await request('/warm');
+  await new Promise(resolve=>setImmediate(resolve));
+  execFileSync(process.execPath,['-e','Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,300)']);
+  const next=await request('/api/brain/releases/fixture');connections.push(first,next);
+  assert.notEqual(first.socket,next.socket,'不复用已关闭旧socket');
+ }
+ assert.ok(connections.every(row=>row.connection==='close'));assert.equal(connections.at(-1).count,12);
 });
 test('真实POST只发一次且要求关闭连接，不自动重试未知写入',async t=>{
  const {brainRequest}=await implementation(),server=await isolatedBrain(t),request=brainRequest(server.base,'fixture-token-not-for-output');
