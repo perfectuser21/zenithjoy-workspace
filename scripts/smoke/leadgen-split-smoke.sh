@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 # 固定中央对象缓存与生成文档不同；先用原安装器还原并核验。
-bash scripts/ensure-skills-source.sh "$PWD"
+node scripts/ci/implementation-skill-source.mjs --install-regression-skills "$PWD"
 # 配套方法静态合同仍为独立前置关卡，不把测试调度当作实际Skill接手验收。
 node scripts/product-map/leadgen-methods.mjs
 # 完整文件只调度一次；并发仅限文件，保留每个文件的原断言、内部顺序与超时。
@@ -23,6 +23,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/clipboard-nonce.test.mjs \
  services/phone-adb-controller/__tests__/commander-workflow-progress.test.mjs \
  services/phone-adb-controller/__tests__/continuous-identity.test.mjs \
+ services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs \
  services/phone-adb-controller/__tests__/copied-share-link.test.mjs \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs \
  services/phone-adb-controller/__tests__/deploy-runtime-files.test.mjs \

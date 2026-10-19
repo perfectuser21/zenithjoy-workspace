@@ -61,3 +61,93 @@ test('Cecelia identity must select the Cecelia profile at the pinned revision',(
   assert.deepEqual(readImplementationSource(f.business,revision,f.path,{source:f.central}),f.payload);
  }finally{f.cleanup();}
 });
+
+// The Pilot capability is an object repository with an unborn HEAD, not a checkout.
+import * as sourceApi from '../implementation-skill-source.mjs';
+import {readFileSync,existsSync,readdirSync,renameSync,symlinkSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+function regressionFixture(){
+ const f=fixture();mkdirSync(join(f.central,'distribution'),{recursive:true});
+ const loader=Buffer.from("import argparse,pathlib\np=argparse.ArgumentParser();p.add_argument('command');p.add_argument('--workspace');p.add_argument('--source');a=p.parse_args();w=pathlib.Path(a.workspace);x=w/'installer-phases';x.write_text((x.read_text() if x.exists() else '')+a.command+'\\n')\n");
+ writeFileSync(join(f.central,'distribution/skills_source.py'),loader);
+ const pin=commit(f.central),lock={version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:pin,loader_sha256:createHash('sha256').update(loader).digest('hex')};
+ writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(lock));
+ for(const path of ['scripts/skills-source.py','scripts/ensure-skills-source.sh'])writeFileSync(join(f.business,path),readFileSync(new URL('../../../'+path,import.meta.url)));
+ commit(f.business);const cache=join(f.business,'../objects');mkdirSync(cache);git(cache,'init','-q');git(cache,'fetch','--quiet','--depth=1',f.central,pin);
+ return {...f,cache,pin,lock};
+}
+test('Pilot白名单无HEAD对象缓存经私有checkout执行原install/verify，保持共享缓存不变并清理',()=>{
+ const f=regressionFixture();try{
+  const config=readFileSync(join(f.cache,'.git/config')),objects=git(f.cache,'count-objects','-v');
+  assert.throws(()=>git(f.cache,'rev-parse','--verify','HEAD'));
+  assert.equal(typeof sourceApi.installRegressionSkills,'function');
+  const result=sourceApi.installRegressionSkills(f.business,{source:f.cache});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.ok(result.privateCheckout);assert.equal(existsSync(result.privateCheckout),false);
+  assert.deepEqual(readFileSync(join(f.cache,'.git/config')),config);assert.equal(git(f.cache,'count-objects','-v'),objects);
+  assert.throws(()=>git(f.cache,'rev-parse','--verify','HEAD'));
+ }finally{f.cleanup();}
+});
+test('正确外部checkout沿原行为，错误HEAD仍拒绝且不能用缓存适配掩盖',()=>{
+ for(const wrong of [false,true]){const f=regressionFixture();try{
+  if(wrong){writeFileSync(join(f.central,'new'),'new');commit(f.central);}
+  if(wrong)assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.central}),/explicit source revision/);
+  else {sourceApi.installRegressionSkills(f.business,{source:f.central});assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');}
+ }finally{f.cleanup();}}
+});
+test('离线对象缓存错pin/loader/repo/缺commit/replace均在安装前拒绝',()=>{
+ for(const mode of ['pin','loader','repo','missing','replace','gitfile','git-symlink','alternates']){const f=regressionFixture();try{
+  if(mode==='pin')f.lock.revision='a'.repeat(40);
+  if(mode==='loader')f.lock.loader_sha256='0'.repeat(64);
+  if(mode==='repo')f.lock.repository='evil/skills';
+  if(['pin','loader','repo'].includes(mode)){writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(f.lock));commit(f.business);}
+  if(mode==='missing'){rmSync(f.cache,{recursive:true});mkdirSync(f.cache);git(f.cache,'init','-q');}
+  if(mode==='replace')git(f.cache,'replace',f.pin,f.pin);
+  if(['gitfile','git-symlink'].includes(mode)){const meta=join(f.business,'../cache-meta');renameSync(join(f.cache,'.git'),meta);if(mode==='gitfile')writeFileSync(join(f.cache,'.git'),'gitdir: '+meta+'\n');else symlinkSync(meta,join(f.cache,'.git'),'dir');}
+  if(mode==='alternates')writeFileSync(join(f.cache,'.git/objects/info/alternates'),join(f.central,'.git/objects')+'\n');
+  assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.cache}),undefined,mode);
+  assert.equal(existsSync(join(f.business,'installer-phases')),false,mode);
+ }finally{f.cleanup();}}
+});
+test('ambient Git重定向与源local config不能执行hook/filter或污染私有安装',()=>{
+ const f=regressionFixture(),previous=process.env.GIT_DIR;try{
+  const poison=join(f.business,'poisoned');git(f.cache,'config','core.hooksPath',poison);git(f.cache,'config','core.autocrlf','true');git(f.cache,'config','uploadpack.packObjectsHook',`touch ${poison}`);
+  process.env.GIT_DIR=poison;
+  sourceApi.installRegressionSkills(f.business,{source:f.cache});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.equal(existsSync(poison),false);delete process.env.GIT_DIR;assert.equal(git(f.cache,'config','core.autocrlf'),'true');
+ }finally{if(previous===undefined)delete process.env.GIT_DIR;else process.env.GIT_DIR=previous;f.cleanup();}
+});
+
+test('实际白名单CLI只继承对象cache，拒绝relative/missing且finally清理失败checkout',()=>{
+ const f=regressionFixture();try{
+  const cli=fileURLToPath(new URL('../implementation-skill-source.mjs',import.meta.url));
+  const env={PATH:`${dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`,CI:'true',NODE_ENV:'test',LANG:'C.UTF-8',SKILLS_SOURCE_DIR:f.cache,GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'core.worktree',GIT_CONFIG_VALUE_0:'/does-not-exist',GIT_OBJECT_DIRECTORY:'/missing-objects'};
+  const result=spawnSync(process.execPath,[cli,'--install-regression-skills',f.business],{env,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  for(const source of ['relative',join(f.business,'missing')])assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source}));
+  const loader=Buffer.from("raise RuntimeError('installer failure witness')\n");writeFileSync(join(f.central,'distribution/skills_source.py'),loader);f.lock.revision=commit(f.central);f.lock.loader_sha256=createHash('sha256').update(loader).digest('hex');writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(f.lock));commit(f.business);git(f.cache,'fetch','--quiet',f.central,f.lock.revision);
+  const before=readdirSync(tmpdir()).filter(x=>x.startsWith('regression-skills-')).sort();
+  assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.cache}),/Command failed/);
+  assert.deepEqual(readdirSync(tmpdir()).filter(x=>x.startsWith('regression-skills-')).sort(),before);
+ }finally{f.cleanup();}
+});
+
+test('三个正式scope smoke全部经同一离线适配入口，不能直装对象cache',()=>{
+ for(const path of ['.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh','.github/workflows/scripts/smoke/codex-publish-contract-smoke.sh','scripts/smoke/leadgen-split-smoke.sh']){
+  const source=readFileSync(new URL('../../../'+path,import.meta.url),'utf8');
+  assert.match(source,/^node scripts\/ci\/implementation-skill-source\.mjs --install-regression-skills "\$(?:REPO_ROOT|PWD)"$/m,path);
+  assert.doesNotMatch(source,/^bash scripts\/ensure-skills-source\.sh/m,path);
+ }
+});
+test('已有固定HEAD的正确外部Git worktree保留原安装兼容，不改共享身份',()=>{
+ const f=regressionFixture();try{
+  const source=join(f.business,'../external-worktree');git(f.central,'worktree','add','--quiet','--detach',source,f.pin);
+  const config=readFileSync(join(f.central,'.git/config'));
+  sourceApi.installRegressionSkills(f.business,{source});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.equal(git(source,'rev-parse','HEAD'),f.pin);assert.deepEqual(readFileSync(join(f.central,'.git/config')),config);
+ }finally{f.cleanup();}
+});

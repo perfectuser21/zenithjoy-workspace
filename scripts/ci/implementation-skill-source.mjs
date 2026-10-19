@@ -1,7 +1,8 @@
 /** Trusted tooling reads pinned skill Git objects; never execute a candidate loader. */
 import {execFileSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
-import {join,resolve} from 'node:path';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync,realpathSync,existsSync,lstatSync} from 'node:fs';
+import {join,resolve,isAbsolute} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 const fail=code=>{throw Object.assign(Error(code),{code});};
@@ -59,4 +60,54 @@ export function readImplementationSource(root,revision,path,{source}={}){
  const payload=git(central,'show',`${lock.revision}:${selected.source}`);
  if(checksum(payload)!==selected.sha256)fail('SKILL_SOURCE_CHECKSUM_MISMATCH');
  return payload;
+}
+
+/** Give the unchanged installer a private checkout; the Pilot object capability stays read-only. */
+export function installRegressionSkills(root,{source=process.env.SKILLS_SOURCE_DIR}={}){
+ root=realpathSync(root);const deadline=Date.now()+60000;
+ const env={...environment(),PYTHONDONTWRITEBYTECODE:'1'};
+ if(source)env.GIT_ALLOW_PROTOCOL='file';
+ for(const key of ['PYTHONPATH','PYTHONHOME','NODE_OPTIONS','NODE_PATH','BASH_ENV','ENV'])delete env[key];
+ delete env.SKILLS_SOURCE_DIR;
+ const run=(command,args)=>{const timeout=deadline-Date.now();if(timeout<=0)fail('SKILL_REGRESSION_TIMEOUT');return execFileSync(command,args,{cwd:root,env,stdio:['ignore','pipe','pipe'],timeout,maxBuffer:32*1024*1024});};
+ const local=(dir,...args)=>run('git',['--no-replace-objects','-C',dir,'-c','core.hooksPath=/dev/null',...args]);
+ const lockBytes=local(root,'show','HEAD:.skills-source.json');
+ if(!readFileSync(join(root,'.skills-source.json')).equals(lockBytes))fail('SKILL_REGRESSION_LOCK_CHANGED');
+ const lock=JSON.parse(lockBytes);
+ if(Object.keys(lock).sort().join(',')!=='loader_sha256,profile,repository,revision,version'||lock.version!==1||lock.repository!=='perfectuser21/zenithjoy-skills'||lock.profile!=='zenithjoy'||typeof lock.revision!=='string'||!/^[0-9a-f]{40}$/.test(lock.revision)||typeof lock.loader_sha256!=='string'||!/^[0-9a-f]{64}$/.test(lock.loader_sha256))fail('SKILL_REGRESSION_LOCK_INVALID');
+ for(const path of ['scripts/ensure-skills-source.sh','scripts/skills-source.py'])if(!readFileSync(join(root,path)).equals(local(root,'show',`HEAD:${path}`)))fail('SKILL_REGRESSION_BOOTSTRAP_CHANGED');
+ let temporary,checkout;
+ try{
+  if(source){
+   if(!isAbsolute(source))fail('SKILL_REGRESSION_CACHE_INVALID');source=realpathSync(source);
+   if(!existsSync(join(source,'.git')))fail('SKILL_REGRESSION_CACHE_INVALID');
+   if(local(source,'for-each-ref','--format=%(refname)','refs/replace').toString().trim())fail('SKILL_REGRESSION_REPLACE_REF');
+   local(source,'cat-file','-e',lock.revision+'^{commit}');
+   if(checksum(local(source,'show',`${lock.revision}:distribution/skills_source.py`))!==lock.loader_sha256)fail('SKILL_REGRESSION_LOADER_CHANGED');
+   let head;try{head=local(source,'rev-parse','--verify','HEAD').toString().trim();}catch{}
+   if(head&&head!==lock.revision)fail('explicit source revision does not match lock; refusing to change its checkout');
+   if(!head){
+    for(const path of ['.git','.git/objects'])if(lstatSync(join(source,path)).isSymbolicLink()||!lstatSync(join(source,path)).isDirectory())fail('SKILL_REGRESSION_CACHE_INVALID');
+    if(existsSync(join(source,'.git/objects/info/alternates')))fail('SKILL_REGRESSION_ALTERNATES');
+    temporary=mkdtempSync(join(tmpdir(),'regression-skills-'));checkout=join(temporary,'source');
+    // clone treats a shallow repository without refs as empty. Fetch the exact
+    // object into a fresh repository instead; file transport copies packs and
+    // never borrows objects, refs, config, hooks or a checkout from the cache.
+    run('git',['-c','core.hooksPath=/dev/null','init','--quiet','--template=',checkout]);
+    local(checkout,'fetch','--quiet','--no-tags','--depth=1',
+     '--upload-pack=git -c core.hooksPath=/dev/null upload-pack',source,lock.revision);
+    if(existsSync(join(checkout,'.git/objects/info/alternates')))fail('SKILL_REGRESSION_ALTERNATES');
+    local(checkout,'-c','core.autocrlf=false','checkout','--quiet','--detach',lock.revision);
+    source=checkout;
+   }
+   env.SKILLS_SOURCE_DIR=source;
+  }
+  run('bash',['scripts/ensure-skills-source.sh',root]);
+  if(Date.now()>=deadline)fail('SKILL_REGRESSION_TIMEOUT');
+  return {privateCheckout:checkout||null};
+ }finally{if(temporary)rmSync(temporary,{recursive:true,force:true});}
+}
+if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){
+ try{if(process.argv.length!==4||process.argv[2]!=='--install-regression-skills')fail('SKILL_REGRESSION_ARGS_INVALID');installRegressionSkills(process.argv[3]);}
+ catch(error){process.stderr.write((error.stderr?.toString()||error.code||error.message)+'\n');process.exitCode=1;}
 }
