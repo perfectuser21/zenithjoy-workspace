@@ -111,3 +111,24 @@ test('split smoke bootstraps its own workspace once before methods and refuses b
  assert.deepEqual(failed.bootstraps,[failed.dir]);assert.deepEqual(failed.calls,[]);
  assert.ok(!failed.result.stdout.includes('PASS'));
 });
+
+test('七类非时序身份断言显式复用唯一wait_ms副本，真实录制时序仍独立保留',()=>{
+ const source=readFileSync(join(root,'services/phone-adb-controller/__tests__/continuous-identity.test.mjs'),'utf8');
+ for(const name of [
+  '队列身份核验连续暂停到nonce完成，只在最终真实ID核验与严格归位后播放一次',
+  '连续暂停不能用深链回显掩盖实际链接VID错误',
+  '最终归位13节点必须重新打开并暂停读回真实分享树，再恢复播放',
+  '严格归位持续骨架或最终播放失败，真实exit非零且不能输出IDENTITY成功',
+  'qv局部暂停策略不污染锁或录音，record-start必须收到恢复后的播放状态',
+  'keyword内部nonce归位保持暂停，仍新读分享树与原词视频tab后输出实际VID',
+  '默认无keyword取链含真实nonce，归位后仍恢复PLAY供后续录音',
+ ]){
+  const start=source.indexOf(`test('${name}'`);assert.ok(start>=0,name);
+  const call=source.slice(start).match(/\bphone\(([^)]*)\)/)?.[1];
+  assert.match(call||'',/controlledWait:true/,name+'只断言身份与命令序列，不应消耗真实设备等待');
+ }
+ assert.ok(source.includes("assert.equal(patched.replace(controlled,wait),source"),'副本必须可逆还原生产全部字节');
+ assert.match(source,/controlledWait=false/,'不能泛化所有case为无等待');
+ assert.match(source,/recordBoundary\(\{captureMode:'delayed_growth'\}\)/,'迟到媒体保留真实等待');
+ assert.match(source,/workflowRemainingSeconds:5/,'cleanup预算边界仍真实等待');
+});
