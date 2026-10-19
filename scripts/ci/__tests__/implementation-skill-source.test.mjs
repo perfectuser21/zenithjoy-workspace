@@ -64,7 +64,10 @@ test('Cecelia identity must select the Cecelia profile at the pinned revision',(
 
 // The Pilot capability is an object repository with an unborn HEAD, not a checkout.
 import * as sourceApi from '../implementation-skill-source.mjs';
-import {readFileSync,existsSync} from 'node:fs';
+import {readFileSync,existsSync,readdirSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
 function regressionFixture(){
  const f=fixture();mkdirSync(join(f.central,'distribution'),{recursive:true});
  const loader=Buffer.from("import argparse,pathlib\np=argparse.ArgumentParser();p.add_argument('command');p.add_argument('--workspace');p.add_argument('--source');a=p.parse_args();w=pathlib.Path(a.workspace);x=w/'installer-phases';x.write_text((x.read_text() if x.exists() else '')+a.command+'\\n')\n");
@@ -112,6 +115,20 @@ test('ambient Git重定向与源local config不能执行hook/filter或污染私�
   process.env.GIT_DIR=poison;
   sourceApi.installRegressionSkills(f.business,{source:f.cache});
   assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
-  assert.equal(existsSync(poison),false);assert.equal(git(f.cache,'config','core.autocrlf'),'true');
+  assert.equal(existsSync(poison),false);delete process.env.GIT_DIR;assert.equal(git(f.cache,'config','core.autocrlf'),'true');
  }finally{if(previous===undefined)delete process.env.GIT_DIR;else process.env.GIT_DIR=previous;f.cleanup();}
+});
+
+test('实际白名单CLI只继承对象cache，拒绝relative/missing且finally清理失败checkout',()=>{
+ const f=regressionFixture();try{
+  const cli=fileURLToPath(new URL('../implementation-skill-source.mjs',import.meta.url));
+  const env={PATH:`${dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`,CI:'true',NODE_ENV:'test',LANG:'C.UTF-8',SKILLS_SOURCE_DIR:f.cache,GIT_CONFIG_COUNT:'1',GIT_CONFIG_KEY_0:'core.worktree',GIT_CONFIG_VALUE_0:'/does-not-exist',GIT_OBJECT_DIRECTORY:'/missing-objects'};
+  const result=spawnSync(process.execPath,[cli,'--install-regression-skills',f.business],{env,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  for(const source of ['relative',join(f.business,'missing')])assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source}));
+  const loader=Buffer.from("raise RuntimeError('installer failure witness')\n");writeFileSync(join(f.central,'distribution/skills_source.py'),loader);f.lock.revision=commit(f.central);f.lock.loader_sha256=createHash('sha256').update(loader).digest('hex');writeFileSync(join(f.business,'.skills-source.json'),JSON.stringify(f.lock));commit(f.business);git(f.cache,'fetch','--quiet',f.central,f.lock.revision);
+  const before=readdirSync(tmpdir()).filter(x=>x.startsWith('regression-skills-')).sort();
+  assert.throws(()=>sourceApi.installRegressionSkills(f.business,{source:f.cache}),/Command failed/);
+  assert.deepEqual(readdirSync(tmpdir()).filter(x=>x.startsWith('regression-skills-')).sort(),before);
+ }finally{f.cleanup();}
 });

@@ -6,7 +6,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO_ROOT"
 # 对象缓存不是生成文档；先按固定中央源安装并核验，再运行原完整回归。
-bash scripts/ensure-skills-source.sh "$REPO_ROOT"
+node scripts/ci/implementation-skill-source.mjs --install-regression-skills "$REPO_ROOT"
 node scripts/product-map/gen-commander-contracts.mjs --check
 node --test scripts/product-map/__tests__/commander-skill-contracts.test.js
 node --test services/phone-adb-controller/__tests__/commander-report.test.mjs services/phone-adb-controller/__tests__/commander-v2.test.mjs services/phone-adb-controller/__tests__/commander-codex-agent.test.mjs services/phone-adb-controller/__tests__/commander-handoff.test.mjs
