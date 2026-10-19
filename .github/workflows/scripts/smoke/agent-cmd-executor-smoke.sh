@@ -27,7 +27,7 @@ if [ -z "${ANDROID_HOME:-}" ] && [ ! -d "$HOME/Library/Android/sdk" ] && [ ! -d 
   exit 0
 fi
 cd "$AGENT_DIR"
-./gradlew :app:testDebugUnitTest --tests "com.zenithjoy.agent.command.*" --console=plain 2>&1 | tail -5
+./gradlew :app:testDebugUnitTest --tests "com.zenithjoy.agent.command.*" --console=plain 2>&1
 RESULTS_DIR="app/build/test-results/testDebugUnitTest"
 if grep -rl 'failures="[1-9]' "$RESULTS_DIR" 2>/dev/null | head -1 | grep -q .; then
   echo "FAIL: command 包存在失败用例"; exit 1
