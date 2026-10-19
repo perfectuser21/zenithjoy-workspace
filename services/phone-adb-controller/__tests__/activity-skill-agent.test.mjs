@@ -142,3 +142,33 @@ test('authorized relay durably pins its gateway surface before transport; unknow
   assert.equal(JSON.parse(readFileSync(join(dir,'gateway-surface.json'),'utf8')).surface,'exec_gateway');
  }finally{rmSync(home,{recursive:true,force:true});}
 });
+
+for(const parentState of ['completed','nonzero','thrown'])test(`官方停止child后仍区分原owner ${parentState}，只在双方真停止时归还reservation`,async t=>{
+ const {assertWorkflowOwnerAvailable}=await import('../activity-commander.mjs');
+ const home=mkdtempSync(join(tmpdir(),'owner-stop-branch-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const q={protocol:'leadgen-activity-v1',run_id:'stopped-child__a1',task_id:null,binding_id:'fixed-stop-binding',activity_key:'scoring',nonce:'1'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'a'.repeat(40),broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'isolated method'}};
+ let dir,raw,launches=0,awaits=0,stops=0;
+ const child='12345678-0000-4000-8000-000000000001',session='agent:skill-factory:subagent:stop-fixture';
+ const result=await runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
+  if(command==='openclaw'){
+   launches++;dir=args[args.indexOf('--message-file')+1].replace(/\/parent-message\.txt$/,'');
+   const request=JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'));
+   writeFileSync(join(dir,'spawn-claimed.json'),JSON.stringify({...request,source_commit:q.source_commit}));
+   writeFileSync(join(dir,'agent-binding.json'),JSON.stringify({...request,child_run_id:child,child_session_key:session}));
+   raw=JSON.stringify({status:'accepted',runId:child,childSessionKey:session,resolvedProvider:'openai',resolvedModel:'openai/gpt-6.1-sol'});writeFileSync(join(dir,'spawn-receipt.json'),raw);
+   if(parentState==='thrown'){const error=Error('transport timeout');error.code='ETIMEDOUT';throw error;}
+   return {code:parentState==='completed'?0:1,stdout:'original parent response',stderr:''};
+  }
+  if(args.includes('await')){awaits++;return {code:1,stdout:'',stderr:'official wait failed'};}
+  assert.ok(args.includes('stop'),'only original await/stop are allowed');stops++;
+  writeFileSync(join(dir,'child-stop-readback.json'),JSON.stringify({runId:child,status:'aborted',endedAt:1}));
+  writeFileSync(join(dir,'handoff-closed.json'),JSON.stringify({at:Date.now()/1000}));
+  return {code:0,stdout:'original exact child stopped',stderr:''};
+ }});
+ assert.equal(result.status,parentState==='completed'?'failed':'unknown');
+ assert.equal(result.execution_stopped,parentState==='completed','child停止不能掩盖owner终态未知');
+ assert.equal(result.child_execution_stopped,true);assert.equal(result.owner_execution_stopped,parentState==='completed');
+ if(parentState==='completed')assert.doesNotThrow(()=>assertWorkflowOwnerAvailable(q,{home}));
+ else assert.throws(()=>assertWorkflowOwnerAvailable(q,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
+ assert.deepEqual([launches,awaits,stops],[1,1,1]);assert.equal(readFileSync(join(dir,'spawn-receipt.json'),'utf8'),raw);
+});
