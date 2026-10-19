@@ -158,7 +158,7 @@
                 "const": "douyin"
               },
               "account": {
-                "const": "Ai办公室"
+                "const": "人工智能小诺考评"
               },
               "title": {
                 "type": "string",
@@ -212,9 +212,9 @@
       },
       "resources": {
         "machine": "xian-m4",
-        "profile": "xiaolongxia",
-        "device_serial": "ANGYVB4311010223",
-        "account_ref": "Ai办公室"
+        "profile": "legacy",
+        "device_serial": "ANGYVB4402004137",
+        "account_ref": "人工智能小诺考评"
       },
       "recovery": {
         "max_attempts": 1,

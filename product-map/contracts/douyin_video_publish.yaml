@@ -2,7 +2,7 @@ version: 1
 execution_profile: codex_agent
 agent: skill-factory
 skill: multi-platform-publish
-resources: {machine: xian-m4, profile: xiaolongxia, device_serial: ANGYVB4311010223, account_ref: Ai办公室}
+resources: {machine: xian-m4, profile: legacy, device_serial: ANGYVB4402004137, account_ref: 人工智能小诺考评}
 recovery: {max_attempts: 1, improvement_after_failures: 5, total_timeout_sec: 2400, cleanup_timeout_sec: 300, retry_safe: false, retry_on: []}
 input_schema:
   type: object
@@ -28,7 +28,7 @@ output_schema:
       required: [platform, account, title, body]
       properties:
         platform: {const: douyin}
-        account: {const: Ai办公室}
+        account: {const: 人工智能小诺考评}
         title: {type: string, minLength: 1}
         body: {type: string}
         work_id: {type: string, minLength: 1}
