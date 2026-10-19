@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {openClawCommander} from '../activity-commander.mjs';
 import {runSkillAgent} from '../leadgen-skill-agent.mjs';
+import {handleRpc} from '../leadgen-rpc.mjs';
 
 test('同Workflow各节点判断与Skill接手使用同一个work-commander负责人',async()=>{
  const calls=[],home=mkdtempSync(join(tmpdir(),'single-commander-'));
@@ -25,4 +26,13 @@ test('同Workflow各节点判断与Skill接手使用同一个work-commander负�
   const other=[];await openClawCommander({execute:async(_cmd,args)=>{other.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"另任务"}'}]})};}})({...scope,run_id:'another-workflow__a1',activity:'preflight'});
   assert.notEqual(other[0][other[0].indexOf('--session-key')+1],owners[0]);
  }finally{rmSync(home,{recursive:true,force:true});}
+});
+
+test('正式获客RPC调用同一work-commander且来源不匹配时零派发',async()=>{
+ const calls=[];const receipt={run_id:'rpc-workflow__a1',source_commit:'a'.repeat(40),activity:'preflight',phase:'before'};
+ const deps={verify:()=>{},commanderExecute:async(_cmd,args)=>{calls.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"原任务"}'}]})};}};
+ const ok=await handleRpc({source:{commit:receipt.source_commit},kind:'commander',receipt},deps);
+ assert.equal(ok.decision.action,'continue');assert.equal(calls.length,1);
+ await assert.rejects(()=>handleRpc({source:{commit:'b'.repeat(40)},kind:'commander',receipt},deps),/COMMANDER_SOURCE_MISMATCH/);
+ assert.equal(calls.length,1);
 });
