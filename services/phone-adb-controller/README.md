@@ -2,6 +2,16 @@
 
 纯 ADB 外驱真机 RPA:skill 层判据焊死为确定性命令,融合 Kotlin RPA(NodeAwait/DouyinCollectService)教义——等待用条件、坐标从树取、失败必归因。
 
+## ADB 宿主管理（任务 c9eff684-0f1a-48df-b694-9459216ee81e）
+
+管理归属：基础设施部／系统看护／设备与手机台账。代码真身在本目录，设备与租约以 Brain 为准。M4 的实体 USB 使用一个受管服务；MMV 云手机保留自己的网络入口，不复制 M4 的策略、密钥或隔离状态。
+
+普通业务使用 `adb-managed-client.py`，由本人私有的 `~/.config/zenithjoy/adb-service.json` 固定宿主与端点。坏配置、额外服务、错误端口、设备不在线均报错；普通调用禁止 `start-server`、`kill-server`、`connect` 等生命周期命令。受管策略尚未安装的宿主保留原入口，不能据源码已发布就声称完成切换。
+
+正式发布先沿原 Source／Pilot／部署关卡交付代码，保持原设备 all-free barrier。之后维护者另持四台设备的中央租约和正式本地维护锁，运行已安装目录的 `adb-host-maintenance.py plan`，核对计划摘要，再运行同一版本的 `apply`。入口会核实际 M4 用户、来源文件字节、任务归属、端点、旧进程身份和 sudo 权限；不操作未知进程。`install-adb-host-service.sh` 只暂存，不激活。
+
+维护完成后独立读回 `adb-host-service.py status --config "$HOME/.config/zenithjoy/adb-service.json"`、launchd 实际子进程与各 serial；再释放本人维护锁。退出码成功或服务只剩一个，不代表四台设备都在线，更不代表获客验收成功。中途失败保留 `~/.config/zenithjoy/adb-maintenance.journal.jsonl` 与业务锁，禁止删除 journal 重放；先核清现场再处理。
+
 ## 五件套清单
 
 | 文件 | 用途 |

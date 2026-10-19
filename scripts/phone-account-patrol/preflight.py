@@ -4,6 +4,7 @@ import hashlib
 import json
 import pathlib
 import subprocess
+import os
 
 def main():
     parser = argparse.ArgumentParser()
@@ -32,7 +33,9 @@ def main():
     except ImportError:
         checks['pillow'] = False
     try:
-        result = subprocess.run(['/opt/homebrew/bin/adb', '-s', args.serial, 'get-state'], capture_output=True, text=True, timeout=20)
+        managed = 'ZJ_ADB_HOST_CONFIG' in os.environ or os.path.lexists(pathlib.Path.home() / '.config/zenithjoy/adb-service.json')
+        adb = str(pathlib.Path.home() / '.local/bin/adb-managed-client.py') if managed else '/opt/homebrew/bin/adb'
+        result = subprocess.run([adb, '-s', args.serial, 'get-state'], capture_output=True, text=True, timeout=20)
         checks['adb_online'] = result.returncode == 0 and result.stdout.strip() == 'device'
         if not checks['adb_online']:
             failure = {'stage': 'preflight', 'code': 'adb_unreachable', 'message': 'ADB无法连接设备：' + args.serial,

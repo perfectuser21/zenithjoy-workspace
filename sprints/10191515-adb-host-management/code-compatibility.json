@@ -1,0 +1,72 @@
+{
+  "douyin_video_discovery.collect_videos": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "6e76abc07b2b786ffb90f7256ddf8664e93aa74c317d39395ffbe1e4aee9c263",
+    "current_code_digest": "a8a5751b5d92292cee3ec7fdf591f6e460cb3784fe6d54f30ed8372983db02a1"
+  },
+  "douyin_video_processing.preflight": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "22c1aae657118211dcc4acc861865668d078470bc234fe622c3f76638e70a840",
+    "current_code_digest": "b240c1d6b0e87530e52b7e564715bb857abf2fc58145cd332d7515411d98be86"
+  },
+  "douyin_video_processing.dedup": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "32eecdb335a3f3a601e63d688ce793b4f365a695ff4aaf40f437fe44caf91a24",
+    "current_code_digest": "54fe240be49d5adca6c7ae8597d59b0f2f7b2760ace3178efc6c638067b617d8"
+  },
+  "douyin_video_processing.qualification": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "17c5f9f177276fcd206a68cccf4d76cc9cc74eda18f021307c495bdc77a7a0f6",
+    "current_code_digest": "f3dfb581d005c963ed71f44f59c68816775c60a6c2412cd5e1a0ea34d87bb7c1"
+  },
+  "douyin_video_processing.collection": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "94cf267ba7e6b0c76ea1ebba7bccfb5893a6c7967184aa693ce8e5fd7c88751e",
+    "current_code_digest": "a2a71480b4d9f8360fd8bd283075f782f98fdc352d5c7d1c57a5730b39319d88"
+  },
+  "douyin_video_processing.cleanup": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "094ca8210cad3eb8024f17a73433de4140424bcd061e21300a88dfa89c220d65",
+    "current_code_digest": "821f0398b3e3d1a590150fb1d111009273a957f8227468415c3b6698ed9b2a2b"
+  },
+  "douyin_lead_outreach.preflight": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "10371f434a7c0624812eb7cc2ee45c77733d53d68c4d14f9caf078b093c32213",
+    "current_code_digest": "2128a4624f35d11ec24aae6eb746ef98c9ccc31ea0466a86507dee3b41047836"
+  },
+  "douyin_lead_outreach.send_dm": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
+    "current_code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845"
+  },
+  "douyin_lead_outreach.write_back": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "e0a2c91dc6985a3da8e88001c8e09930617f3ef0faece0531315faaee21e58a3",
+    "current_code_digest": "d240c89d9fc2159d706b6e8c83dc8be23b3f3ad9147c63ed8062dc3e16280845"
+  },
+  "douyin_lead_outreach.cleanup": {
+    "kind": "internal_compatible",
+    "reason": "仅统一宿主ADB通道和生命周期边界，Activity输入输出、租户核验、锁与评分发送政策保持原合同；生产受管策略通过独立维护切换后才启用。",
+    "reviewed_by": "codex:/root",
+    "previous_code_digest": "5844a950073c02a3fb1067576e237fc904a854c8fea56c2b6ecb4aff03b21c0a",
+    "current_code_digest": "d3dcf220edd3fc953396a842bd50b0ccf1b871557d5154a6d70650b02cfb4284"
+  }
+}

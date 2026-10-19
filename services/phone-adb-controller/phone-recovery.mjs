@@ -1,8 +1,8 @@
 // 开机与定时只读自检；离线时在设备锁内定向恢复，不代替手机端USB授权。
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, lstatSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function targetsForHost(text, host) {
@@ -47,11 +47,12 @@ export function acquireRecoveryLock(root, serial, owner) {
   return true;
 }
 
-export async function recoverPhones({ targets, run, sleep, notify, bins, state, now, log, acquire, owns = () => false, loadState = () => null, persist = () => {}, notifyManagesState = false }) {
+export async function recoverPhones({ targets, run, sleep, notify, bins, state, now, log, acquire, owns = () => false, loadState = () => null, persist = () => {}, notifyManagesState = false, managed = false }) {
   const results = [];
   const call = (bin, args) => run(bins[bin], args);
   const online = serial => {
     const out = call('adb', ['devices']);
+    if (managed && out.status !== 0) throw new Error('ADB_MANAGED_UNAVAILABLE: server health unknown; USB recovery refused');
     return out.status === 0 && out.stdout.split(/\r?\n/).some(x => x.trim() === `${serial}\tdevice`);
   };
   for (const { profile, serial } of targets) {
@@ -173,7 +174,10 @@ async function main() {
     const root = '/private/tmp/openclaw-phone/locks';
     const acquire = (serial, owner) => acquireRecoveryLock(root, serial, owner);
     const owns = (serial, owner) => { try { return readFileSync(join(root, `${serial}.lock/owner`), 'utf8').trim() === owner; } catch { return false; } };
-    const bins = { adb: '/opt/homebrew/bin/adb', ctl: join(homedir(), '.local/bin/douyin-phone-adb'), hub: '/opt/homebrew/bin/uhubctl', profiler: '/usr/sbin/system_profiler', disk: '/usr/sbin/diskutil' };
+    let defaultPolicyExists = false;
+    try { lstatSync(join(homedir(), '.config/zenithjoy/adb-service.json')); defaultPolicyExists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    const managed = Object.hasOwn(process.env, 'ZJ_ADB_HOST_CONFIG') || defaultPolicyExists;
+    const bins = { adb: managed ? join(dirname(fileURLToPath(import.meta.url)), 'adb-managed-client.py') : '/opt/homebrew/bin/adb', ctl: join(homedir(), '.local/bin/douyin-phone-adb'), hub: '/opt/homebrew/bin/uhubctl', profiler: '/usr/sbin/system_profiler', disk: '/usr/sbin/diskutil' };
     const notify = async (body, serial, now) => {
       const out = run('/usr/bin/python3', ['-c', BARK_ONCE_PY, base, serial, String(now), '/opt/homebrew/bin/node', join(homedir(), 'bin-harvest/notify-bark.js'), Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64')]);
       const ok = out.status === 0 && out.stdout.includes('BARK_SENT');
@@ -181,7 +185,7 @@ async function main() {
       return ok;
     };
     const log = text => console.log(`${new Date().toISOString()} PHONE_RECOVERY ${text}`);
-    const result = await recoverPhones({ targets, run, sleep: ms => new Promise(resolve => setTimeout(resolve, ms)), notify, bins, state, now: Date.now(), log, acquire, owns, loadState, persist, notifyManagesState: true });
+    const result = await recoverPhones({ targets, run, sleep: ms => new Promise(resolve => setTimeout(resolve, ms)), notify, bins, state, now: Date.now(), log, acquire, owns, loadState, persist, notifyManagesState: true, managed });
     if (!targets.length) { log('本机registry无目标，配置失败'); process.exitCode = 1; }
     log(JSON.stringify(result));
   }

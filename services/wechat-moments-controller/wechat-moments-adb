@@ -13,6 +13,10 @@ setopt EXTENDED_GLOB
 # 「判定点: 朋友圈发布坐标定位失败处置」）。
 
 ADB="${WECHAT_ADB_BIN:-/opt/homebrew/bin/adb}"
+if [[ -n "${ZJ_ADB_HOST_CONFIG+x}" || -e "$HOME/.config/zenithjoy/adb-service.json" || -L "$HOME/.config/zenithjoy/adb-service.json" ]]; then
+  ADB="${0:A:h}/adb-managed-client.py"
+  [[ -x "$ADB" ]] || ADB="${0:A:h}/../phone-adb-controller/adb-managed-client.py"
+fi
 PYTHON_BIN="${WECHAT_PYTHON_BIN:-/opt/homebrew/bin/python3}"
 # 两类活分开用模型，各用所长（决策 1e8ffaa1 的原话：通用模型强于数数读字、弱于像素定位）：
 #  · 定位（截图→点哪儿）走 UI-TARS：字节专为 GUI 定位训练，真机实测 8/8 命中、误差 3px。
@@ -93,11 +97,7 @@ LOCK_TTL_SECONDS=1800
 check_target_fast() {
   local state
   state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
-  if [[ "$state" != "device" ]]; then
-    "$ADB" start-server >/dev/null 2>&1 || true
-    state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
-  fi
-  [[ "$state" == "device" ]] || die "target phone is offline after adb auto-refresh" NO_ROOT
+  [[ "$state" == "device" ]] || die "target phone is offline on existing ADB endpoint" NO_ROOT
 }
 
 check_target() {

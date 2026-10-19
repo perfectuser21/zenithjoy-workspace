@@ -4459,6 +4459,9 @@ case "$command" in
   runtime-contract|lock-acquire|lock-acquire-new|lock-quarantine|lock-release|lock-release-exact|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock|outward-ledger|search-kw-matches|*-from-xml|on-search-results|detail-restored|on-user-profile|filter-panel-location|own-profile|profile-check|profile-grid-cards|resolve-sec-uid|record-status|record-extract-audio) ;;
   refresh) die 'refresh refuses shared ADB server restart; use existing target route' ;;
   *)
+    if [[ -n "${ZJ_ADB_HOST_CONFIG+x}" || -e "$HOME/.config/zenithjoy/adb-service.json" || -L "$HOME/.config/zenithjoy/adb-service.json" ]]; then
+      ADB="$PHONE_CONTROLLER_DIR/adb-managed-client.py"
+    fi
     _adb_port="$("$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/adb-existing-route.py" "$SERIAL" "$ADB")" || die 'existing target ADB route could not be verified'
     export ADB_SERVER_SOCKET="tcp:127.0.0.1:$_adb_port" DOUYIN_ADB_PORT="$_adb_port"
     unset ANDROID_ADB_SERVER_PORT ANDROID_ADB_SERVER_ADDRESS
