@@ -47,7 +47,7 @@ p.write_text(json.dumps(s))
  const script=`set -eu;setopt EXTENDED_GLOB
 die(){ print -u2 -- "$1";exit 2; }
 wait_ms(){ :; }
-require_held_lock(){ :; }
+require_held_lock(){ [[ -n "$LOCK_OWNER" && "$LOCK_OWNER" != wrong ]] || die CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED; }
 require_target_for(){ :; }
 foreground_package(){ "$ADB" test-foreground; }
 node_center(){ print '200 65'; }
@@ -55,7 +55,7 @@ ui_evidence(){ "$ADB" test-ui "$EVIDENCE_ROOT/$1.xml"; }
 _leave_scratch_route(){ [[ "$LEAVE_FAIL" != 1 ]]; }
 ${['nonce_sdk31_field','nonce_native_copy','nonce_sdk31_copy','seed_clipboard_nonce'].map(fn).join('\n')}
 seed_clipboard_nonce fixture`;
- const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:15000,env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,DEVICE_SDK:'33',SCREEN_W:'720',SCREEN_H:'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',LOCK_OWNER:'fixture-only',LEAVE_FAIL:flags.leaveFail?'1':'0'}});
+ const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:15000,env:{...process.env,D:dir,FLAGS:JSON.stringify(flags),ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,DEVICE_SDK:'33',SCREEN_W:'720',SCREEN_H:'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',LOCK_OWNER:flags.noOwner?'':flags.wrongOwner?'wrong':'fixture-only',LEAVE_FAIL:flags.leaveFail?'1':'0'}});
  return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'),'utf8'))};
 }
 test('成功路径保持完整nonce证明，typed之后不再发送组合键',()=>{
@@ -74,4 +74,13 @@ for(const phase of ['select','copy'])test(phase+'后进入系统小组件框必�
 });
 for(const [name,flags] of Object.entries({部分复制:{partialCopy:true},未选中:{noSelection:true},复制失败:{copyFail:true},清空失败:{clearFail:true},回原详情失败:{leaveFail:true}}))test(name+'不能交出成功nonce',()=>{
  const r=run(flags);assert.notEqual(r.status,0,r.stdout);assert.match(r.stderr,/CLIPBOARD_NONCE/);
+});
+
+test('非SDK31旧无owner入口保留原合同且仍完成完整nonce后验',()=>{
+ const r=run({noOwner:true});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/^clipnonce[a-f0-9]{32}\n$/);
+ assert.equal(r.state.field,r.state.clip);
+});
+test('显式错误owner仍拒绝原生复制动作',()=>{
+ const r=run({wrongOwner:true});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED/);
+ assert.ok(!r.state.events.some(x=>x.includes('input swipe')||x.endsWith('keyevent 278')));
 });

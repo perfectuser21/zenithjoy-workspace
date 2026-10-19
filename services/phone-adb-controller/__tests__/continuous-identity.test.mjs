@@ -56,6 +56,8 @@ else if(has('am start')&&has('search/tabs')){s.page='scratch';s.field='';s.backs
 else if(has('input keyevent 127')){s.play='paused';s.pauseCount=(s.pauseCount||0)+1;}
 else if(has('input keyevent 126')){if(process.env.PLAY_FAILS==='1')process.exit(1);s.play='playing';}
 else if(has('input keyevent 85')){s.play=s.play==='playing'?'paused':'playing';s.media85=(s.media85||0)+1;}
+// 仅暂存字段内同点650ms长按产生选区；普通滑动不能伪装复制选择。
+else if(has('input swipe')&&s.page==='scratch'&&a.slice(-5).join(' ')==='100 100 100 100 650')s.selected=true;
 else if(has('input keycombination 113 29'))s.selected=true;
 else if(has('input text ')){s.field=s.selected?a.at(-1):s.field+a.at(-1);s.selected=false;}
 else if(has('input keyevent 278')){if(s.selected)s.clip=s.field;s.selected=false;}
