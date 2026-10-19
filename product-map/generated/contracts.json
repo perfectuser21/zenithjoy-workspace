@@ -59,7 +59,7 @@
       }
     },
     "douyin_video_publish": {
-      "sha256": "024040336e69c86b71c2949032b1c7474c01d72a7d51ee77c12db719b98833af",
+      "sha256": "15ff74ea5a55d7f24b301a4ed0dc8f2c99572f2cc74c0eb1f6baa61542394d0b",
       "activities": {
         "preflight": "c6a195fd2dc87f6880691ad745e826ac059324e7354182b19b2e127e49f04a0a",
         "prepare": "a8ac30290f8fb5fac2be14b4b3227d6ce89bcdd69587fe843e2b87e7be6993c8",
