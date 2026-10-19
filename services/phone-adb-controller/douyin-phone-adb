@@ -5029,6 +5029,7 @@ PYCARDFOCUS
     wait_ms 1500
     # 打开后验证：切成功的标志是树能读出来且「视频」处于 selected
     vt_after="$(ui_evidence "$2-aftertab")" || _vtab_fail "video tab tap did not settle into a readable page"
+    vt_first="$vt_after"
     if ! /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after"; then
       # 搜索结果加载可能重排页签；旧坐标已失效，只按另一份新鲜树重定位一次。
       vt_retry_xml="$(_ui_evidence_wave "$2-tabs-retry" opportunistic-search-tab)" || _vtab_fail "video tab relocation tree unreadable"
@@ -5042,6 +5043,37 @@ PYCARDFOCUS
     fi
     /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after" \
       || _vtab_fail "video tab is not selected after tap"
+    # 契约只计 canonical aftertab.xml；重定位原件不单独计数，首点树另存以保诊断。
+    vt_canonical="$EVIDENCE_ROOT/${vt_eid}-aftertab.xml"
+    if [[ "$vt_after" != "$vt_canonical" ]]; then
+      "$PYTHON_BIN" - "$vt_after" "$vt_first" "$vt_canonical" "$EVIDENCE_ROOT/${vt_eid}-aftertab-first.xml" "$vt_relocalized" <<'PYVTABCHECKPOINT' \
+        || _vtab_fail "video tab checkpoint publication failed"
+import os, pathlib, stat, sys, tempfile
+source, first, target, archive = map(pathlib.Path, sys.argv[1:5])
+def regular(path):
+    if not stat.S_ISREG(path.lstat().st_mode):
+        raise ValueError('checkpoint evidence must be a regular file')
+regular(source)
+if target.exists() or target.is_symlink():
+    regular(target)
+content = source.read_bytes()
+if sys.argv[5] == '1':
+    regular(first)
+    with archive.open('xb') as saved:
+        saved.write(first.read_bytes())
+fd, staging = tempfile.mkstemp(prefix=target.name + '.', suffix='.tmp', dir=target.parent)
+try:
+    with os.fdopen(fd, 'wb') as staged:
+        staged.write(content)
+    os.replace(staging, target)
+finally:
+    if os.path.exists(staging):
+        os.unlink(staging)
+PYVTABCHECKPOINT
+      vt_after="$vt_canonical"
+      /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after" \
+        || _vtab_fail "published video tab checkpoint is not selected"
+    fi
     print -- "video_tab=1"
     print -- "video_tab_relocalized=$vt_relocalized"
     print -- "coord_source=$vt_src"

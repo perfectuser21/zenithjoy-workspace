@@ -190,3 +190,9 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 - 运行时接线的四条(全 `error`):delivery `videos_readback` / `comments_readback` / `line_key_not_null`,scoring `pool_advanced`。`effective_count` 已删(评分是批级的,`$WORD` 无意义,回写在批次收工后才跑)。
 - 业务线无关:http 探针 url 用 `$BASE/$POOL/$KEYWORD/$LEAD` 占位,`verify-step.mjs` 按 `routeOf(--line-key)` 展开;blocked 占位工件(init 的 scoring/qualification、PUSH=0 的 delivery)不读回、不判。
 - 对账基准取脚本真实统计:`push-videos.js` / `push-raw-comments.js` / `sort-comments.js` 在人读输出后各多打一行 `PUSH_VIDEOS_STATS` / `PUSH_COMMENTS_STATS` / `SORT_STATS {json}`(`stats-line.js`),batch2.sh 解析后写 delivery(`leads_written`/`duplicates_skipped`/`videos_pushed`)与 scoring 工件。
+
+## 搜索页签证据
+
+`search-video-tab EID` 的成功证据固定为 `${EID}-aftertab.xml`，供原步骤checkpoint读取。
+若首次点击后重定位成功，先保首点为 `${EID}-aftertab-first.xml`，保留重试原件，再原子提交最终严格selected树。
+保存或提交失败不会返回 `video_tab=1`；诊断/重试文件不增加成功来源计数。该说明不代表真机验收已完成。

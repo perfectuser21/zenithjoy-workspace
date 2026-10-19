@@ -28,14 +28,14 @@ function run({initial=before,first=moved,retry=moved,last=selected(moved),unread
  if [[ "$1" == *aftertab-retry ]]; then print -- "$CASE_DIR/last.xml";
  else print -- "$CASE_DIR/first.xml"; fi
 }\nset -- search-video-tab evidence\n${body}\n`;
-  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,TAP_LOG:join(dir,'taps'),INITIAL_UNREADABLE:unreadable?'1':'0',ADB:join(dir,'adb'),SERIAL:'fixture-device',EVIDENCE_ROOT:dir,SHOT_MISSING:shotMissing?'1':'0'}});
+  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,TAP_LOG:join(dir,'taps'),INITIAL_UNREADABLE:unreadable?'1':'0',ADB:join(dir,'adb'),SERIAL:'fixture-device',EVIDENCE_ROOT:dir,PYTHON_BIN:'python3',SHOT_MISSING:shotMissing?'1':'0'}});
   let taps=[];try{taps=readFileSync(join(dir,'taps'),'utf8').trim().split('\n').filter(Boolean);}catch{}
   return {...result,taps};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
 
 test('真实页签重排：首次点184，随后从新树定位到291并验证视频选中',()=>{
- const r=run();assert.equal(r.status,0,r.stderr);assert.deepEqual(r.taps,['-s fixture-device shell input tap 184 140','-s fixture-device shell input tap 291 140']);assert.match(r.stdout,/video_tab=1/);assert.match(r.stdout,/video_tab_relocalized=1/);assert.match(r.stdout,/evidence=.*aftertab-retry|evidence=.*last.xml/);
+ const r=run();assert.equal(r.status,0,r.stderr);assert.deepEqual(r.taps,['-s fixture-device shell input tap 184 140','-s fixture-device shell input tap 291 140']);assert.match(r.stdout,/video_tab=1/);assert.match(r.stdout,/video_tab_relocalized=1/);assert.match(r.stdout,/evidence=.*evidence-aftertab\.xml/);
 });
 test('首点已正确时不增加任何点击或重试',()=>{
  const r=run({first:selected(before)});assert.equal(r.status,0,r.stderr);assert.equal(r.taps.length,1);assert.match(r.stdout,/video_tab_relocalized=0/);

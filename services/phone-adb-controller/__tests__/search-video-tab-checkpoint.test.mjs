@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
@@ -18,11 +18,12 @@ const before=readFileSync(new URL('./fixtures/search-tabs-before-reorder.xml',im
 const moved=readFileSync(new URL('./fixtures/search-tabs-after-reorder.xml',import.meta.url),'utf8');
 const selected=xml=>xml.replace(/<node\b[^>]*>/g,node=>node.replace(/selected="(?:true|false)"/,`selected="${node.includes('text="视频"')?'true':'false'}"`));
 
-function run({first= moved,last=selected(moved),wanted=1,publicationFailure=false}={}){
+function run({first=moved,last=selected(moved),wanted=1,publicationFailure=false,archiveCollision=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'vtab-checkpoint-'));
  const eid='checkpoint-src1-vtab';
  try{
   for(const [name,xml] of Object.entries({before,first,last,moved}))writeFileSync(join(dir,name+'.xml'),xml);
+  if(archiveCollision)writeFileSync(join(dir,eid+'-aftertab-first.xml'),'preexisting evidence');
   writeFileSync(join(dir,'adb'),'#!/bin/sh\nexit 0\n',{mode:0o700});
   const script=`set -e
 check_target(){ :; }
@@ -52,12 +53,12 @@ ${body}
   const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,CASE_EID:eid,PUBLICATION_FAILURE:publicationFailure?'1':'0',EVIDENCE_ROOT:dir,ADB:join(dir,'adb'),SERIAL:'offline-fixture',PYTHON_BIN:'python3'}});
   const judged=judgeSteps({spec:{steps:[checkpoint]},stage:'collect_videos',ctx:{tag:'checkpoint',evidenceDir:dir,metrics:{sources_succeeded:wanted}}});
   const get=name=>{try{return readFileSync(join(dir,name),'utf8');}catch{return null;}};
-  return {...result,checkpoint:judged.steps[0],canonical:get(eid+'-aftertab.xml'),firstArchive:get(eid+'-aftertab-first.xml'),retry:get(eid+'-aftertab-retry.xml')};
+  return {...result,checkpoint:judged.steps[0],canonical:get(eid+'-aftertab.xml'),firstArchive:get(eid+'-aftertab-first.xml'),retry:get(eid+'-aftertab-retry.xml'),stagedFiles:readdirSync(dir).filter(n=>n.endsWith('.tmp'))};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
 
 test('重定位成功提交最终canonical XML，真实固定checkpoint计数恰为1',()=>{
- const r=run();assert.equal(r.status,0,r.stderr);assert.equal(r.checkpoint.observed,1);assert.equal(r.checkpoint.pass,true);assert.equal(r.canonical,selected(moved));assert.equal(r.firstArchive,moved);assert.equal(r.retry,selected(moved));assert.match(r.stdout,/evidence=.*checkpoint-src1-vtab-aftertab\.xml/);
+ const r=run();assert.equal(r.status,0,r.stderr);assert.equal(r.checkpoint.observed,1);assert.equal(r.checkpoint.pass,true);assert.equal(r.canonical,selected(moved));assert.equal(r.firstArchive,moved);assert.equal(r.retry,selected(moved));assert.deepEqual(r.stagedFiles,[]);assert.match(r.stdout,/evidence=.*checkpoint-src1-vtab-aftertab\.xml/);
 });
 test('首点已选中保持原canonical证据，不增加重定位',()=>{
  const r=run({first:selected(before)});assert.equal(r.status,0,r.stderr);assert.equal(r.checkpoint.observed,1);assert.equal(r.checkpoint.pass,true);assert.equal(r.canonical,selected(before));assert.equal(r.retry,null);assert.match(r.stdout,/video_tab_relocalized=0/);
@@ -67,6 +68,9 @@ test('canonical目标为目录时提交失败，保重试原件且不能报动�
 });
 test('最终仍未选中不发布通过checkpoint',()=>{
  const r=run({last:moved});assert.notEqual(r.status,0);assert.doesNotMatch(r.stdout,/video_tab=1/);assert.equal(r.checkpoint.observed,0);assert.equal(r.checkpoint.pass,false);assert.equal(r.canonical,moved);
+});
+test('首点诊断已有原件时拒覆盖并失败，canonical仍保首点未选中',()=>{
+ const r=run({archiveCollision:true});assert.notEqual(r.status,0);assert.doesNotMatch(r.stdout,/video_tab=1/);assert.equal(r.firstArchive,'preexisting evidence');assert.equal(r.canonical,moved);assert.equal(r.retry,selected(moved));assert.equal(r.checkpoint.pass,false);assert.deepEqual(r.stagedFiles,[]);
 });
 test('两个成功来源配额只有一个来源证据时仍失败，不双计retry或first原件',()=>{
  const r=run({wanted:2});assert.equal(r.status,0,r.stderr);assert.equal(r.checkpoint.observed,1);assert.equal(r.checkpoint.pass,false);
