@@ -168,5 +168,6 @@ test('真实部署prefix消费固定对象cache，不重建默认源；坏cache�
   if(bad){assert.notEqual(result.status,0);assert.ok(!result.stdout.includes('PREFIX_READY:'));assert.equal(existsSync(join(f.business,'installer-phases')),false);}
   else {assert.equal(result.status,0,result.stderr);assert.ok(result.stdout.includes('PREFIX_READY:'));assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');assert.deepEqual(readFileSync(join(f.cache,'.git/config')),before);assert.throws(()=>git(f.cache,'rev-parse','--verify','HEAD'));}
   assert.equal(existsSync(join(f.business,'.skills-source')),false,'不得回退默认缓存或联网取源');
+  assert.equal(git(f.business,'status','--porcelain=v1','--untracked-files=no'),'','不得改变固定业务源码');
  }finally{f.cleanup();}}
 });
