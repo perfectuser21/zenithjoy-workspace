@@ -101,7 +101,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -153,13 +153,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "ac199a45750882eb80977f3f7623af95e5c920837df0105d4016614a607084ae",
+      "code_digest": "89b1b3fefb6ba55a13796b58472af7d5ecf12ec67963d1d3e5792e4b629e55bc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "c74a154fe918dcca8893b8398510a9b61b197af5fa4c65449ece165fab15d7fa",
-        "current_code_digest": "ac199a45750882eb80977f3f7623af95e5c920837df0105d4016614a607084ae"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "ac199a45750882eb80977f3f7623af95e5c920837df0105d4016614a607084ae",
+        "current_code_digest": "89b1b3fefb6ba55a13796b58472af7d5ecf12ec67963d1d3e5792e4b629e55bc"
       }
     },
     "douyin_video_processing.preflight": {
@@ -270,7 +270,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -294,7 +294,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -325,13 +325,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "4a4b0ec584402fe0662ca594f4aa247b552229e095c549bba7b8785e12de7ad1",
+      "code_digest": "ee2f9f53ded7f268bb2a27ae47eafc78aa5203277ca594cb417820e41ef4345b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "0fde76adb4ba5cb3342ca7a6017d87bc9f23971288f2e78fe1a5798d1e79ae71",
-        "current_code_digest": "4a4b0ec584402fe0662ca594f4aa247b552229e095c549bba7b8785e12de7ad1"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "4a4b0ec584402fe0662ca594f4aa247b552229e095c549bba7b8785e12de7ad1",
+        "current_code_digest": "ee2f9f53ded7f268bb2a27ae47eafc78aa5203277ca594cb417820e41ef4345b"
       }
     },
     "douyin_video_processing.dedup": {
@@ -434,7 +434,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -486,13 +486,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "ba593fb96510ebd3e078b8812027713a6ef561e54709397a11adb30450383e31",
+      "code_digest": "55f5551873fe634fdbcba9a1d82cc05b1c0373ba3078530a5e2ef80f7a7732e8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "6ef0069e00398e75609b72acd567b1208ede55e057c28a8d9a5a0740072dcde7",
-        "current_code_digest": "ba593fb96510ebd3e078b8812027713a6ef561e54709397a11adb30450383e31"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "ba593fb96510ebd3e078b8812027713a6ef561e54709397a11adb30450383e31",
+        "current_code_digest": "55f5551873fe634fdbcba9a1d82cc05b1c0373ba3078530a5e2ef80f7a7732e8"
       }
     },
     "douyin_video_processing.qualification": {
@@ -595,7 +595,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -689,13 +689,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "ebb85dda6d047f9104e3bd2167a542013df6011caa75116e0ec1d3f1d8b18ffa",
+      "code_digest": "93a55a7d237b4d79877b95ffa9320e46add0ff4ad59e08693ccfc6525c10d224",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "4153dba67bb25880c78cc76892ea5ba313af483299d3ff271f67c91ad994e87c",
-        "current_code_digest": "ebb85dda6d047f9104e3bd2167a542013df6011caa75116e0ec1d3f1d8b18ffa"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "ebb85dda6d047f9104e3bd2167a542013df6011caa75116e0ec1d3f1d8b18ffa",
+        "current_code_digest": "93a55a7d237b4d79877b95ffa9320e46add0ff4ad59e08693ccfc6525c10d224"
       }
     },
     "douyin_video_processing.collection": {
@@ -827,7 +827,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -879,13 +879,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "b713f295d58656332ce2a4b4c159877ebff2bacdb9984872fa5c1efd24d0c3cf",
+      "code_digest": "2f4d63f0d20601b6375920f7e133d5e6180169435a08476a5da1295b7ddf3cc3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "d7ece542a57547bf8d146894617955e60e84bd9a5608ab295905f95357541fe2",
-        "current_code_digest": "b713f295d58656332ce2a4b4c159877ebff2bacdb9984872fa5c1efd24d0c3cf"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "b713f295d58656332ce2a4b4c159877ebff2bacdb9984872fa5c1efd24d0c3cf",
+        "current_code_digest": "2f4d63f0d20601b6375920f7e133d5e6180169435a08476a5da1295b7ddf3cc3"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -989,7 +989,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -1036,13 +1036,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "b827b87146a0991e4ea8d0d684b98446b33a49770a68b7b2347211ad5b2cf2f0",
+      "code_digest": "a43c9b216333bb1eb6bac35a751ea227d6f12c8d4a8dbdad81b31830ffaab4be",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "982ae103a67cfd1b7eaf1acdd9e5736bd55c5b645cc9408aa09fbdbc0712df70",
-        "current_code_digest": "b827b87146a0991e4ea8d0d684b98446b33a49770a68b7b2347211ad5b2cf2f0"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "b827b87146a0991e4ea8d0d684b98446b33a49770a68b7b2347211ad5b2cf2f0",
+        "current_code_digest": "a43c9b216333bb1eb6bac35a751ea227d6f12c8d4a8dbdad81b31830ffaab4be"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1482,7 +1482,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -1506,7 +1506,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -1565,13 +1565,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "64ad716de9777f2263c7033c7c9b0ccc793e5cfae931197a20c947f14fcebc71",
+      "code_digest": "6e3d4b1db969600136106712d54d7c6bc01fd7fa754870f6d4fd460b7110c8b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "da9089f333a8de6913620e6440546574ab99a8e4ab6147ad7c197076d83b9774",
-        "current_code_digest": "64ad716de9777f2263c7033c7c9b0ccc793e5cfae931197a20c947f14fcebc71"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "64ad716de9777f2263c7033c7c9b0ccc793e5cfae931197a20c947f14fcebc71",
+        "current_code_digest": "6e3d4b1db969600136106712d54d7c6bc01fd7fa754870f6d4fd460b7110c8b2"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1674,7 +1674,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -1733,13 +1733,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158",
+      "code_digest": "d5e637c980fcabcc13403a2fe994c8a3c75b8c6e326cc5d1fd4305969d3c378d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "abf3e29ff0f6972554ece81d91740d1fd399369478e4c05e536aea9a6ab15798",
-        "current_code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158",
+        "current_code_digest": "d5e637c980fcabcc13403a2fe994c8a3c75b8c6e326cc5d1fd4305969d3c378d"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1842,7 +1842,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -1901,13 +1901,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158",
+      "code_digest": "d5e637c980fcabcc13403a2fe994c8a3c75b8c6e326cc5d1fd4305969d3c378d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "abf3e29ff0f6972554ece81d91740d1fd399369478e4c05e536aea9a6ab15798",
-        "current_code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158",
+        "current_code_digest": "d5e637c980fcabcc13403a2fe994c8a3c75b8c6e326cc5d1fd4305969d3c378d"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2011,7 +2011,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "de54290be6a48b09dd4d75959aef688f5fab4bee3e672e0419fe1a51dfd45f37"
+          "sha256": "ec2c106a499fe6b693f008d30977fa1d95185ff0e9d70eeec499c32d1265ab17"
         },
         {
           "kind": "code",
@@ -2072,13 +2072,13 @@
           "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
         }
       ],
-      "code_digest": "56db7c4b3af021c6d3ff0a2b100f248807526f27f57485138c55d8331d04152d",
+      "code_digest": "1ef591fb1ff2f92b789dcbebf20db48bc1250a9072cc8c02eb664b32f47c9e26",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅search-video-tab最终严格selected后原子提交契约canonical XML并保首点和重试诊断；定位、点击和等待预算、权限、业务合格判据与Skill方法及输入输出保持不变；文件提交失败仍失败。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "63514568af698a9bfcdba797c886509d6baa204c645ee5b73cfc12b4053d412f",
-        "current_code_digest": "56db7c4b3af021c6d3ff0a2b100f248807526f27f57485138c55d8331d04152d"
+        "reason": "nonce复制阶段复用既有原生长按/COPY/MOVE_END/确切长度删除，逐阶段新增前台和原字段证据；保留原精确nonce追加粘贴、返回详情及业务判据、权限、配额和截止，不改变Skill输入输出合同。Honor真实恢复仍须独占实机验收。",
+        "reviewed_by": "codex:/root",
+        "previous_code_digest": "56db7c4b3af021c6d3ff0a2b100f248807526f27f57485138c55d8331d04152d",
+        "current_code_digest": "1ef591fb1ff2f92b789dcbebf20db48bc1250a9072cc8c02eb664b32f47c9e26"
       }
     }
   },
