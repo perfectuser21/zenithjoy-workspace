@@ -133,6 +133,8 @@ test('七类非时序身份断言显式复用唯一wait_ms副本，真实录制�
  const recording=join(root,'services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs');
  assert.ok(existsSync(recording),'完整录音边界必须是独立真实test入口');
  const records=readFileSync(recording,'utf8');
+ assert.doesNotMatch(records,/\bshareWave\(/,'分享树两例应保留在实际shareWave定义所在identity入口');
+ for(const name of ['视频tab机会性策略只做一次dump，失败不发送全局媒体toggle','视频tab机会性策略接受完整新鲜树，不额外dump或toggle'])assert.ok(source.includes(name),name);
  for(const [name,body] of [['identity',source],['recording',records]])assert.ok(body.split('\n').length<=501,name+'必须不超过500行');
  assert.match(records,/recordBoundary\(\{captureMode:'delayed_growth'\}\)/,'迟到媒体保留真实等待');
  assert.match(records,/workflowRemainingSeconds:5/,'cleanup预算边界仍真实等待');
