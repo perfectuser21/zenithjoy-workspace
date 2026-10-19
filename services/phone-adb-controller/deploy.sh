@@ -268,7 +268,7 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py adb-existing-route.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
+  phone-lock-lib.sh phone-lock-helper.py adb-existing-route.py adb-managed-client.py adb-host-service.py adb-host-maintenance.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
   decode-recording.py runtime/scrcpy-runtime.py runtime/scrcpy-adb-shim.py runtime/runtime-policy.json runtime/runtime-policy-sdk33.json
   bypass-report.sh
 )
@@ -279,7 +279,7 @@ DEVICE_SH_FILES=(
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
   brain-lock.sh harvest-fallback.sh
-  workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh
+  workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh install-adb-host-service.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。

@@ -21,6 +21,9 @@ wall_load_env() {
   # shellcheck disable=SC1090
   . "$ZJ_WALL_ENV"
   [ -n "${ZJ_API_BASE:-}" ] && [ -n "${ZJ_LICENSE:-}" ] || { wall_log "wall.env 缺 ZJ_API_BASE/ZJ_LICENSE"; return 1; }
+  if [ "${ZJ_ADB_HOST_CONFIG+x}" = x ] || [ -e "$HOME/.config/zenithjoy/adb-service.json" ] || [ -L "$HOME/.config/zenithjoy/adb-service.json" ]; then
+    ADB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/adb-managed-client.py"
+  fi
   ZJ_API_BASE="${ZJ_API_BASE%/}"
   mkdir -p "$ZJ_WALL_STATE_DIR" "$ZJ_WALL_TMP" 2>/dev/null
   return 0

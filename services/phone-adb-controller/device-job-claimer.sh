@@ -32,6 +32,9 @@ CONF="${ZJ_CONF:-$HOME/.config/zenithjoy/wall.env}"
 API_BASE="${ZJ_API_BASE:-}"
 TOKEN="${ZJ_INTERNAL_TOKEN:-}"
 ADB="${ZJ_ADB:-adb}"
+if [[ -n "${ZJ_ADB_HOST_CONFIG+x}" || -e "$HOME/.config/zenithjoy/adb-service.json" || -L "$HOME/.config/zenithjoy/adb-service.json" ]]; then
+  ADB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/adb-managed-client.py"
+fi
 PHONE_CTL="${ZJ_PHONE_CTL:-$HOME/bin-harvest/douyin-phone-adb}"
 # profile 是**工作机本地**的概念（douyin-phone-adb 的 registry：<profile名>\t<serial>\t…），
 # 中台不知道也不该知道。派单只给机身序列号，profile 在这里按 serial 现查。

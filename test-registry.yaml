@@ -7695,3 +7695,43 @@ agent_suite:
   status: active
   product: AI员工
   note: "固定main来源续版先记账真实验证、CAS登记与版头PR自修，不代表手机执行"
+
+- id: managed-adb-policy
+  path: services/phone-adb-controller/__tests__/managed-adb-policy.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "受管宿主拒绝附加ADB服务、错误端口及缺失策略；不等于真实手机业务验收"
+
+- id: managed-adb-client
+  path: services/phone-adb-controller/__tests__/managed-adb-client.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "普通调用共享固定端点且拒绝服务生命周期；保留未知状态；不等于真实手机业务验收"
+
+- id: adb-host-service
+  path: services/phone-adb-controller/__tests__/adb-host-service.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单一前台ADB子进程与独占锁；暂存不激活；不等于真实手机业务验收"
+
+- id: adb-host-maintenance
+  path: services/phone-adb-controller/__tests__/adb-host-maintenance.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "维护前核中央与本地锁、来源与进程身份；一次切换日志保留；不等于真实手机业务验收"
+
+- id: managed-adb-deployment
+  path: services/phone-adb-controller/__tests__/managed-adb-deployment.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "统一入口随正式双根部署并永久运行完整回归；不等于真实手机业务验收"
