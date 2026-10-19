@@ -126,6 +126,21 @@
       "owner_path": "services/phone-adb-controller/decode-recording.py",
       "path": "services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs",
       "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/activity-commander.mjs",
+      "path": "services/phone-adb-controller/__tests__/commander-single-owner.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/activity-commander.mjs",
+      "path": "services/phone-adb-controller/__tests__/commander-owner-reservation.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/activity-commander.mjs",
+      "path": "services/phone-adb-controller/__tests__/commander-verification-recovery.test.mjs",
+      "role": "verification"
     }
   ]
 }

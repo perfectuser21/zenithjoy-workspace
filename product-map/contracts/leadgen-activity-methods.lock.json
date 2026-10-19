@@ -45,7 +45,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -59,7 +59,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -122,7 +122,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -143,7 +150,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -153,13 +160,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "0f7164f135a28ae510ddb536820d45a5feaa58f38d5e682c48e7e4b9d27eaf11",
+      "code_digest": "a972daaeb20701d3c89f7a224adceb71f835d2f7cd8ce1b5cb6146c6168930b1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "ac199a45750882eb80977f3f7623af95e5c920837df0105d4016614a607084ae",
-        "current_code_digest": "0f7164f135a28ae510ddb536820d45a5feaa58f38d5e682c48e7e4b9d27eaf11"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "0f7164f135a28ae510ddb536820d45a5feaa58f38d5e682c48e7e4b9d27eaf11",
+        "current_code_digest": "a972daaeb20701d3c89f7a224adceb71f835d2f7cd8ce1b5cb6146c6168930b1"
       }
     },
     "douyin_video_processing.preflight": {
@@ -213,7 +220,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -227,7 +234,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -301,7 +308,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -322,16 +336,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         }
       ],
-      "code_digest": "3b0a8c801bdfa1e8321c172b26595d969636faaa069281eda5e7ad865484f4b8",
+      "code_digest": "3d8575c78756bfcbacf11772a7ae99e0a282c222478d05cbfa5ae12511e98ddc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "4a4b0ec584402fe0662ca594f4aa247b552229e095c549bba7b8785e12de7ad1",
-        "current_code_digest": "3b0a8c801bdfa1e8321c172b26595d969636faaa069281eda5e7ad865484f4b8"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "3b0a8c801bdfa1e8321c172b26595d969636faaa069281eda5e7ad865484f4b8",
+        "current_code_digest": "3d8575c78756bfcbacf11772a7ae99e0a282c222478d05cbfa5ae12511e98ddc"
       }
     },
     "douyin_video_processing.dedup": {
@@ -378,7 +392,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -392,7 +406,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -455,7 +469,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -476,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -486,13 +507,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "c4bf611cf19add5636d4f9263b3f5844fd214afa481d0500647152d9766a5343",
+      "code_digest": "dbd6716eb9d37e587b03c996b61dc6daac405d2169a52e62f93bec0b016f3f41",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "ba593fb96510ebd3e078b8812027713a6ef561e54709397a11adb30450383e31",
-        "current_code_digest": "c4bf611cf19add5636d4f9263b3f5844fd214afa481d0500647152d9766a5343"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "c4bf611cf19add5636d4f9263b3f5844fd214afa481d0500647152d9766a5343",
+        "current_code_digest": "dbd6716eb9d37e587b03c996b61dc6daac405d2169a52e62f93bec0b016f3f41"
       }
     },
     "douyin_video_processing.qualification": {
@@ -539,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -553,7 +574,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -616,7 +637,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -630,7 +658,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -689,13 +717,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "c3fea6e0d6f9a75802784f879e5aebd8360e5ec1d77f7164f8d6892bd2d4b620",
+      "code_digest": "38ca8a8619ef735155cbffad42affcd0ea2a35d8385969e5b5d276665fc4077a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "ebb85dda6d047f9104e3bd2167a542013df6011caa75116e0ec1d3f1d8b18ffa",
-        "current_code_digest": "c3fea6e0d6f9a75802784f879e5aebd8360e5ec1d77f7164f8d6892bd2d4b620"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "c3fea6e0d6f9a75802784f879e5aebd8360e5ec1d77f7164f8d6892bd2d4b620",
+        "current_code_digest": "38ca8a8619ef735155cbffad42affcd0ea2a35d8385969e5b5d276665fc4077a"
       }
     },
     "douyin_video_processing.collection": {
@@ -749,7 +777,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -763,7 +791,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -834,7 +862,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -855,7 +890,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -879,13 +914,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "c127b71f52eb9969fb24b028f2faefd30545479ed0206a067bdea69153519075",
+      "code_digest": "bb6c92445968ed5e501a6b4258dfd81d310c02985824c1ea9e90f8752614bade",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "b713f295d58656332ce2a4b4c159877ebff2bacdb9984872fa5c1efd24d0c3cf",
-        "current_code_digest": "c127b71f52eb9969fb24b028f2faefd30545479ed0206a067bdea69153519075"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "c127b71f52eb9969fb24b028f2faefd30545479ed0206a067bdea69153519075",
+        "current_code_digest": "bb6c92445968ed5e501a6b4258dfd81d310c02985824c1ea9e90f8752614bade"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -932,7 +967,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -946,7 +981,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -1012,7 +1047,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -1033,16 +1075,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         }
       ],
-      "code_digest": "88bf0bd2f336e98488b55290ca644f16455444e411a779d6c72c27eccc3313da",
+      "code_digest": "9861fc97b49685729cbed22a3cd81d330dfa6e3ffc0558048b3c9e8fc59da1a8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "b827b87146a0991e4ea8d0d684b98446b33a49770a68b7b2347211ad5b2cf2f0",
-        "current_code_digest": "88bf0bd2f336e98488b55290ca644f16455444e411a779d6c72c27eccc3313da"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "88bf0bd2f336e98488b55290ca644f16455444e411a779d6c72c27eccc3313da",
+        "current_code_digest": "9861fc97b49685729cbed22a3cd81d330dfa6e3ffc0558048b3c9e8fc59da1a8"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1089,7 +1131,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -1103,7 +1145,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -1145,7 +1187,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -1166,7 +1215,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -1176,13 +1225,13 @@
           "sha256": "3b111cd2d9297b5e1314cbceb730cf6049a3c26ff62ab4cf43f15c51a342f823"
         }
       ],
-      "code_digest": "955f6e7795fcd4a8ab22529ed99c5e27962068dd567fb19820a8a68df77ec45a",
+      "code_digest": "8bc302452f7f808f71310ad2954ea141cea3663e5acd904f22a138c3c045e40e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
-        "reviewed_by": "codex:/root/fixed_source_final_review",
-        "previous_code_digest": "80b78460630217e64c482d323784b9db9fd15876d7062acc5bbc6971af05104e",
-        "current_code_digest": "955f6e7795fcd4a8ab22529ed99c5e27962068dd567fb19820a8a68df77ec45a"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "955f6e7795fcd4a8ab22529ed99c5e27962068dd567fb19820a8a68df77ec45a",
+        "current_code_digest": "8bc302452f7f808f71310ad2954ea141cea3663e5acd904f22a138c3c045e40e"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1236,7 +1285,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -1250,7 +1299,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -1292,7 +1341,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -1313,7 +1369,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -1372,13 +1428,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c062c0d6dddd0cfa427deaffe15832444f98d7f7bf33756dd14914de21388337",
+      "code_digest": "d6355143d7f09f4e152da924bfb229dd8015b1e59861c9b4946df1b9c004fd6c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅v2失败读取官方精确原run/session持久终态；closed nonce、原成功模型与terminalReply、业务合同、输入输出和权限不变；仍受原cleanup预算。",
-        "reviewed_by": "codex:/root/fixed_source_final_review",
-        "previous_code_digest": "63e9fe6af78b4b7019a957969386a082c3b85ac369f743d5bfdd89a97800c6bd",
-        "current_code_digest": "c062c0d6dddd0cfa427deaffe15832444f98d7f7bf33756dd14914de21388337"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "c062c0d6dddd0cfa427deaffe15832444f98d7f7bf33756dd14914de21388337",
+        "current_code_digest": "d6355143d7f09f4e152da924bfb229dd8015b1e59861c9b4946df1b9c004fd6c"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1425,7 +1481,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -1439,7 +1495,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -1513,7 +1569,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -1548,7 +1611,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         },
         {
           "kind": "code",
@@ -1565,13 +1628,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "513a7bad20b03d819f513953af57ca23c89e8608967b1ea590231a9be0c0a2ca",
+      "code_digest": "faaec17a2770b8207b505eecfcfa5cbbea00c8b641d35e01326feefc36c61d53",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "64ad716de9777f2263c7033c7c9b0ccc793e5cfae931197a20c947f14fcebc71",
-        "current_code_digest": "513a7bad20b03d819f513953af57ca23c89e8608967b1ea590231a9be0c0a2ca"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "513a7bad20b03d819f513953af57ca23c89e8608967b1ea590231a9be0c0a2ca",
+        "current_code_digest": "faaec17a2770b8207b505eecfcfa5cbbea00c8b641d35e01326feefc36c61d53"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1618,7 +1681,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -1632,7 +1695,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -1695,7 +1758,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -1730,16 +1800,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         }
       ],
-      "code_digest": "86e58eb9ecb02bd0edccf35c2dc1b2b7b5b7f44728dda4b568f7a8a0bc86d4ab",
+      "code_digest": "81ec3271ae9201e96eecff966e04d3523e69c85259028b480cebc19e64a0896b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158",
-        "current_code_digest": "86e58eb9ecb02bd0edccf35c2dc1b2b7b5b7f44728dda4b568f7a8a0bc86d4ab"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "86e58eb9ecb02bd0edccf35c2dc1b2b7b5b7f44728dda4b568f7a8a0bc86d4ab",
+        "current_code_digest": "81ec3271ae9201e96eecff966e04d3523e69c85259028b480cebc19e64a0896b"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -1786,7 +1856,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -1800,7 +1870,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -1863,7 +1933,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -1898,16 +1975,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         }
       ],
-      "code_digest": "86e58eb9ecb02bd0edccf35c2dc1b2b7b5b7f44728dda4b568f7a8a0bc86d4ab",
+      "code_digest": "81ec3271ae9201e96eecff966e04d3523e69c85259028b480cebc19e64a0896b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "cd9494cb974d1b36ace8fac4d977bf1977ef7fd285b58792751f3952f48b9158",
-        "current_code_digest": "86e58eb9ecb02bd0edccf35c2dc1b2b7b5b7f44728dda4b568f7a8a0bc86d4ab"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "86e58eb9ecb02bd0edccf35c2dc1b2b7b5b7f44728dda4b568f7a8a0bc86d4ab",
+        "current_code_digest": "81ec3271ae9201e96eecff966e04d3523e69c85259028b480cebc19e64a0896b"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -1954,7 +2031,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "65329d3a34421090ed8efb1fdfd1548a710ec7bf0f529d168afb34d3b7997024"
+          "sha256": "2160f87a2dd2128585eb5dfc5a682ddd1d8648050f40795a8f83f8e26a73c531"
         },
         {
           "kind": "code",
@@ -1968,7 +2045,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "dd55c37dc016a66c16321300f19f093944e465e682466d57ee9bfb3470ba6741"
+          "sha256": "b7f70ac02483575a847bdfe2b2aea351370083a94238dad50f1ee39310457ddf"
         },
         {
           "kind": "code",
@@ -2034,7 +2111,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3712e4ce1ea0fe12ef0b71fc71d3d008ff7652d5770d94eb9b7cd93425c1f6f7"
+          "sha256": "7e86eb724b3d4fb9b302f3f96b5bad564c1956caffc6dbd56ff7164827a661ca"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-handlers.mjs",
+          "revision": "contract",
+          "sha256": "6d9f17a1181a793c8f75045198ecd54d46bd5592709eaa3e8189983793689b45"
         },
         {
           "kind": "code",
@@ -2069,16 +2153,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "48d7c8575d361fd60fc73e6eb26140f70c7ccaeb45cc2f59027ddd0bcfa73c72"
+          "sha256": "4058a4db9f1a96b5eaaa0e011dfd566eb0baf0b8ade558174fc3ec742b993a64"
         }
       ],
-      "code_digest": "960f911b5bd0c8839772d69fea836644942a3a4fcbd5c1f500e5c5242aa732de",
+      "code_digest": "0a664648e6a1f7483f7abad457f9500fe19f680deec8a6a9b6ae40f0fa9cc21c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原生复制分阶段验证前台与唯一精确nonce字段；恢复非SDK31旧无owner入口权限，SDK31及显式owner仍按原锁校验。无新权限或业务合格判据变化。",
-        "reviewed_by": "codex:/root/source_publication_review",
-        "previous_code_digest": "56db7c4b3af021c6d3ff0a2b100f248807526f27f57485138c55d8331d04152d",
-        "current_code_digest": "960f911b5bd0c8839772d69fea836644942a3a4fcbd5c1f500e5c5242aa732de"
+        "reason": "独立复核：原业务handler函数与f6e逐字一致，仅机械拆分并补完整绑定；监督统一到原work-commander，同run核验失败经既有受限恢复后再核验，未知执行持久拒重发。输入输出、业务判据、方法正文、资源权限、重试次数与截止不变；不承诺Skill失败无限自动修复。",
+        "reviewed_by": "codex:fixed-source-final-review",
+        "previous_code_digest": "960f911b5bd0c8839772d69fea836644942a3a4fcbd5c1f500e5c5242aa732de",
+        "current_code_digest": "0a664648e6a1f7483f7abad457f9500fe19f680deec8a6a9b6ae40f0fa9cc21c"
       }
     }
   },
