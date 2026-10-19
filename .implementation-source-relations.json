@@ -131,16 +131,6 @@
       "owner_path": "services/phone-adb-controller/deployment-guard.py",
       "path": "services/phone-adb-controller/__tests__/commander-v2-deployment.test.mjs",
       "role": "verification"
-    },
-    {
-      "owner_path": "services/phone-adb-controller/commander/wf-v2-io.py",
-      "path": "services/phone-adb-controller/__tests__/commander-v2-deployment.test.mjs",
-      "role": "verification"
-    },
-    {
-      "owner_path": "services/phone-adb-controller/commander/wf-v2.py",
-      "path": "services/phone-adb-controller/__tests__/fixtures/commander-v2-runtime.mjs",
-      "role": "verification"
     }
   ]
 }
