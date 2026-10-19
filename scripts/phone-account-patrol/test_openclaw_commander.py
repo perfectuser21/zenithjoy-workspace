@@ -45,7 +45,11 @@ class SharedValidationTests(unittest.TestCase):
         self.release = self.state / 'releases' / shared.PHONE_SOURCE_REVISION
         self.release.mkdir(parents=True)
         for name in shared.EXPECTED_SHA256:
-            (self.release / name).write_bytes(pathlib.Path(__file__).with_name(name).read_bytes())
+            # 已验收的旧release必须使用原Git字节；当前collector/预检升级不能冒旧版。
+            fixture = pathlib.Path(__file__).parent / 'fixtures' / ('frozen-' + shared.PHONE_SOURCE_REVISION) / (name + '.txt')
+            data = fixture.read_bytes() if fixture.is_file() else pathlib.Path(__file__).with_name(name).read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), shared.EXPECTED_SHA256[name], name)
+            (self.release / name).write_bytes(data)
         self.deployment = {'release': str(self.release), 'source_revision': shared.PHONE_SOURCE_REVISION,
                            'single_workflow_id': WF, 'batch_workflow_id': TASK, 'project_id': PROJECT,
                            'schedule_id': CHILD, 'sha256': dict(shared.EXPECTED_SHA256)}
