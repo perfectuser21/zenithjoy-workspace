@@ -90,3 +90,40 @@ test('旧已返回turn不能清掉同owner新reservation，已返回旁证不能
  assert.throws(()=>first.returned('late old response'),/COMMANDER_OWNER_TURN_UNRESOLVED/);assert.deepEqual(readFileSync(file),bytes);
  next.returned('next official');next.close();assert.doesNotThrow(()=>assertWorkflowOwnerAvailable(scope,{home}));
 });
+
+function nativeFailureProcess(home,mode){
+ const script=`import {readFileSync,writeFileSync,existsSync,readdirSync} from 'node:fs';import {join} from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
+ import {openClawCommander,runWorkflow,assertWorkflowOwnerAvailable} from ${JSON.stringify(modulePath)};
+ import {runSkillAgent} from ${JSON.stringify(transportPath)};
+ const home=process.argv[1],mode=process.argv[2],scope=${JSON.stringify(scope)};let cleaned=0,quarantined=0,result,error;
+ if(mode==='consult-not-started'){
+  result=await runWorkflow({context:scope,activities:[{key:'scoring'},{key:'cleanup'}],handlers:{scoring:async()=>{throw Error('must not execute');},cleanup:async()=>{cleaned++;return {};}},commander:openClawCommander({home}),record:async()=>{},quarantine:async()=>{quarantined++;return {verified:true};}});
+ }else if(mode==='handoff-not-started'||mode==='forged-start-failure'){
+  result=await runSkillAgent({...scope,protocol:'leadgen-activity-v1',activity_key:'scoring',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.0',text:'fixture'}},{home,verifyWorkspace:()=>true,...(mode==='forged-start-failure'?{execute:async()=>{throw Error('EXECUTION_START_FAILED');}}:{})});
+ }else{
+  const execute=async()=>{await promisify(execFile)(process.execPath,['-e','require("fs").writeFileSync('+JSON.stringify(join(home,'actually-started'))+',"started")']);readFileSync(join(home,'missing-after-process'));};
+  try{await openClawCommander({home,execute})(scope);}catch(e){error={execution_stopped:e.executionStopped};}
+ }
+ let available=true;try{assertWorkflowOwnerAvailable(scope,{home});}catch{available=false;}
+ const directory=join(home,'.openclaw/leadgen-owner-turns'),files=readdirSync(directory);
+ process.stdout.write(JSON.stringify({result,error,cleaned,quarantined,available,actually_started:existsSync(join(home,'actually-started')),not_started:files.filter(x=>x.endsWith('.not_started.json')).map(x=>JSON.parse(readFileSync(join(directory,x),'utf8'))),pending:files.filter(x=>x.endsWith('.pending.json'))}));`;
+ return JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',script,home,mode],{encoding:'utf8',env:{...process.env,PATH:home},timeout:10000}));
+}
+
+test('真实原生pre-spawn失败后可沿原cleanup退路清场，但整体仍failed',t=>{
+ const r=nativeFailureProcess(isolated(t),'consult-not-started');
+ assert.equal(r.result.status,'failed');assert.equal(r.cleaned,1);assert.equal(r.quarantined,0);assert.equal(r.available,true);assert.equal(r.pending.length,0);
+ assert.equal(r.not_started.length,3,'业务前与cleanup前后均是真实未spawn失败，不伪returned成功');
+ for(const record of r.not_started)assert.equal(record.status,'not_started');
+});
+
+test('Skill父真实未spawn可让原owner清理，已保留的launch预留不改写',t=>{
+ const home=isolated(t),r=nativeFailureProcess(home,'handoff-not-started');
+ assert.equal(r.result.status,'blocked');assert.equal(r.result.execution_stopped,true);assert.equal(r.available,true);assert.equal(r.not_started.length,1);assert.equal(r.pending.length,0);
+ const runs=join(home,'.openclaw/leadgen-activity-runs');const dir=join(runs,readdirSync(runs)[0]);assert.equal(existsSync(join(dir,'launch-reserved.json')),true);assert.equal(existsSync(join(dir,'agent-request.json')),true);assert.equal(existsSync(join(dir,'spawn-receipt.json')),false);
+});
+
+test('已真实执行后的FS ENOENT与伪未启动错误都不能解锁owner',t=>{
+ const fs=nativeFailureProcess(isolated(t),'post-start-filesystem');assert.equal(fs.actually_started,true);assert.equal(fs.error.execution_stopped,false);assert.equal(fs.available,false);assert.equal(fs.not_started.length,0);assert.equal(fs.pending.length,1);
+ const forged=nativeFailureProcess(isolated(t),'forged-start-failure');assert.equal(forged.result.status,'unknown');assert.equal(forged.result.execution_stopped,false);assert.equal(forged.available,false);assert.equal(forged.not_started.length,0);assert.equal(forged.pending.length,1);
+});
