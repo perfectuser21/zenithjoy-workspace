@@ -43,3 +43,11 @@ test('dashboard rollback serializes against every HK production deployment',()=>
   assert.deepEqual(w.concurrency,{group:'zenithjoy-production-hk','cancel-in-progress':false});
   assert.equal(w.jobs['rollback-dashboard'].concurrency,undefined);
 });
+test('dashboard rollback uses trusted verified-content controller instead of mutable legacy rollback',()=>{
+ const w=load('rollback-dashboard-prod'),j=w.jobs['rollback-dashboard'];
+ assert.equal(j.if,"github.ref == 'refs/heads/main'");
+ assert.ok(j.steps.some(s=>s.uses==='actions/checkout@v4'));
+ const remote=j.steps.find(s=>s.uses==='appleboy/ssh-action@v1.0.3');
+ assert.match(remote.with.script,/frontend-release\.sh[" ]+--rollback/);
+ assert.doesNotMatch(remote.with.script,/\$REPO\/rollback\.sh/);
+});
