@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,statSync,existsSync,realpathSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,statSync,existsSync,realpathSync,symlinkSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
@@ -49,4 +50,31 @@ for(const options of [{badSyntax:true},{missing:true}])test('M4 syntax failure o
  assert.equal(readFileSync(join(r.home,'bin-harvest','two.mjs'),'utf8'),r.files['two.mjs']);
  assert.equal(readFileSync(join(r.home,'bin-harvest','plans/test.steps.json'),'utf8'),r.files['plans/test.steps.json']);
  assert.equal(r.special,'before\nkickstart\n');
+});
+function bundle(t){
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'m4-pack-reject-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const source=join(root,'source'),home=join(root,'home');mkdirSync(source);mkdirSync(home);mkdirSync(join(source,'nested'));
+ writeFileSync(join(source,'first.json'),'{"ok":true}\n');writeFileSync(join(source,'nested/last.json'),'{"last":true}\n');
+ const archive=join(root,'payload.tar'),tool=join(service,'deployment-m4-payload.py');
+ const r=spawnSync('python3',[tool,'pack',source,archive,'--probe','first.json','nested/last.json'],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ return {root,source,home,archive,tool};
+}
+for(const mutation of ['truncate','extra','duplicate','link','escape','hash','paired'])test('M4 entire staged bundle rejects '+mutation+' before any live file replacement',t=>{
+ const f=bundle(t);const code=`import io,json,tarfile,pathlib,sys\np=pathlib.Path(sys.argv[1]);kind=sys.argv[2]\nif kind=='truncate':p.write_bytes(p.read_bytes()[:100]);sys.exit()\nwith tarfile.open(p) as t: rows=[(m.name,t.extractfile(m).read()) for m in t.getmembers()]\nif kind=='extra':rows.append(('payload/unexpected.json',b'{}'))\nif kind=='duplicate':rows.append(rows[-1])\nif kind=='escape':rows.append(('../escape',b'bad'))\nif kind in ('hash','paired'):\n plan=json.loads(rows[0][1]);plan[0]['sha256']='0'*64 if kind=='hash' else plan[0]['sha256']\n if kind=='paired':plan[0]['path']='douyin-phone-adb'\n rows[0]=(rows[0][0],json.dumps(plan).encode())\nwith tarfile.open(p,'w') as t:\n for name,data in rows:\n  m=tarfile.TarInfo(name);m.size=len(data);t.addfile(m,io.BytesIO(data))\n if kind=='link':\n  m=tarfile.TarInfo('payload/link');m.type=tarfile.SYMTYPE;m.linkname='../outside';t.addfile(m)\n`;
+ const changed=spawnSync('python3',['-c',code,f.archive,mutation],{encoding:'utf8'});assert.equal(changed.status,0,changed.stderr);
+ const hash=createHash('sha256').update(readFileSync(f.archive)).digest('hex');
+ const r=spawnSync('python3',[f.tool,'install',f.archive,hash,'after','1'],{env:{...process.env,HOME:f.home},encoding:'utf8'});
+ assert.notEqual(r.status,0,r.stdout);assert.match(r.stderr,/M4_PAYLOAD_INVALID/);assert.equal(existsSync(join(f.home,'bin-harvest/first.json')),false);
+});
+test('later destination parent link is rejected before the first ordinary target is replaced',t=>{
+ const f=bundle(t),root=join(f.home,'bin-harvest'),outside=join(f.root,'outside');mkdirSync(root);mkdirSync(outside);symlinkSync(outside,join(root,'nested'));
+ const hash=createHash('sha256').update(readFileSync(f.archive)).digest('hex');
+ const r=spawnSync('python3',[f.tool,'install',f.archive,hash,'after','1'],{env:{...process.env,HOME:f.home},encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.equal(existsSync(join(root,'first.json')),false,'preflight all destination parents before replacing any file');
+});
+test('missing remote syntax interpreter is FAILED and continues like the original SSH exit127',t=>{
+ const f=bundle(t),hash=createHash('sha256').update(readFileSync(f.archive)).digest('hex');
+ const code=`import importlib.util,sys,types\nspec=importlib.util.spec_from_file_location('batch',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\ncount=0\ndef run(*a,**k):\n global count\n count+=1\n if count==1:raise FileNotFoundError('fixture interpreter missing')\n return types.SimpleNamespace(returncode=0,stderr='')\nm.subprocess.run=run\nsys.exit(m.install(types.SimpleNamespace(archive=sys.argv[2],sha256=sys.argv[3],phase='after',has_zsh='1')))\n`;
+ const r=spawnSync('python3',['-c',code,f.tool,f.archive,hash],{env:{...process.env,HOME:f.home},encoding:'utf8'});
+ assert.equal(r.status,3,r.stderr);assert.equal(readFileSync(join(f.home,'bin-harvest/nested/last.json'),'utf8'),'{"last":true}\n');
 });
