@@ -4,7 +4,7 @@ import {resolve,join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {isDeepStrictEqual} from 'node:util';
-import {AUTHORING_FILES,gitSource,greaterVersion,isAuthoringRepositoryOrigin} from './authoring-source-version.mjs';
+import {AUTHORING_FILES,gitSource,isAuthoringRepositoryOrigin} from './authoring-source-version.mjs';
 import {renewDefinitions} from './authoring-main-source-core.mjs';
 import {scratchRegistration} from './authoring-source-scratch.mjs';
 import {loadAuthoringScope} from './authoring-source-scope.mjs';
