@@ -103,15 +103,17 @@ test('a Workflow Skill absent before first adoption is allowed only when no hist
 // The extracted implementation is business code, so every frozen method must
 // change its code identity when those exact handler bytes change.
 test('real extracted handlers belong to every consumer method source closure',t=>{
- const {root}=fixture(t),path='services/phone-adb-controller/leadgen-handlers.mjs';
+ for(const name of ['leadgen-handlers.mjs','leadgen-scoring-handler.mjs','leadgen-policy-review.js']){
+ const {root}=fixture(t),path='services/phone-adb-controller/'+name;
  put(root,path,readFileSync(join(source,path)));
  const before=collectMethods(root);
  put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated handler-byte mutation\n');
  const after=collectMethods(root);
  for(const [ref,method] of Object.entries(before.activities)){
-  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted actual handler bytes');
+  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted actual '+name+' bytes');
   assert.equal(after.activities[ref].contract_digest,method.contract_digest);
   assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
+ }
  }
 });
 
