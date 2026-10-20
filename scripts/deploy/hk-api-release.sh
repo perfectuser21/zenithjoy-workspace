@@ -101,6 +101,9 @@ if [[ "$ACTION" == rollback ]]; then
   override "$TARGET" "$IMAGE"
 else
   if [[ "$TARGET" == "$CURRENT" ]]; then echo "Already healthy at $CURRENT"; exit 0; fi
+  if [[ -f "$RELEASES/$TARGET/release.json" ]] && [[ "$(json_field "$RELEASES/$TARGET/release.json" verified)" == True ]]; then
+    fail 'verified release already retained; use rollback to restore its exact image'
+  fi
   source_for "$TARGET"
   IMAGE="zenithjoy-api-prod:candidate-$TARGET"
   override "$TARGET" "$IMAGE"
