@@ -28,6 +28,19 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: policy_review
+    stage: scoring
+    journey_cell: stage:scoring
+    probe:
+      type: metric
+      ref: metrics.policy_review_failures
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 按原run、claim、CID和冻结画像逐行只读语义核验；空批或缺证据不得由存储读回代替。
   - key: pool_advanced
     stage: mark_leads
     journey_cell: stage:mark_leads

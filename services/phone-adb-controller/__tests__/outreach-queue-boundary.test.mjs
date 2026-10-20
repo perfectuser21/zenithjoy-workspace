@@ -41,6 +41,14 @@ test('原Feishu永久预留提交但回复丢失，重启/cleanup不能重新获
  assert.match(f.rows[0].fields['回复结果'],/^\[104 prepared:/);
  }finally{f.clean();}
 });
+test('已领未发原订单若失去政策读回入口，prepare不能发发送许可',async()=>{
+ const f=fakeOriginalOrders();try{
+  const [order]=await queueRequest({...f.input,op:'claim_outreach'},f.deps);
+  const input={...f.input,id:order.id,op:'prepare_outreach',script_id:'fake-B',script_version:'B',message_sha256:f.digest,target_douyin_id:order.douyin_id,profile_url:order.profile_url};
+  await assert.rejects(queueRequest(input,{...f.deps,eligibleOrders:undefined}),/POLICY_PREPARE_NOT_VERIFIED/);
+  assert.match(f.rows[0].fields['回复结果'],/^\[104 claim:/);
+ }finally{f.clean();}
+});
 test('原订单claim之后收件人/链接改变，prepare必须拒绝并且不给phone许可',async()=>{
  const f=fakeOriginalOrders();try{const [order]=await queueRequest({...f.input,op:'claim_outreach'},f.deps);
  f.rows[0].fields['抖音号']='EVIL999';

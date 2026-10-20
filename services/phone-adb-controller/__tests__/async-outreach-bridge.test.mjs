@@ -3,13 +3,18 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {queueRequest}=require('../leadgen-queue.js');
-import {freezeFixture} from './company-config-fixture.mjs';
+import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const cid='11111111-1111-4111-8111-111111111111',lid='22222222-2222-4222-8222-222222222222';
+const policySnapshot=companyFixture();policySnapshot.runtime_config.comment_scoring.audiences=[{id:'test-audience',fields:{'意向信号':'报名','人群描述':'测试人群','排除信号':'泛失业'}}];
+policySnapshot.runtime_config.routing={line_key:'jinuo'};
+const policyDeps={freezeCompanyConfig:async()=>policySnapshot,judgePolicy:async()=>({grade:'A',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'test-audience',matched_rule:'报名',exclusion_rule:null,reason:'咨询报名'}}})};
 function markPool({failOutbox=false}={}) {
- const calls=[],comment={id:cid,line_key:'jinuo',dedup_key:'comment1',nickname:'待核个人',douyin_id:'person987',profile_url:'https://www.douyin.com/user/person987',comment_body:'在哪里报名',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',harvest_batch:'source102',relevance:'相关',intent_grade:'A',judgment_reason:'真实原分档'};
+ const calls=[],comment={id:cid,line_key:'jinuo',dedup_key:'comment1',nickname:'待核个人',douyin_id:'person987',profile_url:'https://www.douyin.com/user/person987',comment_body:'在哪里报名',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',harvest_batch:'source102',relevance:'相关',intent_grade:'A',judgment_reason:'真实原分档',judgment_config:{run_id:'score103',company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,policy_id:policySnapshot.policy_id}};
  const client={async query(sql,args){calls.push({sql,args});
   if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
   if(/SELECT \* FROM zenithjoy.leadgen_comments/.test(sql))return {rows:[comment]};
+  if(/company_config_runs/.test(sql))return {rows:[{snapshot:policySnapshot,company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,run_id:'score103'}]};
+  if(/leadgen_videos/.test(sql))return {rows:[{video_url:comment.source_video_url,title:comment.source_video,line_key:'jinuo',judgment_status:'matched'}]};
   if(/SELECT id, dup_hit_count/.test(sql))return {rows:[]};
   if(/INSERT INTO zenithjoy.leadgen_leads/.test(sql))return {rows:[{id:lid}]};
   if(/SELECT id,line_key,douyin_id FROM zenithjoy.leadgen_leads/.test(sql))return {rows:[{id:lid,line_key:'jinuo',douyin_id:'person987'}]};
@@ -19,7 +24,7 @@ function markPool({failOutbox=false}={}) {
  return {calls,async connect(){return client},query:client.query.bind(client)};
 }
 test('103真实mark入口须同事务保comment→lead桥接意图，旧personal/A无native证明仍unknown',async()=>{
- const pool=markPool();await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},{freezeCompanyConfig:freezeFixture});
+ const pool=markPool();await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},policyDeps);
  const i=pool.calls.findIndex(c=>/INSERT INTO zenithjoy.leadgen_bridge_outbox/.test(c.sql));
  assert.ok(i>0,'PG已标已分拣却没有durable飞书outbox意图，异步104永远读不到');
  assert.ok(i<pool.calls.findIndex(c=>c.sql==='COMMIT'));
@@ -27,7 +32,7 @@ test('103真实mark入口须同事务保comment→lead桥接意图，旧personal
  assert.ok(intent.args.some(v=>typeof v==='string'&&v.includes('unknown')),'无真实主页证据不能以personal/A冒ready');
 });
 test('103标记/outbox插入失败必须原评论与lead事务整体回滚，不丢重放意图',async()=>{
- const pool=markPool({failOutbox:true});await assert.rejects(queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},{freezeCompanyConfig:freezeFixture}),/outbox unavailable/);
+ const pool=markPool({failOutbox:true});await assert.rejects(queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},policyDeps),/outbox unavailable/);
  assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));assert.ok(!pool.calls.some(c=>c.sql==='COMMIT'));
 });
 
@@ -68,7 +73,7 @@ test('103正常mark活动须消费durable bridge，不等待104 preflight',async
 test('桥接POST前durable attempted；响应未知仅GET匹配marker/UID/payload，重放不能POST第二次',async()=>{
  const row=pendingBridge(),pool=bridgeStore(row),events=[],remote=[];let posts=0,gets=0;
  const api={all:async()=>{events.push('get');gets++;if(gets===2)throw Error('first readback unavailable');return remote;},fields:async()=>[{field_name:'采集时间',type:1}],post:async fields=>{posts++;events.push('post');assert.equal(row.state,'attempted');remote.push({record_id:'recABC123456',fields});throw Error('HTTP response unknown');}};
- const opts={client:api,lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:3,tenant_id:'tenant1',policy_id:'policy3'})};
+ const opts={client:api,lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',version:3,tenant_id:'tenant1',policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})};
  const first=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',limit:1},opts);
  assert.equal(posts,1);assert.equal(first.published,0);assert.equal(first.verified,false);assert.equal(row.state,'attempted');assert.ok(pool.calls.some(c=>/SET state='attempted'/.test(c.sql)));
  const second=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103retry',limit:1},opts);
@@ -82,6 +87,35 @@ test('104旧personal/A飞书待触达行缺独立native资格不能领取，prot
  const result=await outreachRequest({op:'claim_outreach',line:'jinuo',run:'contact104',limit:1,profile:'legacy',sender_douyin_id:'sender987'},
   {sourceCommit:'a'.repeat(40),client,lock:async(_line,fn)=>fn(),eligibleOrders:async()=>[],policy:async()=>({template:{id:'approved',version:'B',message:'你好'}})});
  assert.deepEqual(result,[]);assert.equal(puts,0);assert.equal(row.fields['状态'],'待触达');
+});
+test('104已有confirmed outbox的政策复核失败时不可成为可领订单',async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
+ row.state='confirmed';row.feishu_record_id='recABC123456';row.fields=bridge.buildOrderFields(row,route,[{field_name:'采集时间',type:1}]);row.fields_sha256=bridge.digest(row.fields);
+ const remote=[{record_id:row.feishu_record_id,fields:structuredClone(row.fields)}];
+ const pool={async query(){return {rows:[row]}}};
+ const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'fail'})};
+ assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104'},opts),[]);
+});
+test('104同一飞书订单映射多个outbox时不允许任选一个CID领单',async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
+ row.state='confirmed';row.feishu_record_id='recABC123456';row.fields=bridge.buildOrderFields(row,route,[{field_name:'采集时间',type:1}]);row.fields_sha256=bridge.digest(row.fields);
+ const duplicate={...row,id:'00000000-0000-4000-8000-000000000099'};
+ const remote=[{record_id:row.feishu_record_id,fields:structuredClone(row.fields)}];
+ const pool={async query(){return {rows:[row,duplicate]}}};
+ const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})};
+ assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104'},opts),[]);
+});
+test('bridge本次扫描越过前十个政策阻断outbox检查后续合格项',async()=>{
+ const rows=Array.from({length:11},(_,i)=>{const r=pendingBridge();r.id=`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`;r.payload.comment_id=r.id;r.payload_sha256=require('../leadgen-outreach-bridge.js').digest(r.payload);return r;});
+ const visited=[];const pool={async query(sql,args=[]){if(sql.includes('SELECT * FROM zenithjoy.leadgen_bridge_outbox'))return {rows:rows.slice(0,args[1])};return {rows:[]};}};
+ const result=await require('../leadgen-outreach-bridge.js').bridgeOutreach(pool,{line:'jinuo',run:'score103',limit:10},{lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async(_pool,_line,id)=>{visited.push(id);return {status:id===rows[10].id?'pass':'unknown'};},client:{all:async()=>{throw Error('offline')}}});
+ assert.ok(visited.includes(rows[10].id));assert.equal(result.verified,false);
+});
+test('已领订单prepare时原103资格版本与当前冻结104版本不符必须阻断',async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();row.state='confirmed';row.feishu_record_id='recABC123456';
+ const pool={async query(){return {rows:[row]}}},record={record_id:row.feishu_record_id,fields:{'抖音号':row.payload.target_douyin_id,'主页链接':row.payload.profile_url}};
+ const allowed=await bridge.reviewPreparedOrder(route,record,{pool,run:'contact104',freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:4,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})});
+ assert.equal(allowed,false);
 });
 
 test('同昵称旧PGlead UID不同不能把comment→lead别名冒成ready身份',()=>{

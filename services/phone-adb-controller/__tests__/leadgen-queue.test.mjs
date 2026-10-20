@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
-import {freezeFixture} from './company-config-fixture.mjs';
+import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
 
 function fakePool(responses) {
@@ -58,7 +58,8 @@ test('评论持久化失败必须回滚，不能先把视频标成已采', async
 });
 
 test('评论评分模型失败留在待评分队列，不降成C档', async () => {
-  const pool = fakePool([{ rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训' }] }]);
+  const pool = fakePool([{ rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训',source_video_url:'https://www.douyin.com/video/7617837149999841201' }] },
+    {rows:[{title:'培训',judgment_status:'matched'}]}]);
   await assert.rejects(queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
     judgeComment: async () => { throw Error('AUTH_FAILED'); },
   }), /AUTH_FAILED/);
@@ -67,13 +68,19 @@ test('评论评分模型失败留在待评分队列，不降成C档', async () =
 });
 
 test('标记人的更新与评论完成状态原子提交，已有已触达人只增加重复标记', async () => {
+  const snapshot=companyFixture();snapshot.runtime_config.comment_scoring.audiences=[{id:'test-audience',fields:{'意向信号':'报名','排除信号':'泛失业','人群描述':'测试画像'}}];
+  snapshot.runtime_config.routing={line_key:'jinuo'};
+  const cid='11111111-1111-4111-8111-111111111111';
+  const row={id:cid,line_key:'jinuo',harvest_batch:'source102',dedup_key:'甲|id|报名',nickname:'甲',douyin_id:'id',comment_body:'如何报名',source_video:'培训',source_video_url:'https://www.douyin.com/video/7617837149999841201',relevance:'相关',intent_grade:'A',judgment_config:{run_id:'test',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id}};
   const pool = fakePool([
-    { rows: [] }, { rows: [{ id: 'c1', line_key:'jinuo', dedup_key: '甲|id|报名', nickname: '甲', douyin_id: 'id',
-      comment_body: '如何报名', source_video: '培训', relevance: '相关', intent_grade: 'A' }] },
+    { rows: [] }, { rows: [row] },{rows:[row]},
+    {rows:[{snapshot,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:'test'}]},
+    {rows:[row]},{rows:[{video_url:row.source_video_url,title:row.source_video,line_key:'jinuo',judgment_status:'matched'}]},
     { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, {rows:[{id:'l1',line_key:'jinuo',douyin_id:'id'}]}, { rows: [] }, {rows:[]},
   ]);
-  const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 });
-  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
+  const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 },{freezeCompanyConfig:async()=>snapshot,
+    judgePolicy:async()=>({grade:'A',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'test-audience',matched_rule:'报名',exclusion_rule:null,reason:'咨询报名'}}})});
+  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,blocked:0,ids:[cid],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
   const person = pool.calls.find(c => /SET dup_hit_count/.test(c.sql));
   assert.ok(person);
   assert.ok(!/status\s*=|reached_at\s*=|DELETE/.test(person.sql));

@@ -125,9 +125,14 @@ test('103真实bridge配送/读回可核云来源；104消费仍不因云来源�
   return {rows:[],rowCount:1};
  }};
  const remote=[],freezeCompanyConfig=async()=>({company_id:b.company_id,tenant_id:b.tenant_id,version:4,policy_id:'policy4'});
- let posts=0;const result=await bridge.bridgeOutreach(pool,{line:'yuesheng',run:'score103',limit:1},{freezeCompanyConfig,lock:async(_line,fn)=>fn(),client:{all:async()=>remote,fields:async()=>[{field_name:'采集时间',type:1}],post:async fields=>{posts++;remote.push({record_id:'recABC123456',fields});}}});
+ let posts=0;const client={all:async()=>remote,fields:async()=>[{field_name:'采集时间',type:1}],post:async fields=>{posts++;remote.push({record_id:'recABC123456',fields});}};
+ const blocked=await bridge.bridgeOutreach(pool,{line:'yuesheng',run:'score103',limit:1},{freezeCompanyConfig,lock:async(_line,fn)=>fn(),client});
+ assert.equal(blocked.verified,false);assert.equal(posts,0,'原CID政策绑定缺失时不能配送');
+ const result=await bridge.bridgeOutreach(pool,{line:'yuesheng',run:'score103',limit:1},{freezeCompanyConfig,lock:async(_line,fn)=>fn(),client,reviewPolicy:async()=>({status:'pass'})});
  assert.equal(result.published,1);assert.equal(result.verified,true);assert.equal(posts,1);assert.equal((await bridge.readbackBridge(pool,{line:'yuesheng',ids:[row.id]})).verified,true);
  const ready=await bridge.eligibleOrders(require('../line-routes.js').routeOf('yuesheng'),remote,{run:'contact104'},{pool,freezeCompanyConfig});assert.deepEqual(ready,[]);
+ const approved=await bridge.eligibleOrders(require('../line-routes.js').routeOf('yuesheng'),remote,{run:'contact104'},{pool,freezeCompanyConfig,reviewPolicy:async()=>({status:'pass'})});
+ assert.deepEqual(approved,['recABC123456'],'政策通过仍须按原recipient身份与订单字段进入104');
  assert.throws(()=>bridge.nativeIntent(row),/RECIPIENT_/,'104无显式新来源授权context不得放行');
  await assert.rejects(()=>require('../leadgen-outreach-orders.js').outreachRequest({op:'claim_outreach',line:'yuesheng',run:'contact104',profile:'cloud-phone-test',sender_douyin_id:'perfect21xx'},{sourceCommit:'a'.repeat(40)}),/触达profile或账号绑定缺失/);
  row.payload.qualification.company_id='other-company';row.payload_sha256=bridge.digest(row.payload);

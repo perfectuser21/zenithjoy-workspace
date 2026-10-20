@@ -29,23 +29,27 @@ test("judgeComment: 主判不相关且高置信度 → relevance派生为不相�
   assert.equal(r.relevance, "不相关");
 });
 
-test("judgeComment: 主判低置信度 → 复核官终审,必须给出A/B/C/不相关四选一(不能再回UNCERTAIN)", async () => {
+const audited = (grade='B') => ({id:'response-123',model:'google/gemini-2.5-flash',choices:[{message:{content:JSON.stringify({grade,policy_evidence:{audience_id:'audience-1',matched_rule:'意向信号',exclusion_rule:null,reason:'主动咨询考试资料'}})}}]});
+
+test("judgeComment: 低置信度终审必须有独立档位、响应身份和政策依据", async () => {
   const httpPost = fakeHttpPost([
     decisionsResp("A", 0.2),
-    { choices: [{ message: { content: "B" } }] },
+    audited(),
   ]);
-  const r = await judgeComment("这个", "视频文案", "画像", { scoringRules, httpPost, apiKey: "k" });
+  const r = await judgeComment("这个", "视频文案", "画像", { scoringRules:{...scoringRules,audiences:[{id:'audience-1',fields:{'意向信号':'意向信号','排除信号':'泛失业或创业焦虑'}}]}, httpPost, apiKey: "k" });
   assert.equal(r.grade, "B");
   assert.equal(r.relevance, "相关");
+  assert.equal(r.audit.response_id,'response-123');
+  assert.equal(r.audit.model,'google/gemini-2.5-flash');
+  assert.equal(r.audit.confidence,null);
 });
 
-test("judgeComment: 主判response格式不对(answers.grade缺失) → 当UNCERTAIN处理,交复核官", async () => {
+test("judgeComment: 主判response格式不对，终审缺依据即失败", async () => {
   const httpPost = fakeHttpPost([
     { id: "x", answers: {} },
     { choices: [{ message: { content: "B" } }] },
   ]);
-  const r = await judgeComment("这个", "视频文案", "画像", { scoringRules, httpPost, apiKey: "k" });
-  assert.equal(r.grade, "B");
+  await assert.rejects(judgeComment("这个", "视频文案", "画像", { scoringRules, httpPost, apiKey: "k" }),/COMMANDER_EVIDENCE_INVALID/);
 });
 
 // 0929 改口径: 复核官调用失败是 API 故障,不能静默降为 C 档写进线索表——
@@ -59,13 +63,32 @@ test("judgeComment: 复核官调用失败 → 抛JudgeApiError(留待分拣),不
   );
 });
 
-test("judgeComment: 复核官解析不出来(既不含ABC也不含不相关) → 保守落C档", async () => {
+test("judgeComment: 复核官解析不出来或reason含A，不能猜档位或默认C", async () => {
   const httpPost = fakeHttpPost([
     decisionsResp("A", 0.1),
-    { choices: [{ message: { content: "我也不知道" } }] },
+    { id:'response-123',model:'google/gemini-2.5-flash',choices: [{ message: { content: '{"reason":"A客户似乎有兴趣"}' } }] },
   ]);
-  const r = await judgeComment("这个", "视频文案", "画像", { scoringRules, httpPost, apiKey: "k" });
-  assert.equal(r.grade, "C");
+  await assert.rejects(judgeComment("这个", "视频文案", "画像", { scoringRules, httpPost, apiKey: "k" }),/COMMANDER_EVIDENCE_INVALID/);
+});
+
+test('终审空排除项或回显整条评论不能成为合格审计依据',async()=>{
+ const body='这是一条需要被脱敏的完整私有评论';const rules={...scoringRules,audiences:[{id:'audience-1',fields:{'意向信号':'报名','排除信号':'泛失业或创业焦虑','人群描述':'职场人'}}]};
+ for(const policy_evidence of [
+  {audience_id:'audience-1',matched_rule:'报名',exclusion_rule:'',reason:'有意向'},
+  {audience_id:'audience-1',matched_rule:'报名',exclusion_rule:null,reason:body},
+ ]){
+  const httpPost=fakeHttpPost([decisionsResp('A',.1),{id:'r1',model:'google/gemini-2.5-flash',choices:[{message:{content:JSON.stringify({grade:'A',policy_evidence})}}]}]);
+  await assert.rejects(judgeComment(body,'视频','画像',{scoringRules:rules,httpPost,apiKey:'k'}),/COMMANDER_EVIDENCE_INVALID/);
+ }
+});
+test('空评论和超长评论在模型网络请求前拒绝',async()=>{
+ let calls=0;for(const body of ['', '字'.repeat(5000)])await assert.rejects(judgeComment(body,'视频','画像',{scoringRules,httpPost:async()=>{calls++;return decisionsResp('A',.9);},apiKey:'k'}),/COMMENT_INPUT_INVALID/);
+ assert.equal(calls,0);
+});
+test('真实模型HTTP请求必须有超时signal，不能无限等待终审',async()=>{
+ const original=globalThis.fetch;let signal;
+ globalThis.fetch=async(_url,opts)=>{signal=opts.signal;return {ok:true,json:async()=>decisionsResp('A',.9)};};
+ try{await judgeComment('人工智能训练师报名','视频','画像',{scoringRules,apiKey:'fake'});assert.ok(signal instanceof AbortSignal);}finally{globalThis.fetch=original;}
 });
 
 test("judgeComment: 主判没有key → 抛错,不冒充判成了任何一档", async () => {

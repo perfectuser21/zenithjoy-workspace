@@ -6,6 +6,31 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 
+test('原批只读复核模式仅调用精确CID政策入口，不领取新评分行',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'policy-review-'));const ids=['ba9b2b44-01eb-403b-b43f-5070dbaa2ba3'];const calls=[];
+ try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'original103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'original102',LEADGEN_POLICY_REVIEW_IDS:JSON.stringify(ids),LEADGEN_POLICY_CLAIM:'original103'},rpc:async body=>{calls.push(body.request);return {result:{verified:false,rows:[{id:ids[0],status:'fail'}],ids}}},sourceCommit:'a'.repeat(40)});
+  const result=await h.scoring();assert.equal(result.status,'partial');assert.deepEqual(calls.map(c=>c.op),['policy_review']);assert.deepEqual(calls[0].ids,ids);
+  assert.equal(JSON.parse(readFileSync(join(d,'original103-policy-review.json'))).rows[0].status,'fail');
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('103检查合同单独要求政策语义复核，不以存储读回代替',()=>{
+ const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-comment-scoring.yaml','utf8'));
+ assert.ok(checks.probes.some(p=>p.key==='policy_review'&&p.probe.ref==='metrics.policy_review_failures'&&p.severity==='error'));
+});
+test('mark_leads预算partial后私有保存同scope游标，重试继续扫描',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'policy-cursor-')),cursor={line:'jinuo',run:'score103',source_run:'source102',collected_at:'2026-10-20T00:00:00.000Z',id:'ba9b2b44-01eb-403b-b43f-5070dbaa2ba3'};const seen=[];
+ try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source102'},rpc:async body=>{seen.push(body.request);const op=body.request.op;return {result:op==='mark_leads'?(seen.filter(v=>v.op==='mark_leads').length===1?{status:'partial',marked:0,ids:[],lead_ids:[],next_cursor:cursor}:{marked:0,ids:[],lead_ids:[]}):{verified:true,failures:0,ids:[]}}},sourceCommit:'a'.repeat(40)});
+  await h.mark_leads();await h.mark_leads();assert.deepEqual(seen.filter(v=>v.op==='mark_leads')[1].cursor,cursor);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+test('103泛化score失败或完成后Skill恢复不能再扫下一批',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'score-recovery-'));const calls=[];
+ try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source102'},rpc:async body=>{calls.push(body.request.op);return {result:body.request.op==='score'?{scored:1,ids:['11111111-1111-4111-8111-111111111111']}:{verified:true,rows:[{status:'pass'}],failures:0}}},sourceCommit:'a'.repeat(40)});
+  await h.scoring();await assert.rejects(h.scoring(),/POLICY_SCORE_RECOVERY_REQUIRES_EXACT_IDS/);assert.equal(calls.filter(op=>op==='score').length,1);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
 // 明示模拟本轮native v2工件；不宣称原始audio为实机采集。
 function fakeNativeProof(eid){const runtime={client_sha256:'d474146594d6f42ec04eede0049391a647ab27cdcf30c627ac30b281cf5069d7',server_sha256:'8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e',evidence_file:eid+'.capture-runtime.json',evidence_sha256:'e'.repeat(64)};return {capture_runtime:runtime,capture_runtime_end:{...runtime},capture_audio_mode:'playback_dup',capture_audio_sdk:36,capture_audio_required:true,capture_audio_sdk_evidence_file:eid+'.capture-sdk.txt',capture_audio_sdk_evidence_sha256:'c'.repeat(64),capture_audio_verified:true,capture_audio_end:{mode:'playback_dup',sdk:36,required:true,sdk_evidence_file:eid+'.capture-sdk.txt',sdk_evidence_sha256:'c'.repeat(64)},audio_streams:1,playback_proof_kind:'native_audio',native_audio:Object.fromEntries(['start','end'].map(phase=>[phase,{state:'started',uid:10203,pid:528,piid:73615,package_uid_verified:true,foreign_started:0,...Object.fromEntries([['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].flatMap(([k,s])=>[[k+'_file',eid+'-playback-'+phase+'.'+s],[k+'_sha256','a'.repeat(64)]]))}]))};}
 test('正式录前音量Step判真实媒体回读，不能用静音内容电平代替',async()=>{
