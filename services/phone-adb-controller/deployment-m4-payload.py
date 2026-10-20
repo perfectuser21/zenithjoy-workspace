@@ -167,11 +167,13 @@ def install(args):
         mode = item['mode'] | (0o111 if group == 'sh' else 0)
         temp = target.with_name('.' + target.name + '.deploy-new')
         directory_fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        owned = False
         try:
             held = os.fstat(directory_fd)
             require((held.st_dev, held.st_ino) == identities[-1][1:], 'held parent changed')
             fd = os.open(temp.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                          0o600, dir_fd=directory_fd)
+            owned = True
             with os.fdopen(fd, 'wb') as stream:
                 stream.write(content['payload/' + path])
                 stream.flush()
@@ -182,10 +184,11 @@ def install(args):
             check_parents(identities)
             os.replace(temp.name, target.name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
         finally:
-            try:
-                os.unlink(temp.name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
+            if owned:
+                try:
+                    os.unlink(temp.name, dir_fd=directory_fd)
+                except FileNotFoundError:
+                    pass
             os.close(directory_fd)
         command = checker(group, path, target, args.has_zsh == '1')
         try:
