@@ -21,7 +21,7 @@ function fixture(t) {
   writeFileSync(join(repo, 'candidate'), 'new'); git('add', '.'); git('commit', '-m', 'candidate');
   const next = git('rev-parse', 'HEAD'); git('remote', 'add', 'origin', repo);
   writeFileSync(state, JSON.stringify({ active: 'sha256:old-image', images: { 'sha256:old-image': old }, builds: 0, ups: [] }));
-  const boundary = `#!${process.execPath}
+  const boundary = `#!${process.execPath} --
 const fs=require('node:fs'); const path=require('node:path');
 const args=process.argv.slice(2); const s=JSON.parse(fs.readFileSync(process.env.FAKE_DOCKER));
 function save(){ fs.writeFileSync(process.env.FAKE_DOCKER,JSON.stringify(s)); }
@@ -87,4 +87,16 @@ test('未知回退版本被拒绝，不能偷偷构建或部署其他版本', t 
 test('不接受main或短SHA作为生产候选', t => {
   const f = fixture(t); const result = f.run(['promote', 'main']);
   assert.notEqual(result.status, 0); assert.equal(f.state().builds, 0);
+});
+
+test('生产健康检查失败仍能回退到上一个已验证镜像', t => {
+  const f = fixture(t); assert.equal(f.run(['promote', f.next]).status, 0);
+  const result = f.run(['rollback'], { FAIL_MODE: 'health' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(f.state().images[f.state().active], f.old);
+});
+test('失败候选不能作为人工回退目标', t => {
+  const f = fixture(t); assert.notEqual(f.run(['promote', f.next], { FAIL_MODE: 'health' }).status, 0);
+  const result = f.run(['rollback', f.next]);
+  assert.notEqual(result.status, 0); assert.equal(f.state().images[f.state().active], f.old);
 });
