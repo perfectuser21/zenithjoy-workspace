@@ -44,14 +44,14 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
 });
 
 // Real parent/child lifecycle + socket; only the Gateway's official RPC transport is offline.
-async function continuationFixture({policy={max_additional_turns:1},activityKey='qualification',ownerState='done',completeFinal=false,resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
+async function continuationFixture({policy={max_additional_turns:1},activityKey='qualification',ownerState='done',completeFinal=false,businessResult={status:'completed',qualified:1},phoneError,resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
  const d=mkdtempSync(join(tmpdir(),'handoff-continuation-'));let launches=0,resumes=0;const turns=[],directories=[];
  try{
-  const name=activityKey==='send_dm'?'douyin-leadgen-activity-104-send-dm':'douyin-leadgen-activity-102-qualification',path=`skills/${name}/SKILL.md`,supportPath='skills/leadgen-activity-execution.md';
+  const name=activityKey==='send_dm'?'douyin-leadgen-activity-104-send-dm':'douyin-leadgen-activity-102-'+activityKey,path=`skills/${name}/SKILL.md`,supportPath='skills/leadgen-activity-execution.md';
   const text=readFileSync(join(sourceRoot,path),'utf8'),support=readFileSync(join(sourceRoot,supportPath),'utf8'),version=text.match(/^  version: (.+)$/m)[1];
   for(const [p,body] of [[path,text],[supportPath,support],['activity-skill-tool.mjs',readFileSync(join(sourceRoot,'activity-skill-tool.mjs'))]]){mkdirSync(dirname(join(d,'runtime',p)),{recursive:true});writeFileSync(join(d,'runtime',p),body);}
-  const frozen={files:{['runtime/'+path]:hash(text),['runtime/'+supportPath]:hash(support)},snapshot_sha256:'fixture-snapshot',release:{id:'fixture-release'},deployment:{source_commit:'a'.repeat(40),target:'mmv',observation_id:'fixture-observation'},workflow_version:{id:'fixture-wv'},activities:[{reference:{slot_key:activityKey,reference_id:'fixture-ref'},version:{id:'fixture-av',payload:{contract:{...(policy===undefined?{}:{agent_recovery:policy})},definition_key:activityKey==='send_dm'?'douyin_lead_outreach.send_dm':'douyin_video_processing.qualification',implementation_bindings:[{kind:'skill',name,version,path:'services/phone-adb-controller/'+path}]}}}]};
-  const handlers={state:{budgetDeadline:Date.now()+60000},handoffContext:async()=>({fixture:true}),handoffHeartbeat:async()=>{},handoffPhone:async()=>({fresh:true})};
+  const frozen={files:{['runtime/'+path]:hash(text),['runtime/'+supportPath]:hash(support)},snapshot_sha256:'fixture-snapshot',release:{id:'fixture-release'},deployment:{source_commit:'a'.repeat(40),target:'mmv',observation_id:'fixture-observation'},workflow_version:{id:'fixture-wv'},activities:[{reference:{slot_key:activityKey,reference_id:'fixture-ref'},version:{id:'fixture-av',payload:{contract:{...(policy===undefined?{}:{agent_recovery:policy})},definition_key:activityKey==='send_dm'?'douyin_lead_outreach.send_dm':'douyin_video_processing.'+activityKey,implementation_bindings:[{kind:'skill',name,version,path:'services/phone-adb-controller/'+path}]}}}]};
+  const handlers={state:{budgetDeadline:Date.now()+60000},handoffContext:async()=>({fixture:true}),handoffHeartbeat:async()=>{},handoffPhone:async()=>{if(phoneError)throw Error(phoneError);return {fresh:true};}};
   const rpc=async input=>{
    if(input.kind==='activity_skill_authority')return {authorized:skillAuthority(input.request,{home:d,verifyWorkspace:()=>true})};
    turns.push(input.request);const turn=turns.length-1;if(turn===1&&secondRpcUnknown)throw Error('official transport result unavailable');
@@ -68,7 +68,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
      writeFileSync(join(dir,'spawn-receipt.json'),JSON.stringify(receipt));writeFileSync(join(dir,'agent-binding.json'),JSON.stringify({...request,child_run_id:receipt.runId,child_session_key:receipt.childSessionKey}));
      const deps={home:d,authorize:async q=>skillAuthority(q,{home:d,verifyWorkspace:()=>true})};
      await relayActivityTool(dir,'inspect',{},deps);
-     if(turn===0){for(let i=0;i<(activityKey==='qualification'?2:0);i++)await relayActivityTool(dir,'phone',{command:'native-audio-evidence',args:[]},deps);if(resumeFirst)await relayActivityTool(dir,'resume',{},deps);await afterFirst?.({handlers,request:input.request});}
+     if(turn===0){for(let i=0;i<(activityKey==='qualification'?2:0);i++){const read=()=>relayActivityTool(dir,'phone',{command:'native-audio-evidence',args:[]},deps);if(phoneError)await assert.rejects(read);else await read();}if(resumeFirst)await relayActivityTool(dir,'resume',{},deps);await afterFirst?.({handlers,request:input.request});}
      else{
       await assert.rejects(()=>relayActivityTool(directories[0],'inspect',{},deps),'old generation cannot use the live broker');
       await assert.rejects(()=>relayActivityTool(dir,'phone',{command:'native-audio-evidence',args:[]},deps),'native evidence budget is cumulative');
@@ -83,7 +83,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
    }})};
   };
   const recover=createActivityRecovery({runDir:d,frozen,binding:{id:'fixture-binding',run_id:'fixture__a1'},env:{},handlers,rpc,verify});
-  const result=await recover({activity:{key:activityKey},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:async()=>{resumes++;return {status:'completed',qualified:1};}});
+  const result=await recover({activity:{key:activityKey},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:async()=>{resumes++;return businessResult;}});
   return {result,launches,resumes,turns,directories};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
@@ -142,4 +142,14 @@ test('full original official final receipt survives exact-run wait cache miss wi
 });
 for(const ownerState of ['wrong_session','pending','missing_active','model_payload'])test('owner final does not authorize continuation with wrong session, pending work or missing official fields '+ownerState,async()=>{
  await assert.rejects(()=>continuationFixture({ownerState,completeFinal:true}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
+});
+
+for(const status of ['partial','paused'])test('new collection '+status+' from the real resumed handler stops before a second Agent',async()=>{
+ const r=await continuationFixture({activityKey:'collection',resumeFirst:true,businessResult:{status,comments_saved:1}});assert.equal(r.launches,1);assert.equal(r.resumes,1);assert.equal(r.result.status,'partial');
+});
+for(const reason of ['EACCES: forbidden resource','SOURCE_FIXED_MISMATCH','LOCK_OWNER_MISMATCH'])test('new actual resumed result policy failure cannot use Agent error to authorize another turn '+reason,async()=>{
+ const r=await continuationFixture({resumeFirst:true,businessResult:{status:'failed',reason}});assert.equal(r.launches,1);assert.equal(r.resumes,1);assert.equal(r.result.status,'partial');
+});
+test('native evidence capability failure is retained even when child only returns an error terminal',async()=>{
+ const r=await continuationFixture({phoneError:'RECORD_CAPTURE_STRATEGY_UNVERIFIED'});assert.equal(r.launches,1);assert.equal(r.resumes,0);assert.equal(r.result.status,'partial');
 });
