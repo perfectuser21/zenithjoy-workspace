@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,statSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,statSync,existsSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
 const service=new URL('../',import.meta.url).pathname;
 const quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
 function run(t,{badSyntax=false,missing=false}={}){
- const root=mkdtempSync(join(tmpdir(),'m4-deploy-batch-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'m4-deploy-batch-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const {home,env}=prepareTransport(root),source=join(root,'source');mkdirSync(source);
  const files={'a.sh':'#!/bin/sh\ntrue\n','log-stream-push.sh':'#!/bin/sh\ntrue\n','z.sh':'#!/bin/sh\ntrue\n',
   'one.mjs':badSyntax?'const = ;\n':'export const value=1;\n','two.mjs':'export const value=2;\n',
