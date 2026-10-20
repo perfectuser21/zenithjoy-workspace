@@ -69,7 +69,8 @@ function m4Batch(root,mode,args){
    matched=!!(install&&install[1]===install[2]&&safeStage(install[1])||cleanup&&cleanup[1]===cleanup[2]&&cleanup[1]===cleanup[3]&&safeStage(cleanup[1]));
    if(!matched)throw Error('unexpected M4 batch command');
   }
- }else if(mode==='scp'&&args.at(-1)?.includes('/m4-payload-deploy.')){
+ }else if(mode==='ssh'&&args[1]?.includes('/m4-payload-deploy.'))throw Error('unexpected M4 batch host');
+ else if(mode==='scp'&&args.at(-1)?.includes('/m4-payload-deploy.')){
   const destination=args.at(-1),stage=destination.slice('xian-m4:'.length,-1);
   matched=args.length===5&&args[0]==='-q'&&args[1]==='-p'&&destination.startsWith('xian-m4:')&&destination.endsWith('/')&&safeStage(stage)
    &&basename(args[2])==='payload.tar'&&args[3]===fileURLToPath(new URL('../../deployment-m4-payload.py',import.meta.url));
