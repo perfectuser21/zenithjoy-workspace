@@ -7,6 +7,8 @@ import {isDeepStrictEqual} from 'node:util';
 import {AUTHORING_FILES,gitSource,greaterVersion,isAuthoringRepositoryOrigin} from './authoring-source-version.mjs';
 import {renewDefinitions} from './authoring-main-source-core.mjs';
 import {scratchRegistration} from './authoring-source-scratch.mjs';
+import {loadAuthoringScope} from './authoring-source-scope.mjs';
+export {loadAuthoringScope};
 const REPO='perfectuser21/zenithjoy-workspace',SHA=/^[a-f0-9]{40}$/;
 const SPECS=[['commander-generic',AUTHORING_FILES.slice(0,2)],['cecelia-device-patrol-definitions',AUTHORING_FILES.slice(2)]];
 const unwrap=x=>x?.task??x?.data??x;
@@ -91,23 +93,9 @@ export async function runMainSource({repoRoot=process.cwd(),brainRoot=process.en
  const skills=[];for(let offset=0;offset<5000;offset+=500){const rows=await api('GET',`skills?limit=500&offset=${offset}`);skills.push(...rows);if(rows.length<500)break;if(offset===4500)throw Error('AUTHORING_SKILL_LIST_TRUNCATED');}
  const scopes=[];
  for(const [scope,files] of SPECS){
-  const documents=[];let snapshot;
-  for(const path of files){
-   const definition={...JSON.parse(readFixedLocalGitBlob(repoRoot,{revision,path})),source:{repo:REPO,ref:path,revision}};
-   const owners=all.filter(w=>w.key===definition.key);if(owners.length!==1)throw Error('AUTHORING_OWNER_AMBIGUOUS');
-   const owner=owners[0],current=(await api('GET',`workflows/${owner.id}/versions/${owner.current_definition_version_id}`)).version;
-   if(current.workflow_id!==owner.id||current.id!==owner.current_definition_version_id||current.source_repo!==REPO||current.source_path!==path||current.payload.registration_protocol!=='definition-freeze-v1')throw Error('AUTHORING_OWNER_SOURCE_CONFLICT');
-   if(current.source_commit===revision){if(definition.version!==owner.version)throw Error('AUTHORING_SAME_SOURCE_VERSION_CONFLICT');}
-   else if(!greaterVersion(definition.version,owner.version))throw Error('AUTHORING_SOURCE_VERSION_BUMP_REQUIRED');
-   const body=await api('GET',`implementation-ci/snapshot?scope=${scope}&repo=${REPO}&revision=${current.source_commit}`);
-   const s=body.snapshot;validateImplementationSnapshot(s);
-   if(s.scope!==scope||s.repo!==REPO||s.revision!==current.source_commit)throw Error('AUTHORING_SNAPSHOT_IDENTITY_CONFLICT');
-   if(!s.map?.manifest||s.map.manifest.digest!==digestMapManifest(s.map.manifest.manifest))throw Error('AUTHORING_COMPLETE_MANIFEST_REQUIRED');
-   if(!s.gaps.every(g=>['authoring_definition_missing','manifest_source_mismatch','workflow_capability_unmapped'].includes(g.code)))throw Error('AUTHORING_BASE_SNAPSHOT_UNKNOWN');
-   if(snapshot&&snapshot.map.manifest.id!==s.map.manifest.id)throw Error('AUTHORING_MAP_CHANGED');snapshot=s;
-   documents.push({definition,owner,snapshot:s,skills:skills.filter(x=>x.id===definition.runtime.skill_id||definition.activities.some(a=>a.implementation?.skill_id===x.id))});
-  }
-  scopes.push({scope,documents,manifest:snapshot.map.manifest});
+  scopes.push(await loadAuthoringScope({api,scope,files,revision,repo:REPO,owners:all,skills,
+   readDefinition:path=>({...JSON.parse(readFixedLocalGitBlob(repoRoot,{revision,path})),source:{repo:REPO,ref:path,revision}}),
+   validateSnapshot:validateImplementationSnapshot,digestMapManifest}));
  }
  const validations=new Map();
  await renewDefinitions(scopes,{revision,hash,checkMain,

@@ -3,7 +3,79 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import YAML from 'yaml';
+import {createHash} from 'node:crypto';
 const root=new URL('../../../',import.meta.url);
+const fixtureDigest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function scopeRecoveryFixture({sources=['a'.repeat(40),'b'.repeat(40)],revision='a'.repeat(40)}={}){
+ const repo='perfectuser21/zenithjoy-workspace',scope='cecelia-device-patrol-definitions';
+ const files=['contracts/single.json','contracts/batch.json'];
+ const manifest={id:'map-active',manifest:{scope_key:scope,value_streams:[],capabilities:sources.map((_,i)=>({key:`cap-${i}`,brain_binding:{entity_type:'capability',entity_id:`cap-${i}`,source_repo:repo,source_revision:'b'.repeat(40)}}))}};
+ manifest.digest=fixtureDigest(manifest.manifest);
+ const owners=sources.map((source,i)=>({id:`owner-${i}`,key:`workflow-${i}`,version:source===revision?'1.0.2':'1.0.1',current_definition_version_id:`version-${i}`,capability_id:`cap-${i}`}));
+ const versions=owners.map((owner,i)=>({id:owner.current_definition_version_id,workflow_id:owner.id,source_repo:repo,source_path:files[i],source_commit:sources[i],payload:{registration_protocol:'definition-freeze-v1',contract:{key:owner.key,capability_id:owner.capability_id,version:owner.version}}}));
+ const snapshots=new Map([...new Set(sources)].map(source=>{
+  // Native snapshot selects every historical definition at the requested source.
+  // Once single advances, the old full-scope selection is no longer all-current.
+  const historical=source==='b'.repeat(40)&&sources.some(s=>s!==source);
+  const selected=historical?versions.map((v,i)=>({...v,id:sources[i]===source?v.id:`historical-${i}`,source_commit:source})):versions.filter(v=>v.source_commit===source);
+  const present=!historical;
+  const snapshot={scope,repo,revision:source,definitions:{workflows:selected},canonical:{workflows:owners,journeys:owners.map(o=>({id:o.capability_id,parent_journey_id:'journey'}))},map:{manifest:present?manifest:null},
+   gaps:present?(sources.some(s=>s!==source)?[{code:'authoring_definition_missing',key:'workflow-1'},{code:'manifest_source_mismatch',revision:source}]:[]):[{code:'scope_manifest_missing',scope,revision:source},{code:'workflow_capability_unmapped',capability_id:'cap-1'}]};
+  snapshot.snapshot_sha256=fixtureDigest(snapshot);return[source,snapshot];
+ }));
+ const calls=[],active={manifest_version_id:manifest.id,manifest_digest:manifest.digest};
+ const api=async(method,path)=>{
+  calls.push([method,path]);assert.equal(method,'GET','source planning must never write');
+  if(path.startsWith('workflows/'))return{version:versions.find(v=>path===`workflows/${v.workflow_id}/versions/${v.id}`)};
+  if(path.startsWith('implementation-ci/snapshot?'))return{snapshot:snapshots.get(new URLSearchParams(path.split('?')[1]).get('revision'))};
+  if(path===`map?scope=${scope}`)return active;
+  throw Error(`unexpected ${path}`);
+ };
+ const readDefinition=path=>{const i=files.indexOf(path);return{key:owners[i].key,version:'1.0.2',capability_id:owners[i].capability_id,runtime:{skill_id:'skill'},activities:[],source:{repo,ref:path,revision}};};
+ const validateSnapshot=s=>{const{snapshot_sha256,...body}=s;assert.equal(snapshot_sha256,fixtureDigest(body),'original native snapshot must remain unmodified');};
+ const reseal=()=>{for(const s of snapshots.values()){delete s.snapshot_sha256;s.snapshot_sha256=fixtureDigest(s);}};
+ return{args:{api,scope,files,revision,repo,owners,skills:[],readDefinition,validateSnapshot,digestMapManifest:fixtureDigest},snapshots,versions,owners,manifest,active,calls,reseal};
+}
+
+for(const[state,sources,revision]of[
+ ['全新candidate',['b','b'],'a'],['全scope已登记',['a','a'],'a'],['同SHA部分登记恢复',['a','b'],'a'],['部分登记后下一candidate',['a','b'],'c'],
+]){
+ test(`来源规划${state}：scope固定真实active地图，每个owner保留原生snapshot`,async()=>{
+  const {loadAuthoringScope}=await import('../authoring-main-source.mjs');
+  const f=scopeRecoveryFixture({sources:sources.map(s=>s.repeat(40)),revision:revision.repeat(40)});
+  const before=[...f.snapshots.values()].map(s=>JSON.stringify(s));
+  const loaded=await loadAuthoringScope(f.args);
+  assert.equal(loaded.manifest,f.manifest);
+  for(const[item,i]of loaded.documents.map((item,i)=>[item,i])){
+   assert.equal(item.snapshot,f.snapshots.get(f.versions[i].source_commit));
+   assert.equal(item.owner,f.owners[i]);
+  }
+  assert.deepEqual([...f.snapshots.values()].map(s=>JSON.stringify(s)),before);
+  assert.equal(f.calls.filter(([,path])=>path===`map?scope=${f.args.scope}`).length,2,'anchor must be read before and after planning');
+ });
+}
+for(const[reason,mutate,expected]of[
+ ['无完整来源地图',f=>{for(const s of f.snapshots.values()){s.map.manifest=null;s.gaps=[{code:'scope_manifest_missing',scope:f.args.scope,revision:s.revision}];}},/COMPLETE_MANIFEST/],
+ ['地图摘要错误',f=>{f.manifest.digest='0'.repeat(64);},/MANIFEST/],
+ ['地图不是active',f=>{f.active.manifest_version_id='other';},/MAP_ACTIVE_CHANGED/],
+ ['旧owner来源错误',f=>{f.versions[1].source_repo='evil/repo';},/OWNER_SOURCE/],
+ ['旧owner冻结seed缺失',f=>{f.snapshots.get('b'.repeat(40)).definitions.workflows=[];},/OWNER_SNAPSHOT/],
+ ['地图不能证明owner能力',f=>{f.manifest.manifest.capabilities.pop();f.manifest.digest=fixtureDigest(f.manifest.manifest);f.active.manifest_digest=f.manifest.digest;},/CAPABILITY/],
+ ['地图能力属于外仓',f=>{f.manifest.manifest.capabilities[1].brain_binding.source_repo='evil/repo';f.manifest.digest=fixtureDigest(f.manifest.manifest);f.active.manifest_digest=f.manifest.digest;},/CAPABILITY/],
+ ['未知gap',f=>{f.snapshots.get('b'.repeat(40)).gaps.push({code:'definition_snapshot_ambiguous'});},/BASE_SNAPSHOT/],
+ ['伪造missing-map范围',f=>{f.snapshots.get('b'.repeat(40)).gaps[0].scope='other';},/BASE_SNAPSHOT/],
+ ['无法证明的unmapped能力',f=>{f.snapshots.get('b'.repeat(40)).gaps[1].capability_id='other';},/CAPABILITY/],
+]){
+ test(`来源恢复仍拒绝：${reason}`,async()=>{
+  const{loadAuthoringScope}=await import('../authoring-main-source.mjs');const f=scopeRecoveryFixture();mutate(f);f.reseal();
+  await assert.rejects(loadAuthoringScope(f.args),expected);
+ });
+}
+test('来源恢复读取期间active地图并发变化必须拒绝',async()=>{
+ const{loadAuthoringScope}=await import('../authoring-main-source.mjs');const f=scopeRecoveryFixture();const base=f.args.api;let reads=0;
+ f.args.api=async(method,path)=>{const result=await base(method,path);return path===`map?scope=${f.args.scope}`&&++reads>1?{...result,manifest_digest:'0'.repeat(64)}:result;};
+ await assert.rejects(loadAuthoringScope(f.args),/MAP_ACTIVE_CHANGED/);
+});
 test('五个既有正式定义升patch且保留Patrol实际固定部署来源',()=>{
  for(const [path,version] of [
  ['commander/contracts/workflow-commander.json','2.0.33'],['commander/contracts/workflow-report.json','1.0.34'],
