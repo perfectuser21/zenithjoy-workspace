@@ -44,7 +44,7 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
 });
 
 // Real parent/child lifecycle + socket; only the Gateway's official RPC transport is offline.
-async function continuationFixture({policy={max_additional_turns:1},resumeFirst=false,parentUnknown=false,status='error',afterFirst}={}){
+async function continuationFixture({policy={max_additional_turns:1},resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,verify=async()=>({verified:true}),afterFirst}={}){
  const d=mkdtempSync(join(tmpdir(),'handoff-continuation-'));let launches=0,resumes=0;const turns=[],directories=[];
  try{
   const name='douyin-leadgen-activity-102-qualification',path=`skills/${name}/SKILL.md`,supportPath='skills/leadgen-activity-execution.md';
@@ -72,11 +72,12 @@ async function continuationFixture({policy={max_additional_turns:1},resumeFirst=
      }
      return {code:parentUnknown&&turn===0?1:0,stdout:'official parent fixture',stderr:''};
     }
+    if(unknownChild)return {code:1,stdout:'',stderr:'official terminal unavailable'};
     const binding=JSON.parse(readFileSync(join(args[2],'agent-binding.json'),'utf8'));
-    writeFileSync(join(args[2],'agent-terminal.json'),JSON.stringify({runId:binding.child_run_id,status:turn===0?status:'ok',endedAt:Date.now(),terminalReceipt:{runId:binding.child_run_id,effective:{provider:'openai',model:'gpt-6.1-sol'}}}));return {code:0,stdout:'official exact terminal',stderr:''};
+    writeFileSync(join(args[2],'agent-terminal.json'),JSON.stringify({runId:binding.child_run_id,status:turn===0?status:secondStatus,endedAt:Date.now(),terminalReceipt:{runId:binding.child_run_id,effective:{provider:'openai',model:'gpt-6.1-sol'}}}));return {code:0,stdout:'official exact terminal',stderr:''};
    }})};
   };
-  const recover=createActivityRecovery({runDir:d,frozen,binding:{id:'fixture-binding',run_id:'fixture__a1'},env:{},handlers,rpc});
+  const recover=createActivityRecovery({runDir:d,frozen,binding:{id:'fixture-binding',run_id:'fixture__a1'},env:{},handlers,rpc,verify});
   const result=await recover({activity:{key:'qualification'},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:async()=>{resumes++;return {status:'completed',qualified:1};}});
   return {result,launches,resumes,turns,directories};
  }finally{rmSync(d,{recursive:true,force:true});}
@@ -91,4 +92,23 @@ for(const options of [{parentUnknown:true},{status:'ok'},{policy:null}])test('no
 });
 for(const policy of [{max_additional_turns:2},{max_additional_turns:1,other:true},{max_additional_turns:'1'}])test('malformed frozen Agent policy rejects before transport '+JSON.stringify(policy),async()=>{
  await assert.rejects(()=>continuationFixture({policy}),/SKILL_AGENT_RECOVERY_POLICY_INVALID/);
+});
+
+test('two confirmed Agent failures exhaust the one additional turn, never create a third child',async()=>{
+ const r=await continuationFixture({secondStatus:'error'});assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.result.status,'partial');
+});
+test('missing official child termination never authorizes a second transport',async()=>{
+ const r=await continuationFixture({unknownChild:true});assert.equal(r.launches,1);assert.equal(r.result.execution_stopped,false);assert.equal(r.resumes,0);
+});
+test('remaining execution deadline exhausted while awaiting proof cannot start another Agent',async()=>{
+ const old=Date.now;let offset=0;
+ try{Date.now=()=>old()+offset;const r=await continuationFixture({afterFirst:()=>{offset=60001;}});assert.equal(r.launches,1);assert.equal(r.resumes,0);}finally{Date.now=old;}
+});
+
+test('Skill actual output failing independent verify gets only a readback turn, then fresh verification',async()=>{
+ let checks=0;const r=await continuationFixture({resumeFirst:true,status:'ok',verify:async()=>({verified:++checks>1})});
+ assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.turns[1].mode,'readback_only');assert.equal(r.result.status,'completed');assert.equal(checks,2);
+});
+test('Skill output still failing independent verify after readback remains incomplete',async()=>{
+ const r=await continuationFixture({resumeFirst:true,status:'ok',verify:async()=>({verified:false})});assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.result.status,'partial');
 });
