@@ -8,11 +8,47 @@ import { deploymentTarget } from '../deployment-release.mjs';
 const actualHost=deploymentTarget(hostname());
 import { join } from 'node:path';
 import { digest } from '../runtime-definition.mjs';
+import {bindRun,readBinding} from '../runtime-binding.mjs';
+import {createHandlers} from '../leadgen-handlers.mjs';
+import {execInput} from '../leadgen-client.mjs';
+import {readNativeOperation,nativeOperationIdentityMatches} from '../native-operation-receipt.mjs';
+import {readdirSync,rmSync} from 'node:fs';
 function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'binding-runtime-'));const steps=JSON.stringify({steps:[{key:'test.run.execute',usage:{slot_key:'run'},mode:'checkpoint'}]});writeFileSync(join(dir,'step-dod.json'),steps);
  const body={schema_version:2,release:{id:'release',target:actualHost},deployment:{observation_id:'observation',target:actualHost},workflow_version:{id:'wv',payload_sha256:'a'.repeat(64),payload:{workflow_id:'workflow'}},activities:[{reference:{reference_id:'ref',slot_key:'run',activity_id:'activity',activity_version_id:'av'},version:{id:'av',payload:{steps:[{step_id:'step',locator:{step_key:'execute'},contract:{key:'execute'}}]}}}],files:{'step-dod.json':digest(steps)}};
  writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));return dir;
 }
+test('public ACK 显式空task经真实createHandlers保留空身份，缺键不得冒充空绑定',async t=>{
+ for(const task of [null,undefined]){
+  const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));let posted;
+  await bindRun({dir,runId:'public-run',brainUrl:'https://fixture.invalid',request:async(_url,body)=>{
+   if(body)posted=body;
+   return {binding:{id:'public-binding',run_id:'public-run__a1',...posted,...(task===null?{task_id:null}:{})}};
+  }});
+  const binding=readBinding(dir,'a1');assert.equal(Object.hasOwn(binding,'task_id'),task===null);
+  let controllerCalls=0;
+  const h=createHandlers({root:dir,taskId:binding.task_id,sourceCommit:'a'.repeat(40),
+   env:{P:'fixture',SERIAL:'fixture-device',WFR_TAG:'public-run',WFR_RUN_ID:'public-run',WFR_ATTEMPT:'a1',WFR_RUN_DIR:dir,HOME:dir,
+    DOUYIN_PHONE_ADB:join(dir,'missing-controller')},
+   execute:async(command,args,options)=>{
+    if(command==='adb'){assert.deepEqual(args,['-s','fixture-device','get-state']);return {code:0,stdout:'device\n',stderr:''};}
+    controllerCalls++;return execInput(command,args,options);
+   },rpc:async()=>{throw Error('unexpected RPC');}});
+  h.state.currentActivity='preflight';
+  if(task===undefined){await assert.rejects(h.preflight(),/NATIVE_OPERATION_CONTEXT_INVALID/);assert.equal(existsSync(join(dir,'native-operations')),false);}
+  else {
+   await assert.rejects(h.preflight(),/EXECUTION_START_FAILED/);
+   const [file]=readdirSync(join(dir,'native-operations'));const id=file.slice(0,-5),proof=readNativeOperation(dir,id);
+   assert.equal(proof.task_id,null);assert.equal(proof.status,'not_started');assert.equal(proof.execution_stopped,true);
+   const identity={operationId:id,runDir:dir,runId:binding.run_id,taskId:null,profile:'fixture',serial:'fixture-device',sourceCommit:'a'.repeat(40),owner:'public-run',activity:'preflight'};
+   assert.equal(nativeOperationIdentityMatches(proof,identity),true);
+   for(const taskId of [undefined,'other-task','',0])assert.equal(nativeOperationIdentityMatches(proof,{...identity,taskId}),false);
+   assert.equal(nativeOperationIdentityMatches({...proof,task_id:'other-task'},identity),false);
+   const {task_id,...missing}=proof;assert.equal(nativeOperationIdentityMatches(missing,identity),false);
+  }
+  assert.equal(controllerCalls,1);
+ }
+});
 async function server(t,handler){const seen=[];const s=createServer(async(req,res)=>{let raw='';for await(const part of req)raw+=part;const event={method:req.method,path:req.url,body:raw?JSON.parse(raw):null};seen.push(event);const answer=handler(event);res.writeHead(answer.status||200,{'Content-Type':'application/json'});res.end(JSON.stringify(answer.body));});await new Promise(r=>s.listen(0,'127.0.0.1',r));t.after(()=>s.close());return {seen,url:`http://127.0.0.1:${s.address().port}`};}
 const cli=(dir,url,args=['bind-run'])=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,...args],{env:{...process.env,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',BRAIN_URL:url,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_HOSTKEY:'fixture'}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('exit',code=>resolve({code,out,err}));});
 test('HTTP绑定ACK前持久请求；失联重试同attempt/内容，ACK后真实续跑新attempt',async t=>{

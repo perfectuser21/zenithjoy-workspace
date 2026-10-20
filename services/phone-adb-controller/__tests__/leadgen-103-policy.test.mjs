@@ -12,6 +12,50 @@ const {judgeCommander}=require('../judge-comment.js');
 const input={op:'policy_review',line:'jinuo',run:originalRun,claim:originalRun,source_run:sourceRun,ids:comments.map(c=>c.id)};
 const primaryAudit={model:'typesafe/jev-1.13',response_id:'jev-response-1',confidence:.99};
 
+test('103新run先走正式公司冻结；首轮与丢回执恢复共享原CID和一次评分预算',async t=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');
+ const {companyFixture}=await import('./company-config-fixture.mjs');
+ const {rmSync}=await import('node:fs');
+ for(const loseReply of [false,true]){
+  const dir=mkdtempSync(join(tmpdir(),'fresh-score-freeze-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const run='fresh103',id='00000000-0000-4000-8000-000000000191',sources={[id]:'original102'};
+  const snapshot=companyFixture();snapshot.config_status='enabled';snapshot.runtime_config.routing={line_key:'jinuo'};snapshot.runtime_config.policy_id=snapshot.policy_id;
+  let frozen=null,scored=false,modelCalls=0,inserts=0,lost=loseReply;const calls=[];
+  const row=()=>({id,harvest_batch:sources[id],line_key:'jinuo',relevance:scored?'相关':null,intent_grade:scored?'A':null,
+   judgment_config:scored?{run_id:run,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
+    model_audit:{model:'fixture',response_id:'response'},policy_audit:{status:'pass',response_id:'review'}}:null});
+  const client={async query(sql,args=[]){
+   if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
+   if(sql.startsWith('SELECT company_id FROM zenithjoy.tenant_company_profiles'))return {rows:[{company_id:snapshot.company_id}]};
+   if(sql.startsWith('SELECT * FROM zenithjoy.tenant_company_profiles'))return {rows:[{config_status:'enabled',config_version:1,tenant_id:snapshot.tenant_id}]};
+   if(sql.includes('FROM zenithjoy.company_config_versions'))return {rows:[{snapshot}]};
+   if(sql.startsWith('INSERT INTO zenithjoy.company_config_runs')){
+    assert.equal(args[1],run);assert.equal(args[6],null);inserts++;frozen={snapshot:JSON.parse(args[4]),task_inputs:JSON.parse(args[5]),source_run:args[6]};return {rows:[frozen]};
+   }
+   if(sql.includes('FROM zenithjoy.company_config_runs'))return {rows:frozen?[{...frozen,run_id:run,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:1}]:[]};
+   if(sql.includes('SELECT id,harvest_batch FROM zenithjoy.leadgen_comments'))return {rows:[{id,harvest_batch:sources[id]}]};
+   if(sql.includes('SELECT id,harvest_batch,line_key,relevance'))return {rows:[row()]};
+   throw Error('unexpected SQL '+sql);
+  },release(){}};
+  const pool={query:client.query.bind(client),connect:async()=>client};
+  const rpc=async({request:r})=>{calls.push(r.op);
+   if(['company_config','score_scope','score_recovery'].includes(r.op))return {result:await queueRequest(pool,r)};
+   if(r.op==='score'){
+    assert.ok(frozen,'必须由真实freezeCompanyConfig持久冻结后才能评分');assert.deepEqual(r.ids,[id]);assert.deepEqual(r.sources,sources);assert.equal(r.limit,1);assert.equal(r.budget_max,1);
+    modelCalls++;scored=true;if(lost){lost=false;throw Error('score reply lost');}return {result:{ids:[id],scored:1,blocked_ids:[]}};
+   }
+   if(r.op==='score_readback')return {result:{verified:true,failures:0}};
+   if(r.op==='policy_review')return {result:{verified:true,rows:[{id,status:'pass'}]}};
+   throw Error('unexpected op '+r.op);
+  };
+  const h=createHandlers({root:dir,env:{P:'mmv-scoring',SERIAL:'none',WFR_TAG:run,LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',WFR_RUN_DIR:dir,HOME:dir},rpc});
+  if(loseReply)await assert.rejects(h.scoring(),/score reply lost/);
+  const result=await h.scoring();assert.equal(result.scored,1);assert.equal(result.recovered,loseReply?1:0);
+  assert.equal(inserts,1);assert.equal(modelCalls,1);assert.equal(calls[0],'company_config');
+  const again=await h.scoring();assert.equal(again.recovered,1);assert.equal(modelCalls,1);assert.equal(inserts,1);
+ }
+});
+
 test('QA 沙箱实际 RPC 评分越过受阻行，持久读回仅后行新分',()=>{
  const dir=mkdtempSync(join(tmpdir(),'leadgen-103-sandbox-')),file=join(dir,'fixture.json'),output=join(dir,'state');
  const rows=[{...comments[0],id:'00000000-0000-4000-8000-000000000051',collected_at:'2026-10-20T00:00:00Z',response:{primary_grade:'B',policy_grade:'B',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'就业焦虑',exclusion_rule:null,reason:'泛焦虑'}}},
