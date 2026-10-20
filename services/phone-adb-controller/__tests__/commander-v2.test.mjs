@@ -17,6 +17,11 @@ function fixture(){
  function call(cmd,args=[],input){return spawnSync('bash',[join(dir,cmd),...args],{env,encoding:'utf8',input:input&&JSON.stringify(input)});}
  return {home,dir,definition,env,envelope,file,call};
 }
+function start(f){
+ const r=spawnSync('python3',[join(f.dir,'wf-v2-io.py'),'manifest',f.dir,JSON.stringify({'release-test':{snapshot_sha256:f.definition.snapshot_sha256,workflow_key:'report.generic'}})],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ const launch=f.call('wf-launch.sh',['--envelope',f.file,'--parent-session','agent:work-commander:test']);assert.equal(launch.status,0,launch.stdout+launch.stderr);
+ return join(f.home,'wf-agent-runs',f.envelope.run_id);
+}
 test('v2 ready实际验证整包manifest，缺包拒绝，标准入口识别协议',()=>{
  const f=fixture();const r=f.call('wf-launch.sh',['--ready'],{definition:f.definition,workflow_key:'report.generic'});
  assert.match(r.stdout,/"protocol"\s*:\s*"commander-v2"/);assert.notEqual(r.status,0);
@@ -33,11 +38,6 @@ test('v2无手机信封启动保留输入，重复启动复用request与deadline
  const status=f.call('wf-status.sh',[f.envelope.run_id]);assert.equal(status.status,0,status.stderr);assert.equal(JSON.parse(status.stdout).execution_stopped,false);
  writeFileSync(join(f.dir,'wf-agent-lib.py'),'# deployment drift');assert.notEqual(f.call('wf-launch.sh',['--ready'],{definition:f.definition,workflow_key:'report.generic'}).status,0);
 });
-function start(f){
- const r=spawnSync('python3',[join(f.dir,'wf-v2-io.py'),'manifest',f.dir,JSON.stringify({'release-test':{snapshot_sha256:f.definition.snapshot_sha256,workflow_key:'report.generic'}})],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
- const launch=f.call('wf-launch.sh',['--envelope',f.file,'--parent-session','agent:work-commander:test']);assert.equal(launch.status,0,launch.stdout+launch.stderr);
- return join(f.home,'wf-agent-runs',f.envelope.run_id);
-}
 function helper(f,command,dir,input){return spawnSync('python3',[join(f.dir,'wf-v2.py'),command,dir],{env:f.env,input:input&&JSON.stringify(input),encoding:'utf8'});}
 function bind(f,dir){
  const request=JSON.parse(readFileSync(join(dir,'agent-request.json')));
@@ -297,12 +297,7 @@ r.handoff.stop(d)
 assert r.io.read(d/'child-stop-readback.json')['endedAt']==1
 `);assert.equal(result.status,0,result.stderr+result.stdout);assert.deepEqual(readFileSync(join(f.home,'rpc-calls'),'utf8').trim().split('\n'),['sessions.abort','agent.wait']);
 });
-test('部署准入拒绝业务已停但cleanup_pending且无delivery的包',()=>{
- const f=fixture(),dir=start(f);writeFileSync(join(dir,'runtime.json'),JSON.stringify({phase:'cleanup_pending',execution_stopped:true}));
- const deploy=readFileSync(resolve('services/phone-adb-controller/deploy.sh'),'utf8');const script=deploy.split("<<'PYADMISSION'\n")[1].split('\nPYADMISSION')[0];
- writeFileSync(join(f.home,'pgrep'),'#!/bin/sh\nexit 1\n',{mode:0o755});f.env.PATH=f.home+':'+process.env.PATH;
- const result=spawnSync('python3',['-c',script],{env:f.env,encoding:'utf8'});assert.notEqual(result.status,0,'cleanup pending deployment was admitted');assert.equal(existsSync(join(f.home,'.openclaw/commander/.deploying')),false);
-});
+
 test('外壳绑定缺失先拒绝；失败preflight重入仍失败且不重复设备动作',()=>{
  const f=fixture(),dir=start(f);
  const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
@@ -459,25 +454,7 @@ except ValueError as error:assert 'durable shell attempt identity' in str(error)
 assert not any(x['type']=='activity_completed' for x in r.io.read(d/'events.json'))
 `);assert.equal(result.status,0,result.stderr+result.stdout);
 });
-test('同一release ready按workflow固定摘要握手，多workflow未知或串用摘要均拒绝',()=>{
- const f=fixture();const workflows=Object.fromEntries(['workflow.meta','workflow_report.internal','douyin_video_publish.android'].map((key,i)=>[key,{snapshot_sha256:String(i+1).repeat(64)}]));
- const seal=releases=>{const result=spawnSync('python3',[join(f.dir,'wf-v2-io.py'),'manifest',f.dir,JSON.stringify(releases)],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);return JSON.parse(readFileSync(join(f.dir,'runtime-manifest.json')));};
- const manifest=seal({'release-test':{workflows}});
- const ready=(key,snapshot,definition={})=>f.call('wf-launch.sh',['--ready'],{workflow_key:key,definition:{...f.definition,snapshot_sha256:snapshot,runtime_snapshot_sha256:manifest.runtime_snapshot_sha256,...definition}});
- for(const [key,value] of Object.entries(workflows)){
-  const result=ready(key,value.snapshot_sha256);assert.equal(result.status,0,result.stdout+result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout),{protocol:'commander-v2',ready:true,release_id:'release-test',snapshot_sha256:value.snapshot_sha256,runtime_snapshot_sha256:manifest.runtime_snapshot_sha256});
- }
- for(const [key,snapshot,definition] of [['missing.workflow','1'.repeat(64),{}],['workflow.meta','2'.repeat(64),{}],['workflow.meta','1'.repeat(64),{release_id:'missing-release'}],['workflow.meta','1'.repeat(64),{runtime_snapshot_sha256:'f'.repeat(64)}]])assert.notEqual(ready(key,snapshot,definition).status,0);
- for(const invalid of [null,[],{'workflow.meta':{}},{'workflow.meta':{snapshot_sha256:null}},{'workflow.meta':{snapshot_sha256:'invalid'}}]){
-  // 显式新shape损坏时不得退回旁边碰巧匹配的旧字段。
-  seal({'release-test':{workflows:invalid,workflow_key:'workflow.meta',snapshot_sha256:'1'.repeat(64)}});
-  assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
-  assert.notEqual(ready('workflow.meta','invalid').status,0);
- }
- seal({'release-test':{workflows}});writeFileSync(join(f.dir,'wf-agent-lib.py'),'# component changed');assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
- assert.equal(existsSync(join(f.home,'wf-agent-runs')),false,'ready must not start any run');
-});
+
 test('同v2原worker从官方持久失败进入cleanup-only并幂等，不新spawn或消费后续turn',()=>{
  const f=fixture(),dir=start(f);helper(f,'claim-spawn',dir);const receipt=bind(f,dir);
  const result=python(f,`d=pathlib.Path(${JSON.stringify(dir)})
