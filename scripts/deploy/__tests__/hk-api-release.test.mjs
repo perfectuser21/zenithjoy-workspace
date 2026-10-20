@@ -56,7 +56,7 @@ if(args[0]==='compose'){
  if(!fs.existsSync(path.join(source,'candidate')))throw Error('build did not use candidate source');
  if(source===process.env.ZJ_HK_REPO)throw Error('build uses mutable shared checkout');
  s.images[image]=process.env.BUILD_SHA;s.builds++;save();process.exit(0);}
- if(args.includes('up')){s.active=image;s.ups.push(image);save();if(process.env.FAIL_MODE==='up'&&s.images[image]===process.env.CANDIDATE)process.exit(9);process.exit(0);}
+ if(args.includes('up')){s.active=image;s.ups.push(image);save();if(process.env.FAIL_MODE==='kill-after-up'&&s.images[image]===process.env.CANDIDATE){process.kill(process.ppid,'SIGKILL');process.exit(0);}if(process.env.FAIL_MODE==='up'&&s.images[image]===process.env.CANDIDATE)process.exit(9);process.exit(0);}
 }
 throw Error('unexpected docker '+args.join(' '));
 `;
@@ -158,4 +158,41 @@ test('回退到当前已运行镜像不改写previous历史',t=>{
  const noop=f.run(['rollback',f.next]);assert.equal(noop.status,0,noop.stderr);
  const actual=f.run(['rollback']);assert.equal(actual.status,0,actual.stderr);
  assert.equal(f.state().images[f.state().active],f.old);
+});
+
+for (const explicit of [false, true]) test(`候选激活后硬中断仍能${explicit ? '指定旧SHA' : '默认'}回退，不误认旧current为已恢复`, t => {
+  const f = fixture(t);
+  assert.equal(f.run(['promote', f.old]).status, 0);
+  writeFileSync(join(f.env.ZJ_HK_RELEASES, 'current'), `${f.old}\n`);
+  const interrupted = f.run(['promote', f.next], {FAIL_MODE:'kill-after-up'});
+  assert.equal(interrupted.signal, 'SIGKILL');
+  assert.equal(f.state().images[f.state().active], f.next);
+  assert.equal(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES, f.next, 'release.json'))).verified, false);
+  const recovered = f.run(explicit ? ['rollback', f.old] : ['rollback']);
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.equal(f.state().active, 'sha256:old-image');
+  assert.equal(readFileSync(join(f.env.ZJ_HK_RELEASES, 'current'), 'utf8').trim(), f.old);
+  assert.equal(f.state().builds, 1, '恢复只用真实留存镜像');
+  assert.equal(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES, f.next, 'release.json'))).verified, false);
+});
+
+test('激活硬中断后禁止继续promote把未验候选当可信current', t => {
+  const f = fixture(t);
+  f.run(['promote', f.next], {FAIL_MODE:'kill-after-up'});
+  const result = f.run(['promote', f.next]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /activation|interrupted|pending/i);
+  assert.equal(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES, f.next, 'release.json'))).verified, false);
+});
+
+test('激活日志不能将第三方未知镜像漂移认证为旧版本或候选', t => {
+  const f = fixture(t);
+  f.run(['promote', f.next], {FAIL_MODE:'kill-after-up'});
+  const state = f.state();
+  state.active = 'sha256:unknown'; state.images[state.active] = f.next;
+  writeFileSync(f.env.FAKE_DOCKER, JSON.stringify(state));
+  const result = f.run(['rollback', f.old]);
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().active, 'sha256:unknown');
+  assert.equal(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES, f.next, 'release.json'))).verified, false);
 });
