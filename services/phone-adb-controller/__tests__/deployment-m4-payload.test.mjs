@@ -78,3 +78,9 @@ test('missing remote syntax interpreter is FAILED and continues like the origina
  const r=spawnSync('python3',['-c',code,f.tool,f.archive,hash],{env:{...process.env,HOME:f.home},encoding:'utf8'});
  assert.equal(r.status,3,r.stderr);assert.equal(readFileSync(join(f.home,'bin-harvest/nested/last.json'),'utf8'),'{"last":true}\n');
 });
+test('pre-existing same-directory temporary file is refused without deleting another writer bytes',t=>{
+ const f=bundle(t),root=join(f.home,'bin-harvest');mkdirSync(root);const temp=join(root,'.first.json.deploy-new');writeFileSync(temp,'other writer');
+ const hash=createHash('sha256').update(readFileSync(f.archive)).digest('hex');
+ const r=spawnSync('python3',[f.tool,'install',f.archive,hash,'after','1'],{env:{...process.env,HOME:f.home},encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.equal(readFileSync(temp,'utf8'),'other writer');assert.equal(existsSync(join(root,'first.json')),false);
+});
