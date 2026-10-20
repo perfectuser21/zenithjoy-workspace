@@ -1,8 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {parse} from 'yaml';
-const load = name => parse(readFileSync(new URL(`../../../.github/workflows/${name}.yml`,import.meta.url),'utf8'));
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const load = name => JSON.parse(execFileSync('python3',['-c',
+  'import json,sys,yaml; d=yaml.safe_load(open(sys.argv[1])); d["on"]=d.pop(True,d.get("on")); print(json.dumps(d))',
+  fileURLToPath(new URL(`../../../.github/workflows/${name}.yml`,import.meta.url))],{encoding:'utf8'}));
 for (const [name,target] of [['promote-dashboard-prod','dashboard'],['promote-staff-hub-prod-hk','staff-hub']]) {
   test(`${target} dispatch and reusable callers cannot bypass same-SHA admission`,()=>{
     const w=load(name);
