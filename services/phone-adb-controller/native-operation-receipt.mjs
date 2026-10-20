@@ -3,8 +3,22 @@ import {mkdirSync, openSync, closeSync, writeFileSync, renameSync, readFileSync,
 import {join, resolve, isAbsolute} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {performance} from 'node:perf_hooks';
 
 const idPattern=/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
+const tailBudgetMs=1000,signalBudgetMs=5000,maximumObservedProcesses=32;
+function inspectionTimeout(maximum,deadline=Infinity){
+ const remaining=deadline-performance.now();
+ if(remaining<=0)throw Error('NATIVE_OBSERVATION_BUDGET_EXHAUSTED');
+ return Math.min(maximum,Math.ceil(remaining));
+}
+async function observedWithin(promise,maximum,deadline=Infinity){
+ let timer;
+ try{
+  const timeout=inspectionTimeout(maximum,deadline);
+  return await Promise.race([promise,new Promise(r=>{timer=setTimeout(()=>r(false),timeout);})]);
+ }catch{return false;}finally{clearTimeout(timer);}
+}
 const receiptKeys=new Set(['version','operation_id','run_dir','run_id','task_id','profile','serial','source_commit','owner','activity','status','execution_stopped','process_coverage','observed_processes_stopped','created_at','started_at','ended_at','pid','pgid','start_identity','signal','signals','wait_code','wait_signal','failure','processes']);
 const watcher=`import os,sys,select\np=int(sys.argv[1])\ntry:\n if hasattr(os,'pidfd_open'):\n  fd=os.pidfd_open(p,0); print('READY',flush=True); select.select([fd],[],[]); print('EXIT',flush=True)\n else:\n  k=select.kqueue(); k.control([select.kevent(p,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ENABLE,fflags=select.KQ_NOTE_EXIT)],0); print('READY',flush=True); k.control(None,1); print('EXIT',flush=True)\nexcept Exception:\n print('UNKNOWN',flush=True); sys.exit(1)\n`;
 const inspector=`import os,sys,json,ctypes,struct\np=int(sys.argv[1]); mode=sys.argv[2]; children=mode=='children'\nif sys.platform=='darwin':\n lib=ctypes.CDLL('/usr/lib/libproc.dylib',use_errno=True)\n def info(pid):\n  b=ctypes.create_string_buffer(136)\n  if lib.proc_pidinfo(pid,3,0,b,136)!=136:return None\n  x=b.raw\n  return {'pid':pid,'ppid':struct.unpack_from('=I',x,16)[0],'uid':struct.unpack_from('=I',x,20)[0],'pgid':struct.unpack_from('=I',x,100)[0],'start_identity':str(struct.unpack_from('=Q',x,120)[0])+':'+str(struct.unpack_from('=Q',x,128)[0])}\n def direct(pid):\n  b=ctypes.create_string_buffer(16384); n=lib.proc_listchildpids(pid,b,len(b))\n  if n<0 or n*4>=len(b):raise RuntimeError('PROCESS_INSPECTION_FAILED')\n  return [x[0] for x in struct.iter_unpack('=I',b.raw[:n*4]) if x[0]>0]\n def group(pid):\n  b=ctypes.create_string_buffer(16384); n=lib.proc_listpgrppids(pid,b,len(b))\n  if n<0 or n*4>=len(b):raise RuntimeError('PROCESS_GROUP_INSPECTION_FAILED')\n  return [x[0] for x in struct.iter_unpack('=I',b.raw[:n*4]) if x[0]>0 and x[0]!=pid]\nelse:\n def info(pid):\n  try:\n   s=open('/proc/%d/stat'%pid).read(); f=s[s.rfind(')')+2:].split()\n   return {'pid':pid,'ppid':int(f[1]),'uid':os.stat('/proc/%d'%pid).st_uid,'pgid':int(f[2]),'start_identity':f[19]}\n  except (FileNotFoundError,ProcessLookupError):return None\n def direct(pid):\n  out=[]\n  for name in os.listdir('/proc'):\n   if name.isdigit():\n    row=info(int(name))\n    if row and row['ppid']==pid:out.append(int(name))\n  return out\n def group(pid):\n  out=[]\n  for name in os.listdir('/proc'):\n   if name.isdigit():\n    row=info(int(name))\n    if row and row['pgid']==pid and row['pid']!=pid:out.append(row['pid'])\n  return out\nif children:\n result=[]; seen={p}; queue=[p]\n while queue:\n  for q in direct(queue.pop(0)):\n   if q not in seen:seen.add(q);result.append(q);queue.append(q)\n print(json.dumps(result))\nelif mode=='group': print(json.dumps(group(p)))\nelse: print(json.dumps(info(p)))\n`;
@@ -37,19 +51,19 @@ function persist(path,value,exclusive=false){
  if(exclusive){const fd=openSync(path,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}return;}
  const fd=openSync(tmp,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}renameSync(tmp,path);
 }
-export function processIdentity(pid){
+export function processIdentity(pid,deadline){
  if(!Number.isSafeInteger(pid)||pid<=0)return null;
- const r=spawnSync('python3',['-c',inspector,String(pid),'identity'],{encoding:'utf8',timeout:2000});
+ const r=spawnSync('python3',['-c',inspector,String(pid),'identity'],{encoding:'utf8',timeout:inspectionTimeout(2000,deadline)});
  if(r.status!==0)throw Error('NATIVE_PROCESS_INSPECTION_FAILED');
  return JSON.parse(r.stdout);
 }
-function descendants(pid){
- const r=spawnSync('python3',['-c',inspector,String(pid),'children'],{encoding:'utf8',timeout:3000});
+function descendants(pid,deadline){
+ const r=spawnSync('python3',['-c',inspector,String(pid),'children'],{encoding:'utf8',timeout:inspectionTimeout(3000,deadline)});
  if(r.status!==0)throw Error('NATIVE_PROCESS_INSPECTION_FAILED');
  return JSON.parse(r.stdout);
 }
-function groupMembers(pgid){
- const r=spawnSync('python3',['-c',inspector,String(pgid),'group'],{encoding:'utf8',timeout:3000});
+function groupMembers(pgid,deadline){
+ const r=spawnSync('python3',['-c',inspector,String(pgid),'group'],{encoding:'utf8',timeout:inspectionTimeout(3000,deadline)});
  if(r.status!==0)throw Error('NATIVE_PROCESS_GROUP_INSPECTION_FAILED');
  return JSON.parse(r.stdout);
 }
@@ -68,16 +82,25 @@ export function beginNativeOperation(context){
  const path=receiptPath(runDir,operationId);mkdirSync(join(resolve(runDir),'native-operations'),{recursive:true,mode:0o700});
  const value={version:1,operation_id:operationId,run_dir:resolve(runDir),run_id:runId,task_id:taskId,profile,serial,source_commit:sourceCommit,owner,activity,status:'intent',execution_stopped:false,process_coverage:'observed_only',created_at:new Date().toISOString(),processes:[]};
  persist(path,value,true);
- let poller,unknown=false,stopped=false;
+ let poller,unknown=false,stopped=false,tailDeadline;
+ // TERM, KILL and final readback share one monotonic observation budget.
+ // Exhaustion never proves termination or grants another business attempt.
+ const startTail=(budget=tailBudgetMs)=>tailDeadline=Math.min(tailDeadline??Infinity,performance.now()+budget);
+ const candidates=ids=>{
+  if(!Array.isArray(ids))throw Error('NATIVE_PROCESS_INSPECTION_FAILED');
+  if(ids.length>maximumObservedProcesses)unknown=true;
+  return ids.slice(0,maximumObservedProcesses);
+ };
  const tracked=new Map();
  const add=async pid=>{
   if(tracked.has(pid))return;
-  let identity;try{identity=processIdentity(pid);}catch{unknown=true;return;}
+  if(tracked.size>=maximumObservedProcesses||(tailDeadline!==undefined&&performance.now()>=tailDeadline)){unknown=true;return;}
+  let identity;try{identity=processIdentity(pid,tailDeadline);}catch{unknown=true;return;}
   if(!identity){unknown=true;return;}
   if(value.pid&&identity.pgid!==value.pgid)unknown=true;
   const watcher=watchExit(pid);tracked.set(pid,{...identity,watcher});
-  const ready=await Promise.race([watcher.ready,new Promise(r=>setTimeout(()=>r(false),1000))]);
-  try{if(!ready||processIdentity(pid)?.start_identity!==identity.start_identity)unknown=true;}catch{unknown=true;}
+  const ready=await observedWithin(watcher.ready,1000,tailDeadline);
+  try{if(!ready||processIdentity(pid,tailDeadline)?.start_identity!==identity.start_identity)unknown=true;}catch{unknown=true;}
   value.processes=[...tracked.values()].map(({watcher,...publicIdentity})=>publicIdentity);
   if(!stopped)persist(path,value);
  };
@@ -85,19 +108,20 @@ export function beginNativeOperation(context){
   value.pid=pid;value.pgid=pid;value.status='running';value.started_at=new Date().toISOString();
   await add(pid);value.start_identity=tracked.get(pid)?.start_identity||null;
   persist(path,value);
-  poller=setInterval(()=>{try{for(const child of descendants(pid))void add(child).catch(()=>{unknown=true;});}catch{unknown=true;}},25);
+  poller=setInterval(()=>{try{for(const child of candidates(descendants(pid,tailDeadline)))void add(child).catch(()=>{unknown=true;});}catch{unknown=true;}},25);
   poller.unref();
  };
  const stop=async(signal,code,waitSignal)=>{
   if(stopped)return readNativeOperation(runDir,operationId);
+  startTail();
   stopped=true;clearInterval(poller);
-  try{for(const child of descendants(value.pid))await add(child);}catch{unknown=true;}
-  try{if(groupMembers(value.pgid).some(pid=>!tracked.has(pid)))unknown=true;}catch{unknown=true;}
+  try{for(const child of candidates(descendants(value.pid,tailDeadline)))await add(child);}catch{unknown=true;}
+  try{if(candidates(groupMembers(value.pgid,tailDeadline)).some(pid=>!tracked.has(pid)))unknown=true;}catch{unknown=true;}
   const records=[];
   for(const item of tracked.values()){
-   let current;try{current=processIdentity(item.pid);}catch{unknown=true;}
+   let current;try{current=processIdentity(item.pid,tailDeadline);}catch{unknown=true;}
    if(current&&(current.pid!==item.pid||current.start_identity!==item.start_identity||current.uid!==item.uid||current.pgid!==item.pgid||current.ppid!==item.ppid))unknown=true;
-   const exited=await Promise.race([item.watcher.exited,new Promise(r=>setTimeout(()=>r(false),200))]);
+   const exited=await observedWithin(item.watcher.exited,200,tailDeadline);
    if(!exited)unknown=true;
    records.push({pid:item.pid,start_identity:item.start_identity,pgid:item.pgid,termination:{confirmed:exited}});
    item.watcher.close();
@@ -110,14 +134,16 @@ export function beginNativeOperation(context){
   return value;
  };
  const maySignal=pid=>{
-  const expected=tracked.get(pid);let current;try{current=processIdentity(pid);}catch{unknown=true;return false;}
+  const expected=tracked.get(pid);let current;try{current=processIdentity(pid,tailDeadline);}catch{unknown=true;return false;}
   if(!expected||!current||current.start_identity!==expected.start_identity||current.uid!==expected.uid||current.pgid!==expected.pgid){unknown=true;return false;}
   return true;
  };
  const notStarted=()=>{stopped=true;clearInterval(poller);value.status='not_started';value.execution_stopped=true;value.process_coverage='not_started';value.failure='native_pre_spawn_error';value.ended_at=new Date().toISOString();persist(path,value);return value;};
  const signalTargets=async signal=>{
-  try{for(const child of descendants(value.pid))await add(child);}catch{unknown=true;}
-  try{const root=processIdentity(value.pid);if(root?.start_identity===value.start_identity){for(const pid of groupMembers(value.pgid))await add(pid);}else unknown=true;}catch{unknown=true;}
+  if(stopped)return 0;
+  startTail(signalBudgetMs);
+  try{for(const child of candidates(descendants(value.pid,tailDeadline)))await add(child);}catch{unknown=true;}
+  try{const root=processIdentity(value.pid,tailDeadline);if(root?.start_identity===value.start_identity){for(const pid of candidates(groupMembers(value.pgid,tailDeadline)))await add(pid);}else unknown=true;}catch{unknown=true;}
   let sent=0;
   for(const pid of [...tracked.keys()].reverse())if(maySignal(pid)){
    try{process.kill(pid,signal);sent++;}catch(error){if(error.code!=='ESRCH')unknown=true;}
