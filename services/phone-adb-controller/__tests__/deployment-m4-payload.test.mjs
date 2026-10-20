@@ -106,10 +106,16 @@ test('actual pre-source guard rejects missing or modified deployment helpers bef
  const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-C',root,...args],{stdio:'pipe'});
  git('init','-q');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','fixed source fixture');
  const deploy=readFileSync(join(service,'deploy.sh'),'utf8'),start=deploy.indexOf('for _helper in '),end=deploy.indexOf('source "$D/deployment-functions.sh"')+'source "$D/deployment-functions.sh"'.length;
- const invoke=()=>spawnSync('bash',['-c',`set -euo pipefail\ncd ${quote(root)}\nD=${quote(dir)}\n${deploy.slice(start,end)}`],{encoding:'utf8'});
+ const invoke=(env=process.env)=>spawnSync('bash',['-c',`set -euo pipefail\ncd ${quote(root)}\nD=${quote(dir)}\n${deploy.slice(start,end)}`],{encoding:'utf8',env});
  assert.equal(invoke().status,0);
  const marker=join(root,'loaded-tampered-helper');writeFileSync(join(dir,names[0]),`touch ${quote(marker)}\n`+readFileSync(join(service,names[0]),'utf8'));
  assert.notEqual(invoke().status,0);assert.equal(existsSync(marker),false);
+ const other=join(root,'redirected-repo'),otherDir=join(other,'services/phone-adb-controller');mkdirSync(otherDir,{recursive:true});
+ for(const name of names)writeFileSync(join(otherDir,name),readFileSync(join(dir,name)));
+ const otherGit=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-C',other,...args],{stdio:'pipe'});
+ otherGit('init','-q');otherGit('add','.');otherGit('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','redirected helper fixture');
+ const redirected=invoke({...process.env,GIT_DIR:join(other,'.git'),GIT_WORK_TREE:other});
+ assert.notEqual(redirected.status,0,'ambient Git repository must not authorize modified local helper');assert.equal(existsSync(marker),false);
  writeFileSync(join(dir,names[0]),readFileSync(join(service,names[0])));rmSync(join(dir,names[2]));assert.notEqual(invoke().status,0);assert.equal(existsSync(marker),false);
 });
 for(const mask of ['022','077'])test('ordinary SH mode equals real chmod +x under remote umask '+mask,t=>{
