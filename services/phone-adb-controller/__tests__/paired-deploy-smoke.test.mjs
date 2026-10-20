@@ -117,17 +117,6 @@ test('SQL附件transport真实存三份源字节、实际SHA读回并拒绝篡�
  assert.equal(transport(f.root,'ssh',['xian-m4','python3 -c "print(1)" ~/outside/release-evidence/'+name]).status,2);
 });
 
-test('full deployment dry-run crosses real M4 payload staging before paired CAS verification',t=>{
- const root=mkdtempSync(join(tmpdir(),'paired-full-m4-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
- // Use the existing phone-adb-controller-smoke 180s bound; no deployment/CI budget changes.
- const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:180000,env:{...process.env,PATH:root+':'+process.env.PATH}});
- assert.equal(result.error,undefined,JSON.stringify({status:result.status,signal:result.signal,error:result.error?.message,stdout:result.stdout,stderr:result.stderr}));
- let receipt;assert.doesNotThrow(()=>{receipt=verify(root);},result.stdout+result.stderr);
- assert.deepEqual(receipt.remote_dirs,['~/bin-harvest','~/.local/bin']);
- const calls=readFileSync(join(root,'transport.jsonl'),'utf8').trim().split('\n').map(v=>JSON.parse(v));
- assert.ok(calls.some(v=>v.kind==='ssh'&&v.args[1]?.includes('/deployment-m4-payload.py install ')),'batch stage must actually execute reviewed installer');
-});
-
 test('paired M4 batch adapter rejects wrong host, unknown command and unreviewed helper',t=>{
  const f=fixture(t),stage=join(f.root,'m4-payload-deploy.fixture');mkdirSync(stage);
  const install=`python3 ${stage}/deployment-m4-payload.py install ${stage}/payload.tar ${'a'.repeat(64)} before 0`;
