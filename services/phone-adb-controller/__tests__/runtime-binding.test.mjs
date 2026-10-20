@@ -98,7 +98,7 @@ console.log(JSON.stringify(result));`,{mode:0o600});
  assert.equal(readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8'),originalAck);
 });
 test('public归一不隐藏关联任务/其他来源/显式undefined，也不改原ACK',async t=>{
- for(const kind of ['associated','task_run_missing','payload_task','task_string','task_null','task_undefined','payload_undefined','other_source']){
+ for(const kind of ['associated','task_run_missing','payload_task','task_string','task_null','task_undefined','payload_undefined','payload_task_run','contradictory_task','task_run_undefined','payload_task_run_undefined','other_source']){
   const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));let posted;
   const action=bindRun({dir,runId:'scope-run',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{
    if(input)posted=input;
@@ -110,10 +110,14 @@ test('public归一不隐藏关联任务/其他来源/显式undefined，也不改
    if(kind==='task_null')binding.task_id=null;
    if(kind==='task_undefined')binding.task_id=undefined;
    if(kind==='payload_undefined')binding.payload.task_id=undefined;
+   if(kind==='payload_task_run')binding.payload.task_run_id='actual-task-run';
+   if(kind==='contradictory_task'){binding.task_id='actual-task';binding.payload.task_id='other-task';}
+   if(kind==='task_run_undefined')binding.task_run_id=undefined;
+   if(kind==='payload_task_run_undefined')binding.payload.task_run_id=undefined;
    if(kind==='other_source')binding.source_kind='kernel';
    return {binding};
   }});
-  if(['task_undefined','payload_undefined','other_source'].includes(kind)){
+  if(['task_undefined','payload_undefined','payload_task_run','contradictory_task','task_run_undefined','payload_task_run_undefined','other_source'].includes(kind)){
    await assert.rejects(action,kind==='other_source'?/ACK内容不匹配: source_kind/:/RUN_BINDING_TASK_ID_INVALID/);
    assert.equal(existsSync(join(dir,'run-bindings/a1.ack.json')),false);continue;
   }
