@@ -68,9 +68,14 @@ def pack(args):
 
 
 def verified_bundle(path, expected):
-    data = pathlib.Path(path).read_bytes()
-    require(re.fullmatch('[a-f0-9]{64}', expected) and sha(data) == expected, 'bundle hash mismatch')
+    require(re.fullmatch('[a-f0-9]{64}', expected), 'invalid bundle hash')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode) and info.st_size <= 132 * 1024 * 1024, 'oversized archive')
+        data = stream.read(132 * 1024 * 1024 + 1)
     require(len(data) <= 132 * 1024 * 1024, 'oversized archive')
+    require(sha(data) == expected, 'bundle hash mismatch')
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
         members = archive.getmembers()
         require(len(members) <= 1000, 'too many archive members')
