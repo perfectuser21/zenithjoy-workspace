@@ -93,9 +93,16 @@ PY
 }
 
 # Bootstrap from the actual running image, never from a mutable latest tag.
-OLD_IMAGE=$(docker inspect "$SERVICE" --format '{{.Image}}')
-[[ -n "$OLD_IMAGE" ]] || fail 'running image is unavailable'
-PROJECT=$(docker inspect "$SERVICE" --format '{{index .Config.Labels "com.docker.compose.project"}}')
+if OLD_IMAGE=$(docker inspect "$SERVICE" --format '{{.Image}}' 2>/dev/null); then
+  [[ -n "$OLD_IMAGE" ]] || fail 'running image is unavailable'
+  PROJECT=$(docker inspect "$SERVICE" --format '{{index .Config.Labels "com.docker.compose.project"}}')
+else
+  # Compose may have removed the old container before its replacement exists.
+  # Only an activation journal can supply recovery identity in that interval.
+  [[ -f "$RELEASES/activation.json" ]] || fail 'container missing without a trusted activation record'
+  OLD_IMAGE=
+  PROJECT=$(json_field "$RELEASES/activation.json" project)
+fi
 [[ "$PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail 'running compose project is unavailable'
 # A killed publisher cannot run its EXIT trap. Its durable intent is the only
 # authority for accepting the known old/candidate mismatch; arbitrary drift fails.
@@ -111,7 +118,7 @@ for key in ('current','target'):
     assert m['sha']==d[key] and m['project']==project, 'activation manifest identity mismatch'
     assert m['image']==d['old_image' if key=='current' else 'image'], 'activation image mismatch'
     if key=='current': assert m['verified'] is True, 'previous image was never verified'
-assert d['project']==project and active in (d['old_image'],d['image']), 'unknown running image drift'
+assert d['project']==project and active in ('',d['old_image'],d['image']), 'unknown running image drift'
 assert d['previous'] is None or re.fullmatch('[0-9a-f]{40}',d['previous']), 'invalid previous release'
 print(d['current'])
 PY
@@ -203,8 +210,8 @@ printf '%s\n' "$CURRENT" > "$RELEASES/previous.tmp"
 mv "$RELEASES/previous.tmp" "$RELEASES/previous"
 printf '%s\n' "$TARGET" > "$RELEASES/current.tmp"
 mv "$RELEASES/current.tmp" "$RELEASES/current"
-rm "$RELEASES/activation.json"
 SWITCHED=false
+rm "$RELEASES/activation.json"
 trap - EXIT INT TERM
 echo "HK API $ACTION verified: $TARGET"
 echo "HK_RELEASE_PREVIOUS=$CURRENT"
