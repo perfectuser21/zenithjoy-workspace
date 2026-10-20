@@ -104,11 +104,13 @@ test('主线部署消费已成功的Pilot release verification同run证据且凭
  assert.ok(text.indexOf('phone-deploy-evidence.mjs')<text.indexOf('uses: tailscale/github-action'),'证据身份先于目标网络操作');
 });
 
-test('控制SSH运输只携带固定SHA与编码JSON，远端仍拒绝旧main',()=>{
+test('控制SSH运输绑定候选和门禁工具SHA，两者必须是已合并主线版本',()=>{
  const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
  assert.match(text,/DEPLOY_SHA: \$\{\{ steps\.evidence\.outputs\.sha \}\}/);
  assert.match(text,/CI_BUNDLE_B64='%s'/);assert.match(text,/Buffer\.from\(fs\.readFileSync\(0,"utf8"\),"base64"\)/);
- assert.match(text,/rev-parse origin\/main\)" != "\$DEPLOY_SHA"/);
+ assert.match(text,/merge-base --is-ancestor "\$DEPLOY_SHA" origin\/main/);
+ assert.match(text,/merge-base --is-ancestor "\$TOOL_SHA" origin\/main/);
+ assert.match(text,/show "\$TOOL_SHA:\.github\/workflows\/scripts\/deploy-phone-adb-remote-lib\.sh"/);
  assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$IMPLEMENTATION_RUN_ID" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT"/);
  assert.doesNotMatch(text,/upload-artifact|CECELIA_INTERNAL_TOKEN=/);
 });
