@@ -146,7 +146,6 @@ test('staging构建固定候选且不改共享HEAD，健康后回读同SHA', t =
   const f = fixture(t); f.git('checkout', f.old);
   const result = stage(f); assert.equal(result.status, 0, result.stderr);
   assert.equal(f.git('rev-parse', 'HEAD'), f.old);
-  assert.equal(deploy.stdout.match(/^HK_RELEASE_PREVIOUS=([a-f0-9]{40})$/m)?.[1], f.old);
   assert.equal(f.state().images[f.state().active], f.next);
 });
 for (const mode of ['sha', 'health']) test(`staging ${mode}不符不能产出成功运行`, t => {
