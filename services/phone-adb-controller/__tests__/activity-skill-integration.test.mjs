@@ -44,14 +44,14 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
 });
 
 // Real parent/child lifecycle + socket; only the Gateway's official RPC transport is offline.
-async function continuationFixture({policy={max_additional_turns:1},activityKey='qualification',ownerState='done',completeFinal=false,businessResult={status:'completed',qualified:1},phoneError,resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
- const d=mkdtempSync(join(tmpdir(),'handoff-continuation-'));let launches=0,resumes=0;const turns=[],directories=[];
+async function continuationFixture({policy={max_additional_turns:1},activityKey='qualification',ownerState='done',completeFinal=false,businessResult={status:'completed',qualified:1},phoneError,phoneUnknown=false,throwUnknown=false,workflow=false,resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
+ const d=mkdtempSync(join(tmpdir(),'handoff-continuation-'));let launches=0,resumes=0,cleaned=0,quarantined=0,followed=0;const turns=[],directories=[];
  try{
   const name=activityKey==='send_dm'?'douyin-leadgen-activity-104-send-dm':'douyin-leadgen-activity-102-'+activityKey,path=`skills/${name}/SKILL.md`,supportPath='skills/leadgen-activity-execution.md';
   const text=readFileSync(join(sourceRoot,path),'utf8'),support=readFileSync(join(sourceRoot,supportPath),'utf8'),version=text.match(/^  version: (.+)$/m)[1];
   for(const [p,body] of [[path,text],[supportPath,support],['activity-skill-tool.mjs',readFileSync(join(sourceRoot,'activity-skill-tool.mjs'))]]){mkdirSync(dirname(join(d,'runtime',p)),{recursive:true});writeFileSync(join(d,'runtime',p),body);}
   const frozen={files:{['runtime/'+path]:hash(text),['runtime/'+supportPath]:hash(support)},snapshot_sha256:'fixture-snapshot',release:{id:'fixture-release'},deployment:{source_commit:'a'.repeat(40),target:'mmv',observation_id:'fixture-observation'},workflow_version:{id:'fixture-wv'},activities:[{reference:{slot_key:activityKey,reference_id:'fixture-ref'},version:{id:'fixture-av',payload:{contract:{...(policy===undefined?{}:{agent_recovery:policy})},definition_key:activityKey==='send_dm'?'douyin_lead_outreach.send_dm':'douyin_video_processing.'+activityKey,implementation_bindings:[{kind:'skill',name,version,path:'services/phone-adb-controller/'+path}]}}}]};
-  const handlers={state:{budgetDeadline:Date.now()+60000},handoffContext:async()=>({fixture:true}),handoffHeartbeat:async()=>{},handoffPhone:async()=>{if(phoneError)throw Error(phoneError);return {fresh:true};}};
+  const handlers={state:{budgetDeadline:Date.now()+60000},handoffContext:async()=>({fixture:true}),handoffHeartbeat:async()=>{},handoffPhone:async()=>{if(phoneUnknown)throw Object.assign(Error('native phone exit unknown'),{executionStopped:false});if(phoneError)throw Error(phoneError);return {fresh:true};}};
   const rpc=async input=>{
    if(input.kind==='activity_skill_authority')return {authorized:skillAuthority(input.request,{home:d,verifyWorkspace:()=>true})};
    turns.push(input.request);const turn=turns.length-1;if(turn===1&&secondRpcUnknown)throw Error('official transport result unavailable');
@@ -69,7 +69,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
      writeFileSync(join(dir,'spawn-receipt.json'),JSON.stringify(receipt));writeFileSync(join(dir,'agent-binding.json'),JSON.stringify({...request,child_run_id:receipt.runId,child_session_key:receipt.childSessionKey}));
      const deps={home:d,authorize:async q=>skillAuthority(q,{home:d,verifyWorkspace:()=>true})};
      await relayActivityTool(dir,'inspect',{},deps);
-     if(turn===0){for(let i=0;i<(activityKey==='qualification'?2:0);i++){const read=()=>relayActivityTool(dir,'phone',{command:'native-audio-evidence',args:[]},deps);if(phoneError)await assert.rejects(read);else await read();}if(resumeFirst)await relayActivityTool(dir,'resume',{},deps);await afterFirst?.({handlers,request:input.request});}
+     if(turn===0){for(let i=0;i<(activityKey==='qualification'?2:0);i++){const read=()=>relayActivityTool(dir,'phone',{command:'native-audio-evidence',args:[]},deps);if(phoneError||phoneUnknown)await assert.rejects(read);else await read();}if(resumeFirst){const resume=()=>relayActivityTool(dir,'resume',{},deps);if(throwUnknown)await assert.rejects(resume);else await resume();}await afterFirst?.({handlers,request:input.request});}
      else{
       await assert.rejects(()=>relayActivityTool(directories[0],'inspect',{},deps),'old generation cannot use the live broker');
       await assert.rejects(()=>relayActivityTool(dir,'phone',{command:'native-audio-evidence',args:[]},deps),'native evidence budget is cumulative');
@@ -84,8 +84,13 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
    }})};
   };
   const recover=createActivityRecovery({runDir:d,frozen,binding:{id:'fixture-binding',run_id:'fixture__a1'},env:{},handlers,rpc,verify});
-  const result=await recover({activity:{key:activityKey},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:async()=>{resumes++;return businessResult;}});
-  return {result,launches,resumes,turns,directories,owner_pending:readdirSync(join(d,'.openclaw','leadgen-owner-turns')).some(p=>p.endsWith('.pending.json'))};
+  const resume=async()=>{resumes++;if(throwUnknown)throw Object.assign(Error('native resume exit unknown'),{executionStopped:false});return businessResult;};
+  let originalCalls=0;
+  const result=workflow?await runWorkflow({activities:[{key:activityKey,retry_safe:false},{key:'next'},{key:'cleanup'}],context:{},
+   handlers:{[activityKey]:async()=>{if(++originalCalls===1)throw Error('temporary application fault');return resume();},next:async()=>{followed++;return {};},cleanup:async()=>{cleaned++;return {};}},
+   commander:async()=>({action:'continue',reason:'isolated owner'}),record:async()=>{},verify,recover,quarantine:async()=>{quarantined++;return {verified:true};}})
+   :await recover({activity:{key:activityKey},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:resume});
+  return {result,launches,resumes,turns,directories,cleaned,quarantined,followed,owner_pending:readdirSync(join(d,'.openclaw','leadgen-owner-turns')).some(p=>p.endsWith('.pending.json'))};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
 for(const resumeFirst of [false,true])test('confirmed failed Agent continues once in original broker without resetting execution/evidence '+resumeFirst,async()=>{
@@ -161,4 +166,14 @@ for(const ownerState of ['live_subagent','registry_active','registry_identity','
 
 for(const ownerState of ['code_only','model_payload'])test('code zero or model payload cannot release an unresolved original owner '+ownerState,async()=>{
  const r=await continuationFixture({ownerState});assert.equal(r.launches,1);assert.equal(r.result.status,'failed');assert.equal(r.result.execution_stopped,false);assert.equal(r.owner_pending,true);
+});
+
+for(const [name,options] of [
+ ['resume returned unknown',{resumeFirst:true,businessResult:{status:'failed',execution_stopped:false,reason:'REMOTE_EXIT_UNKNOWN'}}],
+ ['resume threw unknown',{resumeFirst:true,throwUnknown:true}],
+ ['phone threw unknown',{phoneUnknown:true}],
+ ['handler state became unknown',{resumeFirst:true,afterFirst:({handlers})=>{handlers.state.executionUnknown=true;}}],
+])test('real outer Workflow quarantines native unknown despite official Agent termination: '+name,async()=>{
+ const r=await continuationFixture({...options,workflow:true});assert.equal(r.launches,1);assert.equal(r.turns.length,1);assert.equal(r.cleaned,0);assert.equal(r.followed,0);assert.equal(r.quarantined,1);assert.equal(r.result.status,'failed');
+ assert.equal(r.result.results[0].execution_stopped,false);assert.equal(r.result.results.find(x=>x.activity==='cleanup').status,'blocked');assert.equal(r.result.resource_quarantine.verified,true);
 });
