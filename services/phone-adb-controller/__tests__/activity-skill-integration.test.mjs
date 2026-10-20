@@ -57,9 +57,10 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
    turns.push(input.request);const turn=turns.length-1;if(turn===1&&secondRpcUnknown)throw Error('official transport result unavailable');
    return {result:await runSkillAgent(input.request,{home:d,verifyWorkspace:()=>true,execute:async(command,args)=>{
     if(command==='openclaw'&&args[0]==='gateway'){
+     if(args[2]==='tools.invoke'){const parent=JSON.parse(readFileSync(join(directories[0],'agent-request.json'),'utf8')).parent_session_key;return {code:0,stdout:JSON.stringify({ok:true,toolName:'subagents',source:'core',output:{details:{status:'ok',action:'list',callerIsSubagent:false,callerSessionKey:ownerState==='registry_identity'?'other':parent,requesterSessionKey:parent,active:ownerState==='registry_active'?[{runId:'unbound-live-child'}]:ownerState==='registry_missing'?undefined:[]}}}),stderr:''};}
      if(args[2]==='agent.wait')return {code:0,stdout:JSON.stringify({runId:ownerState==='wrong_run'?'other':'owner-turn-0',status:ownerState==='wait_missing'?'timeout':'ok',endedAt:ownerState==='wait_missing'?null:Date.now()}),stderr:''};
      const previous=JSON.parse(readFileSync(join(directories[0],'agent-request.json'),'utf8'));
-     return {code:0,stdout:JSON.stringify({ts:Date.now(),sessions:[{key:previous.parent_session_key,lastRunId:['wrong_run','later_done'].includes(ownerState)?'other':'owner-turn-0',sessionId:ownerState==='wrong_session'?'other-session':'owner-session-0',...(ownerState==='pending'?{pendingInputs:['unconsumed']}:{}),status:'done',endedAt:ownerState==='missing_end'?null:Date.now(),hasActiveRun:ownerState==='missing_active'?undefined:ownerState==='active',activeRunIds:ownerState==='active'?['late-owner']:[]}]}),stderr:''};
+     return {code:0,stdout:JSON.stringify({ts:Date.now(),sessions:[{key:previous.parent_session_key,lastRunId:['wrong_run','later_done'].includes(ownerState)?'other':'owner-turn-0',sessionId:ownerState==='wrong_session'?'other-session':'owner-session-0',...(ownerState==='live_subagent'?{hasActiveSubagentRun:true}:{}),...(ownerState==='pending'?{pendingInputs:['unconsumed']}:{}),status:'done',endedAt:ownerState==='missing_end'?null:Date.now(),hasActiveRun:ownerState==='missing_active'?undefined:ownerState==='active',activeRunIds:ownerState==='active'?['late-owner']:[]}]}),stderr:''};
     }
     if(command==='openclaw'){
      launches++;const dir=dirname(args[args.indexOf('--message-file')+1]);directories.push(dir);
@@ -152,4 +153,8 @@ for(const reason of ['EACCES: forbidden resource','SOURCE_FIXED_MISMATCH','LOCK_
 });
 test('native evidence capability failure is retained even when child only returns an error terminal',async()=>{
  const r=await continuationFixture({phoneError:'RECORD_CAPTURE_STRATEGY_UNVERIFIED'});assert.equal(r.launches,1);assert.equal(r.resumes,0);assert.equal(r.result.status,'partial');
+});
+
+for(const ownerState of ['live_subagent','registry_active','registry_identity','registry_missing'])test('fresh official owner readback cannot hide another active or unverified child '+ownerState,async()=>{
+ await assert.rejects(()=>continuationFixture({ownerState}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
 });
