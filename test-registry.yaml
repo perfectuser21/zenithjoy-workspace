@@ -7496,6 +7496,14 @@ agent_suite:
   product: AI员工
   note: "明示fake SSH PG catalog输入经真实readiness；缺schema/无效JSON先于admission及安装拒绝，配套CAS安装须真实字节读回"
 
+- id: deployment-m4-payload
+  path: services/phone-adb-controller/__tests__/deployment-m4-payload.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "原M4四组真实本地transport字节/权限/顺序、特殊重载屏障与FAILED继续语义；记录实际子进程启动数，不触设备"
+
 - id: leadgen-workflow-skill-contract
   path: scripts/product-map/__tests__/leadgen-workflow-skill.test.js
   type: unit
