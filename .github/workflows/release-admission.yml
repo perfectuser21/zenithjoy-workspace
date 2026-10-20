@@ -1,0 +1,68 @@
+name: Release admission（同版本 staging 与真实验收）
+on:
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+      targets:
+        required: true
+        type: string
+      acceptance_run_key:
+        required: true
+        type: string
+    outputs:
+      sha:
+        value: ${{ jobs.admission.outputs.sha }}
+permissions:
+  contents: read
+  actions: read
+jobs:
+  admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.staging.outputs.sha }}
+    steps:
+      - name: Only trusted main release entry
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: test "$RELEASE_REF" = refs/heads/main
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact candidate staging runs
+        id: staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          TARGETS: ${{ inputs.targets }}
+        run: node scripts/release-gate/staging-evidence.mjs "$SHA" "$TARGETS"
+      - uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+      - name: Read frozen business acceptance from Brain
+        env:
+          SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.US_MAC_USER }}
+          SHA: ${{ steps.staging.outputs.sha }}
+          TARGETS: ${{ inputs.targets }}
+          RUN_KEY: ${{ inputs.acceptance_run_key }}
+        run: |
+          set -euo pipefail
+          # SSH joins remote arguments into a shell command: validate every data token first.
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGETS" =~ ^(api|dashboard|staff-hub)(,(api|dashboard|staff-hub))*$ ]]
+          [[ "$RUN_KEY" =~ ^[a-zA-Z0-9_.:-]{1,180}$ ]]
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 -i "$KEY_FILE" \
+            "$SSH_USER@$SSH_HOST" node --input-type=module - "$SHA" "$TARGETS" "$RUN_KEY" \
+            < scripts/release-gate/acceptance-record.mjs

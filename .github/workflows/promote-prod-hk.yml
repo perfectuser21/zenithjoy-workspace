@@ -1,89 +1,75 @@
-name: Promote to Production HK :5200（人工放行闸）
-
-# ───────────────────────────────────────────────────────────────────────────
-# 拆库刀3-T5（2026-07-15）：生产 API 已迁 hk-vps docker（zenithjoy-api-prod）。
-#   本 workflow 取代 promote-prod.yml（美国蓝绿版，T6 已删除，07-30）：
-#   人手点 workflow_dispatch（死的人工卡点，绝不自动触发）→ ssh HK →
-#   git 同步到指定 SHA → docker build + up 生产容器 → /health 冒烟断言 build sha。
-#   staging（zenithjoy-api-staging）不受影响。
-# ───────────────────────────────────────────────────────────────────────────
-
+name: Promote API to Production HK
 on:
   workflow_dispatch:
     inputs:
       sha:
-        description: '要 promote 的 commit SHA（默认 main HEAD）'
+        description: 已在staging通过的完整40位SHA
+        required: true
+        type: string
+      acceptance_run_key:
+        description: 冻结同版本且已定案的Brain验收单
+        required: true
+        type: string
+      confirm:
+        description: 输入PROMOTE
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+      acceptance_run_key:
+        required: true
+        type: string
+      confirm:
         required: false
-        default: ''
-
-concurrency:
-  group: promote-prod-hk
-  cancel-in-progress: false
-
+        type: string
+        default: PROMOTE
+permissions:
+  contents: read
+  actions: read
 jobs:
+  admission:
+    uses: ./.github/workflows/release-admission.yml
+    with:
+      sha: ${{ inputs.sha }}
+      targets: api
+      acceptance_run_key: ${{ inputs.acceptance_run_key }}
+    secrets: inherit
   promote-prod-hk:
     name: Promote 生产 :5200（HK docker）
+    needs: [admission]
+    concurrency:
+      group: zenithjoy-production-hk
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Confirm promotion
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: test "$CONFIRM" = PROMOTE
       - name: 接入 Tailscale（走内网）
         uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: latest
 
-      - name: Promote via SSH（HK docker build + up + 冒烟）
+      - uses: actions/checkout@v4
+
+      - name: Promote verified SHA via SSH（保留镜像，失败自动恢复）
         env:
           SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
           SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
-          INPUT_SHA: ${{ inputs.sha }}
+          DEPLOY_SHA: ${{ needs.admission.outputs.sha }}
         timeout-minutes: 25
         run: |
+          set -euo pipefail
           KEY_FILE=$(mktemp)
           trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
-
-          ssh -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=30 \
-              -o ServerAliveInterval=60 \
-              -i "$KEY_FILE" \
-              "root@${SSH_HOST}" \
-              bash -s -- "${INPUT_SHA}" << 'REMOTE_EOF'
-          set -euo pipefail
-          INPUT_SHA="${1:-}"
-          REPO=/opt/zenithjoy/repo
-
-          git -C "$REPO" fetch --force --prune origin main
-          DEPLOY_SHA="${INPUT_SHA:-$(git -C "$REPO" rev-parse origin/main)}"
-          echo "=== [1/4] git sync → ${DEPLOY_SHA} ==="
-          git -C "$REPO" reset --hard "$DEPLOY_SHA"
-
-          echo "=== [2/4] DB migration（0823 结构性缺陷补齐：此前 promote 无此步骤，生产曾落后 28 个
-          #      migration；与 staging 同款一次性 node 容器，走 prod env-file 的 DATABASE_URL。
-          #      TS_NODE_TRANSPILE_ONLY：宿主 node_modules 污染致 ts-node 类型检查 TS7016 假红，
-          #      类型闸由 CI tsc 负责，部署路径只转译执行（0909 双实证）。）==="
-          docker run --rm \
-            --network zenithjoy-net \
-            --env-file /opt/zenithjoy/prod-api/.env \
-            -e TS_NODE_TRANSPILE_ONLY=1 \
-            -v "$REPO":/repo -w /repo/apps/api \
-            node:20-alpine sh -c "npm install --silent && npx ts-node db/migrations/run-migration.ts"
-
-          echo "=== [3/4] docker build + up（仅生产容器）==="
-          cd "$REPO"
-          BUILD_SHA="$DEPLOY_SHA" docker compose -f deploy/docker-compose.prod-api.yml build zenithjoy-api-prod
-          docker compose -f deploy/docker-compose.prod-api.yml up -d zenithjoy-api-prod
-
-          echo "=== [4/4] 冒烟：healthy + /version sha 断言 ==="
-          STATUS=none
-          for i in $(seq 1 20); do
-            STATUS=$(docker inspect zenithjoy-api-prod --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
-            [ "$STATUS" = "healthy" ] && break
-            sleep 5
-          done
-          [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 zenithjoy-api-prod; exit 1; }
-          GOT_SHA=$(curl -fsS http://127.0.0.1:5200/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('build',{}).get('sha',''))")
-          [ "$GOT_SHA" = "$DEPLOY_SHA" ] || { echo "❌ /health build.sha=$GOT_SHA ≠ $DEPLOY_SHA（旧进程仍在跑）"; exit 1; }
-          echo "✅ prod :5200 healthy，build.sha 断言通过"
-          REMOTE_EOF
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \
+            -i "$KEY_FILE" "root@${SSH_HOST}" bash -s -- promote "$DEPLOY_SHA" \
+            < scripts/deploy/hk-api-release.sh
