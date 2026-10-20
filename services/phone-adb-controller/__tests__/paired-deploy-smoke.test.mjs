@@ -69,6 +69,8 @@ for(const mode of ['schema-ready','missing-schema','invalid-json','active-census
   assert.equal(result.error,undefined,'正向readiness必须真正结束，不能靠超时后的旧receipt通过');
   assert.notEqual(result.status,0,'explicit unresolved proof must fail closed');
   assert.match(output,new RegExp('Commander deployment admission: '+(mode==='active-census'?'active Commander process':'bounded cleanup references')),'must be the exact modeled census/proof rejection, not an unrelated script error');
+  const census=JSON.parse(readFileSync(join(root,'remote-census.log'),'utf8').trim());
+  assert.deepEqual(census,{args:['-f','[w]f-agent-run.sh|[w]f-v2.py worker'],status:mode==='active-census'?0:1});
   assert.match(output,/Commander部署准入通道关闭|MMV部署锁通道丢失|Commander仍有在途执行/,'must stop through the real guarded admission failure path');
   const messages=readFileSync(join(root,'admission.log'),'utf8').trim().split('\n').map(x=>JSON.parse(x));
   assert.deepEqual(messages,[{action:'admit'}],'schema通过后真实进入持锁准入，原未决run在安装前拒绝');

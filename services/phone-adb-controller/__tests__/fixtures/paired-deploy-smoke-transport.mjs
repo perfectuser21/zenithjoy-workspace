@@ -138,7 +138,11 @@ if(process.argv[1]&&resolve(process.argv[1])===self){
     writeFileSync(join(busy,'runtime.json'),JSON.stringify({phase:'blocked',execution_stopped:false}));writeFileSync(join(busy,'.worker.lock'),'');
     writeFileSync(join(busy,'cleanup.json'),JSON.stringify({_shell:{files:[]}}));
    }
-   const child=spawn('sh',['-c',args.at(-1)],{stdio:['pipe','inherit','inherit'],env:{...process.env,HOME:home}});
+   // Only this modeled remote guard receives its own process inventory.
+   const census=join(resolve(root),'remote-census');mkdirSync(census,{mode:0o700});
+   const status=process.env.PAIR_DEPLOY_ACTIVE_CENSUS==='1'?0:1;
+   writeFileSync(join(census,'pgrep'),`#!/bin/sh\nexec ${quote(process.execPath)} -e 'const fs=require("node:fs");const args=process.argv.slice(1),expected=["-f","[w]f-agent-run.sh|[w]f-v2.py worker"];if(JSON.stringify(args)!==JSON.stringify(expected))throw Error("unexpected fixture census arguments");fs.appendFileSync(process.env.PAIR_CENSUS_LOG,JSON.stringify({args,status:Number(process.env.PAIR_CENSUS_STATUS)})+"\\n");process.exit(Number(process.env.PAIR_CENSUS_STATUS));' -- "$@"\n`,{mode:0o700});
+   const child=spawn('sh',['-c',args.at(-1)],{stdio:['pipe','inherit','inherit'],env:{...process.env,HOME:home,PATH:census+':'+process.env.PATH,PAIR_CENSUS_LOG:join(resolve(root),'remote-census.log'),PAIR_CENSUS_STATUS:String(status)}});
    process.stdin.on('data',data=>appendFileSync(join(resolve(root),'admission.log'),data));process.stdin.pipe(child.stdin);
    process.exitCode=await new Promise(r=>child.on('close',r));
   }
