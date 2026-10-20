@@ -57,8 +57,9 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
    turns.push(input.request);const turn=turns.length-1;if(turn===1&&secondRpcUnknown)throw Error('official transport result unavailable');
    return {result:await runSkillAgent(input.request,{home:d,verifyWorkspace:()=>true,execute:async(command,args)=>{
     if(command==='openclaw'&&args[0]==='gateway'){
+     if(args[2]==='agent.wait')return {code:0,stdout:JSON.stringify({runId:ownerState==='wrong_run'?'other':'owner-turn-0',status:ownerState==='wait_missing'?'timeout':'ok',endedAt:ownerState==='wait_missing'?null:Date.now()}),stderr:''};
      const previous=JSON.parse(readFileSync(join(directories[0],'agent-request.json'),'utf8'));
-     return {code:0,stdout:JSON.stringify({ts:Date.now(),sessions:[{key:previous.parent_session_key,lastRunId:ownerState==='wrong_run'?'other':'owner-turn-0',status:'done',endedAt:ownerState==='missing_end'?null:Date.now(),hasActiveRun:ownerState==='active',activeRunIds:ownerState==='active'?['late-owner']:[]}]}),stderr:''};
+     return {code:0,stdout:JSON.stringify({ts:Date.now(),sessions:[{key:previous.parent_session_key,lastRunId:['wrong_run','later_done'].includes(ownerState)?'other':'owner-turn-0',status:'done',endedAt:ownerState==='missing_end'?null:Date.now(),hasActiveRun:ownerState==='active',activeRunIds:ownerState==='active'?['late-owner']:[]}]}),stderr:''};
     }
     if(command==='openclaw'){
      launches++;const dir=dirname(args[args.indexOf('--message-file')+1]);directories.push(dir);
@@ -127,4 +128,11 @@ test('send_dm keeps its original single readback-only Agent even with frozen opt
 
 for(const ownerState of ['active','wrong_run','missing_end'])test('extra Agent requires fresh official stop proof for the exact original owner turn '+ownerState,async()=>{
  await assert.rejects(()=>continuationFixture({ownerState}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
+});
+
+test('another completed parent-session turn cannot substitute for exact parent run, but does not erase its official terminal',async()=>{
+ const r=await continuationFixture({ownerState:'later_done'});assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.result.status,'completed');
+});
+test('missing exact parent agent.wait terminal rejects even when session is currently idle',async()=>{
+ await assert.rejects(()=>continuationFixture({ownerState:'wait_missing'}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
 });
