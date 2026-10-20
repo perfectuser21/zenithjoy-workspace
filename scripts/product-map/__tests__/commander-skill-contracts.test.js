@@ -9,7 +9,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadContractsFromDisk, validateContracts, commanderContractsSpec } from '../contracts-lib.mjs';
 
 const fresh = () => loadContractsFromDisk();
@@ -84,4 +86,21 @@ test('冻结业务合同累计5次同类失败提出改进建议，不扩大单�
  assert.equal(douyin.recovery.improvement_after_failures,5);assert.equal(douyin.recovery.max_attempts,1);
  assert.equal(report.recovery.improvement_after_failures,5);assert.equal(report.recovery.max_attempts,2);
  assert.deepEqual(errorsOf(fresh()),[]);
+});
+
+test('未还原Commander正文时必须核真实固定Git来源，坏repo/profile/loader锁不可借静态版本表通过',t=>{
+ const root=mkdtempSync(join(tmpdir(),'commander-source-contract-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const git=(...args)=>{const r=spawnSync('git',['-c','core.hooksPath=/dev/null','-C',root,...args],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
+ git('init','-q');git('remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace.git');
+ mkdirSync(join(root,'product-map/contracts'),{recursive:true});
+ copyFileSync('product-map/contracts/activity-contract.schema.json',join(root,'product-map/contracts/activity-contract.schema.json'));
+ const lock=JSON.parse(readFileSync('.skills-source.json'));
+ const source=spawnSync('git',['clone','--no-hardlinks','--no-checkout','--quiet','.skills-source',join(root,'.skills-source')],{encoding:'utf8'});assert.equal(source.status,0,source.stderr);
+ const env={...process.env,GIT_ALLOW_PROTOCOL:'file'};delete env.SKILLS_SOURCE_DIR;delete env.SKILLS_SOURCE_SSH_KEY;
+ const script=`import {loadContractsFromDisk,validateContracts} from ${JSON.stringify(new URL('../contracts-lib.mjs',import.meta.url).href)};const ctx=loadContractsFromDisk();ctx.repoRoot=process.argv[1];console.log(JSON.stringify(validateContracts(ctx).filter(e=>e.includes('commander_skill'))));`;
+ for(const [label,change] of [['valid',{}],['repo',{repository:'evil/not-central'}],['profile',{profile:'foreign'}],['loader',{loader_sha256:'0'.repeat(64)}]]){
+  writeFileSync(join(root,'.skills-source.json'),JSON.stringify({...lock,...change}));git('add','.skills-source.json');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-qm',label);
+  const r=spawnSync(process.execPath,['--input-type=module','-e',script,root],{env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+  const errors=JSON.parse(r.stdout);if(label==='valid')assert.deepEqual(errors,[]);else assert.ok(errors.length>0,`${label}坏锁被当成已验证Skill来源`);
+ }
 });

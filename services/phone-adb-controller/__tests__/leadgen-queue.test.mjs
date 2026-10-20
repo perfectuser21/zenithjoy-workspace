@@ -9,6 +9,38 @@ const require = createRequire(import.meta.url);
 import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
 
+test('103独立队列冻结跨批CID来源，提交丢回执后保原范围与总预算',async(t)=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const dir=mkdtempSync(join(tmpdir(),'independent-score-'));
+ const ids=['00000000-0000-4000-8000-000000000131','00000000-0000-4000-8000-000000000132'];
+ const sources=Object.fromEntries(ids.map((id,i)=>[id,`batch${i}`]));let committed=[],lost=true;const requests=[];
+ const rpc=async({request:r})=>{requests.push(r);assert.equal(r.source_run,undefined);
+  if(r.op==='score_scope')return {result:{line:'jinuo',run:'independent103',source_run:null,ids,sources}};
+  assert.deepEqual(r.sources,sources);
+  if(r.op==='score_recovery')return {result:{verified:true,ids:committed,scored:committed.length}};
+  if(r.op==='score'){assert.deepEqual(r.ids,ids);assert.equal(r.budget_max,2);
+   if(lost){lost=false;committed=[ids[0]];throw Error('committed response lost');}
+   assert.equal(r.limit,1);committed.push(ids[1]);return {result:{ids:[ids[1]],scored:1,blocked_ids:[]}};}
+  if(r.op==='score_readback')return {result:{verified:true,failures:0}};
+  if(r.op==='policy_review')return {result:{verified:true,rows:ids.map(id=>({id,status:'pass'}))}};
+  throw Error('unexpected '+r.op);};
+ const h=createHandlers({root:dir,env:{P:'qa',SERIAL:'fake',LEADGEN_LINE:'jinuo',WFR_TAG:'independent103',LEADGEN_LIMIT:'2',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir},rpc});
+ await assert.rejects(h.scoring(),/committed response lost/);
+ const saved=JSON.parse(readFileSync(join(dir,'independent103-score-attempt.json')));assert.equal(saved.source_run,null);assert.deepEqual(saved.sources,sources);
+ const result=await h.scoring();assert.equal(result.scored,2);assert.equal(result.recovered,1);
+ assert.equal(requests.filter(r=>r.op==='score').length,2);
+});
+test('独立队列scope保逐行批次，恢复时批次漂移拒绝且显式批次不扩大',async()=>{
+ const ids=['00000000-0000-4000-8000-000000000141','00000000-0000-4000-8000-000000000142'];
+ const rows=ids.map((id,i)=>({id,harvest_batch:`batch${i}`}));const calls=[];
+ const pool={async query(sql,args){calls.push({sql,args});return {rows};}};
+ const scope=await queueRequest(pool,{op:'score_scope',line:'jinuo',run:'independent103'});
+ assert.deepEqual(scope.ids,ids);assert.deepEqual(scope.sources,Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch])));
+ assert.match(calls[0].sql,/\$2::text IS NULL OR harvest_batch=\$2/);
+ const snapshot=companyFixture();const p={async query(sql){if(sql.includes('company_config_runs'))return {rows:[{run_id:'independent103',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,snapshot}]};return {rows:[{...rows[0],harvest_batch:'changed',line_key:'jinuo'}, {...rows[1],line_key:'jinuo'}]};}};
+ await assert.rejects(queueRequest(p,{op:'score_recovery',line:'jinuo',run:'independent103',ids,sources:scope.sources}),/POLICY_SCORE_RECOVERY_AMBIGUOUS/);
+ await assert.rejects(queueRequest(pool,{op:'score_scope',line:'jinuo',run:'independent103',source_run:'batch0'}),/POLICY_SCORE_SCOPE_AMBIGUOUS/);
+});
+
 test('评分冻结 CID 范围与提交读回只认本批本 run 的完整证据',async()=>{
  const id1='00000000-0000-4000-8000-000000000101',id2='00000000-0000-4000-8000-000000000102';
  const snapshot=companyFixture();snapshot.runtime_config.routing={line_key:'jinuo'};
