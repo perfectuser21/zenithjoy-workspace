@@ -3,10 +3,8 @@
 const db = require('./leadgen-db-lib.js');
 const { resolveLine, configEvidence } = require('./judge-video.js');
 const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
-const { judgeComment,judgeCommander } = require('./judge-comment.js');
-const crypto=require('node:crypto');
+const { judgeComment } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const sha=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 const {evaluatePolicy}=require('./leadgen-policy-review.js');
 
