@@ -49,7 +49,12 @@ FAILED=0
 # push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]
 #   先 scp 到同目录临时名,再远端 mv -f 换 inode;带第 5 参 x 时在 mv 之前先 chmod +x(不留"新文件无执行权限"的窗口)。
 for _helper in deployment-functions.sh deployment-m4-payload.sh deployment-m4-payload.py; do
-  git --no-replace-objects show "HEAD:services/phone-adb-controller/$_helper" | cmp - "$D/$_helper" || { echo "部署helper不属于当前固定源: $_helper" >&2; exit 1; }
+  (
+    # Match the existing fixed-source readers: ambient Git state is never authority.
+    for _git_var in ${!GIT_@}; do unset "$_git_var"; done
+    export GIT_NO_REPLACE_OBJECTS=1 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+    git --no-replace-objects -C "$D/../.." show "HEAD:services/phone-adb-controller/$_helper"
+  ) | cmp - "$D/$_helper" || { echo "部署helper不属于当前固定源: $_helper" >&2; exit 1; }
 done
 source "$D/deployment-functions.sh"
 
