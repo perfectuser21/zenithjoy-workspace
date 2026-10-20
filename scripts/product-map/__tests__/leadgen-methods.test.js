@@ -82,10 +82,11 @@ test('migrated baseline still validates every method against pinned central Skil
   t.after(()=>rmSync(central,{recursive:true,force:true}));git(central,'init','-q');
   git(root,'remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace.git');
   const paths=git(root,'ls-files').split('\n').filter(p=>p.endsWith('/SKILL.md'));
-  const saved=new Map(),files=[];put(central,'distribution/catalog.json',{});
+  const saved=new Map(),files=[],loader='fixture loader; never executed\n';put(central,'distribution/catalog.json',{});
+  put(central,'distribution/skills_source.py',loader);
   for(const [i,path] of paths.entries()){const body=readFileSync(join(root,path)),source='bodies/'+i+'.md';saved.set(path,body);put(central,source,body);files.push({path,source,sha256:createHash('sha256').update(body).digest('hex')});rmSync(join(root,path));}
   put(central,'distribution/catalog.json',{profiles:{zenithjoy:{files}}});git(central,'add','.');git(central,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','central pinned methods');
-  put(root,'.skills-source.json',{version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:git(central,'rev-parse','HEAD'),loader_sha256:'0'.repeat(64)});
+  put(root,'.skills-source.json',{version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:git(central,'rev-parse','HEAD'),loader_sha256:createHash('sha256').update(loader).digest('hex')});
   git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','migrated baseline');const base=git(root,'rev-parse','HEAD');
   for(const [path,body] of saved)put(root,path,body);
   assert.equal(checkMethods(root,{base,skillSource:central}).status,'PASS');
