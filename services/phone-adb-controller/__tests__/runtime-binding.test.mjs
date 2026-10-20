@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn,spawnSync } from 'node:child_process';
 import { mkdtempSync,writeFileSync,readFileSync,existsSync } from 'node:fs';
 import { tmpdir,hostname } from 'node:os';
 import { deploymentTarget } from '../deployment-release.mjs';
@@ -12,7 +12,7 @@ import {bindRun,readBinding} from '../runtime-binding.mjs';
 import {createHandlers} from '../leadgen-handlers.mjs';
 import {execInput} from '../leadgen-client.mjs';
 import {readNativeOperation,nativeOperationIdentityMatches} from '../native-operation-receipt.mjs';
-import {readdirSync,rmSync} from 'node:fs';
+import {readdirSync,rmSync,mkdirSync} from 'node:fs';
 function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'binding-runtime-'));const steps=JSON.stringify({steps:[{key:'test.run.execute',usage:{slot_key:'run'},mode:'checkpoint'}]});writeFileSync(join(dir,'step-dod.json'),steps);
  const body={schema_version:2,release:{id:'release',target:actualHost},deployment:{observation_id:'observation',target:actualHost},workflow_version:{id:'wv',payload_sha256:'a'.repeat(64),payload:{workflow_id:'workflow'}},activities:[{reference:{reference_id:'ref',slot_key:'run',activity_id:'activity',activity_version_id:'av'},version:{id:'av',payload:{steps:[{step_id:'step',locator:{step_key:'execute'},contract:{key:'execute'}}]}}}],files:{'step-dod.json':digest(steps)}};
@@ -48,6 +48,51 @@ test('public ACK 显式空task经真实createHandlers保留空身份，缺键不
   }
   assert.equal(controllerCalls,1);
  }
+});
+test('真实public缺task键ACK经原main调用点归一空绑定，原响应保留且native上下文仍严格',async t=>{
+ const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const {snapshot_sha256,...body}=JSON.parse(readFileSync(join(dir,'run-definition.json'),'utf8'));
+ body.deployment.source_commit='a'.repeat(40);body.activities[0].reference.slot_key='preflight';body.activities[0].version.payload.contract={budget:{max_duration_s:120}};
+ const steps=JSON.stringify({steps:[{key:'test.preflight.execute',usage:{slot_key:'preflight'},mode:'checkpoint'}]});
+ writeFileSync(join(dir,'step-dod.json'),steps);body.files['step-dod.json']=digest(steps);
+ writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));mkdirSync(join(dir,'runtime'));
+ let posted;
+ await bindRun({dir,runId:'public-main',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{
+  if(input)posted=input;
+  return {binding:{id:'public-binding',run_id:'public-main__a1',...posted,task_run_id:null,payload:{...posted}}};
+ }});
+ const raw=JSON.parse(readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8')).binding;
+ assert.equal(Object.hasOwn(raw,'task_id'),false);assert.equal(Object.hasOwn(raw.payload,'task_id'),false);
+ const script=join(dir,'main-probe.mjs');
+ writeFileSync(script,`import fs from 'node:fs';import path from 'node:path';import vm from 'node:vm';import {pathToFileURL} from 'node:url';
+const root=${JSON.stringify(new URL('../',import.meta.url).pathname)},dir=${JSON.stringify(dir)},runtime=path.join(dir,'runtime');
+const {createHandlers}=await import(pathToFileURL(root+'leadgen-handlers.mjs'));
+const {execInput}=await import(pathToFileURL(root+'leadgen-client.mjs'));
+const {readNativeOperation}=await import(pathToFileURL(root+'native-operation-receipt.mjs'));
+const definition=await import(pathToFileURL(root+'runtime-definition.mjs'));
+const binding=await import(pathToFileURL(root+'runtime-binding.mjs'));
+const result={calls:[]};
+const env={HOME:dir,WF_HOME:runtime,WFR_RUN_DIR:dir,WFR_ATTEMPT:'a1',WFR_RUN_ID:'public-main',WFR_TAG:'public-main',P:'fixture',SERIAL:'fixture-device',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_video_discovery',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'900',LEADGEN_DISCOVERY_MAX_SECONDS:'120'};
+const proc={env,argv:['node','not-main'],execPath:process.execPath,pid:process.pid,stdout:{write(){}},stderr:{write(){}},exitCode:0};
+const context=vm.createContext({process:proc,console,Date,Map,Set,Buffer,JSON});
+const modules={
+ './activity-commander.mjs':{runWorkflow:async options=>{await options.handlers.preflight();throw Error('unexpected preflight success');}},
+ './leadgen-handlers.mjs':{createHandlers:options=>{result.task_own=Object.hasOwn(options,'taskId');result.task_is_null=options.taskId===null;return createHandlers({...options,execute:async(command,args,opts)=>{result.calls.push(command==='adb'?'adb-read-state':'controller');if(command==='adb')return {code:0,stdout:'device\\n',stderr:''};return execInput(command,args,opts);}});},parseCollection:()=>{}},
+ './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{}},
+ './runtime-definition.mjs':definition,'./runtime-binding.mjs':binding,
+ './leadgen-client.mjs':{createRpc:()=>async()=>{throw Error('unexpected RPC');},execInput:async()=>({code:0,stdout:'',stderr:''})},
+ './step-judge.mjs':{judgeSteps:()=>{throw Error('unexpected verify');}}};
+const source=fs.readFileSync(root+'leadgen-workflow.mjs','utf8');
+const main=new vm.SourceTextModule(source+'\\nexport {main as probeMain};',{context,identifier:pathToFileURL(path.join(runtime,'leadgen-workflow.mjs')).href,initializeImportMeta:meta=>{meta.url=pathToFileURL(path.join(runtime,'leadgen-workflow.mjs')).href;}});
+await main.link(async name=>{const values=modules[name]||await import(name);return new vm.SyntheticModule(Object.keys(values),function(){for(const [k,v]of Object.entries(values))this.setExport(k,v);},{context});});await main.evaluate();
+try{await main.namespace.probeMain();}catch(error){result.error=error.message;}
+const folder=path.join(dir,'native-operations');result.proofs=fs.existsSync(folder)?fs.readdirSync(folder).map(n=>readNativeOperation(dir,n.slice(0,-5))):[];
+console.log(JSON.stringify(result));`,{mode:0o600});
+ const child=spawnSync(process.execPath,['--experimental-vm-modules',script],{encoding:'utf8',timeout:15000});
+ assert.equal(child.status,0,child.stderr);const observed=JSON.parse(child.stdout);
+ assert.equal(observed.error,'EXECUTION_START_FAILED');assert.equal(observed.task_own,true);assert.equal(observed.task_is_null,true);
+ assert.deepEqual(observed.calls,['adb-read-state','controller']);assert.equal(observed.proofs.length,1);
+ assert.equal(observed.proofs[0].task_id,null);assert.equal(observed.proofs[0].status,'not_started');assert.equal(observed.proofs[0].execution_stopped,true);
 });
 async function server(t,handler){const seen=[];const s=createServer(async(req,res)=>{let raw='';for await(const part of req)raw+=part;const event={method:req.method,path:req.url,body:raw?JSON.parse(raw):null};seen.push(event);const answer=handler(event);res.writeHead(answer.status||200,{'Content-Type':'application/json'});res.end(JSON.stringify(answer.body));});await new Promise(r=>s.listen(0,'127.0.0.1',r));t.after(()=>s.close());return {seen,url:`http://127.0.0.1:${s.address().port}`};}
 const cli=(dir,url,args=['bind-run'])=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,...args],{env:{...process.env,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',BRAIN_URL:url,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_HOSTKEY:'fixture'}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('exit',code=>resolve({code,out,err}));});
