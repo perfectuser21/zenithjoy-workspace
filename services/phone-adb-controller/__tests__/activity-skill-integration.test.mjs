@@ -44,7 +44,7 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
 });
 
 // Real parent/child lifecycle + socket; only the Gateway's official RPC transport is offline.
-async function continuationFixture({policy={max_additional_turns:1},resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,verify=async()=>({verified:true}),afterFirst}={}){
+async function continuationFixture({policy={max_additional_turns:1},resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
  const d=mkdtempSync(join(tmpdir(),'handoff-continuation-'));let launches=0,resumes=0;const turns=[],directories=[];
  try{
   const name='douyin-leadgen-activity-102-qualification',path=`skills/${name}/SKILL.md`,supportPath='skills/leadgen-activity-execution.md';
@@ -54,7 +54,7 @@ async function continuationFixture({policy={max_additional_turns:1},resumeFirst=
   const handlers={state:{budgetDeadline:Date.now()+60000},handoffContext:async()=>({fixture:true}),handoffHeartbeat:async()=>{},handoffPhone:async()=>({fresh:true})};
   const rpc=async input=>{
    if(input.kind==='activity_skill_authority')return {authorized:skillAuthority(input.request,{home:d,verifyWorkspace:()=>true})};
-   turns.push(input.request);const turn=turns.length-1;
+   turns.push(input.request);const turn=turns.length-1;if(turn===1&&secondRpcUnknown)throw Error('official transport result unavailable');
    return {result:await runSkillAgent(input.request,{home:d,verifyWorkspace:()=>true,execute:async(command,args)=>{
     if(command==='openclaw'){
      launches++;const dir=dirname(args[args.indexOf('--message-file')+1]);directories.push(dir);
@@ -111,4 +111,8 @@ test('Skill actual output failing independent verify gets only a readback turn, 
 });
 test('Skill output still failing independent verify after readback remains incomplete',async()=>{
  const r=await continuationFixture({resumeFirst:true,status:'ok',verify:async()=>({verified:false})});assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.result.status,'partial');
+});
+
+test('second transport response lost cannot inherit the first child stopped proof',async()=>{
+ await assert.rejects(()=>continuationFixture({secondRpcUnknown:true}),error=>error.message==='official transport result unavailable'&&error.executionStopped===false);
 });
