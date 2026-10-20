@@ -4,7 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
-import {execInput,safeExecutionDiagnostic,nativeNotStartedProof} from './leadgen-client.mjs';
+import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
@@ -58,18 +58,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
     chmodSync(file,0o600);
   };
-  const nativeFailure=(error,command,args,opts)=>{
-    if(opts.receipt){
-      const proof=nativeNotStartedProof(error,command,args,opts.receipt);
-      const valid=Boolean(proof&&!state.nativeStopUnproven);
-      error.executionStopped=valid;error.externalEffect='unknown';error.operationId=opts.receipt.operationId;
-      state.nativeStopProof=valid?proof:null;
-    }
-    if(error.executionStopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)&&error.executionStopped!==true)){
-      state.executionUnknown=true;error.executionStopped=false;
-    }
-    return error;
-  };
+  const nativeFailure=(error,command,args,opts)=>applyNativeFailure(error,command,args,opts,state);
   const bounded=async(command,args,opts={})=>{
     if(opts.receipt)state.nativeStopProof=null;
     try {

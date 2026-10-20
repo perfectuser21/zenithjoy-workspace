@@ -50,6 +50,18 @@ export function verifiedNativeNotStartedProof(proof,context){
 export function nativeNotStartedProof(error,command,args,context){
   return error?.message==='EXECUTION_START_FAILED'&&executionDidNotStart(error,command,args,context)?nativeNotStarted.get(error).receipt:null;
 }
+export function applyNativeFailure(error,command,args,opts,state){
+    if(opts.receipt){
+      const proof=nativeNotStartedProof(error,command,args,opts.receipt);
+      const valid=Boolean(proof&&!state.nativeStopUnproven);
+      error.executionStopped=valid;error.externalEffect='unknown';error.operationId=opts.receipt.operationId;
+      state.nativeStopProof=valid?proof:null;
+    }
+    if(error.executionStopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)&&error.executionStopped!==true)){
+      state.executionUnknown=true;error.executionStopped=false;
+    }
+    return error;
+}
 export function execFileReceipt(command,args,options){
   return new Promise((resolveResult,reject)=>{
     let spawned=false,child;
