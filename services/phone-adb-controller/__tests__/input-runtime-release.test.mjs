@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,unlinkSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,unlinkSync,statSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const service=new URL('../',import.meta.url).pathname;
@@ -107,4 +107,31 @@ test('real four-profile v2 registry header format resolves every kernel serial (
 test('atomic registry replacement immediately after parse cannot bind old serials to a new hash',()=>{
  const c=setup();const code=`import importlib.util,pathlib,sys,os\ns=importlib.util.spec_from_file_location('guard',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nregistry=pathlib.Path(sys.argv[2]);original=m.registry_serials\ndef replace_after_parse(*args):\n serials=original(*args)\n replacement=registry.with_suffix('.new');replacement.write_bytes(registry.read_bytes()+b'new\\tSER5\\tm\\n');os.replace(replacement,registry)\n (pathlib.Path(sys.argv[3])/'SER5.guard').write_text('')\n return serials\nm.registry_serials=replace_after_parse\ntry:\n with m.device_barrier(registry,sys.argv[3]): pass\nexcept ValueError as e: assert 'registry changed' in str(e),str(e)\nelse: raise AssertionError('accepted old serials with replacement registry hash; SER5 was never guarded')\n`;
  const r=spawnSync('python3',['-c',code,script,c.registry,c.locks],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+function installedFixture(){const c=setup();snapshot(c);assert.equal(install(c).status,0);snapshot(c);return c;}
+function fileIdentities(c){return [c.a,c.b].flatMap(dir=>['douyin-phone-adb','text-input-focus.py'].map(name=>{const p=join(dir,name),s=statSync(p);return [p,s.dev,s.ino,s.mtimeMs,s.mode,readFileSync(p,'utf8')];}));}
+test('identical install is read-only even while the original owner remains quarantined',()=>{
+ const c=installedFixture(),owner=join(c.locks,'SER1.lock');mkdirSync(owner);writeFileSync(join(owner,'owner'),'original-unknown-run\n');writeFileSync(join(owner,'standalone_review_required'),'unknown\n');
+ const before=fileIdentities(c),registry=readFileSync(c.registry,'utf8'),guard=statSync(join(c.locks,'SER2.guard'));
+ const code=`import fcntl,subprocess,sys
+f=open(sys.argv[1],'r+');fcntl.flock(f,fcntl.LOCK_EX)
+r=subprocess.run(sys.argv[2:],capture_output=True,text=True);print(r.stdout);print(r.stderr,file=sys.stderr);sys.exit(r.returncode)`;
+ const r=spawnSync('python3',['-c',code,join(c.locks,'SER2.guard'),'python3',script,'install',join(c.source,'douyin-phone-adb'),join(c.source,'text-input-focus.py'),c.expected,c.registry,c.locks,c.a,c.b],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout).status,'unchanged');assert.deepEqual(fileIdentities(c),before);
+ assert.equal(readFileSync(join(owner,'owner'),'utf8'),'original-unknown-run\n');assert.equal(readFileSync(join(owner,'standalone_review_required'),'utf8'),'unknown\n');assert.equal(readFileSync(c.registry,'utf8'),registry);assert.equal(statSync(join(c.locks,'SER2.guard')).ino,guard.ino);
+});
+test('identical install without owners also preserves all target inodes and mtimes',()=>{
+ const c=installedFixture(),before=fileIdentities(c);const r=install(c);assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout).status,'unchanged');assert.deepEqual(fileIdentities(c),before);
+});
+for(const mode of ['changed','missing','stale-cas','target-symlink','directory-symlink','missing-guard','invalid-registry'])test('unchanged never accepts incomplete or ambiguous identity: '+mode,()=>{
+ const c=installedFixture();mkdirSync(join(c.locks,'SER1.lock'));writeFileSync(join(c.locks,'SER1.lock','owner'),'original-unknown-run\n');
+ if(mode==='changed')writeFileSync(join(c.b,'douyin-phone-adb'),controller+'\n# changed bytes\n');
+ if(mode==='missing')unlinkSync(join(c.b,'text-input-focus.py'));
+ if(mode==='stale-cas'){const expected=JSON.parse(readFileSync(c.expected));expected[join(c.a,'douyin-phone-adb')]='0'.repeat(64);writeFileSync(c.expected,JSON.stringify(expected));}
+ if(mode==='target-symlink'){unlinkSync(join(c.b,'text-input-focus.py'));symlinkSync(join(c.source,'text-input-focus.py'),join(c.b,'text-input-focus.py'));}
+ if(mode==='directory-symlink'){const alias=join(c.source,'alias');symlinkSync(c.b,alias);c.b=alias;}
+ if(mode==='missing-guard')unlinkSync(join(c.locks,'SER4.guard'));
+ if(mode==='invalid-registry')writeFileSync(c.registry,'');
+ const r=install(c);assert.equal(r.status,2,r.stdout);assert.equal(readFileSync(join(c.locks,'SER1.lock','owner'),'utf8'),'original-unknown-run\n');
 });
