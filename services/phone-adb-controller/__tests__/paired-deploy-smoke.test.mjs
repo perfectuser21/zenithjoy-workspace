@@ -124,6 +124,7 @@ test('paired M4 batch adapter rejects wrong host, unknown command and unreviewed
  const install=`python3 ${stage}/deployment-m4-payload.py install ${stage}/payload.tar ${'a'.repeat(64)} before 0`;
  assert.equal(transport(f.root,'ssh',['unregistered-fixture-host',install]).status,2,'a batch command cannot fall back to generic record-only success');
  assert.equal(transport(f.root,'ssh',['xian-m4',install+' unexpected']).status,2);
+ assert.equal(transport(f.root,'ssh',['xian-m4','mktemp -d /tmp/m4-payload-deploy.XXXXXX','unexpected-extra-arg']).status,2,'batch SSH cannot ignore additional argv');
  assert.equal(transport(f.root,'scp',['-q','-p',join(f.root,'payload.tar'),join(f.root,'unreviewed.py'),`xian-m4:${stage}/`]).status,2);
  assert.throws(()=>verify(f.root),/not verified/);
 });
