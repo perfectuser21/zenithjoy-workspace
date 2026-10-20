@@ -169,7 +169,7 @@ function validateCommanderSkill(ctx, capId, doc, errors) {
   } else {
     try {
       const revision = execFileSync('git', ['-C', ctx.repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-      body = readImplementationSource(ctx.repoRoot, revision, path, { source: process.env.SKILLS_SOURCE_DIR || join(ctx.repoRoot, '.skills-source') }).toString('utf8');
+      body = readImplementationSource(ctx.repoRoot, revision, path, { source: process.env.SKILLS_SOURCE_DIR || join(ctx.repoRoot, '.skills-source'), offline: true }).toString('utf8');
     } catch (error) {
       errors.push(`${capId}: commander_skill ${cs.name} 不存在且固定源不可读（${error.code || error.message}）`);
       return;
