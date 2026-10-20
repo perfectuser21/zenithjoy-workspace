@@ -311,3 +311,11 @@ test('Enabler声明schema只允许非空稳定键，保留显式固定文件规�
   a.implementation_bindings[0].enabler_key='';expectError(ctx,/enabler_key/);
   a.implementation_bindings[0].enabler_key='../other';expectError(ctx,/enabler_key/);
 });
+
+test('Activity continuation is a strict frozen opt-in, not caller-controlled extra retries',()=>{
+ const ctx=fresh();act(ctx,'douyin_comment_scoring','scoring').agent_recovery={max_additional_turns:1};
+ assert.deepEqual(validateContracts(ctx),[]);
+ for(const policy of [{max_additional_turns:0},{max_additional_turns:2},{max_additional_turns:'1'},{max_additional_turns:1,other:true},{}]){
+  const bad=fresh();act(bad,'douyin_comment_scoring','scoring').agent_recovery=policy;assert.ok(validateContracts(bad).length>0);
+ }
+});
