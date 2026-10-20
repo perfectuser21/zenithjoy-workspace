@@ -139,6 +139,18 @@ def install(args):
     root = pathlib.Path.home() / 'bin-harvest'
     root.mkdir(exist_ok=True)
     base = parent_identity(root)
+    parents = {}
+    # Validate every existing destination ancestor before the first replacement.
+    for item in plan:
+        if item['missing']:
+            continue
+        current = root
+        for part in pathlib.PurePosixPath(item['path']).parts[:-1]:
+            current /= part
+            if not current.exists():
+                current.mkdir()
+            require(stat.S_ISDIR(current.lstat().st_mode), 'symlink destination parent refused')
+        parents[item['path']] = parent_identity(current)
     failed, checked = False, 0
     for item in plan:
         if item['phase'] != args.phase:
@@ -150,31 +162,36 @@ def install(args):
             continue
         check_parents(base)
         target = root / path
-        # Create only real directories below the pinned destination root.
-        current = root
-        for part in pathlib.PurePosixPath(path).parts[:-1]:
-            current /= part
-            if not current.exists():
-                current.mkdir()
-            require(stat.S_ISDIR(current.lstat().st_mode), 'symlink destination parent refused')
-        identities = parent_identity(target.parent)
+        identities = parents[path]
+        check_parents(identities)
         mode = item['mode'] | (0o111 if group == 'sh' else 0)
         temp = target.with_name('.' + target.name + '.deploy-new')
-        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        directory_fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
+            held = os.fstat(directory_fd)
+            require((held.st_dev, held.st_ino) == identities[-1][1:], 'held parent changed')
+            fd = os.open(temp.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory_fd)
             with os.fdopen(fd, 'wb') as stream:
                 stream.write(content['payload/' + path])
                 stream.flush()
                 os.fchmod(stream.fileno(), mode)
-            os.utime(temp, ns=(item['mtime_ns'], item['mtime_ns']), follow_symlinks=False)
+            os.utime(temp.name, ns=(item['mtime_ns'], item['mtime_ns']),
+                     dir_fd=directory_fd, follow_symlinks=False)
             check_parents(base)
             check_parents(identities)
-            os.replace(temp, target)
+            os.replace(temp.name, target.name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
         finally:
-            if temp.exists():
-                temp.unlink()
+            try:
+                os.unlink(temp.name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+            os.close(directory_fd)
         command = checker(group, path, target, args.has_zsh == '1')
-        result = subprocess.run(command, capture_output=True, text=True) if command else None
+        try:
+            result = subprocess.run(command, capture_output=True, text=True) if command else None
+        except OSError as error:
+            result = subprocess.CompletedProcess(command, 127, stderr=str(error))
         if result and result.returncode != 0:
             print('语法检查失败: ' + path + '\n' + '\n'.join(result.stderr.splitlines()[:3]), file=sys.stderr)
             failed = True
