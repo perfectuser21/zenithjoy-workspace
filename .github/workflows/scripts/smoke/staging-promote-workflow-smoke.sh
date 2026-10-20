@@ -46,30 +46,41 @@ CURRENT_BEFORE="$(readlink "$RELROOT/current")"
 SANDBOX_PROD_SHA_BEFORE="$(current_release_sha "$RELROOT")"
 
 # ── mock :5200（绝不是真生产，纯本地假服务，扮演"当前生产进程"）──
-MOCK_PROD_PORT=53910
+MOCK_PROD_PORT=""
+MOCK_PORT_FILE="$SANDBOX/mock-port.json"
+cleanup() { [ -z "${MOCK_PROD_PID:-}" ] || kill "$MOCK_PROD_PID" 2>/dev/null || true; rm -rf "$SANDBOX"; }
+trap cleanup EXIT
 node -e '
 const http=require("http");
+const fs=require("fs");
 const sha=process.argv[1];
 const s=http.createServer((req,res)=>{
   if(req.url==="/version"){res.setHeader("content-type","application/json");res.end(JSON.stringify({sha}));}
   else if(req.url==="/health"){res.end("ok");}
   else{res.statusCode=404;res.end("no");}
 });
-s.listen('"$MOCK_PROD_PORT"',()=>{});
-' "$PROD_RELEASE_SHA" &
+s.listen(0,"127.0.0.1",()=>fs.writeFileSync(process.argv[2],JSON.stringify({port:s.address().port,pid:process.pid}),{flag:"wx",mode:0o600}));
+' "$PROD_RELEASE_SHA" "$MOCK_PORT_FILE" &
 MOCK_PROD_PID=$!
 disown "$MOCK_PROD_PID" 2>/dev/null || true   # 抑制 trap kill 时的 "Terminated" 作业通知
+MOCK_READY=0
 for _i in $(seq 1 50); do
-  if curl -sf "http://localhost:${MOCK_PROD_PORT}/version" >/dev/null 2>&1; then break; fi
+  if ! kill -0 "$MOCK_PROD_PID" 2>/dev/null; then
+    wait "$MOCK_PROD_PID" 2>/dev/null || true
+    MOCK_PROD_PID=""
+    break
+  fi
+  if [ -s "$MOCK_PORT_FILE" ]; then
+    MOCK_PROD_PORT="$(node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));if(x.pid!==Number(process.argv[2])||!Number.isInteger(x.port)||x.port<1||x.port>65535)process.exit(1);process.stdout.write(String(x.port));' "$MOCK_PORT_FILE" "$MOCK_PROD_PID")" || break
+    if curl -sf "http://127.0.0.1:${MOCK_PROD_PORT}/version" >/dev/null 2>&1; then MOCK_READY=1; break; fi
+  fi
   sleep 0.2
 done
+if [ "$MOCK_READY" -ne 1 ]; then echo "mock production server failed to start" >&2; exit 1; fi
 
 # ── 只读快照：真生产 :5200 的 sha（不变性断言用；若没起则跳过那条）──
 REAL_PROD_SHA_BEFORE="$(curl -sf "http://localhost:5200/version" 2>/dev/null \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).sha||""))}catch{process.stdout.write("")}})' 2>/dev/null || echo "")"
-
-cleanup() { kill "$MOCK_PROD_PID" 2>/dev/null || true; rm -rf "$SANDBOX"; }
-trap cleanup EXIT
 
 # ── sandbox hook：操作 sandbox releases + mock 端口，绝不碰真生产 ──
 sb_deploy_staging() { echo "  [sandbox] staging slot 起来了（不连真 :5201）"; return 0; }
