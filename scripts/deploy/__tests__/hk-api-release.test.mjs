@@ -42,11 +42,19 @@ if(args[0]==='image'&&args[1]==='inspect'){
  const image=args[2]; if(!s.images[image])process.exit(1); console.log(image); process.exit(0);
 }
 if(args[0]==='tag'){ s.images[args[2]]=s.images[args[1]]; save(); process.exit(0); }
-if(args[0]==='run'){ if(process.env.FAIL_MODE==='migration')process.exit(8); process.exit(0); }
+if(args[0]==='run'){
+ const expected=service==='zenithjoy-api-staging'?'/opt/zenithjoy/staging-api/.env':'/opt/zenithjoy/prod-api/.env';
+ if(args[args.indexOf('--env-file')+1]!==expected)throw Error('wrong database environment');
+ if(process.env.FAIL_MODE==='migration')process.exit(8); process.exit(0);
+}
 if(args[0]==='compose'){
  const files=args.flatMap((a,i)=>a==='-f'?[args[i+1]]:[]);
  const image=JSON.parse(fs.readFileSync(files.at(-1))).services[service].image;
- if(args.includes('build')){s.images[image]=process.env.BUILD_SHA;s.builds++;save();process.exit(0);}
+ if(args.includes('build')){
+ const source=path.dirname(path.dirname(files[0]));
+ if(!fs.existsSync(path.join(source,'candidate')))throw Error('build did not use candidate source');
+ if(source===process.env.ZJ_HK_REPO)throw Error('build uses mutable shared checkout');
+ s.images[image]=process.env.BUILD_SHA;s.builds++;save();process.exit(0);}
  if(args.includes('up')){s.active=image;s.ups.push(image);save();if(process.env.FAIL_MODE==='up'&&s.images[image]===process.env.CANDIDATE)process.exit(9);process.exit(0);}
 }
 throw Error('unexpected docker '+args.join(' '));
