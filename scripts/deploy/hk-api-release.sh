@@ -100,7 +100,7 @@ if [[ "$ACTION" == rollback ]]; then
   docker image inspect "$IMAGE" >/dev/null || fail 'retained image missing; rollback cannot rebuild'
   override "$TARGET" "$IMAGE"
 else
-  if [[ "$TARGET" == "$CURRENT" ]]; then echo "Already healthy at $CURRENT"; exit 0; fi
+  if [[ "$TARGET" == "$CURRENT" ]]; then echo "Already healthy at $CURRENT"; echo "HK_RELEASE_PREVIOUS=$CURRENT"; exit 0; fi
   if [[ -f "$RELEASES/$TARGET/release.json" ]] && [[ "$(json_field "$RELEASES/$TARGET/release.json" verified)" == True ]]; then
     fail 'verified release already retained; use rollback to restore its exact image'
   fi
@@ -145,3 +145,4 @@ mv "$RELEASES/current.tmp" "$RELEASES/current"
 SWITCHED=false
 trap - EXIT INT TERM
 echo "HK API $ACTION verified: $TARGET"
+echo "HK_RELEASE_PREVIOUS=$CURRENT"

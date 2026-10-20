@@ -47,6 +47,15 @@ jobs:
       confirm: ${{ inputs.confirm }}
       coordinated: true
     secrets: inherit
+  recover-backend:
+    needs: [promote-backend, promote-frontend]
+    if: always() && needs.promote-backend.result == 'success' && needs.promote-frontend.result == 'failure'
+    uses: ./.github/workflows/rollback-prod.yml
+    with:
+      sha: ${{ needs.promote-backend.outputs.previous_sha }}
+      coordinated: true
+      confirm: ROLLBACK
+    secrets: inherit
   release-tag:
     needs: [admission, promote-backend, promote-frontend]
     runs-on: ubuntu-latest

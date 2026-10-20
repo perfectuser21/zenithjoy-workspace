@@ -72,6 +72,7 @@ test('固定候选发布不重置共享仓库，留存实际旧镜像供免构�
   const f = fixture(t); f.git('checkout', f.old);
   const deploy = f.run(['promote', f.next]); assert.equal(deploy.status, 0, deploy.stderr);
   assert.equal(f.git('rev-parse', 'HEAD'), f.old);
+  assert.equal(deploy.stdout.match(/^HK_RELEASE_PREVIOUS=([a-f0-9]{40})$/m)?.[1], f.old);
   assert.equal(f.state().images[f.state().active], f.next);
   const builds = f.state().builds;
   const rollback = f.run(['rollback']); assert.equal(rollback.status, 0, rollback.stderr);
@@ -145,6 +146,7 @@ test('staging构建固定候选且不改共享HEAD，健康后回读同SHA', t =
   const f = fixture(t); f.git('checkout', f.old);
   const result = stage(f); assert.equal(result.status, 0, result.stderr);
   assert.equal(f.git('rev-parse', 'HEAD'), f.old);
+  assert.equal(deploy.stdout.match(/^HK_RELEASE_PREVIOUS=([a-f0-9]{40})$/m)?.[1], f.old);
   assert.equal(f.state().images[f.state().active], f.next);
 });
 for (const mode of ['sha', 'health']) test(`staging ${mode}不符不能产出成功运行`, t => {

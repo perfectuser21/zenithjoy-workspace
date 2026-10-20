@@ -12,14 +12,27 @@ on:
         required: true
         default: ''
 
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+      coordinated:
+        required: false
+        type: boolean
+        default: false
+      confirm:
+        required: false
+        type: string
+        default: ROLLBACK
+concurrency:
+  group: ${{ inputs.coordinated && format('zenithjoy-nested-{0}-api-rollback', github.run_id) || 'zenithjoy-production-hk' }}
+  cancel-in-progress: false
 permissions:
   contents: read
 
 jobs:
   rollback:
-    concurrency:
-      group: zenithjoy-production-hk
-      cancel-in-progress: false
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
