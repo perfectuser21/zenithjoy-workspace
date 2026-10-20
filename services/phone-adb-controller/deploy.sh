@@ -48,151 +48,15 @@ FAILED=0
 
 # push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]
 #   先 scp 到同目录临时名,再远端 mv -f 换 inode;带第 5 参 x 时在 mv 之前先 chmod +x(不留"新文件无执行权限"的窗口)。
-push_atomic() {
-  local src="$1" host="$2" rdir="$3" name="$4" mode="${5:-}" tmp
-  tmp="$rdir/.$name.deploy-new"
-  scp -q -p "$src" "$host:$tmp"
-  if [[ "$mode" == "x" ]]; then
-    ssh "$host" "chmod +x $tmp && mv -f $tmp $rdir/$name"
-  elif [[ "$mode" == "evidence" ]]; then
-    ssh "$host" "chmod 600 $tmp && mv -f $tmp $rdir/$name"
-  else
-    ssh "$host" "mv -f $tmp $rdir/$name"
-  fi
-}
-
-# 固定源SQL仅作非执行验收附件；三份真实文件均由原collector读回。
-deploy_release_evidence() {
-  local mapping source destination host base expected actual target
-  for mapping in "${RELEASE_EVIDENCE_FILES[@]}"; do
-    source="${mapping%%=*}"; destination="${mapping#*=}"
-    expected="$(python3 -c 'import json,sys; rows=[e for e in json.load(open(sys.argv[1]))["files"] if e["path"]==sys.argv[2] and e["deployed_path"]==sys.argv[3]]; exec("if len(rows)!=1:\n raise ValueError()"); print(rows[0]["content_sha256"])' "$DEPLOY_MANIFEST" "$source" "$destination")"
-    for target in 'xian-m4|~/bin-harvest' 'mmv|~/bin-harvest' 'mmv|~/.openclaw/leadgen-scripts'; do
-      host="${target%%|*}"; base="${target#*|}"
-      ssh "$host" "python3 -c 'import pathlib,sys; home=pathlib.Path.home(); p=pathlib.Path(sys.argv[1]).expanduser(); parts=p.relative_to(home).parts; current=home; exec(\"for part in parts:\n current=current/part\n if current.is_symlink(): raise ValueError()\n current.mkdir(exist_ok=True)\")' $base/release-evidence"
-      push_atomic "$REPO_ROOT/$source" "$host" "$base/release-evidence" "${destination##*/}" evidence
-      actual="$(ssh "$host" "python3 -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]).expanduser(); exec(\"if p.is_symlink():\n raise ValueError()\"); print(hashlib.sha256(p.read_bytes()).hexdigest())' $base/$destination")"
-      [[ "$actual" == "$expected" ]] || { echo "SQL验收附件读回不符: $host/$destination" >&2; return 1; }
-    done
-  done
-}
-
-# Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
-# Commander与旧MMV包共享完整release；--commander-only仍须真实核对其它已安装组件。
-commander_admission() {
-  # 在途外壳保留原版本；整套文件和skills同步完成才发布新manifest。
-  if ! python3 "$D/deployment-guard.py" admit
-  then
-    echo "  ❌ Commander仍有在途执行，拒绝覆盖其运行包"; FAILED=1; return
-  fi
-}
-
-deploy_commander() {
-  # 已由统一入口取得部署锁与admission；失败时.deploying保留。
-  # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
-  echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status/wf-agent-run + 合同清单 + skills + AGENTS.md) ==="
-  ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
-  # wf-agent-run.sh / wf-agent-lib.py / workflow-contracts.json：codex_agent 形态共享外壳 runner 与 Commander 运行时合同清单（任务 c0fe7e30）
-  for f in wf-launch.sh wf-status.sh wf-agent-run.sh wf-agent-lib.py wf-agent-handoff.py workflow-contracts.json wf-v2.py wf-v2-io.py wf-v2-phone.py wf-v2-shell.py wf-report.py; do
-    if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
-    case "$f" in
-      *.sh) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="bash -n ~/.openclaw/commander/$f";;
-      *.py) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x; _chk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/.openclaw/commander/$f";;
-      *.json) push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f"; _chk="python3 -c 'import json,sys; json.load(open(sys.argv[1]))' ~/.openclaw/commander/$f";;
-    esac
-    if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
-      echo "  ✅ commander/$f"
-    else
-      echo "  ❌ commander/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
-      FAILED=1
-    fi
-    rm -f /tmp/deploy-err-$$
-  done
-  for contract in "$D"/commander/contracts/*.json; do
-    [[ -f "$contract" ]] || continue
-    ssh mmv "mkdir -p ~/.openclaw/commander/contracts"
-    push_atomic "$contract" mmv "~/.openclaw/commander/contracts" "$(basename "$contract")"
-  done
-  # 通用 skill workflow-commander + 各 workflow 陪跑 skill wf-<能力>（决策 26df670a：合同 commander_skill 指向它们，Commander 按字段自加载）
-  CMDR_SKILLS=()
-  for sk in "$D"/commander/skills/*/SKILL.md; do
-    [[ -s "$sk" ]] || continue
-    _name="$(basename "$(dirname "$sk")")"
-    ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name"
-    push_atomic "$sk" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/$_name" SKILL.md
-    ssh mmv "mkdir -p ~/.openclaw/commander/skills/$_name"
-    push_atomic "$sk" mmv "~/.openclaw/commander/skills/$_name" SKILL.md
-    CMDR_SKILLS+=("$_name")
-    echo "  ✅ skills/$_name/SKILL.md"
-  done
-  # work-commander 的 skills 白名单放开到上面部署的全部 skill（只增不删：保留人工加的项），变了才写
-  if (( ${#CMDR_SKILLS[@]} )); then
-    _want="$(printf '%s\n' "${CMDR_SKILLS[@]}")"
-    _cur="$(ssh mmv "/opt/homebrew/bin/openclaw config get agents.entries.work-commander.skills" 2>/dev/null || echo '[]')"
-    _merged="$(python3 -c 'import json,sys; cur=json.loads(sys.argv[1] or "[]"); want=[w for w in sys.argv[2].split("\n") if w]; out=list(cur)+[w for w in want if w not in cur]; print(json.dumps(out) if out!=cur else "")' "$_cur" "$_want" 2>/dev/null || echo ERR)"
-    if [[ "$_merged" == ERR ]]; then
-      echo "  ❌ work-commander skills 白名单读不到/解析失败: $_cur"; FAILED=1
-    elif [[ -n "$_merged" ]]; then
-      if ssh mmv "/opt/homebrew/bin/openclaw config set agents.entries.work-commander.skills '$_merged' --strict-json" >/dev/null 2>/tmp/deploy-err-$$; then
-        echo "  ✅ work-commander skills 白名单 → $_merged"
-      else
-        echo "  ❌ work-commander skills 白名单写入失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1
-      fi
-      rm -f /tmp/deploy-err-$$
-    else
-      echo "  ✅ work-commander skills 白名单已含全部陪跑 skill"
-    fi
-  fi
-  # 正式 sessions_spawn 只补业务执行者；CAS 保留人工授权，冲突时重新读，不扩其他权限。
-  if ssh mmv /usr/bin/env python3 <<'PYREMOTE'
-import json, subprocess, sys
-cli = '/opt/homebrew/bin/openclaw'
-path = 'agents.entries.work-commander.subagents.allowAgents'
-for attempt in range(3):
-    current = json.loads(subprocess.check_output([cli, 'config', 'get', path], text=True))
-    if not isinstance(current, list):
-        raise ValueError('Commander allowAgents must be an authored list')
-    if 'skill-factory' in current:
-        break
-    merged = current + ['skill-factory']
-    result = subprocess.run([cli, 'config', 'set', path, json.dumps(merged), '--strict-json',
-                             '--expect-current-json', json.dumps(current)], stdout=subprocess.DEVNULL)
-    if result.returncode == 0:
-        break
-else:
-    sys.exit('Commander allowAgents CAS conflict')
-PYREMOTE
-  then echo "  ✅ work-commander 允许正式派发 skill-factory（CAS 只增）"
-  else echo "  ❌ work-commander 子代理授权未完成"; FAILED=1; fi
-  # 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
-  if [[ -s "$D/commander/AGENTS.md" ]]; then
-    push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
-    push_atomic "$D/commander/AGENTS.md" mmv "~/.openclaw/commander" AGENTS.md
-    echo "  ✅ commander/AGENTS.md → work-commander 工作区"
-  else
-    echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
-  fi
-  if [[ "$FAILED" == 0 ]]; then
-    # 元数据文件仅含已验证release映射，不含token；未提供映射则v2不ready。
-    local manifest_tmp
-    manifest_tmp="$(mktemp -d)"
-    python3 - "$D/commander" "${WF_COMMANDER_RELEASES_FILE:-}" "$manifest_tmp" <<'PYMANIFEST'
-import importlib.util,json,pathlib,sys
-root=pathlib.Path(sys.argv[1])
-spec=importlib.util.spec_from_file_location('commander_io',root/'wf-v2-io.py')
-io=importlib.util.module_from_spec(spec);spec.loader.exec_module(io)
-releases=json.load(open(sys.argv[2])) if sys.argv[2] else {}
-files=io.components(root)
-io.write(pathlib.Path(sys.argv[3])/'runtime-manifest.json',dict(protocol=io.PROTOCOL,files=files,runtime_snapshot_sha256=io.digest(files),releases=releases))
-PYMANIFEST
-    if [[ $? == 0 ]]; then
-      push_atomic "$manifest_tmp/runtime-manifest.json" mmv "~/.openclaw/commander" runtime-manifest.json
-      if ! ssh mmv "python3 ~/.openclaw/commander/wf-v2-io.py verify"; then FAILED=1; fi
-      # 唯一聚合观测和所有本机视图ACK落地之前保留.deploying，禁止新run。
-    else FAILED=1; fi
-    rm -rf "$manifest_tmp"
-  fi
-}
+for _helper in deployment-functions.sh deployment-m4-payload.sh deployment-m4-payload.py; do
+  (
+    # Match the existing fixed-source readers: ambient Git state is never authority.
+    for _git_var in ${!GIT_@}; do unset "$_git_var"; done
+    export GIT_NO_REPLACE_OBJECTS=1 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+    git --no-replace-objects -C "$D/../.." show "HEAD:services/phone-adb-controller/$_helper"
+  ) | cmp - "$D/$_helper" || { echo "部署helper不属于当前固定源: $_helper" >&2; exit 1; }
+done
+source "$D/deployment-functions.sh"
 
 
 
@@ -441,85 +305,9 @@ for f in "${MMV_BIN_FILES[@]}"; do
   [[ "$f" == "escort-claude-escalation.sh" ]] && kickstart_if_changed mmv com.zenithjoy.escortclaude "$_before" "~/bin/$f"
 done
 
-echo "=== [3/3] xian-m4:~/bin-harvest/ (设备/ADB层, ${#DEVICE_SH_FILES[@]} 个文件 × 1台) ==="
+echo "=== [3/3] xian-m4:~/bin-harvest/ 普通payload批量暂存、原序逐文件安装 ==="
 for host in xian-m4; do
-  echo "  --- $host ---"
-  for f in "${DEVICE_SH_FILES[@]}"; do
-    if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
-    _before=""
-    [[ "$f" == "log-stream-push.sh" ]] && _before="$(remote_md5 "$host" "~/bin-harvest/$f")"
-    push_atomic "$D/$f" "$host" "~/bin-harvest" "$f" x
-    ssh "$host" "chmod +x ~/bin-harvest/$f"
-    # 推流器是 launchd KeepAlive 长驻(com.zenithjoy.logstreampush),换版不重载 = 继续往旧目标推(0930 日志桥断 12 天的病)
-    [[ "$f" == "log-stream-push.sh" ]] && kickstart_if_changed "$host" com.zenithjoy.logstreampush "$_before" "~/bin-harvest/$f"
-    # douyin-phone-adb 还要送一份到 ~/.local/bin/ —— **夜批真正调的是那个**：
-    # harvest-keyword.sh 里写的是 `C=~/.local/bin/douyin-phone-adb`。
-    # 0924 实测两台机 bin-harvest=新版、.local/bin=旧版，下发"成功"了夜批却跑旧的
-    # （昵称归一那次差点就这么白改）。这条路径长期两份不同步，见 memory
-    # phone_controller_live_path_is_local_bin_not_repo。
-    # 两处送的是同一次循环里的同一个源文件($D/$f),不是两条独立下发链——
-    # 不存在"两份各自演化再不同步"的风险,恰恰是为了消灭原来那种不同步。
-    if [[ "$f" == "douyin-phone-adb" ]]; then
-      ssh "$host" "mkdir -p ~/.local/bin"
-      push_atomic "$D/$f" "$host" "~/.local/bin" "$f" x
-      ssh "$host" "chmod +x ~/.local/bin/$f"
-    fi
-    if command -v zsh >/dev/null 2>&1 && ssh "$host" "zsh -n ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
-      echo "    ✅ $f"
-    elif [[ -s /tmp/deploy-err-$$ ]]; then
-      echo "    ❌ $f 语法检查失败: $(cat /tmp/deploy-err-$$ | head -3)"
-      FAILED=1
-    else
-      echo "    ✅ $f (已复制,本机无zsh跳过语法检查)"
-    fi
-    rm -f /tmp/deploy-err-$$
-  done
-  for f in "${DEVICE_NODE_FILES[@]}"; do
-    if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
-    _pd="$(dirname "$f")"; _pdir="~/bin-harvest"; [[ "$_pd" != "." ]] && _pdir="$_pdir/$_pd"
-    ssh "$host" "mkdir -p $_pdir"
-    push_atomic "$D/$f" "$host" "$_pdir" "$(basename "$f")"
-    case "$f" in
-      *.py) _nchk="python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/bin-harvest/$f";;
-      *.json) _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
-      *) _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
-    esac
-    if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then
-      echo "    ✅ $f"
-    else
-      echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
-      FAILED=1
-    fi
-    rm -f /tmp/deploy-err-$$
-  done
-  # 探针在设备也必须保留原嵌套路径，才能冻结进 runtime/checks/*。
-  for f in "${DEVICE_RPC_PROBE_FILES[@]}"; do
-    if [[ ! -s "$D/$f" ]]; then echo "    ❌ 缺RPC探针文件: $f"; FAILED=1; continue; fi
-    _pd="$(dirname "$f")"; _pdir="~/bin-harvest"; [[ "$_pd" != "." ]] && _pdir="$_pdir/$_pd"
-    ssh "$host" "mkdir -p $_pdir"
-    push_atomic "$D/$f" "$host" "$_pdir" "$(basename "$f")"
-    case "$f" in
-      *.js|*.mjs) _chk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
-      *.json) _chk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
-      *) _chk="test -s ~/bin-harvest/$f";;
-    esac
-    if ssh "$host" "$_chk" 2>/tmp/deploy-err-$$; then echo "    ✅ $f"
-    else echo "    ❌ $f 校验失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1; fi
-    rm -f /tmp/deploy-err-$$
-  done
-  ssh "$host" "mkdir -p ~/bin-harvest/plans"
-  for f in "${DEVICE_PLAN_FILES[@]}"; do
-    if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
-    push_atomic "$D/$f" "$host" "~/bin-harvest/plans" "$(basename "$f")"
-    if [[ "$f" == *.json ]]; then _pchk="node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"; else _pchk="zsh -n ~/bin-harvest/$f"; fi
-    if ssh "$host" "$_pchk" 2>/tmp/deploy-err-$$; then
-      echo "    ✅ $f"
-    else
-      echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
-      FAILED=1
-    fi
-    rm -f /tmp/deploy-err-$$
-  done
+  deploy_m4_payload "$host"
 done
 
 echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="

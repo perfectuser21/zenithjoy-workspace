@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,readdirSync,writeFileSync,mkdirSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,readFileSync,readdirSync,writeFileSync,mkdirSync,rmSync,existsSync,realpathSync} from 'node:fs';
+import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {digest} from '../runtime-definition.mjs';
@@ -83,12 +84,12 @@ test('actual MMV and M4 copy loops preserve nested paths and atomic failure befo
  const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
  const prefix=source.slice(0,source.indexOf('# 在任何SSH前核验部署源字节'));
  for(const scenario of [{host:'mmv',root:'~/.openclaw/leadgen-scripts',array:'MMV_JS_FILES',start:'echo \"=== [1/3]',end:'echo \"=== [1b/3]'},{host:'xian-m4',root:'~/bin-harvest',array:'DEVICE_NODE_FILES',start:'  for f in \"${DEVICE_NODE_FILES[@]}\";',end:'  # 探针在设备也必须保留原嵌套路径'}]){
- const start=source.indexOf(scenario.start),end=source.indexOf(scenario.end,start);
+ const start=source.indexOf(scenario.host==='xian-m4'?'echo "=== [3/3]':scenario.start),end=source.indexOf(scenario.host==='xian-m4'?'echo "=== [4/4]':scenario.end,start);
  assert.ok(start>0&&end>start);const loop=source.slice(start,end);
  for(const failure of ['', 'mkdir', 'scp', 'mv']){
-  const dir=mkdtempSync(join(tmpdir(),'deploy-nested-fixture-'));
+  const dir=realpathSync(mkdtempSync(join(tmpdir(),'deploy-nested-fixture-')));
   try{
-   const src=join(dir,'source'),remote=join(dir,'remote'),bin=join(dir,'bin'),ack=join(dir,'ack');
+   const src=join(dir,'source'),remote=join(dir,'remote',...(scenario.host==='xian-m4'?['bin-harvest']:[])),bin=join(dir,'bin'),ack=join(dir,'ack');
    for(const d of [src,remote,bin,join(src,'commander'),join(src,'config')])mkdirSync(d,{recursive:true});
    const files=['top.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py','config/leadgen-outreach-rate-ramp.json'];
    for(const file of files){writeFileSync(join(src,file),file.endsWith('.py')?'x = 1\n':file.endsWith('.json')?'{}\n':'export const fixture = 1;\n');if(!file.includes('/'))writeFileSync(join(remote,file),'# old fixture bytes\n');}
@@ -113,9 +114,10 @@ assert '..' not in pathlib.Path(relative).parts
 try:shutil.copy2(source,pathlib.Path(os.environ['FIXTURE_REMOTE'])/relative)
 except OSError:sys.exit(75)
 `,{mode:0o755});
-   const script=prefix+'\nD="$FIXTURE_SOURCE"\nhost="$FIXTURE_HOST"\n'+scenario.array+'=(top.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py config/leadgen-outreach-rate-ramp.json)\n'+loop+'\ntouch "$FIXTURE_ACK"\n';
-   let failed=false;try{execFileSync('/bin/bash',['-c',script,new URL('../deploy.sh',import.meta.url).pathname],{env:{...process.env,PATH:bin+':'+process.env.PATH,FIXTURE_SOURCE:src,FIXTURE_REMOTE:remote,FIXTURE_ACK:ack,FIXTURE_FAIL:failure,FIXTURE_HOST:scenario.host,FIXTURE_ROOT:scenario.root,FIXTURE_NODE:process.execPath},stdio:'pipe'});}catch{failed=true;}
-   assert.equal(failed,Boolean(failure),scenario.host+' actual script failure phase '+(failure||'successful nested copy'));
+   const transport=scenario.host==='xian-m4'?prepareTransport(dir):null;
+   const script=prefix+'\nD="$FIXTURE_SOURCE"\nhost="$FIXTURE_HOST"\n'+(transport?'DEVICE_SH_FILES=(); DEVICE_RPC_PROBE_FILES=(); DEVICE_PLAN_FILES=(); FAILED=0\n':'')+scenario.array+'=(top.mjs commander/wf-agent-handoff.py commander/wf-agent-lib.py config/leadgen-outreach-rate-ramp.json)\n'+loop+'\ntouch "$FIXTURE_ACK"\n';
+   let failed=false,detail='';try{execFileSync('/bin/bash',['-c',script,new URL('../deploy.sh',import.meta.url).pathname],{env:{...process.env,...transport?.env,PATH:bin+':'+process.env.PATH,FIXTURE_SOURCE:src,FIXTURE_REMOTE:remote,FIXTURE_ACK:ack,FIXTURE_FAIL:failure,FIXTURE_HOST:scenario.host,FIXTURE_ROOT:scenario.root,FIXTURE_NODE:process.execPath},stdio:'pipe'});}catch(error){failed=true;detail=error.stderr?.toString()||error.message;}
+   assert.equal(failed,Boolean(failure),scenario.host+' actual script failure phase '+(failure||'successful nested copy')+' '+detail);
    assert.equal(existsSync(ack),!failure,'no completion/ACK after mkdir, scp or mv failure');
    if(failure)assert.equal(readFileSync(join(remote,files[0]),'utf8'),'# old fixture bytes\n','failed atomic replacement preserves previous final');
    else for(const file of files)assert.equal(readFileSync(join(remote,file),'utf8'),readFileSync(join(src,file),'utf8'));

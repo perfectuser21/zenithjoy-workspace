@@ -1,9 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
+import {readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, dirname} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
 import {withDeploymentPrefixFixture} from './deployment-prefix-fixture.mjs';
 
 test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包，SSH 前不报空数组错误', () => {
@@ -47,6 +48,25 @@ for (const [array, host, destination] of [
   );
   for (const [filename, content, valid] of cases) test(`${array} 使用真实语法解析器检查 ${filename}`, () => {
     const source = readFileSync(new URL('../deploy.sh', import.meta.url), 'utf8');
+    if (array === 'DEVICE_NODE_FILES') {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'deployment-node-syntax-')));
+      try {
+        const {home,env} = prepareTransport(root), input = join(root,'source');
+        mkdirSync(input); writeFileSync(join(input,filename),content);
+        const service = new URL('../',import.meta.url).pathname;
+        const block = source.slice(source.indexOf('echo "=== [3/3]'),source.indexOf('echo "=== [4/4]'));
+        assert.ok(block.includes('deploy_m4_payload "$host"'), 'actual M4 deployment block must invoke the installer');
+        const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+        const script = `set -euo pipefail\nD=${quote(input)}\nFAILED=0\nsource ${quote(join(service,'deployment-functions.sh'))}\n` +
+          `DEVICE_SH_FILES=()\nDEVICE_NODE_FILES=(${quote(filename)})\nDEVICE_RPC_PROBE_FILES=()\nDEVICE_PLAN_FILES=()\n${block}\nexit "$FAILED"\n`;
+        const result = spawnSync('/bin/bash',['-c',script],{encoding:'utf8',env});
+        assert.equal(result.error,undefined);
+        assert.equal(result.status === 0,valid,result.stderr);
+        assert.equal(readFileSync(join(home,destination,filename),'utf8'),content);
+        assert.match(result.stdout,/M4_FILE /,'the actual uploaded Python installer must check the file');
+      } finally { rmSync(root,{recursive:true,force:true}); }
+      return;
+    }
     const marker = `for f in "\${${array}[@]}"; do`;
     const start = source.indexOf(marker);
     assert.ok(start >= 0, 'actual deployment loop must exist');

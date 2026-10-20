@@ -160,6 +160,7 @@ test('真实部署prefix消费固定对象cache，不重建默认源；坏cache�
   const deployment=readFileSync(new URL('../../../services/phone-adb-controller/deploy.sh',import.meta.url),'utf8');
   const marker='# 在任何SSH前核验部署源字节';assert.ok(deployment.includes(marker));
   const path=join(folder,'deploy.sh');writeFileSync(path,deployment);
+  for(const helper of ['deployment-functions.sh','deployment-m4-payload.sh','deployment-m4-payload.py'])writeFileSync(join(folder,helper),readFileSync(new URL('../../../services/phone-adb-controller/'+helper,import.meta.url)));
   writeFileSync(join(f.business,'scripts/ci/implementation-skill-source.mjs'),readFileSync(new URL('../implementation-skill-source.mjs',import.meta.url)));commit(f.business);
   const before=readFileSync(join(f.cache,'.git/config'));
   if(bad){rmSync(f.cache,{recursive:true});mkdirSync(f.cache);git(f.cache,'init','-q');}

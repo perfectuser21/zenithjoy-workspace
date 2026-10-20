@@ -57,16 +57,20 @@ test('unrelated deploy syntax/hash reads cannot invalidate a verified pair recei
  assert.equal(verify(f.root).status,'verified');
 });
 
-for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实dry-run公司readiness ${mode} 在admission/安装前判定`,t=>{
+for(const mode of ['schema-ready','missing-schema','invalid-json','active-census'])test(`真实dry-run公司readiness ${mode} 在admission/安装前判定`,t=>{
  const root=mkdtempSync(join(tmpdir(),'paired-company-readiness-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
- const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH,PAIR_COMPANY_READINESS_MODE:mode,...(mode==='schema-ready'?{PAIR_DEPLOY_STOP_AT_ADMISSION:'1'}:{})}});
+ // Model an unrelated active worker on the caller host; the remote census must be isolated.
+ writeFileSync(join(root,'pgrep'),'#!/bin/sh\nexit 0\n',{mode:0o700});
+ const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH,PAIR_COMPANY_READINESS_MODE:mode==='active-census'?'schema-ready':mode,...(['schema-ready','active-census'].includes(mode)?{PAIR_DEPLOY_STOP_AT_ADMISSION:'1',PAIR_DEPLOY_ACTIVE_CENSUS:mode==='active-census'?'1':'0'}:{})}});
  const output=result.stdout+result.stderr;
  assert.doesNotThrow(()=>readFileSync(join(root,'ssh.log'),'utf8'),output);
- if(mode==='schema-ready') {
+ if(['schema-ready','active-census'].includes(mode)) {
   assert.match(output,/"business_runtime_status":"disabled"/);assert.match(output,/"schema_verified":true/);
   assert.equal(result.error,undefined,'正向readiness必须真正结束，不能靠超时后的旧receipt通过');
   assert.notEqual(result.status,0,'explicit unresolved proof must fail closed');
-  assert.match(output,/Commander deployment admission: bounded cleanup references/,'must be the deliberate unresolved-proof rejection, not an unrelated script error');
+  assert.match(output,new RegExp('Commander deployment admission: '+(mode==='active-census'?'active Commander process':'bounded cleanup references')),'must be the exact modeled census/proof rejection, not an unrelated script error');
+  const census=JSON.parse(readFileSync(join(root,'remote-census.log'),'utf8').trim());
+  assert.deepEqual(census,{args:['-f','[w]f-agent-run.sh|[w]f-v2.py worker'],status:mode==='active-census'?0:1});
   assert.match(output,/Commander部署准入通道关闭|MMV部署锁通道丢失|Commander仍有在途执行/,'must stop through the real guarded admission failure path');
   const messages=readFileSync(join(root,'admission.log'),'utf8').trim().split('\n').map(x=>JSON.parse(x));
   assert.deepEqual(messages,[{action:'admit'}],'schema通过后真实进入持锁准入，原未决run在安装前拒绝');
@@ -96,7 +100,7 @@ test('部署smoke仍执行真实业务准入，失败候选在readiness和上传
 test('SQL附件transport真实存三份源字节、实际SHA读回并拒绝篡改/未知目标',t=>{
  const f=fixture(t),source=join(service,'../../apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql');
  const name='20261014_130000_leadgen_outreach_bridge.sql',bytes=readFileSync(source);
- const text=readFileSync(join(service,'deploy.sh'),'utf8');const block=text.slice(text.indexOf('deploy_release_evidence() {'),text.indexOf('# Commander 入口'));
+ const text=readFileSync(join(service,'deployment-functions.sh'),'utf8');const block=text.slice(text.indexOf('deploy_release_evidence() {'),text.indexOf('# Commander 入口'));
  const codes=[...block.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1].replaceAll('\\"','"'));assert.equal(codes.length,3);
  for(const [host,base,local] of [['xian-m4','~/bin-harvest','remote/bin-harvest'],['mmv','~/bin-harvest','remote-mmv/bin-harvest'],['mmv','~/.openclaw/leadgen-scripts','remote-mmv/.openclaw/leadgen-scripts']]){
   const directory=base+'/release-evidence',file=directory+'/'+name,stage=directory+'/.'+name+'.deploy-new';
@@ -111,4 +115,14 @@ test('SQL附件transport真实存三份源字节、实际SHA读回并拒绝篡�
  }
  assert.equal(transport(f.root,'scp',['-q',source,'xian-m1:~/bin-harvest/release-evidence/.'+name+'.deploy-new']).status,2);
  assert.equal(transport(f.root,'ssh',['xian-m4','python3 -c "print(1)" ~/outside/release-evidence/'+name]).status,2);
+});
+
+test('paired M4 batch adapter rejects wrong host, unknown command and unreviewed helper',t=>{
+ const f=fixture(t),stage=join(f.root,'m4-payload-deploy.fixture');mkdirSync(stage);
+ const install=`python3 ${stage}/deployment-m4-payload.py install ${stage}/payload.tar ${'a'.repeat(64)} before 0`;
+ assert.equal(transport(f.root,'ssh',['unregistered-fixture-host',install]).status,2,'a batch command cannot fall back to generic record-only success');
+ assert.equal(transport(f.root,'ssh',['xian-m4',install+' unexpected']).status,2);
+ assert.equal(transport(f.root,'ssh',['xian-m4','mktemp -d /tmp/m4-payload-deploy.XXXXXX','unexpected-extra-arg']).status,2,'batch SSH cannot ignore additional argv');
+ assert.equal(transport(f.root,'scp',['-q','-p',join(f.root,'payload.tar'),join(f.root,'unreviewed.py'),`xian-m4:${stage}/`]).status,2);
+ assert.throws(()=>verify(f.root),/not verified/);
 });

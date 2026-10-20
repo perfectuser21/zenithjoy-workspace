@@ -2,6 +2,7 @@ import {readFileSync,writeFileSync,existsSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {startActivityBroker} from './activity-skill-broker.mjs';
+import {digest as contractDigest} from './runtime-definition.mjs';
 import {safeExecutionDiagnostic,verifiedNativeNotStartedProof} from './leadgen-client.mjs';
 import {isCaptureContractFailure} from './activity-commander.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
@@ -39,7 +40,10 @@ export function frozenMethod(frozen,slot,runDir){
  if(name!==b.name||!/^\d+\.\d+\.\d+$/.test(version||'')||version!==b.version||ref!==a.version.payload.definition_key)throw Error('SKILL_METHOD_VERSION_MISMATCH');
  const supportPath='runtime/skills/leadgen-activity-execution.md',support=readFileSync(join(runDir,supportPath),'utf8');
  if(hash(support)!==frozen.files[supportPath])throw Error('SKILL_SUPPORT_BYTES_MISMATCH');
- return {name,version,path,activity_ref:ref,activity_version_id:a.version.id,reference_id:a.reference.reference_id,sha256:hash(text),text,support:{sha256:hash(support),text:support}};
+ const contract=a.version.payload.contract;
+ if(!contract||typeof contract!=='object'||Array.isArray(contract)||a.version.contract_sha256&&a.version.contract_sha256!==contractDigest(contract))throw Error('SKILL_ACTIVITY_CONTRACT_INVALID');
+ return {name,version,path,activity_ref:ref,activity_version_id:a.version.id,reference_id:a.reference.reference_id,sha256:hash(text),text,support:{sha256:hash(support),text:support},
+  contract:{activity_version_id:a.version.id,definition_key:a.version.payload.definition_key,sha256:contractDigest(contract),payload:structuredClone(contract)}};
 }
 export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,verify}){
  return async({activity,failure,execute})=>{

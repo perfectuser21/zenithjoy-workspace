@@ -1,27 +1,12 @@
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
+import {fixture,start,copyCommanderFixture} from './fixtures/commander-runtime.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, writeFileSync, cpSync, existsSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
-import {createHash} from 'node:crypto';
-const source=resolve('services/phone-adb-controller/commander');
-const sorted=v=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v;
-const hash=v=>createHash('sha256').update(JSON.stringify(sorted(v))).digest('hex');
-function fixture(){
- const home=mkdtempSync(join(tmpdir(),'commander-v2-')); const dir=join(home,'commander');cpSync(source,dir,{recursive:true});
- const definition={release_id:'release-test',snapshot_sha256:'a'.repeat(64)};
- const env={...process.env,HOME:home,WF_BRAIN_URL:'http://127.0.0.1:1',WF_V2_NO_WORKER:'1'};
- const envelope={protocol:'commander-v2',task_id:'1234abcd-0000-4000-8000-000000000001',run_id:'wfd-test',workflow_key:'report.generic',attempt:1,owner_epoch:1,deadline_at:new Date(Date.now()+600000).toISOString(),cleanup_deadline_at:new Date(Date.now()+660000).toISOString(),input:{text:'中文\n$(touch /tmp/commander-must-not-execute) `id`',empty:[]},definition,contract:{execution_profile:'codex_agent',resources:{},activities:[{key:'report',by:'agent'}]},recovery:{max_attempts:1}};envelope.input_sha256=hash(envelope.input);
- const file=join(home,'envelope.json');writeFileSync(file,JSON.stringify(envelope));
- function call(cmd,args=[],input){return spawnSync('bash',[join(dir,cmd),...args],{env,encoding:'utf8',input:input&&JSON.stringify(input)});}
- return {home,dir,definition,env,envelope,file,call};
-}
-function start(f){
- const r=spawnSync('python3',[join(f.dir,'wf-v2-io.py'),'manifest',f.dir,JSON.stringify({'release-test':{snapshot_sha256:f.definition.snapshot_sha256,workflow_key:'report.generic'}})],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
- const launch=f.call('wf-launch.sh',['--envelope',f.file,'--parent-session','agent:work-commander:test']);assert.equal(launch.status,0,launch.stdout+launch.stderr);
- return join(f.home,'wf-agent-runs',f.envelope.run_id);
-}
 test('部署准入拒绝业务已停但cleanup_pending且无delivery的包',()=>{
  const f=fixture(),dir=start(f);writeFileSync(join(dir,'runtime.json'),JSON.stringify({phase:'cleanup_pending',execution_stopped:true}));
  const guard=resolve('services/phone-adb-controller/deployment-guard.py'),forbidden=join(f.home,'installation-forbidden');
@@ -53,4 +38,38 @@ test('同一release ready按workflow固定摘要握手，多workflow未知或串
  }
  seal({'release-test':{workflows}});writeFileSync(join(f.dir,'wf-agent-lib.py'),'# component changed');assert.notEqual(ready('workflow.meta','1'.repeat(64)).status,0);
  assert.equal(existsSync(join(f.home,'wf-agent-runs')),false,'ready must not start any run');
+});
+
+test('Commander fixture仅复制已发布文件，不带Skill安装器的原子临时文件',t=>{
+ const root=mkdtempSync(join(tmpdir(),'commander-copy-stage-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const src=join(root,'source'),dest=join(root,'dest'),skill=join(src,'skills/wf-test');mkdirSync(skill,{recursive:true});
+ writeFileSync(join(skill,'SKILL.md'),'published-skill');writeFileSync(join(skill,'.skill-stage'),'unpublished');writeFileSync(join(src,'wf-v2.py'),'runtime');writeFileSync(join(src,'.skill-outside'),'ordinary');
+ copyCommanderFixture(src,dest);
+ assert.equal(existsSync(join(dest,'skills/wf-test/.skill-stage')),false,'unpublished installer staging file entered the runtime fixture');
+ assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published-skill');assert.equal(readFileSync(join(dest,'wf-v2.py'),'utf8'),'runtime');assert.equal(readFileSync(join(dest,'.skill-outside'),'utf8'),'ordinary');
+ assert.throws(()=>copyCommanderFixture(join(root,'missing'),join(root,'must-not-exist')),/ENOENT/);
+});
+
+test('Commander fixture枚举Skill暂存后文件消失，不吞正式文件的读取失败',t=>{
+ const root=mkdtempSync(join(tmpdir(),'commander-copy-disappearing-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const src=join(root,'source'),dest=join(root,'dest'),skill=join(src,'skills/wf-test');mkdirSync(skill,{recursive:true});
+ const staging=join(skill,'.skill-disappearing');writeFileSync(staging,'temporary');writeFileSync(join(skill,'SKILL.md'),'published');
+ const original=fs.cpSync;let removed=false;
+ t.mock.method(fs,'cpSync',(from,to,options)=>original(from,to,{...options,filter:(path,target)=>{
+  if(path===staging){fs.unlinkSync(path);removed=true;}
+  return options.filter?options.filter(path,target):true;
+ }}));syncBuiltinESMExports();
+ try{copyCommanderFixture(src,dest);}finally{t.mock.restoreAll();syncBuiltinESMExports();}
+ assert.equal(removed,true,'the test must observe removal after enumeration');assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published');
+});
+
+test('Commander fixture正式Skill在枚举后缺失仍原样拒绝，不泛吞ENOENT',t=>{
+ const root=mkdtempSync(join(tmpdir(),'commander-copy-canonical-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const src=join(root,'source'),skill=join(src,'skills/wf-test');mkdirSync(skill,{recursive:true});
+ const published=join(skill,'SKILL.md');writeFileSync(published,'published');const original=fs.cpSync;
+ t.mock.method(fs,'cpSync',(from,to,options)=>original(from,to,{...options,filter:(path,target)=>{
+  if(path===published)fs.unlinkSync(path);
+  return options.filter?options.filter(path,target):true;
+ }}));syncBuiltinESMExports();
+ try{assert.throws(()=>copyCommanderFixture(src,join(root,'dest')),/ENOENT/);}finally{t.mock.restoreAll();syncBuiltinESMExports();}
 });

@@ -17,7 +17,7 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
   const text=readFileSync(join(sourceRoot,methodPath),'utf8'),support=readFileSync(join(sourceRoot,supportPath),'utf8'),version=text.match(/^  version: (.+)$/m)[1];
   for(const [path,body] of [[methodPath,text],[supportPath,support]]){mkdirSync(dirname(join(d,'runtime',path)),{recursive:true});writeFileSync(join(d,'runtime',path),body);}
   writeFileSync(join(d,'runtime','activity-skill-tool.mjs'),readFileSync(join(sourceRoot,'activity-skill-tool.mjs')));
-  const frozen={files:{['runtime/'+methodPath]:hash(text),['runtime/'+supportPath]:hash(support)},snapshot_sha256:'fixture-snapshot',release:{id:'fixture-release'},deployment:{source_commit:'a'.repeat(40),target:'mmv',observation_id:'fixture-observation'},workflow_version:{id:'fixture-wv'},activities:[{reference:{slot_key:'scoring',reference_id:'fixture-ref'},version:{id:'fixture-av',payload:{definition_key:'douyin_comment_scoring.scoring',implementation_bindings:[{kind:'skill',name,version,path:'services/phone-adb-controller/'+methodPath}]}}}]};
+  const frozen={files:{['runtime/'+methodPath]:hash(text),['runtime/'+supportPath]:hash(support)},snapshot_sha256:'fixture-snapshot',release:{id:'fixture-release'},deployment:{source_commit:'a'.repeat(40),target:'mmv',observation_id:'fixture-observation'},workflow_version:{id:'fixture-wv'},activities:[{reference:{slot_key:'scoring',reference_id:'fixture-ref'},version:{id:'fixture-av',payload:{definition_key:'douyin_comment_scoring.scoring',contract:{version:'2.1.0',key:'scoring',budget:{max_duration_s:60}},implementation_bindings:[{kind:'skill',name,version,path:'services/phone-adb-controller/'+methodPath}]}}}]};
   const handlers={state:{budgetDeadline:Date.now()+60000},handoffContext:async()=>({company_id:'fixture-company',comments_committed:1}),handoffPhone:async()=>{throw Error('no phone in103');}};
   const rpc=async input=>{
    if(input.kind==='activity_skill_authority')return {authorized:skillAuthority(input.request,{home:d,verifyWorkspace:()=>true})};
@@ -25,6 +25,7 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
    return {result:await runSkillAgent(input.request,{home:d,verifyWorkspace:()=>true,execute:async(command,args)=>{
     if(command==='openclaw'){
      launches++;const dir=dirname(args[args.indexOf('--message-file')+1]),request=JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'));
+     assert.deepEqual(JSON.parse(readFileSync(join(dir,'activity-contract.json'),'utf8')),input.request.method.contract,'child must read an actual authority-bound frozen contract, not an absent repository YAML');
      claimSkillSpawn(dir,{home:d,verifyWorkspace:()=>true});
      const receipt={runId:'11111111-1111-4111-8111-111111111111',childSessionKey:'agent:skill-factory:subagent:fixture',resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'};
      writeFileSync(join(dir,'spawn-receipt.json'),JSON.stringify(receipt));writeFileSync(join(dir,'agent-binding.json'),JSON.stringify({...request,child_run_id:receipt.runId,child_session_key:receipt.childSessionKey}));

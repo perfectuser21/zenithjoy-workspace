@@ -371,7 +371,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           collected_at:new Date(row.collected_at).toISOString(),id:row.id}:null;
         const videos=(await client.query(`SELECT video_id,video_url,title,judgment_status FROM zenithjoy.leadgen_videos
           WHERE line_key=$1 AND video_url=$2`,[lineKey,row.source_video_url])).rows;
-        if(videos.length!==1||videos[0].title!==row.source_video||videos[0].judgment_status!=='matched')throw Error('POLICY_VIDEO_SCOPE_INVALID');
+        if(videos.length!==1||videos[0].title!==row.source_video||videos[0].judgment_status!=='matched'){
+          const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
+        }
         let verdict;
         try{verdict=await deps.judgeComment(row.comment_body, row.source_video, targetProfile,
           { scoringRules: snapshot.runtime_config.comment_scoring });}

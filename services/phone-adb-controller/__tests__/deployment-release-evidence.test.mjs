@@ -34,7 +34,7 @@ test('原部署函数从空目录原子安装三个SQL副本且只读校验，�
  const python=execFileSync('which',['python3'],{encoding:'utf8'}).trim();const marker=join(work,'SQL_EXECUTED');
  const shim=`#!${python}\nimport os,sys,shutil,subprocess\nfrom pathlib import Path\nmode=Path(sys.argv[0]).name\nif mode=='psql':Path(os.environ['SQL_EXECUTED_MARKER']).write_text('forbidden');sys.exit(99)\nargs=sys.argv[1:]\nif mode=='scp':\n src,dest=args[-2:];\n if os.environ.get('FAIL_SCP')=='1':sys.exit(75)\n host,relative=dest.split(':',1);p=Path(os.environ['MOCK_HOST_ROOT'])/host/relative.removeprefix('~/');shutil.copy2(src,p)\nelse:\n host,cmd=args[-2:];home=str(Path(os.environ['MOCK_HOST_ROOT'])/host);sys.exit(subprocess.call(['bash','-c',cmd],env=dict(os.environ,HOME=home)))\n`;
  for(const n of ['ssh','scp','psql']){writeFileSync(join(bin,n),shim);chmodSync(join(bin,n),0o755);}
- const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');const fn=source.slice(source.indexOf('push_atomic() {'),source.indexOf('# Commander 入口'));assert.ok(fn.includes('deploy_release_evidence()'),'actual attachment installer must exist');
+ const source=readFileSync(new URL('../deployment-functions.sh',import.meta.url),'utf8');const fn=source.slice(source.indexOf('push_atomic() {'),source.indexOf('# Commander 入口'));assert.ok(fn.includes('deploy_release_evidence()'),'actual attachment installer must exist');
  const script='set -euo pipefail\n'+fn+`\nREPO_ROOT=${JSON.stringify(root)}\nDEPLOY_MANIFEST=${JSON.stringify(mf)}\nRELEASE_EVIDENCE_FILES=(${JSON.stringify(sql+'='+deployed)})\ndeploy_release_evidence\n`;
  const r=spawnSync('bash',['-c',script],{encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH,MOCK_HOST_ROOT:homes,SQL_EXECUTED_MARKER:marker}});assert.equal(r.status,0,r.stdout+'\n'+r.stderr);assert.equal(existsSync(marker),false);
  const targets=[join(homes,'xian-m4/bin-harvest'),join(homes,'mmv/bin-harvest'),join(homes,'mmv/.openclaw/leadgen-scripts')];
@@ -54,7 +54,7 @@ test('正式manifest调用、GP早期守卫及drift都必须包含同一附件�
 });
 
 function attachmentPython(){
- const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const source=readFileSync(new URL('../deployment-functions.sh',import.meta.url),'utf8');
  const section=source.slice(source.indexOf('deploy_release_evidence() {'),source.indexOf('# Commander 入口'));
  const matches=[...section.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1]);
  assert.equal(matches.length,3);

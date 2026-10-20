@@ -271,3 +271,33 @@ test('mark_leads扫描游标与原line/run/source scope不符时查库前拒绝'
   cursor:{line:'yuesheng',run:originalRun,source_run:sourceRun,collected_at:'2026-10-20T00:00:00.000Z',id:comments[0].id}},{freezeCompanyConfig:async()=>policy}),/POLICY_MARK_CURSOR_INVALID/);
  assert.equal(queries,0);
 });
+
+test('103评分失败后inspect保留真实冻结公司，上下文不要求MMV借用手机账号',async t=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const {rmSync}=await import('node:fs');
+ const dir=mkdtempSync(join(tmpdir(),'score-frozen-inspect-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const h=createHandlers({root:dir,env:{P:'mmv-scoring',SERIAL:'none',WFR_TAG:originalRun,LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',WFR_RUN_DIR:dir,HOME:dir},
+  rpc:async({request:r})=>{if(r.op==='company_config')return {result:policy};throw Error('fixture scoring unavailable');}});
+ await assert.rejects(h.scoring(),/fixture scoring unavailable/);
+ const context=await h.handoffContext();assert.equal(context.company_id,policy.company_id);assert.equal(context.account,null);
+ assert.deepEqual(h.state.company_config,policy,'must retain the returned frozen receipt, not infer company from a line label');
+});
+for(const badSource of ['missing','duplicate','title-mismatch','not-qualified','all-orphan'])test('103孤儿来源明确隔离且同run仅评分后续合格CID：'+badSource,async()=>{
+ const bad={id:'cc160b18-9189-4447-9c32-abd71daa8ce0',line_key:'jinuo',harvest_batch:'old102',comment_body:'legacy orphan',source_video:'原历史视频',source_video_url:'https://www.douyin.com/video/7617837149999841201',collected_at:new Date('2026-10-20T00:00:00Z')};
+ const good={...bad,id:'00000000-0000-4000-8000-000000000192',comment_body:'人工智能训练师证书怎么报名',source_video:video.title,source_video_url:video.video_url,collected_at:new Date('2026-10-20T00:01:00Z')};
+ const updated=[],judged=[];const sources={[bad.id]:bad.harvest_batch,[good.id]:good.harvest_batch};
+ const client={async query(sql,args=[]){
+  if(sql.includes('SELECT count(*)::int AS used'))return {rows:[{used:updated.length}]};
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:(badSource==='all-orphan'?[bad]:[bad,good]).filter(r=>!args[2].includes(r.id)&&!updated.includes(r.id)).slice(0,1)};
+  if(sql.includes('FROM zenithjoy.leadgen_videos')){
+   if(args[1]===good.source_video_url)return {rows:[{...video,judgment_status:'matched'}]};
+   const original={title:bad.source_video,judgment_status:'matched'};
+   return {rows:['missing','all-orphan'].includes(badSource)?[]:badSource==='duplicate'?[original,original]:[{...original,...(badSource==='title-mismatch'?{title:'别的视频'}:{judgment_status:'pending'})}]};
+  }
+  if(sql.includes('UPDATE zenithjoy.leadgen_comments'))updated.push(args[0]);return {rows:[]};
+ },release(){}};
+ const r=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:originalRun,source_run:null,limit:1,budget_max:1,ids:[bad.id,good.id],sources},{freezeCompanyConfig:async()=>policy,
+  judgeComment:async body=>{judged.push(body);assert.equal(body,good.comment_body,'orphan must never be sent to a model');return {grade:'A',relevance:'相关',reason:'原政策报名咨询',audit:primaryAudit};},
+  judgePolicy:async()=>({grade:'A',audit:{model:'fixture-policy',response_id:'policy-response',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么报',exclusion_rule:null,reason:'按冻结政策'}}})});
+ const expected=badSource==='all-orphan'?[]:[good.id];assert.deepEqual(updated,expected);assert.deepEqual(judged,badSource==='all-orphan'?[]:[good.comment_body]);assert.equal(r.scored,expected.length);assert.deepEqual(r.ids,expected);assert.equal(r.status,'partial');
+ assert.deepEqual(r.blocked_ids,[bad.id]);assert.deepEqual(r.blocked_reasons,[{id:bad.id,code:'POLICY_VIDEO_SCOPE_INVALID'}]);assert.equal(bad.relevance,undefined);
+});

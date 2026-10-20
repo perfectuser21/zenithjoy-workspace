@@ -151,6 +151,26 @@
       "owner_path": "services/phone-adb-controller/leadgen-workflow.mjs",
       "path": "services/phone-adb-controller/__tests__/leadgen-workflow-supervision.test.mjs",
       "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/deploy.sh",
+      "path": "services/phone-adb-controller/__tests__/deployment-m4-payload.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/deployment-functions.sh",
+      "path": "services/phone-adb-controller/__tests__/deployment-m4-payload.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/deployment-m4-payload.sh",
+      "path": "services/phone-adb-controller/__tests__/deployment-m4-payload.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/deployment-m4-payload.py",
+      "path": "services/phone-adb-controller/__tests__/deployment-m4-payload.test.mjs",
+      "role": "verification"
     }
   ]
 }
