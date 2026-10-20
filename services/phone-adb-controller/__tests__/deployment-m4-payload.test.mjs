@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {spawnSync,execFileSync} from 'node:child_process';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,statSync,existsSync,realpathSync,symlinkSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
@@ -8,14 +8,14 @@ import {join} from 'node:path';
 import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
 const service=new URL('../',import.meta.url).pathname;
 const quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
-function run(t,{badSyntax=false,missing=false}={}){
+function run(t,{badSyntax=false,missing=false,missingSh=false,badSh=false,duplicate=false,finishGuard=false}={}){
  const root=realpathSync(mkdtempSync(join(tmpdir(),'m4-deploy-batch-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const {home,env}=prepareTransport(root),source=join(root,'source');mkdirSync(source);
- const files={'a.sh':'#!/bin/sh\ntrue\n','log-stream-push.sh':'#!/bin/sh\ntrue\n','z.sh':'#!/bin/sh\ntrue\n',
+ const files={'a.sh':badSh?'if broken;\n':'#!/bin/sh\ntrue\n','log-stream-push.sh':'#!/bin/sh\ntrue\n','z.sh':'#!/bin/sh\ntrue\n',
   'one.mjs':badSyntax?'const = ;\n':'export const value=1;\n','two.mjs':'export const value=2;\n',
   'skills/first/SKILL.md':'---\nname: real-payload\n---\nSkill bytes\n','checks/test.json':'{"ok":true}\n',
   'plans/test.plan':'#!/bin/sh\ntrue\n','plans/test.steps.json':'{"steps":[]}\n'};
- for(const [p,bytes] of Object.entries(files)){mkdirSync(join(source,p,'..'),{recursive:true});if(!(missing&&p==='one.mjs'))writeFileSync(join(source,p),bytes,{mode:0o640});}
+ for(const [p,bytes] of Object.entries(files)){mkdirSync(join(source,p,'..'),{recursive:true});if(!(missing&&p==='one.mjs')&&!(missingSh&&p==='a.sh'))writeFileSync(join(source,p),bytes,{mode:0o640});}
  // Execute the actual production M4 four-loop block, never a second installer.
  const deploy=readFileSync(join(service,'deploy.sh'),'utf8');
  const block=deploy.slice(deploy.indexOf('echo "=== [3/3]'),deploy.indexOf('echo "=== [4/4]'));
@@ -25,16 +25,17 @@ function run(t,{badSyntax=false,missing=false}={}){
  const special=join(root,'special.log');
  const script=`set -euo pipefail\nD=${quote(source)}\nDEPLOY_TOOL_DIR=${quote(service)}\nFAILED=0\n${helpers}
 remote_md5(){ printf '%s\\n' before >> ${quote(special)}; printf old; }
-kickstart_if_changed(){ printf '%s\\n' kickstart >> ${quote(special)}; }
+kickstart_if_changed(){ printf '%s\\n' kickstart >> ${quote(special)}; printf 'M4_STREAM_BARRIER\\n'; }
 DEVICE_SH_FILES=(a.sh log-stream-push.sh z.sh)
 DEVICE_NODE_FILES=(one.mjs two.mjs)
-DEVICE_RPC_PROBE_FILES=(skills/first/SKILL.md checks/test.json)
+DEVICE_RPC_PROBE_FILES=(skills/first/SKILL.md checks/test.json ${duplicate?'plans/test.steps.json':''})
 DEVICE_PLAN_FILES=(plans/test.plan plans/test.steps.json)
 ${block}
+${finishGuard?deploy.slice(deploy.lastIndexOf('if [[ "$FAILED" == "1" ]]'),deploy.indexOf('# 完整安装实读后')):''}
 printf 'FINAL_FAILED=%s\\n' "$FAILED"
 `;
  const started=performance.now(),r=spawnSync('bash',['-c',script],{env,encoding:'utf8',timeout:30000});
- assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);const calls=readFileSync(join(root,'transport.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(r.error,undefined);assert.equal(r.status,finishGuard?1:0,r.stderr);const calls=readFileSync(join(root,'transport.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
  t.diagnostic(JSON.stringify({ssh:calls.filter(x=>x.kind==='ssh').length,scp:calls.filter(x=>x.kind==='scp').length,elapsed_ms:performance.now()-started}));
  return {root,home,source,files,result:r,calls,elapsed:performance.now()-started,special:readFileSync(special,'utf8')};
 }
@@ -44,6 +45,19 @@ test('M4 actual ordinary deployment uses bounded transport while preserving ever
  assert.equal(r.special,'before\nkickstart\n');
  assert.ok(r.calls.filter(x=>x.kind==='scp').length<=2,'ordinary M4 payload must be uploaded once; stream retains its separate upload');
  assert.ok(r.calls.filter(x=>x.kind==='ssh').length<=8,'bulk staging/install must bound actual SSH process launches');
+});
+test('duplicate source is uploaded once but installed twice in original group order around the stream barrier',t=>{
+ const r=run(t,{duplicate:true});const lines=r.result.stdout.split('\n');
+ const sequence=lines.flatMap(line=>line.startsWith('M4_FILE ')?[JSON.parse(line.slice(8)).path]:line==='M4_STREAM_BARRIER'?['stream-barrier']:[]);
+ assert.deepEqual(sequence,['a.sh','stream-barrier','z.sh','one.mjs','two.mjs','skills/first/SKILL.md','checks/test.json','plans/test.steps.json','plans/test.plan','plans/test.steps.json']);
+ assert.equal(r.calls.filter(x=>x.kind==='scp').length,2);
+});
+test('missing optional SH retains warning-only while SH syntax failure sets FAILED and continues',t=>{
+ const missing=run(t,{missingSh:true});assert.match(missing.result.stdout,/FINAL_FAILED=0/);assert.equal(existsSync(join(missing.home,'bin-harvest/a.sh')),false);
+ const invalid=run(t,{badSh:true});assert.match(invalid.result.stdout,/FINAL_FAILED=1/);assert.equal(readFileSync(join(invalid.home,'bin-harvest/two.mjs'),'utf8'),invalid.files['two.mjs']);
+});
+test('actual final FAILED guard prevents reaching manifest and observation publication after syntax failure',t=>{
+ const r=run(t,{badSyntax:true,finishGuard:true});assert.doesNotMatch(r.result.stdout,/FINAL_FAILED=/);assert.match(r.result.stdout,/部分文件语法检查失败/);
 });
 for(const options of [{badSyntax:true},{missing:true}])test('M4 syntax failure or required missing source preserve FAILED and continue to later real bytes '+JSON.stringify(options),t=>{
  const r=run(t,options);assert.match(r.result.stdout,/FINAL_FAILED=1/);
@@ -83,4 +97,18 @@ test('pre-existing same-directory temporary file is refused without deleting ano
  const hash=createHash('sha256').update(readFileSync(f.archive)).digest('hex');
  const r=spawnSync('python3',[f.tool,'install',f.archive,hash,'after','1'],{env:{...process.env,HOME:f.home},encoding:'utf8'});
  assert.notEqual(r.status,0);assert.equal(readFileSync(temp,'utf8'),'other writer');assert.equal(existsSync(join(root,'first.json')),false);
+});
+test('actual pre-source guard rejects missing or modified deployment helpers before loading their code',t=>{
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'m4-helper-source-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const dir=join(root,'services/phone-adb-controller');mkdirSync(dir,{recursive:true});
+ const names=['deployment-functions.sh','deployment-m4-payload.sh','deployment-m4-payload.py'];
+ for(const name of names)writeFileSync(join(dir,name),readFileSync(join(service,name)));
+ const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-C',root,...args],{stdio:'pipe'});
+ git('init','-q');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','fixed source fixture');
+ const deploy=readFileSync(join(service,'deploy.sh'),'utf8'),start=deploy.indexOf('for _helper in '),end=deploy.indexOf('source "$D/deployment-functions.sh"')+'source "$D/deployment-functions.sh"'.length;
+ const invoke=()=>spawnSync('bash',['-c',`set -euo pipefail\ncd ${quote(root)}\nD=${quote(dir)}\n${deploy.slice(start,end)}`],{encoding:'utf8'});
+ assert.equal(invoke().status,0);
+ const marker=join(root,'loaded-tampered-helper');writeFileSync(join(dir,names[0]),`touch ${quote(marker)}\n`+readFileSync(join(service,names[0]),'utf8'));
+ assert.notEqual(invoke().status,0);assert.equal(existsSync(marker),false);
+ writeFileSync(join(dir,names[0]),readFileSync(join(service,names[0])));rmSync(join(dir,names[2]));assert.notEqual(invoke().status,0);assert.equal(existsSync(marker),false);
 });
