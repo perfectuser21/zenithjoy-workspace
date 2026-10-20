@@ -1,7 +1,7 @@
 // Isolated offline transport fixtures; no Gateway/model/device/DB or production run.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -76,7 +76,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
       if(resumeFirst){await assert.rejects(()=>relayActivityTool(dir,'resume',{},deps));await assert.rejects(()=>relayActivityTool(dir,'phone',{command:'back-evidence',args:[]},deps));}
       else await relayActivityTool(dir,'resume',{},deps);
      }
-     return {code:parentUnknown&&turn===0?1:0,stdout:JSON.stringify(ownerState==='model_payload'?{result:{payloads:[{text:JSON.stringify({runId:'owner-turn-'+turn,status:'ok',summary:'completed'})}]}}:{runId:'owner-turn-'+turn,status:'ok',...(completeFinal?{summary:'completed',result:{payloads:[],meta:{durationMs:10,agentMeta:{sessionId:'owner-session-'+turn}}}}:{})}),stderr:''};
+     return {code:parentUnknown&&turn===0?1:0,stdout:ownerState==='code_only'?'':JSON.stringify(ownerState==='model_payload'?{result:{payloads:[{text:JSON.stringify({runId:'owner-turn-'+turn,status:'ok',summary:'completed'})}]}}:{runId:'owner-turn-'+turn,status:'ok',...(completeFinal?{summary:'completed',result:{payloads:[],meta:{durationMs:10,agentMeta:{sessionId:'owner-session-'+turn}}}}:{})}),stderr:''};
     }
     if(unknownChild)return {code:1,stdout:'',stderr:'official terminal unavailable'};
     const binding=JSON.parse(readFileSync(join(args[2],'agent-binding.json'),'utf8'));
@@ -85,7 +85,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
   };
   const recover=createActivityRecovery({runDir:d,frozen,binding:{id:'fixture-binding',run_id:'fixture__a1'},env:{},handlers,rpc,verify});
   const result=await recover({activity:{key:activityKey},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:async()=>{resumes++;return businessResult;}});
-  return {result,launches,resumes,turns,directories};
+  return {result,launches,resumes,turns,directories,owner_pending:readdirSync(join(d,'.openclaw','leadgen-owner-turns')).some(p=>p.endsWith('.pending.json'))};
  }finally{rmSync(d,{recursive:true,force:true});}
 }
 for(const resumeFirst of [false,true])test('confirmed failed Agent continues once in original broker without resetting execution/evidence '+resumeFirst,async()=>{
@@ -141,7 +141,7 @@ test('missing exact parent agent.wait terminal rejects even when session is curr
 test('full original official final receipt survives exact-run wait cache miss with fresh idle session',async()=>{
  const r=await continuationFixture({ownerState:'wait_missing',completeFinal:true});assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.result.status,'completed');
 });
-for(const ownerState of ['wrong_session','pending','missing_active','model_payload'])test('owner final does not authorize continuation with wrong session, pending work or missing official fields '+ownerState,async()=>{
+for(const ownerState of ['wrong_session','pending','missing_active'])test('owner final does not authorize continuation with wrong session, pending work or missing official fields '+ownerState,async()=>{
  await assert.rejects(()=>continuationFixture({ownerState,completeFinal:true}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
 });
 
@@ -157,4 +157,8 @@ test('native evidence capability failure is retained even when child only return
 
 for(const ownerState of ['live_subagent','registry_active','registry_identity','registry_missing'])test('fresh official owner readback cannot hide another active or unverified child '+ownerState,async()=>{
  await assert.rejects(()=>continuationFixture({ownerState}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
+});
+
+for(const ownerState of ['code_only','model_payload'])test('code zero or model payload cannot release an unresolved original owner '+ownerState,async()=>{
+ const r=await continuationFixture({ownerState});assert.equal(r.launches,1);assert.equal(r.result.status,'failed');assert.equal(r.result.execution_stopped,false);assert.equal(r.owner_pending,true);
 });
