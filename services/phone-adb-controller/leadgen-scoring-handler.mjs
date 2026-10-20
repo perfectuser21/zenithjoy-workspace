@@ -15,7 +15,7 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       const requested=Number(env.LEADGEN_LIMIT||2);
       if(!Number.isSafeInteger(requested)||requested<1)throw Error('POLICY_SCORE_BUDGET_INVALID');
       const budget=Math.min(50,requested);
-      await queue('company_config',{step:'103'});
+      state.company_config=await queue('company_config',{step:'103'});
       const scope=await queue('score_scope');
       if(!sourceRun&&(!scope.sources||scope.ids.some(id=>typeof scope.sources[id]!=='string')))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
       const saveAttempt=value=>{const temp=`${attemptFile}.${process.pid}.${randomUUID()}.tmp`;
