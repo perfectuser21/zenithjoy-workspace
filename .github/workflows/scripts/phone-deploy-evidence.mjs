@@ -44,9 +44,15 @@ function scopedEvidence(zip,scope,sha){
  }
  return {snapshot,report,receipt};
 }
-export async function downloadDeploymentEvidence(runId,github){
+export async function downloadDeploymentEvidence(runId,github,candidateSha){
  ensure(/^[1-9]\d{0,14}$/.test(String(runId))&&Number.isSafeInteger(Number(runId)),'run_id');
- const run=validateSourceRun(await github(`repos/${REPO}/actions/runs/${runId}`),(await github(`repos/${REPO}/git/ref/heads/main`)).object.sha);
+ const mainSha=(await github(`repos/${REPO}/git/ref/heads/main`)).object.sha;
+ if(candidateSha){
+  ensure(/^[0-9a-f]{40}$/.test(candidateSha),'显式候选SHA');
+  const ancestry=await github(`repos/${REPO}/compare/${mainSha}...${candidateSha}`);
+  ensure(['identical','behind'].includes(ancestry.status)&&ancestry.merge_base_commit?.sha===candidateSha,'候选必须是主线已合并祖先');
+ }
+ const run=validateSourceRun(await github(`repos/${REPO}/actions/runs/${runId}`),candidateSha||mainSha);
  const listing=await github(`repos/${REPO}/actions/runs/${run.id}/artifacts?per_page=100`);
  ensure(listing.total_count===listing.artifacts?.length,'artifact分页不完整');
  ensure(run.id===Number(runId),'请求run身份');
@@ -57,7 +63,7 @@ export async function downloadDeploymentEvidence(runId,github){
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
  try{const github=async(path,binary=false)=>{const bytes=execFileSync('gh',['api',path],{maxBuffer:32*1024*1024,stdio:['ignore','pipe','pipe']});return binary?bytes:JSON.parse(bytes.toString());};
-  const bundle=await downloadDeploymentEvidence(process.argv[2],github);
+  const bundle=await downloadDeploymentEvidence(process.argv[2],github,process.argv[4]||undefined);
   writeFileSync(process.argv[3],JSON.stringify(bundle)+'\n',{mode:0o600});
   if(process.env.GITHUB_OUTPUT)appendFileSync(process.env.GITHUB_OUTPUT,`sha=${bundle.run.sha}\nrun_id=${bundle.run.id}\n`);
  }catch{process.stderr.write('部署CI证据来源或固定JSON不满足要求；未发起部署。\n');process.exitCode=1;}

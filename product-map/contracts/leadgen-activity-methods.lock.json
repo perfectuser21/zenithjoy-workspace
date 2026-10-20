@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -188,13 +188,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "1d60b64bafc01ee5bc961b20ef17aaf1fa651ef533e962500ca521c5624470c8",
+      "code_digest": "5046bb53a116c2f2f02ccc71a9204d67b7e0e797fed3a61cb6a7a252a397c63b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "adf33ac5f284a4b02e2b6dda3824a9ad1d0a6b2fda075a926e73f3cb7557fdcf",
-        "current_code_digest": "1d60b64bafc01ee5bc961b20ef17aaf1fa651ef533e962500ca521c5624470c8"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "1d60b64bafc01ee5bc961b20ef17aaf1fa651ef533e962500ca521c5624470c8",
+        "current_code_digest": "5046bb53a116c2f2f02ccc71a9204d67b7e0e797fed3a61cb6a7a252a397c63b"
       }
     },
     "douyin_video_processing.preflight": {
@@ -255,7 +255,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -395,13 +395,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "0afec952533a5954aa7f55a6acc10526c6c305bf400c150f70bbf38296c41559",
+      "code_digest": "8497655463adbb6180f2d8f6155df2c76c04765ed1ed64484d5d21a5a537de15",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "de2a09cd0348c8975ab89f85548f8aee2d2a929a2644052923fb4e0e943fc803",
-        "current_code_digest": "0afec952533a5954aa7f55a6acc10526c6c305bf400c150f70bbf38296c41559"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "0afec952533a5954aa7f55a6acc10526c6c305bf400c150f70bbf38296c41559",
+        "current_code_digest": "8497655463adbb6180f2d8f6155df2c76c04765ed1ed64484d5d21a5a537de15"
       }
     },
     "douyin_video_processing.dedup": {
@@ -455,7 +455,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -591,13 +591,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "527bbc4cc9bbb3d7ed8f70315a45f5342806d0ac4beab419a3a153cd76710bd9",
+      "code_digest": "5ce4d191235499583feff544f80f58d47602beca4eb741cb66e0987146632506",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "36ab27a663ceb001c951b6d8a5a2882f7e3030850a2d2c1caae3c91acd7ce555",
-        "current_code_digest": "527bbc4cc9bbb3d7ed8f70315a45f5342806d0ac4beab419a3a153cd76710bd9"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "527bbc4cc9bbb3d7ed8f70315a45f5342806d0ac4beab419a3a153cd76710bd9",
+        "current_code_digest": "5ce4d191235499583feff544f80f58d47602beca4eb741cb66e0987146632506"
       }
     },
     "douyin_video_processing.qualification": {
@@ -651,7 +651,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "ce3d81a59920ef95e44ed7c645235f2941003cfffcc4f0a5df6ff074f336a32d",
+      "code_digest": "c46ea4bf04b5d1fac4f11a51714efe1b8a07c10d6755ce2476759e047b48aa66",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "54978160c5e951165b72bc914962a734d73d2fb78d1cc92289688402c7ea0944",
-        "current_code_digest": "ce3d81a59920ef95e44ed7c645235f2941003cfffcc4f0a5df6ff074f336a32d"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "ce3d81a59920ef95e44ed7c645235f2941003cfffcc4f0a5df6ff074f336a32d",
+        "current_code_digest": "c46ea4bf04b5d1fac4f11a51714efe1b8a07c10d6755ce2476759e047b48aa66"
       }
     },
     "douyin_video_processing.collection": {
@@ -896,7 +896,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -1054,13 +1054,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "79147b17d6e13a114c642c0f0ab95fa831d286d5d02398f6045524ab86eec52f",
+      "code_digest": "25d4a4d832516689d758f0a1b8e784b368a5d554a803f5394b4628efecf3d3be",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "2bb27cd6456f9fdd3451cd966dd3f587f94fd4414f3ef177126225d87ec81c79",
-        "current_code_digest": "79147b17d6e13a114c642c0f0ab95fa831d286d5d02398f6045524ab86eec52f"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "79147b17d6e13a114c642c0f0ab95fa831d286d5d02398f6045524ab86eec52f",
+        "current_code_digest": "25d4a4d832516689d758f0a1b8e784b368a5d554a803f5394b4628efecf3d3be"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1114,7 +1114,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -1246,13 +1246,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "a4b77f8a165c867d2b8131802ca9cb73104b92d8bf3b67a76616208839b59738",
+      "code_digest": "394ddfd0e7d42148a1875fcf9f344d923e30fe13a30edc35885b390efd374eb0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "3c94d6dc14162bb557c6fe80128e3ec9d1f35e7eb77e9f50152d401b58d8b325",
-        "current_code_digest": "a4b77f8a165c867d2b8131802ca9cb73104b92d8bf3b67a76616208839b59738"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "a4b77f8a165c867d2b8131802ca9cb73104b92d8bf3b67a76616208839b59738",
+        "current_code_digest": "394ddfd0e7d42148a1875fcf9f344d923e30fe13a30edc35885b390efd374eb0"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1306,7 +1306,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -1421,13 +1421,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "4ca3754f945f66b2e63e648dfe54772dc335ea11d00cb42569af7946c96936ca",
+      "code_digest": "ac80b5b8c05a5fa43aade32ff57200aa6e374d9de3e56fcfabdb030bb3d190ca",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "2cceb05053f4c6a7f94423bfd20bf1a3956edbf359e7245871509afda08c894c",
-        "current_code_digest": "4ca3754f945f66b2e63e648dfe54772dc335ea11d00cb42569af7946c96936ca"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "4ca3754f945f66b2e63e648dfe54772dc335ea11d00cb42569af7946c96936ca",
+        "current_code_digest": "ac80b5b8c05a5fa43aade32ff57200aa6e374d9de3e56fcfabdb030bb3d190ca"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1488,7 +1488,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -1652,13 +1652,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "34c9343bc6a0b7d3096561bf29a49c809b5d27f465d66600a712d52dc6006c82",
+      "code_digest": "606dc611d6cc69f7acc8af281b8d00139173a502f30fd2c9c1a8b7942a922c57",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "e99136baad4b74cf60862ba36efe20c6cbda5dc5f75ea109ce25072fac5bad8d",
-        "current_code_digest": "34c9343bc6a0b7d3096561bf29a49c809b5d27f465d66600a712d52dc6006c82"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "34c9343bc6a0b7d3096561bf29a49c809b5d27f465d66600a712d52dc6006c82",
+        "current_code_digest": "606dc611d6cc69f7acc8af281b8d00139173a502f30fd2c9c1a8b7942a922c57"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1712,7 +1712,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -1880,13 +1880,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "9d626c161e9e9770781a15ea024ce219578114ca1bbd11d406cd8291e775fcb7",
+      "code_digest": "5b61e90104a7d5ad3f5e653b13bb2e899ef51cab846cd311df8186db3053cb16",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "4f4b0d9398c3a557c2d61bd2639318fb141fdd7801002b1ab7f0db9b2ceb2e9d",
-        "current_code_digest": "9d626c161e9e9770781a15ea024ce219578114ca1bbd11d406cd8291e775fcb7"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "9d626c161e9e9770781a15ea024ce219578114ca1bbd11d406cd8291e775fcb7",
+        "current_code_digest": "5b61e90104a7d5ad3f5e653b13bb2e899ef51cab846cd311df8186db3053cb16"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1940,7 +1940,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -2083,13 +2083,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
+      "code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
-        "current_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
+        "current_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2143,7 +2143,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -2286,13 +2286,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
+      "code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
-        "current_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
+        "current_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2346,7 +2346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "5177b6786f0fc30b35208b62a9bcc4fb53b750fbbdfea494dcd2466ba8bc7363"
+          "sha256": "14adcc4e2f6a29ce2394e61f325c4b50bd160018b22c72b7dd5c31e3c795014b"
         },
         {
           "kind": "code",
@@ -2492,13 +2492,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "276e8094413fa6c65bc8f45d5fd7cb85fdfd818770c10ec2cf2cd9bc0b24246d",
+      "code_digest": "7b1946d25d78230351392c935cfdf66f57b6bc70f75b2e04a522018d48513c2e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "59cd13e0d6271f17f3e60cb3ec28e57c22ba9b0c91240edf454fe92019176b5d",
-        "current_code_digest": "276e8094413fa6c65bc8f45d5fd7cb85fdfd818770c10ec2cf2cd9bc0b24246d"
+        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
+        "reviewed_by": "codex:/root-release-admission",
+        "previous_code_digest": "276e8094413fa6c65bc8f45d5fd7cb85fdfd818770c10ec2cf2cd9bc0b24246d",
+        "current_code_digest": "7b1946d25d78230351392c935cfdf66f57b6bc70f75b2e04a522018d48513c2e"
       }
     }
   },

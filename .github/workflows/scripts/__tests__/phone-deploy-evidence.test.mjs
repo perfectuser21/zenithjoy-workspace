@@ -70,6 +70,19 @@ test('同main成功run精确下载三个scope完整证据，保留原两scope，
  assert.deepEqual(result.patrol,evidence('cecelia-device-patrol-definitions'));
  assert.deepEqual(requests.filter(p=>p.endsWith('/zip')).sort(),[55,57,58].map(id=>`repos/${repo}/actions/artifacts/${id}/zip`));
 });
+test('显式已验收main祖先沿用原SHA证据；分叉或伪造merge-base不能晋级',async()=>{
+ const {downloadDeploymentEvidence}=await implementation(),f=githubFixture();
+ const github=async(path,binary)=>{
+  if(path.includes('/git/ref/'))return {object:{sha:'e'.repeat(40)}};
+  if(path.includes('/compare/'))return {status:'behind',merge_base_commit:{sha}};
+  return f.github(path,binary);
+ };
+ assert.equal((await downloadDeploymentEvidence('42',github,sha)).run.sha,sha);
+ for(const compare of [{status:'ahead',merge_base_commit:{sha}},{status:'diverged',merge_base_commit:{sha}},{status:'behind',merge_base_commit:{sha:'f'.repeat(40)}}]){
+  await assert.rejects(downloadDeploymentEvidence('42',(p,b)=>p.includes('/compare/')?compare:github(p,b),sha));
+ }
+ await assert.rejects(downloadDeploymentEvidence('42',github));
+});
 test('第三scope缺失、重复及来源错误在下载前拒绝',async()=>{
  const {downloadDeploymentEvidence}=await implementation(),patrol='cecelia-device-patrol-definitions';
  for(const scopes of [['zenithjoy','commander-generic'],['zenithjoy','commander-generic',patrol,patrol]]){

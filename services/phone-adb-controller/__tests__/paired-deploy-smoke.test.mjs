@@ -61,7 +61,7 @@ for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实d
  const root=mkdtempSync(join(tmpdir(),'paired-company-readiness-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
  const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH,PAIR_COMPANY_READINESS_MODE:mode,...(mode==='schema-ready'?{PAIR_DEPLOY_STOP_AT_ADMISSION:'1'}:{})}});
  const output=result.stdout+result.stderr;
- const ssh=readFileSync(join(root,'ssh.log'),'utf8');
+ assert.doesNotThrow(()=>readFileSync(join(root,'ssh.log'),'utf8'),output);
  if(mode==='schema-ready') {
   assert.match(output,/"business_runtime_status":"disabled"/);assert.match(output,/"schema_verified":true/);
   assert.equal(result.error,undefined,'正向readiness必须真正结束，不能靠超时后的旧receipt通过');
@@ -82,6 +82,15 @@ for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实d
   let uploads='';try{uploads=readFileSync(join(root,'scp.log'),'utf8');}catch{}
   assert.equal(uploads,'','readiness失败不得执行任何安装上传');
  }
+});
+
+test('部署smoke仍执行真实业务准入，失败候选在readiness和上传前拒绝',t=>{
+ const root=mkdtempSync(join(tmpdir(),'paired-business-rejected-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
+ const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH,PAIR_BUSINESS_ADMISSION_MODE:'failed'}});
+ assert.notEqual(result.status,0);
+ assert.match(result.stdout+result.stderr,/业务验收未通过或证据不完整/);
+ for(const file of ['ssh.log','scp.log','admission.log'])assert.throws(()=>readFileSync(join(root,file)),{code:'ENOENT'},'业务拒绝不能进入readiness、持锁准入或安装');
+ assert.throws(()=>verify(root),/not verified/);
 });
 
 test('SQL附件transport真实存三份源字节、实际SHA读回并拒绝篡改/未知目标',t=>{

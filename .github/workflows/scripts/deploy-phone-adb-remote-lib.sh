@@ -41,7 +41,7 @@ def need(value,message):
  if not value:raise ValueError(message)
 def canonical(path):return Path(path).resolve(strict=True)
 def current(repo,sha):
- need(git(repo,'rev-parse','origin/main')==sha,'目标SHA已不是当前origin/main')
+ git(repo,'merge-base','--is-ancestor',sha,'origin/main')
 def clean(target):
  status=git(target,'status','--porcelain=v1','--untracked-files=all','--ignored=matching')
  if not status:return

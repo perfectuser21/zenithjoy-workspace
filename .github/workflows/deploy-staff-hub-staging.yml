@@ -20,43 +20,62 @@ jobs:
   deploy-staff-hub-staging:
     name: Build & Deploy Staff Hub Staging
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
+      FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+      SSH_HOST: ${{ secrets.HK_VPS_HOST }}
+      SSH_USER: ${{ secrets.HK_VPS_USER }}
+      SSH_PORT: ${{ secrets.HK_VPS_PORT || '22' }}
+      SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+      BRAIN_PUBLIC_URL: ${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Install dependencies
-        run: npm install --workspace=apps/staff-hub
+        run: npm ci --workspace=apps/staff-hub
 
       - name: Create .env.production
         run: |
-          echo "VITE_FEISHU_APP_ID=${{ secrets.FEISHU_APP_ID }}" > apps/staff-hub/.env.production
+          echo "VITE_FEISHU_APP_ID=$FEISHU_APP_ID" > apps/staff-hub/.env.production
           echo "VITE_DEPLOY_ENV=staging" >> apps/staff-hub/.env.production
 
       - name: Build staff-hub
-        run: npm run build --workspace=apps/staff-hub
+        run: |
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          export VITE_BUILD_SHA="$DEPLOY_SHA"
+          npm run build --workspace=apps/staff-hub
+          printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/staff-hub/dist/release-sha.json
 
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.HK_VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p ${{ secrets.HK_VPS_PORT }} ${{ secrets.HK_VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Deploy dist + nginx configs to VPS via rsync（仅 staging 路径）
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             apps/staff-hub/dist/ \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/dist/
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/dist/"
           rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             deploy/staff-hub/nginx-staging.conf \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/nginx.conf
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/nginx.conf"
           rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             deploy/staff-hub/common-staging.conf \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/common.conf
-          echo "✅ staging dist + nginx configs synced"
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/common.conf"
+          rsync -avz \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
+            deploy/docker-compose.staff-hub-staging.yml \
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/compose.yml"
+          echo "✅ staging dist + nginx configs + 同SHA compose synced"
 
       - name: Bring up staff-hub-staging via docker compose + 冒烟（仅 staging，绝不碰生产 staff-hub）
         uses: appleboy/ssh-action@v1.0.3
@@ -65,12 +84,19 @@ jobs:
           username: ${{ secrets.HK_VPS_USER }}
           key: ${{ secrets.HK_VPS_SSH_KEY }}
           port: ${{ secrets.HK_VPS_PORT }}
+          envs: DEPLOY_SHA
+          script_stop: true
           script: |
             set -euo pipefail
-            cd /opt/zenithjoy/repo
-            git fetch --force --prune origin main
-            git checkout origin/main -- deploy/docker-compose.staff-hub-staging.yml
-            docker compose -f deploy/docker-compose.staff-hub-staging.yml up -d staff-hub-staging
+            [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+            # Existing HK staging was created under project=deploy. Preserve
+            # its ownership while using this candidate's uploaded compose.
+            PROJECT=$(docker inspect staff-hub-staging \
+              --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)
+            PROJECT=${PROJECT:-zenithjoy-staff-hub-staging}
+            [[ "$PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo 'Invalid staging compose project' >&2; exit 1; }
+            docker compose -p "$PROJECT" \
+              -f /opt/zenithjoy/staff-hub-staging/compose.yml up -d staff-hub-staging
             docker restart staff-hub-staging
             echo "✅ staff-hub-staging restarted"
 
@@ -84,11 +110,12 @@ jobs:
             [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 staff-hub-staging; exit 1; }
             CODE=$(curl -s -o /dev/null -w '%{http_code}' -k "https://100.86.118.99:9444/" -H "Host: staff.zenjoymedia.media")
             [ "$CODE" = "200" ] || { echo "❌ staging :9444 首页 http=$CODE"; exit 1; }
-            echo "✅ staging :9444 首页 200"
+            curl -fsSk --max-time 15 "https://100.86.118.99:9444/release-sha.json?candidate=$DEPLOY_SHA" \
+              -H 'Host: staff.zenjoymedia.media' | jq -e --arg sha "$DEPLOY_SHA" '.sha == $sha'
+            echo "✅ staging :9444 首页200 且 SHA=$DEPLOY_SHA"
 
       - name: Notify Brain on failure
         if: failure()
         run: |
-          curl -s -X POST "${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}/api/brain/alerts" \
-            -H "Content-Type: application/json" \
-            -d '{"level":"P1","source":"deploy-staff-hub-staging","message":"Staff Hub staging 部署失败 sha=${{ github.sha }}"}' || true
+          jq -n --arg sha "$DEPLOY_SHA" '{level:"P1",source:"deploy-staff-hub-staging",message:("Staff Hub staging 部署失败 sha="+$sha)}' \
+            | curl -s -X POST "$BRAIN_PUBLIC_URL/api/brain/alerts" -H 'Content-Type: application/json' --data-binary @- || true

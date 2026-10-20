@@ -96,6 +96,14 @@ test('旧run与错误origin在创建目录前拒绝，脏原仓保留',t=>{
  const f=deploymentFixture(t);assert.notEqual(prepare(f,'b'.repeat(40)).status,0);assert.equal(fs.existsSync(path.join(f.base,'b'.repeat(40))),false);
  git(f.repo,'remote','set-url','origin','https://github.com/other/repo.git');assert.notEqual(prepare(f).status,0);assert.equal(fs.existsSync(path.join(f.base,f.sha)),false);
 });
+test('显式候选是main祖先时取原SHA，不因主线前进改部署字节',t=>{
+ const f=deploymentFixture(t),old=f.sha;
+ git(f.repo,'add','a.txt');git(f.repo,'commit','-qm','new main');
+ git(f.repo,'update-ref','refs/remotes/origin/main',git(f.repo,'rev-parse','HEAD'));
+ const result=prepare(f,old);assert.equal(result.status,0,result.stderr);
+ assert.equal(git(result.stdout.trim(),'rev-parse','HEAD'),old);
+ assert.equal(fs.readFileSync(path.join(result.stdout.trim(),'a.txt'),'utf8'),'hello\n');
+});
 test('复用树有tracked/untracked漂移拒绝，绝不reset或删除',t=>{
  const f=deploymentFixture(t);assert.equal(prepare(f).status,0);const target=path.join(f.base,f.sha);
  fs.writeFileSync(path.join(target,'a.txt'),'deployment drift');assert.notEqual(prepare(f).status,0);assert.equal(fs.readFileSync(path.join(target,'a.txt'),'utf8'),'deployment drift');

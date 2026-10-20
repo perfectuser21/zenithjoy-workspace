@@ -26,8 +26,10 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: 验证分支必须通过 /dev 创建
+        env:
+          DEV_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          BRANCH="${{ github.head_ref || github.ref_name }}"
+          BRANCH="$DEV_BRANCH"
           echo "检查分支名: $BRANCH"
           # 兼容 8 位 (MMDDHHNN) 与 10 位 (MMDDHHMMSS) 时间戳
           if ! echo "$BRANCH" | grep -qP '^cp-\d{8,10}-[a-z0-9-]+$'; then
@@ -51,8 +53,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check PR title follows conventional commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $TITLE"
 
           # 去掉 [CONFIG] / [INFRA] 前缀后再校验 conventional commits
@@ -97,10 +100,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.head_ref }}
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  CI Config Audit"
-          echo "  Branch: ${{ github.head_ref }}"
+          echo "  Branch: $PR_HEAD_REF"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
 
@@ -118,7 +122,9 @@ jobs:
           fi
 
           echo "CI workflow files changed:"
-          echo "$CI_CHANGED" | sed 's/^/  - /'
+          while IFS= read -r changed_path; do
+            printf '  - %s\n' "$changed_path"
+          done <<< "$CI_CHANGED"
           echo ""
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -198,7 +204,12 @@ jobs:
           BASE_REF="${{ github.base_ref }}"
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
 
-          if ! echo "$CHANGED" | grep -qE "^apps/dashboard/|^apps/api/"; then
+          # 测试目录和 *.test.* / *.spec.* 只验证实现，不要求虚构浏览器操作。
+          # API 保持原有覆盖；Staff Hub 与 Dashboard 一样属于真实界面入口。
+          if ! echo "$CHANGED" |
+            grep -E '^apps/(dashboard|api|staff-hub)/' |
+            grep -vE '(^|/)(__tests__|tests?)/|(^|/)[^/]+\.(test|spec)\.[^/]+$' |
+            grep . >/dev/null; then
             echo "无前端文件改动，跳过浏览器验证检查"
             exit 0
           fi
@@ -607,6 +618,40 @@ jobs:
           python3 -c "import yaml" 2>/dev/null || python3 -m pip install --quiet pyyaml
           python3 .github/workflows/scripts/lint-workflow-yaml-parse.py
 
+  release-admission-regression:
+    name: Test — Release Admission Regression
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install workflow parser
+        run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Run L1 and business gate behavior regressions
+        run: python3 scripts/release-gate/__tests__/process-and-business-gates.test.py
+      - name: Run release admission and HK rollback regressions
+        run: |
+          node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/*.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-business-admission.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-candidate.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-prepare.test.mjs \
+            services/phone-adb-controller/__tests__/commander-v2.test.mjs \
+            .github/workflows/scripts/__tests__/phone-deploy-evidence.test.mjs \
+            .github/workflows/scripts/__tests__/deploy-phone-adb-remote-lib.test.mjs
+
   # ─── Gate job ─────────────────────────────────────────────────────────────
 
   l1-passed:
@@ -616,7 +661,8 @@ jobs:
             lint-gp-anchor, lint-smoke-mock-honesty, lint-rpa-failure-scene, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane,
             lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
             lint-nightly-sparse-checkout-deps,
-            lint-contract-test-immutability, lint-workflow-yaml-parse]
+            lint-contract-test-immutability, lint-workflow-yaml-parse,
+            test-deploy-lib, test-install-pack-ascii, release-admission-regression]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -676,7 +722,7 @@ jobs:
 
           if [ "${{ needs.lint-rpa-failure-scene.result }}" != "success" ]; then
             echo "FAIL: Lint RPA Failure Scene (${{ needs.lint-rpa-failure-scene.result }})"
-            FAILED=1
+            FAILED=true
           fi
           if [ "${{ needs.lint-smoke-mock-honesty.result }}" != "success" ]; then
             echo "FAIL: Lint Smoke Mock Honesty (${{ needs.lint-smoke-mock-honesty.result }})"
@@ -730,6 +776,21 @@ jobs:
 
           if [ "${{ needs.lint-workflow-yaml-parse.result }}" != "success" ]; then
             echo "FAIL: Lint Workflow YAML Parse (${{ needs.lint-workflow-yaml-parse.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.test-deploy-lib.result }}" != "success" ]; then
+            echo "FAIL: Deploy Library (${{ needs.test-deploy-lib.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.test-install-pack-ascii.result }}" != "success" ]; then
+            echo "FAIL: Install Pack ASCII (${{ needs.test-install-pack-ascii.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.release-admission-regression.result }}" != "success" ]; then
+            echo "FAIL: Release Admission Regression (${{ needs.release-admission-regression.result }})"
             FAILED=true
           fi
 
