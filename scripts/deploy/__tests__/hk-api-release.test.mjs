@@ -32,6 +32,7 @@ if(path.basename(process.argv[1])==='curl'){
 }
 if(args[0]==='inspect'){
  if(args[1]!==service)throw Error('wrong container '+args[1]);
+ if(!s.active)process.exit(1);
  const fmt=args[args.indexOf('--format')+1];
  if(fmt.includes('.Image'))console.log(s.active);
  else if(fmt.includes('Health'))console.log(process.env.FAIL_MODE==='health'&&s.images[s.active]===process.env.CANDIDATE?'unhealthy':'healthy');
@@ -56,7 +57,7 @@ if(args[0]==='compose'){
  if(!fs.existsSync(path.join(source,'candidate')))throw Error('build did not use candidate source');
  if(source===process.env.ZJ_HK_REPO)throw Error('build uses mutable shared checkout');
  s.images[image]=process.env.BUILD_SHA;s.builds++;save();process.exit(0);}
- if(args.includes('up')){s.active=image;s.ups.push(image);save();if(process.env.FAIL_MODE==='kill-after-up'&&s.images[image]===process.env.CANDIDATE){process.kill(process.ppid,'SIGKILL');process.exit(0);}if(process.env.FAIL_MODE==='up'&&s.images[image]===process.env.CANDIDATE)process.exit(9);process.exit(0);}
+ if(args.includes('up')){s.active=image;s.ups.push(image);save();if(process.env.FAIL_MODE==='kill-after-remove'&&s.images[image]===process.env.CANDIDATE){s.active=null;save();process.kill(process.ppid,'SIGKILL');process.exit(0);}if(process.env.FAIL_MODE==='kill-after-up'&&s.images[image]===process.env.CANDIDATE){process.kill(process.ppid,'SIGKILL');process.exit(0);}if(process.env.FAIL_MODE==='up'&&s.images[image]===process.env.CANDIDATE)process.exit(9);process.exit(0);}
 }
 throw Error('unexpected docker '+args.join(' '));
 `;
@@ -211,4 +212,42 @@ test('中断恢复保留原previous历史，恢复后仍能回退再前一版', 
   const rollback = f.run(['rollback']);
   assert.equal(rollback.status, 0, rollback.stderr);
   assert.equal(f.state().active, 'sha256:old-image');
+});
+
+test('Compose删旧建新间硬中断导致容器缺失时，从可信激活记录恢复已验证镜像', t => {
+  const f = fixture(t);
+  const interrupted = f.run(['promote', f.next], {FAIL_MODE:'kill-after-remove'});
+  assert.equal(interrupted.signal, 'SIGKILL');
+  assert.equal(f.state().active, null);
+  const recovered = f.run(['rollback']);
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.equal(f.state().active, 'sha256:old-image');
+  assert.equal(f.state().builds, 1);
+  assert.equal(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES, f.next, 'release.json'))).verified, false);
+});
+
+test('容器缺失但无激活记录时拒绝猜测恢复', t => {
+  const f = fixture(t);
+  assert.equal(f.run(['promote', f.next]).status, 0);
+  const state = f.state(); state.active = null;
+  writeFileSync(f.env.FAKE_DOCKER, JSON.stringify(state));
+  const result = f.run(['rollback']);
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().active, null);
+  assert.deepEqual(f.state().ups, state.ups);
+});
+
+test('提交账本后清理journal时收到TERM不会回退容器造成账实不符', t => {
+  const f = fixture(t);
+  writeFileSync(join(f.env.PATH.split(':')[0], 'rm'), `#!${process.execPath} --
+const fs=require('node:fs');
+const file=process.argv[2];
+if(!file.endsWith('/activation.json'))throw Error('unexpected removal '+file);
+fs.unlinkSync(file);
+process.kill(process.ppid,'SIGTERM');
+`, {mode:0o755});
+  const interrupted = f.run(['promote', f.next]);
+  assert.notEqual(interrupted.status, 0);
+  assert.equal(f.state().images[f.state().active], f.next);
+  assert.equal(readFileSync(join(f.env.ZJ_HK_RELEASES, 'current'), 'utf8').trim(), f.next);
 });
