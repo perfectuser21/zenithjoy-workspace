@@ -59,11 +59,12 @@ async function main(){
     const verified=probes.length>0&&probes.every(p=>p.pass===true)&&local.every(r=>r.steps.length===expected.length&&r.steps.every(s=>s.pass===true));
     return {verified,metrics,probes,step_dod:local};
   };
-  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit});
+  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:binding.task_id});
   const activityDeadlines=new Map();
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
     const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key)});
     activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;
+    handlers.state.currentActivity=activity.key;
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};

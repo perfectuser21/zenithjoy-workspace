@@ -26,6 +26,14 @@ test('非法路径不能被RPC读取为凭据',()=>{
   assert.throws(()=>verifyRpcSource({...f.source,files:[{path:'../.credentials/brain.env',sha256:'a'.repeat(64)}]},{...f.options,read}),/PATH_INVALID/);
   assert.equal(touched,false);
 });
+test('声明的新增运行依赖实际缺失时来源门固定失败，执行器零调用',async()=>{
+ const f=fixture(),missing='native-operation-receipt.mjs';let executed=0;
+ assert.ok(RPC_FILES.includes(missing));
+ const read=path=>{if(path===resolve(f.options.base,missing)){const e=Error('missing fixture dependency');e.code='ENOENT';throw e;}return f.options.read(path);};
+ assert.throws(()=>verifyRpcSource(f.source,{...f.options,read}),error=>error.message==='RPC_SOURCE_DEPENDENCY_MISSING:'+missing);
+ await assert.rejects(handleRpc({kind:'commander',source:f.source,receipt:{source_commit:f.source.commit}},{verify:s=>verifyRpcSource(s,{...f.options,read}),commanderExecute:async()=>{executed++;}}),/RPC_SOURCE_DEPENDENCY_MISSING/);
+ assert.equal(executed,0);
+});
 test('版本未验证前，不建PG连接也不触发业务动作',async()=>{
   let used=false;
   await assert.rejects(handleRpc({kind:'queue',source:{}},{verify:()=>{throw Error('UNVERIFIED');},pool:{query:async()=>{used=true;}}}),/UNVERIFIED/);

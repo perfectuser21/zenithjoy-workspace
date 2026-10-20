@@ -16,7 +16,8 @@ export function skillBlockedDiagnostic(receipt,request,env){
  return {status:'blocked',reason:safeExecutionDiagnostic(reason,env).slice(0,1500)};
 }
 export function classifyActivityFailure(activity,failure){
- const text=JSON.stringify(failure);
+ const nativeStopped=failure.execution_stopped===true&&failure.external_effect==='unknown'&&typeof failure.operation_id==='string';
+ const text=nativeStopped?JSON.stringify(failure).replace(/EXECUTION_DEADLINE|EXECUTION_OUTPUT_LIMIT/g,''):JSON.stringify(failure);
  if(isCaptureContractFailure(failure))return 'blocked';
  if(/SOURCE_|BINDING_|CONTRACT_|COMPANY_|ACCOUNT_|未授权|暂停|日发送上限|锁.*(不符|未知|失败)|LOCK_|鉴权|权限|AUTH_|PERMISSION_|EACCES|EPERM|EXECUTION_DEADLINE|预算|截止|配额/.test(text))return 'blocked';
  if(activity.key==='collection'&&failure.status==='partial')return 'blocked';
@@ -44,7 +45,9 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
  return async({activity,failure,execute})=>{
   const directory=join(runDir,'skill-handoff',activity.key);
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
-  if(handlers.state.executionUnknown||failure.execution_stopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
+  const native=handlers.state.nativeStopProof;
+  const nativeStopVerified=failure.execution_stopped===true&&failure.external_effect==='unknown'&&native?.execution_stopped===true&&native.operation_id===failure.operation_id&&native.run_dir===runDir&&native.run_id===binding.run_id&&native.task_id===binding.task_id&&native.owner===env.WFR_TAG&&native.source_commit===frozen.deployment.source_commit&&native.activity===activity.key;
+  if(handlers.state.executionUnknown||failure.execution_stopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))&&!nativeStopVerified)){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
   const mode=classifyActivityFailure(activity,failure);
   if(handlers.state.qualificationClaimUnknown)noLaunch('SKILL_HANDOFF_CLAIM_RECEIPT_UNKNOWN');
   if(mode==='blocked')noLaunch(activity.key==='collection'&&failure.status==='partial'?'SKILL_COLLECTION_PARTIAL_READBACK_REQUIRED':'SKILL_HANDOFF_POLICY_BLOCKED');

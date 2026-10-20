@@ -42,10 +42,11 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
   for (const file of source.files) {
     if (!/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(file.path || '')
         || file.path.split('/').some(p => p === '..' || p === '.') || !/^[a-f0-9]{64}$/.test(file.sha256 || '')) throw Error('RPC_SOURCE_PATH_INVALID');
-    const actual = createHash('sha256').update(read(resolve(base, file.path))).digest('hex');
+    let bytes;try{bytes=read(resolve(base,file.path));}catch(error){if(error.code==='ENOENT')throw Error(`RPC_SOURCE_DEPENDENCY_MISSING:${file.path}`);throw error;}
+    const actual = createHash('sha256').update(bytes).digest('hex');
     if (actual !== file.sha256) throw Error('RPC_SOURCE_BYTES_MISMATCH');
   }
-  for (const path of ['outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','leadgen-client.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py','leadgen-db-lib.js',
+  for (const path of ['outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','leadgen-client.mjs','native-operation-receipt.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py','leadgen-db-lib.js',
     'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
     'leadgen-db-connect.js','company-config-lib.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
@@ -113,7 +114,8 @@ export async function handleRpc(input, deps = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.stdout.write(JSON.stringify(await handleRpc(JSON.parse(readFileSync(0, 'utf8')))) + '\n'); }
   catch (error) {
-    const code = /^RPC_[A-Z_]+(?::[a-zA-Z0-9_.-]+)?$/.test(error.message) ? error.message : 'RPC_OPERATION_FAILED';
-    process.stdout.write(JSON.stringify({ ok: false, error: code }) + '\n'); process.exitCode = 1;
+    const unknown=error.executionStopped===false;
+    const code = unknown?'RPC_EXECUTION_STOP_UNKNOWN':/^RPC_[A-Z_]+(?::[a-zA-Z0-9_.-]+)?$/.test(error.message) ? error.message : 'RPC_OPERATION_FAILED';
+    process.stdout.write(JSON.stringify({ ok: false, error: code,...(unknown?{execution_stopped:false,external_effect:'unknown'}:{}) }) + '\n'); process.exitCode = 1;
   }
 }
