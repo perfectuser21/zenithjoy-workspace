@@ -22,3 +22,18 @@ describe('整体晋级复用单项入口与同一候选', () => {
     expect(workflow('promote-prod-hk').jobs.admission.uses).toBe('./.github/workflows/release-admission.yml');
   });
 });
+
+describe('生产后端保持香港拓扑，旧Mac发布入口退役', () => {
+  it('实际部署步骤使用HK连接并调用留存镜像发布器', () => {
+    const steps = workflow('promote-prod-hk').jobs['promote-prod-hk'].steps;
+    expect(steps.some((step: {uses?: string}) => step.uses?.startsWith('tailscale/github-action@'))).toBe(true);
+    const deploy = steps.find((step: {id?: string}) => step.id === 'deploy');
+    expect(deploy.env.SSH_KEY).toBe('${{ secrets.HK_VPS_SSH_KEY }}');
+    expect(deploy.env.SSH_HOST).toContain('HK_VPS_TAILSCALE_IP');
+    expect(deploy.run).toContain('scripts/deploy/hk-api-release.sh');
+    expect(Object.values(deploy.env).join(' ')).not.toMatch(/US_MAC_/);
+  });
+  it('旧Mac生产发布workflow仍不存在', () => {
+    expect(fs.existsSync(path.join(ROOT, '.github/workflows/promote-prod.yml'))).toBe(false);
+  });
+});

@@ -8,7 +8,7 @@ test('整体前端失败精确恢复本轮API旧版本，整体仍为失败且�
  assert.ok(r.needs.includes('promote-backend')&&r.needs.includes('promote-frontend'));
  assert.equal(r.with.sha,'${{ needs.promote-backend.outputs.previous_sha }}');
  assert.equal(r.with.coordinated,true);
- assert.match(r.if,/promote-frontend.result == 'failure'/);
+ assert.match(r.if,/promote-frontend.result != 'success'/);
  assert.match(r.if,/promote-backend.result == 'success'/);
  assert.ok(!all.jobs['release-tag'].if);
  assert.equal(load('promote-prod-hk').on.workflow_call.outputs.previous_sha.value,'${{ jobs.promote-prod-hk.outputs.previous_sha }}');

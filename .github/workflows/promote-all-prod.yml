@@ -49,7 +49,7 @@ jobs:
     secrets: inherit
   recover-backend:
     needs: [promote-backend, promote-frontend]
-    if: always() && needs.promote-backend.result == 'success' && needs.promote-frontend.result == 'failure'
+    if: always() && needs.promote-backend.result == 'success' && needs.promote-frontend.result != 'success'
     uses: ./.github/workflows/rollback-prod.yml
     with:
       sha: ${{ needs.promote-backend.outputs.previous_sha }}

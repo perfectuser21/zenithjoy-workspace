@@ -92,6 +92,7 @@ if [[ "$ACTION" == rollback ]]; then
     TARGET=$(cat "$RELEASES/previous")
   fi
   sha_ok "$TARGET" || fail 'invalid retained SHA'
+  if [[ "$TARGET" == "$CURRENT" ]]; then verify "$CURRENT"; echo "Already healthy at $CURRENT"; exit 0; fi
   MANIFEST="$RELEASES/$TARGET/release.json"
   [[ -f "$MANIFEST" ]] || fail 'requested release is not retained'
   [[ "$(json_field "$MANIFEST" verified)" == True ]] || fail 'requested release was never verified'
