@@ -9,7 +9,7 @@ Activity是可验收的业务工作；Skill是执行方法，Code是该方法的
 3. Code失败交Commander核对最早错误、持久进度、旧执行者与外部结果。确认执行者停止或有安全独占权交接后，再由匹配方法Skill续接同一Activity、任务、身份及截止。
 4. 结果未知的外部动作先读回；已发送不重发，已提交不重复制造数据。保留原Code失败和Skill接手证据，从最后确认处继续，不把“回档”理解成撤销外部事实。
 5. 没有合法单Activity入口、持久交接接口或可用权限时给出blocked原因；不得直接import内部队列、裸写PG、调用整流程冒单步或重启共享服务。
-6. Skill仍失败或预算结束时停止本轮业务，保留部分成果、准确失败/未知原因及资源清理结果。Commander基于证据汇总成功、部分完成、失败或待确认，不把缺证据猜成成功。
+6. 原冻结Activity仅在显式配置 `agent_recovery: {max_additional_turns: 1}` 时允许一次额外Agent turn。先核原owner与child双停、broker无在途、原资源有效及原执行截止；未知不重派。额外turn不是新业务attempt，也不延长预算。额外turn耗尽或预算结束时准确停止，保留部分成果、失败/未知及清理结果，不把缺证据猜成成功。
 
 本轮源码增加leadgen-activity-v1与原run私有broker入口，真实work-commander父会话→官方sessions_spawn→同slot工具→原独立verify闭环。它不是整Workflow重启入口；当前方法仍需独立实机验收，源码通过、正式发布、生产启用与实机接手分别留证。
 
@@ -32,3 +32,12 @@ child在MMV通过同源 `leadgen-skill-agent.mjs tool <本次私有handoff目录
 旧执行或child终态未知时禁止重试、接手及清场；原进程通过精确owner的lock-quarantine写既有standalone_review_required并读回，已领VID只用同line/run/VID的CAS隔离到待人工核验状态并读回。隔离回执未知必须明确unknown，不宣称保有无限租约；普通设备1800秒/视频15分钟TTL不变，已确认隔离态不得自动陈旧回收或重领。
 
 音频生产器固定错误（5个名称、6种阶段/退出场景）RECORD_AUDIO_STRATEGY_UNSUPPORTED、RECORD_AUDIO_CAPTURE_UNAVAILABLE、RECORD_AUDIO_TRACK_UNVERIFIED、RECORD_CAPTURE_STRATEGY_UNVERIFIED、RECORD_CAPTURE_SILENT表示能力/策略或捕获证据缺口：不重试同代码，不转成UI/音量修复。保留首错和已有部分成果并升级；mode/SDK/required/实际音轨字段必须来自同Source真实回执，不能拿旧ASR、标题或模型自述补齐。新音频生产器的落地与真机验收另记，不以本分类源码测试冒通过。
+
+
+## 同slot有限Agent续行
+
+仅从冻结 `version.payload.contract.agent_recovery` 读取唯一键整数1；缺省保持一次，非法值或额外键阻断。同一次createActivityRecovery与原broker存活期内续行，保留原run/task/binding/source/slot、业务nonce、handler成功VID及全部额度。每turn使用不可覆盖的transport generation和独立官方child绑定；先撤旧代工具权，迟到调用或回执不得覆盖当前代。
+
+原child正式error/timeout/aborted且owner确已停止，或Skill实际结果未过原独立verify，才评估这一次额外turn。父CLI未知、child未知、外部写入结果未知、collection partial、能力/权限/来源阻断均不能转新Agent重试；send_dm仍只读回，禁止发送。恢复前续验原资源，原执行截止不得挪用cleanup预算。
+
+resume跨所有代总计一次，失败或抛错仍占额度；原生证据读取总计两次，失败也计数。resume预留后后继代仅inspect/readback/verify，禁止再次resume或受控归位；不重建broker、不重claim、不重录成功VID、不重置每VID次数。最终只由原独立verify及持久读回判断，Agent终态ok不等于业务完成；复验仍未通过准确partial/failed/unknown，不承诺全部外部障碍都能救回。配套源码、正式部署、同run接手与实机验收分别留证，本合同仍awaiting-real-run。

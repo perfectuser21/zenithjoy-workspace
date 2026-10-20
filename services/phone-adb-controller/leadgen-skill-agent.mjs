@@ -20,6 +20,11 @@ function privateJson(path){
  const stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o022)!==0||stat.size>1024*1024)throw Error('RPC_SKILL_GENERATION_EVIDENCE_INVALID');
  return JSON.parse(readFileSync(path,'utf8'));
 }
+function ownerReturned(q,result){
+ if(result?.code!==0)return false;
+ if(q.transport_generation===undefined)return true;
+ try{const body=JSON.parse(result.stdout);return ['ok','completed'].includes(body.status)&&typeof body.runId==='string'&&/^[-A-Za-z0-9_.:]{1,200}$/.test(body.runId);}catch{return false;}
+}
 function generationEvidence(q,dir,terminal){
  return {request_sha256:digest(q),binding_sha256:digest(official(q,dir)),parent_sha256:digest(privateJson(join(dir,'parent-cli-result.json'))),terminal_sha256:digest(terminal)};
 }
@@ -225,7 +230,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   const terminal=JSON.parse(readFileSync(join(dir,'agent-terminal.json'),'utf8'));
   if(terminal.runId!==binding.child_run_id||terminal.endedAt==null||!['ok','error','aborted','timeout'].includes(terminal.status))throw Error('RPC_SKILL_TERMINAL_INVALID');
   if(terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id||terminal.terminalReceipt?.effective?.provider!=='openai'||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_MODEL_INVALID');
-  if(parentResult?.code!==0)return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
+  if(!ownerReturned(q,parentResult))return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
   ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
   writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
   return {status:terminal.status,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
@@ -235,7 +240,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
     const terminal=JSON.parse(readFileSync(join(dir,'child-stop-readback.json'),'utf8'));
     const binding=official(q,dir);
     if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null){
-     if(parentResult?.code!==0)return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
+     if(!ownerReturned(q,parentResult))return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
      ownerTurn.returned(JSON.stringify({parent_result:parentResult,stop_readback:terminal}));
      writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
      return {terminal,status:'failed',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,reason:'child_stopped_after_failed_handoff',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key};

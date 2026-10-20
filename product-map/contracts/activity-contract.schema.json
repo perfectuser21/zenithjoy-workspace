@@ -194,6 +194,7 @@
       "required": ["key", "name", "order", "version", "compatibility", "owner", "inputs", "outputs", "preconditions",
         "postconditions", "execution", "budget", "resources", "idempotency", "failure", "side_effects", "invokers", "steps"],
       "properties": {
+        "agent_recovery": {"type":"object","additionalProperties":false,"required":["max_additional_turns"],"properties":{"max_additional_turns":{"type":"integer","const":1}}},
         "commander": {
           "type": "object", "additionalProperties": false, "required": ["entry"],
           "properties": { "entry": { "const": "activity-commander.mjs" } }

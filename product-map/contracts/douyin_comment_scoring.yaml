@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.2.2
+  version: 0.3.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -23,7 +23,9 @@ activities:
   - key: scoring
     name: 评分
     order: 1
-    version: 2.0.0
+    version: 2.1.0
+    agent_recovery:
+      max_additional_turns: 1
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -102,7 +104,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.1.1
+        version: 0.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -242,7 +244,9 @@ activities:
   - key: mark_leads
     name: 标记人
     order: 2
-    version: 3.1.0
+    version: 3.2.0
+    agent_recovery:
+      max_additional_turns: 1
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -378,7 +382,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.1.2
+        version: 0.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
