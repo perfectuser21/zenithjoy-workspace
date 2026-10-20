@@ -17,7 +17,11 @@ for (const [name,target] of [['promote-dashboard-prod','dashboard'],['promote-st
     const deploy=Object.values(w.jobs).find(j=>j.runs_on || j['runs-on']);
     assert.ok([deploy.needs].flat().includes('admission'));
     assert.equal(deploy.env.DEPLOY_SHA,'${{ needs.admission.outputs.sha }}');
-    assert.deepEqual(deploy.concurrency,{group:'zenithjoy-production-hk','cancel-in-progress':false});
+    assert.equal(deploy.concurrency,undefined);
+    assert.equal(w.on.workflow_call.inputs.coordinated.type,'boolean');
+    assert.equal(w.on.workflow_dispatch.inputs.coordinated,undefined);
+    assert.equal(w.concurrency['cancel-in-progress'],false);
+    assert.equal(w.concurrency.group,`\${{ inputs.coordinated && format('zenithjoy-nested-{0}-${target}', github.run_id) || 'zenithjoy-production-hk' }}`);
   });
 }
 test('all delegates to the same single-target deployment paths with one candidate',()=>{
@@ -29,11 +33,13 @@ test('all delegates to the same single-target deployment paths with one candidat
     assert.equal(w.jobs[job].with.sha,'${{ needs.admission.outputs.sha }}');
     assert.ok([w.jobs[job].needs].flat().includes('admission'));
     assert.equal(w.jobs[job].steps,undefined);
+    assert.equal(w.jobs[job].with.coordinated,true);
   }
   assert.equal(w.jobs['release-tag'].env.DEPLOY_SHA,'${{ needs.admission.outputs.sha }}');
-  assert.notEqual(w.concurrency?.group,'zenithjoy-production-hk');
+  assert.equal(w.concurrency?.group,'zenithjoy-production-hk');
 });
 test('dashboard rollback serializes against every HK production deployment',()=>{
   const w=load('rollback-dashboard-prod');
-  assert.deepEqual(w.jobs['rollback-dashboard'].concurrency,{group:'zenithjoy-production-hk','cancel-in-progress':false});
+  assert.deepEqual(w.concurrency,{group:'zenithjoy-production-hk','cancel-in-progress':false});
+  assert.equal(w.jobs['rollback-dashboard'].concurrency,undefined);
 });
