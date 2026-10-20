@@ -204,7 +204,12 @@ jobs:
           BASE_REF="${{ github.base_ref }}"
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
 
-          if ! echo "$CHANGED" | grep -qE "^apps/dashboard/|^apps/api/"; then
+          # 测试目录和 *.test.* / *.spec.* 只验证实现，不要求虚构浏览器操作。
+          # API 保持原有覆盖；Staff Hub 与 Dashboard 一样属于真实界面入口。
+          if ! echo "$CHANGED" |
+            grep -E '^apps/(dashboard|api|staff-hub)/' |
+            grep -vE '(^|/)(__tests__|tests?)/|(^|/)[^/]+\.(test|spec)\.[^/]+$' |
+            grep . >/dev/null; then
             echo "无前端文件改动，跳过浏览器验证检查"
             exit 0
           fi
@@ -615,6 +620,8 @@ jobs:
 
   release-admission-regression:
     name: Test — Release Admission Regression
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -636,6 +643,7 @@ jobs:
             services/phone-adb-controller/__tests__/deployment-candidate.test.mjs \
             services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs \
             services/phone-adb-controller/__tests__/deployment-prepare.test.mjs \
+            services/phone-adb-controller/__tests__/commander-v2.test.mjs \
             .github/workflows/scripts/__tests__/phone-deploy-evidence.test.mjs \
             .github/workflows/scripts/__tests__/deploy-phone-adb-remote-lib.test.mjs
 
