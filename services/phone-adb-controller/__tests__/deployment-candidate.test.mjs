@@ -1,0 +1,26 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {materializeCandidate} from '../deployment-candidate.mjs';
+import {collectDeployment} from '../deployment-manifest.mjs';
+test('真实Git候选物化保持生产文件不动，逐字节manifest能读回，污染版本拒绝重写',t=>{
+ const temp=mkdtempSync(join(tmpdir(),'phone-candidate-test-'));t.after(()=>rmSync(temp,{recursive:true,force:true}));
+ const root=join(temp,'repo'),cache=join(root,'.skills-source'),destination=join(temp,'candidate'),production=join(temp,'production');
+ mkdirSync(join(cache,'distribution'),{recursive:true});mkdirSync(join(root,'services/phone-adb-controller'),{recursive:true});
+ const git=(dir,...args)=>execFileSync('git',['-C',dir,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ const commit=dir=>{git(dir,'init','-q');git(dir,'config','core.hooksPath','/dev/null');git(dir,'add','.');git(dir,'-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture');return git(dir,'rev-parse','HEAD');};
+ writeFileSync(join(cache,'distribution/catalog.json'),JSON.stringify({profiles:{zenithjoy:{files:[]}}}));const skillSha=commit(cache);
+ writeFileSync(join(root,'.gitignore'),'.skills-source\n');
+ writeFileSync(join(root,'.skills-source.json'),JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',revision:skillSha,profile:'zenithjoy'}));
+ for(const name of ['leadgen-run.sh','leadgen-rpc.mjs'])writeFileSync(join(root,'services/phone-adb-controller',name),'fixed candidate '+name);
+ writeFileSync(production,'original V1');const sha=commit(root),release={environment:`staging:${sha}`,payload:{components:[]}};
+ const manifest=materializeCandidate({root,sha,destination,release});
+ assert.equal(collectDeployment(destination,manifest).files.length,2);
+ assert.equal(readFileSync(production,'utf8'),'original V1');
+ assert.equal(readFileSync(join(destination,'leadgen-run.sh'),'utf8'),'fixed candidate leadgen-run.sh');
+ assert.throws(()=>materializeCandidate({root,sha,destination,release}));
+ assert.equal(existsSync(join(destination,'deployment-manifest.json')),false,'观测ACK前不能宣称候选已安装');
+});

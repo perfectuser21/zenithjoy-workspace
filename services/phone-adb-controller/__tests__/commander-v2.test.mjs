@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, writeFileSync, cpSync, existsSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync, cpSync, existsSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -21,8 +21,8 @@ function fixture({candidate=false}={}){
 test('候选Commander子会话明确绑定本次helper根，缺根或指向生产须零业务起跑',()=>{
  const f=fixture({candidate:true}),dir=start(f);
  const request=JSON.parse(readFileSync(join(dir,'agent-request.json')));
- assert.equal(request.execution_location.runtime_root,f.dir);
- assert.equal(request.runtime_helpers.report,join(f.dir,'wf-report.py'));
+ assert.equal(request.execution_location.runtime_root,realpathSync(f.dir));
+ assert.equal(request.runtime_helpers.report,join(realpathSync(f.dir),'wf-report.py'));
  assert.match(readFileSync(join(dir,'msg.txt'),'utf8'),/runtime_helpers/);
  for(const root of [undefined,join(f.home,'.openclaw/commander')]){
   const invalid=fixture({candidate:true});invalid.envelope.execution_location=root?{runtime_root:root}:{};

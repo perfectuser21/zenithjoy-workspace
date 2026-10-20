@@ -1,10 +1,8 @@
 name: Deploy phone-adb-controller to mmv+xian-m4
 
 # ───────────────────────────────────────────────────────────────────────────
-# 背景（0929）：services/phone-adb-controller/ 的代码合并到 main 之后，此前完全靠人肉记得
-# 手动跑 deploy.sh 才会真的出现在跑它的两台机器（mmv 本机 + 西安 xian-m4）上——
-# 历史 DoD 审计已确认合并不会自动换执行代码。决策 639800cc：
-# 合并自动直推两机，不加人工确认闸（这两台物理机本身就是生产，没有等价的 staging 手机）。
+# Pilot仅证明登记回归；自动事件只准备独立候选，不切生产。
+# 显式promote必须带同SHA真实候选run IDs，Brain逐项对账后才写正式根。
 #
 # 连接模式完全复用 deploy-us-vps.yml / promote-prod-hk.yml 已验证过的
 # tailscale/github-action + SSH 到 mmv，不新建任何连接通道。
@@ -19,8 +17,23 @@ on:
   workflow_dispatch:
     inputs:
       implementation_run_id:
-        description: '本仓当前main SHA对应的成功Pilot release verification run ID'
+        description: '本仓候选SHA对应的成功Pilot release verification run ID'
         required: true
+        type: string
+      candidate_sha:
+        description: '已合并main的完整40位候选SHA'
+        required: true
+        type: string
+      mode:
+        description: '准备候选或晋级已实跑通过的候选'
+        required: true
+        default: candidate
+        type: choice
+        options: [candidate, promote]
+      business_run_ids:
+        description: 'promote必填：Brain候选run ID的JSON数组，不接受PASS声明'
+        required: false
+        default: '[]'
         type: string
 
 permissions:
@@ -33,7 +46,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: 部署到 mmv + xian-m4
+    name: 候选准备或同版本真实验收后晋级
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     outputs:
@@ -57,7 +70,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           IMPLEMENTATION_RUN_ID: ${{ inputs.implementation_run_id || github.event.workflow_run.id }}
-        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA"
       - name: 接入 Tailscale
         uses: tailscale/github-action@v3
         with:
@@ -82,6 +96,8 @@ jobs:
           SSH_USER: ${{ secrets.US_MAC_USER }}
           DEPLOY_SHA: ${{ steps.evidence.outputs.sha }}
           IMPLEMENTATION_RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'candidate' }}
+          BUSINESS_RUN_IDS: ${{ inputs.business_run_ids || '[]' }}
         timeout-minutes: 30
         run: |
           KEY_FILE=$(mktemp)
@@ -91,10 +107,16 @@ jobs:
           # 只把JSON编码为数据；不将artifact路径或内容当作shell/代码执行。
           {
           printf "CI_BUNDLE_B64='%s'\n" "$(base64 -w0 phone-release-evidence.json)"
+          printf "BUSINESS_RUNS_B64='%s'\n" "$(printf '%s' "$BUSINESS_RUN_IDS" | base64 -w0)"
           cat << 'REMOTE_EOF'
           set -euo pipefail
           DEPLOY_SHA="$1"
           DEPLOY_ATTEMPT="github:$2:$3:$4"
+          DEPLOY_MODE="$5"
+          TOOL_SHA="$6"
+          BUSINESS_RUN_IDS="$(printf '%s' "$BUSINESS_RUNS_B64" | node -e 'process.stdout.write(Buffer.from(require("fs").readFileSync(0,"utf8"),"base64").toString())')"
+          [[ "$DEPLOY_MODE" == candidate || "$DEPLOY_MODE" == promote ]] || exit 1
+          [[ "$TOOL_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
           CI_BUNDLE=$(mktemp)
           trap 'rm -f "$CI_BUNDLE"' EXIT
           printf '%s' "$CI_BUNDLE_B64" | node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],Buffer.from(fs.readFileSync(0,"utf8"),"base64"),{mode:0o600})' "$CI_BUNDLE"
@@ -115,15 +137,12 @@ jobs:
             *) echo "部署源仓库身份不符" >&2; exit 1 ;;
           esac
           git -C "$REPO" fetch --force origin refs/heads/main:refs/remotes/origin/main
-          if [[ "$(git -C "$REPO" rev-parse origin/main)" != "$DEPLOY_SHA" ]]; then
-            notify "phone-adb自动部署已拒绝" "目标SHA不是当前origin/main，禁止旧run回滚"
-            exit 1
-          fi
+          git -C "$REPO" merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+          git -C "$REPO" merge-base --is-ancestor "$TOOL_SHA" origin/main
 
-          # 用目标commit版本的lib,不能从当前(未同步)工作区source——
-          # 工作区可能是上一版部署遗留的旧lib,或者第一次跑时这个文件压根还不存在。
+          # 门禁工具固定于本次主线控制版本；被测候选只提供部署源字节。
           LIB_TMP=$(mktemp)
-          if ! git -C "$REPO" show "$DEPLOY_SHA:.github/workflows/scripts/deploy-phone-adb-remote-lib.sh" > "$LIB_TMP" 2>/dev/null; then
+          if ! git -C "$REPO" show "$TOOL_SHA:.github/workflows/scripts/deploy-phone-adb-remote-lib.sh" > "$LIB_TMP" 2>/dev/null; then
             notify "phone-adb自动部署失败" "取不到目标commit的部署lib脚本(sha=${DEPLOY_SHA:0:8})"
             rm -f "$LIB_TMP"
             exit 1
@@ -137,19 +156,28 @@ jobs:
             notify "phone-adb自动部署已拒绝" "固定SHA独立checkout核验失败，现场保留(sha=${DEPLOY_SHA:0:8})"
             exit 1
           fi
+          TOOL_CHECKOUT="$(prepare_deployment_checkout "$REPO" "$TOOL_SHA")"
 
-          echo "=== [2/4] deploy.sh（推 mmv + xian-m4）==="
+          echo "=== [2/4] ${DEPLOY_MODE}（固定 ${DEPLOY_SHA}）==="
           cd "$DEPLOY_CHECKOUT"
           export PYTHONDONTWRITEBYTECODE=1
           # wrapper从mmv 0600凭据镜像读token，先构造/核验release，再调用现有deploy.sh。
-          if ! DEPLOY_LOG=$(node services/phone-adb-controller/deployment-prepare.mjs "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" </dev/null 2>&1); then
+          if ! DEPLOY_LOG=$(node "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-prepare.mjs" "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" "$DEPLOY_MODE" "$BUSINESS_RUN_IDS" </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
             DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"
             [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
-            notify "phone-adb自动部署失败" "deploy.sh失败(可能已部分部署,两机版本可能不一致): ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
+            if [[ "$DEPLOY_MODE" == candidate ]]; then
+              notify "phone-adb候选准备失败" "正式安装未切换: ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
+            else
+              notify "phone-adb晋级失败" "生产写入或后验失败，需检查两机安装状态: ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
+            fi
             exit 1
           fi
           echo "$DEPLOY_LOG"
+          if [[ "$DEPLOY_MODE" == candidate ]]; then
+            notify "phone-adb候选已准备" "独立版本目录就绪，业务尚未验收，正式安装未切换(sha=${DEPLOY_SHA:0:8})" "active"
+            exit 0
+          fi
 
           echo "=== [3/4] drift-check.sh 后验(锁定本次部署的SHA,不重新fetch避免中途又有合并造成误报) ==="
           if ! DRIFT_LOG=$(DRIFT_REPO="$DEPLOY_CHECKOUT" DRIFT_REF="$DEPLOY_SHA" DRIFT_SKIP_FETCH=1 bash services/phone-adb-controller/drift-check.sh </dev/null 2>&1); then
@@ -170,7 +198,7 @@ jobs:
           REMOTE_EOF
           } | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \
               -i "$KEY_FILE" -p 22 "${SSH_USER}@${SSH_HOST}" \
-              bash -s -- "$DEPLOY_SHA" "$IMPLEMENTATION_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+              bash -s -- "$DEPLOY_SHA" "$IMPLEMENTATION_RUN_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$DEPLOY_MODE" "$(git rev-parse HEAD)"
 
           rm -f "$KEY_FILE"
 

@@ -145,6 +145,10 @@ export function rpcSource(frozen) {
 
 export function createRpc({ frozen, execute = execInput, local = false } = {}) {
   const source = rpcSource(frozen);
+  if(frozen.deployment.environment&&frozen.deployment.environment!=='production'
+    &&(!/^[a-f0-9]{40}$/.test(source.commit)||frozen.deployment.environment!==`staging:${source.commit}`))throw Error('候选RPC缺固定SHA或环境版本不符');
+  const peerRoot=frozen.deployment.environment?.startsWith('staging:')
+    ?`~/.local/share/zenithjoy/phone-candidates/${source.commit}/runtime`:'~/.openclaw/leadgen-scripts';
   const peer=frozen.runtime_transport;
   const transport=peer?['-o',`HostName=${peer.ssh_hostname}`,'-o',`HostKeyAlias=${peer.ssh_hostkey_alias}`]:[];
   return async (body, { timeoutMs = 180000 } = {}) => {
@@ -158,7 +162,7 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
           {input:JSON.stringify({...payload,source}),timeoutMs:remaining});
         else result=await execute('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=15',
           '-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2',...transport,'mmv',
-          'set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node leadgen-rpc.mjs'],
+          `set -a; source ~/.credentials/zenithjoy-db.env; set +a; export NODE_PATH="$HOME/.openclaw/leadgen-scripts/node_modules:$HOME/.openclaw/node_modules"; cd ${peerRoot} && node leadgen-rpc.mjs`],
           {input:JSON.stringify({...payload,source}),timeoutMs:remaining});
       }catch(error){
         // 进程已关闭才可恢复；不把源码/数据库明确错误当网络抖动。

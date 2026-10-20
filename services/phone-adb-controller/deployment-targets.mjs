@@ -3,6 +3,7 @@ import {readFileSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
 import {DEPLOY_REPO,WORKFLOWS,validateDeploymentEvidence,deploymentAssertionPlan,brainRequest} from './deployment-preflight.mjs';
+import {verifyBusinessAdmission} from './deployment-business-admission.mjs';
 const extraKeys=['workflow_report.internal','workflow_commander.internal','douyin_video_publish.android'];
 const need=(v,m)=>{if(!v)throw Error('统一部署: '+m);};
 const same=(a,b)=>digest(a)===digest(b);
@@ -56,23 +57,24 @@ export function targetDefinitions(bundle,sha,readFile){
 export function commanderMap(release){
  const workflows={};for(const w of release.payload.workflows){const key=w.payload.key;need(key&&!workflows[key],'冻结workflow key为空/重复');workflows[key]={snapshot_sha256:w.payload_sha256};}return{[release.id]:{workflows}};
 }
-export function verifyTargetRelease(release,target,sha,expected){
- need(release?.target===target&&release.environment==='production'&&release.payload?.verification?.status==='verified'&&release.manifest_sha256===digest({environment:release.environment,target:release.target,payload:release.payload}),'正式release目标/摘要/状态错误');
+export function verifyTargetRelease(release,target,sha,expected,environment='production'){
+ need((environment==='production'||environment===`staging:${sha}`)&&release?.target===target&&release.environment===environment&&release.payload?.verification?.status==='verified'&&release.manifest_sha256===digest({environment:release.environment,target:release.target,payload:release.payload}),'release目标/摘要/状态错误');
  need(same(release.payload.components,bindingComponents(release.payload,sha)),'release组件不等于完整bindings');
  for(const r of [...release.payload.workflows,...release.payload.activities])need(r.source_repo===DEPLOY_REPO&&r.source_commit===sha&&r.payload_sha256===rowHash(r),'正式release冻结摘要/来源不符');
  const rows=release.payload.workflows;need(rows.filter(w=>WORKFLOWS.includes(w.workflow_id)).length===4&&rows.length===(target==='mmv'?7:4),'release缺完整目标闭包');
  if(target==='mmv')for(const key of extraKeys)need(rows.filter(w=>w.payload.key===key).length===1,'release缺Commander身份');
  if(expected)need(same([...rows].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.workflows].sort((a,b)=>a.id.localeCompare(b.id)))&&same([...release.payload.activities].sort((a,b)=>a.id.localeCompare(b.id)),[...expected.definitions.activities].sort((a,b)=>a.id.localeCompare(b.id))),'Brain回了其它冻结版本');return release;
 }
-export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request}){
- need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');const targets=targetDefinitions(bundle,sha,readFile),releases={};
+export async function prepareTargetReleases({bundle,sha,attemptKey,readFile,request,environment='production',businessRunIds}){
+ need(/^github:\d+:[\w:.-]+$/.test(attemptKey),'固定attempt无效');need((environment==='production'||environment===`staging:${sha}`),'发布环境无效');const targets=targetDefinitions(bundle,sha,readFile),releases={};
+ const admission=environment==='production'?await verifyBusinessAdmission({sha,targets,runIds:businessRunIds,request}):null;
  for(const target of ['xian-m4','mmv']){
   const {definitions,components}=targets[target],evidence=target==='mmv'?[bundle,bundle.commander]:[bundle];
-  const input={release_key:`phone-adb-unified:${sha}:${target}:${attemptKey.split(':')[1]}:${digest(evidence.map(e=>e.report))}`,environment:'production',target,actor:'phone-adb-deployer',workflows:definitions.workflows.map(w=>({workflow_definition_version_id:w.id,payload_sha256:w.payload_sha256})),components,ci_evidence:evidence.map(e=>({report:e.report,receipt:e.receipt,evidence_ref:`https://github.com/${DEPLOY_REPO}/actions/runs/${attemptKey.split(':')[1]}`}))};
-  const release=(await request('/api/brain/releases',input)).release;verifyTargetRelease(release,target,sha,targets[target]);releases[target]=release;
+  const input={release_key:`phone-adb-unified:${environment}:${sha}:${target}:${attemptKey.split(':')[1]}:${digest(evidence.map(e=>e.report))}`,environment,target,actor:'phone-adb-deployer',workflows:definitions.workflows.map(w=>({workflow_definition_version_id:w.id,payload_sha256:w.payload_sha256})),components,ci_evidence:evidence.map(e=>({report:e.report,receipt:e.receipt,evidence_ref:`https://github.com/${DEPLOY_REPO}/actions/runs/${attemptKey.split(':')[1]}`}))};
+  const release=(await request('/api/brain/releases',input)).release;verifyTargetRelease(release,target,sha,targets[target],environment);releases[target]=release;
  }
  for(const target of Object.keys(releases)){const row=(await request('/api/brain/releases/'+releases[target].id)).release;need(same(row,releases[target]),'正式release回读变化');}
- return{source_repo:DEPLOY_REPO,source_commit:sha,release_ids:Object.fromEntries(Object.entries(releases).map(([k,r])=>[k,r.id])),releases,commander_releases:commanderMap(releases.mmv)};
+ return{source_repo:DEPLOY_REPO,source_commit:sha,environment,business_admission:admission,release_ids:Object.fromEntries(Object.entries(releases).map(([k,r])=>[k,r.id])),releases,commander_releases:commanderMap(releases.mmv)};
 }
 export function localManifestView(local,ack){
  need(local.source_repo===ack.source_repo&&local.source_commit===ack.source_commit&&ack.release_id&&ack.observation_id,'安装视图与唯一ACK来源不符');
@@ -84,6 +86,8 @@ export async function verifyDeploymentPlan(plan,request){
  need(same(plan.commander_releases,commanderMap(plan.releases.mmv)),'Commander map不是完整MMV release');return plan;
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{const plan=JSON.parse(readFileSync(process.argv[2]));need(process.argv[3]===plan.source_commit,'部署源码HEAD与计划不同');await verifyDeploymentPlan(plan,brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN));need(same(JSON.parse(readFileSync(process.env.WF_COMMANDER_RELEASES_FILE)),plan.commander_releases),'实际map文件与计划不同');}
+ try{const plan=JSON.parse(readFileSync(process.argv[2]));need(process.argv[3]===plan.source_commit,'部署源码HEAD与计划不同');const request=brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN);await verifyDeploymentPlan(plan,request);
+  await verifyBusinessAdmission({sha:plan.source_commit,targets:Object.fromEntries(Object.entries(plan.releases).map(([k,r])=>[k,{definitions:r.payload}])),runIds:JSON.parse(process.env.WF_BUSINESS_RUN_IDS||'[]'),request});
+  need(same(JSON.parse(readFileSync(process.env.WF_COMMANDER_RELEASES_FILE)),plan.commander_releases),'实际map文件与计划不同');}
  catch(e){console.error(e.message);process.exitCode=1;}
 }
