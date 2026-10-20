@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadContractsFromDisk, validateContracts, commanderContractsSpec } from '../contracts-lib.mjs';
@@ -103,4 +103,8 @@ test('未还原Commander正文时必须核真实固定Git来源，坏repo/profil
   const r=spawnSync(process.execPath,['--input-type=module','-e',script,root],{env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);
   const errors=JSON.parse(r.stdout);if(label==='valid')assert.deepEqual(errors,[]);else assert.ok(errors.length>0,`${label}坏锁被当成已验证Skill来源`);
  }
+ writeFileSync(join(root,'.skills-source.json'),JSON.stringify(lock));git('add','.skills-source.json');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','restore valid lock');
+ rmSync(join(root,'.skills-source'),{recursive:true,force:true});
+ const absent=spawnSync(process.execPath,['--input-type=module','-e',script,root],{env,encoding:'utf8'});assert.equal(absent.status,0,absent.stderr);assert.ok(JSON.parse(absent.stdout).length>0);
+ assert.equal(existsSync(join(root,'.skills-source')),false,'离线缺对象不得初始化可联网的缓存作为回退');
 });
