@@ -41,6 +41,11 @@ jobs:
           SHA: ${{ inputs.sha }}
           TARGETS: ${{ inputs.targets }}
         run: node scripts/release-gate/staging-evidence.mjs "$SHA" "$TARGETS"
+      - name: Preserve nightly real-machine job admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGETS: ${{ inputs.targets }}
+        run: node scripts/release-gate/nightly-evidence.mjs "$TARGETS"
       - uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
