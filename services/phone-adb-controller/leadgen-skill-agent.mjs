@@ -40,14 +40,29 @@ async function verifyPreviousOwner(previous,q,execute){
  try{
   const parent=privateJson(join(previous,'parent-cli-result.json')),body=JSON.parse(parent.stdout),request=privateJson(join(previous,'agent-request.json'));
   if(parent.code!==0||!['ok','completed'].includes(body.status)||typeof body.runId!=='string'||!/^[-A-Za-z0-9_.:]{1,200}$/.test(body.runId))throw Error('missing final owner receipt');
-  const start=Date.now(),timeout=Math.min(10000,q.deadline_ms-start);if(timeout<=0)throw Error('expired');
-  const params={agentId:'work-commander',search:request.parent_session_key,limit:5,archived:'all',includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false};
-  const raw=await execute('openclaw',['gateway','call','sessions.list','--params',JSON.stringify(params),'--json','--timeout',String(timeout)],{timeoutMs:timeout,env:process.env});
-  const result=JSON.parse(raw.stdout),rows=result.sessions?.filter(row=>row.key===request.parent_session_key);
-  if(raw.code!==0||!Number.isFinite(result.ts)||result.ts<start-1000||result.ts>Date.now()+1000||rows?.length!==1)throw Error('owner readback missing');
-  const row=rows[0];
-  if(row.lastRunId!==body.runId||row.status!=='done'||!Number.isFinite(row.endedAt)||row.hasActiveRun!==false||!Array.isArray(row.activeRunIds)||row.activeRunIds.length!==0||Date.now()>=q.deadline_ms)throw Error('owner active or identity mismatch');
-  writeFileSync(join(previous,'owner-stop-readback.json'),raw.stdout,{flag:'wx',mode:0o600});
+  const start=Date.now(),end=Math.min(q.deadline_ms,start+10000);
+  const read=async(method,params)=>{
+   const timeout=end-Date.now();if(timeout<=0)throw Error('expired');
+   const raw=await execute('openclaw',['gateway','call',method,'--params',JSON.stringify(params),'--json','--timeout',String(timeout)],{timeoutMs:timeout,env:process.env});
+   if(raw.code!==0)throw Error('owner read failed');return {raw,value:JSON.parse(raw.stdout)};
+  };
+  const wait=await read('agent.wait',{runId:body.runId,timeoutMs:0});
+  if(wait.value.runId!==body.runId)throw Error('owner run mismatch');
+  const waitFinal=wait.value.status==='ok'&&Number.isFinite(wait.value.endedAt);
+  const cacheMiss=wait.value.status==='timeout'&&wait.value.endedAt==null;
+  const meta=body.result?.meta,cliFinal=body.status==='ok'&&body.summary==='completed'&&Array.isArray(body.result?.payloads)&&Number.isFinite(meta?.durationMs)&&meta.durationMs>=0&&typeof meta.agentMeta?.sessionId==='string'&&meta.agentMeta.sessionId.length>0;
+  if(!waitFinal&&!(cacheMiss&&cliFinal))throw Error('owner terminal missing');
+  const list=await read('sessions.list',{agentId:'work-commander',search:request.parent_session_key,limit:5,archived:'all',includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false});
+  const result=list.value,rows=result.sessions?.filter(row=>row.key===request.parent_session_key);
+  if(!Number.isFinite(result.ts)||result.ts<start-1000||result.ts>Date.now()+1000||rows?.length!==1)throw Error('owner readback missing');
+  const registry=await read('tools.invoke',{name:'subagents',sessionKey:request.parent_session_key,args:{action:'list'}}),wrapper=registry.value,details=wrapper.output?.details;
+  if(wrapper.ok!==true||wrapper.toolName!=='subagents'||wrapper.source!=='core'||details?.status!=='ok'||details.action!=='list'||details.callerIsSubagent!==false||details.callerSessionKey!==request.parent_session_key||details.requesterSessionKey!==request.parent_session_key||!Array.isArray(details.active)||details.active.length!==0)throw Error('owner child census unknown');
+  const row=rows[0],empty=v=>v===null||v===false||v===0||Array.isArray(v)&&v.length===0;
+  if(row.hasActiveSubagentRun!==undefined&&row.hasActiveSubagentRun!==false||row.activeSubagentRunIds!==undefined&&(!Array.isArray(row.activeSubagentRunIds)||row.activeSubagentRunIds.length!==0)||row.status!=='done'||!Number.isFinite(row.endedAt)||row.hasActiveRun!==false||!Array.isArray(row.activeRunIds)||row.activeRunIds.length!==0||cliFinal&&row.sessionId!==meta.agentMeta.sessionId||Date.now()>=q.deadline_ms||Object.entries(row).some(([key,value])=>/pending|queued|queueDepth/i.test(key)&&!empty(value)))throw Error('owner active or identity mismatch');
+  writeFileSync(join(previous,'owner-subagents-readback.json'),registry.raw.stdout,{flag:'wx',mode:0o600});
+  writeFileSync(join(previous,'owner-run-wait-readback.json'),wait.raw.stdout,{flag:'wx',mode:0o600});
+  writeFileSync(join(previous,'owner-stop-readback.json'),list.raw.stdout,{flag:'wx',mode:0o600});
+  writeFileSync(join(previous,'owner-terminal-proof.json'),JSON.stringify({run_id:body.runId,parent_session_key:request.parent_session_key,source:waitFinal?'official_agent_wait':'official_cli_final',wait_cache_miss:cacheMiss,parent_cli_sha256:digest(parent)}),{flag:'wx',mode:0o600});
  }catch{throw Error('RPC_SKILL_OWNER_TERMINATION_UNVERIFIED');}
 }
 export function claimSkillSpawn(dir,{home=homedir(),verifyWorkspace=verifyCommanderWorkspace}={}){

@@ -18,7 +18,7 @@ export function skillBlockedDiagnostic(receipt,request,env){
 export function classifyActivityFailure(activity,failure){
  const text=JSON.stringify(failure);
  if(isCaptureContractFailure(failure))return 'blocked';
- if(/SOURCE_|BINDING_|CONTRACT_|COMPANY_|ACCOUNT_|未授权|暂停|日发送上限|锁.*(不符|未知|失败)|LOCK_|鉴权|AUTH_|EXECUTION_DEADLINE|预算|截止|配额/.test(text))return 'blocked';
+ if(/SOURCE_|BINDING_|CONTRACT_|COMPANY_|ACCOUNT_|未授权|暂停|日发送上限|锁.*(不符|未知|失败)|LOCK_|鉴权|权限|AUTH_|PERMISSION_|EACCES|EPERM|EXECUTION_DEADLINE|预算|截止|配额/.test(text))return 'blocked';
  if(activity.key==='collection'&&failure.status==='partial')return 'blocked';
  if(activity.key==='send_dm')return 'readback_only';
  if(failure.status==='partial'&&!failure.result?.failures?.length)return 'blocked';
@@ -60,7 +60,7 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
    failure:{status:failure.status,attempt:failure.attempt,error:safeExecutionDiagnostic(failure.error||'',env),result_status:failure.result?.status||null,failures:(failure.result?.failures||[]).slice(0,4).map(f=>safeExecutionDiagnostic(JSON.stringify(f),env))}};
   try{await handlers.handoffHeartbeat?.(activity);}catch(error){noLaunch('SKILL_HANDOFF_RESOURCE_UNVERIFIED: '+error.message);}
   let heartbeatError=null,heartbeatBusy=false,heartbeatJob=Promise.resolve();
-  const broker=await startActivityBroker({directory,request,inspect:handlers.handoffContext,resume:execute,phone:handlers.handoffPhone,
+  const broker=await startActivityBroker({directory,request,isBlockedError:error=>classifyActivityFailure(activity,{status:'failed',error:String(error.message)})==='blocked',inspect:handlers.handoffContext,resume:execute,phone:handlers.handoffPhone,
    authorize:async q=> !heartbeatError&&q.transport_generation===request.transport_generation&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:10000})).authorized===true});
   const heartbeat=setInterval(()=>{if(heartbeatBusy||heartbeatError)return;heartbeatBusy=true;heartbeatJob=Promise.resolve().then(()=>handlers.handoffHeartbeat?.(activity)).catch(error=>{heartbeatError=error;}).finally(()=>{heartbeatBusy=false;});},60000);heartbeat.unref();
   let stopped=false;
@@ -71,14 +71,15 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
     const reply=await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,deadline-Date.now())});receipt=reply.result;
     writeFileSync(join(directory,`agent-receipt${generation?'-turn-1':''}.json`),JSON.stringify(receipt),{flag:'wx',mode:0o600});
     actual=broker.getResult();stopped=receipt?.execution_stopped===true&&actual.active===0;
+    const newlyBlocked=actual.blocked_error||actual.result?.status==='paused'||actual.result&&classifyActivityFailure(activity,{status:actual.result.status??'failed',result:actual.result})==='blocked';
     verificationFailed=false;
-    if(policy&&stopped&&receipt.status==='ok'&&actual.result){
+    if(policy&&!newlyBlocked&&stopped&&receipt.status==='ok'&&actual.result){
      if(typeof verify!=='function')noLaunch('SKILL_INDEPENDENT_VERIFY_UNAVAILABLE');
      const verdict=await verify(activity,{status:'completed',result:actual.result,execution_stopped:true,skill_receipt:receipt});
      writeFileSync(join(directory,`verification-turn-${generation}.json`),JSON.stringify(verdict),{flag:'wx',mode:0o600});verificationFailed=verdict?.verified!==true;
     }
     const failed=['error','failed','timeout','aborted'].includes(receipt?.status)&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true&&receipt.terminal?.runId===receipt.child_run_id&&Number.isFinite(receipt.terminal?.endedAt);
-    if(!policy||mode!=='repair'||generation!==0||!stopped||!(failed||verificationFailed&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true)||heartbeatError||deadline-Date.now()<10000)break;
+    if(newlyBlocked||!policy||mode!=='repair'||generation!==0||!stopped||!(failed||verificationFailed&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true)||heartbeatError||deadline-Date.now()<10000)break;
     try{await handlers.handoffHeartbeat?.(activity);}catch(error){heartbeatError=error;break;}
     if(heartbeatError||deadline-Date.now()<10000)break;
     request=broker.advanceTurn(verificationFailed?'verification_failed':'agent_failed');
