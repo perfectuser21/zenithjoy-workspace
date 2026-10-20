@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.2.3
+  version: 0.3.0
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -24,7 +24,9 @@ activities:
   - key: preflight
     name: 预检
     order: 1
-    version: 4.0.0
+    version: 4.1.0
+    agent_recovery:
+      max_additional_turns: 1
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -146,7 +148,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 0.1.1
+        version: 0.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -214,6 +216,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-handlers.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -424,7 +430,9 @@ activities:
   - key: send_dm
     name: 发私信
     order: 2
-    version: 3.0.0
+    version: 3.1.0
+    agent_recovery:
+      max_additional_turns: 1
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -536,7 +544,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-send-dm
-        version: 0.1.1
+        version: 0.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -596,6 +604,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-handlers.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -693,7 +705,9 @@ activities:
   - key: write_back
     name: 回填
     order: 3
-    version: 3.0.0
+    version: 3.1.0
+    agent_recovery:
+      max_additional_turns: 1
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -810,7 +824,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-write-back
-        version: 0.1.1
+        version: 0.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -873,6 +887,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-handlers.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/capture-strategy.mjs
         revision: contract
       - kind: code
@@ -923,7 +941,9 @@ activities:
   - key: cleanup
     name: 收尾
     order: 4
-    version: 3.0.0
+    version: 3.1.0
+    agent_recovery:
+      max_additional_turns: 1
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -996,7 +1016,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.1.1
+        version: 0.2.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -1059,6 +1079,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-handlers.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace

@@ -7759,3 +7759,27 @@ agent_suite:
   status: active
   product: AI员工
   note: "统一入口随正式双根部署并永久运行完整回归；不等于真实手机业务验收"
+
+- id: commander-single-owner
+  path: services/phone-adb-controller/__tests__/commander-single-owner.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "同Workflow节点与Skill接手共享唯一负责人，真实main停止入口；不等于真实手机业务验收"
+
+- id: commander-owner-reservation
+  path: services/phone-adb-controller/__tests__/commander-owner-reservation.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实跨进程owner互斥、未知保留与nonce/文件边界；不等于真实手机业务验收"
+
+- id: commander-verification-recovery
+  path: services/phone-adb-controller/__tests__/commander-verification-recovery.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "原run产出核验失败接手与独立复验；不等于真实手机业务验收"

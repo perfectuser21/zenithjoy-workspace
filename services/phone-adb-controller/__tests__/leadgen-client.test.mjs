@@ -113,3 +113,11 @@ test('缺RPC回执保留固定诊断而不泄漏远端stdout、stderr或任务�
   });assert.equal(calls,1,'诊断不能引入重发或重试');
  }
 });
+
+
+test('未spawn证明只认同次原生调用，不认错误属性或序列化消息',async()=>{
+ assert.equal(typeof client.executionDidNotStart,'function');
+ for(const error of [null,{},Error('EXECUTION_START_FAILED'),Object.assign(Error('missing'),{code:'ENOENT',execution_started:false})]){assert.equal(client.executionDidNotStart(error),false);assert.equal(client.executionDidNotStart(error,'openclaw',[]),false);}
+ const args=[];let error;try{await execInput('/nonexistent/unified-commander-native-start-fixture',args,{timeoutMs:1000});}catch(e){error=e;}
+ assert.ok(error);assert.equal(client.executionDidNotStart(error,'/nonexistent/unified-commander-native-start-fixture',args),true);assert.equal(client.executionDidNotStart(error,'openclaw',args),false);assert.equal(client.executionDidNotStart(error,'/nonexistent/unified-commander-native-start-fixture',[]),false);assert.equal(client.executionDidNotStart(JSON.parse(JSON.stringify(error)),'/nonexistent/unified-commander-native-start-fixture',args),false);
+});

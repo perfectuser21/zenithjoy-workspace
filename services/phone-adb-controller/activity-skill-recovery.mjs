@@ -18,7 +18,7 @@ export function skillBlockedDiagnostic(receipt,request,env){
 export function classifyActivityFailure(activity,failure){
  const text=JSON.stringify(failure);
  if(isCaptureContractFailure(failure))return 'blocked';
- if(/SOURCE_|BINDING_|CONTRACT_|COMPANY_|ACCOUNT_|未授权|暂停|日发送上限|锁.*(不符|未知|失败)|LOCK_|鉴权|AUTH_|EXECUTION_DEADLINE|预算|截止|配额/.test(text))return 'blocked';
+ if(/SOURCE_|BINDING_|CONTRACT_|COMPANY_|ACCOUNT_|未授权|暂停|日发送上限|锁.*(不符|未知|失败)|LOCK_|鉴权|权限|AUTH_|PERMISSION_|EACCES|EPERM|EXECUTION_DEADLINE|预算|截止|配额/.test(text))return 'blocked';
  if(activity.key==='collection'&&failure.status==='partial')return 'blocked';
  if(activity.key==='send_dm')return 'readback_only';
  if(failure.status==='partial'&&!failure.result?.failures?.length)return 'blocked';
@@ -40,7 +40,7 @@ export function frozenMethod(frozen,slot,runDir){
  if(hash(support)!==frozen.files[supportPath])throw Error('SKILL_SUPPORT_BYTES_MISMATCH');
  return {name,version,path,activity_ref:ref,activity_version_id:a.version.id,reference_id:a.reference.reference_id,sha256:hash(text),text,support:{sha256:hash(support),text:support}};
 }
-export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc}){
+export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,verify}){
  return async({activity,failure,execute})=>{
   const directory=join(runDir,'skill-handoff',activity.key);
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
@@ -51,32 +51,51 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc})
   const deadline=handlers.state.budgetDeadline;
   if(!Number.isSafeInteger(deadline)||deadline-Date.now()<10000)noLaunch('SKILL_HANDOFF_NO_REMAINING_BUDGET');
   let method;try{method=frozenMethod(frozen,activity.key,runDir);}catch(error){noLaunch(error.message);}
+  const entry=frozen.activities.find(a=>a.reference.slot_key===activity.key),policy=entry.version.payload.contract?.agent_recovery;
+  if(policy!=null&&(!policy||typeof policy!=='object'||Array.isArray(policy)||Object.keys(policy).length!==1||policy.max_additional_turns!==1))noLaunch('SKILL_AGENT_RECOVERY_POLICY_INVALID');
   mkdirSync(directory,{recursive:true,mode:0o700});
-  const request={protocol:'leadgen-activity-v1',run_id:binding.run_id,task_id:binding.task_id||null,binding_id:binding.id,activity_key:activity.key,
-   nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,source_commit:frozen.deployment.source_commit,workflow_definition_version_id:frozen.workflow_version.id,
+  let request={protocol:'leadgen-activity-v1',run_id:binding.run_id,task_id:binding.task_id||null,binding_id:binding.id,activity_key:activity.key,
+   ...(policy?{transport_generation:0}:{}),nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,source_commit:frozen.deployment.source_commit,workflow_definition_version_id:frozen.workflow_version.id,
    runtime_snapshot_sha256:frozen.snapshot_sha256,release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,mode,method,broker_host:frozen.deployment.target,broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
    failure:{status:failure.status,attempt:failure.attempt,error:safeExecutionDiagnostic(failure.error||'',env),result_status:failure.result?.status||null,failures:(failure.result?.failures||[]).slice(0,4).map(f=>safeExecutionDiagnostic(JSON.stringify(f),env))}};
   try{await handlers.handoffHeartbeat?.(activity);}catch(error){noLaunch('SKILL_HANDOFF_RESOURCE_UNVERIFIED: '+error.message);}
   let heartbeatError=null,heartbeatBusy=false,heartbeatJob=Promise.resolve();
-  const broker=await startActivityBroker({directory,request,inspect:handlers.handoffContext,resume:execute,phone:handlers.handoffPhone,
-   authorize:async()=> !heartbeatError&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:10000})).authorized===true});
+  const broker=await startActivityBroker({directory,request,isBlockedError:error=>classifyActivityFailure(activity,{status:'failed',error:String(error.message)})==='blocked',inspect:handlers.handoffContext,resume:execute,phone:handlers.handoffPhone,
+   authorize:async q=> !heartbeatError&&q.transport_generation===request.transport_generation&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:10000})).authorized===true});
   const heartbeat=setInterval(()=>{if(heartbeatBusy||heartbeatError)return;heartbeatBusy=true;heartbeatJob=Promise.resolve().then(()=>handlers.handoffHeartbeat?.(activity)).catch(error=>{heartbeatError=error;}).finally(()=>{heartbeatBusy=false;});},60000);heartbeat.unref();
-  let stopped=false;
+  let stopped=false,nativeUnknown=false;
+  const nativeKnown=()=>{const actual=broker.getResult();nativeUnknown||=!!(handlers.state.executionUnknown||actual.execution_unknown||actual.result?.execution_stopped===false);if(nativeUnknown)stopped=false;return !nativeUnknown;};
   try{
-   const reply=await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,deadline-Date.now())});
-   clearInterval(heartbeat);await heartbeatJob;
-   const receipt=reply.result;
-   writeFileSync(join(directory,'agent-receipt.json'),JSON.stringify(receipt),{mode:0o600});
-   const actual=broker.getResult();stopped=receipt?.execution_stopped===true&&actual.active===0;
+   let receipt,actual,verificationFailed=false;
+   for(let generation=0;generation<=(policy?1:0);generation++){
+    if(!nativeKnown())break;
+    stopped=false;
+    const reply=await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,deadline-Date.now())});receipt=reply.result;
+    writeFileSync(join(directory,`agent-receipt${generation?'-turn-1':''}.json`),JSON.stringify(receipt),{flag:'wx',mode:0o600});
+    actual=broker.getResult();stopped=receipt?.execution_stopped===true&&actual.active===0&&nativeKnown();
+    const newlyBlocked=actual.blocked_error||actual.result?.status==='paused'||actual.result&&classifyActivityFailure(activity,{status:actual.result.status??'failed',result:actual.result})==='blocked';
+    verificationFailed=false;
+    if(policy&&!newlyBlocked&&stopped&&receipt.status==='ok'&&actual.result){
+     if(typeof verify!=='function')noLaunch('SKILL_INDEPENDENT_VERIFY_UNAVAILABLE');
+     const verdict=await verify(activity,{status:'completed',result:actual.result,execution_stopped:true,skill_receipt:receipt});
+     writeFileSync(join(directory,`verification-turn-${generation}.json`),JSON.stringify(verdict),{flag:'wx',mode:0o600});verificationFailed=verdict?.verified!==true;
+    }
+    const failed=['error','failed','timeout','aborted'].includes(receipt?.status)&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true&&receipt.terminal?.runId===receipt.child_run_id&&Number.isFinite(receipt.terminal?.endedAt);
+    if(!nativeKnown()||newlyBlocked||!policy||mode!=='repair'||generation!==0||!stopped||!(failed||verificationFailed&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true)||heartbeatError||deadline-Date.now()<10000)break;
+    try{await handlers.handoffHeartbeat?.(activity);}catch(error){heartbeatError=error;break;}
+    if(!nativeKnown()||heartbeatError||deadline-Date.now()<10000)break;
+    request=broker.advanceTurn(verificationFailed?'verification_failed':'agent_failed');
+   }
+   clearInterval(heartbeat);await heartbeatJob;nativeKnown();
    if(!stopped)return {status:'failed',execution_stopped:false,reason:'Skill或原操作终止未知',skill_receipt:receipt};
    if(heartbeatError)return {status:'failed',execution_stopped:true,reason:'Skill执行期间原资源续期未验证',skill_receipt:receipt};
-   if(receipt.status!=='ok'||!actual.reserved||!actual.result){
+   if(receipt.status!=='ok'||!actual.reserved||!actual.result||verificationFailed){
     const blocked=skillBlockedDiagnostic(receipt,request,env);
     return {status:'partial',execution_stopped:true,reason:blocked?'Skill接手后阻断: '+blocked.reason:'Skill未交付当前Activity实际执行结果',recovery_outcome:blocked?'skill_blocked':'skill_result_missing',skill_receipt:receipt};
    }
    const result=actual.result;
    return {status:['failed','partial','paused'].includes(result.status)?'partial':'completed',result,execution_stopped:true,skill_receipt:receipt};
-  }catch(error){error.executionStopped=stopped;throw error;}
+  }catch(error){error.executionStopped=stopped&&nativeKnown()&&error.executionStopped!==false;throw error;}
   finally{clearInterval(heartbeat);await heartbeatJob;await broker.close();}
  };
 }

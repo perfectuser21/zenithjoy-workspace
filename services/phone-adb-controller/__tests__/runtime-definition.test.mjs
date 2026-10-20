@@ -150,3 +150,29 @@ test('显式collection预算是可选采样冻结字段，改变/删除均拒绝
  const samplingInput=commentSamplingInput(env);assert.equal(samplingInput.collection_budget_s,1620);f.options.workflowKey=env.WF_BRAIN_WORKFLOW;f.routes['/api/brain/workflows'][0].key=env.WF_BRAIN_WORKFLOW;const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key=env.WF_BRAIN_WORKFLOW;v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});await freezeDefinition({...f.options,samplingInput});const fixed=readFrozen(f.options.runDir);assert.equal(fixed.sampling_input.collection_budget_s,1620);assert.deepEqual(assertCommentSampling(fixed,env),samplingInput);
  for(const bad of [{...env,QUEUED_VIDEO_COLLECTION_SECONDS:'1621'},Object.fromEntries(Object.entries(env).filter(([k])=>k!=='QUEUED_VIDEO_COLLECTION_SECONDS'))]){assert.throws(()=>assertCommentSampling(fixed,bad));await assert.rejects(freezeDefinition({...f.options,samplingInput:commentSamplingInput(bad)}));}
 });
+
+
+test('真实部署闭包冻结后导入新handler；缺文件、错hash或冻结后漂移均拒绝',async t=>{
+ const {execFileSync,spawnSync}=await import('node:child_process');
+ const {copyFileSync,rmSync}=await import('node:fs');const {dirname}=await import('node:path');const {fileURLToPath,pathToFileURL}=await import('node:url');
+ const source=fileURLToPath(new URL('../',import.meta.url));
+ const deploy=readFileSync(join(source,'deploy.sh'),'utf8'),arrays=deploy.slice(deploy.indexOf('MMV_JS_FILES=('),deploy.indexOf('# 在任何SSH前'));
+ const declared=execFileSync('bash',['-c',arrays+'\nprintf "%s\\n" "${MMV_RUNTIME_FILES[@]}"'],{encoding:'utf8'}).trim().split('\n');
+ const files=declared.filter(x=>/\.(?:mjs|js|json)$/.test(x));assert.ok(files.includes('leadgen-handlers.mjs'),'official MMV runtime omitted actual handler');
+ const setup=()=>{
+  const f=fixture();t.after(()=>rmSync(f.dir,{recursive:true,force:true}));
+  const manifest=JSON.parse(readFileSync(join(f.dir,'deployment-manifest.json')));
+  for(const name of files){const to=join(f.dir,name);mkdirSync(dirname(to),{recursive:true});copyFileSync(join(source,name),to);manifest.files.push({path:'services/phone-adb-controller/'+name,deployed_path:name,content_sha256:createHash('sha256').update(readFileSync(to)).digest('hex')});}
+  writeFileSync(join(f.dir,'deployment-manifest.json'),JSON.stringify(manifest));
+  symlinkSync(fileURLToPath(new URL('../../../node_modules',import.meta.url)),join(f.dir,'node_modules'),'dir');
+  return f;
+ };
+ const good=setup();await freezeDefinition(good.options);
+ const launch=spawnSync(process.execPath,['--input-type=module','-e',`const m=await import(${JSON.stringify(pathToFileURL(join(good.options.runDir,'runtime','leadgen-workflow.mjs')).href)});if(typeof m.createHandlers!=='function'||typeof m.runWorkflow!=='function')throw Error('real module exports missing');`],{encoding:'utf8'});
+ assert.equal(launch.status,0,launch.stderr);
+ const {readFrozen}=await import('../runtime-definition.mjs');
+ rmSync(join(good.options.runDir,'runtime','leadgen-handlers.mjs'));writeFileSync(join(good.options.runDir,'runtime','leadgen-handlers.mjs'),'export const forged=true;');
+ assert.throws(()=>readFrozen(good.options.runDir),/冻结文件digest不符/);
+ const missing=setup();rmSync(join(missing.dir,'leadgen-handlers.mjs'));await assert.rejects(freezeDefinition(missing.options),/ENOENT/);
+ const wrong=setup();writeFileSync(join(wrong.dir,'leadgen-handlers.mjs'),'export const forged=true;');await assert.rejects(freezeDefinition(wrong.options),/实际部署文件digest不符/);
+});

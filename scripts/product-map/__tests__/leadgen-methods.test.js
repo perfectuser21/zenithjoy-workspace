@@ -7,7 +7,7 @@ import {execFileSync,spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {parse,stringify} from 'yaml';
 import {createHash} from 'node:crypto';
-import {checkMethods} from '../leadgen-methods.mjs';
+import {checkMethods,collectMethods} from '../leadgen-methods.mjs';
 
 const source=fileURLToPath(new URL('../../../',import.meta.url));
 const cli=join(source,'scripts/product-map/leadgen-methods.mjs');
@@ -62,7 +62,7 @@ test('code-only hash refresh needs explicit exact prior/current compatibility as
   put(root,'compatibility-fixture.json',assessments);r=call(root,'--write','--compatibility','compatibility-fixture.json');assert.equal(r.status,0,r.stderr);r=check(root,base);assert.equal(r.status,0,r.stderr);
   const l=json(root,lockPath),ref=Object.keys(assessments)[0];l.activities[ref].code_compatibility.previous_code_digest='*';put(root,lockPath,l);r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/CODE_COMPATIBILITY/);
 });
-test('wrong Activity owner, I/O version, or missing code binding digest is rejected',t=>{const {root,base}=fixture(t);const p=skillRoot+'douyin-leadgen-activity-104-preflight/SKILL.md';editFront(root,p,f=>f.metadata.activity_ref='douyin_video_processing.preflight');assert.notEqual(call(root,'--write').status,0);editFront(root,p,f=>{f.metadata.activity_ref='douyin_lead_outreach.preflight';f.metadata.activity_version='0.1.0';});assert.notEqual(call(root,'--write').status,0);editFront(root,p,f=>f.metadata.activity_version='4.0.0');refresh(root);const l=json(root,lockPath);l.activities['douyin_lead_outreach.preflight'].code_bindings.pop();put(root,lockPath,l);assert.notEqual(check(root,base).status,0);});
+test('wrong Activity owner, I/O version, or missing code binding digest is rejected',t=>{const {root,base}=fixture(t);const p=skillRoot+'douyin-leadgen-activity-104-preflight/SKILL.md',originalVersion=parse(readFileSync(join(root,'product-map/contracts/douyin_lead_outreach.yaml'),'utf8')).activities.find(a=>a.key==='preflight').version;editFront(root,p,f=>f.metadata.activity_ref='douyin_video_processing.preflight');assert.notEqual(call(root,'--write').status,0);editFront(root,p,f=>{f.metadata.activity_ref='douyin_lead_outreach.preflight';f.metadata.activity_version='0.1.0';});assert.notEqual(call(root,'--write').status,0);editFront(root,p,f=>f.metadata.activity_version=originalVersion);refresh(root);const l=json(root,lockPath);l.activities['douyin_lead_outreach.preflight'].code_bindings.pop();put(root,lockPath,l);assert.notEqual(check(root,base).status,0);});
 test('method upgrade rejects stale consumer then requires both Workflow and Commander version bumps',t=>{const {root,base}=fixture(t);const owner='douyin_video_processing',ref=owner+'.preflight',p=skillRoot+'douyin-leadgen-activity-102-preflight/SKILL.md';editFront(root,p,f=>f.metadata.version='0.2.0');const cp='product-map/contracts/'+owner+'.yaml';const c=parse(readFileSync(join(root,cp),'utf8'));c.activities.find(a=>a.key==='preflight').implementation_bindings.find(b=>b.kind==='skill').version='0.2.0';put(root,cp,stringify(c));assert.notEqual(call(root,'--write').status,0,'both shared consumers remain stale');
   for(const number of [101,102]){const rp=skillRoot+'douyin-leadgen-'+number+'/references/activity-methods.json',d=json(root,rp);d.activities.find(a=>a.activity_ref===ref).skill_version='0.2.0';put(root,rp,d);}refresh(root);let r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/WORKFLOW_SKILL_VERSION_NOT_ADVANCED/);
   for(const number of [101,102])editFront(root,skillRoot+'douyin-leadgen-'+number+'/SKILL.md',f=>f.metadata.version='0.3.0');refresh(root);r=check(root,base);assert.notEqual(r.status,0);assert.match(r.stderr,/COMMANDER_SKILL_VERSION_NOT_ADVANCED/);
@@ -97,4 +97,19 @@ test('first method-lock adoption still checks tracked historical Skills without 
 });
 test('a Workflow Skill absent before first adoption is allowed only when no historical central lock exists',t=>{
   const {root}=fixture(t),path=skillRoot+'douyin-leadgen-101/SKILL.md',body=readFileSync(join(root,path));rmSync(join(root,lockPath));rmSync(join(root,path));git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','before first workflow skill');const base=git(root,'rev-parse','HEAD');put(root,path,body);refresh(root);assert.equal(checkMethods(root,{base}).status,'PASS');
+});
+
+// The extracted implementation is business code, so every frozen method must
+// change its code identity when those exact handler bytes change.
+test('real extracted handlers belong to every consumer method source closure',t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/leadgen-handlers.mjs';
+ put(root,path,readFileSync(join(source,path)));
+ const before=collectMethods(root);
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated handler-byte mutation\n');
+ const after=collectMethods(root);
+ for(const [ref,method] of Object.entries(before.activities)){
+  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted actual handler bytes');
+  assert.equal(after.activities[ref].contract_digest,method.contract_digest);
+  assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
+ }
 });

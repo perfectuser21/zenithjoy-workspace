@@ -56,3 +56,20 @@ test('qualification Skill can inspect fresh native audio only twice with parent-
  }finally{await b.close();rmSync(d,{recursive:true,force:true});}
  for(const activity_key of ['collection','scoring','send_dm'])await using(async(b)=>{await assert.rejects(()=>callActivityTool(b.requestPath,'phone',{command:'native-audio-evidence',args:[]}));},{activity_key});
 });
+
+
+test('generation rotation cannot reset one resume, native reads or active operations',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-generations-'));let resumes=0,reads=0,release;
+ const q={...request,activity_key:'qualification',transport_generation:0,deadline_ms:Date.now()+20000};
+ const b=await startActivityBroker({directory:d,request:q,authorize:async()=>true,inspect:async()=>({}),resume:async()=>{resumes++;await new Promise(r=>release=r);return {done:1};},phone:async()=>{reads++;throw Error('native capture failed');}});
+ try{
+  for(let i=0;i<2;i++)await assert.rejects(()=>callActivityTool(b.requestPath,'phone',{command:'native-audio-evidence',args:[]}));
+  const pending=callActivityTool(b.requestPath,'resume');while(!release)await new Promise(r=>setTimeout(r,1));
+  assert.throws(()=>b.advanceTurn(),/ADVANCE_REJECTED/);release();await pending;
+  const next=b.advanceTurn();assert.equal(next.mode,'readback_only');assert.equal(next.nonce,q.nonce);assert.equal(next.deadline_ms,q.deadline_ms);
+  await assert.rejects(()=>callActivityTool(b.requestPath,'inspect'));
+  await assert.rejects(()=>callActivityTool(next.broker_request_path,'resume'));
+  await assert.rejects(()=>callActivityTool(next.broker_request_path,'phone',{command:'back-evidence',args:[]}));
+  assert.equal((await callActivityTool(next.broker_request_path,'inspect')).ok,true);assert.throws(()=>b.advanceTurn());assert.equal(resumes,1);assert.equal(reads,2);assert.equal(b.getResult().nativeReads,2);
+ }finally{await b.close();rmSync(d,{recursive:true,force:true});}
+});

@@ -15,3 +15,12 @@ test('unverified or wrong-revision Skill reference cannot authorize a child',asy
  const binding=av.payload.implementation_bindings[0];
  for(const mutation of [{status:'unknown'},{revision:'c'.repeat(40)},{repo:'other/repo'}]){const original={...binding};Object.assign(binding,mutation);try{await assert.rejects(()=>verifySkillRequest(q,{get,verifyMethod:()=>true}));}finally{Object.assign(binding,original);}}
 });
+
+test('central frozen Activity opt-in is mandatory and cannot be raised by the transport request',async()=>{
+ for(const policy of [undefined,{}, {max_additional_turns:2},{max_additional_turns:1,other:true},{max_additional_turns:'1'}]){
+  av.payload.contract.agent_recovery=policy;
+  try{await assert.rejects(()=>verifySkillRequest({...q,transport_generation:0},{get,verifyMethod:()=>true}),/RECOVERY_POLICY_UNVERIFIED/);}finally{delete av.payload.contract.agent_recovery;}
+ }
+ av.payload.contract.agent_recovery={max_additional_turns:1};
+ try{assert.equal(await verifySkillRequest({...q,transport_generation:0},{get,verifyMethod:()=>true}),true);}finally{delete av.payload.contract.agent_recovery;}
+});

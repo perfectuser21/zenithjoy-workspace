@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn,execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
@@ -29,12 +29,34 @@ export function safeExecutionDiagnostic(value, env = process.env) {
   return (boundary >= 0 ? prefix.slice(0, boundary + 1) : '') + '[diagnostic truncated]\n';
 }
 
+// This capability is process-local and bound to the exact executor invocation.
+// A serialized message/code or an error from a later filesystem read is no proof.
+const nativeNotStarted=new WeakMap();
+function markNotStarted(error,cause,command,args,child,spawned){
+  if(!spawned&&child?.pid===undefined&&cause?.path===command&&cause?.syscall==='spawn '+command)nativeNotStarted.set(error,{command,args});
+  return error;
+}
+export function executionDidNotStart(error,command,args){
+  const proof=error&&typeof error==='object'?nativeNotStarted.get(error):null;
+  return Boolean(proof&&proof.command===command&&proof.args===args);
+}
+export function execFileReceipt(command,args,options){
+  return new Promise((resolveResult,reject)=>{
+    let spawned=false,child;
+    child=execFile(command,args,options,(error,stdout,stderr)=>{
+      if(error){error.stdout=stdout;error.stderr=stderr;reject(markNotStarted(error,error,command,args,child,spawned));}
+      else resolveResult({stdout,stderr});
+    });
+    child.once('spawn',()=>{spawned=true;});
+  });
+}
+
 export function execInput(command, args, { input = '', timeoutMs = 180000, env = process.env } = {}) {
   return new Promise((resolveResult, reject) => {
     // Mac/Linux上每次动作独占进程组，只停止本次动作及其子进程，不碰ADB服务或其他批次。
     const ownGroup = process.platform !== 'win32';
     const child = spawn(command, args, { env, detached: ownGroup, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer, stderrTruncated = false;
+    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer, stderrTruncated = false, spawned = false;
     const timer = setTimeout(() => stop(Error('EXECUTION_DEADLINE')), timeoutMs);
     function signalOwned(signal) {
       try { if (ownGroup && child.pid) process.kill(-child.pid, signal); else child.kill(signal); }
@@ -54,7 +76,8 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
         reject(error);
       } else resolveResult(result);
     }
-    child.on('error', () => finish(Error('EXECUTION_START_FAILED')));
+    child.once('spawn',()=>{spawned=true;});
+    child.on('error', cause => finish(markNotStarted(Error('EXECUTION_START_FAILED'),cause,command,args,child,spawned)));
     child.stdout.on('data', chunk => {
       if (stoppingError) return;
       stdout += chunk;
