@@ -162,6 +162,11 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
         return None  # Permission repair is a real installation, never a read-only no-op.
     for p in [*raw_directories, *directories]:
         watch(p, stat.S_ISDIR)
+    def verify_directories():
+        for raw, canonical in zip(raw_directories, directories):
+            if str(Path(raw).resolve(strict=True)) != canonical:
+                raise ValueError("unchanged input raw directory changed canonical target")
+    verify_directories()
     registry_path = watch(registry, stat.S_ISREG)
     root = watch(lock_root, stat.S_ISDIR)
     for owner in root.glob("*.lock"):
@@ -191,6 +196,7 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
     for serial in registry_serials(registry, registry_raw):
         watch(root / (serial + ".guard"), stat.S_ISREG)
     observed = {str(p): digest(read_regular(p)) for p in targets}
+    verify_directories()
     for path, identity in watched.items():
         if path_identity(path) != identity:
             raise ValueError("unchanged input path identity changed during readback")
