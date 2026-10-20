@@ -8,9 +8,9 @@ import {join} from 'node:path';
 import {prepareTransport} from './fixtures/m4-deploy-transport.mjs';
 const service=new URL('../',import.meta.url).pathname;
 const quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
-function run(t,{badSyntax=false,missing=false,missingSh=false,badSh=false,duplicate=false,finishGuard=false}={}){
+function run(t,{badSyntax=false,missing=false,missingSh=false,badSh=false,duplicate=false,finishGuard=false,remoteUmask}={}){
  const root=realpathSync(mkdtempSync(join(tmpdir(),'m4-deploy-batch-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
- const {home,env}=prepareTransport(root),source=join(root,'source');mkdirSync(source);
+ const {home,env}=prepareTransport(root),source=join(root,'source');if(remoteUmask)env.M4_FIXTURE_UMASK=remoteUmask;mkdirSync(source);
  const files={'a.sh':badSh?'if broken;\n':'#!/bin/sh\ntrue\n','log-stream-push.sh':'#!/bin/sh\ntrue\n','z.sh':'#!/bin/sh\ntrue\n',
   'one.mjs':badSyntax?'const = ;\n':'export const value=1;\n','two.mjs':'export const value=2;\n',
   'skills/first/SKILL.md':'---\nname: real-payload\n---\nSkill bytes\n','checks/test.json':'{"ok":true}\n',
@@ -111,4 +111,16 @@ test('actual pre-source guard rejects missing or modified deployment helpers bef
  const marker=join(root,'loaded-tampered-helper');writeFileSync(join(dir,names[0]),`touch ${quote(marker)}\n`+readFileSync(join(service,names[0]),'utf8'));
  assert.notEqual(invoke().status,0);assert.equal(existsSync(marker),false);
  writeFileSync(join(dir,names[0]),readFileSync(join(service,names[0])));rmSync(join(dir,names[2]));assert.notEqual(invoke().status,0);assert.equal(existsSync(marker),false);
+});
+for(const mask of ['022','077'])test('ordinary SH mode equals real chmod +x under remote umask '+mask,t=>{
+ const r=run(t,{remoteUmask:mask});const oracle=join(r.root,'chmod-oracle');writeFileSync(oracle,'true\n',{mode:0o640});
+ const chmod=spawnSync('bash',['-c',`umask ${mask}; chmod +x ${quote(oracle)}`],{encoding:'utf8'});assert.equal(chmod.status,0,chmod.stderr);
+ assert.equal(statSync(join(r.home,'bin-harvest/a.sh')).mode&0o777,statSync(oracle).mode&0o777);
+ assert.equal(statSync(join(r.home,'bin-harvest/z.sh')).mode&0o777,statSync(oracle).mode&0o777);
+ assert.equal(statSync(join(r.home,'bin-harvest/log-stream-push.sh')).mode&0o777,statSync(oracle).mode&0o777);
+});
+for(const mutation of ['oversize','total','sparse','negative-size'])test('archive header '+mutation+' rejects before any extractfile content allocation',t=>{
+ const f=bundle(t),hash=createHash('sha256').update(readFileSync(f.archive)).digest('hex');
+ const code=`import copy,importlib.util,sys,tarfile\nspec=importlib.util.spec_from_file_location('batch',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\nwith tarfile.open(sys.argv[2]) as t:members=t.getmembers()\nkind=sys.argv[4]\nif kind=='oversize':members[-1].size=33*1024*1024\nif kind=='negative-size':members[-1].size=-1\nif kind=='sparse':members[-1].sparse=[(0,1)]\nif kind=='total':\n members=[members[0]]+[copy.copy(members[-1]) for _ in range(5)]\n for i,x in enumerate(members[1:]):x.name='payload/extra'+str(i);x.size=32*1024*1024\nreads=0\nclass Header:\n def __enter__(self):return self\n def __exit__(self,*a):pass\n def getmembers(self):return members\n def extractfile(self,*a):\n  global reads\n  reads+=1;raise AssertionError('unsafe content allocation before header validation')\nm.tarfile.open=lambda **k:Header()\ntry:m.verified_bundle(sys.argv[2],sys.argv[3])\nexcept ValueError:pass\nelse:raise AssertionError('invalid headers accepted')\nassert reads==0\n`;
+ const r=spawnSync('python3',['-c',code,f.tool,f.archive,hash,mutation],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });

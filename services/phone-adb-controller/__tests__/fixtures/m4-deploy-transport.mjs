@@ -27,9 +27,9 @@ if(process.argv[1]&&resolve(process.argv[1])===self){
    // The SSH fixture maps the Mac-only interpreter location to this test host.
    // The staged production Python bytes execute unchanged, including real syntax subprocesses.
    const install=command.match(/^python3 (\S+\/deployment-m4-payload\.py) install (\S+) ([a-f0-9]{64}) (before|after) ([01])$/);
-   const provider=`import os,runpy,subprocess,sys\noriginal=subprocess.run;node=sys.argv[1]\ndef run(args,*a,**k):\n if isinstance(args,list) and args[0]=='/opt/homebrew/bin/node':args=[node,*args[1:]]\n return original(args,*a,**k)\nsubprocess.run=run\nif os.environ.get('FIXTURE_FAIL')=='mv':\n def refuse(*a,**k):raise OSError('fixture atomic replace refused')\n os.replace=refuse\nscript=sys.argv[2];sys.argv=[script,*sys.argv[3:]]\nrunpy.run_path(script,run_name='__main__')\n`;
+   const provider=`import os,runpy,subprocess,sys\noriginal=subprocess.run;node=sys.argv[1]\nif os.environ.get('M4_FIXTURE_UMASK'):os.umask(int(os.environ['M4_FIXTURE_UMASK'],8))\ndef run(args,*a,**k):\n if isinstance(args,list) and args[0]=='/opt/homebrew/bin/node':args=[node,*args[1:]]\n return original(args,*a,**k)\nsubprocess.run=run\nif os.environ.get('FIXTURE_FAIL')=='mv':\n def refuse(*a,**k):raise OSError('fixture atomic replace refused')\n os.replace=refuse\nscript=sys.argv[2];sys.argv=[script,*sys.argv[3:]]\nrunpy.run_path(script,run_name='__main__')\n`;
    const r=install?spawnSync('python3',['-c',provider,process.execPath,install[1],'install',...install.slice(2)],{encoding:'utf8',env:{...process.env,HOME:home}})
-    :spawnSync('bash',['-c',command],{encoding:'utf8',env:{...process.env,HOME:home}});
+    :spawnSync('bash',['-c',(process.env.M4_FIXTURE_UMASK?'umask '+process.env.M4_FIXTURE_UMASK+'; ':'')+command],{encoding:'utf8',env:{...process.env,HOME:home}});
    process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exitCode=r.status??2;
   }
  }catch(error){process.stderr.write(error.message+'\n');process.exitCode=2;}
