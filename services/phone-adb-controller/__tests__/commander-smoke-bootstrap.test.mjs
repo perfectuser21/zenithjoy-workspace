@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync,copyFileSync,symlinkSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 const path='.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh';
 function run(fail){
@@ -31,4 +31,21 @@ test('Commander回归先执行固定Skill安装核验，再保留完整原测试
 });
 test('固定Skill安装核验失败立即拒绝，不能继续测试或报PASS',()=>{
  const {r,lines}=run(23);assert.equal(r.status,23);assert.equal(lines.length,2);assert.match(lines[0],/^node:scripts\/ci\/implementation-skill-source\.mjs --install-regression-skills /);assert.match(lines[1],/^bootstrap:/);assert.ok(!r.stdout.includes('commander-codex-agent-smoke: PASS'));
+});
+
+test('真实Commander来源用例可消费外部无HEAD对象缓存且不依赖默认缓存',t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-external-cache-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const root=process.cwd(),workspace=join(dir,'workspace'),cache=join(dir,'objects');
+ const env={...process.env,GIT_ALLOW_PROTOCOL:'file',GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'};
+ const git=(args,cwd=root)=>{const r=spawnSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd,env,encoding:'utf8',timeout:30000});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
+ const lock=JSON.parse(readFileSync(join(root,'.skills-source.json')));
+ git(['clone','--quiet','--no-hardlinks','--no-checkout',root,workspace]);git(['checkout','--quiet','--detach','HEAD'],workspace);
+ assert.equal(existsSync(join(workspace,'.skills-source')),false,'fresh源码不应有默认Skill缓存');
+ git(['init','--quiet',cache]);git(['fetch','--quiet','--no-tags','--depth=1',resolve(process.env.SKILLS_SOURCE_DIR||join(root,'.skills-source')),lock.revision],cache);
+ const head=spawnSync('git',['-C',cache,'rev-parse','--verify','HEAD'],{env,encoding:'utf8'});assert.notEqual(head.status,0,'复现正式无HEAD缓存');
+ symlinkSync(resolve(root,'node_modules'),join(workspace,'node_modules'),'dir');
+ const target='scripts/product-map/__tests__/commander-skill-contracts.test.js';copyFileSync(join(root,target),join(workspace,target));
+ const childEnv={...env,SKILLS_SOURCE_DIR:cache};delete childEnv.NODE_TEST_CONTEXT;
+ const r=spawnSync(process.execPath,['--test','--test-name-pattern=^未还原Commander正文',target],{cwd:workspace,env:childEnv,encoding:'utf8',timeout:30000});
+ assert.match(r.stdout,/未还原Commander正文/);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);assert.equal(existsSync(join(workspace,'.skills-source')),false,'测试不能造默认缓存掩盖正式前提');
 });
