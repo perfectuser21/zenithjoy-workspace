@@ -45,6 +45,7 @@ if(args[0]==='tag'){ s.images[args[2]]=s.images[args[1]]; save(); process.exit(0
 if(args[0]==='run'){
  const expected=service==='zenithjoy-api-staging'?'/opt/zenithjoy/staging-api/.env':'/opt/zenithjoy/prod-api/.env';
  if(args[args.indexOf('--env-file')+1]!==expected)throw Error('wrong database environment');
+ if(!args.at(-1).includes('--include=dev'))throw Error('migration runner must retain locked ts-node dev dependency under NODE_ENV=production');
  if(process.env.FAIL_MODE==='migration')process.exit(8); process.exit(0);
 }
 if(args[0]==='compose'){
