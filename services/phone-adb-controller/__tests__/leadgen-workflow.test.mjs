@@ -24,10 +24,16 @@ test('mark_leads预算partial后私有保存同scope游标，重试继续扫描'
   await h.mark_leads();await h.mark_leads();assert.deepEqual(seen.filter(v=>v.op==='mark_leads')[1].cursor,cursor);
  }finally{rmSync(d,{recursive:true,force:true});}
 });
-test('103泛化score失败或完成后Skill恢复不能再扫下一批',async()=>{
- const d=mkdtempSync(join(tmpdir(),'score-recovery-'));const calls=[];
- try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source102'},rpc:async body=>{calls.push(body.request.op);return {result:body.request.op==='score'?{scored:1,ids:['11111111-1111-4111-8111-111111111111']}:{verified:true,rows:[{status:'pass'}],failures:0}}},sourceCommit:'a'.repeat(40)});
-  await h.scoring();await assert.rejects(h.scoring(),/POLICY_SCORE_RECOVERY_REQUIRES_EXACT_IDS/);assert.equal(calls.filter(op=>op==='score').length,1);
+test('103冻结score完成后恢复只读原CID，不能再扫下一批',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'score-recovery-'));const calls=[],id='11111111-1111-4111-8111-111111111111';let committed=false;
+ try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source102',LEADGEN_LIMIT:'1'},rpc:async body=>{
+  const r=body.request;calls.push(r);let result;
+  if(r.op==='score_scope')result={ids:committed?[id,'22222222-2222-4222-8222-222222222222']:[id]};
+  else if(r.op==='score_recovery')result={verified:true,ids:committed?[id]:[],scored:committed?1:0};
+  else if(r.op==='score'){committed=true;result={scored:1,ids:[id]};}
+  else result={verified:true,rows:[{status:'pass'}],failures:0};return {result};},sourceCommit:'a'.repeat(40)});
+  await h.scoring();assert.equal((await h.scoring()).recovered,1);assert.equal(calls.filter(r=>r.op==='score').length,1);
+  assert.ok(calls.filter(r=>r.op==='score_recovery').every(r=>JSON.stringify(r.ids)===JSON.stringify([id])));
  }finally{rmSync(d,{recursive:true,force:true});}
 });
 
@@ -100,13 +106,14 @@ test('profile注册的手机与命令serial不符时，在拿锁与手势前拒�
 
 test('评分必须按实际处理ID读回，缺行在工件记录verified=false',async()=>{
   const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'leadgen-score-'));const ops=[];
+  const id='11111111-1111-4111-8111-111111111111',sources={[id]:'batch102'};
   try{
     const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'run',LEADGEN_LINE:'jinuo'},
-      rpc:async body=>{ops.push(body.request);return {result:body.request.op==='score'?{scored:1,ids:['c1']}:{verified:false,failures:1}};}});
+      rpc:async body=>{const r=body.request;ops.push(r);return {result:r.op==='score_scope'?{ids:[id],sources}:r.op==='score_recovery'?{verified:true,scored:0,ids:[]}:r.op==='score'?{scored:1,ids:[id]}:{verified:false,failures:1}};}});
     assert.equal((await h.scoring()).scoring_readback_failures,1);
-    assert.deepEqual(ops[1].ids,['c1']);
+    assert.deepEqual(ops.find(r=>r.op==='score_readback').ids,[id]);
     assert.equal(JSON.parse(readFileSync(join(dir,'run-scoring-readback.json'),'utf8')).verified,false);
-    assert.deepEqual(JSON.parse(readFileSync(join(dir,'activity.log'),'utf8').trim().replace(/^SORT_STATS /,'')),{scored:1,ids:['c1']});
+    assert.deepEqual(JSON.parse(readFileSync(join(dir,'activity.log'),'utf8').trim().replace(/^SORT_STATS /,'')),{scored:1,ids:[id]});
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
