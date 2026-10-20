@@ -154,3 +154,9 @@ for (const mode of ['sha', 'health']) test(`staging ${mode}不符不能产出成
   assert.notEqual(result.status, 0);
   assert.equal(f.state().builds, 1, result.stderr);
 });
+test('回退到当前已运行镜像不改写previous历史',t=>{
+ const f=fixture(t);assert.equal(f.run(['promote',f.next]).status,0);
+ const noop=f.run(['rollback',f.next]);assert.equal(noop.status,0,noop.stderr);
+ const actual=f.run(['rollback']);assert.equal(actual.status,0,actual.stderr);
+ assert.equal(f.state().images[f.state().active],f.old);
+});
