@@ -64,6 +64,13 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
           "sha256": "b4bf0989d5baf8b9bb8214a9101af4c6308ee4ebce221e6b756056b0f955dc57"
@@ -181,13 +188,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "adf33ac5f284a4b02e2b6dda3824a9ad1d0a6b2fda075a926e73f3cb7557fdcf",
+      "code_digest": "1d60b64bafc01ee5bc961b20ef17aaf1fa651ef533e962500ca521c5624470c8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "3617f75ab8540b7deb5d5d0ee17da72829a0f52f6c2a02bebca9bcbd43beb0a8",
-        "current_code_digest": "adf33ac5f284a4b02e2b6dda3824a9ad1d0a6b2fda075a926e73f3cb7557fdcf"
+        "previous_code_digest": "adf33ac5f284a4b02e2b6dda3824a9ad1d0a6b2fda075a926e73f3cb7557fdcf",
+        "current_code_digest": "1d60b64bafc01ee5bc961b20ef17aaf1fa651ef533e962500ca521c5624470c8"
       }
     },
     "douyin_video_processing.preflight": {
@@ -256,6 +263,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -381,13 +395,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "de2a09cd0348c8975ab89f85548f8aee2d2a929a2644052923fb4e0e943fc803",
+      "code_digest": "0afec952533a5954aa7f55a6acc10526c6c305bf400c150f70bbf38296c41559",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "9a4d37d77ca2be938392950aa8fa6f6a898710ecc18d8c1cc852c574b6775bd5",
-        "current_code_digest": "de2a09cd0348c8975ab89f85548f8aee2d2a929a2644052923fb4e0e943fc803"
+        "previous_code_digest": "de2a09cd0348c8975ab89f85548f8aee2d2a929a2644052923fb4e0e943fc803",
+        "current_code_digest": "0afec952533a5954aa7f55a6acc10526c6c305bf400c150f70bbf38296c41559"
       }
     },
     "douyin_video_processing.dedup": {
@@ -449,6 +463,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -570,13 +591,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "36ab27a663ceb001c951b6d8a5a2882f7e3030850a2d2c1caae3c91acd7ce555",
+      "code_digest": "527bbc4cc9bbb3d7ed8f70315a45f5342806d0ac4beab419a3a153cd76710bd9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "61db1790ce1af77b2e0f16f099e84ddbb8684da019fb1d9ed38e0a6e40d0a891",
-        "current_code_digest": "36ab27a663ceb001c951b6d8a5a2882f7e3030850a2d2c1caae3c91acd7ce555"
+        "previous_code_digest": "36ab27a663ceb001c951b6d8a5a2882f7e3030850a2d2c1caae3c91acd7ce555",
+        "current_code_digest": "527bbc4cc9bbb3d7ed8f70315a45f5342806d0ac4beab419a3a153cd76710bd9"
       }
     },
     "douyin_video_processing.qualification": {
@@ -638,6 +659,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -801,13 +829,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "54978160c5e951165b72bc914962a734d73d2fb78d1cc92289688402c7ea0944",
+      "code_digest": "ce3d81a59920ef95e44ed7c645235f2941003cfffcc4f0a5df6ff074f336a32d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "d085f41afb88f15efcec378044b3bb634b4c581a7458d29996e674598520becc",
-        "current_code_digest": "54978160c5e951165b72bc914962a734d73d2fb78d1cc92289688402c7ea0944"
+        "previous_code_digest": "54978160c5e951165b72bc914962a734d73d2fb78d1cc92289688402c7ea0944",
+        "current_code_digest": "ce3d81a59920ef95e44ed7c645235f2941003cfffcc4f0a5df6ff074f336a32d"
       }
     },
     "douyin_video_processing.collection": {
@@ -876,6 +904,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -1019,13 +1054,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "2bb27cd6456f9fdd3451cd966dd3f587f94fd4414f3ef177126225d87ec81c79",
+      "code_digest": "79147b17d6e13a114c642c0f0ab95fa831d286d5d02398f6045524ab86eec52f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "059694d9a928cbfbd1df56e919bb04992a701645c57674d59df77a33ad321e51",
-        "current_code_digest": "2bb27cd6456f9fdd3451cd966dd3f587f94fd4414f3ef177126225d87ec81c79"
+        "previous_code_digest": "2bb27cd6456f9fdd3451cd966dd3f587f94fd4414f3ef177126225d87ec81c79",
+        "current_code_digest": "79147b17d6e13a114c642c0f0ab95fa831d286d5d02398f6045524ab86eec52f"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1087,6 +1122,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -1204,13 +1246,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "3c94d6dc14162bb557c6fe80128e3ec9d1f35e7eb77e9f50152d401b58d8b325",
+      "code_digest": "a4b77f8a165c867d2b8131802ca9cb73104b92d8bf3b67a76616208839b59738",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "90fc4db22cc33bbb0bf29c36b2267ef1f4176d31b877f82b6d4a70ab6854a06a",
-        "current_code_digest": "3c94d6dc14162bb557c6fe80128e3ec9d1f35e7eb77e9f50152d401b58d8b325"
+        "previous_code_digest": "3c94d6dc14162bb557c6fe80128e3ec9d1f35e7eb77e9f50152d401b58d8b325",
+        "current_code_digest": "a4b77f8a165c867d2b8131802ca9cb73104b92d8bf3b67a76616208839b59738"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1272,6 +1314,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -1372,13 +1421,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "2cceb05053f4c6a7f94423bfd20bf1a3956edbf359e7245871509afda08c894c",
+      "code_digest": "4ca3754f945f66b2e63e648dfe54772dc335ea11d00cb42569af7946c96936ca",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "8e974f5205ad4dfd874d247d309223f383bc9856c9799f461c0b13f21c6b1d11",
-        "current_code_digest": "2cceb05053f4c6a7f94423bfd20bf1a3956edbf359e7245871509afda08c894c"
+        "previous_code_digest": "2cceb05053f4c6a7f94423bfd20bf1a3956edbf359e7245871509afda08c894c",
+        "current_code_digest": "4ca3754f945f66b2e63e648dfe54772dc335ea11d00cb42569af7946c96936ca"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1447,6 +1496,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -1596,13 +1652,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e99136baad4b74cf60862ba36efe20c6cbda5dc5f75ea109ce25072fac5bad8d",
+      "code_digest": "34c9343bc6a0b7d3096561bf29a49c809b5d27f465d66600a712d52dc6006c82",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "01b7321675873be3499a0d0e390e560d9a43cc203972288651d2dc6d64cc1d81",
-        "current_code_digest": "e99136baad4b74cf60862ba36efe20c6cbda5dc5f75ea109ce25072fac5bad8d"
+        "previous_code_digest": "e99136baad4b74cf60862ba36efe20c6cbda5dc5f75ea109ce25072fac5bad8d",
+        "current_code_digest": "34c9343bc6a0b7d3096561bf29a49c809b5d27f465d66600a712d52dc6006c82"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1664,6 +1720,13 @@
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
           "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
         },
         {
           "kind": "code",
@@ -1817,13 +1880,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "4f4b0d9398c3a557c2d61bd2639318fb141fdd7801002b1ab7f0db9b2ceb2e9d",
+      "code_digest": "9d626c161e9e9770781a15ea024ce219578114ca1bbd11d406cd8291e775fcb7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "538b4f5bf9482d8c8cdece0d122d31e0eaebb664e77d4640e8f16b335f1cbca5",
-        "current_code_digest": "4f4b0d9398c3a557c2d61bd2639318fb141fdd7801002b1ab7f0db9b2ceb2e9d"
+        "previous_code_digest": "4f4b0d9398c3a557c2d61bd2639318fb141fdd7801002b1ab7f0db9b2ceb2e9d",
+        "current_code_digest": "9d626c161e9e9770781a15ea024ce219578114ca1bbd11d406cd8291e775fcb7"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1889,6 +1952,13 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
           "sha256": "b4bf0989d5baf8b9bb8214a9101af4c6308ee4ebce221e6b756056b0f955dc57"
@@ -2013,13 +2083,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
+      "code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2",
-        "current_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed"
+        "previous_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
+        "current_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2085,6 +2155,13 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
           "sha256": "b4bf0989d5baf8b9bb8214a9101af4c6308ee4ebce221e6b756056b0f955dc57"
@@ -2209,13 +2286,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
+      "code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2",
-        "current_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed"
+        "previous_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
+        "current_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2281,6 +2358,13 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-binding.mjs",
+          "revision": "contract",
+          "sha256": "f572858a6ade90200daed24b7f70dadf25283ad2c6672eae2423487fc2b06221"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
           "sha256": "b4bf0989d5baf8b9bb8214a9101af4c6308ee4ebce221e6b756056b0f955dc57"
@@ -2408,13 +2492,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "59cd13e0d6271f17f3e60cb3ec28e57c22ba9b0c91240edf454fe92019176b5d",
+      "code_digest": "276e8094413fa6c65bc8f45d5fd7cb85fdfd818770c10ec2cf2cd9bc0b24246d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reason": "仅在已验证external且task_run_id显式null、两层均缺task_id的公有ACK消费视图归一null，保原rawACK与native缺上下文拒绝；补真实runtime-binding共享来源闭包，不改方法I/O、政策或额度，不等实机验收。",
         "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "5f57a91b4ee75e787af57dafc68715f53bf08eda3879e05c482f9c454fb6f873",
-        "current_code_digest": "59cd13e0d6271f17f3e60cb3ec28e57c22ba9b0c91240edf454fe92019176b5d"
+        "previous_code_digest": "59cd13e0d6271f17f3e60cb3ec28e57c22ba9b0c91240edf454fe92019176b5d",
+        "current_code_digest": "276e8094413fa6c65bc8f45d5fd7cb85fdfd818770c10ec2cf2cd9bc0b24246d"
       }
     }
   },
