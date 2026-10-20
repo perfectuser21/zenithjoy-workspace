@@ -5,9 +5,35 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {execInput,createRpc,RPC_FILES} from '../leadgen-client.mjs';
+import {spawnSync} from 'node:child_process';
 import * as client from '../leadgen-client.mjs';
 
 const frozen={deployment:{source_commit:'a'.repeat(40)},files:Object.fromEntries(RPC_FILES.map(path=>['runtime/'+path,'b'.repeat(64)]))};
+test('受控原生超时留下可独立读回的同一次操作身份和终态', {skip:process.platform==='win32'}, async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'native-operation-red-'));
+ const operationId='op-'+Date.now();
+ const pids=join(dir,'pids.json'),heartbeat=join(dir,'heartbeat');
+ const childCode=`const fs=require('fs');process.on('SIGTERM',()=>{});setInterval(()=>fs.appendFileSync(${JSON.stringify(heartbeat)},'.'),20)`;
+ const code=`const fs=require('fs'),{spawn}=require('child_process');process.on('SIGTERM',()=>{});const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:'inherit'});fs.writeFileSync(${JSON.stringify(pids)},JSON.stringify({parent:process.pid,child:child.pid}));setInterval(()=>{},1000)`;
+ try {
+  await assert.rejects(execInput(process.execPath,['-e',code],{timeoutMs:500,receipt:{runDir:dir,operationId,runId:'fixture-run',taskId:'fixture-task',profile:'fixture-profile',serial:'fixture-serial',sourceCommit:'a'.repeat(40),owner:'fixture-owner',activity:'collect_videos'}}),/EXECUTION_DEADLINE/);
+  const receipt=JSON.parse(readFileSync(join(dir,'native-operations',operationId+'.json'),'utf8'));
+  assert.equal(receipt.operation_id,operationId);
+  assert.equal(receipt.run_id,'fixture-run');
+  assert.ok(Number.isSafeInteger(receipt.pid));
+  assert.ok(receipt.start_identity);
+  assert.equal(receipt.execution_stopped,true);
+  assert.ok(Array.isArray(receipt.processes)&&receipt.processes.length>=2);
+  assert.ok(receipt.processes.every(p=>p.termination?.confirmed===true));
+ } finally {
+  // 只清理本 fixture 的、命令行仍含本临时目录的进程。
+  try {for(const pid of Object.values(JSON.parse(readFileSync(pids,'utf8')))) {
+   const ps=spawnSync('/bin/ps',['-ww','-p',String(pid),'-o','command='],{encoding:'utf8'});
+   if(ps.status===0&&ps.stdout.includes(dir))try{process.kill(pid,'SIGKILL');}catch{}
+  }}catch{}
+  rmSync(dir,{recursive:true,force:true});
+ }
+});
 test('真实26.511秒建连加短链解析可在有限预算完成，未核来源或假ID仍拒绝',async()=>{
  const actual={resolved_url:'https://www.douyin.com/video/7691237147096960271',content_id:'7691237147096960271',content_type:'video'};
  // 传输夹具按已观测耗时执行时限合同；不联网、不冒真实取链成功。
