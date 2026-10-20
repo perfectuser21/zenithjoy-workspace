@@ -9,7 +9,7 @@ import {promisify} from 'node:util';
 const exec=promisify(execFile), sha='b'.repeat(40), old='a'.repeat(40);
 const script=resolve('scripts/deploy/frontend-release.sh');
 const lib=resolve('.github/workflows/scripts/deploy-lib.sh');
-async function scenario({bad=false,legacy=false,restartFails=false,same=false}={}) {
+async function scenario({bad=false,legacy=false,restartFails=false,same=false,rollback=false,rollbackFailed=false,legacyNoStamp=false,tamperOld=false}={}) {
  const root=await mkdtemp(join(tmpdir(),'frontend-release-'));
  const live=join(root,'live'),built=join(root,'built'),bin=join(root,'bin'),configs=join(root,'configs');
  await Promise.all([live,built,bin,configs].map(p=>mkdir(p,{recursive:true})));
@@ -19,7 +19,7 @@ async function scenario({bad=false,legacy=false,restartFails=false,same=false}={
   await symlink('releases/current',join(live,'dist'));
  }
  await writeFile(join(live,'dist','index.html'),'old page');
- await writeFile(join(live,'dist','release-sha.json'),JSON.stringify({sha:old}));
+ if(!legacyNoStamp)await writeFile(join(live,'dist','release-sha.json'),JSON.stringify({sha:old}));
  await writeFile(join(live,'nginx.conf'),'old config');
  await writeFile(join(live,'common.conf'),'old common');
  await writeFile(join(built,'index.html'),'new page');
@@ -29,15 +29,22 @@ async function scenario({bad=false,legacy=false,restartFails=false,same=false}={
  // Docker is the only unavailable external boundary; filesystem and HTTP stay real.
  await writeFile(join(bin,'docker'),`#!/bin/sh\necho "$*" >> "$DOCKER_CALLS"\nif [ "$FAIL_FIRST_RESTART" = true ] && [ ! -e "$DOCKER_CALLS.failed" ]; then touch "$DOCKER_CALLS.failed"; exit 1; fi\n`,{mode:0o755});
  const server=createServer(async(req,res)=>{
-  const data=await readFile(join(live,'dist','release-sha.json'),'utf8');
-  if(bad && JSON.parse(data).sha===sha){res.statusCode=503;res.end('candidate broken');return;}
-  res.end(req.url.startsWith('/release-sha.json')?data:'page');
+  let data;try{data=await readFile(join(live,'dist','release-sha.json'),'utf8');}catch{data=null;}
+  if(bad && data && JSON.parse(data).sha===sha){res.statusCode=503;res.end('candidate broken');return;}
+  if(req.url.startsWith('/release-sha.json')){res.statusCode=data?200:404;res.end(data||'missing');return;}
+  res.end(await readFile(join(live,'dist','index.html'),'utf8'));
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let result;
- try { result=await exec('bash',[script,live,same?old:sha,built,'frontend',`http://127.0.0.1:${server.address().port}`,lib,configs],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,DOCKER_CALLS:join(root,'calls'),FAIL_FIRST_RESTART:String(restartFails),LC_ALL:'C'}}); }
+ try { result=await exec('bash',[script,live,same?old:sha,built,'frontend',`http://127.0.0.1:${server.address().port}`,lib,configs],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,DOCKER_CALLS:join(root,'calls'),FAIL_FIRST_RESTART:String(restartFails),ZJ_FRONTEND_VERIFY_RETRIES:'0',LC_ALL:'C'}}); }
  catch(error){result=error;}
- const observation={code:result.code??0,page:await readFile(join(live,'dist','index.html'),'utf8'),config:await readFile(join(live,'nginx.conf'),'utf8'),output:result.stdout+' '+result.stderr};
+ let rollbackResult;
+ if(rollback||rollbackFailed){
+  if(tamperOld)await writeFile(join(live,'releases',old,'index.html'),'tampered old');
+  try{rollbackResult=await exec('bash',[script,'--rollback',live,rollbackFailed?sha:'','frontend',`http://127.0.0.1:${server.address().port}`,lib],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,DOCKER_CALLS:join(root,'calls'),ZJ_FRONTEND_VERIFY_RETRIES:'0',LC_ALL:'C'}});}
+  catch(error){rollbackResult=error;}
+ }
+ const observation={rollbackCode:rollbackResult?.code??0,rollbackOutput:rollbackResult?.stderr||'',code:result.code??0,page:await readFile(join(live,'dist','index.html'),'utf8'),config:await readFile(join(live,'nginx.conf'),'utf8'),output:result.stdout+' '+result.stderr};
  await new Promise(r=>server.close(r));await rm(root,{recursive:true,force:true});return observation;
 }
 for(const legacy of [false,true]) {
@@ -46,3 +53,7 @@ for(const legacy of [false,true]) {
 }
 test('container restart failure restores old release',async()=>{const r=await scenario({restartFails:true});assert.notEqual(r.code,0);assert.equal(r.page,'old page');assert.equal(r.config,'old config');});
 test('same SHA rebuild cannot erase the live release',async()=>{const r=await scenario({same:true});assert.notEqual(r.code,0);assert.equal(r.page,'old page');assert.equal(r.config,'old config');});
+
+test('失败候选无法通过人工rollback入口重新上线',async()=>{const r=await scenario({bad:true,rollbackFailed:true});assert.notEqual(r.code,0);assert.notEqual(r.rollbackCode,0);assert.equal(r.page,'old page');});
+for(const legacyNoStamp of [false,true])test(`成功候选能回退到已验证旧内容，支持无SHA旧现场=${legacyNoStamp}`,async()=>{const r=await scenario({legacy:legacyNoStamp,legacyNoStamp,rollback:true});assert.equal(r.code,0,r.output);assert.equal(r.rollbackCode,0,r.rollbackOutput);assert.equal(r.page,'old page');});
+test('旧版本留存内容被篡改时不切换指针',async()=>{const r=await scenario({rollback:true,tamperOld:true});assert.equal(r.code,0);assert.notEqual(r.rollbackCode,0);assert.equal(r.page,'new page');});
