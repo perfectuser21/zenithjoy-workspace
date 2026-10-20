@@ -43,7 +43,7 @@ async function scenario({bad=false,legacy=false,restartFails=false,same=false,ro
  let rollbackResult;
  if(rollback||rollbackFailed){
   rollingBack=true;
-  if(unverifiedCurrent)await rm(join(live,'releases',sha,'.release-verified.json')); 
+  if(unverifiedCurrent)await rm(join(live,'.release-state',sha,'verified.json'));
   if(tamperOld)await writeFile(join(live,'releases',old,'index.html'),'tampered old');
   try{rollbackResult=await exec('bash',[script,'--rollback',live,rollbackFailed?sha:'','frontend',`http://127.0.0.1:${server.address().port}`,lib],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,DOCKER_CALLS:join(root,'calls'),ZJ_FRONTEND_VERIFY_RETRIES:'0',LC_ALL:'C'}});}
   catch(error){rollbackResult=error;}

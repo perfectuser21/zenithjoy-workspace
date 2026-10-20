@@ -28,15 +28,15 @@ CHANGED=false
 CAN_RESTORE=false
 
 make_proof() {
-  python3 - "$1" "$2" "$3" "$4" <<'PY'
+  python3 - "$1" "$2" "$3" "$4" "$5" <<'PY'
 import hashlib,json,pathlib,re,sys
-root,release,expected,out=sys.argv[1:]; root=pathlib.Path(root)
+root,release,expected,out,configs_dir=sys.argv[1:]; root=pathlib.Path(root); configs_dir=pathlib.Path(configs_dir)
 version=None
 if (root/'release-sha.json').is_file():
     version=json.loads((root/'release-sha.json').read_text()).get('sha')
     if not isinstance(version,str) or not re.fullmatch('[0-9a-f]{40}',version): raise ValueError('invalid retained version stamp')
 if expected and version != expected: raise ValueError('candidate version mismatch')
-configs={name: hashlib.sha256((root/'.release-configs'/name).read_bytes()).hexdigest() if (root/'.release-configs'/name).is_file() else None for name in ['nginx.conf','common.conf']}
+configs={name: hashlib.sha256((configs_dir/name).read_bytes()).hexdigest() if (configs_dir/name).is_file() else None for name in ['nginx.conf','common.conf']}
 proof=dict(version=1,release_id=release,sha=version,index_sha256=hashlib.sha256((root/'index.html').read_bytes()).hexdigest(),configs=configs)
 pathlib.Path(out).write_text(json.dumps(proof))
 PY
@@ -53,7 +53,7 @@ if p.get('sha') is not None:
     assert json.loads((root/'release-sha.json').read_text()).get('sha')==p['sha'], 'retained version changed'
 assert set(p.get('configs',{}))=={'nginx.conf','common.conf'}, 'missing configuration proof'
 for name,digest in p['configs'].items():
-    for folder in [root/'.release-configs']+([pathlib.Path(runtime)] if runtime else []):
+    for folder in [pathlib.Path(proof).parent/'configs']+([pathlib.Path(runtime)] if runtime else []):
         item=folder/name
         if digest is None: assert not item.exists(), 'configuration unexpectedly present: '+name
         else:
@@ -76,20 +76,19 @@ verify_proof() {
   fi
 }
 certify() {
-  local release=$1 expected=${2:-} root="$DIR/releases/$1" proof
-  proof="$root/.release-verified.json"
+  local release=$1 expected=${2:-} root="$DIR/releases/$1" state="$DIR/.release-state/$1" proof
+  proof="$state/verified.json"
   if [[ -f "$proof" ]]; then
     if [[ -n "$expected" ]]; then jq -e --arg sha "$expected" '.sha == $sha' "$proof" >/dev/null; fi
     verify_proof "$root" "$proof"
     return
   fi
-  mkdir -p "$root/.release-configs"
+  mkdir -p "$state/configs"
   for config in nginx.conf common.conf; do
-    if [[ -f "$DIR/$config" ]]; then cp "$DIR/$config" "$root/.release-configs/$config"; else rm -f "$root/.release-configs/$config"; fi
+    if [[ -f "$DIR/$config" ]]; then cp "$DIR/$config" "$state/configs/$config"; else rm -f "$state/configs/$config"; fi
   done
-  make_proof "$root" "$release" "$expected" "$SNAPSHOT/new-proof"
-  verify_proof "$root" "$SNAPSHOT/new-proof"
-  cp "$SNAPSHOT/new-proof" "$proof.tmp"
+  make_proof "$root" "$release" "$expected" "$proof.tmp" "$state/configs"
+  verify_proof "$root" "$proof.tmp"
   mv "$proof.tmp" "$proof"
 }
 persist_previous() {
@@ -117,13 +116,16 @@ cleanup() {
       fi
     done
     docker restart "$CONTAINER" || rollback_failed=true
-    verify_proof "$DIR/releases/$PREVIOUS" "$DIR/releases/$PREVIOUS/.release-verified.json" || rollback_failed=true
+    verify_proof "$DIR/releases/$PREVIOUS" "$DIR/.release-state/$PREVIOUS/verified.json" || rollback_failed=true
     if [[ "$rollback_failed" == true ]]; then
       echo '::error::自动回退后真实内容未确认，必须按失败事件处理' >&2
     elif [[ "$MODE" == promote && "$TARGET" != "$PREVIOUS" && -d "$DIR/releases/$TARGET" ]]; then
       # 失败候选不进入任何人工回退列表；保留事故实物用于诊断。
-      mkdir -p "$DIR/failed"
-      mv "$DIR/releases/$TARGET" "$DIR/failed/$TARGET-$(date +%s)-$$" || true
+      local failed_dir
+      failed_dir="$DIR/failed/$TARGET-$(date +%s)-$$"
+      mkdir -p "$failed_dir"
+      mv "$DIR/releases/$TARGET" "$failed_dir/assets" || true
+      if [[ -d "$DIR/.release-state/$TARGET" ]]; then mv "$DIR/.release-state/$TARGET" "$failed_dir/state" || true; fi
     fi
   fi
   if [[ "$code" -ne 0 && "$CHANGED" == true ]]; then
@@ -141,7 +143,7 @@ done
 
 if [[ "$MODE" == promote ]]; then
   [[ "$PREVIOUS" != "$TARGET" ]] || { echo '当前已是此 SHA；禁止原地重建现网 release' >&2; exit 1; }
-  [[ ! -f "$DIR/releases/$TARGET/.release-verified.json" ]] || { echo '已验证的留存版本不可覆盖，请使用回退' >&2; exit 1; }
+  [[ ! -f "$DIR/.release-state/$TARGET/verified.json" ]] || { echo '已验证的留存版本不可覆盖，请使用回退' >&2; exit 1; }
   if [[ ! -L "$DIR/dist" ]]; then
     PREVIOUS="baseline-$(date +%s)-$$"
     mkdir -p "$DIR/releases"
@@ -172,22 +174,22 @@ if [[ "$MODE" == promote ]]; then
 else
   if [[ -z "$TARGET" && -f "$DIR/.previous-verified" ]]; then TARGET=$(cat "$DIR/.previous-verified"); fi
   valid_id "$TARGET" || { echo '没有合法的已验证回退目标' >&2; exit 1; }
-  [[ -f "$DIR/releases/$TARGET/.release-verified.json" ]] || { echo '回退目标从未验证通过' >&2; exit 1; }
-  check_files "$DIR/releases/$TARGET" "$DIR/releases/$TARGET/.release-verified.json"
+  [[ -f "$DIR/.release-state/$TARGET/verified.json" ]] || { echo '回退目标从未验证通过' >&2; exit 1; }
+  check_files "$DIR/releases/$TARGET" "$DIR/.release-state/$TARGET/verified.json"
   [[ -n "$PREVIOUS" ]] || { echo '当前指针缺失，无法识别现场' >&2; exit 1; }
-  if [[ -f "$DIR/releases/$PREVIOUS/.release-verified.json" ]]; then CAN_RESTORE=true; fi
-  if [[ "$TARGET" == "$PREVIOUS" ]]; then verify_proof "$DIR/releases/$TARGET" "$DIR/releases/$TARGET/.release-verified.json"; exit 0; fi
+  if [[ -f "$DIR/.release-state/$PREVIOUS/verified.json" ]]; then CAN_RESTORE=true; fi
+  if [[ "$TARGET" == "$PREVIOUS" ]]; then verify_proof "$DIR/releases/$TARGET" "$DIR/.release-state/$TARGET/verified.json"; exit 0; fi
   CHANGED=true
   dashboard_release_rollback "$DIR" "$TARGET"
   for config in nginx.conf common.conf; do
-    if [[ -f "$DIR/releases/$TARGET/.release-configs/$config" ]]; then
-      cp "$DIR/releases/$TARGET/.release-configs/$config" "$DIR/$config"
+    if [[ -f "$DIR/.release-state/$TARGET/configs/$config" ]]; then
+      cp "$DIR/.release-state/$TARGET/configs/$config" "$DIR/$config"
     else
       rm -f "$DIR/$config"
     fi
   done
   docker restart "$CONTAINER"
-  verify_proof "$DIR/releases/$TARGET" "$DIR/releases/$TARGET/.release-verified.json"
+  verify_proof "$DIR/releases/$TARGET" "$DIR/.release-state/$TARGET/verified.json"
 fi
 if [[ "$CAN_RESTORE" == true ]]; then persist_previous; else rm -f "$DIR/.previous-verified"; fi
 CHANGED=false
