@@ -77,6 +77,7 @@ function m4Batch(root,mode,args){
   if(!matched)throw Error('unexpected M4 batch upload');
  }
  if(!matched)return null;
+ if(mode==='ssh'&&args.length!==2)throw Error('unexpected M4 batch SSH argv');
  const r=spawnSync(process.execPath,[fileURLToPath(new URL('./m4-deploy-transport.mjs',import.meta.url)),canonicalRoot,mode,...args],{encoding:'utf8',env:process.env});
  return {status:r.status??2,stdout:r.stdout||'',stderr:r.stderr||''};
 }
