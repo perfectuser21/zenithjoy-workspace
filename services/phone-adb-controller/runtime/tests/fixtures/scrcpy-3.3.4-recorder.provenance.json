@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Genymobile/scrcpy",
+  "commit": "fb6381f5b9bb96f3fa823d899f4c32de2ec84ab3",
+  "path": "app/src/recorder.c",
+  "sha256": "b00347f69afafa5743dcfcb21344e29f8d1c09f9cfb564d48521de859953e819",
+  "license": "Apache-2.0",
+  "split_after_line": 450
+}
