@@ -4,6 +4,20 @@ import {fileURLToPath} from 'node:url';
 import {runWorkflow} from './activity-commander.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
+
+export async function invokeNativeActivity(execute,state){
+  try{
+    const result=await execute();
+    if(state.nativeStopUnproven&&['partial','failed'].includes(result?.status)){
+      state.executionUnknown=true;
+      return {...result,execution_stopped:false};
+    }
+    return result;
+  }catch(error){
+    if(state.nativeStopUnproven){state.executionUnknown=true;error.executionStopped=false;error.externalEffect='unknown';}
+    throw error;
+  }
+}
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {readFrozen,assertCommentSampling} from './runtime-definition.mjs';
@@ -59,15 +73,16 @@ async function main(){
     const verified=probes.length>0&&probes.every(p=>p.pass===true)&&local.every(r=>r.steps.length===expected.length&&r.steps.every(s=>s.pass===true));
     return {verified,metrics,probes,step_dod:local};
   };
-  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit});
+  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:binding.task_id});
   const activityDeadlines=new Map();
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
     const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key)});
     activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;
+    handlers.state.currentActivity=activity.key;
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
-    const result=await handlers[activity.key]();
+    const result=await invokeNativeActivity(()=>handlers[activity.key](),handlers.state);
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     return result;
   }]));
@@ -79,7 +94,7 @@ async function main(){
         if(mark.code!==0)throw Error('活动起始证据未登记');
       }
       return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;
-    },record,verify});
+    },record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);
     writeFileSync(file,JSON.stringify({...item,observed_at:new Date().toISOString(),metrics:item.verification?.metrics||item.result||{},commander:records.filter(r=>r.activity===item.activity)},null,2));

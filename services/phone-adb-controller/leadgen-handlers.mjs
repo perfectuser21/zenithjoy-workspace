@@ -1,10 +1,10 @@
 import {readFileSync,writeFileSync,appendFileSync,chmodSync,renameSync,existsSync,readdirSync,lstatSync,realpathSync,mkdirSync,copyFileSync,constants} from 'node:fs';
 import {join,resolve} from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
-import {execInput,safeExecutionDiagnostic} from './leadgen-client.mjs';
+import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
@@ -43,7 +43,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
@@ -58,32 +58,37 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
     chmodSync(file,0o600);
   };
+  const nativeFailure=(error,command,args,opts)=>applyNativeFailure(error,command,args,opts,state);
   const bounded=async(command,args,opts={})=>{
+    if(opts.receipt)state.nativeStopProof=null;
     try {
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
       recordDiagnostic(result.stderr||'');
+      if(opts.receipt)state.nativeStopUnproven=true;
       if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
       return result;
     } catch(error) {
-      if(error.executionStopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)){state.executionUnknown=true;error.executionStopped=false;}
+      nativeFailure(error,command,args,opts);
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
-  const checked=async(command,args,opts)=>{const r=await bounded(command,args,opts);if(r.code!==0)throw Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`);return r.stdout;};
+  const checked=async(command,args,opts={})=>{const r=await bounded(command,args,opts);if(r.code!==0)throw nativeFailure(Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`),command,args,opts);return r.stdout;};
   const phone=async(command,...args)=>{
     const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
     if(!locked&&!['lock-acquire','preflight'].includes(command))throw Error('设备操作未持本批锁');
+    const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
     if(locked&&!['lock-refresh','lock-release'].includes(command)){
-      const held=await checked(ctl,['--profile',profile,'lock-refresh',run]);
+      const held=await checked(ctl,['--profile',profile,'lock-refresh',run],{receipt:nativeReceipt()});
       if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
     }
     const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
+    const receipt=nativeReceipt();
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
-      command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{});
+      {...(command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{}),receipt});
   };
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};

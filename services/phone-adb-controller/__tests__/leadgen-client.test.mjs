@@ -5,9 +5,37 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {execInput,createRpc,RPC_FILES} from '../leadgen-client.mjs';
+import {spawnSync} from 'node:child_process';
 import * as client from '../leadgen-client.mjs';
 
 const frozen={deployment:{source_commit:'a'.repeat(40)},files:Object.fromEntries(RPC_FILES.map(path=>['runtime/'+path,'b'.repeat(64)]))};
+test('受控原生超时留下可独立读回的同一次操作身份和终态', {skip:process.platform==='win32'}, async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'native-operation-red-'));
+ const operationId='op-'+Date.now();
+ const pids=join(dir,'pids.json'),heartbeat=join(dir,'heartbeat');
+ const childCode=`const fs=require('fs');process.on('SIGTERM',()=>{});setInterval(()=>fs.appendFileSync(${JSON.stringify(heartbeat)},'.'),20);setTimeout(()=>process.exit(0),6000)`;
+ const code=`const fs=require('fs'),{spawn}=require('child_process');process.on('SIGTERM',()=>{});const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:'inherit'});fs.writeFileSync(${JSON.stringify(pids)},JSON.stringify({parent:process.pid,child:child.pid}));setInterval(()=>{},1000);setTimeout(()=>process.exit(0),6000)`;
+ try {
+  await assert.rejects(execInput(process.execPath,['-e',code],{timeoutMs:500,receipt:{runDir:dir,operationId,runId:'fixture-run',taskId:'fixture-task',profile:'fixture-profile',serial:'fixture-serial',sourceCommit:'a'.repeat(40),owner:'fixture-owner',activity:'collect_videos'}}),/EXECUTION_DEADLINE/);
+  const receipt=JSON.parse(readFileSync(join(dir,'native-operations',operationId+'.json'),'utf8'));
+  assert.equal(receipt.operation_id,operationId);
+  assert.equal(receipt.run_id,'fixture-run');
+  assert.ok(Number.isSafeInteger(receipt.pid));
+  assert.ok(receipt.start_identity);
+  assert.equal(receipt.execution_stopped,false);
+  assert.equal(receipt.process_coverage,'observed_only');
+  assert.equal(receipt.wait_signal,'SIGKILL');
+  assert.ok(Array.isArray(receipt.processes)&&receipt.processes.length>=2);
+  assert.ok(receipt.processes.every(p=>p.termination?.confirmed===true));
+ } finally {
+  // 只清理本 fixture 的、命令行仍含本临时目录的进程。
+  try {for(const pid of Object.values(JSON.parse(readFileSync(pids,'utf8')))) {
+   const ps=spawnSync('/bin/ps',['-ww','-p',String(pid),'-o','command='],{encoding:'utf8'});
+   if(ps.status===0&&ps.stdout.includes(dir))try{process.kill(pid,'SIGKILL');}catch{}
+  }}catch{}
+  rmSync(dir,{recursive:true,force:true});
+ }
+});
 test('真实26.511秒建连加短链解析可在有限预算完成，未核来源或假ID仍拒绝',async()=>{
  const actual={resolved_url:'https://www.douyin.com/video/7691237147096960271',content_id:'7691237147096960271',content_type:'video'};
  // 传输夹具按已观测耗时执行时限合同；不联网、不冒真实取链成功。
@@ -23,11 +51,15 @@ test('真实26.511秒建连加短链解析可在有限预算完成，未核来�
  await assert.rejects(client.resolveShareViaFrozenPeer({frozen:{deployment:frozen.deployment,files:{}},url:'https://v.douyin.com/MHIr0PxToCo/',execute}),/缺远端依赖/);
  await assert.rejects(client.resolveShareViaFrozenPeer({frozen,url:'https://v.douyin.com/MHIr0PxToCo/',execute:async()=>({code:0,stdout:JSON.stringify({ok:true,result:{...actual,content_id:'7691237147096960999'}}),stderr:''})}),/解析回执身份无效/);
 });
-test('只读Commander丢失SSH回执时有界重试；仍按原总预算',async()=>{
+test('Commander丢失SSH回执时保持停止未知且不再次发起原操作',async()=>{
  const calls=[];const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
   calls.push(opts.timeoutMs);return calls.length===1?{code:255,stdout:'',stderr:'transport closed'}:{code:0,stdout:JSON.stringify({ok:true,decision:{action:'continue',reason:'真实回执'}}),stderr:''};
  }});
- const r=await rpc({kind:'commander',receipt:{}},{timeoutMs:1000});assert.equal(r.decision.action,'continue');assert.equal(calls.length,2);assert.ok(calls[1]<=calls[0]);
+ await assert.rejects(rpc({kind:'commander',receipt:{}},{timeoutMs:1000}),error=>{assert.equal(error.executionStopped,false);return true;});assert.equal(calls.length,1);
+});
+test('RPC 固定停止未知错误即使伪报已停也不能放行',async()=>{
+ const rpc=createRpc({frozen,execute:async()=>({code:1,stdout:JSON.stringify({ok:false,error:'RPC_EXECUTION_STOP_UNKNOWN',execution_stopped:true}),stderr:''})});
+ await assert.rejects(rpc({kind:'commander',receipt:{}},{timeoutMs:1000}),error=>{assert.equal(error.executionStopped,false);return true;});
 });
 test('队列写入和版本校验失败不得自动重跑',async()=>{
  for(const kind of ['queue','commander']){

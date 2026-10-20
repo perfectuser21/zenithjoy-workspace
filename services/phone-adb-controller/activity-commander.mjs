@@ -153,22 +153,22 @@ export async function runActivity({ activity, context, execute, commander, recor
       const status=result?.status==='paused'?'partial':['partial','failed','skipped'].includes(result?.status)?result.status:'completed';
       evidence = { status, attempt, result };
     }
-    catch (error) { evidence = { status: 'failed', attempt, error: safeError(error),...(error.executionStopped===false?{execution_stopped:false}:{}) }; }
+    catch (error) { evidence = { status: 'failed', attempt, error: safeError(error),...(typeof error.executionStopped==='boolean'?{execution_stopped:error.executionStopped}:{}) ,...(error.externalEffect==='unknown'?{external_effect:'unknown'}:{}),...(error.operationId?{operation_id:error.operationId}:{}) }; }
     await record({ ...context, activity: activity.key, phase: 'execution', evidence });
     // Parent close after SIGTERM/output truncation does not prove its process group stopped.
     // Do not retry, hand over, or clear resources until an independent stop readback exists.
-    if(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(evidence))){
+    if(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||(evidence.execution_stopped!==true&&/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(evidence)))){
       return {...evidence,status:'failed',execution_stopped:false,commander_status:commanderStatus,decision:{action:'escalate',reason:'原执行者终止未验证，保留资源'}};
     }
     const after = await consult('after', evidence);
     if(isCaptureContractFailure(evidence))return {...evidence,commander_status:commanderStatus,decision:{action:'escalate',reason:'音频能力或捕获合同证据缺口，不重试或用UI代修'},failure_class:'capture_contract_blocked'};
-    if (evidence.status === 'failed' && after.action === 'retry' && attempt < maxAttempts) continue;
+    if (evidence.status === 'failed' && evidence.execution_stopped!==true && after.action === 'retry' && attempt < maxAttempts) continue;
     if (recover && ['failed','partial'].includes(evidence.status) && !['finish','escalate'].includes(after.action)) {
       try {
         const candidate = await recover(evidence);
         if (!candidate || !['completed','failed','partial'].includes(candidate.status) || typeof candidate.execution_stopped !== 'boolean') throw Error('SKILL_RECOVERY_RECEIPT_INVALID');
         await record({ ...context, activity: activity.key, phase: 'skill_execution', evidence: candidate, code_failure: evidence });
-        return { ...candidate, code_failure: evidence, commander_status: commanderStatus, decision: after };
+        return { ...candidate, ...(evidence.external_effect==='unknown'?{external_effect:'unknown'}:{}), code_failure: evidence, commander_status: commanderStatus, decision: after };
       } catch (error) {
         await record({ ...context, activity: activity.key, phase: 'skill_failure', error: safeError(error), code_failure: evidence });
         return { ...evidence, execution_stopped: error.executionStopped === true, skill_error: safeError(error), commander_status: commanderStatus, decision: after };
@@ -190,7 +190,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 }
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
-export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine}) {
+export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine,terminationUnverified=()=>false}) {
   const results=[];let status='completed',stopped=false;
   const ordered=[...activities.filter(a=>a.key!=='cleanup'),...activities.filter(a=>a.key==='cleanup')];
   const execute=async activity=>{
@@ -245,16 +245,19 @@ export async function runWorkflow({activities,context,handlers,commander,record,
       }
       if(result.execution_stopped===false){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
     }catch(error){
-      if(error.executionStopped===false)context={...context,skill_execution_unknown:true};
+      if(error.executionStopped===false||terminationUnverified())context={...context,skill_execution_unknown:true};
       status='failed';stopped=true;
       const result={activity:activity.key,status:'failed',error:String(error.message).slice(0,400)};
-      results.push(result);await record({...context,...result,phase:'failure'});
+      results.push(result);
+      try{await record({...context,...result,phase:'failure'});}catch(recordError){result.record_error=safeError(recordError);}
     }
   };
   try {for(const a of activities.filter(a=>a.key!=='cleanup')){
     if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
     await execute(a);
-  }}finally{for(const a of activities.filter(a=>a.key==='cleanup')){
+  }}finally{
+    if(stopped&&terminationUnverified())context={...context,skill_execution_unknown:true};
+    for(const a of activities.filter(a=>a.key==='cleanup')){
     if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'原执行或Skill子会话终止未知，禁止清场并记录资源隔离'});status='failed';}
     else await execute(a);
   }}
