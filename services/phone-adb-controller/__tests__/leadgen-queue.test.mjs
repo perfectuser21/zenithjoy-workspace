@@ -2,9 +2,64 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import {mkdtempSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 const require = createRequire(import.meta.url);
 import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
+
+test('评分冻结 CID 范围与提交读回只认本批本 run 的完整证据',async()=>{
+ const id1='00000000-0000-4000-8000-000000000101',id2='00000000-0000-4000-8000-000000000102';
+ const snapshot=companyFixture();snapshot.runtime_config.routing={line_key:'jinuo'};
+ const c={run_id:'score-new',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
+  model_audit:{model:'typesafe/jev-1.13',response_id:'primary'},policy_audit:{status:'pass',response_id:'review'}};
+ const calls=[],pool={async query(sql,args){calls.push({sql,args});
+  if(sql.includes('SELECT id FROM zenithjoy.leadgen_comments'))return {rows:[{id:id1},{id:id2}]};
+  if(sql.includes('company_config_runs'))return {rows:[{run_id:'score-new',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,snapshot}]};
+  if(sql.includes('SELECT id,harvest_batch'))return {rows:[{id:id1,harvest_batch:'batch-102',line_key:'jinuo',relevance:'相关',intent_grade:'A',judgment_config:c},
+    {id:id2,harvest_batch:'batch-102',line_key:'jinuo',relevance:null,intent_grade:null,judgment_config:null}]};
+  throw Error('unexpected SQL');}};
+ const scope={line:'jinuo',run:'score-new',source_run:'batch-102'};
+ const frozen=await queueRequest(pool,{...scope,op:'score_scope'});assert.deepEqual(frozen.ids,[id1,id2]);
+ const recovered=await queueRequest(pool,{...scope,op:'score_recovery',ids:frozen.ids});assert.deepEqual(recovered.ids,[id1]);assert.equal(recovered.scored,1);
+ assert.ok(calls.every(x=>x.args?.includes('batch-102')||x.sql.includes('company_config_runs')));
+ await assert.rejects(queueRequest(pool,{...scope,op:'score',cursor:{line:'another',run:'score-new',source_run:'batch-102',collected_at:'2026-10-20T00:00:00.000Z',id:id1}}),/POLICY_SCORE_CURSOR_INVALID/);
+});
+
+test('评分提交后丢回执，重启先按原 CID 读回并扣预算再续扫',async()=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-score-attempt-'));
+ const ids=['00000000-0000-4000-8000-000000000111','00000000-0000-4000-8000-000000000112'];
+ const requests=[];let lost=true,committed=[];
+ const rpc=async body=>{requests.push(body.request);const r=body.request;
+  if(r.op==='score_scope')return {result:{line:'jinuo',run:'score103',source_run:'batch102',ids}};
+  if(r.op==='score_recovery')return {result:{ids:committed,scored:committed.length,verified:true}};
+  if(r.op==='score'){assert.deepEqual(r.ids,ids);if(lost){lost=false;committed=[ids[0]];throw Error('transport reply lost');}
+    assert.equal(r.limit,1);committed.push(ids[1]);return {result:{scored:1,ids:[ids[1]],blocked_ids:[],next_cursor:null}};}
+  if(r.op==='score_readback')return {result:{verified:true,failures:0,ids:r.ids}};
+  if(r.op==='policy_review')return {result:{verified:true,rows:r.ids.map(id=>({id,status:'pass'}))}};
+  throw Error('unexpected op');};
+ const env={P:'qa',SERIAL:'fake',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'batch102',LEADGEN_LIMIT:'2',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir};
+ const h=createHandlers({root:dir,env,rpc});await assert.rejects(h.scoring(),/transport reply lost/);
+ const saved=JSON.parse(readFileSync(join(dir,'score103-score-attempt.json'),'utf8'));
+ assert.deepEqual(saved.ids,ids);assert.equal(saved.budget,2);
+ const result=await h.scoring();assert.equal(result.recovered,1);assert.equal(result.scored,2);assert.deepEqual(result.ids,ids);
+ assert.equal(requests.filter(r=>r.op==='score').length,2);
+});
+test('并发同 run 评分在 PG 锁内重读已用额度，满额时不再领行',async()=>{
+ const id='00000000-0000-4000-8000-000000000121',calls=[];
+ const client={async query(sql,args=[]){calls.push({sql,args});if(sql.includes('count(*)::int AS used'))return {rows:[{used:1}]};return {rows:[]};},release(){}};
+ const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:'score103',source_run:'batch102',
+  limit:1,budget_max:1,ids:[id]},{freezeCompanyConfig:async()=>companyFixture()});
+ assert.equal(result.scored,0);assert.ok(calls.some(c=>c.sql.includes('pg_advisory_xact_lock')));
+ assert.ok(!calls.some(c=>c.sql.includes('SELECT * FROM zenithjoy.leadgen_comments')));
+});
+test('执行端非法评分上限在任何 RPC 前拒绝',async()=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-score-limit-'));let calls=0;
+ const h=createHandlers({root:dir,env:{P:'qa',SERIAL:'fake',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',
+  LEADGEN_SOURCE_RUN:'batch102',LEADGEN_LIMIT:'not-a-number',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir},rpc:async()=>{calls++;return {result:{}};}});
+ await assert.rejects(h.scoring(),/POLICY_SCORE_BUDGET_INVALID/);assert.equal(calls,0);
+});
 
 function fakePool(responses) {
   const calls = [];
@@ -59,10 +114,11 @@ test('评论持久化失败必须回滚，不能先把视频标成已采', async
 
 test('评论评分模型失败留在待评分队列，不降成C档', async () => {
   const pool = fakePool([{ rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训',source_video_url:'https://www.douyin.com/video/7617837149999841201' }] },
-    {rows:[{title:'培训',judgment_status:'matched'}]}]);
-  await assert.rejects(queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
+    {rows:[{title:'培训',judgment_status:'matched'}]},{rows:[]}]);
+  const result=await queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
     judgeComment: async () => { throw Error('AUTH_FAILED'); },
-  }), /AUTH_FAILED/);
+  });
+  assert.equal(result.status,'partial');assert.deepEqual(result.blocked_reasons,[{id:'c1',code:'POLICY_SCORE_MODEL_UNAVAILABLE'}]);
   assert.ok(pool.calls.some(c => c.sql === 'ROLLBACK'));
   assert.ok(!pool.calls.some(c => /UPDATE zenithjoy.leadgen_comments/.test(c.sql)));
 });

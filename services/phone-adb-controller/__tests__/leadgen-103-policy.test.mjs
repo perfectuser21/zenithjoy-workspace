@@ -1,10 +1,106 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {mkdtempSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
 import {comments,originalRun,sourceRun,video,policy} from './fixtures/leadgen-103-v14.mjs';
 const require=createRequire(import.meta.url);
-const {queueRequest}=require('../leadgen-queue.js');
+const {queueRequest,evaluatePolicy,reviewBoundComment}=require('../leadgen-queue.js');
+const {judgeCommander}=require('../judge-comment.js');
 const input={op:'policy_review',line:'jinuo',run:originalRun,claim:originalRun,source_run:sourceRun,ids:comments.map(c=>c.id)};
+const primaryAudit={model:'typesafe/jev-1.13',response_id:'jev-response-1',confidence:.99};
+
+test('QA 沙箱实际 RPC 评分越过受阻行，持久读回仅后行新分',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'leadgen-103-sandbox-')),file=join(dir,'fixture.json'),output=join(dir,'state');
+ const rows=[{...comments[0],id:'00000000-0000-4000-8000-000000000051',collected_at:'2026-10-20T00:00:00Z',response:{primary_grade:'B',policy_grade:'B',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'就业焦虑',exclusion_rule:null,reason:'泛焦虑'}}},
+  {id:'00000000-0000-4000-8000-000000000052',comment_body:'人工智能训练师证书怎么报名',collected_at:'2026-10-20T00:01:00Z',response:{primary_grade:'A',policy_grade:'A',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么报',exclusion_rule:null,reason:'报名咨询'}}}]
+  .map(r=>({...r,line_key:'jinuo',harvest_batch:sourceRun,source_video:video.title,source_video_url:video.video_url,process_status:'待分拣',relevance:null,intent_grade:null}));
+ writeFileSync(file,JSON.stringify({snapshot:policy,rows,line:'jinuo',run:originalRun,source_run:sourceRun,limit:1,video}));
+ const cli=new URL('./helpers/leadgen-103-sandbox.mjs',import.meta.url);
+ const result=spawnSync(process.execPath,[cli.pathname,'score','--fixture',file,'--output',output],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stdout+result.stderr);const data=JSON.parse(result.stdout);
+ assert.deepEqual(data.result.ids,[rows[1].id]);assert.deepEqual(data.result.blocked_ids,[rows[0].id]);
+ assert.equal(data.rows[0].relevance,null);assert.equal(data.rows[1].intent_grade,'A');assert.ok(data.requests.some(r=>r.path==='/api/v1/chat/completions'));
+});
+
+test('终审只接单个 JSON 或单层 json fence，保留真实模型响应身份与独立置信',async()=>{
+ const answer={grade:'A',confidence:.83,policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么报',exclusion_rule:null,reason:'报名咨询'}};
+ const requests=[];const httpPost=async(url,body)=>{requests.push({url,body});return {id:'actual-response-id',model:'google/gemini-2.5-flash',choices:[{message:{content:`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``}}]};};
+ const r=await judgeCommander('人工智能训练师证书怎么报名',video.title,'冻结画像','jev low confidence',
+  {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost});
+ assert.equal(r.grade,'A');assert.equal(r.audit.response_id,'actual-response-id');assert.equal(r.audit.confidence,.83);
+ assert.match(requests[0].url,/\/api\/v1\/chat\/completions$/);assert.equal(requests[0].body.model,'google/gemini-2.5-flash');
+ await assert.rejects(judgeCommander('人工智能训练师证书怎么报名',video.title,'冻结画像','low',
+  {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost:async()=>({id:'r',model:'google/gemini-2.5-flash',choices:[{message:{content:`${JSON.stringify(answer)} ${JSON.stringify(answer)}`}}]})}),/COMMANDER_EVIDENCE_INVALID/);
+});
+
+test('完整 v14 下合法错误 B 与真实引用不能放行泛焦虑，明确报名 A 可过',async()=>{
+ const proof=(grade,rule)=>({grade,audit:{model:'google/gemini-2.5-flash',response_id:'response-1',confidence:.99,
+  policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:rule,exclusion_rule:null,reason:'按冻结画像判断'}}});
+ const binding={run_id:originalRun,company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id};
+ for(const c of comments){const r=await evaluatePolicy({...c,source_video:video.title,source_video_url:video.video_url,relevance:'相关',intent_grade:'B',judgment_config:binding},policy,{judgePolicy:async()=>proof('B','就业焦虑')});assert.notEqual(r.status,'pass');}
+ const good=await evaluatePolicy({id:'00000000-0000-4000-8000-000000000041',comment_body:'人工智能训练师证书怎么报名',source_video:video.title,source_video_url:video.video_url,relevance:'相关',intent_grade:'A',judgment_config:binding},policy,{judgePolicy:async()=>proof('A','怎么报')});
+ assert.equal(good.status,'pass');
+});
+test('本人明确追问可由同视频政策主题补足省略指代，不能只凭视频话题',async()=>{
+ const config={run_id:originalRun,company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id};
+ const row={id:'00000000-0000-4000-8000-000000000045',comment_body:'这个适合我吗？',source_video:'人工智能训练师证书怎么考',
+  source_video_url:video.video_url,relevance:'相关',intent_grade:'A',judgment_config:config};
+ const verdict={grade:'A',audit:{model:'google/gemini-2.5-flash',response_id:'actual-context',policy_evidence:{audience_id:'recvvcNzUv5rzl',
+  matched_rule:'怎么考',comment_signal:'适合我吗？',video_signal:'怎么考',exclusion_rule:null,reason:'本人追问视频中的考证主题'}}};
+ const r=await evaluatePolicy(row,policy,{judgePolicy:async()=>verdict});assert.equal(r.status,'pass');
+ const unrelated=await evaluatePolicy({...row,comment_body:'最近压力很大'},policy,{judgePolicy:async()=>verdict});assert.notEqual(unrelated.status,'pass');
+});
+
+test('同批首 CID 阻断后仍提交后行 A，旧行不改且不跨批',async()=>{
+ const first={...comments[0],line_key:'jinuo',harvest_batch:sourceRun,source_video:video.title,source_video_url:video.video_url,collected_at:new Date('2026-10-20T00:00:00Z')};
+ const second={id:'00000000-0000-4000-8000-000000000043',comment_body:'人工智能训练师证书怎么报名',line_key:'jinuo',harvest_batch:sourceRun,source_video:video.title,source_video_url:video.video_url,collected_at:new Date('2026-10-20T00:01:00Z')};
+ const other={...second,id:'00000000-0000-4000-8000-000000000044',harvest_batch:'another-batch'};const updates=[];const calls=[];
+ const client={async query(sql,args=[]){calls.push({sql,args});if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments')){const excluded=args.find(Array.isArray)||[];return {rows:[first,second,other].filter(r=>r.harvest_batch===sourceRun&&!excluded.includes(r.id)&&!updates.includes(r.id)).slice(0,1)};}if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};if(sql.includes('UPDATE zenithjoy.leadgen_comments'))updates.push(args[0]);return {rows:[]};},release(){}};
+ const r=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},{freezeCompanyConfig:async()=>policy,
+  judgeComment:async(body)=>({grade:body===first.comment_body?'B':'A',relevance:'相关',reason:'模型判定',audit:primaryAudit}),
+  judgePolicy:async(body)=>({grade:body===first.comment_body?'B':'A',audit:{model:'google/gemini-2.5-flash',response_id:'response-1',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:body===first.comment_body?'就业焦虑':'怎么报',exclusion_rule:null,reason:'冻结规则依据'}}})});
+ assert.deepEqual(updates,[second.id]);assert.equal(r.scored,1);assert.deepEqual(r.blocked_ids,[first.id]);
+ assert.ok(calls.some(c=>c.sql.includes('id<>ALL')&&c.args.some(a=>Array.isArray(a)&&a.includes(first.id))));
+});
+
+test('合法错误 B 加真实规则引用不得 UPDATE COMMIT 原 CID',async()=>{
+ const row={...comments[1],line_key:'jinuo',harvest_batch:sourceRun,source_video:video.title,source_video_url:video.video_url,
+  collected_at:new Date('2026-10-20T00:00:00Z')};let selects=0;const calls=[];
+ const client={async query(sql,args=[]){calls.push({sql,args});if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:selects++?[]:[row]};
+  if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};return {rows:[]};},release(){}};
+ const r=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},
+  {freezeCompanyConfig:async()=>policy,judgeComment:async()=>({grade:'B',relevance:'相关',reason:'model:B',audit:primaryAudit}),
+   judgePolicy:async()=>({grade:'B',audit:{model:'google/gemini-2.5-flash',response_id:'actual-response',confidence:.99,
+    policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'就业焦虑',exclusion_rule:null,reason:'人群描述引用'}}})});
+ assert.equal(r.scored,0);assert.deepEqual(r.blocked_ids,[row.id]);
+ assert.ok(calls.some(c=>c.sql==='ROLLBACK'));assert.ok(!calls.some(c=>c.sql.includes('UPDATE zenithjoy.leadgen_comments')));
+});
+
+test('旧代码确实阻断首行时仍须扫描同批后行',async()=>{
+ const first={...comments[0],line_key:'jinuo',harvest_batch:sourceRun,source_video:video.title,source_video_url:video.video_url,collected_at:new Date('2026-10-20T00:00:00Z')};
+ const second={id:'00000000-0000-4000-8000-000000000061',comment_body:'人工智能训练师证书怎么报名',line_key:'jinuo',harvest_batch:sourceRun,
+  source_video:video.title,source_video_url:video.video_url,collected_at:new Date('2026-10-20T00:01:00Z')};const writes=[];
+ const client={async query(sql,args=[]){if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[first,second].filter(r=>!(args[2]||[]).includes(r.id)&&!writes.includes(r.id)).slice(0,1)};
+  if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};if(sql.includes('UPDATE zenithjoy.leadgen_comments'))writes.push(args[0]);return {rows:[]};},release(){}};
+ const r=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},
+  {freezeCompanyConfig:async()=>policy,judgeComment:async(body)=>({grade:body===first.comment_body?'B':'A',relevance:'相关',reason:'model',audit:primaryAudit}),
+   judgePolicy:async(body)=>({grade:body===first.comment_body?'不相关':'A',audit:{model:'google/gemini-2.5-flash',response_id:'actual',
+    policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:body===first.comment_body?'就业焦虑':'怎么报',
+     exclusion_rule:body===first.comment_body?'泛失业或创业焦虑但未指向AI学习、考证或转行':null,reason:'冻结规则依据'}}})});
+ assert.deepEqual(r.blocked_ids,[first.id]);assert.deepEqual(writes,[second.id]);
+});
+
+test('旧评分 run 与新标人 run 分别绑定后可复核原评论',async()=>{
+ const scoreRun=originalRun,markRun='mark103_new';const id='00000000-0000-4000-8000-000000000042';
+ const row={id,line_key:'jinuo',harvest_batch:sourceRun,comment_body:'人工智能训练师证书怎么报名',source_video:video.title,source_video_url:video.video_url,relevance:'相关',intent_grade:'A',judgment_config:{run_id:scoreRun,company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id}};
+ const pool={async query(sql,args){if(sql.includes('leadgen_comments'))return {rows:[row]};if(sql.includes('company_config_runs'))return {rows:[{snapshot:policy,company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,run_id:args[0]}]};if(sql.includes('leadgen_videos'))return {rows:[{...video,line_key:'jinuo',judgment_status:'matched'}]};throw Error('unexpected SQL');}};
+ const result=await reviewBoundComment(pool,'jinuo',id,{run:markRun,scoring_run:scoreRun,source_run:sourceRun,source_video:video.title,source_video_url:video.video_url},
+  {judgePolicy:async()=>({grade:'A',audit:{model:'google/gemini-2.5-flash',response_id:'response-1',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么报',exclusion_rule:null,reason:'报名咨询'}}})});
+ assert.equal(result.status,'pass');
+});
 
 test('原批复核拒绝空、重复与非法CID，查库前停止',async()=>{
  for(const ids of [[],[comments[0].id,comments[0].id],['bad'],Array(51).fill(comments[0].id)]){
@@ -48,7 +144,7 @@ test('新评分语义未通过时回滚且不写旧评分，模型B也不能绕�
  const calls=[];const client={async query(sql){calls.push(sql);if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[row]};if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};return {rows:[]};},release(){}};
  const pool={async connect(){return client}};
  await assert.rejects(queueRequest(pool,{op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},{freezeCompanyConfig:async()=>policy,
-  judgeComment:async()=>({grade:'B',relevance:'相关',reason:'model:B'}),
+  judgeComment:async()=>({grade:'B',relevance:'相关',reason:'model:B',audit:primaryAudit}),
   judgePolicy:async()=>({grade:'不相关',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'就业焦虑',exclusion_rule:'泛失业或创业焦虑但未指向AI学习、考证或转行',reason:'无考证学习诉求'}}})}),/POLICY_SCORE_NOT_VERIFIED/);
  assert.ok(calls.includes('ROLLBACK'));assert.ok(!calls.some(sql=>sql.includes('UPDATE zenithjoy.leadgen_comments')));
 });
@@ -73,7 +169,7 @@ test('四档中的不相关在语义一致时仍可记录，intent_grade保持nu
  const row={id:'00000000-0000-4000-8000-000000000032',line_key:'jinuo',harvest_batch:sourceRun,comment_body:'这是什么背景音乐',source_video:video.title,source_video_url:video.video_url};let selected=0,saved;
  const client={async query(sql,args=[]){if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:selected++?[]:[row]};if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};if(sql.includes('UPDATE zenithjoy.leadgen_comments'))saved=args;return {rows:[]};},release(){}};
  const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},{freezeCompanyConfig:async()=>policy,
-  judgeComment:async()=>({grade:'不相关',relevance:'不相关',reason:'非业务话题'}),
+  judgeComment:async()=>({grade:'不相关',relevance:'不相关',reason:'非业务话题',audit:primaryAudit}),
   judgePolicy:async()=>({grade:'不相关',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么考',exclusion_rule:null,reason:'与业务画像无关'}}})});
  assert.equal(result.scored,1);assert.equal(saved[2],null);
 });

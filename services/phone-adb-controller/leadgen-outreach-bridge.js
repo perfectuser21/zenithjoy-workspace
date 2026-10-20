@@ -15,7 +15,7 @@ async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},
    :await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config,{companyBinding});
  if(!['passed','excluded','unknown'].includes(qualification?.status))throw Error('BRIDGE_QUALIFICATION_INVALID');
  if(qualification.status==='passed'&&(!leadIdentity||leadIdentity.id!==lead.id||leadIdentity.line_key!==lineKey||leadIdentity.douyin_id!==comment.douyin_id))qualification={...qualification,status:'unknown',reason:'lead_identity_mapping_unverified'};
- const intent={version:1,line_key:lineKey,run,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
+ const intent={version:1,line_key:lineKey,run,scoring_run:comment.judgment_config?.run_id,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
    target_douyin_id:comment.douyin_id,nickname:comment.nickname,comment_body:comment.comment_body,
    profile_url:comment.profile_url,source_video:comment.source_video,source_video_url:comment.source_video_url,
    collected_at:comment.collected_at,intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
@@ -37,7 +37,7 @@ function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`
 function frozenQualification(p,snapshot){const q=p.qualification;return q?.company_id===snapshot.company_id&&String(q.company_version)===String(snapshot.version)&&typeof q.tenant_id==='string'&&q.tenant_id!==''&&q.tenant_id===snapshot.tenant_id&&typeof q.policy_id==='string'&&q.policy_id!==''&&q.policy_id===(snapshot.policy_id||snapshot.runtime_config?.policy_id);}
 function nativeIntent(row,{companyBinding}={}){
  const p=row.payload;
- if(!p||row.line_key!==p.line_key||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
+ if(!p||row.line_key!==p.line_key||row.run_tag!==p.run||!p.scoring_run||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
  if(companyBinding&&(p.qualification.company_id!==companyBinding.company_id||p.qualification.tenant_id!==companyBinding.tenant_id))throw Error('BRIDGE_COMPANY_SOURCE_INVALID');
  if(!p.lead_identity||p.lead_identity.id!==p.lead_id||p.lead_identity.line_key!==p.line_key||p.lead_identity.douyin_id!==p.target_douyin_id)throw Error('BRIDGE_LEAD_IDENTITY_INVALID');
  if(!p.profile_url||!/^https:\/\/(?:www|v)\.douyin\.com\/[A-Za-z0-9._/-]+$/.test(p.profile_url))throw Error('BRIDGE_PROFILE_LINK_MISSING');
@@ -73,7 +73,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,review
    }
    const p=row.payload;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p?.comment_id,
-     {run:p?.run,source_run:p?.comment_run,source_video:p?.source_video,source_video_url:p?.source_video_url});
+     {run:p?.run,scoring_run:p?.scoring_run,source_run:p?.comment_run,source_video:p?.source_video,source_video_url:p?.source_video_url});
    if(policy.status!=='pass'){result.unknown++;result.verified=false;continue;}
    let companyBinding;
    try{companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);const p=nativeIntent(row,{companyBinding});if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
@@ -113,9 +113,9 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPo
   for(const row of rows){try{
    if(rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
    const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
-   const p=nativeIntent(row,{companyBinding});if(!frozenQualification(p,snapshot))continue;
+   const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
-     {run:p.run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
+     {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
    if(policy.status!=='pass')continue;
    if(!row.fields||digest(row.fields)!==row.fields_sha256)continue;
    const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
@@ -133,11 +133,11 @@ async function reviewPreparedOrder(route,record,{pool,run,freezeCompanyConfig,re
   const companyBinding=await collectionBinding(pool,rows[0].payload?.line_key,rows[0].payload?.comment_run,rows[0].payload?.recipient_evidence);
   const p=nativeIntent(rows[0],{companyBinding});
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:run,step:'104'});
-  if(!frozenQualification(p,snapshot))return false;
+  if(run===p.run||run===p.scoring_run||!frozenQualification(p,snapshot))return false;
   if(txt(record.fields?.['抖音号']).toLowerCase()!==String(p.target_douyin_id).toLowerCase()
     ||txt(record.fields?.['主页链接'])!==p.profile_url)return false;
   const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
-    {run:p.run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
+    {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
   return policy.status==='pass';
  }catch{return false;}
 }

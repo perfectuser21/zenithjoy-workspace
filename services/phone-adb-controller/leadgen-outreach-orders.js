@@ -72,7 +72,7 @@ function receiptValid(input,line,source){const r=input.receipt;
   const f=r.raw_evidence?.[key];if(f?.file!==input.run+'-a2-dm-1-'+suffix||!/^[a-f0-9]{64}$/.test(f.sha256||''))throw Error('触达原始证明不完整');
  }return r;
 }
-async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,lock=withOrderLock,eligibleOrders,pool,freezeCompanyConfig}={}){
+async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,lock=withOrderLock,eligibleOrders,pool,freezeCompanyConfig,reviewPolicy}={}){
  const route=routeOf(input.line),run=input.run;
  if(!/^[a-zA-Z0-9_-]{1,64}$/.test(run||'')||!/^[a-f0-9]{40}$/.test(sourceCommit||''))throw Error('触达正式运行来源证明缺失');
  if(input.op==='claim_outreach')sender(route,input.profile,input.sender_douyin_id);
@@ -103,7 +103,7 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
    sender(route,input.profile,input.sender_douyin_id);
    const policyReady=eligibleOrders
      ?(await eligibleOrders(route,[row],input)).includes(input.id)
-     :await require('./leadgen-outreach-bridge.js').reviewPreparedOrder(route,row,{pool,run,freezeCompanyConfig});
+     :await require('./leadgen-outreach-bridge.js').reviewPreparedOrder(route,row,{pool,run,freezeCompanyConfig,reviewPolicy});
    if(!policyReady)throw Error('POLICY_PREPARE_NOT_VERIFIED');
    const same=fields=>txt(fields['状态'])==='触达中'&&txt(fields['实际分发号'])===input.profile+'('+input.sender_douyin_id+')'&&txt(fields['话术ID'])===input.script_id&&txt(fields['话术版本'])===input.script_version&&hash(txt(fields['话术内容']))===input.message_sha256&&lib.extractLead(fields).dyid.toLowerCase()===String(input.target_douyin_id||'').toLowerCase()&&lib.extractLead(fields).profileUrl===input.profile_url;
    if(reply!==marker('claim',run,sourceCommit)||!same(f))throw Error('触达无首次发送许可证或订单已变化');
