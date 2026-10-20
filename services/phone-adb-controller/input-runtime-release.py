@@ -158,6 +158,8 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
         return p
     for p in targets:
         watch(p, stat.S_ISREG)
+    if any(stat.S_IMODE(watched[str(p)][2]) != 0o755 for p in targets):
+        return None  # Permission repair is a real installation, never a read-only no-op.
     for p in [*raw_directories, *directories]:
         watch(p, stat.S_ISDIR)
     registry_path = watch(registry, stat.S_ISREG)
