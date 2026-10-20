@@ -2,8 +2,9 @@ import { spawn,execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
+import {beginNativeOperation,nativeOperationIdentityMatches} from './native-operation-receipt.mjs';
 
-export const RPC_FILES = ['capture-strategy.mjs','outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js','leadgen-policy-review.js','leadgen-scoring-handler.mjs', 'activity-commander.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','leadgen-client.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py',
+export const RPC_FILES = ['capture-strategy.mjs','outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js','leadgen-policy-review.js','leadgen-scoring-handler.mjs', 'activity-commander.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','leadgen-client.mjs','native-operation-receipt.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py',
   'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
   'leadgen-db-lib.js', 'company-config-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
   'judge-jev.js', 'judge-comment.js', 'qualify-video.js', 'transcribe-qwen-audio.js',
@@ -32,13 +33,34 @@ export function safeExecutionDiagnostic(value, env = process.env) {
 // This capability is process-local and bound to the exact executor invocation.
 // A serialized message/code or an error from a later filesystem read is no proof.
 const nativeNotStarted=new WeakMap();
+const trustedNotStartedProofs=new WeakSet();
 function markNotStarted(error,cause,command,args,child,spawned){
   if(!spawned&&child?.pid===undefined&&cause?.path===command&&cause?.syscall==='spawn '+command)nativeNotStarted.set(error,{command,args});
   return error;
 }
-export function executionDidNotStart(error,command,args){
+export function executionDidNotStart(error,command,args,context){
   const proof=error&&typeof error==='object'?nativeNotStarted.get(error):null;
-  return Boolean(proof&&proof.command===command&&proof.args===args);
+  return Boolean(proof&&proof.command===command&&proof.args===args&&
+    (context===undefined||verifiedNativeNotStartedProof(proof.receipt,context)));
+}
+export function verifiedNativeNotStartedProof(proof,context){
+  return Boolean(proof&&trustedNotStartedProofs.has(proof)&&proof.status==='not_started'&&
+    proof.execution_stopped===true&&Array.isArray(proof.processes)&&proof.processes.length===0&&nativeOperationIdentityMatches(proof,context));
+}
+export function nativeNotStartedProof(error,command,args,context){
+  return error?.message==='EXECUTION_START_FAILED'&&executionDidNotStart(error,command,args,context)?nativeNotStarted.get(error).receipt:null;
+}
+export function applyNativeFailure(error,command,args,opts,state){
+    if(opts.receipt){
+      const proof=nativeNotStartedProof(error,command,args,opts.receipt);
+      const valid=Boolean(proof&&!state.nativeStopUnproven);
+      error.executionStopped=valid;error.externalEffect='unknown';error.operationId=opts.receipt.operationId;
+      state.nativeStopProof=valid?proof:null;
+    }
+    if(error.executionStopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)&&error.executionStopped!==true)){
+      state.executionUnknown=true;error.executionStopped=false;
+    }
+    return error;
 }
 export function execFileReceipt(command,args,options){
   return new Promise((resolveResult,reject)=>{
@@ -51,14 +73,17 @@ export function execFileReceipt(command,args,options){
   });
 }
 
-export function execInput(command, args, { input = '', timeoutMs = 180000, env = process.env } = {}) {
+export function execInput(command, args, { input = '', timeoutMs = 180000, env = process.env, receipt } = {}) {
   return new Promise((resolveResult, reject) => {
+    let operation;
+    try{if(receipt)operation=beginNativeOperation(receipt);}catch(error){reject(error);return;}
     // Mac/Linux上每次动作独占进程组，只停止本次动作及其子进程，不碰ADB服务或其他批次。
     const ownGroup = process.platform !== 'win32';
     const child = spawn(command, args, { env, detached: ownGroup, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer, stderrTruncated = false, spawned = false;
+    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer, abandonTimer, stderrTruncated = false, spawned = false,ready=Promise.resolve();
     const timer = setTimeout(() => stop(Error('EXECUTION_DEADLINE')), timeoutMs);
     function signalOwned(signal) {
+      if(operation){void ready.then(()=>operation.signalTargets(signal)).then(sent=>{if(sent===0){operation.markUnknown();child.kill(signal);}}).catch(()=>{operation.markUnknown();try{child.kill(signal);}catch{}});return;}
       try { if (ownGroup && child.pid) process.kill(-child.pid, signal); else child.kill(signal); }
       catch (error) { if (error.code !== 'ESRCH') child.kill(signal); }
     }
@@ -67,16 +92,27 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
       stoppingError = error;
       signalOwned('SIGTERM');
       forceTimer = setTimeout(() => signalOwned('SIGKILL'), 1000);
+      if(operation)abandonTimer=setTimeout(()=>{operation.markUnknown();child.stdout.destroy();child.stderr.destroy();child.stdin.destroy();child.unref();void finish(stoppingError,{code:null,stdout,stderr});},5000);
     }
-    function finish(error, result) {
-      if (settled) return; settled = true; clearTimeout(timer); clearTimeout(forceTimer);
+    async function finish(error, result, waitSignal) {
+      if (settled) return; settled = true; clearTimeout(timer); clearTimeout(forceTimer);clearTimeout(abandonTimer);
+      if(operation){
+        try{await ready;const notStarted=executionDidNotStart(error,command,args);
+          const final=notStarted?operation.notStarted():await operation.stop(stoppingError?'SIGTERM/SIGKILL':null,result?.code,waitSignal);
+          if(notStarted){Object.freeze(final.processes);Object.freeze(final);trustedNotStartedProofs.add(final);nativeNotStarted.get(error).receipt=final;}
+          // A normal command return is not a proof that every descendant stopped.
+          // Its actual Activity result still needs the existing business contract.
+          if(error){error.executionStopped=notStarted;error.externalEffect='unknown';error.operationId=receipt.operationId;}
+          else Object.assign(result,{executionStopped:false,externalEffect:'unknown',operationId:receipt.operationId});}
+        catch{if(!error)error=Error('NATIVE_OPERATION_RECEIPT_UNKNOWN');error.executionStopped=false;error.externalEffect='unknown';error.operationId=receipt.operationId;}
+      }
       if (error) {
         error.stdout = safeExecutionDiagnostic(stdout, env);
         error.stderr = safeExecutionDiagnostic(stderr, env);
         reject(error);
       } else resolveResult(result);
     }
-    child.once('spawn',()=>{spawned=true;});
+    child.once('spawn',()=>{spawned=true;if(operation)ready=operation.started(child.pid).catch(()=>{operation.markUnknown();});});
     child.on('error', cause => finish(markNotStarted(Error('EXECUTION_START_FAILED'),cause,command,args,child,spawned)));
     child.stdout.on('data', chunk => {
       if (stoppingError) return;
@@ -93,7 +129,7 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
       }
     });
     // 必须等close：旧动作还活着时不可返回失败并开始操作同一台手机的下一候选。
-    child.on('close', code => finish(stoppingError, { code, stdout, stderr }));
+    child.on('close', (code,signal) => finish(stoppingError, { code, stdout, stderr },signal));
     child.stdin.on('error', () => {});
     child.stdin.end(input);
   });
@@ -127,6 +163,7 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
       }catch(error){
         // 进程已关闭才可恢复；不把源码/数据库明确错误当网络抖动。
         if(['EXECUTION_DEADLINE','EXECUTION_START_FAILED'].includes(error.message))error.receiptMissing=true;
+        if(payload.kind==='commander')error.executionStopped=false;
         throw error;
       }
       let response;
@@ -145,9 +182,9 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
         // 只把固定分类和计数写入回执；远端输出与请求正文不得进入错误或模型。
         const exit=Number.isSafeInteger(result.code)?result.code:'unknown';
         const error=Error(`远端没有合法回执: kind=${kind}; exit=${exit}; stdout_bytes=${Buffer.byteLength(result.stdout)}; transport=${transport}`);
-        error.receiptMissing=true;throw error;
+        error.receiptMissing=true;if(payload.kind==='commander')error.executionStopped=false;throw error;
       }
-      if(result.code!==0||response.ok!==true)throw Error(response.error||'远端执行失败');
+      if(result.code!==0||response.ok!==true){const error=Error(response.error||'远端执行失败');if(response.error==='RPC_EXECUTION_STOP_UNKNOWN'||response.execution_stopped===false)error.executionStopped=false;throw error;}
       return response;
     };
     if(body.kind==='queue'&&body.request?.op==='discover'){
@@ -162,7 +199,7 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
         return send(body,20000);
       }
     }
-    const attempts=['commander','resolve_share_link'].includes(body.kind)?2:1;
+    const attempts=body.kind==='resolve_share_link'?2:1;
     for(let attempt=0;attempt<attempts;attempt++){
       try{return await send(body);}catch(error){
         if(!error.receiptMissing||attempt+1>=attempts||Date.now()+250>=deadline)throw error;

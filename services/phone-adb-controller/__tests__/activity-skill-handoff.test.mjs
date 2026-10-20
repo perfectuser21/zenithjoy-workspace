@@ -51,6 +51,24 @@ for(const kind of ['EXECUTION_OUTPUT_LIMIT','EXECUTION_DEADLINE','explicit'])tes
  const r=await runWorkflow({activities:[{key:'qualification',retry_safe:true},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{calls++;const e=Error(kind);if(kind==='explicit')e.executionStopped=false;throw e;},cleanup:async()=>{cleaned++;}},commander:async()=>({action:'retry',reason:'fixture'}),record:async()=>{},recover:async()=>{skills++;return {status:'completed',result:{},execution_stopped:true};}});
  assert.equal(calls,1);assert.equal(skills,0);assert.equal(cleaned,0);assert.equal(r.status,'failed');assert.equal(r.results[0].execution_stopped,false);
 });
+test('同一次受控停止正证仅放行一次原 Skill 接手，外部效果仍未知',async()=>{
+ let code=0,skill=0,cleaned=0;const records=[];
+ const r=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:{run_id:'current__a1'},
+  handlers:{collect_videos:async()=>{code++;const e=Error('EXECUTION_DEADLINE');e.executionStopped=true;e.externalEffect='unknown';e.operationId='current-operation';throw e;},cleanup:async()=>{cleaned++;return {safe:true};}},
+  commander:async()=>({action:'retry',reason:'原运行内接手'}),record:async x=>records.push(x),
+  recover:async({failure})=>{skill++;assert.equal(failure.execution_stopped,true);assert.equal(failure.external_effect,'unknown');assert.equal(failure.operation_id,'current-operation');return {status:'completed',execution_stopped:true,result:{collected:1}};},verify:async()=>({verified:true})});
+ assert.equal(code,1);assert.equal(skill,1);assert.equal(cleaned,1);assert.equal(r.status,'completed');
+ assert.equal(r.results[0].external_effect,'unknown');
+ assert.equal(records.find(x=>x.phase==='execution').evidence.external_effect,'unknown');
+});
+test('旧 422 未知收据或跨 owner 收据不能伪解原隔离',async()=>{
+ const {createActivityRecovery}=await import('../activity-skill-recovery.mjs');
+ const runDir='/tmp/old-422-fixture',failure={status:'failed',error:'EXECUTION_DEADLINE',execution_stopped:true,external_effect:'unknown',operation_id:'old-operation'};
+ for(const proof of [undefined,{operation_id:'old-operation',execution_stopped:true,run_dir:runDir,run_id:'old__a1',task_id:'task',owner:'another-owner',source_commit:'a'.repeat(40),activity:'collect_videos'}]){
+  const recover=createActivityRecovery({runDir,frozen:{deployment:{source_commit:'a'.repeat(40)}},binding:{run_id:'old__a1',task_id:'task'},env:{WFR_TAG:'original-owner'},handlers:{state:{nativeStopProof:proof}},rpc:async()=>{throw Error('不得发 RPC');}});
+  await assert.rejects(recover({activity:{key:'collect_videos'},failure}),error=>{assert.equal(error.message,'OLD_EXECUTION_TERMINATION_UNKNOWN');assert.equal(error.executionStopped,false);return true;});
+ }
+});
 
 for(const ok of [true,false])test('unknown execution invokes persistent quarantine and records actual acknowledgment '+ok,async()=>{
  let called=0,cleaned=0;
