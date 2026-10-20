@@ -114,3 +114,12 @@ test('留存镜像丢失时拒绝回退，不通过重建冒充旧版本', t => 
   assert.notEqual(f.run(['rollback']).status, 0);
   assert.equal(f.state().images[f.state().active], f.next); assert.equal(f.state().builds, 1);
 });
+
+test('已经验证过的留存版本不能被再次构建覆盖', t => {
+  const f = fixture(t); assert.equal(f.run(['promote', f.next]).status, 0);
+  const result = f.run(['promote', f.old]);
+  assert.notEqual(result.status, 0);
+  assert.equal(f.state().builds, 1);
+  assert.equal(f.run(['rollback', f.old]).status, 0);
+  assert.equal(f.state().active, 'sha256:old-image');
+});
