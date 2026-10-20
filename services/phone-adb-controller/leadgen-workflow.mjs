@@ -94,7 +94,7 @@ async function main(){
         if(mark.code!==0)throw Error('活动起始证据未登记');
       }
       return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;
-    },record,verify});
+    },record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);
     writeFileSync(file,JSON.stringify({...item,observed_at:new Date().toISOString(),metrics:item.verification?.metrics||item.result||{},commander:records.filter(r=>r.activity===item.activity)},null,2));

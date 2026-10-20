@@ -190,7 +190,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 }
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
-export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine}) {
+export async function runWorkflow({activities,context,handlers,commander,record,verify,recover,quarantine,terminationUnverified=()=>false}) {
   const results=[];let status='completed',stopped=false;
   const ordered=[...activities.filter(a=>a.key!=='cleanup'),...activities.filter(a=>a.key==='cleanup')];
   const execute=async activity=>{
@@ -245,16 +245,19 @@ export async function runWorkflow({activities,context,handlers,commander,record,
       }
       if(result.execution_stopped===false){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
     }catch(error){
-      if(error.executionStopped===false)context={...context,skill_execution_unknown:true};
+      if(error.executionStopped===false||terminationUnverified())context={...context,skill_execution_unknown:true};
       status='failed';stopped=true;
       const result={activity:activity.key,status:'failed',error:String(error.message).slice(0,400)};
-      results.push(result);await record({...context,...result,phase:'failure'});
+      results.push(result);
+      try{await record({...context,...result,phase:'failure'});}catch(recordError){result.record_error=safeError(recordError);}
     }
   };
   try {for(const a of activities.filter(a=>a.key!=='cleanup')){
     if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
     await execute(a);
-  }}finally{for(const a of activities.filter(a=>a.key==='cleanup')){
+  }}finally{
+    if(stopped&&terminationUnverified())context={...context,skill_execution_unknown:true};
+    for(const a of activities.filter(a=>a.key==='cleanup')){
     if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'原执行或Skill子会话终止未知，禁止清场并记录资源隔离'});status='failed';}
     else await execute(a);
   }}
