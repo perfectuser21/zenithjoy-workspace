@@ -196,3 +196,19 @@ test('激活日志不能将第三方未知镜像漂移认证为旧版本或候�
   assert.equal(f.state().active, 'sha256:unknown');
   assert.equal(JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES, f.next, 'release.json'))).verified, false);
 });
+
+test('中断恢复保留原previous历史，恢复后仍能回退再前一版', t => {
+  const f = fixture(t);
+  assert.equal(f.run(['promote', f.next]).status, 0);
+  f.git('commit', '--allow-empty', '-m', 'third');
+  const third = f.git('rev-parse', 'HEAD');
+  const interrupted = f.run(['promote', third], {FAIL_MODE:'kill-after-up', CANDIDATE:third});
+  assert.equal(interrupted.signal, 'SIGKILL');
+  const recovery = f.run(['rollback']);
+  assert.equal(recovery.status, 0, recovery.stderr);
+  assert.equal(f.state().images[f.state().active], f.next);
+  assert.equal(readFileSync(join(f.env.ZJ_HK_RELEASES, 'previous'), 'utf8').trim(), f.old);
+  const rollback = f.run(['rollback']);
+  assert.equal(rollback.status, 0, rollback.stderr);
+  assert.equal(f.state().active, 'sha256:old-image');
+});
