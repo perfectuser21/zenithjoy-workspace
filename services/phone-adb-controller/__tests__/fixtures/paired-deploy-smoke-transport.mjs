@@ -35,7 +35,7 @@ function sqlRemote(root,host,cmd){
  if(!cmd?.includes('release-evidence'))return null;
  // Only the two exact reviewed Python fragments from the real installer may execute.
  // No arbitrary SSH shell command is passed to a local shell.
- const deploy=readFileSync(new URL('../../deploy.sh',import.meta.url),'utf8');
+ const deploy=readFileSync(new URL('../../deployment-functions.sh',import.meta.url),'utf8');
  const section=deploy.slice(deploy.indexOf('deploy_release_evidence() {'),deploy.indexOf('# Commander 入口'));
  const codes=[...section.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1].replaceAll('\\"','"'));
  if(codes.length!==3)throw Error('SQL evidence production commands changed');

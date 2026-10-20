@@ -87,7 +87,7 @@ for(const mode of ['schema-ready','missing-schema','invalid-json'])test(`真实d
 test('SQL附件transport真实存三份源字节、实际SHA读回并拒绝篡改/未知目标',t=>{
  const f=fixture(t),source=join(service,'../../apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql');
  const name='20261014_130000_leadgen_outreach_bridge.sql',bytes=readFileSync(source);
- const text=readFileSync(join(service,'deploy.sh'),'utf8');const block=text.slice(text.indexOf('deploy_release_evidence() {'),text.indexOf('# Commander 入口'));
+ const text=readFileSync(join(service,'deployment-functions.sh'),'utf8');const block=text.slice(text.indexOf('deploy_release_evidence() {'),text.indexOf('# Commander 入口'));
  const codes=[...block.matchAll(/python3 -c '([^']+)'/g)].map(m=>m[1].replaceAll('\\"','"'));assert.equal(codes.length,3);
  for(const [host,base,local] of [['xian-m4','~/bin-harvest','remote/bin-harvest'],['mmv','~/bin-harvest','remote-mmv/bin-harvest'],['mmv','~/.openclaw/leadgen-scripts','remote-mmv/.openclaw/leadgen-scripts']]){
   const directory=base+'/release-evidence',file=directory+'/'+name,stage=directory+'/.'+name+'.deploy-new';
