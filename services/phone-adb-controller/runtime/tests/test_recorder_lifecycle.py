@@ -89,3 +89,6 @@ class RecorderLifecycle(unittest.TestCase):
 
     def test_output_open_failure_never_starts_worker(self):
         self.run_case('file-failure')
+
+    def test_worker_error_rejects_producers_before_free_under_mutex(self):
+        self.run_case('worker-error')

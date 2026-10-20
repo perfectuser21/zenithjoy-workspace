@@ -67,7 +67,8 @@ struct sc_recorder_callbacks {
 };
 static int allocations, frees, opened, closed, invalid_streams, streams, creates;
 static int mutex_depth;
-static bool fail_create, fail_file, late_audio, ended;
+static bool fail_create, fail_file, late_audio, worker_error, ended;
+static struct sc_recorder *observed_recorder;
 static AVFormatContext context;
 static AVStream stream_storage[2];
 static AVCodecParameters parameters[2];
@@ -111,6 +112,10 @@ static AVFormatContext *avformat_alloc_context(void) {
 }
 static void avformat_free_context(AVFormatContext *c) {
     assert(c == &context && allocations == frees + 1);
+    if (worker_error && (!observed_recorder->stopped || mutex_depth != 1)) {
+        fputs("FAIL: worker freed output before rejecting producers under mutex\n", stderr);
+        exit(12);
+    }
     ++frees;
 }
 static int avio_open(void **pb, const char *url, int flags) {
@@ -158,6 +163,7 @@ static bool sc_recorder_process_packets(struct sc_recorder *r) {
     } else {
         assert(r->video_packet_sink.ops->open(&r->video_packet_sink, &codec));
         assert(r->audio_packet_sink.ops->open(&r->audio_packet_sink, &codec));
+        if (worker_error) return false; /* both streams opened once, mux write fails */
         sc_recorder_stop(r);
     }
     return true;
@@ -172,6 +178,8 @@ int main(int argc, char **argv) {
     fail_create = !strcmp(argv[1], "thread-failure");
     fail_file = !strcmp(argv[1], "file-failure");
     late_audio = !strcmp(argv[1], "late-audio");
+    worker_error = !strcmp(argv[1], "worker-error");
+    observed_recorder = &r;
     bool started = sc_recorder_start(&r);
     if (fail_create || fail_file) {
         assert(!started);
