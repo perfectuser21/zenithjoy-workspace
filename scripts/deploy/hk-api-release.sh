@@ -114,7 +114,7 @@ else
   # Build before migrating, and do not touch the current container on migration failure.
   docker run --rm --network zenithjoy-net --env-file /opt/zenithjoy/prod-api/.env \
     -e TS_NODE_TRANSPILE_ONLY=1 -v "$RELEASES/$TARGET/source:/repo" -w /repo \
-    node:20-bookworm-slim sh -c 'npm ci --workspace=apps/api --silent && cd apps/api && npx ts-node db/migrations/run-migration.ts'
+    node:20-bookworm-slim sh -c 'npm ci --include=dev --workspace=apps/api --silent && cd apps/api && npx ts-node db/migrations/run-migration.ts'
 fi
 
 SWITCHED=false
