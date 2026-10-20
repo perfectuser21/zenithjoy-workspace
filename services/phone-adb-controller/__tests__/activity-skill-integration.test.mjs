@@ -44,7 +44,7 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
 });
 
 // Real parent/child lifecycle + socket; only the Gateway's official RPC transport is offline.
-async function continuationFixture({policy={max_additional_turns:1},activityKey='qualification',ownerState='done',resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
+async function continuationFixture({policy={max_additional_turns:1},activityKey='qualification',ownerState='done',completeFinal=false,resumeFirst=false,parentUnknown=false,status='error',secondStatus='ok',unknownChild=false,secondRpcUnknown=false,verify=async()=>({verified:true}),afterFirst}={}){
  const d=mkdtempSync(join(tmpdir(),'handoff-continuation-'));let launches=0,resumes=0;const turns=[],directories=[];
  try{
   const name=activityKey==='send_dm'?'douyin-leadgen-activity-104-send-dm':'douyin-leadgen-activity-102-qualification',path=`skills/${name}/SKILL.md`,supportPath='skills/leadgen-activity-execution.md';
@@ -59,7 +59,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
     if(command==='openclaw'&&args[0]==='gateway'){
      if(args[2]==='agent.wait')return {code:0,stdout:JSON.stringify({runId:ownerState==='wrong_run'?'other':'owner-turn-0',status:ownerState==='wait_missing'?'timeout':'ok',endedAt:ownerState==='wait_missing'?null:Date.now()}),stderr:''};
      const previous=JSON.parse(readFileSync(join(directories[0],'agent-request.json'),'utf8'));
-     return {code:0,stdout:JSON.stringify({ts:Date.now(),sessions:[{key:previous.parent_session_key,lastRunId:['wrong_run','later_done'].includes(ownerState)?'other':'owner-turn-0',status:'done',endedAt:ownerState==='missing_end'?null:Date.now(),hasActiveRun:ownerState==='active',activeRunIds:ownerState==='active'?['late-owner']:[]}]}),stderr:''};
+     return {code:0,stdout:JSON.stringify({ts:Date.now(),sessions:[{key:previous.parent_session_key,lastRunId:['wrong_run','later_done'].includes(ownerState)?'other':'owner-turn-0',sessionId:ownerState==='wrong_session'?'other-session':'owner-session-0',...(ownerState==='pending'?{pendingInputs:['unconsumed']}:{}),status:'done',endedAt:ownerState==='missing_end'?null:Date.now(),hasActiveRun:ownerState==='missing_active'?undefined:ownerState==='active',activeRunIds:ownerState==='active'?['late-owner']:[]}]}),stderr:''};
     }
     if(command==='openclaw'){
      launches++;const dir=dirname(args[args.indexOf('--message-file')+1]);directories.push(dir);
@@ -75,7 +75,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
       if(resumeFirst){await assert.rejects(()=>relayActivityTool(dir,'resume',{},deps));await assert.rejects(()=>relayActivityTool(dir,'phone',{command:'back-evidence',args:[]},deps));}
       else await relayActivityTool(dir,'resume',{},deps);
      }
-     return {code:parentUnknown&&turn===0?1:0,stdout:JSON.stringify({runId:'owner-turn-'+turn,status:'ok'}),stderr:''};
+     return {code:parentUnknown&&turn===0?1:0,stdout:JSON.stringify(ownerState==='model_payload'?{result:{payloads:[{text:JSON.stringify({runId:'owner-turn-'+turn,status:'ok',summary:'completed'})}]}}:{runId:'owner-turn-'+turn,status:'ok',...(completeFinal?{summary:'completed',result:{payloads:[],meta:{durationMs:10,agentMeta:{sessionId:'owner-session-'+turn}}}}:{})}),stderr:''};
     }
     if(unknownChild)return {code:1,stdout:'',stderr:'official terminal unavailable'};
     const binding=JSON.parse(readFileSync(join(args[2],'agent-binding.json'),'utf8'));
@@ -135,4 +135,11 @@ test('another completed parent-session turn cannot substitute for exact parent r
 });
 test('missing exact parent agent.wait terminal rejects even when session is currently idle',async()=>{
  await assert.rejects(()=>continuationFixture({ownerState:'wait_missing'}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
+});
+
+test('full original official final receipt survives exact-run wait cache miss with fresh idle session',async()=>{
+ const r=await continuationFixture({ownerState:'wait_missing',completeFinal:true});assert.equal(r.launches,2);assert.equal(r.resumes,1);assert.equal(r.result.status,'completed');
+});
+for(const ownerState of ['wrong_session','pending','missing_active','model_payload'])test('owner final does not authorize continuation with wrong session, pending work or missing official fields '+ownerState,async()=>{
+ await assert.rejects(()=>continuationFixture({ownerState,completeFinal:true}),/RPC_SKILL_OWNER_TERMINATION_UNVERIFIED/);
 });
