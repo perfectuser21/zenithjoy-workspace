@@ -51,5 +51,7 @@ test("AGENTS.md 真身：通用Commander身份/冻结归属/核验恢复，n8n V
 
 test("deploy.sh：AGENTS.md 同步到 MMV work-commander 工作区，改真身走 PR", () => {
   const deploy = read("deploy.sh");
-  assert.match(deploy, /push_atomic "\$D\/commander\/AGENTS\.md" mmv "~\/openclaw-root\/workspaces-root\/clawd-work-commander" AGENTS\.md/);
+  assert.match(deploy, /^source "\$D\/deployment-functions\.sh"$/m);
+  const functions = read("deployment-functions.sh");
+  assert.match(functions, /push_atomic "\$D\/commander\/AGENTS\.md" mmv "~\/openclaw-root\/workspaces-root\/clawd-work-commander" AGENTS\.md/);
 });

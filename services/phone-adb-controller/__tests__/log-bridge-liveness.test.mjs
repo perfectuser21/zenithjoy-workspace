@@ -199,6 +199,10 @@ test("launchd 模板: 每 600s 跑 ~/bin/log-bridge-liveness.sh;deploy.sh 把守
   assert.ok(files.includes("log-bridge-liveness.sh"), files.join(","));
   assert.ok(files.includes("escort-claude-escalation.sh"), files.join(","));
   assert.match(deploy, /launchctl kickstart -k gui\//, "deploy.sh 必须有 launchd 重载动作");
-  assert.match(deploy, /kickstart_if_changed "\$host" com\.zenithjoy\.logstreampush/, "推流脚本换版后必须重载执行机 launchd,否则跑的仍是旧 inode");
+  assert.match(deploy, /^source "\$D\/deployment-functions\.sh"$/m);
+  const functions = readFileSync(join(SRC, "deployment-functions.sh"), "utf8");
+  assert.match(functions, /^source "\$\{BASH_SOURCE\[0\]\%\/\*\}\/deployment-m4-payload\.sh"$/m);
+  const payload = readFileSync(join(SRC, "deployment-m4-payload.sh"), "utf8");
+  assert.match(payload, /kickstart_if_changed "\$host" com\.zenithjoy\.logstreampush/, "推流脚本换版后必须重载执行机 launchd,否则跑的仍是旧 inode");
   assert.match(deploy, /kickstart_if_changed mmv com\.zenithjoy\.escortclaude/, "分身 watcher 换版后必须重载 mmv launchd");
 });
