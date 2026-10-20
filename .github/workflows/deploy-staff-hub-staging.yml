@@ -104,7 +104,7 @@ jobs:
             STATUS=none
             for i in $(seq 1 20); do
               STATUS=$(docker inspect staff-hub-staging --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
-              [ "$STATUS" = "healthy" ] && break
+              if [ "$STATUS" = "healthy" ]; then break; fi
               sleep 3
             done
             [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 staff-hub-staging; exit 1; }

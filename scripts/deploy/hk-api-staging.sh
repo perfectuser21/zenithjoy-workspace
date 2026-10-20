@@ -13,7 +13,9 @@ exec 9>"$LOCK"
 flock -n 9 || { echo 'Another staging API deployment holds the host lock' >&2; exit 1; }
 SOURCE="$RELEASES/$SHA/source"
 if [[ ! -f "$SOURCE/deploy/docker-compose.staging-api.yml" ]]; then
-  git -C "$REPO" cat-file -e "$SHA^{commit}" 2>/dev/null || git -C "$REPO" fetch origin main
+  # Shared with dashboard staging and production source_for; serialize only fetch.
+  git -C "$REPO" cat-file -e "$SHA^{commit}" 2>/dev/null || \
+    flock "$REPO/.git/hk-source-fetch.lock" git -C "$REPO" fetch origin main
   TEMP=$(mktemp -d "$RELEASES/source.XXXXXX")
   git -C "$REPO" archive "$SHA" | tar -x -C "$TEMP"
   test -f "$TEMP/deploy/docker-compose.staging-api.yml"
