@@ -59,7 +59,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -143,7 +143,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -181,13 +181,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "3617f75ab8540b7deb5d5d0ee17da72829a0f52f6c2a02bebca9bcbd43beb0a8",
+      "code_digest": "adf33ac5f284a4b02e2b6dda3824a9ad1d0a6b2fda075a926e73f3cb7557fdcf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_video_discovery.collect_videos：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "9ae926963027f6ab2b08a9673236ed56229848f176904e1388c040e3ac9e7168",
-        "current_code_digest": "3617f75ab8540b7deb5d5d0ee17da72829a0f52f6c2a02bebca9bcbd43beb0a8"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "3617f75ab8540b7deb5d5d0ee17da72829a0f52f6c2a02bebca9bcbd43beb0a8",
+        "current_code_digest": "adf33ac5f284a4b02e2b6dda3824a9ad1d0a6b2fda075a926e73f3cb7557fdcf"
       }
     },
     "douyin_video_processing.preflight": {
@@ -255,7 +255,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -350,7 +350,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -381,13 +381,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "9a4d37d77ca2be938392950aa8fa6f6a898710ecc18d8c1cc852c574b6775bd5",
+      "code_digest": "de2a09cd0348c8975ab89f85548f8aee2d2a929a2644052923fb4e0e943fc803",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_video_processing.preflight：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "d8056712d2f3a9d255f0a62d2f53e34bede5e7032ad46e8b16ccbddee0089645",
-        "current_code_digest": "9a4d37d77ca2be938392950aa8fa6f6a898710ecc18d8c1cc852c574b6775bd5"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "9a4d37d77ca2be938392950aa8fa6f6a898710ecc18d8c1cc852c574b6775bd5",
+        "current_code_digest": "de2a09cd0348c8975ab89f85548f8aee2d2a929a2644052923fb4e0e943fc803"
       }
     },
     "douyin_video_processing.dedup": {
@@ -448,7 +448,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -532,7 +532,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "61db1790ce1af77b2e0f16f099e84ddbb8684da019fb1d9ed38e0a6e40d0a891",
+      "code_digest": "36ab27a663ceb001c951b6d8a5a2882f7e3030850a2d2c1caae3c91acd7ce555",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_video_processing.dedup：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "3f4a04850742485684d67ff7d33937c819acebdcfadbaf82d9a66fa8530aa43f",
-        "current_code_digest": "61db1790ce1af77b2e0f16f099e84ddbb8684da019fb1d9ed38e0a6e40d0a891"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "61db1790ce1af77b2e0f16f099e84ddbb8684da019fb1d9ed38e0a6e40d0a891",
+        "current_code_digest": "36ab27a663ceb001c951b6d8a5a2882f7e3030850a2d2c1caae3c91acd7ce555"
       }
     },
     "douyin_video_processing.qualification": {
@@ -637,7 +637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -721,7 +721,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -801,13 +801,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "d085f41afb88f15efcec378044b3bb634b4c581a7458d29996e674598520becc",
+      "code_digest": "54978160c5e951165b72bc914962a734d73d2fb78d1cc92289688402c7ea0944",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_video_processing.qualification：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "9839e650ab7b13022646da34c5aeb9dd4df1a07e53fb079a8c77ecb072af0bd3",
-        "current_code_digest": "d085f41afb88f15efcec378044b3bb634b4c581a7458d29996e674598520becc"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "d085f41afb88f15efcec378044b3bb634b4c581a7458d29996e674598520becc",
+        "current_code_digest": "54978160c5e951165b72bc914962a734d73d2fb78d1cc92289688402c7ea0944"
       }
     },
     "douyin_video_processing.collection": {
@@ -875,7 +875,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -967,7 +967,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -1019,13 +1019,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "059694d9a928cbfbd1df56e919bb04992a701645c57674d59df77a33ad321e51",
+      "code_digest": "2bb27cd6456f9fdd3451cd966dd3f587f94fd4414f3ef177126225d87ec81c79",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_video_processing.collection：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "45357f7e8bc0724231c0c4f9f6a271c9b2b5e3886cee198f07d582f46f1cd006",
-        "current_code_digest": "059694d9a928cbfbd1df56e919bb04992a701645c57674d59df77a33ad321e51"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "059694d9a928cbfbd1df56e919bb04992a701645c57674d59df77a33ad321e51",
+        "current_code_digest": "2bb27cd6456f9fdd3451cd966dd3f587f94fd4414f3ef177126225d87ec81c79"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1086,7 +1086,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -1173,7 +1173,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -1204,13 +1204,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "90fc4db22cc33bbb0bf29c36b2267ef1f4176d31b877f82b6d4a70ab6854a06a",
+      "code_digest": "3c94d6dc14162bb557c6fe80128e3ec9d1f35e7eb77e9f50152d401b58d8b325",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_video_processing.cleanup：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "7ee6f1fb8727ef1ac413199669a62fbae77612c53f56552de5054ec20e6b468a",
-        "current_code_digest": "90fc4db22cc33bbb0bf29c36b2267ef1f4176d31b877f82b6d4a70ab6854a06a"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "90fc4db22cc33bbb0bf29c36b2267ef1f4176d31b877f82b6d4a70ab6854a06a",
+        "current_code_digest": "3c94d6dc14162bb557c6fe80128e3ec9d1f35e7eb77e9f50152d401b58d8b325"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1271,7 +1271,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -1334,7 +1334,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -1372,13 +1372,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "8e974f5205ad4dfd874d247d309223f383bc9856c9799f461c0b13f21c6b1d11",
+      "code_digest": "2cceb05053f4c6a7f94423bfd20bf1a3956edbf359e7245871509afda08c894c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_comment_scoring.scoring：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "c8b1e58aafed9506dbb4621e6a818f490caf4a7648ca9299b5960d15931cac68",
-        "current_code_digest": "8e974f5205ad4dfd874d247d309223f383bc9856c9799f461c0b13f21c6b1d11"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "8e974f5205ad4dfd874d247d309223f383bc9856c9799f461c0b13f21c6b1d11",
+        "current_code_digest": "2cceb05053f4c6a7f94423bfd20bf1a3956edbf359e7245871509afda08c894c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1446,7 +1446,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -1509,7 +1509,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -1596,13 +1596,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "01b7321675873be3499a0d0e390e560d9a43cc203972288651d2dc6d64cc1d81",
+      "code_digest": "e99136baad4b74cf60862ba36efe20c6cbda5dc5f75ea109ce25072fac5bad8d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_comment_scoring.mark_leads：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "62eb7938693599163bdb2fc80e494f438b24ca419bc5a71a34cebea699e40103",
-        "current_code_digest": "01b7321675873be3499a0d0e390e560d9a43cc203972288651d2dc6d64cc1d81"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "01b7321675873be3499a0d0e390e560d9a43cc203972288651d2dc6d64cc1d81",
+        "current_code_digest": "e99136baad4b74cf60862ba36efe20c6cbda5dc5f75ea109ce25072fac5bad8d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1663,7 +1663,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -1758,7 +1758,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -1817,13 +1817,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "538b4f5bf9482d8c8cdece0d122d31e0eaebb664e77d4640e8f16b335f1cbca5",
+      "code_digest": "4f4b0d9398c3a557c2d61bd2639318fb141fdd7801002b1ab7f0db9b2ceb2e9d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_lead_outreach.preflight：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "4ab53e43b09f10b65302a5bbec179e10965ca28708177c6bc602b49daa9e0fa1",
-        "current_code_digest": "538b4f5bf9482d8c8cdece0d122d31e0eaebb664e77d4640e8f16b335f1cbca5"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "538b4f5bf9482d8c8cdece0d122d31e0eaebb664e77d4640e8f16b335f1cbca5",
+        "current_code_digest": "4f4b0d9398c3a557c2d61bd2639318fb141fdd7801002b1ab7f0db9b2ceb2e9d"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1884,7 +1884,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -1968,7 +1968,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -2013,13 +2013,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2",
+      "code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_lead_outreach.send_dm：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "fd7b3960c256b0697e8f93cf7cb9c49f562ea8720a75436c0f5cf0b8dfdc4583",
-        "current_code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2",
+        "current_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2080,7 +2080,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -2164,7 +2164,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -2209,13 +2209,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2",
+      "code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_lead_outreach.write_back：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "fd7b3960c256b0697e8f93cf7cb9c49f562ea8720a75436c0f5cf0b8dfdc4583",
-        "current_code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "ec7a5f1c4f739ad31e19f5d6ce56abe353e96018eb074e332c6be1dabf58c8f2",
+        "current_code_digest": "de9b22d4cd36732b9a60b723346885b6a2b3cceb60864c17fb5a41fddbf2a4ed"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2276,7 +2276,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "3b71abed7f5ebc6c843ff9573ce35490b6b8b6d7d2f088428c14ed3a5834b6bc"
+          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
         },
         {
           "kind": "code",
@@ -2363,7 +2363,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "53e607411ab178554a54abea007575a1050c2c8ca42852ae21f9b63c6ed063f2"
+          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
         },
         {
           "kind": "code",
@@ -2408,13 +2408,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "5f57a91b4ee75e787af57dafc68715f53bf08eda3879e05c482f9c454fb6f873",
+      "code_digest": "59cd13e0d6271f17f3e60cb3ec28e57c22ba9b0c91240edf454fe92019176b5d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "douyin_lead_outreach.cleanup：按真实已发布cad5及固定edc逐Git字节核对，Activity合同、业务I/O、Skill方法正文/版本与公司冻结配置不变；本候选沿原按冻结政策评分、独立资格核验及未知不伪成功边界，补逐CID原harvest_batch冻结、同run累计预算/丢回执恢复、跨score/mark来源区分和写前证据守卫，恢复source_run缺省的独立队列；拆分新helper已纳全部12方法、RPC与部署真实闭包。未新增发送额度/权限，不冒认模型质量F1已修或真实PG/手机/业务通过。",
-        "reviewed_by": "codex:fixed-source-final-review (/root/fixed_source_final_review)",
-        "previous_code_digest": "f06057bf34ff5edfdde2c567ef91446601562fdf75131ce172c8329b62bbfde5",
-        "current_code_digest": "5f57a91b4ee75e787af57dafc68715f53bf08eda3879e05c482f9c454fb6f873"
+        "reason": "修复既有公开ACK显式null任务身份与同run103首次冻结次序，保持原方法I/O、公司政策、CID范围、预算及弱映射停止证明边界；仅内部入口恢复，不代表实机或评分质量验收。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "5f57a91b4ee75e787af57dafc68715f53bf08eda3879e05c482f9c454fb6f873",
+        "current_code_digest": "59cd13e0d6271f17f3e60cb3ec28e57c22ba9b0c91240edf454fe92019176b5d"
       }
     }
   },

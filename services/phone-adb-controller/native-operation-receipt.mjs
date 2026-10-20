@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {performance} from 'node:perf_hooks';
 
 const idPattern=/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
+const validTaskId=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=256;
 const tailBudgetMs=1000,signalBudgetMs=5000,maximumObservedProcesses=32;
 function inspectionTimeout(maximum,deadline=Infinity){
  const remaining=deadline-performance.now();
@@ -29,7 +30,8 @@ export function receiptPath(runDir,operationId){
 }
 export function nativeOperationIdentityMatches(proof,context){
  const fields={operation_id:'operationId',run_dir:'runDir',run_id:'runId',task_id:'taskId',profile:'profile',serial:'serial',source_commit:'sourceCommit',owner:'owner',activity:'activity'};
- return Object.entries(fields).every(([actual,expected])=>typeof context?.[expected]==='string'&&context[expected].length>0&&proof?.[actual]===context[expected]);
+ return Object.entries(fields).every(([actual,expected])=>Object.hasOwn(context||{},expected)&&Object.hasOwn(proof||{},actual)
+  &&(expected==='taskId'?validTaskId(context[expected]):typeof context[expected]==='string'&&context[expected].length>0)&&proof[actual]===context[expected]);
 }
 export function readNativeOperation(runDir,operationId){
  let value;
@@ -40,7 +42,8 @@ export function readNativeOperation(runDir,operationId){
   processes:Array.isArray(value?.processes)?value.processes.map(p=>({pid:p?.pid,ppid:p?.ppid,uid:p?.uid,pgid:p?.pgid,start_identity:p?.start_identity,termination:{confirmed:p?.termination?.confirmed===true}})):[]};
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!receiptKeys.has(key))
    ||value.operation_id!==operationId||value.run_dir!==resolve(runDir)||value.execution_stopped!==true
-   ||![value.run_id,value.task_id,value.profile,value.serial,value.source_commit,value.owner,value.activity].every(s=>typeof s==='string'&&s.length>0)
+   ||!Object.hasOwn(value,'task_id')||!validTaskId(value.task_id)
+   ||![value.run_id,value.profile,value.serial,value.source_commit,value.owner,value.activity].every(s=>typeof s==='string'&&s.length>0)
    ||value.status!=='not_started'||value.failure!=='native_pre_spawn_error'
    ||value.pid!==undefined||value.started_at!==undefined||!Array.isArray(value.processes)||value.processes.length!==0)
   return {...publicValue,status:'unknown',execution_stopped:false};
@@ -78,7 +81,8 @@ function watchExit(pid){
 }
 export function beginNativeOperation(context){
  const {runDir,operationId,runId,taskId,profile,serial,sourceCommit,owner,activity}=context||{};
- if(!isAbsolute(runDir||'')||!idPattern.test(operationId||'')||![runId,taskId,profile,serial,sourceCommit,owner,activity].every(v=>typeof v==='string'&&v.length>0&&v.length<=256))throw Error('NATIVE_OPERATION_CONTEXT_INVALID');
+ if(!isAbsolute(runDir||'')||!idPattern.test(operationId||'')||!Object.hasOwn(context||{},'taskId')||!validTaskId(taskId)
+  ||![runId,profile,serial,sourceCommit,owner,activity].every(v=>typeof v==='string'&&v.length>0&&v.length<=256))throw Error('NATIVE_OPERATION_CONTEXT_INVALID');
  const path=receiptPath(runDir,operationId);mkdirSync(join(resolve(runDir),'native-operations'),{recursive:true,mode:0o700});
  const value={version:1,operation_id:operationId,run_dir:resolve(runDir),run_id:runId,task_id:taskId,profile,serial,source_commit:sourceCommit,owner,activity,status:'intent',execution_stopped:false,process_coverage:'observed_only',created_at:new Date().toISOString(),processes:[]};
  persist(path,value,true);

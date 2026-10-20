@@ -14,6 +14,7 @@ test('103独立队列冻结跨批CID来源，提交丢回执后保原范围与�
  const ids=['00000000-0000-4000-8000-000000000131','00000000-0000-4000-8000-000000000132'];
  const sources=Object.fromEntries(ids.map((id,i)=>[id,`batch${i}`]));let committed=[],lost=true;const requests=[];
  const rpc=async({request:r})=>{requests.push(r);assert.equal(r.source_run,undefined);
+  if(r.op==='company_config'){assert.equal(r.step,'103');return {result:companyFixture()};}
   if(r.op==='score_scope')return {result:{line:'jinuo',run:'independent103',source_run:null,ids,sources}};
   assert.deepEqual(r.sources,sources);
   if(r.op==='score_recovery')return {result:{verified:true,ids:committed,scored:committed.length}};
@@ -84,6 +85,7 @@ test('评分提交后丢回执，重启先按原 CID 读回并扣预算再续扫
  const ids=['00000000-0000-4000-8000-000000000111','00000000-0000-4000-8000-000000000112'];
  const requests=[];let lost=true,committed=[];
  const rpc=async body=>{requests.push(body.request);const r=body.request;
+  if(r.op==='company_config'){assert.equal(r.step,'103');return {result:companyFixture()};}
   if(r.op==='score_scope')return {result:{line:'jinuo',run:'score103',source_run:'batch102',ids}};
   if(r.op==='score_recovery')return {result:{ids:committed,scored:committed.length,verified:true}};
   if(r.op==='score'){assert.deepEqual(r.ids,ids);if(lost){lost=false;committed=[ids[0]];throw Error('transport reply lost');}
