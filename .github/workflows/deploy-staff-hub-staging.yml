@@ -23,6 +23,11 @@ jobs:
     env:
       DEPLOY_SHA: ${{ github.sha }}
       FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+      SSH_HOST: ${{ secrets.HK_VPS_HOST }}
+      SSH_USER: ${{ secrets.HK_VPS_USER }}
+      SSH_PORT: ${{ secrets.HK_VPS_PORT || '22' }}
+      SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+      BRAIN_PUBLIC_URL: ${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,28 +53,28 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.HK_VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p ${{ secrets.HK_VPS_PORT }} ${{ secrets.HK_VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Deploy dist + nginx configs to VPS via rsync（仅 staging 路径）
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             apps/staff-hub/dist/ \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/dist/
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/dist/"
           rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             deploy/staff-hub/nginx-staging.conf \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/nginx.conf
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/nginx.conf"
           rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             deploy/staff-hub/common-staging.conf \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/common.conf
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/common.conf"
           rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }}" \
+            -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" \
             deploy/docker-compose.staff-hub-staging.yml \
-            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/compose.yml
+            "$SSH_USER@$SSH_HOST:/opt/zenithjoy/staff-hub-staging/compose.yml"
           echo "✅ staging dist + nginx configs + 同SHA compose synced"
 
       - name: Bring up staff-hub-staging via docker compose + 冒烟（仅 staging，绝不碰生产 staff-hub）
@@ -106,6 +111,5 @@ jobs:
       - name: Notify Brain on failure
         if: failure()
         run: |
-          curl -s -X POST "${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}/api/brain/alerts" \
-            -H "Content-Type: application/json" \
-            -d '{"level":"P1","source":"deploy-staff-hub-staging","message":"Staff Hub staging 部署失败 sha=${{ github.sha }}"}' || true
+          jq -n --arg sha "$DEPLOY_SHA" '{level:"P1",source:"deploy-staff-hub-staging",message:("Staff Hub staging 部署失败 sha="+$sha)}' \
+            | curl -s -X POST "$BRAIN_PUBLIC_URL/api/brain/alerts" -H 'Content-Type: application/json' --data-binary @- || true

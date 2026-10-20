@@ -97,8 +97,10 @@ jobs:
     if: failure()
     steps:
       - name: Post P0 alert to Brain
+        env:
+          BRAIN_URL: ${{ secrets.BRAIN_URL }}
         run: |
-          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
+          curl -sf -X POST "$BRAIN_URL/api/brain/tasks" \
             -H "Content-Type: application/json" \
             -d '{
               "title": "ZenithJoy 生产 Dashboard 人工回滚失败",
