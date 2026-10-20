@@ -37,12 +37,12 @@ function definition(name){
  return {...JSON.parse(readFile({repo,revision,path:ref})),source:{repo,ref,revision}};
 }
 
-test('真实Brain绑定校验器接受原Commander技能2.0.22与固定main续版合同',async()=>{
+test('真实Brain绑定校验器接受正式Commander技能2.1.0与固定main续版合同',async()=>{
  const doc=definition('workflow-commander');assert.match(doc.version,/^2\.0\.[0-9]+$/);
  const execution=doc.activities.find(a=>a.implementation_bindings?.some(b=>b.kind==='skill'));
  const rows=await validateFixedImplementationBindings(execution,{repo,commit:revision},{readFile});
  const skill=rows.find(b=>b.kind==='skill');
- assert.equal(skill.name,'workflow-commander');assert.equal(skill.version,'2.0.22');
+ assert.equal(skill.name,'workflow-commander');assert.equal(skill.version,'2.1.0');
  assert.equal(skill.status,'verified');assert.equal(skill.revision,revision);
  assert.equal(skill.repo,repo);
  assert.equal(skill.resolved_source.repo,skillsLock.repository);
