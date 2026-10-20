@@ -26,8 +26,10 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: 验证分支必须通过 /dev 创建
+        env:
+          DEV_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          BRANCH="${{ github.head_ref || github.ref_name }}"
+          BRANCH="$DEV_BRANCH"
           echo "检查分支名: $BRANCH"
           # 兼容 8 位 (MMDDHHNN) 与 10 位 (MMDDHHMMSS) 时间戳
           if ! echo "$BRANCH" | grep -qP '^cp-\d{8,10}-[a-z0-9-]+$'; then
@@ -51,8 +53,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check PR title follows conventional commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
-          TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $TITLE"
 
           # 去掉 [CONFIG] / [INFRA] 前缀后再校验 conventional commits
@@ -97,10 +100,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.head_ref }}
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  CI Config Audit"
-          echo "  Branch: ${{ github.head_ref }}"
+          echo "  Branch: $PR_HEAD_REF"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
 
@@ -118,7 +122,9 @@ jobs:
           fi
 
           echo "CI workflow files changed:"
-          echo "$CI_CHANGED" | sed 's/^/  - /'
+          while IFS= read -r changed_path; do
+            printf '  - %s\n' "$changed_path"
+          done <<< "$CI_CHANGED"
           echo ""
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -624,7 +630,11 @@ jobs:
       - name: Run L1 and business gate behavior regressions
         run: python3 scripts/release-gate/__tests__/process-and-business-gates.test.py
       - name: Run release admission and HK rollback regressions
-        run: node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/hk-api-release.test.mjs
+        run: |
+          node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/*.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-business-admission.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-candidate.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs
 
   # ─── Gate job ─────────────────────────────────────────────────────────────
 

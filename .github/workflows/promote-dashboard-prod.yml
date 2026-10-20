@@ -1,135 +1,113 @@
-name: Promote Dashboard to Production (autopilot 人工放行闸)
-
-# ───────────────────────────────────────────────────────────────────────────
-# 生产 dashboard 人工放行闸（2026-06-25）
-#   死规矩：AI 只到 staging，生产由用户手点放行（同 API 侧 promote-prod.yml）。
-#
-#   过去 deploy-hk-vps.yml 是 push:main 命中 dashboard 路径就自动上生产 autopilot——
-#   这把前端改动直接推生产，违反"生产手点"规矩。现已改为：
-#     · 合 main → 只跑 deploy-dashboard-staging.yml 上 staging-autopilot（候选）
-#     · 生产 autopilot = 本 workflow，★只能人手点★（workflow_dispatch + confirm=PROMOTE）
-#
-#   流程：人工打开 https://staging-autopilot.zenjoymedia.media 看过、确认 OK
-#         → 来 Actions 手点本 workflow、confirm 框输入 PROMOTE
-#         → build 生产 dist（VITE env 注入）→ release 隔离 promote → 重启 autopilot-dashboard
-#         → 公网验证 https://autopilot.zenjoymedia.media。
-#
-#   release 隔离（2026-06-25 补，配套 rollback-dashboard-prod.yml）：
-#     旧模型是 `cp -r dist` 原地覆盖、零留存、零回档（炸了回不来）。现改 sha-keyed release：
-#     build 进 DASH_DIR/releases/<sha>/ → 原子切 dist 软链（dist→releases/current→releases/<sha>）
-#     → 留最近 5 份。docker bind-mount 在容器启动解析软链，故切完必 restart 让容器重解析。
-#     回档走 rollback-dashboard-prod.yml（软链回拨到上一个/指定留存 release + restart）。
-#     首次上线自动把当前实体 dist 存成 baseline release 再转软链，不丢现网版本、上线即有可回退点。
-#
-#   ☠️ 绝无 push/schedule 自动触发。每次都人点。绝不碰 staging 容器。
-# ───────────────────────────────────────────────────────────────────────────
-
+name: Promote dashboard to Production (verified candidate)
 on:
   workflow_dispatch:
     inputs:
-      confirm:
-        description: '输入 PROMOTE 确认放行到生产 autopilot.zenjoymedia.media（人工卡点二次确认）'
+      sha:
+        description: '已在 staging 验证的完整40位 SHA'
         required: true
-        default: ''
-
-concurrency:
-  group: promote-dashboard-prod
-  cancel-in-progress: false
-
+        type: string
+      acceptance_run_key:
+        description: '同候选真实业务验收记录的 run key'
+        required: true
+        type: string
+      confirm:
+        description: '输入 PROMOTE 确认晋级'
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      sha:
+        required: true
+        type: string
+      acceptance_run_key:
+        required: true
+        type: string
+      confirm:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
 jobs:
+  admission:
+    uses: ./.github/workflows/release-admission.yml
+    with:
+      sha: ${{ inputs.sha }}
+      targets: dashboard
+      acceptance_run_key: ${{ inputs.acceptance_run_key }}
+    secrets: inherit
   promote-dashboard:
-    name: Promote 候选 dashboard → 生产 autopilot（人工放行）
+    needs: admission
     runs-on: ubuntu-latest
-
+    timeout-minutes: 25
+    concurrency:
+      group: zenithjoy-production-hk
+      cancel-in-progress: false
+    env:
+      DEPLOY_SHA: ${{ needs.admission.outputs.sha }}
+      CONFIRM: ${{ inputs.confirm }}
+      SSH_HOST: ${{ secrets.HK_VPS_HOST }}
+      SSH_USER: ${{ secrets.HK_VPS_USER }}
+      SSH_PORT: ${{ secrets.HK_VPS_PORT || '22' }}
+      SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+      UPLOAD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: 二次确认闸（必须输入 PROMOTE）
+      - name: Confirm promotion
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "PROMOTE" ]; then
-            echo "❌ confirm 不是 PROMOTE（实际='${{ github.event.inputs.confirm }}'）——拒绝 promote。"
-            echo "   人工卡点：请先打开 https://staging-autopilot.zenjoymedia.media 看过、确认 OK，再在 confirm 框输入 PROMOTE。"
-            exit 1
-          fi
-          echo "✅ 人工二次确认通过，开始 promote 生产 dashboard。"
-
-      - name: Promote via SSH（build 生产 dist + 切生产 autopilot-dashboard）
+          [[ "$CONFIRM" == PROMOTE ]] || exit 1
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+      - uses: actions/checkout@v4
+        with:
+          path: control
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.admission.outputs.sha }}
+          path: source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build exact candidate
+        working-directory: source
+        env:
+          VITE_FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID || 'cli_a937a808ca395bd6' }}
+          VITE_DEPLOY_ENV: production
+          VITE_SKIP_AUTH: 'false'
+          VITE_SUPER_ADMIN_EMAILS: 'xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
+          VITE_STAFF_EMAILS: '408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
+        run: |
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          export VITE_BUILD_SHA="$DEPLOY_SHA"
+          npm ci --workspace=apps/dashboard
+          npm run build --workspace=apps/dashboard
+          printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/dashboard/dist/release-sha.json
+      - name: Upload immutable candidate and release helper
+        run: |
+          mkdir -p ~/.ssh bundle/dist
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          cp -R source/apps/dashboard/dist/. bundle/dist/
+          cp control/scripts/deploy/frontend-release.sh bundle/
+          cp control/.github/workflows/scripts/deploy-lib.sh bundle/
+          REMOTE="/opt/zenithjoy/autopilot-dashboard/incoming/$DEPLOY_SHA-$UPLOAD_ID"
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p '$REMOTE'"
+          rsync -az -e "ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT" bundle/ "$SSH_USER@$SSH_HOST:$REMOTE/"
+      - name: Promote and roll back automatically on failure
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_SHA: ${{ needs.admission.outputs.sha }}
+          UPLOAD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         with:
           host: ${{ secrets.HK_VPS_HOST }}
           username: ${{ secrets.HK_VPS_USER }}
           key: ${{ secrets.HK_VPS_SSH_KEY }}
-          port: ${{ secrets.HK_VPS_PORT }}
+          port: ${{ secrets.HK_VPS_PORT || '22' }}
+          envs: DEPLOY_SHA,UPLOAD_ID
           script_stop: true
-          command_timeout: 20m
+          command_timeout: 15m
           script: |
             set -euo pipefail
-            REPO=/opt/zenithjoy/repo
-            DASH_DIR=/opt/zenithjoy/autopilot-dashboard
-
-            echo "=== [1/5] git sync（候选 = origin/main）==="
-            git -C "$REPO" remote prune origin 2>/dev/null || true
-            git -C "$REPO" fetch --force --prune origin main
-            git -C "$REPO" reset --hard origin/main
-            SHA="$(git -C "$REPO" rev-parse HEAD)"
-            echo "候选 sha=$SHA"
-
-            echo "=== [2/5] npm build（生产 build env）==="
-            cd "$REPO"
-            npm ci --silent --workspace=apps/dashboard
-            # VITE_* build env 显式注入：apps/dashboard/.env.production 被 gitignore，
-            # git reset --hard 后 HK 上没有该文件 → 不注入则 VITE_SUPER_ADMIN_EMAILS 为空，
-            # 超管功能在生产失效（已知 bug，2026-06-25 修）。
-            export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
-            export VITE_SKIP_AUTH='false'
-            export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
-            export VITE_STAFF_EMAILS='408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
-            # 环境角标：生产 build 注入 production → 前端不显示任何角标（staging build 注入 staging 才显示橙旗）。
-            export VITE_DEPLOY_ENV='production'
-            npm run build --workspace=apps/dashboard
-
-            echo "=== [3/5] 首次迁移：若 dist 还是实体目录（旧 cp 覆盖模型）→ 转成 release 软链 ==="
-            # 旧模型 dist 是实体目录、零留存。第一次走新模型前，把当前 dist 内容存成一个 baseline
-            # release 再让 dist 变软链——这样上线即有"上一份"可回退，不丢现网版本。
-            if [ -d "$DASH_DIR/dist" ] && [ ! -L "$DASH_DIR/dist" ]; then
-              echo "检测到 dist 为实体目录，迁移为 release 软链模型（保留当前内容为 baseline release）"
-              mkdir -p "$DASH_DIR/releases/baseline-$SHA"
-              cp -R "$DASH_DIR/dist/." "$DASH_DIR/releases/baseline-$SHA/" 2>/dev/null || true
-              rm -rf "$DASH_DIR/dist"
-              ln -sfn "releases/baseline-$SHA" "$DASH_DIR/dist"  # 临时指向 baseline，下一步 promote 会切到新 release
-            fi
-
-            echo "=== [4/5] release 隔离 promote（cp 进 releases/<sha>/ + 原子切软链 + 留存5份）==="
-            # shellcheck source=/dev/null
-            source "$REPO/.github/workflows/scripts/deploy-lib.sh"
-            dashboard_release_promote "$DASH_DIR" "$SHA" "$REPO/apps/dashboard/dist" 5
-            # docker bind-mount 在容器启动时解析软链 → 切完软链必须 restart 让容器重解析（绝不碰 staging 容器）
-            docker restart autopilot-dashboard
-            sleep 3
-
-            echo "=== [5/5] 公网验证（Cloudflare 全链路）==="
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://autopilot.zenjoymedia.media/ || echo "000")
-            echo "公网 HTTP 状态码: $HTTP_CODE"
-            if [ "$HTTP_CODE" != "200" ]; then
-              echo "❌ 公网验证失败（期望 200，实际 $HTTP_CODE）"
-              echo "容器状态: $(docker inspect autopilot-dashboard --format '{{.State.Status}}')"
-              echo "本地访问: $(curl -s -o /dev/null -w '%{http_code}' http://localhost/ || echo 'failed')"
-              echo "排查：Cloudflare Tunnel ingress 必须是 http://172.17.0.1:80"
-              exit 1
-            fi
-            echo "✅ 生产 dashboard promote 完成，公网验证通过 (HTTP 200)。"
-
-  notify-failure:
-    name: Notify Brain on failure
-    runs-on: ubuntu-latest
-    needs: [promote-dashboard]
-    if: failure()
-    steps:
-      - name: Post P0 alert to Brain
-        run: |
-          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
-            -H "Content-Type: application/json" \
-            -d '{
-              "title": "ZenithJoy 生产 Dashboard promote 失败",
-              "priority": "P0",
-              "task_type": "dev",
-              "description": "promote-dashboard-prod.yml 失败（人工放行闸），请人工介入"
-            }' || echo "Brain API 不可达，跳过告警"
+            [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ && "$UPLOAD_ID" =~ ^[0-9]+-[0-9]+$ ]] || exit 1
+            BUNDLE="/opt/zenithjoy/autopilot-dashboard/incoming/$DEPLOY_SHA-$UPLOAD_ID"
+            bash "$BUNDLE/frontend-release.sh" /opt/zenithjoy/autopilot-dashboard "$DEPLOY_SHA" \
+              "$BUNDLE/dist" autopilot-dashboard https://autopilot.zenjoymedia.media "$BUNDLE/deploy-lib.sh"

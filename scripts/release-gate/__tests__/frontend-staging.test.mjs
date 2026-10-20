@@ -14,7 +14,7 @@ test('dashboard staging deploys requested commit even after main advances and le
  const root=await mkdtemp(join(tmpdir(),'staging-fixed-sha-'));
  const source=join(root,'source'), stage=join(root,'staging'), bin=join(root,'bin');
  await Promise.all([source,stage,bin].map(p=>mkdir(p,{recursive:true})));
- const git=(...args)=>execFileSync('git',args,{cwd:source,encoding:'utf8'}).trim();
+ const git=(...args)=>execFileSync('git',args,{cwd:source,encoding:'utf8',env:{...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'}}).trim();
  git('init','-b','main');git('config','user.name','Test');git('config','user.email','test@example.invalid');
  await mkdir(join(source,'deploy'));await writeFile(join(source,'deploy','nginx.staging.conf'),'test nginx');
  await writeFile(join(source,'deploy','docker-compose.staging.yml'),'test compose');

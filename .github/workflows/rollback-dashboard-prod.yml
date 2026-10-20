@@ -30,23 +30,22 @@ on:
         required: true
         default: ''
 
-concurrency:
-  group: rollback-dashboard-prod
-  cancel-in-progress: false
-
 jobs:
   rollback-dashboard:
     name: Rollback 生产 dashboard → 上一个/指定 release（人工放行）
     runs-on: ubuntu-latest
+    concurrency:
+      group: zenithjoy-production-hk
+      cancel-in-progress: false
+    env:
+      INPUT_SHA: ${{ inputs.sha }}
+      CONFIRM: ${{ inputs.confirm }}
     steps:
       - name: 二次确认闸（必须输入 ROLLBACK）
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "ROLLBACK" ]; then
-            echo "❌ confirm 不是 ROLLBACK（实际='${{ github.event.inputs.confirm }}'）——拒绝回滚。"
-            echo "   人工卡点：确认要把生产 dashboard 回拨到上一个/指定 release，再在 confirm 框输入 ROLLBACK。"
-            exit 1
-          fi
-          echo "✅ 人工二次确认通过，开始回滚生产 dashboard。"
+          [[ "$CONFIRM" == ROLLBACK ]] || exit 1
+          [[ -z "$INPUT_SHA" || "$INPUT_SHA" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 1
+          echo '回退输入已验证'
 
       - name: Rollback via SSH（rollback.sh dashboard 切软链 + docker restart + 公网验证）
         uses: appleboy/ssh-action@v1.0.3
@@ -55,13 +54,14 @@ jobs:
           username: ${{ secrets.HK_VPS_USER }}
           key: ${{ secrets.HK_VPS_SSH_KEY }}
           port: ${{ secrets.HK_VPS_PORT }}
+          envs: INPUT_SHA
           script_stop: true
           command_timeout: 15m
           script: |
             set -euo pipefail
             REPO=/opt/zenithjoy/repo
             DASH_DIR=/opt/zenithjoy/autopilot-dashboard
-            INPUT_SHA="${{ github.event.inputs.sha }}"
+            [[ -z "$INPUT_SHA" || "$INPUT_SHA" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 1
 
             # rollback.sh + deploy-lib.sh 都在 HK 的 repo checkout 里（git reset --hard 同步过）。
             export ZJ_DASHBOARD_DIR="$DASH_DIR"

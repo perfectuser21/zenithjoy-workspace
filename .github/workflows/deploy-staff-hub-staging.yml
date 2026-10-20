@@ -20,20 +20,30 @@ jobs:
   deploy-staff-hub-staging:
     name: Build & Deploy Staff Hub Staging
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
+      FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Install dependencies
-        run: npm install --workspace=apps/staff-hub
+        run: npm ci --workspace=apps/staff-hub
 
       - name: Create .env.production
         run: |
-          echo "VITE_FEISHU_APP_ID=${{ secrets.FEISHU_APP_ID }}" > apps/staff-hub/.env.production
+          echo "VITE_FEISHU_APP_ID=$FEISHU_APP_ID" > apps/staff-hub/.env.production
           echo "VITE_DEPLOY_ENV=staging" >> apps/staff-hub/.env.production
 
       - name: Build staff-hub
-        run: npm run build --workspace=apps/staff-hub
+        run: |
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          export VITE_BUILD_SHA="$DEPLOY_SHA"
+          npm run build --workspace=apps/staff-hub
+          printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/staff-hub/dist/release-sha.json
 
       - name: Setup SSH key
         run: |
@@ -56,7 +66,11 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
             deploy/staff-hub/common-staging.conf \
             ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/common.conf
-          echo "✅ staging dist + nginx configs synced"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }}" \
+            deploy/docker-compose.staff-hub-staging.yml \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/compose.yml
+          echo "✅ staging dist + nginx configs + 同SHA compose synced"
 
       - name: Bring up staff-hub-staging via docker compose + 冒烟（仅 staging，绝不碰生产 staff-hub）
         uses: appleboy/ssh-action@v1.0.3
@@ -65,12 +79,13 @@ jobs:
           username: ${{ secrets.HK_VPS_USER }}
           key: ${{ secrets.HK_VPS_SSH_KEY }}
           port: ${{ secrets.HK_VPS_PORT }}
+          envs: DEPLOY_SHA
+          script_stop: true
           script: |
             set -euo pipefail
-            cd /opt/zenithjoy/repo
-            git fetch --force --prune origin main
-            git checkout origin/main -- deploy/docker-compose.staff-hub-staging.yml
-            docker compose -f deploy/docker-compose.staff-hub-staging.yml up -d staff-hub-staging
+            [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+            docker compose -p zenithjoy-staff-hub-staging \
+              -f /opt/zenithjoy/staff-hub-staging/compose.yml up -d staff-hub-staging
             docker restart staff-hub-staging
             echo "✅ staff-hub-staging restarted"
 
@@ -84,7 +99,9 @@ jobs:
             [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 staff-hub-staging; exit 1; }
             CODE=$(curl -s -o /dev/null -w '%{http_code}' -k "https://100.86.118.99:9444/" -H "Host: staff.zenjoymedia.media")
             [ "$CODE" = "200" ] || { echo "❌ staging :9444 首页 http=$CODE"; exit 1; }
-            echo "✅ staging :9444 首页 200"
+            curl -fsSk --max-time 15 "https://100.86.118.99:9444/release-sha.json?candidate=$DEPLOY_SHA" \
+              -H 'Host: staff.zenjoymedia.media' | jq -e --arg sha "$DEPLOY_SHA" '.sha == $sha'
+            echo "✅ staging :9444 首页200 且 SHA=$DEPLOY_SHA"
 
       - name: Notify Brain on failure
         if: failure()
