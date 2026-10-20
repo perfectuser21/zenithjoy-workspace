@@ -118,3 +118,12 @@ test('full deployment dry-run crosses real M4 payload staging before paired CAS 
  const calls=readFileSync(join(root,'transport.jsonl'),'utf8').trim().split('\n').map(v=>JSON.parse(v));
  assert.ok(calls.some(v=>v.kind==='ssh'&&v.args[1]?.includes('/deployment-m4-payload.py install ')),'batch stage must actually execute reviewed installer');
 });
+
+test('paired M4 batch adapter rejects wrong host, unknown command and unreviewed helper',t=>{
+ const f=fixture(t),stage=join(f.root,'m4-payload-deploy.fixture');mkdirSync(stage);
+ const install=`python3 ${stage}/deployment-m4-payload.py install ${stage}/payload.tar ${'a'.repeat(64)} before 0`;
+ assert.equal(transport(f.root,'ssh',['unregistered-fixture-host',install]).status,2,'a batch command cannot fall back to generic record-only success');
+ assert.equal(transport(f.root,'ssh',['xian-m4',install+' unexpected']).status,2);
+ assert.equal(transport(f.root,'scp',['-q','-p',join(f.root,'payload.tar'),join(f.root,'unreviewed.py'),`xian-m4:${stage}/`]).status,2);
+ assert.throws(()=>verify(f.root),/not verified/);
+});
