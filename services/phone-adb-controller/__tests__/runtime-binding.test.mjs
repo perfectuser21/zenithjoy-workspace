@@ -57,10 +57,12 @@ test('真实public缺task键ACK经原main调用点归一空绑定，原响应保
  writeFileSync(join(dir,'step-dod.json'),steps);body.files['step-dod.json']=digest(steps);
  writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));mkdirSync(join(dir,'runtime'));
  let posted;
- await bindRun({dir,runId:'public-main',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{
+ const initial=await bindRun({dir,runId:'public-main',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{
   if(input)posted=input;
   return {binding:{id:'public-binding',run_id:'public-main__a1',...posted,task_run_id:null,payload:{...posted}}};
  }});
+ assert.equal(initial.binding.task_id,null);assert.equal(readBinding(dir,'a1').task_id,null);
+ const originalAck=readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8');
  const raw=JSON.parse(readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8')).binding;
  assert.equal(Object.hasOwn(raw,'task_id'),false);assert.equal(Object.hasOwn(raw.payload,'task_id'),false);
  const script=join(dir,'main-probe.mjs');
@@ -93,6 +95,36 @@ console.log(JSON.stringify(result));`,{mode:0o600});
  assert.equal(observed.error,'EXECUTION_START_FAILED');assert.equal(observed.task_own,true);assert.equal(observed.task_is_null,true);
  assert.deepEqual(observed.calls,['adb-read-state','controller']);assert.equal(observed.proofs.length,1);
  assert.equal(observed.proofs[0].task_id,null);assert.equal(observed.proofs[0].status,'not_started');assert.equal(observed.proofs[0].execution_stopped,true);
+ assert.equal(readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8'),originalAck);
+});
+test('public归一不隐藏关联任务/其他来源/显式undefined，也不改原ACK',async t=>{
+ for(const kind of ['associated','task_run_missing','payload_task','task_string','task_null','task_undefined','payload_undefined','other_source']){
+  const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));let posted;
+  const action=bindRun({dir,runId:'scope-run',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{
+   if(input)posted=input;
+   const binding={id:'binding',run_id:'scope-run__a1',...posted,task_run_id:null,payload:{...posted}};
+   if(kind==='associated')binding.task_run_id='actual-task-run';
+   if(kind==='task_run_missing')delete binding.task_run_id;
+   if(kind==='payload_task')binding.payload.task_id='actual-task';
+   if(kind==='task_string')binding.task_id='actual-task';
+   if(kind==='task_null')binding.task_id=null;
+   if(kind==='task_undefined')binding.task_id=undefined;
+   if(kind==='payload_undefined')binding.payload.task_id=undefined;
+   if(kind==='other_source')binding.source_kind='kernel';
+   return {binding};
+  }});
+  if(['task_undefined','payload_undefined','other_source'].includes(kind)){
+   await assert.rejects(action,kind==='other_source'?/ACK内容不匹配: source_kind/:/RUN_BINDING_TASK_ID_INVALID/);
+   assert.equal(existsSync(join(dir,'run-bindings/a1.ack.json')),false);continue;
+  }
+  const first=await action,again=readBinding(dir,'a1');
+  if(kind==='task_string')assert.equal(first.binding.task_id,'actual-task');
+  else if(kind==='task_null')assert.equal(first.binding.task_id,null);
+  else assert.equal(Object.hasOwn(first.binding,'task_id'),false);
+  assert.deepEqual(again,first.binding);
+  const raw=JSON.parse(readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8')).binding;
+  assert.equal(Object.hasOwn(raw,'task_id'),['task_string','task_null'].includes(kind));
+ }
 });
 async function server(t,handler){const seen=[];const s=createServer(async(req,res)=>{let raw='';for await(const part of req)raw+=part;const event={method:req.method,path:req.url,body:raw?JSON.parse(raw):null};seen.push(event);const answer=handler(event);res.writeHead(answer.status||200,{'Content-Type':'application/json'});res.end(JSON.stringify(answer.body));});await new Promise(r=>s.listen(0,'127.0.0.1',r));t.after(()=>s.close());return {seen,url:`http://127.0.0.1:${s.address().port}`};}
 const cli=(dir,url,args=['bind-run'])=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,...args],{env:{...process.env,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',BRAIN_URL:url,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_HOSTKEY:'fixture'}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('exit',code=>resolve({code,out,err}));});
