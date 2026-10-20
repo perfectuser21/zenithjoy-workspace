@@ -43,10 +43,10 @@ test('同一release ready按workflow固定摘要握手，多workflow未知或串
 test('Commander fixture仅复制已发布文件，不带Skill安装器的原子临时文件',t=>{
  const root=mkdtempSync(join(tmpdir(),'commander-copy-stage-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const src=join(root,'source'),dest=join(root,'dest'),skill=join(src,'skills/wf-test');mkdirSync(skill,{recursive:true});
- writeFileSync(join(skill,'SKILL.md'),'published-skill');writeFileSync(join(skill,'.skill-stage'),'unpublished');writeFileSync(join(src,'wf-v2.py'),'runtime');
+ writeFileSync(join(skill,'SKILL.md'),'published-skill');writeFileSync(join(skill,'.skill-stage'),'unpublished');writeFileSync(join(src,'wf-v2.py'),'runtime');writeFileSync(join(src,'.skill-outside'),'ordinary');
  copyCommanderFixture(src,dest);
  assert.equal(existsSync(join(dest,'skills/wf-test/.skill-stage')),false,'unpublished installer staging file entered the runtime fixture');
- assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published-skill');assert.equal(readFileSync(join(dest,'wf-v2.py'),'utf8'),'runtime');
+ assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published-skill');assert.equal(readFileSync(join(dest,'wf-v2.py'),'utf8'),'runtime');assert.equal(readFileSync(join(dest,'.skill-outside'),'utf8'),'ordinary');
  assert.throws(()=>copyCommanderFixture(join(root,'missing'),join(root,'must-not-exist')),/ENOENT/);
 });
 
@@ -61,4 +61,15 @@ test('Commander fixture枚举Skill暂存后文件消失，不吞正式文件的�
  }}));syncBuiltinESMExports();
  try{copyCommanderFixture(src,dest);}finally{t.mock.restoreAll();syncBuiltinESMExports();}
  assert.equal(removed,true,'the test must observe removal after enumeration');assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published');
+});
+
+test('Commander fixture正式Skill在枚举后缺失仍原样拒绝，不泛吞ENOENT',t=>{
+ const root=mkdtempSync(join(tmpdir(),'commander-copy-canonical-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const src=join(root,'source'),skill=join(src,'skills/wf-test');mkdirSync(skill,{recursive:true});
+ const published=join(skill,'SKILL.md');writeFileSync(published,'published');const original=fs.cpSync;
+ t.mock.method(fs,'cpSync',(from,to,options)=>original(from,to,{...options,filter:(path,target)=>{
+  if(path===published)fs.unlinkSync(path);
+  return options.filter?options.filter(path,target):true;
+ }}));syncBuiltinESMExports();
+ try{assert.throws(()=>copyCommanderFixture(src,join(root,'dest')),/ENOENT/);}finally{t.mock.restoreAll();syncBuiltinESMExports();}
 });

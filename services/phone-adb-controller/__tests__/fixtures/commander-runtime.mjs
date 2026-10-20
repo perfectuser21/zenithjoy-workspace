@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {mkdtempSync,writeFileSync,cpSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {join,resolve,relative,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 const source=resolve('services/phone-adb-controller/commander');
 const sorted=v=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v;
 const hash=v=>createHash('sha256').update(JSON.stringify(sorted(v))).digest('hex');
-export function copyCommanderFixture(source,dir){cpSync(source,dir,{recursive:true});}
+export function copyCommanderFixture(source,dir){
+ cpSync(source,dir,{recursive:true,filter:path=>{
+  const parts=relative(source,path).split(sep);
+  return !(parts.length===3&&parts[0]==='skills'&&parts[2].startsWith('.skill-'));
+ }});
+}
 export function fixture({candidate=false}={}){
  const home=mkdtempSync(join(tmpdir(),'commander-v2-')); const dir=candidate?join(home,'.local/share/zenithjoy/phone-candidates','a'.repeat(40),'runtime/commander'):join(home,'commander');copyCommanderFixture(source,dir);
  const definition={release_id:'release-test',snapshot_sha256:'a'.repeat(64)};
