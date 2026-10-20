@@ -24,7 +24,9 @@ health_sha() { curl --max-time 10 -fsS "$HEALTH_URL" | python3 -c "import json,s
 source_for() {
   local sha=$1 dir="$RELEASES/$1/source"
   if [[ ! -f "$dir/deploy/docker-compose.prod-api.yml" ]]; then
-    git -C "$REPO" cat-file -e "$sha^{commit}" 2>/dev/null || git -C "$REPO" fetch origin main
+    # All HK source consumers share this fetch lock, including staging workflows.
+    git -C "$REPO" cat-file -e "$sha^{commit}" 2>/dev/null || \
+      flock "$REPO/.git/hk-source-fetch.lock" git -C "$REPO" fetch origin main
     git -C "$REPO" cat-file -e "$sha^{commit}"
     local tmp
     tmp=$(mktemp -d "$RELEASES/source.XXXXXX")
