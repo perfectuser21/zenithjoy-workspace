@@ -54,7 +54,8 @@ jobs:
             [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
             SOURCE=/opt/zenithjoy/repo
             STAGING_DIR=/opt/zenithjoy/autopilot-staging
-            git -C "$SOURCE" fetch --force origin main
+            # Same host source lock as API staging and production release helpers.
+            flock "$SOURCE/.git/hk-source-fetch.lock" git -C "$SOURCE" fetch --force origin main
             git -C "$SOURCE" cat-file -e "$DEPLOY_SHA^{commit}"
             git -C "$SOURCE" merge-base --is-ancestor "$DEPLOY_SHA" origin/main
             REPO="$(mktemp -d /opt/zenithjoy/dashboard-staging-build.XXXXXX)"
