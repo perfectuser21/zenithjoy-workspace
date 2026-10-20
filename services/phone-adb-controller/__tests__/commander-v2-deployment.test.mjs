@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import {fixture,start,copyCommanderFixture} from './fixtures/commander-runtime.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,4 +48,17 @@ test('Commander fixture仅复制已发布文件，不带Skill安装器的原子�
  assert.equal(existsSync(join(dest,'skills/wf-test/.skill-stage')),false,'unpublished installer staging file entered the runtime fixture');
  assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published-skill');assert.equal(readFileSync(join(dest,'wf-v2.py'),'utf8'),'runtime');
  assert.throws(()=>copyCommanderFixture(join(root,'missing'),join(root,'must-not-exist')),/ENOENT/);
+});
+
+test('Commander fixture枚举Skill暂存后文件消失，不吞正式文件的读取失败',t=>{
+ const root=mkdtempSync(join(tmpdir(),'commander-copy-disappearing-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const src=join(root,'source'),dest=join(root,'dest'),skill=join(src,'skills/wf-test');mkdirSync(skill,{recursive:true});
+ const staging=join(skill,'.skill-disappearing');writeFileSync(staging,'temporary');writeFileSync(join(skill,'SKILL.md'),'published');
+ const original=fs.cpSync;let removed=false;
+ t.mock.method(fs,'cpSync',(from,to,options)=>original(from,to,{...options,filter:(path,target)=>{
+  if(path===staging){fs.unlinkSync(path);removed=true;}
+  return options.filter?options.filter(path,target):true;
+ }}));syncBuiltinESMExports();
+ try{copyCommanderFixture(src,dest);}finally{t.mock.restoreAll();syncBuiltinESMExports();}
+ assert.equal(removed,true,'the test must observe removal after enumeration');assert.equal(readFileSync(join(dest,'skills/wf-test/SKILL.md'),'utf8'),'published');
 });
