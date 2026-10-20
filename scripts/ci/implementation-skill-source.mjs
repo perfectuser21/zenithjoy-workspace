@@ -36,7 +36,7 @@ function ensureSource(source,revision){
   execFileSync('git',['--no-replace-objects','-C',source,'fetch','--quiet','--depth=1',remote,revision],{env,stdio:['ignore','pipe','pipe'],timeout:60000});
  }finally{rmSync(auth,{recursive:true,force:true});}
 }
-export function readImplementationSource(root,revision,path,{source}={}){
+export function readImplementationSource(root,revision,path,{source,offline=false}={}){
  if(!/^[0-9a-f]{40}$/.test(revision)||typeof path!=='string'||!path||path.startsWith('/')||path.split('/').some(v=>!v||v==='.'||v==='..')||path.includes('\\'))fail('SKILL_SOURCE_INPUT_INVALID');
  const entry=git(root,'ls-tree','-z',revision,'--',path).toString();
  if(entry){
@@ -51,7 +51,8 @@ export function readImplementationSource(root,revision,path,{source}={}){
  if(lock.profile!==profileFor[repo])fail('SKILL_SOURCE_PROFILE_MISMATCH');
  // Production always uses a new private cache outside the candidate checkout.
  const central=source?resolve(source):sourceCache();
- ensureSource(central,lock.revision);
+ if(offline)git(central,'cat-file','-e',`${lock.revision}^{commit}`);else ensureSource(central,lock.revision);
+ if(checksum(git(central,'show',`${lock.revision}:distribution/skills_source.py`))!==lock.loader_sha256)fail('SKILL_SOURCE_LOADER_MISMATCH');
  const catalog=JSON.parse(git(central,'show',`${lock.revision}:distribution/catalog.json`));
  const matches=catalog.profiles?.[lock.profile]?.files?.filter(e=>e.path===path);
  if(!matches||matches.length!==1)fail('SKILL_SOURCE_ENTRY_MISSING');

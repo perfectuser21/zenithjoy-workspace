@@ -15,7 +15,7 @@ async function enqueueBridge(client,{lineKey,run,sourceRun,comment,lead,config},
    :await (deps.qualifyRecipient||require('./judge-recipient.js').qualifyRecipient)(comment,config,{companyBinding});
  if(!['passed','excluded','unknown'].includes(qualification?.status))throw Error('BRIDGE_QUALIFICATION_INVALID');
  if(qualification.status==='passed'&&(!leadIdentity||leadIdentity.id!==lead.id||leadIdentity.line_key!==lineKey||leadIdentity.douyin_id!==comment.douyin_id))qualification={...qualification,status:'unknown',reason:'lead_identity_mapping_unverified'};
- const intent={version:1,line_key:lineKey,run,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
+ const intent={version:1,line_key:lineKey,run,scoring_run:comment.judgment_config?.run_id,source_run:sourceRun,comment_run:comment.harvest_batch,comment_id:comment.id,lead_id:lead.id,lead_identity:leadIdentity,
    target_douyin_id:comment.douyin_id,nickname:comment.nickname,comment_body:comment.comment_body,
    profile_url:comment.profile_url,source_video:comment.source_video,source_video_url:comment.source_video_url,
    collected_at:comment.collected_at,intent_grade:comment.intent_grade,judgment_reason:comment.judgment_reason,profile_ip:comment.profile_ip,region:comment.region,comment_time:comment.comment_time,recipient_evidence:comment.recipient_evidence||null,qualification};
@@ -37,7 +37,7 @@ function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`
 function frozenQualification(p,snapshot){const q=p.qualification;return q?.company_id===snapshot.company_id&&String(q.company_version)===String(snapshot.version)&&typeof q.tenant_id==='string'&&q.tenant_id!==''&&q.tenant_id===snapshot.tenant_id&&typeof q.policy_id==='string'&&q.policy_id!==''&&q.policy_id===(snapshot.policy_id||snapshot.runtime_config?.policy_id);}
 function nativeIntent(row,{companyBinding}={}){
  const p=row.payload;
- if(!p||row.line_key!==p.line_key||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
+ if(!p||row.line_key!==p.line_key||row.run_tag!==p.run||!p.scoring_run||digest(p)!==row.payload_sha256||p.qualification?.status!=='passed'||row.qualification_status!=='passed')throw Error('BRIDGE_INTENT_INVALID');
  if(companyBinding&&(p.qualification.company_id!==companyBinding.company_id||p.qualification.tenant_id!==companyBinding.tenant_id))throw Error('BRIDGE_COMPANY_SOURCE_INVALID');
  if(!p.lead_identity||p.lead_identity.id!==p.lead_id||p.lead_identity.line_key!==p.line_key||p.lead_identity.douyin_id!==p.target_douyin_id)throw Error('BRIDGE_LEAD_IDENTITY_INVALID');
  if(!p.profile_url||!/^https:\/\/(?:www|v)\.douyin\.com\/[A-Za-z0-9._/-]+$/.test(p.profile_url))throw Error('BRIDGE_PROFILE_LINK_MISSING');
@@ -56,36 +56,43 @@ function buildOrderFields(row,route,types,options){
  'IP属地':p.profile_ip||p.region||'','留言时间':p.comment_time||'','业务线':route.line,'关键词层级':route.tier||'','搜索意图':route.intent||'','目标人群':route.audience||'',
  'AI判断理由':`[${p.intent_grade}级] `+(p.judgment_reason||''),'状态':'待触达','发送状态':'未发送','搜索账号':'池转入(自动判定)','采集时间':time,'合规核验状态':bridgeMarker(row)};
 }
-async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
+async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,reviewPolicy}={}){
  const deadlineAt=Date.now()+Math.max(1,Math.min(165000,Number(input.remaining_ms)||165000));
  const route=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js');
  return (lock||outreach.withOrderLock)(route.key,async()=>{
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,sourceRun:input.source_run,step:'103'});
   const result={published:0,protected:0,excluded:0,unknown:0,ids:[],verified:true};
-  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,Math.max(1,Math.min(50,Number(input.limit)||10))])).rows;
-  let api=client;
-  for(const row of rows){if(Date.now()>=deadlineAt){result.verified=false;result.unknown++;break;}result.ids.push(row.id);
+  const limit=Math.max(1,Math.min(50,Number(input.limit)||10));
+  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,1000])).rows;
+  let api=client,handled=0;
+  for(const row of rows){if(handled>=limit)break;
+   if(Date.now()>=deadlineAt){result.verified=false;result.unknown++;break;}
    if(row.qualification_status!=='passed'){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
-    result[excluded?'excluded':'unknown']++;continue;
+    result.ids.push(row.id);handled++;result[excluded?'excluded':'unknown']++;continue;
    }
+   const p=row.payload;
+   const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p?.comment_id,
+     {run:p?.run,scoring_run:p?.scoring_run,source_run:p?.comment_run,source_video:p?.source_video,source_video_url:p?.source_video_url});
+   if(policy.status!=='pass'){result.unknown++;result.verified=false;continue;}
    let companyBinding;
    try{companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);const p=nativeIntent(row,{companyBinding});if(!frozenQualification(p,snapshot))throw Error('BRIDGE_POLICY_STALE');}catch{result.unknown++;result.verified=false;continue;}
    if(!api)api=await outreach.orderClient(route,{deadlineAt});
    let all;try{all=await api.all({deadlineAt});}catch{result.unknown++;result.verified=false;continue;}
    const found=all.filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));
    if(found.length){
-    if(found.length===1&&fieldsMatch(row,found[0])){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='confirmed',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,found[0].record_id]);result.published++;}
+    if(found.length===1&&fieldsMatch(row,found[0])){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='confirmed',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,found[0].record_id]);result.ids.push(row.id);handled++;result.published++;}
     else {result.unknown++;result.verified=false;}continue;
    }
    // 已attempted，无论GET未找到或POST返回如何，永不第二次POST。
    if(row.state==='attempted'||row.attempted_at){result.unknown++;result.verified=false;continue;}
    const duplicates=all.filter(r=>txt(r.fields?.['抖音号']).trim().toLowerCase()===String(row.payload.target_douyin_id).toLowerCase()||txt(r.fields?.['抖音昵称'])===row.payload.nickname);
-   if(duplicates.length){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='protected',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,duplicates[0].record_id]);result.protected++;continue;}
+   if(duplicates.length){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='protected',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,duplicates[0].record_id]);result.ids.push(row.id);handled++;result.protected++;continue;}
    let fields;try{fields=buildOrderFields(row,route,await api.fields(),{companyBinding});}catch{result.unknown++;result.verified=false;continue;}
    if(Date.now()>=deadlineAt){result.unknown++;result.verified=false;break;}
    const stored=await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='attempted',fields=$3::jsonb,fields_sha256=$4,attempted_at=now(),updated_at=now() WHERE line_key=$1 AND id=$2 AND state IN ('pending','unknown') AND attempted_at IS NULL RETURNING *",[route.key,row.id,JSON.stringify(fields),digest(fields)]);
    if(stored.rowCount!==1)throw Error('BRIDGE_ATTEMPT_NOT_PERSISTED');
+   result.ids.push(row.id);handled++;
    row.fields=fields;row.fields_sha256=digest(fields);row.state='attempted';
    try{await api.post(fields);}catch{await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET last_error=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,'post_outcome_unknown']);}
    let back;try{back=(await api.all({deadlineAt})).filter(r=>txt(r.fields?.['合规核验状态'])===bridgeMarker(row));}catch{back=[];}
@@ -96,7 +103,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig}={}){
  });
 }
 module.exports={digest,enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fieldsMatch,buildOrderFields};
-async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
+async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPolicy}={}){
  if(!pool)throw Error('BRIDGE_PG_AUTHORITY_MISSING');
  {
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,step:'104'});
@@ -104,7 +111,12 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
   const rows=ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
   const allowed=[];
   for(const row of rows){try{
-   const p=nativeIntent(row);if(!frozenQualification(p,snapshot))continue;
+   if(rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
+   const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
+   const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
+   const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
+     {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
+   if(policy.status!=='pass')continue;
    if(!row.fields||digest(row.fields)!==row.fields_sha256)continue;
    const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
   }catch{/* 旧/错scope/缺native证明均不ready，不改原记录。 */}}
@@ -112,6 +124,24 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig}={}){
  }
 }
 module.exports.eligibleOrders=eligibleOrders;
+
+async function reviewPreparedOrder(route,record,{pool,run,freezeCompanyConfig,reviewPolicy}={}){
+ if(!pool||!record?.record_id||!run)return false;
+ const rows=(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2",[route.key,record.record_id])).rows;
+ if(rows.length!==1)return false;
+ try{
+  const companyBinding=await collectionBinding(pool,rows[0].payload?.line_key,rows[0].payload?.comment_run,rows[0].payload?.recipient_evidence);
+  const p=nativeIntent(rows[0],{companyBinding});
+  const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:run,step:'104'});
+  if(run===p.run||run===p.scoring_run||!frozenQualification(p,snapshot))return false;
+  if(txt(record.fields?.['抖音号']).toLowerCase()!==String(p.target_douyin_id).toLowerCase()
+    ||txt(record.fields?.['主页链接'])!==p.profile_url)return false;
+  const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
+    {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
+  return policy.status==='pass';
+ }catch{return false;}
+}
+module.exports.reviewPreparedOrder=reviewPreparedOrder;
 
 async function readbackBridge(pool,input){
  const route=routeOf(input.line),ids=input.ids;

@@ -13,11 +13,13 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { parse as parseYaml } from 'yaml';
+import { readImplementationSource } from '../ci/implementation-skill-source.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CONTRACTS_DIR = 'product-map/contracts';
@@ -159,9 +161,21 @@ export const COMMANDER_SKILLS_DIR = 'services/phone-adb-controller/commander/ski
 function validateCommanderSkill(ctx, capId, doc, errors) {
   const cs = doc.commander_skill;
   if (!cs) return;
-  const file = join(ctx.repoRoot, COMMANDER_SKILLS_DIR, cs.name, 'SKILL.md');
-  if (!existsSync(file)) { errors.push(`${capId}: commander_skill ${cs.name} 不存在（${COMMANDER_SKILLS_DIR}/${cs.name}/SKILL.md）`); return; }
-  const fm = readFileSync(file, 'utf8').match(/^---\n([\s\S]*?)\n---/);
+  const path = `${COMMANDER_SKILLS_DIR}/${cs.name}/SKILL.md`;
+  const file = join(ctx.repoRoot, path);
+  let body;
+  if (existsSync(file)) {
+    body = readFileSync(file, 'utf8');
+  } else {
+    try {
+      const revision = execFileSync('git', ['-C', ctx.repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+      body = readImplementationSource(ctx.repoRoot, revision, path, { source: process.env.SKILLS_SOURCE_DIR || join(ctx.repoRoot, '.skills-source'), offline: true }).toString('utf8');
+    } catch (error) {
+      errors.push(`${capId}: commander_skill ${cs.name} 不存在且固定源不可读（${error.code || error.message}）`);
+      return;
+    }
+  }
+  const fm = body.match(/^---\n([\s\S]*?)\n---/);
   const version = fm && (fm[1].match(/^version:\s*["']?([^"'\s]+)["']?\s*$/m) || [])[1];
   if (version !== cs.version) errors.push(`${capId}: commander_skill ${cs.name} 版本 ${cs.version} 与 SKILL.md frontmatter version=${version ?? '缺'} 不一致`);
 }

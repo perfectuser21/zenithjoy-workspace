@@ -15,9 +15,10 @@ function fixture(){
  const path='scripts/phone-account-patrol/SKILL.md',payload=Buffer.from('real source\n\n');
  mkdirSync(join(business,'scripts/phone-account-patrol'),{recursive:true});writeFileSync(join(business,path),payload);
  const before=commit(business);mkdirSync(join(central,'distribution'));writeFileSync(join(central,'body.md'),payload);
+ const loader=Buffer.from('fixture loader; never execute\n');writeFileSync(join(central,'distribution/skills_source.py'),loader);
  const catalog={profiles:{zenithjoy:{files:[{path,source:'body.md',sha256:createHash('sha256').update(payload).digest('hex')}]}}};
  writeFileSync(join(central,'distribution/catalog.json'),JSON.stringify(catalog));const revision=commit(central);
- rmSync(join(business,path));writeFileSync(join(business,'.skills-source.json'),JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision,loader_sha256:'0'.repeat(64)}));
+ rmSync(join(business,path));writeFileSync(join(business,'.skills-source.json'),JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision,loader_sha256:createHash('sha256').update(loader).digest('hex')}));
  writeFileSync(join(business,'scripts/skills-source.py'),"raise Exception('CANDIDATE_MUST_NOT_EXECUTE')\n");
  const after=commit(business);
  return {business,central,path,payload,before,after,cleanup:()=>rmSync(root,{recursive:true,force:true})};

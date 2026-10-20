@@ -2,9 +2,116 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import {mkdtempSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 const require = createRequire(import.meta.url);
-import {freezeFixture} from './company-config-fixture.mjs';
+import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
+
+test('103独立队列冻结跨批CID来源，提交丢回执后保原范围与总预算',async(t)=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const dir=mkdtempSync(join(tmpdir(),'independent-score-'));
+ const ids=['00000000-0000-4000-8000-000000000131','00000000-0000-4000-8000-000000000132'];
+ const sources=Object.fromEntries(ids.map((id,i)=>[id,`batch${i}`]));let committed=[],lost=true;const requests=[];
+ const rpc=async({request:r})=>{requests.push(r);assert.equal(r.source_run,undefined);
+  if(r.op==='score_scope')return {result:{line:'jinuo',run:'independent103',source_run:null,ids,sources}};
+  assert.deepEqual(r.sources,sources);
+  if(r.op==='score_recovery')return {result:{verified:true,ids:committed,scored:committed.length}};
+  if(r.op==='score'){assert.deepEqual(r.ids,ids);assert.equal(r.budget_max,2);
+   if(lost){lost=false;committed=[ids[0]];throw Error('committed response lost');}
+   assert.equal(r.limit,1);committed.push(ids[1]);return {result:{ids:[ids[1]],scored:1,blocked_ids:[]}};}
+  if(r.op==='score_readback')return {result:{verified:true,failures:0}};
+  if(r.op==='policy_review')return {result:{verified:true,rows:ids.map(id=>({id,status:'pass'}))}};
+  throw Error('unexpected '+r.op);};
+ const h=createHandlers({root:dir,env:{P:'qa',SERIAL:'fake',LEADGEN_LINE:'jinuo',WFR_TAG:'independent103',LEADGEN_LIMIT:'2',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir},rpc});
+ await assert.rejects(h.scoring(),/committed response lost/);
+ const saved=JSON.parse(readFileSync(join(dir,'independent103-score-attempt.json')));assert.equal(saved.source_run,null);assert.deepEqual(saved.sources,sources);
+ const result=await h.scoring();assert.equal(result.scored,2);assert.equal(result.recovered,1);
+ assert.equal(requests.filter(r=>r.op==='score').length,2);
+ sources[ids[0]]='changed-batch';await assert.rejects(h.scoring(),/POLICY_SCORE_RECOVERY_SCOPE_INVALID/);
+ assert.equal(requests.filter(r=>r.op==='score').length,2);
+});
+test('独立队列scope保逐行批次，恢复时批次漂移拒绝且显式批次不扩大',async()=>{
+ const ids=['00000000-0000-4000-8000-000000000141','00000000-0000-4000-8000-000000000142'];
+ const rows=ids.map((id,i)=>({id,harvest_batch:`batch${i}`}));const calls=[];
+ const pool={async query(sql,args){calls.push({sql,args});return {rows};}};
+ const scope=await queueRequest(pool,{op:'score_scope',line:'jinuo',run:'independent103'});
+ assert.deepEqual(scope.ids,ids);assert.deepEqual(scope.sources,Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch])));
+ assert.match(calls[0].sql,/\$2::text IS NULL OR harvest_batch=\$2/);
+ const snapshot=companyFixture();const p={async query(sql){if(sql.includes('company_config_runs'))return {rows:[{run_id:'independent103',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,snapshot}]};return {rows:[{...rows[0],harvest_batch:'changed',line_key:'jinuo'}, {...rows[1],line_key:'jinuo'}]};}};
+ await assert.rejects(queueRequest(p,{op:'score_recovery',line:'jinuo',run:'independent103',ids,sources:scope.sources}),/POLICY_SCORE_RECOVERY_AMBIGUOUS/);
+ await assert.rejects(queueRequest(pool,{op:'score_scope',line:'jinuo',run:'independent103',source_run:'batch0'}),/POLICY_SCORE_SCOPE_AMBIGUOUS/);
+});
+
+test('跨批冻结范围仍按同run总额锁内读回，来源变更在模型与写入前拒绝',async()=>{
+ const id='00000000-0000-4000-8000-000000000151',sources={[id]:'original102'};
+ for(const full of [true,false]){
+  const calls=[];let model=0;
+  const client={async query(sql,args=[]){calls.push({sql,args});
+   if(sql.includes('count(*)::int AS used'))return {rows:[{used:full?2:0}]};
+   if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[{id,harvest_batch:'changed102'}]};
+   return {rows:[]};},release(){}};
+  const input={op:'score',line:'jinuo',run:'independent103',ids:[id],sources,budget_max:2,limit:2};
+  const action=queueRequest({connect:async()=>client},input,{freezeCompanyConfig:async()=>companyFixture(),judgeComment:async()=>{model++;}});
+  if(full)assert.equal((await action).scored,0);else await assert.rejects(action,/POLICY_SCORE_ROW_SOURCE_CHANGED/);
+  const count=calls.find(x=>x.sql.includes('count(*)::int AS used'));
+  assert.deepEqual(count.args,['jinuo',null,'independent103']);assert.match(count.sql,/\$2::text IS NULL OR harvest_batch=\$2/);
+  assert.equal(model,0);assert.ok(!calls.some(x=>x.sql.includes('UPDATE zenithjoy.leadgen_comments')));
+ }
+ for(const bad of [undefined,{}, {[id]:'bad/batch'}])await assert.rejects(queueRequest({}, {op:'score',line:'jinuo',run:'independent103',ids:[id],sources:bad,budget_max:2}),/POLICY_SCORE_IDS_INVALID/);
+});
+
+test('评分冻结 CID 范围与提交读回只认本批本 run 的完整证据',async()=>{
+ const id1='00000000-0000-4000-8000-000000000101',id2='00000000-0000-4000-8000-000000000102';
+ const snapshot=companyFixture();snapshot.runtime_config.routing={line_key:'jinuo'};
+ const c={run_id:'score-new',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
+  model_audit:{model:'typesafe/jev-1.13',response_id:'primary'},policy_audit:{status:'pass',response_id:'review'}};
+ const calls=[],pool={async query(sql,args){calls.push({sql,args});
+  if(sql.includes('SELECT id,harvest_batch FROM zenithjoy.leadgen_comments'))return {rows:[{id:id1,harvest_batch:'batch-102'},{id:id2,harvest_batch:'batch-102'}]};
+  if(sql.includes('company_config_runs'))return {rows:[{run_id:'score-new',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,snapshot}]};
+  if(sql.includes('SELECT id,harvest_batch'))return {rows:[{id:id1,harvest_batch:'batch-102',line_key:'jinuo',relevance:'相关',intent_grade:'A',judgment_config:c},
+    {id:id2,harvest_batch:'batch-102',line_key:'jinuo',relevance:null,intent_grade:null,judgment_config:null}]};
+  throw Error('unexpected SQL');}};
+ const scope={line:'jinuo',run:'score-new',source_run:'batch-102'};
+ const frozen=await queueRequest(pool,{...scope,op:'score_scope'});assert.deepEqual(frozen.ids,[id1,id2]);
+ const recovered=await queueRequest(pool,{...scope,op:'score_recovery',ids:frozen.ids});assert.deepEqual(recovered.ids,[id1]);assert.equal(recovered.scored,1);
+ assert.ok(calls.every(x=>x.args?.includes('batch-102')||x.sql.includes('company_config_runs')));
+ await assert.rejects(queueRequest(pool,{...scope,op:'score',cursor:{line:'another',run:'score-new',source_run:'batch-102',collected_at:'2026-10-20T00:00:00.000Z',id:id1}}),/POLICY_SCORE_CURSOR_INVALID/);
+});
+
+test('评分提交后丢回执，重启先按原 CID 读回并扣预算再续扫',async()=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-score-attempt-'));
+ const ids=['00000000-0000-4000-8000-000000000111','00000000-0000-4000-8000-000000000112'];
+ const requests=[];let lost=true,committed=[];
+ const rpc=async body=>{requests.push(body.request);const r=body.request;
+  if(r.op==='score_scope')return {result:{line:'jinuo',run:'score103',source_run:'batch102',ids}};
+  if(r.op==='score_recovery')return {result:{ids:committed,scored:committed.length,verified:true}};
+  if(r.op==='score'){assert.deepEqual(r.ids,ids);if(lost){lost=false;committed=[ids[0]];throw Error('transport reply lost');}
+    assert.equal(r.limit,1);committed.push(ids[1]);return {result:{scored:1,ids:[ids[1]],blocked_ids:[],next_cursor:null}};}
+  if(r.op==='score_readback')return {result:{verified:true,failures:0,ids:r.ids}};
+  if(r.op==='policy_review')return {result:{verified:true,rows:r.ids.map(id=>({id,status:'pass'}))}};
+  throw Error('unexpected op');};
+ const env={P:'qa',SERIAL:'fake',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'batch102',LEADGEN_LIMIT:'2',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir};
+ const h=createHandlers({root:dir,env,rpc});await assert.rejects(h.scoring(),/transport reply lost/);
+ const saved=JSON.parse(readFileSync(join(dir,'score103-score-attempt.json'),'utf8'));
+ assert.deepEqual(saved.ids,ids);assert.equal(saved.budget,2);
+ const result=await h.scoring();assert.equal(result.recovered,1);assert.equal(result.scored,2);assert.deepEqual(result.ids,ids);
+ assert.equal(requests.filter(r=>r.op==='score').length,2);
+});
+test('并发同 run 评分在 PG 锁内重读已用额度，满额时不再领行',async()=>{
+ const id='00000000-0000-4000-8000-000000000121',calls=[];
+ const client={async query(sql,args=[]){calls.push({sql,args});if(sql.includes('count(*)::int AS used'))return {rows:[{used:1}]};return {rows:[]};},release(){}};
+ const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:'score103',source_run:'batch102',
+  limit:1,budget_max:1,ids:[id]},{freezeCompanyConfig:async()=>companyFixture()});
+ assert.equal(result.scored,0);assert.ok(calls.some(c=>c.sql.includes('pg_advisory_xact_lock')));
+ assert.ok(!calls.some(c=>c.sql.includes('SELECT * FROM zenithjoy.leadgen_comments')));
+});
+test('执行端非法评分上限在任何 RPC 前拒绝',async()=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-score-limit-'));let calls=0;
+ const h=createHandlers({root:dir,env:{P:'qa',SERIAL:'fake',WFR_TAG:'score103',LEADGEN_LINE:'jinuo',
+  LEADGEN_SOURCE_RUN:'batch102',LEADGEN_LIMIT:'not-a-number',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir},rpc:async()=>{calls++;return {result:{}};}});
+ await assert.rejects(h.scoring(),/POLICY_SCORE_BUDGET_INVALID/);assert.equal(calls,0);
+});
 
 function fakePool(responses) {
   const calls = [];
@@ -58,22 +165,30 @@ test('评论持久化失败必须回滚，不能先把视频标成已采', async
 });
 
 test('评论评分模型失败留在待评分队列，不降成C档', async () => {
-  const pool = fakePool([{ rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训' }] }]);
-  await assert.rejects(queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
+  const pool = fakePool([{ rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训',source_video_url:'https://www.douyin.com/video/7617837149999841201' }] },
+    {rows:[{title:'培训',judgment_status:'matched'}]},{rows:[]}]);
+  const result=await queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
     judgeComment: async () => { throw Error('AUTH_FAILED'); },
-  }), /AUTH_FAILED/);
+  });
+  assert.equal(result.status,'partial');assert.deepEqual(result.blocked_reasons,[{id:'c1',code:'POLICY_SCORE_MODEL_UNAVAILABLE'}]);
   assert.ok(pool.calls.some(c => c.sql === 'ROLLBACK'));
   assert.ok(!pool.calls.some(c => /UPDATE zenithjoy.leadgen_comments/.test(c.sql)));
 });
 
 test('标记人的更新与评论完成状态原子提交，已有已触达人只增加重复标记', async () => {
+  const snapshot=companyFixture();snapshot.runtime_config.comment_scoring.audiences=[{id:'test-audience',fields:{'意向信号':'报名','排除信号':'泛失业','人群描述':'测试画像'}}];
+  snapshot.runtime_config.routing={line_key:'jinuo'};
+  const cid='11111111-1111-4111-8111-111111111111';
+  const row={id:cid,line_key:'jinuo',harvest_batch:'source102',dedup_key:'甲|id|报名',nickname:'甲',douyin_id:'id',comment_body:'如何报名',source_video:'培训',source_video_url:'https://www.douyin.com/video/7617837149999841201',relevance:'相关',intent_grade:'A',judgment_config:{run_id:'test',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id}};
   const pool = fakePool([
-    { rows: [] }, { rows: [{ id: 'c1', line_key:'jinuo', dedup_key: '甲|id|报名', nickname: '甲', douyin_id: 'id',
-      comment_body: '如何报名', source_video: '培训', relevance: '相关', intent_grade: 'A' }] },
+    { rows: [] }, { rows: [row] },{rows:[row]},
+    {rows:[{snapshot,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:'test'}]},
+    {rows:[row]},{rows:[{video_url:row.source_video_url,title:row.source_video,line_key:'jinuo',judgment_status:'matched'}]},
     { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, {rows:[{id:'l1',line_key:'jinuo',douyin_id:'id'}]}, { rows: [] }, {rows:[]},
   ]);
-  const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 });
-  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
+  const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 },{freezeCompanyConfig:async()=>snapshot,
+    judgePolicy:async()=>({grade:'A',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'test-audience',matched_rule:'报名',exclusion_rule:null,reason:'咨询报名'}}})});
+  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,blocked:0,ids:[cid],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
   const person = pool.calls.find(c => /SET dup_hit_count/.test(c.sql));
   assert.ok(person);
   assert.ok(!/status\s*=|reached_at\s*=|DELETE/.test(person.sql));

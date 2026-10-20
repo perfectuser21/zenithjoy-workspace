@@ -20,10 +20,11 @@ for(const mode of ['relocation','runtime','mixed','changed-body','new-skill','mi
  if(mode==='merge-base'){
   const original=base;git(business,'checkout','-qb','base-tip');put(business,skill,'base branch only');base=commit(business);git(business,'checkout','--detach',original);
  }
- const payload=mode==='changed-body'?'changed\n':'original\n';put(central,'body.md',payload);
+ const payload=mode==='changed-body'?'changed\n':'original\n',loader='fixture loader; never executed\n';put(central,'body.md',payload);
+ put(central,'distribution/skills_source.py',loader);
  put(central,'distribution/catalog.json',JSON.stringify({profiles:{zenithjoy:{files:mode==='missing-mapping'?[]:[{path:skill,source:'body.md',sha256:createHash('sha256').update(payload).digest('hex')}]}}}));
  const revision=commit(central);
- put(business,'.skills-source.json',JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision,loader_sha256:'0'.repeat(64)}));
+ put(business,'.skills-source.json',JSON.stringify({version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision,loader_sha256:createHash('sha256').update(loader).digest('hex')}));
  if(mode==='runtime')put(business,'services/agent/runtime.py','changed');
  else if(mode==='new-skill')put(business,'services/agent/new/SKILL.md','new');
  else{rmSync(join(business,skill));if(mode==='mixed')put(business,'services/agent/runtime.py','changed');}

@@ -82,10 +82,11 @@ test('migrated baseline still validates every method against pinned central Skil
   t.after(()=>rmSync(central,{recursive:true,force:true}));git(central,'init','-q');
   git(root,'remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace.git');
   const paths=git(root,'ls-files').split('\n').filter(p=>p.endsWith('/SKILL.md'));
-  const saved=new Map(),files=[];put(central,'distribution/catalog.json',{});
+  const saved=new Map(),files=[],loader='fixture loader; never executed\n';put(central,'distribution/catalog.json',{});
+  put(central,'distribution/skills_source.py',loader);
   for(const [i,path] of paths.entries()){const body=readFileSync(join(root,path)),source='bodies/'+i+'.md';saved.set(path,body);put(central,source,body);files.push({path,source,sha256:createHash('sha256').update(body).digest('hex')});rmSync(join(root,path));}
   put(central,'distribution/catalog.json',{profiles:{zenithjoy:{files}}});git(central,'add','.');git(central,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','central pinned methods');
-  put(root,'.skills-source.json',{version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:git(central,'rev-parse','HEAD'),loader_sha256:'0'.repeat(64)});
+  put(root,'.skills-source.json',{version:1,repository:'perfectuser21/zenithjoy-skills',profile:'zenithjoy',revision:git(central,'rev-parse','HEAD'),loader_sha256:createHash('sha256').update(loader).digest('hex')});
   git(root,'add','.');git(root,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','migrated baseline');const base=git(root,'rev-parse','HEAD');
   for(const [path,body] of saved)put(root,path,body);
   assert.equal(checkMethods(root,{base,skillSource:central}).status,'PASS');
@@ -102,15 +103,17 @@ test('a Workflow Skill absent before first adoption is allowed only when no hist
 // The extracted implementation is business code, so every frozen method must
 // change its code identity when those exact handler bytes change.
 test('real extracted handlers belong to every consumer method source closure',t=>{
- const {root}=fixture(t),path='services/phone-adb-controller/leadgen-handlers.mjs';
+ for(const name of ['leadgen-handlers.mjs','leadgen-scoring-handler.mjs','leadgen-policy-review.js']){
+ const {root}=fixture(t),path='services/phone-adb-controller/'+name;
  put(root,path,readFileSync(join(source,path)));
  const before=collectMethods(root);
  put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated handler-byte mutation\n');
  const after=collectMethods(root);
  for(const [ref,method] of Object.entries(before.activities)){
-  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted actual handler bytes');
+  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted actual '+name+' bytes');
   assert.equal(after.activities[ref].contract_digest,method.contract_digest);
   assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
+ }
  }
 });
 
