@@ -45,8 +45,27 @@ async function fixture(t,{migrated=false}={}){
  const bundlePath=join(temp,'bundle.json');writeFileSync(bundlePath,JSON.stringify({run:{id:42,sha,repo,branch:'main',event:'push',path:'.github/workflows/pilot-release-verification.yml'},snapshot,report,receipt,commander,patrol}));
  const tokenPath=join(temp,'token.env');writeFileSync(tokenPath,'CECELIA_INTERNAL_TOKEN=fixture-private-token\n',{mode:0o600});
  const releases=new Map(),requests=[];let mode='valid';
+ const proofs=new Map([...workflows,...commanderWorkflows].filter(w=>w.payload.key!=='workflow_commander.internal').map((w,i)=>{
+  const target=['douyin_comment_scoring','workflow_report.internal','workflow_commander.internal','douyin_video_publish.android'].includes(w.payload.key)?'mmv':'xian-m4',id=target==='mmv'?uuid(8):uuid(9),run_id=`candidate-${i}`;
+  const release={id,environment:`staging:${sha}`,target,payload:{workflows:[...workflows,...commanderWorkflows],components:[{kind:'repo',repo,revision:sha},...activities[0].payload.implementation_bindings.filter(b=>b.kind==='code').map(({scope,status,...c})=>c)]}};
+  releases.set(id,release);
+  return [run_id,{binding:{id:`binding-${i}`,run_id,release_id:id,observation_id:`observation-${target}`,workflow_id:w.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256:'e'.repeat(64)},release,workflow:w}];
+ }));
  const server=createServer(async(req,res)=>{
-  assert.equal(req.headers.authorization,'Bearer fixture-private-token');let body='';for await(const part of req)body+=part;requests.push({method:req.method,path:req.url});
+  assert.equal(req.headers.authorization,'Bearer fixture-private-token');let body='';for await(const part of req)body+=part;requests.push({method:req.method,path:req.url,environment:body?JSON.parse(body).environment:undefined});
+  if(req.method==='GET'&&req.url.startsWith('/api/brain/tasks/')){
+   const run_id=req.url.split('/').at(-1),proof=proofs.get(run_id),b=proof.binding;
+   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({id:run_id,status:'completed',result:{workflow_control:{phase:'final',envelope:{definition:b},verification:{task_id:run_id,run_id,definition_sha256:b.snapshot_sha256,verdict:'PASS',assertions:[{name:'cleanup',pass:true}],evidence:['independent-readback']}}}}));return;
+  }
+  if(req.method==='GET'&&req.url.startsWith('/api/brain/runs/')){
+   const proof=proofs.get(req.url.split('/')[4].split('?')[0]),b=proof.binding;
+   const value=req.url.includes('?include=spans')?{spans:[{run_binding_id:b.id,evidence:{runtime_snapshot_sha256:b.runtime_snapshot_sha256}}]}:req.url.endsWith('/definition')?proof:{run_id:b.run_id,run_binding_id:b.id,release_id:b.release_id,business_outcome:mode==='business_failed'?'fail':'pass',evidence_status:'verified',gaps:[],missing:[],unexpected:[],span_count:2,expected_count:2,links:{task_id:b.run_id},task_run:{status:'success'}};
+   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(value));return;
+  }
+  if(req.method==='GET'&&req.url.endsWith('/gate')){
+   const release=releases.get(req.url.split('/')[4]);
+   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({release_id:release.id,deployed:true,actual_matches:true,current_observation_id:`observation-${release.target}`}));return;
+  }
   let release;
   if(req.method==='POST'){
    const input=JSON.parse(body);assert.ok(input.components.every(c=>c.kind!=='raw'));assert.deepEqual(snapshot.definitions.activities[0].payload.implementation_bindings.slice(1),normalizedDescriptions);const id=input.target==='xian-m4'?uuid(5):input.target==='xian-m1'?uuid(6):uuid(7);
@@ -57,19 +76,24 @@ async function fixture(t,{migrated=false}={}){
   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({release}));
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  if(migrated)rmSync(join(root,path));
- return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,setMode:value=>mode=value};
+ return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,mode:'promote',businessRunIds:[...proofs.keys()],setMode:value=>mode=value};
 }
 test('真实normalized描述保留unknown，Git+HTTP两release回读后才部署固定组件',async t=>{
  const f=await fixture(t);await prepareAndDeploy(f);const actual=JSON.parse(readFileSync(f.marker));
  assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.deepEqual(Object.keys(actual.ids).sort(),['mmv','xian-m4']);
  assert.equal(actual.plan.releases.mmv.payload.workflows.length,7);assert.equal(actual.plan.releases['xian-m4'].payload.workflows.length,4);assert.deepEqual(actual.map,actual.plan.commander_releases);assert.deepEqual(Object.keys(actual.map),[actual.ids.mmv]);assert.equal(Object.keys(actual.map[actual.ids.mmv].workflows).length,7);
- assert.deepEqual(f.requests.map(r=>r.method),['POST','POST','GET','GET']);
+ assert.equal(f.requests.filter(r=>r.method==='POST').length,2);
+ assert.equal(f.requests.filter(r=>r.path.endsWith('/reconciliation')).length,6);
 });
 for(const mode of ['unknown','wrong_target'])test(`真实Brain ${mode}回执阻止部署子进程`,async t=>{
  const f=await fixture(t);f.setMode(mode);await assert.rejects(prepareAndDeploy(f));assert.equal(existsSync(f.marker),false);
 });
 test('工作区字节漂移在创建release前拒绝',async t=>{
  const f=await fixture(t);writeFileSync(join(f.root,'services/phone-adb-controller/entry.sh'),'changed');await assert.rejects(prepareAndDeploy(f));assert.equal(f.requests.length,0);assert.equal(existsSync(f.marker),false);
+});
+test('Pilot绿但业务失败时禁止创建production release及执行部署',async t=>{
+ const f=await fixture(t);f.setMode('business_failed');await assert.rejects(prepareAndDeploy(f));
+ assert.equal(f.requests.some(r=>r.method==='POST'),false);assert.equal(existsSync(f.marker),false);
 });
 
 test('真实prepareAndDeploy在全新迁移checkout从固定catalog恢复Skill后才构造正式release',async t=>{

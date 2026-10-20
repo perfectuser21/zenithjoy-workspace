@@ -40,6 +40,24 @@ def run_directory(run):
     return Path.home() / 'wf-agent-runs' / run
 
 
+def runtime_helpers(envelope):
+    supplied = envelope.get('execution_location', {}).get('runtime_root')
+    candidate = re.fullmatch(r'(.+)/\.local/share/zenithjoy/phone-candidates/([a-f0-9]{40})/runtime/commander', str(HERE))
+    if supplied is not None and (not isinstance(supplied, str) or Path(supplied).expanduser().resolve() != HERE):
+        raise ValueError('frozen Commander runtime root mismatch')
+    if candidate and supplied is None:
+        raise ValueError('candidate Commander requires frozen runtime root')
+    result = {'report': str(HERE / 'wf-report.py'), 'commander': str(HERE / 'wf-v2.py')}
+    if candidate and envelope.get('workflow_key') == 'douyin_video_publish.android':
+        sha = candidate.group(2)
+        package = Path.home() / '.local/share/zenithjoy/publish-releases' / sha
+        # 候选Skill来源全闭包独立读回，不能退回用户当前全局Skill链接。
+        subprocess.run(['node', str(HERE.parent / 'deployment-publish-release.mjs'), 'verify', str(package), sha],
+                       check=True, capture_output=True, timeout=120)
+        result['publish_skill'] = str(package / '.agents/skills/multi-platform-publish/SKILL.md')
+    return result
+
+
 def validate(envelope, parent):
     if envelope.get('protocol') != io.PROTOCOL:
         raise ValueError('unsupported commander protocol')
@@ -68,6 +86,7 @@ def validate(envelope, parent):
     if envelope['contract'].get('resources'):
         phone_module.Phone(run_directory(envelope['run_id']), envelope)
     io.ready(envelope)
+    runtime_helpers(envelope)
 
 
 def make_request(directory, envelope, parent):
@@ -88,13 +107,16 @@ def make_request(directory, envelope, parent):
     request = io.read(directory / 'agent-request.json')
     request['expires_at'] = timestamp(envelope['deadline_at'])
     request['protocol'] = io.PROTOCOL
-    request['execution_location'] = {'host': 'mmv', 'tool': 'gateway_exec', 'run_directory': str(directory)}
+    request['execution_location'] = {'host': 'mmv', 'tool': 'gateway_exec', 'run_directory': str(directory),
+                                     'runtime_root': str(HERE)}
+    request['runtime_helpers'] = runtime_helpers(envelope)
     io.write(directory / 'agent-request.json', request)
     (directory / 'msg.txt').write_text(
         '【通用Commander业务子会话】仅执行冻结合同，禁止修改代码或直接完成Brain任务。\n'
         '执行位置execution_location=MMV网关宿主；模型本机不是MMV。读取绑定、input/contract、活动event、报告collect/verify、产物和交付文件均须gateway_exec；JSON用结构化env配固定Python读os.environ传stdin，正文不得拼shell。长进程用gateway_process。resources.machine仅指手机动作宿主，不能据此迁移run目录或报告helper。\n'
         '完整输入：' + str(directory / 'input.json') + '\n冻结合同：' + str(directory / 'contract.json') +
         '\n运行信封：' + str(directory / 'envelope.json') + '\n产物目录：' + str(directory / 'evidence') +
+        '\n本次实际执行路径见agent-request.json的runtime_helpers；合同内历史安装路径是逻辑入口，必须解析为这里已核验的同版本helper。report采集和独立读回使用runtime_helpers.report；发布Skill使用runtime_helpers.publish_skill（候选有此项时禁止使用全局Skill链接）。当前runtime_root=' + str(HERE) +
         '\n按照合同skill与activities执行；原样保留所有输入字段，仅为contract中by=agent的业务activity/step上报（preflight与cleanup由外壳负责，不能代补）；每个真实完成的activity/step，用activity_bindings按key定位并对照definition.expected_path的reference_id和step_id逐项通过 wf-v2.py event 发activity_completed，附started_at/ended_at/outcome及真实evidence；不能只记最外层activity，不能根据delivery补造步骤证据。'
         '\n手机资源由外壳领锁/收尾，业务全程精确使用run_id作lock-owner，不另领或释放锁。'
         '\n外部副作用幂等key用task_id与activity，不用run_id；未知副作用先读回，不重复发布。'

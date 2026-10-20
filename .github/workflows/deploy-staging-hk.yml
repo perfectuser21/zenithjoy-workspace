@@ -17,6 +17,8 @@ on:
     paths:
       - 'apps/api/**'
       - 'deploy/docker-compose.staging-api.yml'
+      - 'scripts/deploy/hk-api-staging.sh'
+      - '.github/workflows/deploy-staging-hk.yml'
   workflow_dispatch: {}
 
 concurrency:
@@ -35,68 +37,25 @@ jobs:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: latest
 
-      - name: Deploy via SSH（HK docker build + up + 冒烟）
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Deploy fixed candidate via SSH（独立源码及实际版本核验）
         env:
           SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
           SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
           DEPLOY_SHA: ${{ github.sha }}
         timeout-minutes: 25
         run: |
+          set -euo pipefail
           KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
-
-          ssh -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=30 \
-              -o ServerAliveInterval=60 \
-              -i "$KEY_FILE" \
-              "root@${SSH_HOST}" \
-              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
-          set -euo pipefail
-          DEPLOY_SHA="$1"
-          REPO=/opt/zenithjoy/repo
-
-          echo "=== [1/4] git sync → ${DEPLOY_SHA} ==="
-          git -C "$REPO" fetch --force --prune origin main
-          git -C "$REPO" reset --hard "$DEPLOY_SHA"
-
-          echo "=== [2/4] DB migration（生产镜像不含 db/migrations 且无 devDeps，借一次性 node 容器跑，
-          #      挂同一 zenithjoy-net + 同一 .env，走跟 API 容器一样的 DATABASE_URL）==="
-          # 拆库刀3-T3 迁移到 hk-vps docker 时漏了这一步——旧 deploy-us-vps.yml 在宿主直跑
-          # `npm run migrate`，新 docker 化流程从没补上，导致 migration 文件合并进 main 后
-          # 从未真正应用到 staging 库，直到 Path2 真机验证时才在 acquisition_leads.douyin_id
-          # 上撞出来（2026-07-16 真机复现：查询该列报 column does not exist）。
-          # apps/api/tsconfig.json 继承 monorepo 根 tsconfig.base.json——只挂 apps/api 目录
-          # ts-node 解析不到父级 tsconfig 会报 TS5083 Cannot read file '/tsconfig.base.json'，
-          # 必须把整个仓库挂进去，workdir 落在 apps/api 子目录。
-          docker run --rm \
-            --network zenithjoy-net \
-            --env-file /opt/zenithjoy/staging-api/.env \
-            -v "$REPO":/repo -w /repo/apps/api \
-            -e TS_NODE_TRANSPILE_ONLY=1 \
-            node:20-alpine sh -c "npm install --silent && npx ts-node db/migrations/run-migration.ts"
-          # TS_NODE_TRANSPILE_ONLY：宿主 repo node_modules 被容器历史写入污染后 @types 解析漂移，
-          # ts-node 类型检查会 TS7016 假红（0909 staging/prod 双实证）；类型闸由 CI tsc 负责，
-          # 部署路径只需转译执行。
-
-          echo "=== [3/4] docker build + up（仅 staging，绝不碰生产容器）==="
-          cd "$REPO"
-          BUILD_SHA="$DEPLOY_SHA" docker compose -f deploy/docker-compose.staging-api.yml build zenithjoy-api-staging
-          docker compose -f deploy/docker-compose.staging-api.yml up -d zenithjoy-api-staging
-
-          echo "=== [4/4] 冒烟：容器 /health（等 healthcheck 过）==="
-          STATUS=none
-          for i in $(seq 1 20); do
-            STATUS=$(docker inspect zenithjoy-api-staging --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
-            [ "$STATUS" = "healthy" ] && break
-            sleep 5
-          done
-          [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 zenithjoy-api-staging; exit 1; }
-          curl -fsS http://127.0.0.1:5201/health >/dev/null && echo "✅ staging :5201 /health OK"
-          REMOTE_EOF
-
-      - name: Checkout (payment smoke script)
-        uses: actions/checkout@v4
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \
+            -i "$KEY_FILE" "root@${SSH_HOST}" bash -s -- "$DEPLOY_SHA" \
+            < scripts/deploy/hk-api-staging.sh
 
       # 从 GHA runner 公网出口验证部署后的支付回调端点——上面 [4/4] 那步是容器起来了没
       # （SSH 进 HK 内网 curl 127.0.0.1），这步验的是完全不同的另一件事：公网域名/nginx

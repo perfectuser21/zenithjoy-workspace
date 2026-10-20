@@ -4,8 +4,8 @@
 # 验收内容：
 #   1. two-column-gate.sh 脚本存在且可执行
 #   2. --fixture 模式五情形逐一验证
-#   3. promote-all-prod.yml 包含证据③接线
-#   4. promote-all-prod.yml promote-dashboard job 包含 inputs.sha 绑定
+#   3. 共享准入消费真实冻结验收；全部发布入口接同一门禁
+#   4. 整体晋级及恢复始终绑定候选 SHA
 #
 # TASK_ID: 11cc5f4c-9bd0-4612-bf5a-9a6b574756af
 
@@ -45,22 +45,22 @@ check "情形2: 定案绿+sha匹配→exit 0" "$C" 0
 set +e; bash "$SCRIPT" --fixture "$FIXTURE_DIR/nonexistent.json" 2>/dev/null; C=$?; set -e
 check "情形3: fixture不存在→exit 1" "$C" 1
 
-# 情形4：infra_error + bypass=true → exit 0
+# 情形4：infra_error + bypass=true 仍没有业务通过证据 → exit 1
 set +e; PROMOTE_SHA="$PROMOTE_SHA" BYPASS_TWO_COLUMN_INFRA=true bash "$SCRIPT" --fixture "$FIXTURE_DIR/case-infra-error-bypass.json" 2>/dev/null; C=$?; set -e
-check "情形4: infra_error+bypass→exit 0" "$C" 0
+check "情形4: infra_error+bypass仍拒绝→exit 1" "$C" 1
 
 # 情形5：cells_red + bypass=true → exit 1
 set +e; PROMOTE_SHA="$PROMOTE_SHA" BYPASS_TWO_COLUMN_INFRA=true bash "$SCRIPT" --fixture "$FIXTURE_DIR/case-cells-red-bypass.json" 2>/dev/null; C=$?; set -e
 check "情形5: cells_red+bypass→exit 1" "$C" 1
 
-# ── 3. promote-all-prod.yml 证据③接线 ────────────────────────────────────
-grep -q "two-column-gate.sh" .github/workflows/promote-all-prod.yml \
-  && { echo "[PASS] INV-1: 证据③ two-column-gate.sh 接线存在"; PASS=$((PASS+1)); } \
-  || { echo "[FAIL] INV-1: 缺证据③接线"; FAIL=$((FAIL+1)); }
-
-grep -q "release-gate" .github/workflows/promote-all-prod.yml \
-  && { echo "[PASS] INV-1: promote-backend needs release-gate"; PASS=$((PASS+1)); } \
-  || { echo "[FAIL] INV-1: 缺 release-gate 依赖"; FAIL=$((FAIL+1)); }
+# ── 3. 共享准入行为与全部生产入口依赖 ────────────────────────────────────
+if node --test scripts/release-gate/__tests__/release-admission.test.mjs \
+  scripts/release-gate/__tests__/app-workflow-wiring.test.mjs \
+  scripts/release-gate/__tests__/all-release-recovery.test.mjs; then
+  echo "[PASS] INV-1: 真实验收读取、固定SHA、共同依赖与失败恢复"; PASS=$((PASS+1))
+else
+  echo "[FAIL] INV-1: 共享生产准入或恢复回归失败"; FAIL=$((FAIL+1))
+fi
 
 # ── 4. promote-dashboard sha 绑定 ────────────────────────────────────────
 grep -q "inputs.sha" .github/workflows/promote-all-prod.yml \

@@ -36,6 +36,8 @@ jobs:
     name: Build + Deploy STAGING Dashboard (autopilot-staging :521 / API :5201)
     runs-on: ubuntu-latest
 
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
     steps:
       - name: Deploy via SSH（build staging dist + 起 autopilot-staging 容器）
         uses: appleboy/ssh-action@v1.0.3
@@ -44,17 +46,20 @@ jobs:
           username: ${{ secrets.HK_VPS_USER }}
           key: ${{ secrets.HK_VPS_SSH_KEY }}
           port: ${{ secrets.HK_VPS_PORT }}
+          envs: DEPLOY_SHA
           script_stop: true
           command_timeout: 20m
           script: |
             set -euo pipefail
-            REPO=/opt/zenithjoy/repo
+            [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+            SOURCE=/opt/zenithjoy/repo
             STAGING_DIR=/opt/zenithjoy/autopilot-staging
-
-            echo "=== [1/5] git sync（候选 = origin/main）==="
-            git -C "$REPO" remote prune origin 2>/dev/null || true
-            git -C "$REPO" fetch --force --prune origin main
-            git -C "$REPO" reset --hard origin/main
+            git -C "$SOURCE" fetch --force origin main
+            git -C "$SOURCE" cat-file -e "$DEPLOY_SHA^{commit}"
+            git -C "$SOURCE" merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+            REPO="$(mktemp -d /opt/zenithjoy/dashboard-staging-build.XXXXXX)"
+            trap 'rm -rf "$REPO"' EXIT
+            git -C "$SOURCE" archive "$DEPLOY_SHA" | tar -xf - -C "$REPO"
 
             echo "=== [2/5] build dashboard（STAGING build env）==="
             cd "$REPO"
@@ -68,8 +73,9 @@ jobs:
             # 环境角标：staging build 注入 staging → 前端右上角显橙色 STAGING 旗（生产 promote 注入 production，不显示）。
             export VITE_DEPLOY_ENV='staging'
             # D2 FR-4：注入 git SHA，前端可读供验收版本戳核对
-            export VITE_BUILD_SHA='${{ github.sha }}'
+            export VITE_BUILD_SHA="$DEPLOY_SHA"
             npm run build --workspace=apps/dashboard
+            printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/dashboard/dist/release-sha.json
 
             echo "=== [3/5] 落 staging dist + staging nginx.conf（绝不碰生产 autopilot-dashboard）==="
             mkdir -p "$STAGING_DIR/dist"
@@ -84,7 +90,7 @@ jobs:
             # 否则 compose up 会报 "container name already in use" 冲突）。
             # ⚠️ 绝不用 --remove-orphans：生产 autopilot-dashboard 会被 compose 当 orphan 删掉，等于杀生产。
             docker rm -f autopilot-staging 2>/dev/null || true
-            docker compose -f docker-compose.staging.yml up -d --force-recreate autopilot-staging
+            docker compose -p zenithjoy-dashboard-staging -f docker-compose.staging.yml up -d --force-recreate autopilot-staging
             sleep 3
 
             echo "=== [5/5] 验证：本地容器健康 ==="
@@ -96,11 +102,15 @@ jobs:
               docker logs --tail 30 autopilot-staging 2>&1 || true
               exit 1
             fi
-            echo "[done] STAGING dashboard 部署流程结束（容器已起）"
+            curl -fsS --max-time 15 "http://localhost:521/release-sha.json?candidate=$DEPLOY_SHA" \
+              | jq -e --arg sha "$DEPLOY_SHA" '.sha == $sha'
+            echo "[done] STAGING dashboard 已读回候选 SHA=$DEPLOY_SHA"
             exit 0
 
       - name: Checkout (smoke script)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Staging smoke
         run: |
@@ -114,8 +124,10 @@ jobs:
     if: failure()
     steps:
       - name: Post alert to Brain
+        env:
+          BRAIN_URL: ${{ secrets.BRAIN_URL }}
         run: |
-          curl -sf -X POST ${{ secrets.BRAIN_URL }}/api/brain/tasks \
+          curl -sf -X POST "$BRAIN_URL/api/brain/tasks" \
             -H "Content-Type: application/json" \
             -d '{
               "title": "ZenithJoy STAGING Dashboard 部署失败",

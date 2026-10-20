@@ -8,31 +8,35 @@ import {fileURLToPath} from 'node:url';
 import {readDeploymentToken,brainRequest,DEPLOY_REPO} from './deployment-preflight.mjs';
 import {readDeploymentSource,fixedSourceEnvironment,prepareDeploymentSkillSources} from './deployment-fixed-source.mjs';
 import {prepareTargetReleases} from './deployment-targets.mjs';
-export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath}){
+import {stageCandidate} from './deployment-candidate.mjs';
+export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[]}){
+ if(!['candidate','promote'].includes(mode))throw Error('必须选择candidate或promote');
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:fixedSourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024}).trim();
- if(!/^[0-9a-f]{40}$/.test(sha)||git('rev-parse','HEAD')!==sha||git('rev-parse','origin/main')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署源不是干净的固定main');
+ if(!/^[0-9a-f]{40}$/.test(sha)||git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署源不是干净的固定main');
+ git('merge-base','--is-ancestor',sha,'origin/main');
  const origin=git('remote','get-url','origin');
  if(![`https://github.com/${DEPLOY_REPO}.git`,`https://github.com/${DEPLOY_REPO}`,`git@github.com:${DEPLOY_REPO}.git`].includes(origin))throw Error('部署来源仓库不符');
  const bundle=JSON.parse(readFileSync(bundlePath,'utf8'));
  if(bundle.run?.repo!==DEPLOY_REPO||bundle.run.sha!==sha||bundle.run.branch!=='main'||!['push','workflow_dispatch'].includes(bundle.run.event)||bundle.run.path!=='.github/workflows/pilot-release-verification.yml'||!Number.isSafeInteger(bundle.run.id)||!attemptKey.startsWith(`github:${bundle.run.id}:`))throw Error('部署证据与受信run不符');
  prepareDeploymentSkillSources(root,sha);
  const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
- const plan=await prepareTargetReleases({bundle,sha,environment:'production',attemptKey,request,readFile:path=>{
+ const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,attemptKey,request,readFile:path=>{
   return readDeploymentSource(root,sha,path,{materialize:true});
  }});
  if(git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署预检期间工作区变化');
+ if(mode==='candidate')return stageCandidate({root,sha,plan,attemptKey,request,brainUrl});
  const folder=mkdtempSync(join(tmpdir(),'phone-deployment-plan-'));
  const planFile=join(folder,'plan.json'),mapFile=join(folder,'commander-releases.json');
  writeFileSync(planFile,JSON.stringify(plan),{mode:0o600});writeFileSync(mapFile,JSON.stringify(plan.commander_releases),{mode:0o600});
  try {
  const child=spawn('bash',[join(root,'services/phone-adb-controller/deploy.sh')],{stdio:['ignore','inherit','inherit'],env:{...fixedSourceEnvironment({network:true}),
   DEPLOY_SHA:sha,WF_RELEASE_IDS:JSON.stringify(plan.release_ids),WF_DEPLOY_PLAN_FILE:planFile,WF_COMMANDER_RELEASES_FILE:mapFile,WF_DEPLOY_ENVIRONMENT:'production',WF_DEPLOY_COLLECTOR:'phone-adb-deployer',
-  WF_DEPLOY_ATTEMPT_KEY:attemptKey,BRAIN_URL:brainUrl,BRAIN_INTERNAL_TOKEN:token}});
+  WF_BUSINESS_RUN_IDS:JSON.stringify(businessRunIds),WF_DEPLOY_ATTEMPT_KEY:attemptKey,BRAIN_URL:brainUrl,BRAIN_INTERNAL_TOKEN:token}});
  const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
  if(code!==0)throw Error('部署或观测未完成');
  } finally {rmSync(folder,{recursive:true,force:true});}
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env')});}
+ try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env')});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
  catch(error){process.stderr.write(`${error.message}\n`);process.exitCode=1;}
 }
