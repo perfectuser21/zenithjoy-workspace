@@ -6,208 +6,10 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 
-test('原批只读复核模式仅调用精确CID政策入口，不领取新评分行',async()=>{
- const d=mkdtempSync(join(tmpdir(),'policy-review-'));const ids=['ba9b2b44-01eb-403b-b43f-5070dbaa2ba3'];const calls=[];
- try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'original103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'original102',LEADGEN_POLICY_REVIEW_IDS:JSON.stringify(ids),LEADGEN_POLICY_CLAIM:'original103'},rpc:async body=>{calls.push(body.request);return {result:{verified:false,rows:[{id:ids[0],status:'fail'}],ids}}},sourceCommit:'a'.repeat(40)});
-  const result=await h.scoring();assert.equal(result.status,'partial');assert.deepEqual(calls.map(c=>c.op),['policy_review']);assert.deepEqual(calls[0].ids,ids);
-  assert.equal(JSON.parse(readFileSync(join(d,'original103-policy-review.json'))).rows[0].status,'fail');
- }finally{rmSync(d,{recursive:true,force:true});}
-});
-
-test('103检查合同单独要求政策语义复核，不以存储读回代替',()=>{
- const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-comment-scoring.yaml','utf8'));
- assert.ok(checks.probes.some(p=>p.key==='policy_review'&&p.probe.ref==='metrics.policy_review_failures'&&p.severity==='error'));
-});
-test('mark_leads预算partial后私有保存同scope游标，重试继续扫描',async()=>{
- const d=mkdtempSync(join(tmpdir(),'policy-cursor-')),cursor={line:'jinuo',run:'score103',source_run:'source102',collected_at:'2026-10-20T00:00:00.000Z',id:'ba9b2b44-01eb-403b-b43f-5070dbaa2ba3'};const seen=[];
- try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source102'},rpc:async body=>{seen.push(body.request);const op=body.request.op;return {result:op==='mark_leads'?(seen.filter(v=>v.op==='mark_leads').length===1?{status:'partial',marked:0,ids:[],lead_ids:[],next_cursor:cursor}:{marked:0,ids:[],lead_ids:[]}):{verified:true,failures:0,ids:[]}}},sourceCommit:'a'.repeat(40)});
-  await h.mark_leads();await h.mark_leads();assert.deepEqual(seen.filter(v=>v.op==='mark_leads')[1].cursor,cursor);
- }finally{rmSync(d,{recursive:true,force:true});}
-});
-test('103冻结score完成后恢复只读原CID，不能再扫下一批',async()=>{
- const d=mkdtempSync(join(tmpdir(),'score-recovery-'));const calls=[],id='11111111-1111-4111-8111-111111111111';let committed=false;
- try{const {createHandlers}=await import('../leadgen-handlers.mjs');const h=createHandlers({root:d,env:{HOME:d,P:'test-profile',WFR_RUN_DIR:d,WFR_TAG:'score103',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source102',LEADGEN_LIMIT:'1'},rpc:async body=>{
-  const r=body.request;calls.push(r);let result;
-  if(r.op==='score_scope')result={ids:committed?[id,'22222222-2222-4222-8222-222222222222']:[id]};
-  else if(r.op==='score_recovery')result={verified:true,ids:committed?[id]:[],scored:committed?1:0};
-  else if(r.op==='score'){committed=true;result={scored:1,ids:[id]};}
-  else result={verified:true,rows:[{status:'pass'}],failures:0};return {result};},sourceCommit:'a'.repeat(40)});
-  await h.scoring();assert.equal((await h.scoring()).recovered,1);assert.equal(calls.filter(r=>r.op==='score').length,1);
-  assert.ok(calls.filter(r=>r.op==='score_recovery').every(r=>JSON.stringify(r.ids)===JSON.stringify([id])));
- }finally{rmSync(d,{recursive:true,force:true});}
-});
-
 // 明示模拟本轮native v2工件；不宣称原始audio为实机采集。
 function fakeNativeProof(eid){const runtime={client_sha256:'d474146594d6f42ec04eede0049391a647ab27cdcf30c627ac30b281cf5069d7',server_sha256:'8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e',evidence_file:eid+'.capture-runtime.json',evidence_sha256:'e'.repeat(64)};return {capture_runtime:runtime,capture_runtime_end:{...runtime},capture_audio_mode:'playback_dup',capture_audio_sdk:36,capture_audio_required:true,capture_audio_sdk_evidence_file:eid+'.capture-sdk.txt',capture_audio_sdk_evidence_sha256:'c'.repeat(64),capture_audio_verified:true,capture_audio_end:{mode:'playback_dup',sdk:36,required:true,sdk_evidence_file:eid+'.capture-sdk.txt',sdk_evidence_sha256:'c'.repeat(64)},audio_streams:1,playback_proof_kind:'native_audio',native_audio:Object.fromEntries(['start','end'].map(phase=>[phase,{state:'started',uid:10203,pid:528,piid:73615,package_uid_verified:true,foreign_started:0,...Object.fromEntries([['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].flatMap(([k,s])=>[[k+'_file',eid+'-playback-'+phase+'.'+s],[k+'_sha256','a'.repeat(64)]]))}]))};}
-test('正式录前音量Step判真实媒体回读，不能用静音内容电平代替',async()=>{
- const contract=parseYaml(readFileSync('product-map/contracts/douyin_video_processing.yaml','utf8'));
- const step=contract.activities.find(a=>a.key==='qualification').steps.find(s=>s.key==='unmute_before_record');
- const {judgeSteps}=await import('../step-judge.mjs');const d=mkdtempSync(join(tmpdir(),'media-step-'));
- try{const log=join(d,'activity.log');writeFileSync(log,'audio_rejected reason=silent_or_unknown_volume\n');
- const deployed=JSON.parse(readFileSync('services/phone-adb-controller/plans/douyin_video_processing.steps.json','utf8')).steps.find(s=>s.key.endsWith('.unmute_before_record'));
- for(const s of [{key:'volume',at:'qualification',mode:'checkpoint',readback:step.dod.readback},deployed]){
-  const spec={steps:[s]};
-  const ok=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:0}}});assert.equal(ok.steps[0].pass,true);
-  const bad=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:1}}});assert.equal(bad.steps[0].pass,false);
-  const unknown=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{}}});assert.equal(unknown.steps[0].pass,null);
- }
- }finally{rmSync(d,{recursive:true,force:true});}
-});
-
-test('采集返回partial时，Commander收到真实部分状态而不是脚本正常返回后的completed',async()=>{
- const {runWorkflow}=await import('../leadgen-workflow.mjs');const receipts=[];
- const result=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:{},
-  handlers:{collect_videos:async()=>({status:'partial',stop_reason:'capture_failed',counts:{persisted:11,failed:1}}),cleanup:async()=>({released:true})},
-  commander:async receipt=>{receipts.push(receipt);return {action:'continue',reason:'依据真实状态'};},record:async()=>{}});
- assert.equal(result.status,'partial');
- assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.status,'partial');
- assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.result.counts.persisted,11);
-});
-
-test('Commander叫停后不执行下一活动，锁内清场仍有前后Commander回执', async () => {
-  const {runWorkflow} = await import('../leadgen-workflow.mjs');
-  const executed=[],records=[];
-  const result=await runWorkflow({activities:['source','dedup','cleanup'].map(key=>({key})),
-    context:{run_id:'r'},handlers:Object.fromEntries(['source','dedup','cleanup'].map(k=>[k,async()=>{executed.push(k);return {ok:true};}])),
-    commander:async r=>({action:r.activity==='source'&&r.phase==='after'?'finish':'continue',reason:'实际证据'}),
-    record:async r=>records.push(r)});
-  assert.deepEqual(executed,['source','cleanup']);
-  assert.equal(result.status,'partial');
-  assert.equal(records.filter(r=>r.activity==='cleanup'&&['before','after'].includes(r.phase)).length,2);
-});
-
-test('独立读回未知或失败不能让执行exit0成为活动成功',async()=>{
-  const {runWorkflow}=await import('../leadgen-workflow.mjs');let cleaned=0;
-  const r=await runWorkflow({activities:[{key:'source'},{key:'dedup'},{key:'cleanup'}],context:{},
-    handlers:{source:async()=>({cards:2}),dedup:async()=>{throw Error('不应执行');},cleanup:async()=>{cleaned++;return {};}},
-    commander:async()=>({action:'continue',reason:'检查证据'}),record:async()=>{},
-    verify:async()=>({verified:false,reason:'必需步骤读不到'})});
-  assert.equal(r.status,'failed');assert.equal(cleaned,1);
-  assert.equal(r.results.find(a=>a.activity==='dedup').status,'blocked');
-});
-
-test('触达暂停预检不取单、不触碰手机、不发送',async()=>{
-  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
-  const handlers=createHandlers({root:'/tmp',env:{HOME:'/tmp',P:'jinoshengyuan-work',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'},
-    rpc:async()=>{throw Error('不允许取单');},execute:async()=>{throw Error('不允许操作手机');}});
-  assert.equal((await handlers.preflight()).status,'paused');
-  await assert.rejects(handlers.send_dm(),/暂停/);
-});
-
-test('profile注册的手机与命令serial不符时，在拿锁与手势前拒绝',async()=>{
-  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'leadgen-identity-'));const calls=[];
-  try{
-    const handlers=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,P:'work',SERIAL:'S1',WFR_TAG:'run'},rpc:async()=>{},
-      execute:async(command,args)=>{calls.push({command,args});return {code:0,stdout:command==='adb'?'device\n':'serial=S2\n',stderr:''};}});
-    await assert.rejects(handlers.preflight(),/serial不一致/);
-    assert.ok(!calls.some(c=>c.args.includes('lock-acquire')||c.args.includes('input')));
-  }finally{rmSync(dir,{recursive:true,force:true});}
-});
-
-test('评分必须按实际处理ID读回，缺行在工件记录verified=false',async()=>{
-  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'leadgen-score-'));const ops=[];
-  const id='11111111-1111-4111-8111-111111111111',sources={[id]:'batch102'};
-  try{
-    const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'run',LEADGEN_LINE:'jinuo'},
-      rpc:async body=>{const r=body.request;ops.push(r);return {result:r.op==='score_scope'?{ids:[id],sources}:r.op==='score_recovery'?{verified:true,scored:0,ids:[]}:r.op==='score'?{scored:1,ids:[id]}:{verified:false,failures:1}};}});
-    assert.equal((await h.scoring()).scoring_readback_failures,1);
-    assert.deepEqual(ops.find(r=>r.op==='score_readback').ids,[id]);
-    assert.equal(JSON.parse(readFileSync(join(dir,'run-scoring-readback.json'),'utf8')).verified,false);
-    assert.deepEqual(JSON.parse(readFileSync(join(dir,'activity.log'),'utf8').trim().replace(/^SORT_STATS /,'')),{scored:1,ids:[id]});
-  }finally{rmSync(dir,{recursive:true,force:true});}
-});
-
-test('活动抛错与Commander断线都必须清场，并保留失败状态',async()=>{
-  const {runWorkflow}=await import('../leadgen-workflow.mjs');
-  for(const failure of ['script','model']){
-    let cleaned=0;
-    const result=await runWorkflow({activities:[{key:'preflight'},{key:'cleanup'}],context:{},
-      handlers:{preflight:async()=>{throw Error('SCRIPT_FAILED');},cleanup:async()=>{cleaned++;return {released:true};}},
-      commander:async r=>{if(failure==='model')throw Error('AUTH_UNAVAILABLE');return {action:'continue',reason:'记录失败'};},record:async()=>{}});
-    assert.equal(cleaned,1);assert.equal(result.status,'failed');
-  }
-});
-
-test('采集成功必须有同视频完成标记；非零返回时即使有LEAD也不能落完成',async()=>{
-  const {parseCollection}=await import('../leadgen-workflow.mjs');
-  const row='LEAD\t昵称\tid\tpersonal\t想报名\t今天\t陕西\t视频标题\t词\t西安\thttps://www.douyin.com/user/u\thttps://www.douyin.com/video/7646309328911907195';
-  assert.throws(()=>parseCollection({code:6,stdout:row},'7646309328911907195'),/采集/);
-  assert.throws(()=>parseCollection({code:0,stdout:row},'7646309328911907195'),/完成标记/);
-  const comments=parseCollection({code:0,stdout:row+'\nCOLLECTION\t7646309328911907195\tcollected\t1'},'7646309328911907195');
-  assert.equal(comments.length,1);assert.equal(comments[0].commentBody,'想报名');
-  assert.deepEqual(parseCollection({code:0,stdout:'COLLECTION\t7646309328911907195\tno_comments\t0'},'7646309328911907195'),[]);
-});
 
 // 暂停流程没有本批设备锁，不能拿别批锁清场或伪报close-app通过。
-test('暂停触达的清场标记skipped，保留partial而不伪造手机清场',async()=>{
- const {createHandlers,runWorkflow}=await import('../leadgen-workflow.mjs');let calls=0,verified=[];
- const handlers=createHandlers({root:'/tmp',env:{HOME:'/tmp',P:'work',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'},
- rpc:async()=>{calls++;throw Error('不可调用');},execute:async()=>{calls++;throw Error('不可操作');}});
- const result=await runWorkflow({activities:[{key:'preflight'},{key:'cleanup'}],context:{},handlers,
- commander:async()=>({action:'continue',reason:'保留暂停'}),record:async()=>{},verify:async a=>{verified.push(a.key);return {verified:true};}});
- assert.equal(result.status,'partial');assert.equal(result.results[1].status,'skipped');
- assert.equal(calls,0);assert.deepEqual(verified,[]);
-});
-
-test('部分取链失败必须把活动记partial，不能把部分结果记completed',async()=>{
- const {runWorkflow}=await import('../leadgen-workflow.mjs');let next=0;
- const r=await runWorkflow({activities:[{key:'write_videos'},{key:'qualification'},{key:'cleanup'}],context:{},
- handlers:{write_videos:async()=>({status:'partial',persisted:1,failures:[{reason:'copy_failed'}]}),qualification:async()=>{next++;},cleanup:async()=>({status:'skipped',no_lock:true})},
- commander:async()=>({action:'continue',reason:'保留部分失败证据'}),record:async()=>{},verify:async()=>({verified:true})});
- assert.equal(r.status,'partial');assert.equal(r.results[0].status,'partial');assert.equal(next,0);
-});
-
-test('需要140秒的取链能够完整入库，但不能越过活动剩余预算',async()=>{
- const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
- // 明示的设备模拟：140秒代表本次真机nonce+UI重抓+复制+归位的完整动作，并不实际睡眠。
- for(const remaining of [480000,30000]){
-  const dir=mkdtempSync(join(tmpdir(),'leadgen-link-envelope-'));
-  const profile='test-profile',videoId='7663337150875733275',written=[],timeouts=[];
-  const own=join(dir,'own.json'),registry=join(dir,'accounts.tsv');
-  writeFileSync(own,JSON.stringify({nicknames:[],ids:[]}));writeFileSync(registry,`${profile}\ttest-account\n`);
-  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'new-budget-run',P:profile,SERIAL:'test-serial',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',
-   DOUYIN_PHONE_ADB:'/test/phone-controller',DOUYIN_PHONE_TMP_ROOT:dir,DOUYIN_ACCOUNT_REGISTRY:registry,OWN_ACCOUNTS_CONF:own};
-  const execute=async(command,args,opts={})=>{
-   let stdout='';
-   if(command==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
-   else if(command==='zsh')stdout='100\t200\t00:20\t目标视频\t别人\t0\n';
-   else if(command==='/test/phone-controller'){
-    const op=args[2]==='--lock-owner'?args[4]:args[2];
-    if(op==='preflight')stdout='serial=test-serial\n';
-    if(op==='lock-acquire')stdout='lock=acquired\n';
-    if(op==='lock-refresh')stdout='lock=refreshed\n';
-    if(op==='account-current')stdout='douyin_id=test-account\n';
-    if(op==='search-kw-matches')stdout='kw_matches=1\n';
-    if(op==='search-video-tab'){
-     const path=join(dir,'evidence',profile,`${args[3]}-aftertab.xml`);mkdirSync(join(dir,'evidence',profile),{recursive:true});
-     writeFileSync(path,'<hierarchy><node resource-id="com.ss.android.ugc.aweme:id/et_search_kw" text="人工智能训练师"/></hierarchy>');
-    }
-    if(op==='search-video-cards')stdout='100\t200\t00:20\t目标视频\t别人\t0\nvideo_tab=1\nend_of_results=1\nevidence=/test/grid.xml\n';
-    if(op==='current-video-link'){
-     timeouts.push(opts.timeoutMs);
-     if(opts.timeoutMs<140000)throw Error('EXECUTION_DEADLINE');
-     stdout=`return_mode=results\ncontent_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/newTarget/\n`;
-    }
-   }
-   return {code:0,stdout,stderr:''};
-  };
-  const rpc=async body=>{
-   if(body.kind==='keywords')return {result:['人工智能训练师']};
-   if(body.request.op==='inspect_videos')return {result:written.map(video_id=>({video_id,line_key:'jinuo'}))};
-   assert.equal(body.request.op,'discover');written.push(body.request.video.videoId);return {result:{status:'pending',inserted:true}};
-  };
-  try{
-   const h=createHandlers({root:dir,env,rpc,execute});
-   await h.preflight();h.state.budgetDeadline=Date.now()+remaining;
-   const result=await h.collect_videos();
-   assert.equal(result.persisted,remaining===480000?1:0);
-   assert.deepEqual(written,remaining===480000?[videoId]:[]);
-   assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);
-   if(remaining===30000)assert.match(JSON.stringify(result.failures),/EXECUTION_DEADLINE/);
-  }finally{rmSync(dir,{recursive:true,force:true});}
- }
-});
-
 
 test('资格动作容纳已实测的打开与身份核验组合耗时，仍受活动剩余预算限制',async()=>{
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
@@ -250,7 +52,6 @@ test('dup静音捕获本轮保持pending，不能作为视频内容写PG拒绝�
  }
 });
 
-
 test('已匹配视频的身份核验也包含打开与取链，不能沿用单取链时限',async()=>{
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);
  const dir=mkdtempSync(join(tmpdir(),'leadgen-matched-identity-envelope-')),videoId='7657464669711404351';
@@ -285,7 +86,6 @@ test('采集组合预算包含重新打开核验和本身480秒采集，但不�
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
 });
-
 
 test('全部业务与清场验收通过后，清场after的正常finish应汇总为completed',async()=>{
  const {runWorkflow}=await import('../leadgen-workflow.mjs');const records=[];
@@ -377,7 +177,6 @@ test('真实workflow包装器达到目标且仅有消失候选缺口时保留成
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
 });
-
 
 test('历史输入逐VID局部绑定，scope失败不假报通过；无qualified明确0样本',async()=>{
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);

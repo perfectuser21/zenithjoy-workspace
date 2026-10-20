@@ -7783,3 +7783,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "原run产出核验失败接手与独立复验；不等于真实手机业务验收"
+
+- id: leadgen-workflow-supervision
+  path: services/phone-adb-controller/__tests__/leadgen-workflow-supervision.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: 获客
+  note: "机械归位原Workflow监督与评分冻结读回用例；现行controller L3 glob执行，GP-Anchor: line02/keyword_acquisition keep-green"
