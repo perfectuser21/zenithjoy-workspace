@@ -30,7 +30,7 @@ function previousGeneration(q,home){
  const stable=x=>{const {transport_generation,broker_request_path,mode,continuation_cause,...rest}=x;return rest;};
  if(q.broker_request_path!==join(dirname(old.broker_request_path),'broker-request-turn-1.json')||old.transport_generation!==0||old.mode!=='repair'||digest(stable(old))!==digest(stable(q))||Date.now()>=old.deadline_ms)throw Error('RPC_SKILL_GENERATION_SCOPE_INVALID');
  const parent=privateJson(join(previous,'parent-cli-result.json'));
- const terminal=privateJson(join(previous,existsSync(join(previous,'agent-terminal.json'))?'agent-terminal.json':'child-stop-readback.json')); 
+ const terminal=privateJson(join(previous,existsSync(join(previous,'agent-terminal.json'))?'agent-terminal.json':'child-stop-readback.json'));
  const binding=official(old,previous);
  const failed=['error','aborted','timeout'].includes(terminal.status),readback=q.continuation_cause==='verification_failed'&&q.mode==='readback_only'&&terminal.status==='ok';
  if(parent.code!==0||!(failed||readback)||terminal.runId!==binding.child_run_id||!Number.isFinite(terminal.endedAt)||digest(privateJson(join(previous,'agent-returned.json')))!==digest(generationEvidence(old,previous,terminal)))throw Error('RPC_SKILL_PREVIOUS_TERMINATION_UNVERIFIED');

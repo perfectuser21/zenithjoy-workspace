@@ -67,6 +67,7 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
   try{
    let receipt,actual,verificationFailed=false;
    for(let generation=0;generation<=(policy?1:0);generation++){
+    stopped=false;
     const reply=await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,deadline-Date.now())});receipt=reply.result;
     writeFileSync(join(directory,`agent-receipt${generation?'-turn-1':''}.json`),JSON.stringify(receipt),{flag:'wx',mode:0o600});
     actual=broker.getResult();stopped=receipt?.execution_stopped===true&&actual.active===0;
