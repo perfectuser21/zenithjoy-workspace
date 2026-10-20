@@ -89,7 +89,13 @@ jobs:
           script: |
             set -euo pipefail
             [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
-            docker compose -p zenithjoy-staff-hub-staging \
+            # Existing HK staging was created under project=deploy. Preserve
+            # its ownership while using this candidate's uploaded compose.
+            PROJECT=$(docker inspect staff-hub-staging \
+              --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)
+            PROJECT=${PROJECT:-zenithjoy-staff-hub-staging}
+            [[ "$PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo 'Invalid staging compose project' >&2; exit 1; }
+            docker compose -p "$PROJECT" \
               -f /opt/zenithjoy/staff-hub-staging/compose.yml up -d staff-hub-staging
             docker restart staff-hub-staging
             echo "✅ staff-hub-staging restarted"
