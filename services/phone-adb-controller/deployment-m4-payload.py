@@ -71,11 +71,16 @@ def verified_bundle(path, expected):
     data = pathlib.Path(path).read_bytes()
     require(re.fullmatch('[a-f0-9]{64}', expected) and sha(data) == expected, 'bundle hash mismatch')
     require(len(data) <= 132 * 1024 * 1024, 'oversized archive')
-    with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
         members = archive.getmembers()
-        require(all(x.isfile() for x in members) and len({x.name for x in members}) == len(members),
-                'nonregular or duplicate archive member')
         require(len(members) <= 1000, 'too many archive members')
+        require(all(x.type in (tarfile.REGTYPE, tarfile.AREGTYPE) and not x.issparse()
+                    for x in members) and len({x.name for x in members}) == len(members),
+                'nonregular or duplicate archive member')
+        require(all(type(x.size) is int and 0 <= x.size <=
+                    (1024 * 1024 if x.name == 'plan.json' else 32 * 1024 * 1024)
+                    for x in members), 'oversized archive member')
+        require(sum(x.size for x in members) <= 129 * 1024 * 1024, 'oversized archive contents')
         content = {x.name: archive.extractfile(x).read() for x in members}
     require('plan.json' in content, 'missing plan')
     plan = json.loads(content.pop('plan.json'))
@@ -139,6 +144,8 @@ def install(args):
     root = pathlib.Path.home() / 'bin-harvest'
     root.mkdir(exist_ok=True)
     base = parent_identity(root)
+    mask = os.umask(0)
+    os.umask(mask)
     parents = {}
     # Validate every existing destination ancestor before the first replacement.
     for item in plan:
@@ -164,7 +171,7 @@ def install(args):
         target = root / path
         identities = parents[path]
         check_parents(identities)
-        mode = item['mode'] | (0o111 if group == 'sh' else 0)
+        mode = item['mode'] | ((0o111 & ~mask) if group == 'sh' else 0)
         temp = target.with_name('.' + target.name + '.deploy-new')
         directory_fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         owned = False
