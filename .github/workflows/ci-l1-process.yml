@@ -634,7 +634,10 @@ jobs:
           node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/*.test.mjs \
             services/phone-adb-controller/__tests__/deployment-business-admission.test.mjs \
             services/phone-adb-controller/__tests__/deployment-candidate.test.mjs \
-            services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs
+            services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-prepare.test.mjs \
+            .github/workflows/scripts/__tests__/phone-deploy-evidence.test.mjs \
+            .github/workflows/scripts/__tests__/deploy-phone-adb-remote-lib.test.mjs
 
   # ─── Gate job ─────────────────────────────────────────────────────────────
 
