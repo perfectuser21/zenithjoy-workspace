@@ -86,3 +86,9 @@ for(const [label,mutate] of [
  const record={created:false,run:{...structuredClone(data),id:'run-1',status:'pending'},checks:data.checks.map(c=>({...c,run_id:'run-1'}))};mutate(record);
  await assert.rejects(()=>producer.createAcceptance(data,{fetchImpl:async()=>Response.json(record)}));
 });
+
+test('SPA的HTTP200兜底页不是版本证据，错误说明具体入口且不建单',async()=>{
+ const s=sources();
+ await assert.rejects(()=>producer.createReleaseAcceptance(input(),{sha,targets:['api'],api:s.api,fetchImpl:async(url,o)=>String(url).includes('/release-sha.json')?new Response('<!doctype html><title>Dashboard</title>',{status:200}):s.fetchImpl(url,o)}),/staging-autopilot.*release-sha.json.*JSON/);
+ assert.equal(s.writes.length,0);
+});
