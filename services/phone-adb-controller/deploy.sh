@@ -81,23 +81,7 @@ deploy_release_evidence() {
 # Commander与旧MMV包共享完整release；--commander-only仍须真实核对其它已安装组件。
 commander_admission() {
   # 在途外壳保留原版本；整套文件和skills同步完成才发布新manifest。
-  if ! ssh mmv python3 <<'PYADMISSION'
-import fcntl,json,pathlib,subprocess,sys
-root=pathlib.Path.home()/'.openclaw/commander'
-root.mkdir(parents=True,exist_ok=True)
-with open(root/'.admission.lock','a') as guard:
-    try:
-        fcntl.flock(guard,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    except BlockingIOError:
-        sys.exit(3)
-    active=subprocess.run(['pgrep','-f','[w]f-agent-run.sh|[w]f-v2.py worker'],stdout=subprocess.DEVNULL).returncode==0
-    for path in (pathlib.Path.home()/'wf-agent-runs').glob('*/runtime.json'):
-        state=json.loads(path.read_text())
-        active=active or state.get('execution_stopped') is not True or state.get('phase')!='awaiting_verify' or not (path.parent/'delivery.json').exists()
-    if active:
-        sys.exit(3)
-    (root/'.deploying').touch()
-PYADMISSION
+  if ! python3 "$D/deployment-guard.py" admit
   then
     echo "  ❌ Commander仍有在途执行，拒绝覆盖其运行包"; FAILED=1; return
   fi
@@ -392,7 +376,7 @@ if [[ "${1:-}" == "--commander-only" ]]; then
   activate_publish_package
   node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
   PUBLISH_PENDING_SHA=''
-  ssh mmv "rm -f ~/.openclaw/commander/.deploying"
+  python3 "$D/deployment-guard.py" complete
   echo "✅ Commander与既有本机视图已绑定同一正式release/ACK"
   exit 0
 fi
@@ -628,5 +612,5 @@ fi
 activate_publish_package
 node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
 PUBLISH_PENDING_SHA=''
-ssh mmv "rm -f ~/.openclaw/commander/.deploying"
+python3 "$D/deployment-guard.py" complete
 echo "✅ 同一目标完整release已部署，旧运行包与Commander共享正式观测。"
