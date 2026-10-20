@@ -71,7 +71,7 @@ async function main(){
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     return result;
   }]));
-  const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc});
+  const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
   const result=await runWorkflow({activities,context,handlers:execution,recover,quarantine:handlers.quarantineResources,
     commander:async receipt=>{
       if(receipt.phase==='before'){

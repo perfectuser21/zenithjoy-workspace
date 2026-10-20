@@ -10,10 +10,32 @@ import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './activity-
 const root=dirname(fileURLToPath(import.meta.url));
 export const skillRunKey=q=>createHash('sha256').update(JSON.stringify([q.run_id,q.activity_key,q.nonce])).digest('hex');
 function validate(q){
+ if(q?.transport_generation!==undefined&&![0,1].includes(q.transport_generation)||q?.transport_generation===1&&!['agent_failed','verification_failed'].includes(q.continuation_cause)||q?.transport_generation!==1&&q?.continuation_cause!==undefined)throw Error('RPC_SKILL_GENERATION_INVALID');
  if(q?.protocol!=='leadgen-activity-v1'||!/^\w[\w.-]{0,150}$/.test(q.run_id||'')||!/^\w{1,48}$/.test(q.activity_key||'')||!/^[a-f0-9]{48}$/.test(q.nonce||'')||!/^[a-f0-9]{40}$/.test(q.source_commit||'')||!Number.isSafeInteger(q.deadline_ms)||!['mmv','xian-m4','xian-m1'].includes(q.broker_host)||!['repair','readback_only'].includes(q.mode)||!q.method?.name||!q.method?.version||typeof q.method?.text!=='string')throw Error('RPC_SKILL_REQUEST_INVALID');
  for(const k of ['broker_request_path','broker_tool_path'])if(!/^\/[A-Za-z0-9_./-]+$/.test(q[k]||'')||q[k].split('/').includes('..'))throw Error('RPC_SKILL_PATH_INVALID');
 }
-function directory(q,home){return join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));}
+function directory(q,home){const base=join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));return q.transport_generation===undefined?base:join(base,'turn-'+q.transport_generation);}
+const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+function privateJson(path){
+ const stat=lstatSync(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o022)!==0||stat.size>1024*1024)throw Error('RPC_SKILL_GENERATION_EVIDENCE_INVALID');
+ return JSON.parse(readFileSync(path,'utf8'));
+}
+function generationEvidence(q,dir,terminal){
+ return {request_sha256:digest(q),binding_sha256:digest(official(q,dir)),parent_sha256:digest(privateJson(join(dir,'parent-cli-result.json'))),terminal_sha256:digest(terminal)};
+}
+function previousGeneration(q,home){
+ const previous=directory({...q,transport_generation:0},home);
+ const stat=lstatSync(previous);if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid())throw Error('RPC_SKILL_GENERATION_EVIDENCE_INVALID');
+ const old=privateJson(join(previous,'activity-request.json'));
+ const stable=x=>{const {transport_generation,broker_request_path,mode,continuation_cause,...rest}=x;return rest;};
+ if(q.broker_request_path!==join(dirname(old.broker_request_path),'broker-request-turn-1.json')||old.transport_generation!==0||old.mode!=='repair'||digest(stable(old))!==digest(stable(q))||Date.now()>=old.deadline_ms)throw Error('RPC_SKILL_GENERATION_SCOPE_INVALID');
+ const parent=privateJson(join(previous,'parent-cli-result.json'));
+ const terminal=privateJson(join(previous,existsSync(join(previous,'agent-terminal.json'))?'agent-terminal.json':'child-stop-readback.json')); 
+ const binding=official(old,previous);
+ const failed=['error','aborted','timeout'].includes(terminal.status),readback=q.continuation_cause==='verification_failed'&&q.mode==='readback_only'&&terminal.status==='ok';
+ if(parent.code!==0||!(failed||readback)||terminal.runId!==binding.child_run_id||!Number.isFinite(terminal.endedAt)||digest(privateJson(join(previous,'agent-returned.json')))!==digest(generationEvidence(old,previous,terminal)))throw Error('RPC_SKILL_PREVIOUS_TERMINATION_UNVERIFIED');
+ return previous;
+}
 export function claimSkillSpawn(dir,{home=homedir(),verifyWorkspace=verifyCommanderWorkspace}={}){
  const q=JSON.parse(readFileSync(join(dir,'activity-request.json'),'utf8'));validate(q);verifyWorkspace({home});
  if(resolve(dir)!==directory(q,home)||existsSync(join(dir,'handoff-closed.json'))||Date.now()>=q.deadline_ms)throw Error('RPC_SKILL_SPAWN_SCOPE_INVALID');
@@ -63,6 +85,8 @@ export async function verifySkillRequest(q,{get=centralGet,verifyMethod:verifyLo
  const refs=wf.payload.activities.filter(a=>a.slot_key===q.activity_key&&a.reference_id===q.method.reference_id&&a.activity_version_id===q.method.activity_version_id);
  if(refs.length!==1)throw Error('RPC_SKILL_ACTIVITY_SCOPE_MISMATCH');
  const ref=refs[0],{version:av}=await get('/api/brain/activities/'+ref.activity_id+'/versions/'+ref.activity_version_id);
+ const policy=av.payload.contract.agent_recovery;
+ if(q.transport_generation!==undefined&&(!policy||Object.keys(policy).length!==1||policy.max_additional_turns!==1))throw Error('RPC_SKILL_RECOVERY_POLICY_UNVERIFIED');
  const matches=(av.payload.implementation_bindings||[]).filter(b=>b.kind==='skill'&&b.status==='verified'&&b.repo==='perfectuser21/zenithjoy-workspace'&&b.revision===q.source_commit&&b.name===q.method.name&&b.version===q.method.version&&(b.content_sha256||b.digest?.replace(/^sha256:/,''))===q.method.sha256);
  if(matches.length!==1||!Number.isSafeInteger(q.deadline_ms)||q.deadline_ms>Date.now()+Number(av.payload.contract.budget?.max_duration_s||0)*1000||q.activity_key==='send_dm'&&q.mode!=='readback_only')throw Error('RPC_SKILL_METHOD_BINDING_MISMATCH');
  if(verifyLocalMethod(q)!==true)throw Error('RPC_SKILL_METHOD_UNVERIFIED');return true;
@@ -78,7 +102,7 @@ export function verifyCommanderWorkspace({home=homedir()}={}){
 }
 export function skillAuthority(q,{home=homedir(),verifyWorkspace=verifyCommanderWorkspace}={}){
  validate(q);verifyWorkspace({home});const dir=directory(q,home);
- if(Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json')))return false;
+ if(Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json'))||existsSync(join(dir,'generation-revoked.json')))return false;
  try{official(q,dir);return true;}catch{return false;}
 }
 // Both official surfaces target the same MMV; never infer a route from a name suffix.
@@ -110,7 +134,7 @@ function pinGatewaySurface(q,dir,surface){
 // The managed SSH alias owns network routing; no model-supplied host or jump.
 export async function relayActivityTool(dir,op,body={}, {home=homedir(),authorize,execute=execInput,surface,requireSurface=false}={}){
  const q=JSON.parse(readFileSync(join(dir,'activity-request.json'),'utf8'));validate(q);
- if(resolve(dir)!==directory(q,home)||!['inspect','phone','resume'].includes(op)||Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json')))throw Error('RPC_SKILL_TOOL_SCOPE_INVALID');
+ if(resolve(dir)!==directory(q,home)||!['inspect','phone','resume'].includes(op)||Date.now()>=q.deadline_ms||existsSync(join(dir,'handoff-closed.json'))||existsSync(join(dir,'generation-revoked.json')))throw Error('RPC_SKILL_TOOL_SCOPE_INVALID');
  if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');
  const allowed=authorize?await authorize(q):await verifySkillRequest(q)&&skillAuthority(q,{home});
  if(allowed!==true||Date.now()>=q.deadline_ms)throw Error('RPC_SKILL_TOOL_UNAUTHORIZED');
@@ -124,8 +148,10 @@ export async function relayActivityTool(dir,op,body={}, {home=homedir(),authoriz
 }
 export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace}={}){
  validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
+ const previous=q.transport_generation===1?previousGeneration(q,home):null;
  const ownerTurn=reserveWorkflowCommanderTurn(q,{home});
  try{
+ if(previous)writeFileSync(join(previous,'generation-revoked.json'),JSON.stringify({next_generation:1,at:Date.now()}),{flag:'wx',mode:0o600});
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
  const parent=workflowCommanderSession(q);
  const request={run_id:q.run_id,task_id:q.task_id??null,parent_session_key:parent,nonce:q.nonce,agent_id:'skill-factory',expires_at:q.deadline_ms/1000};
@@ -170,7 +196,8 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   if(terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id||terminal.terminalReceipt?.effective?.provider!=='openai'||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_MODEL_INVALID');
   if(parentResult?.code!==0)return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
   ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
-  return {status:terminal.status,execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
+  writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
+  return {status:terminal.status,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
  }catch{
   if(existsSync(join(dir,'agent-binding.json'))){
    try{const stopped=await execute('python3',[helper,'stop',dir],{timeoutMs:48000});
@@ -179,7 +206,8 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
     if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null){
      if(parentResult?.code!==0)return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
      ownerTurn.returned(JSON.stringify({parent_result:parentResult,stop_readback:terminal}));
-     return {status:'failed',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,reason:'child_stopped_after_failed_handoff',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key};
+     writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
+     return {terminal,status:'failed',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,reason:'child_stopped_after_failed_handoff',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key};
     }
    }catch{/* no proof of termination: retain original resources */}
   }
