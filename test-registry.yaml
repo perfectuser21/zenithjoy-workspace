@@ -7789,5 +7789,5 @@ agent_suite:
   type: integration
   ci: L3
   status: active
-  product: 获客
+  product: AI员工
   note: "机械归位原Workflow监督与评分冻结读回用例；现行controller L3 glob执行，GP-Anchor: line02/keyword_acquisition keep-green"
