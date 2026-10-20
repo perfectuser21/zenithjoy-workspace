@@ -28,10 +28,12 @@ function observations(t,{count=8,exited=false}={}){
   queueMicrotask(()=>child.stdout.emit('data',exited?'READY\nEXIT\n':'READY\n'));
   return child;
  });
- syncBuiltinESMExports();t.after(()=>{t.mock.restoreAll();syncBuiltinESMExports();});
- const dir=mkdtempSync(join(tmpdir(),'native-budget-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ syncBuiltinESMExports();
+ const dir=mkdtempSync(join(tmpdir(),'native-budget-'));
  const operation=beginNativeOperation({runDir:dir,operationId:'bounded-tail',runId:'run__a1',taskId:'task',profile:'profile',serial:'serial',sourceCommit:'a'.repeat(40),owner:'owner',activity:'preflight'});
+ t.after(async()=>{try{await operation.stop(null,0,null);}finally{t.mock.restoreAll();syncBuiltinESMExports();rmSync(dir,{recursive:true,force:true});}});
  return {operation,root,timeouts,counts:()=>({watchers,closed}),clock:()=>clock,
+  advance:ms=>{clock+=ms;},clocked:()=>t.mock.method(performance,'now',()=>clock),
   slowInspections:()=>{cost=350;t.mock.method(performance,'now',()=>clock);}};
 }
 
@@ -56,4 +58,15 @@ test('超量后代不能创建无限观测器且不得取得停止许可',async 
  const receipt=await f.operation.stop(null,0,null);
  assert.equal(receipt.execution_stopped,false);assert.equal(receipt.status,'unknown');
  assert.ok(f.counts().watchers<=64,`观测器数量 ${f.counts().watchers} 未受有限集合约束`);
+});
+
+
+test('已核身份的TERM和KILL共享有限信号窗口且重复调用不续期',async t=>{
+ const f=observations(t,{count:0,exited:true});await f.operation.started(f.root);f.clocked();
+ const signals=[];t.mock.method(process,'kill',(pid,signal)=>{signals.push({pid,signal});return true;});
+ assert.equal(await f.operation.signalTargets('SIGTERM'),1);
+ f.advance(1000);assert.equal(await f.operation.signalTargets('SIGKILL'),1,'原有1秒后KILL仍须经过精确身份检查');
+ f.advance(5000);assert.equal(await f.operation.signalTargets('SIGKILL'),0,'耗尽后不能重置观测截止');
+ assert.deepEqual(signals,[{pid:f.root,signal:'SIGTERM'},{pid:f.root,signal:'SIGKILL'}]);
+ const receipt=await f.operation.stop(null,0,null);assert.equal(receipt.execution_stopped,false);
 });
