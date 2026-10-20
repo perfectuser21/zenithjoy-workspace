@@ -56,6 +56,18 @@ test('103新run先走正式公司冻结；首轮与丢回执恢复共享原CID�
  }
 });
 
+test('103正式公司冻结拒绝时不读评分范围、不占本地attempt、不调用模型',async t=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');
+ const {existsSync,rmSync}=await import('node:fs');
+ for(const reason of ['COMPANY_CONFIG_NOT_ENABLED','COMPANY_SOURCE_RUN_CHANGED','COMPANY_TASK_INPUTS_CHANGED']){
+  const dir=mkdtempSync(join(tmpdir(),'score-freeze-denied-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const calls=[];
+  const h=createHandlers({root:dir,env:{P:'mmv-scoring',SERIAL:'none',WFR_TAG:'denied103',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',WFR_RUN_DIR:dir,HOME:dir},
+   rpc:async({request:r})=>{calls.push(r);if(r.op!=='company_config')assert.fail('冻结拒绝后不得继续');throw Error(reason);}});
+  await assert.rejects(h.scoring(),new RegExp(reason));assert.equal(calls.length,1);assert.equal(calls[0].step,'103');
+  assert.equal(existsSync(join(dir,'denied103-score-attempt.json')),false);
+ }
+});
+
 test('QA 沙箱实际 RPC 评分越过受阻行，持久读回仅后行新分',()=>{
  const dir=mkdtempSync(join(tmpdir(),'leadgen-103-sandbox-')),file=join(dir,'fixture.json'),output=join(dir,'state');
  const rows=[{...comments[0],id:'00000000-0000-4000-8000-000000000051',collected_at:'2026-10-20T00:00:00Z',response:{primary_grade:'B',policy_grade:'B',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'就业焦虑',exclusion_rule:null,reason:'泛焦虑'}}},
