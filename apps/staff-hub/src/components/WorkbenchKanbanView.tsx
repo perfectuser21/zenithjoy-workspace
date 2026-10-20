@@ -18,7 +18,8 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { groupRowsByField, resolveDropPatch, UNGROUPED, type DropPatch } from '../lib/workbenchKanban';
-import type { WorkbenchField, WorkbenchRow } from '../lib/workbenchFetch';
+import type { CellValue, WorkbenchField, WorkbenchRow } from '../lib/workbenchFetch';
+import { FieldIcon, personBadge, tagColor } from '../lib/workbenchFieldMeta';
 
 interface Props {
   fields: WorkbenchField[];
@@ -35,21 +36,87 @@ function cardLabel(row: WorkbenchRow, fields: WorkbenchField[]): string {
   return text;
 }
 
-function KanbanCard({ row, label }: { row: WorkbenchRow; label: string }) {
+function isEmpty(v: CellValue): boolean {
+  if (v === null || v === undefined || v === '') return true;
+  if (Array.isArray(v)) return v.length === 0;
+  return false;
+}
+
+/** 卡片上一枚属性（像 Notion 看板卡：多选/单选彩标、人员头像、数字/日期小字）。 */
+function CardProp({ field, value }: { field: WorkbenchField; value: CellValue }) {
+  if (isEmpty(value)) return null;
+  if (field.field_type === 'single_select' || field.field_type === 'multi_select') {
+    const arr = Array.isArray(value) ? value : [String(value)];
+    return (
+      <span className="kanban-card-tags">
+        {arr.map((v) => {
+          const c = tagColor(String(v));
+          return (
+            <span key={String(v)} className="wb-tag" style={{ background: c.bg, color: c.fg }}>
+              <span className="wb-tag-dot" style={{ background: c.dot }} />
+              {String(v)}
+            </span>
+          );
+        })}
+      </span>
+    );
+  }
+  if (field.field_type === 'person') {
+    const arr = Array.isArray(value) ? value : [String(value)];
+    return (
+      <span className="kanban-card-persons">
+        {arr.map((v) => {
+          const bd = personBadge(String(v));
+          return (
+            <span key={String(v)} className="wb-person">
+              <span className="wb-avatar" style={{ background: bd.color.dot }}>{bd.initial}</span>
+              {String(v)}
+            </span>
+          );
+        })}
+      </span>
+    );
+  }
+  return (
+    <span className="kanban-card-meta">
+      <FieldIcon type={field.field_type} className="wb-inline-ico" />
+      {Array.isArray(value) ? value.join('、') : String(value)}
+    </span>
+  );
+}
+
+function KanbanCard({ row, fields, groupFieldId }: { row: WorkbenchRow; fields: WorkbenchField[]; groupFieldId: string | null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: row.row_id });
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.6 : 1 }
     : undefined;
+  // 卡片属性：跳过分组字段（列本身即它）与主标题文本字段，展示其余非空字段
+  const titleFieldId = fields.find((f) => f.field_type === 'text')?.field_id;
+  const props = fields.filter(
+    (f) =>
+      f.field_id &&
+      f.field_id !== groupFieldId &&
+      f.field_id !== titleFieldId &&
+      !['relation', 'rollup', 'lookup', 'long_text'].includes(f.field_type) &&
+      !isEmpty(row.data[f.field_id] ?? null)
+  );
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="kanban-card"
+      className={`kanban-card${isDragging ? ' kanban-card-dragging' : ''}`}
       data-testid={`kanban-card-${row.row_id}`}
       {...listeners}
       {...attributes}
     >
-      {label}
+      <div className="kanban-card-title">{cardLabel(row, fields)}</div>
+      {props.length > 0 && (
+        <div className="kanban-card-props">
+          {props.map((f) => (
+            <CardProp key={f.field_id} field={f} value={(row.data[f.field_id ?? ''] ?? null) as CellValue} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -59,24 +126,35 @@ function KanbanColumn({
   title,
   rows,
   fields,
+  groupFieldId,
 }: {
   columnValue: string;
   title: string;
   rows: WorkbenchRow[];
   fields: WorkbenchField[];
+  groupFieldId: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: columnValue });
+  const ungrouped = columnValue === UNGROUPED;
+  const c = tagColor(title);
   return (
     <div
       ref={setNodeRef}
       className={`kanban-column${isOver ? ' kanban-column-over' : ''}`}
       data-testid={`kanban-column-${columnValue}`}
     >
-      <h3 className="kanban-column-title">{title}</h3>
+      <div className="kanban-column-head">
+        <h3 className="kanban-column-title">
+          <span className="kanban-col-dot" style={{ background: ungrouped ? 'var(--wb-line-strong)' : c.dot }} />
+          {title}
+        </h3>
+        <span className="kanban-column-count">{rows.length}</span>
+      </div>
       <div className="kanban-column-body">
         {rows.map((r) => (
-          <KanbanCard key={r.row_id} row={r} label={cardLabel(r, fields)} />
+          <KanbanCard key={r.row_id} row={r} fields={fields} groupFieldId={groupFieldId} />
         ))}
+        {rows.length === 0 && <div className="kanban-column-empty">拖卡到这里</div>}
       </div>
     </div>
   );
@@ -116,6 +194,7 @@ export default function WorkbenchKanbanView({ fields, rows, groupFieldId, onCard
             title={col.column_value === UNGROUPED ? '未分组' : col.column_value}
             rows={col.row_ids.map((id) => rowById.get(id)).filter((r): r is WorkbenchRow => Boolean(r))}
             fields={fields}
+            groupFieldId={groupFieldId}
           />
         ))}
       </DndContext>

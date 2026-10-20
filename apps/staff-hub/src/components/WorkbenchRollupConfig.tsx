@@ -93,69 +93,98 @@ export default function WorkbenchRollupConfig({ tableId, fields, onCreated }: Wo
 
   if (!open) {
     return (
-      <button type="button" data-testid="rollup-config-open" onClick={() => setOpen(true)}>
-        + 汇总字段
+      <button type="button" className="wb-btn" data-testid="rollup-config-open" onClick={() => setOpen(true)}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path d="M17 5H7l6 7-6 7h10" />
+        </svg>
+        汇总字段
       </button>
     );
   }
 
   const needsTargetField = fn !== 'count';
   return (
-    <div className="rollup-config" data-testid="rollup-config">
-      <input
-        data-testid="rollup-config-name"
-        placeholder="字段名"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <select
-        data-testid="rollup-config-relation"
-        value={relFieldId}
-        onChange={(e) => setRelFieldId(e.target.value)}
-      >
-        <option value="">选关联字段</option>
-        {relationFields.map((f) => (
-          <option key={f.field_id} value={f.field_id}>
-            {f.name}
-          </option>
-        ))}
-      </select>
-      <select
-        data-testid="rollup-config-fn"
-        value={fn}
-        onChange={(e) => setFn(e.target.value as (typeof ROLLUP_FNS)[number])}
-      >
-        {ROLLUP_FNS.map((x) => (
-          <option key={x} value={x}>
-            {x}
-          </option>
-        ))}
-      </select>
-      {needsTargetField && (
-        <select
-          data-testid="rollup-config-target"
-          value={targetFieldId}
-          onChange={(e) => setTargetFieldId(e.target.value)}
-        >
-          <option value="">选目标字段</option>
-          {targetFields.map((f) => (
-            <option key={f.field_id} value={f.field_id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <button type="button" data-testid="rollup-config-submit" disabled={busy} onClick={() => void submit()}>
-        添加
-      </button>
-      <button type="button" data-testid="rollup-config-cancel" onClick={() => setOpen(false)}>
-        取消
-      </button>
-      {error && (
-        <span className="rollup-config-error" data-testid="rollup-config-error">
-          {error}
-        </span>
-      )}
+    <div className="wb-rollup-config" data-testid="rollup-config">
+      <div className="wb-rollup-panel">
+        <h4>新建汇总字段</h4>
+        <input
+          className="wb-input"
+          data-testid="rollup-config-name"
+          placeholder="字段名（如：订单总数）"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <div className="wb-rollup-grid">
+          <label className="wb-label">
+            关联字段
+            <select
+              className="wb-native-select"
+              data-testid="rollup-config-relation"
+              value={relFieldId}
+              onChange={(e) => setRelFieldId(e.target.value)}
+            >
+              <option value="">选关联字段</option>
+              {relationFields.map((f) => (
+                <option key={f.field_id} value={f.field_id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="wb-label">
+            聚合函数
+            <select
+              className="wb-native-select"
+              data-testid="rollup-config-fn"
+              value={fn}
+              onChange={(e) => setFn(e.target.value as (typeof ROLLUP_FNS)[number])}
+            >
+              {ROLLUP_FNS.map((x) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </select>
+          </label>
+          {needsTargetField && (
+            <label className="wb-label">
+              目标字段
+              <select
+                className="wb-native-select"
+                data-testid="rollup-config-target"
+                value={targetFieldId}
+                onChange={(e) => setTargetFieldId(e.target.value)}
+              >
+                <option value="">选目标字段</option>
+                {targetFields.map((f) => (
+                  <option key={f.field_id} value={f.field_id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        {error && (
+          <div className="wb-notice wb-notice-error" data-testid="rollup-config-error" style={{ margin: 0 }}>
+            {error}
+          </div>
+        )}
+        <div className="wb-modal-actions" style={{ border: 0, padding: 0 }}>
+          <button type="button" className="wb-btn" data-testid="rollup-config-cancel" onClick={() => setOpen(false)}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="wb-btn wb-btn-primary"
+            data-testid="rollup-config-submit"
+            disabled={busy}
+            onClick={() => void submit()}
+          >
+            添加汇总字段
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
