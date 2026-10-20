@@ -1,7 +1,7 @@
 // Local-only transport for the paired input deployment smoke. Other deployment
 // commands retain the existing record-only stub; paired inputs and fixed SQL evidence use isolated real files.
-import {appendFileSync,copyFileSync,existsSync,mkdirSync,readFileSync,unlinkSync,writeFileSync,chmodSync,renameSync} from 'node:fs';
-import {basename,join,resolve} from 'node:path';
+import {appendFileSync,copyFileSync,existsSync,mkdirSync,readFileSync,unlinkSync,writeFileSync,chmodSync,renameSync,realpathSync} from 'node:fs';
+import {basename,dirname,join,resolve} from 'node:path';
 import {spawnSync,spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -55,11 +55,35 @@ function sqlRemote(root,host,cmd){
  }
  throw Error('unexpected SQL evidence remote command');
 }
+// New ordinary payload commands execute only through the reviewed local M4 fixture.
+function m4Batch(root,mode,args){
+ const canonicalRoot=realpathSync(root);
+ const safeStage=v=>dirname(v)===canonicalRoot&&/^m4-payload-deploy\.[A-Za-z0-9]+$/.test(basename(v));
+ let matched=false;
+ if(mode==='ssh'&&args[0]==='xian-m4'){
+  const cmd=args[1];
+  if(cmd==='mktemp -d /tmp/m4-payload-deploy.XXXXXX')matched=true;
+  else if(cmd?.includes('/m4-payload-deploy.')){
+   const install=cmd.match(/^python3 (\S+)\/deployment-m4-payload\.py install (\S+)\/payload\.tar ([a-f0-9]{64}) (before|after) ([01])$/);
+   const cleanup=cmd.match(/^rm -f (\S+)\/deployment-m4-payload\.py (\S+)\/payload\.tar; rmdir (\S+)$/);
+   matched=!!(install&&install[1]===install[2]&&safeStage(install[1])||cleanup&&cleanup[1]===cleanup[2]&&cleanup[1]===cleanup[3]&&safeStage(cleanup[1]));
+   if(!matched)throw Error('unexpected M4 batch command');
+  }
+ }else if(mode==='scp'&&args.at(-1)?.includes('/m4-payload-deploy.')){
+  const destination=args.at(-1),stage=destination.slice('xian-m4:'.length,-1);
+  matched=args.length===5&&args[0]==='-q'&&args[1]==='-p'&&destination.startsWith('xian-m4:')&&destination.endsWith('/')&&safeStage(stage)
+   &&basename(args[2])==='payload.tar'&&args[3]===fileURLToPath(new URL('../../deployment-m4-payload.py',import.meta.url));
+  if(!matched)throw Error('unexpected M4 batch upload');
+ }
+ if(!matched)return null;
+ const r=spawnSync(process.execPath,[fileURLToPath(new URL('./m4-deploy-transport.mjs',import.meta.url)),canonicalRoot,mode,...args],{encoding:'utf8',env:process.env});
+ return {status:r.status??2,stdout:r.stdout||'',stderr:r.stderr||''};
+}
 export function transport(root,mode,args){
  root=resolve(root);const p=paths(root);const ok=stdout=>({status:0,stdout:stdout||'',stderr:''});
  try{
   if(mode==='scp'){
-   appendFileSync(join(root,'scp.log'),args.join('\n')+'\n');const target=args.at(-1);
+   appendFileSync(join(root,'scp.log'),args.join('\n')+'\n');const batch=m4Batch(root,mode,args);if(batch)return batch;const target=args.at(-1);
    if(target.includes('release-evidence/')){
     const matched=sqlTargets.find(([host,base])=>target===`${host}:${base}/release-evidence/.${sqlName}.deploy-new`);
     if(!matched||args.at(-2)!==resolve(fileURLToPath(new URL('../../../../',import.meta.url)),sqlSource))throw Error('unexpected SQL evidence upload');
@@ -78,7 +102,7 @@ export function transport(root,mode,args){
    return ok(); // Legacy, unrelated deployment uploads remain record-only.
   }
   if(mode!=='ssh')throw Error('unknown transport');
-  appendFileSync(join(root,'ssh.log'),args.join(' ')+'\n');const [host,cmd]=args;
+  appendFileSync(join(root,'ssh.log'),args.join(' ')+'\n');const batch=m4Batch(root,mode,args);if(batch)return batch;const [host,cmd]=args;
   if(args.at(-2)==='mmv'&&args.at(-1)==='set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node -'){
    const mode=process.env.PAIR_COMPANY_READINESS_MODE||'schema-ready';
    if(mode==='invalid-json')return ok('explicit-mock-invalid-inventory\n');
