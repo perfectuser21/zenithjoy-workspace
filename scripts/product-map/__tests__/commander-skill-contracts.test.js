@@ -95,8 +95,9 @@ test('未还原Commander正文时必须核真实固定Git来源，坏repo/profil
  mkdirSync(join(root,'product-map/contracts'),{recursive:true});
  copyFileSync('product-map/contracts/activity-contract.schema.json',join(root,'product-map/contracts/activity-contract.schema.json'));
  const lock=JSON.parse(readFileSync('.skills-source.json'));
- const source=spawnSync('git',['clone','--no-hardlinks','--no-checkout','--quiet','.skills-source',join(root,'.skills-source')],{encoding:'utf8'});assert.equal(source.status,0,source.stderr);
  const env={...process.env,GIT_ALLOW_PROTOCOL:'file'};delete env.SKILLS_SOURCE_DIR;delete env.SKILLS_SOURCE_SSH_KEY;
+ const fixtureSource=join(root,'.skills-source');git('init','--quiet',fixtureSource);
+ const source=spawnSync('git',['-c','core.hooksPath=/dev/null','-C',fixtureSource,'fetch','--quiet','--no-tags','--depth=1',process.env.SKILLS_SOURCE_DIR||join(process.cwd(),'.skills-source'),lock.revision],{env,encoding:'utf8'});assert.equal(source.status,0,source.stderr);
  const script=`import {loadContractsFromDisk,validateContracts} from ${JSON.stringify(new URL('../contracts-lib.mjs',import.meta.url).href)};const ctx=loadContractsFromDisk();ctx.repoRoot=process.argv[1];console.log(JSON.stringify(validateContracts(ctx).filter(e=>e.includes('commander_skill'))));`;
  for(const [label,change] of [['valid',{}],['repo',{repository:'evil/not-central'}],['profile',{profile:'foreign'}],['loader',{loader_sha256:'0'.repeat(64)}]]){
   writeFileSync(join(root,'.skills-source.json'),JSON.stringify({...lock,...change}));git('add','.skills-source.json');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-qm',label);
