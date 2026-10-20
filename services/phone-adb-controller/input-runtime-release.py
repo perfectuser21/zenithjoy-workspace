@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -125,6 +126,98 @@ def device_barrier(registry, lock_root):
             os.close(fd)
 
 
+def path_identity(path):
+    p = Path(path)
+    value = p.lstat()
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, value.st_ctime_ns,
+            os.readlink(p) if stat.S_ISLNK(value.st_mode) else None)
+
+
+def unchanged_runtime(raw_directories, directories, expected, registry, lock_root, incoming):
+    # This proves only byte identity. No device is declared free or stopped, and
+    # no guard is acquired/created while an existing owner remains quarantined.
+    targets = [Path(d) / name for d in directories for name in incoming]
+    for directory in raw_directories:
+        if not stat.S_ISDIR(Path(directory).lstat().st_mode):
+            raise ValueError("input runtime directory is not a regular directory")
+    if any(not p.exists() and not p.is_symlink() for p in targets):
+        return None
+    watched = {}
+    def remember(path, identity):
+        key = str(path)
+        if key in watched and watched[key] != identity:
+            raise ValueError("unchanged input identity changed while freezing paths")
+        watched[key] = identity
+    def watch(path, kind=None):
+        p = Path(path)
+        identity = path_identity(p)
+        if kind and not kind(identity[2]):
+            raise ValueError("unchanged input identity is not a regular file/directory")
+        remember(p, identity)
+        # Preserve existing compatibility aliases, but never silently resolve a
+        # changed alias to a different root during the read-only proof.
+        for parent in p.parents:
+            if parent.is_symlink():
+                remember(parent, path_identity(parent))
+        return p
+    for p in targets:
+        watch(p, stat.S_ISREG)
+    if any(stat.S_IMODE(watched[str(p)][2]) != 0o755 for p in targets):
+        return None  # Permission repair is a real installation, never a read-only no-op.
+    for p in [*raw_directories, *directories]:
+        watch(p, stat.S_ISDIR)
+    def verify_directories():
+        for raw, canonical in zip(raw_directories, directories):
+            if str(Path(raw).resolve(strict=True)) != canonical:
+                raise ValueError("unchanged input raw directory changed canonical target")
+    verify_directories()
+    registry_named = watch(registry)
+    if not (registry_named.is_symlink() or stat.S_ISREG(registry_named.lstat().st_mode)):
+        raise ValueError("unchanged registry is not a regular file or stable alias")
+    registry_path = watch(registry_named.resolve(strict=True), stat.S_ISREG)
+    root = watch(lock_root, stat.S_ISDIR)
+    for owner in root.glob("*.lock"):
+        watch(owner)
+        if owner.is_dir() and not owner.is_symlink():
+            for child in owner.iterdir():
+                watch(child)
+    def read_regular(path):
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            value = os.fstat(fd)
+            identity = watched[str(path)]
+            if not stat.S_ISREG(value.st_mode) or (value.st_dev, value.st_ino) != identity[:2]:
+                raise ValueError("unchanged input descriptor identity changed")
+            raw = bytearray()
+            while len(raw) <= value.st_size:
+                part = os.read(fd, min(65536, value.st_size + 1 - len(raw)))
+                if not part:
+                    break
+                raw.extend(part)
+            if len(raw) != value.st_size:
+                raise ValueError("unchanged input size changed")
+            return bytes(raw)
+        finally:
+            os.close(fd)
+    registry_raw = read_regular(registry_path)
+    for serial in registry_serials(registry, registry_raw):
+        watch(root / (serial + ".guard"), stat.S_ISREG)
+    observed = {str(p): digest(read_regular(p)) for p in targets}
+    verify_directories()
+    if registry_named.resolve(strict=True) != registry_path:
+        raise ValueError("unchanged registry alias changed canonical target")
+    for path, identity in watched.items():
+        if path_identity(path) != identity:
+            raise ValueError("unchanged input path identity changed during readback")
+    if observed != expected:
+        raise ValueError("input deployment CAS mismatch during unchanged readback")
+    if all(observed[str(Path(d) / name)] == digest(raw)
+           for d in directories for name, raw in incoming.items()):
+        return observed
+    return None
+
+
 def install(controller, helper, expected_path, registry, lock_root, directories):
     # Freeze incoming bytes before validation/staging so the source cannot change midway.
     c, h = Path(controller).read_bytes(), Path(helper).read_bytes()
@@ -132,12 +225,23 @@ def install(controller, helper, expected_path, registry, lock_root, directories)
     if digest(c) != info["controller_sha256"] or digest(h) != info["helper_sha256"]:
         raise ValueError("incoming source changed during validation")
     expected = json.loads(Path(expected_path).read_text())
-    directories = [str(Path(d).resolve()) for d in directories]
+    raw_directories = list(directories)
+    directories = [str(Path(d).resolve()) for d in raw_directories]
     if not directories or len(set(directories)) != len(directories):
         raise ValueError("input deployment paths are empty or repeated")
     for directory in directories:
         if not Path(directory).is_dir():
             raise ValueError("input runtime directory missing; installation refused")
+    keys = {str(Path(d) / name) for d in directories
+            for name in ("douyin-phone-adb", "text-input-focus.py")}
+    if not isinstance(expected, dict) or set(expected) != keys or any(
+            value is not None and (not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value))
+            for value in expected.values()):
+        raise ValueError("input deployment CAS target set is invalid")
+    observed = unchanged_runtime(raw_directories, directories, expected, registry, lock_root,
+                                 {"douyin-phone-adb": c, "text-input-focus.py": h})
+    if observed is not None:
+        return {"status": "unchanged", "component": info, "observed": observed}
     staged = []
     try:
         with device_barrier(registry, lock_root) as verify_free, (Path(directories[0]) / ".input-runtime.deploy.guard").open("a") as lock:
