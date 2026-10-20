@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -45,7 +45,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -150,7 +150,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -188,13 +188,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "5046bb53a116c2f2f02ccc71a9204d67b7e0e797fed3a61cb6a7a252a397c63b",
+      "code_digest": "46a1e827faf4f7be646bba4e77913eb2ee9dd81a98d36a013c921c3033f74cb3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "1d60b64bafc01ee5bc961b20ef17aaf1fa651ef533e962500ca521c5624470c8",
-        "current_code_digest": "5046bb53a116c2f2f02ccc71a9204d67b7e0e797fed3a61cb6a7a252a397c63b"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "5046bb53a116c2f2f02ccc71a9204d67b7e0e797fed3a61cb6a7a252a397c63b",
+        "current_code_digest": "46a1e827faf4f7be646bba4e77913eb2ee9dd81a98d36a013c921c3033f74cb3"
       }
     },
     "douyin_video_processing.preflight": {
@@ -227,7 +227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -248,7 +248,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -364,7 +364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -395,13 +395,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "8497655463adbb6180f2d8f6155df2c76c04765ed1ed64484d5d21a5a537de15",
+      "code_digest": "ca591c011282877b831828144624e6c633bea915def8a3eda333745d0889389d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "0afec952533a5954aa7f55a6acc10526c6c305bf400c150f70bbf38296c41559",
-        "current_code_digest": "8497655463adbb6180f2d8f6155df2c76c04765ed1ed64484d5d21a5a537de15"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "8497655463adbb6180f2d8f6155df2c76c04765ed1ed64484d5d21a5a537de15",
+        "current_code_digest": "ca591c011282877b831828144624e6c633bea915def8a3eda333745d0889389d"
       }
     },
     "douyin_video_processing.dedup": {
@@ -427,7 +427,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -448,7 +448,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -553,7 +553,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -581,7 +581,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "aa8818722cb3236fa4cabc4d0feec4e21c58ffcab3687db72ea92e757fd4d0a7"
+          "sha256": "20ee9f5693bc62b4e7f7da3c1e87117f005b0bbc051f4d1987ef17ff48fc2dc8"
         },
         {
           "kind": "code",
@@ -591,13 +591,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "5ce4d191235499583feff544f80f58d47602beca4eb741cb66e0987146632506",
+      "code_digest": "8da6b63c9421db403dffe8d47697f3cf4329f5db02cfef73afb64ed8f7e3e098",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "527bbc4cc9bbb3d7ed8f70315a45f5342806d0ac4beab419a3a153cd76710bd9",
-        "current_code_digest": "5ce4d191235499583feff544f80f58d47602beca4eb741cb66e0987146632506"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "5ce4d191235499583feff544f80f58d47602beca4eb741cb66e0987146632506",
+        "current_code_digest": "8da6b63c9421db403dffe8d47697f3cf4329f5db02cfef73afb64ed8f7e3e098"
       }
     },
     "douyin_video_processing.qualification": {
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -644,7 +644,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -749,7 +749,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "c46ea4bf04b5d1fac4f11a51714efe1b8a07c10d6755ce2476759e047b48aa66",
+      "code_digest": "1d1735be88d28796dab4d70f8c539a0841e41caffe17d316b3ec22c611c07d77",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "ce3d81a59920ef95e44ed7c645235f2941003cfffcc4f0a5df6ff074f336a32d",
-        "current_code_digest": "c46ea4bf04b5d1fac4f11a51714efe1b8a07c10d6755ce2476759e047b48aa66"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "c46ea4bf04b5d1fac4f11a51714efe1b8a07c10d6755ce2476759e047b48aa66",
+        "current_code_digest": "1d1735be88d28796dab4d70f8c539a0841e41caffe17d316b3ec22c611c07d77"
       }
     },
     "douyin_video_processing.collection": {
@@ -868,7 +868,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -889,7 +889,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -1002,7 +1002,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -1054,13 +1054,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "25d4a4d832516689d758f0a1b8e784b368a5d554a803f5394b4628efecf3d3be",
+      "code_digest": "9f345a89f85b655ee8217a1817f2de164d7959d64252d9b3c9ba5a2f086486e9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "79147b17d6e13a114c642c0f0ab95fa831d286d5d02398f6045524ab86eec52f",
-        "current_code_digest": "25d4a4d832516689d758f0a1b8e784b368a5d554a803f5394b4628efecf3d3be"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "25d4a4d832516689d758f0a1b8e784b368a5d554a803f5394b4628efecf3d3be",
+        "current_code_digest": "9f345a89f85b655ee8217a1817f2de164d7959d64252d9b3c9ba5a2f086486e9"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1086,7 +1086,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -1107,7 +1107,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -1215,7 +1215,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -1246,13 +1246,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "394ddfd0e7d42148a1875fcf9f344d923e30fe13a30edc35885b390efd374eb0",
+      "code_digest": "f5717f8a0ed3c3c08b41cb7d49e4ce0cfb47a3ec3dd31f23b25fedfb83062ffd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "a4b77f8a165c867d2b8131802ca9cb73104b92d8bf3b67a76616208839b59738",
-        "current_code_digest": "394ddfd0e7d42148a1875fcf9f344d923e30fe13a30edc35885b390efd374eb0"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "394ddfd0e7d42148a1875fcf9f344d923e30fe13a30edc35885b390efd374eb0",
+        "current_code_digest": "f5717f8a0ed3c3c08b41cb7d49e4ce0cfb47a3ec3dd31f23b25fedfb83062ffd"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1278,7 +1278,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -1299,7 +1299,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -1383,7 +1383,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -1411,7 +1411,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "aa8818722cb3236fa4cabc4d0feec4e21c58ffcab3687db72ea92e757fd4d0a7"
+          "sha256": "20ee9f5693bc62b4e7f7da3c1e87117f005b0bbc051f4d1987ef17ff48fc2dc8"
         },
         {
           "kind": "code",
@@ -1421,13 +1421,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "ac80b5b8c05a5fa43aade32ff57200aa6e374d9de3e56fcfabdb030bb3d190ca",
+      "code_digest": "aaeaab8642af27ce1532407398c2b431e71bc549a547374be8d521f5a7f23a00",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "4ca3754f945f66b2e63e648dfe54772dc335ea11d00cb42569af7946c96936ca",
-        "current_code_digest": "ac80b5b8c05a5fa43aade32ff57200aa6e374d9de3e56fcfabdb030bb3d190ca"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "ac80b5b8c05a5fa43aade32ff57200aa6e374d9de3e56fcfabdb030bb3d190ca",
+        "current_code_digest": "aaeaab8642af27ce1532407398c2b431e71bc549a547374be8d521f5a7f23a00"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1460,7 +1460,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -1481,7 +1481,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -1565,7 +1565,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -1593,7 +1593,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "aa8818722cb3236fa4cabc4d0feec4e21c58ffcab3687db72ea92e757fd4d0a7"
+          "sha256": "20ee9f5693bc62b4e7f7da3c1e87117f005b0bbc051f4d1987ef17ff48fc2dc8"
         },
         {
           "kind": "code",
@@ -1652,13 +1652,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "606dc611d6cc69f7acc8af281b8d00139173a502f30fd2c9c1a8b7942a922c57",
+      "code_digest": "2ec09ac262c243829e5635f0a4153e3e0b422756945ada5c9f266f5e7ed4072d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "34c9343bc6a0b7d3096561bf29a49c809b5d27f465d66600a712d52dc6006c82",
-        "current_code_digest": "606dc611d6cc69f7acc8af281b8d00139173a502f30fd2c9c1a8b7942a922c57"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "606dc611d6cc69f7acc8af281b8d00139173a502f30fd2c9c1a8b7942a922c57",
+        "current_code_digest": "2ec09ac262c243829e5635f0a4153e3e0b422756945ada5c9f266f5e7ed4072d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1684,7 +1684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -1705,7 +1705,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -1821,7 +1821,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -1880,13 +1880,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "5b61e90104a7d5ad3f5e653b13bb2e899ef51cab846cd311df8186db3053cb16",
+      "code_digest": "1d77917014ff298cdcc811b7a07340b034b73227a85dcc8ab11319b258967c27",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "9d626c161e9e9770781a15ea024ce219578114ca1bbd11d406cd8291e775fcb7",
-        "current_code_digest": "5b61e90104a7d5ad3f5e653b13bb2e899ef51cab846cd311df8186db3053cb16"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "5b61e90104a7d5ad3f5e653b13bb2e899ef51cab846cd311df8186db3053cb16",
+        "current_code_digest": "1d77917014ff298cdcc811b7a07340b034b73227a85dcc8ab11319b258967c27"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1912,7 +1912,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -1933,7 +1933,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -2038,7 +2038,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -2083,13 +2083,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
+      "code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
-        "current_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
+        "current_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2115,7 +2115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -2136,7 +2136,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -2241,7 +2241,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -2286,13 +2286,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
+      "code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "eb3c9c1252b3220309d9376cfbc0ae74e1f5d2208a28d8b093640cd81d419e99",
-        "current_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
+        "current_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2318,7 +2318,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "ab9374274c605d698db8c1ca2d21714257c7cfe10e19270634eee606d144a7ce"
+          "sha256": "f77d70b383ba60aa58db533a43e27e66521b295e6e81d82f09f83d3b2efa86a3"
         },
         {
           "kind": "code",
@@ -2339,7 +2339,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-skill-agent.mjs",
           "revision": "contract",
-          "sha256": "982d8dd144c9abb8fd56be09ed8d6c3d9343356346850262cb274fb9093c8508"
+          "sha256": "02d2bad0e5e46f751d53783ea0a483869795161cbf0601d4831d23ec66e8c320"
         },
         {
           "kind": "code",
@@ -2447,7 +2447,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "d054ad3a990de993e1a45f0bd8a7512c08e63168c14e6a402372a248647a6bd9"
+          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
         },
         {
           "kind": "code",
@@ -2492,13 +2492,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "7b1946d25d78230351392c935cfdf66f57b6bc70f75b2e04a522018d48513c2e",
+      "code_digest": "e7a886e5643e3c19af4f5ca0d4c63fd58e44a1d3a35411d2bc3c583af127b1c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅候选环境RPC根据冻结SHA路由到隔离版本；生产默认入口、Activity输入输出及业务策略不变，候选路由回归已通过。",
-        "reviewed_by": "codex:/root-release-admission",
-        "previous_code_digest": "276e8094413fa6c65bc8f45d5fd7cb85fdfd818770c10ec2cf2cd9bc0b24246d",
-        "current_code_digest": "7b1946d25d78230351392c935cfdf66f57b6bc70f75b2e04a522018d48513c2e"
+        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
+        "reviewed_by": "/root/fixed_source_final_review",
+        "previous_code_digest": "7b1946d25d78230351392c935cfdf66f57b6bc70f75b2e04a522018d48513c2e",
+        "current_code_digest": "e7a886e5643e3c19af4f5ca0d4c63fd58e44a1d3a35411d2bc3c583af127b1c3"
       }
     }
   },
