@@ -129,3 +129,17 @@ test('native operation receipt bytes belong to every consumer method source clos
   assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
  }
 });
+
+test('verified runtime binding bytes belong to every consumer method source closure',t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/runtime-binding.mjs';
+ put(root,path,readFileSync(join(source,path)));
+ const before=collectMethods(root);
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated verified binding byte mutation\n');
+ const after=collectMethods(root);
+ assert.equal(Object.keys(before.activities).length,12);
+ for(const [ref,method] of Object.entries(before.activities)){
+  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted verified runtime binding bytes');
+  assert.equal(after.activities[ref].contract_digest,method.contract_digest);
+  assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
+ }
+});

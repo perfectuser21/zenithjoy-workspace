@@ -22,6 +22,17 @@ export function expectedPath(frozen,stepSpec){
 function verifyBinding(binding,record){
  if(!binding?.id || binding.run_id!==record.run_id)throw Error('运行绑定ACK身份不匹配');
  for(const [key,value] of Object.entries(record.body))if(digest(binding[key]??binding.payload?.[key])!==digest(value))throw Error(`运行绑定ACK内容不匹配: ${key}`);
+ for(const key of ['task_id','task_run_id']){
+  const top=Object.hasOwn(binding,key),nested=Object.hasOwn(binding.payload||{},key);
+  if(top&&binding[key]===undefined||nested&&binding.payload[key]===undefined
+    ||top&&nested&&binding[key]!==binding.payload[key])throw Error('RUN_BINDING_TASK_ID_INVALID');
+ }
+ // The public unbound-run ACK omits task_id; normalize only that verified shape.
+ // Preserve explicit/associated task identities and the original ACK on disk.
+ if(record.body.source_kind==='external'&&binding.source_kind==='external'
+   &&Object.hasOwn(binding,'task_run_id')&&binding.task_run_id===null
+   &&!Object.hasOwn(binding,'task_id')&&!Object.hasOwn(binding.payload||{},'task_id')
+   &&!Object.hasOwn(record.body,'task_id')&&!Object.hasOwn(record.body,'task_run_id'))return {...binding,task_id:null};
  return binding;
 }
 export function readBinding(dir,attempt,frozen=readFrozen(dir)){
@@ -55,7 +66,7 @@ export async function bindRun({dir,runId,brainUrl,request,ledgerPath=new URL('./
   try{
    const posted=await request(record.endpoint,record.body);verifyBinding(posted?.binding,record);
    const readback=await request(record.endpoint);binding=verifyBinding(readback?.binding,record);
-   if(binding.id!==posted.binding.id)throw Error('运行绑定回读ID不匹配');atomic(ackPath,{binding});
+   if(binding.id!==posted.binding.id)throw Error('运行绑定回读ID不匹配');atomic(ackPath,{binding:readback.binding});
   }catch(err){if(err.status===409)atomic(blocked,{state:'blocked',http_status:409});throw err;}
  }
  atomic(reservationPath,{...reservation,started:true});return {binding,attempt_key:attempt,skip_words:reservation.skip_words};
