@@ -6,6 +6,8 @@ import {join} from 'node:path';
 import {createHandlers} from '../leadgen-handlers.mjs';
 import {runWorkflow} from '../activity-commander.mjs';
 import {execInput,executionDidNotStart} from '../leadgen-client.mjs';
+import * as workflow from '../leadgen-workflow.mjs';
+import {createActivityRecovery} from '../activity-skill-recovery.mjs';
 
 const root=new URL('..',import.meta.url).pathname;
 function setup(execute){
@@ -63,4 +65,39 @@ test('真实WeakMap未启动证明同时绑定原run设备及操作身份',async
   for(const key of Object.keys(receipt))assert.equal(executionDidNotStart(original,command,args,{...receipt,[key]:'other'}),false,key+' must be bound');
   assert.equal(executionDidNotStart(Error('EXECUTION_START_FAILED'),command,args,receipt),false);
  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('原生命令完成后的业务解析失败保留停止未知，不放行清场',async()=>{
+ const state={nativeStopUnproven:true};
+ await assert.rejects(workflow.invokeNativeActivity(async()=>{throw Error('missing semantic output');},state),error=>{
+  assert.equal(error.message,'missing semantic output');assert.equal(error.executionStopped,false);assert.equal(error.externalEffect,'unknown');return true;
+ });
+ assert.equal(state.executionUnknown,true);
+});
+for(const status of ['partial','failed'])test('原生命令完成后的业务部分失败保留实际产出并标停止未知：'+status,async()=>{
+ const state={nativeStopUnproven:true},actual={status,comments_saved:3,failures:[{reason:'readback missing'}]};
+ const result=await workflow.invokeNativeActivity(async()=>actual,state);
+ assert.equal(result.execution_stopped,false);assert.equal(result.comments_saved,3);assert.deepEqual(result.failures,actual.failures);assert.equal(state.executionUnknown,true);
+});
+test('原生命令正常产出仍进入原业务验收，不被一律判失败',async()=>{
+ const state={nativeStopUnproven:true},actual={record_started:true,recording_id:'local-owned-resource'};
+ assert.equal(await workflow.invokeNativeActivity(async()=>actual,state),actual);assert.equal(state.executionUnknown,undefined);
+});
+
+test('恢复门核对真实未启动能力的全部身份，磁盘副本和旧opid不能代替能力',async()=>{
+ const f=setup((command,args,opts)=>execInput(command,args,opts));
+ try{
+  let original;await assert.rejects(f.handlers.preflight(),error=>{original=error;return true;});
+  const failure={status:'failed',error:original.message,execution_stopped:original.executionStopped,external_effect:original.externalEffect,operation_id:original.operationId};
+  const make=()=>({runDir:f.dir,frozen:{deployment:{source_commit:'a'.repeat(40)},activities:[]},binding:{run_id:'run__a1',task_id:'task'},env:{...f.env},handlers:{state:{...f.handlers.state}},rpc:async()=>{throw Error('unexpected RPC');}});
+  // 真能力通过停止准入，随后因本夹具没有Skill绑定而在下一关退出；不宣称Skill已运行。
+  await assert.rejects(createActivityRecovery(make())({activity:{key:'preflight'},failure}),error=>error.message==='SKILL_ACTIVITY_BINDING_INVALID'&&error.executionStopped===true);
+  const changes={runDir:c=>c.runDir+='-other',runId:c=>c.binding.run_id='other',taskId:c=>c.binding.task_id='other',profile:c=>c.env.P='other',serial:c=>c.env.SERIAL='other',owner:c=>c.env.WFR_TAG='other',source:c=>c.frozen.deployment.source_commit='b'.repeat(40),serialized:c=>c.handlers.state.nativeStopProof=structuredClone(c.handlers.state.nativeStopProof)};
+  for(const [key,change] of Object.entries(changes)){
+   const context=make();change(context);
+   await assert.rejects(createActivityRecovery(context)({activity:{key:'preflight'},failure}),error=>error.message==='OLD_EXECUTION_TERMINATION_UNKNOWN'&&error.executionStopped===false,key);
+  }
+  for(const changed of [{...failure,operation_id:'old-operation'},{...failure,operation_id:undefined},{...failure,error:'EXECUTION_DEADLINE'}])await assert.rejects(createActivityRecovery(make())({activity:{key:'preflight'},failure:changed}),error=>error.message==='OLD_EXECUTION_TERMINATION_UNKNOWN'&&error.executionStopped===false);
+  await assert.rejects(createActivityRecovery(make())({activity:{key:'collection'},failure}),error=>error.message==='OLD_EXECUTION_TERMINATION_UNKNOWN'&&error.executionStopped===false);
+ }finally{f.close();}
 });
