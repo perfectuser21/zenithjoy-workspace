@@ -78,7 +78,7 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
      writeFileSync(join(directory,`verification-turn-${generation}.json`),JSON.stringify(verdict),{flag:'wx',mode:0o600});verificationFailed=verdict?.verified!==true;
     }
     const failed=['error','failed','timeout','aborted'].includes(receipt?.status)&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true&&receipt.terminal?.runId===receipt.child_run_id&&Number.isFinite(receipt.terminal?.endedAt);
-    if(!policy||generation!==0||!stopped||!(failed||verificationFailed&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true)||heartbeatError||deadline-Date.now()<10000)break;
+    if(!policy||mode!=='repair'||generation!==0||!stopped||!(failed||verificationFailed&&receipt.owner_execution_stopped===true&&receipt.child_execution_stopped===true)||heartbeatError||deadline-Date.now()<10000)break;
     try{await handlers.handoffHeartbeat?.(activity);}catch(error){heartbeatError=error;break;}
     if(heartbeatError||deadline-Date.now()<10000)break;
     request=broker.advanceTurn(verificationFailed?'verification_failed':'agent_failed');
