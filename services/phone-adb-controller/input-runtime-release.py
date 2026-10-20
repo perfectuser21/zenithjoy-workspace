@@ -144,17 +144,22 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
     if any(not p.exists() and not p.is_symlink() for p in targets):
         return None
     watched = {}
+    def remember(path, identity):
+        key = str(path)
+        if key in watched and watched[key] != identity:
+            raise ValueError("unchanged input identity changed while freezing paths")
+        watched[key] = identity
     def watch(path, kind=None):
         p = Path(path)
         identity = path_identity(p)
         if kind and not kind(identity[2]):
             raise ValueError("unchanged input identity is not a regular file/directory")
-        watched[str(p)] = identity
+        remember(p, identity)
         # Preserve existing compatibility aliases, but never silently resolve a
         # changed alias to a different root during the read-only proof.
         for parent in p.parents:
             if parent.is_symlink():
-                watched[str(parent)] = path_identity(parent)
+                remember(parent, path_identity(parent))
         return p
     for p in targets:
         watch(p, stat.S_ISREG)
@@ -167,7 +172,10 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
             if str(Path(raw).resolve(strict=True)) != canonical:
                 raise ValueError("unchanged input raw directory changed canonical target")
     verify_directories()
-    registry_path = watch(registry, stat.S_ISREG)
+    registry_named = watch(registry)
+    if not (registry_named.is_symlink() or stat.S_ISREG(registry_named.lstat().st_mode)):
+        raise ValueError("unchanged registry is not a regular file or stable alias")
+    registry_path = watch(registry_named.resolve(strict=True), stat.S_ISREG)
     root = watch(lock_root, stat.S_ISDIR)
     for owner in root.glob("*.lock"):
         watch(owner)
@@ -197,6 +205,8 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
         watch(root / (serial + ".guard"), stat.S_ISREG)
     observed = {str(p): digest(read_regular(p)) for p in targets}
     verify_directories()
+    if registry_named.resolve(strict=True) != registry_path:
+        raise ValueError("unchanged registry alias changed canonical target")
     for path, identity in watched.items():
         if path_identity(path) != identity:
             raise ValueError("unchanged input path identity changed during readback")
