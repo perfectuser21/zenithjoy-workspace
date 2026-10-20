@@ -79,6 +79,51 @@ class BusinessGateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+class FrontendBrowserDodTest(unittest.TestCase):
+    def run_frontend_check(self, paths):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
+        step = next(step for step in jobs["frontend-browser-dod-check"]["steps"]
+                    if step.get("name") == "Detect frontend changes and check browser DoD")
+        script = step["run"].replace("${{ github.base_ref }}", "main")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".dod.md").write_text("")
+            binary = root / "bin"
+            binary.mkdir()
+            git = binary / "git"
+            git.write_text('#!/bin/sh\nprintf "%s\\n" "$FRONTEND_CHANGED_FILES"\n')
+            git.chmod(0o755)
+            env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
+                   "BRANCH": "cp-browser-scope", "FRONTEND_CHANGED_FILES": "\n".join(paths)}
+            return subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
+                                  cwd=root, env=env, capture_output=True, text=True)
+
+    def test_test_only_changes_do_not_require_browser_dod(self):
+        for app in ("api", "dashboard", "staff-hub"):
+            for relative in ("tests/deploy/release.test.ts", "test/health.ts",
+                             "src/__tests__/health.ts", "src/health.test.ts",
+                             "src/health.spec.tsx", "src/probe.test.mjs"):
+                with self.subTest(app=app, relative=relative):
+                    result = self.run_frontend_check([f"apps/{app}/{relative}"])
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_real_source_in_each_app_still_requires_browser_dod(self):
+        for app in ("api", "dashboard", "staff-hub"):
+            for relative in ("src/app.ts", "src/TestButton.tsx", "src/styles.css"):
+                with self.subTest(app=app, relative=relative):
+                    result = self.run_frontend_check([f"apps/{app}/{relative}"])
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_test_changes_cannot_hide_real_source(self):
+        result = self.run_frontend_check(["apps/api/tests/deploy/health.test.ts",
+                                          "apps/staff-hub/src/pages/Home.tsx"])
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_unrelated_changes_do_not_require_browser_dod(self):
+        result = self.run_frontend_check(["scripts/deploy/hk-api-release.sh"])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 class L1AggregateTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
