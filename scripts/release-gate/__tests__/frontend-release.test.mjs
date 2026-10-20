@@ -49,7 +49,7 @@ async function scenario({bad=false,legacy=false,restartFails=false,same=false,ro
   catch(error){rollbackResult=error;}
  }
  const failedEntries=await readdir(join(live,'failed')).catch(()=>[]);
- const observation={common:await readFile(join(live,'common.conf'),'utf8').catch(()=>null),failedEntries,rollbackCode:rollbackResult?.code??0,rollbackOutput:rollbackResult?.stderr||'',code:result.code??0,page:await readFile(join(live,'dist','index.html'),'utf8'),config:await readFile(join(live,'nginx.conf'),'utf8'),output:result.stdout+' '+result.stderr};
+ const observation={servedFiles:await readdir(join(live,'dist')),common:await readFile(join(live,'common.conf'),'utf8').catch(()=>null),failedEntries,rollbackCode:rollbackResult?.code??0,rollbackOutput:rollbackResult?.stderr||'',code:result.code??0,page:await readFile(join(live,'dist','index.html'),'utf8'),config:await readFile(join(live,'nginx.conf'),'utf8'),output:result.stdout+' '+result.stderr};
  await new Promise(r=>server.close(r));await rm(root,{recursive:true,force:true});return observation;
 }
 for(const legacy of [false,true]) {
@@ -67,3 +67,5 @@ test('回退本身健康失败恢复原当前版本',async()=>{const r=await sce
 test('当前候选缺验证证明仍允许恢复已验证上一版',async()=>{const r=await scenario({rollback:true,unverifiedCurrent:true});assert.equal(r.code,0);assert.equal(r.rollbackCode,0,r.rollbackOutput);assert.equal(r.page,'old page');assert.equal(r.config,'old config');});
 
 test('目标版本没有common.conf时人工回退移除新引入配置',async()=>{const r=await scenario({rollback:true,noOldCommon:true});assert.equal(r.code,0);assert.equal(r.rollbackCode,0,r.rollbackOutput);assert.equal(r.common,null);});
+
+test('留存证明及nginx配置不放进静态webroot',async()=>{const r=await scenario();assert.equal(r.code,0,r.output);assert.ok(!r.servedFiles.includes('.release-configs'));assert.ok(!r.servedFiles.includes('.release-verified.json'));});
