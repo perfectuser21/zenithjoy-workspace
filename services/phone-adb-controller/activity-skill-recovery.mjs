@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,existsSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {startActivityBroker} from './activity-skill-broker.mjs';
-import {safeExecutionDiagnostic} from './leadgen-client.mjs';
+import {safeExecutionDiagnostic,verifiedNativeNotStartedProof} from './leadgen-client.mjs';
 import {isCaptureContractFailure} from './activity-commander.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const noLaunch=message=>{const e=Error(message);e.executionStopped=true;throw e;};
@@ -46,8 +46,10 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
   const directory=join(runDir,'skill-handoff',activity.key);
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
   const native=handlers.state.nativeStopProof;
-  const nativeStopVerified=failure.execution_stopped===true&&failure.external_effect==='unknown'&&native?.execution_stopped===true&&native.operation_id===failure.operation_id&&native.run_dir===runDir&&native.run_id===binding.run_id&&native.task_id===binding.task_id&&native.owner===env.WFR_TAG&&native.source_commit===frozen.deployment.source_commit&&native.activity===activity.key;
-  if(handlers.state.executionUnknown||failure.execution_stopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))&&!nativeStopVerified)){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
+  const nativeStopVerified=failure.execution_stopped===true&&failure.external_effect==='unknown'
+    &&/\bEXECUTION_START_FAILED\b/.test(failure.error||'')
+    &&verifiedNativeNotStartedProof(native,{runDir,operationId:failure.operation_id,runId:binding.run_id,taskId:binding.task_id,profile:env.P,serial:env.SERIAL,owner:env.WFR_TAG,sourceCommit:frozen.deployment.source_commit,activity:activity.key});
+  if(handlers.state.executionUnknown||(handlers.state.nativeStopUnproven||native||failure.operation_id)&&!nativeStopVerified||failure.execution_stopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))&&!nativeStopVerified)){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
   const mode=classifyActivityFailure(activity,failure);
   if(handlers.state.qualificationClaimUnknown)noLaunch('SKILL_HANDOFF_CLAIM_RECEIPT_UNKNOWN');
   if(mode==='blocked')noLaunch(activity.key==='collection'&&failure.status==='partial'?'SKILL_COLLECTION_PARTIAL_READBACK_REQUIRED':'SKILL_HANDOFF_POLICY_BLOCKED');

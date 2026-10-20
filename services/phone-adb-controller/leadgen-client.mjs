@@ -2,7 +2,7 @@ import { spawn,execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
-import {beginNativeOperation} from './native-operation-receipt.mjs';
+import {beginNativeOperation,nativeOperationIdentityMatches} from './native-operation-receipt.mjs';
 
 export const RPC_FILES = ['capture-strategy.mjs','outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','leadgen-client.mjs','native-operation-receipt.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py',
   'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/leadgen-outreach-rate-ramp.json',
@@ -33,13 +33,22 @@ export function safeExecutionDiagnostic(value, env = process.env) {
 // This capability is process-local and bound to the exact executor invocation.
 // A serialized message/code or an error from a later filesystem read is no proof.
 const nativeNotStarted=new WeakMap();
+const trustedNotStartedProofs=new WeakSet();
 function markNotStarted(error,cause,command,args,child,spawned){
   if(!spawned&&child?.pid===undefined&&cause?.path===command&&cause?.syscall==='spawn '+command)nativeNotStarted.set(error,{command,args});
   return error;
 }
-export function executionDidNotStart(error,command,args){
+export function executionDidNotStart(error,command,args,context){
   const proof=error&&typeof error==='object'?nativeNotStarted.get(error):null;
-  return Boolean(proof&&proof.command===command&&proof.args===args);
+  return Boolean(proof&&proof.command===command&&proof.args===args&&
+    (context===undefined||verifiedNativeNotStartedProof(proof.receipt,context)));
+}
+export function verifiedNativeNotStartedProof(proof,context){
+  return Boolean(proof&&trustedNotStartedProofs.has(proof)&&proof.status==='not_started'&&
+    proof.execution_stopped===true&&Array.isArray(proof.processes)&&proof.processes.length===0&&nativeOperationIdentityMatches(proof,context));
+}
+export function nativeNotStartedProof(error,command,args,context){
+  return error?.message==='EXECUTION_START_FAILED'&&executionDidNotStart(error,command,args,context)?nativeNotStarted.get(error).receipt:null;
 }
 export function execFileReceipt(command,args,options){
   return new Promise((resolveResult,reject)=>{
@@ -76,9 +85,13 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
     async function finish(error, result, waitSignal) {
       if (settled) return; settled = true; clearTimeout(timer); clearTimeout(forceTimer);clearTimeout(abandonTimer);
       if(operation){
-        try{await ready;const final=executionDidNotStart(error,command,args)?operation.notStarted():await operation.stop(stoppingError?'SIGTERM/SIGKILL':null,result?.code,waitSignal);
-          if(!error&&final.execution_stopped!==true){error=Error('NATIVE_OPERATION_RECEIPT_UNKNOWN');error.executionStopped=false;error.externalEffect='unknown';error.operationId=receipt.operationId;}
-          if(error){error.executionStopped=final.execution_stopped===true;error.externalEffect='unknown';error.operationId=receipt.operationId;}}
+        try{await ready;const notStarted=executionDidNotStart(error,command,args);
+          const final=notStarted?operation.notStarted():await operation.stop(stoppingError?'SIGTERM/SIGKILL':null,result?.code,waitSignal);
+          if(notStarted){Object.freeze(final.processes);Object.freeze(final);trustedNotStartedProofs.add(final);nativeNotStarted.get(error).receipt=final;}
+          // A normal command return is not a proof that every descendant stopped.
+          // Its actual Activity result still needs the existing business contract.
+          if(error){error.executionStopped=notStarted;error.externalEffect='unknown';error.operationId=receipt.operationId;}
+          else Object.assign(result,{executionStopped:false,externalEffect:'unknown',operationId:receipt.operationId});}
         catch{if(!error)error=Error('NATIVE_OPERATION_RECEIPT_UNKNOWN');error.executionStopped=false;error.externalEffect='unknown';error.operationId=receipt.operationId;}
       }
       if (error) {

@@ -4,8 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
-import {execInput,safeExecutionDiagnostic} from './leadgen-client.mjs';
-import {readNativeOperation} from './native-operation-receipt.mjs';
+import {execInput,safeExecutionDiagnostic,nativeNotStartedProof} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
@@ -59,27 +58,35 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     appendFileSync(file,safeExecutionDiagnostic(value,env),{mode:0o600});
     chmodSync(file,0o600);
   };
+  const nativeFailure=(error,command,args,opts)=>{
+    if(opts.receipt){
+      const proof=nativeNotStartedProof(error,command,args,opts.receipt);
+      const valid=Boolean(proof&&!state.nativeStopUnproven);
+      error.executionStopped=valid;error.externalEffect='unknown';error.operationId=opts.receipt.operationId;
+      state.nativeStopProof=valid?proof:null;
+    }
+    if(error.executionStopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)&&error.executionStopped!==true)){
+      state.executionUnknown=true;error.executionStopped=false;
+    }
+    return error;
+  };
   const bounded=async(command,args,opts={})=>{
+    if(opts.receipt)state.nativeStopProof=null;
     try {
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
         env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
       recordDiagnostic(result.stderr||'');
+      if(opts.receipt)state.nativeStopUnproven=true;
       if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
       return result;
     } catch(error) {
-      if(opts.receipt&&/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE)\b/.test(error.message)){
-        const proof=readNativeOperation(opts.receipt.runDir,opts.receipt.operationId);
-        const valid=proof.execution_stopped===true&&proof.run_id===opts.receipt.runId&&proof.task_id===opts.receipt.taskId&&proof.owner===opts.receipt.owner&&proof.source_commit===opts.receipt.sourceCommit&&proof.activity===opts.receipt.activity;
-        error.executionStopped=valid;error.externalEffect='unknown';error.operationId=opts.receipt.operationId;
-        if(valid)state.nativeStopProof=proof;
-      }
-      if(error.executionStopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(error.message)&&error.executionStopped!==true)){state.executionUnknown=true;error.executionStopped=false;}
+      nativeFailure(error,command,args,opts);
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
-  const checked=async(command,args,opts)=>{const r=await bounded(command,args,opts);if(r.code!==0)throw Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`);return r.stdout;};
+  const checked=async(command,args,opts={})=>{const r=await bounded(command,args,opts);if(r.code!==0)throw nativeFailure(Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`),command,args,opts);return r.stdout;};
   const phone=async(command,...args)=>{
     const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
     if(!locked&&!['lock-acquire','preflight'].includes(command))throw Error('设备操作未持本批锁');

@@ -15,14 +15,14 @@ test('两套 run 的原生收据只读回本 run，同 ID 不覆盖且不泄漏�
   const result=await execInput(process.execPath,['-e',"process.stderr.write('PRIVATE_STDERR_MUST_NOT_APPEAR');setTimeout(()=>process.exit(0),100)",'PRIVATE_ARG_MUST_NOT_APPEAR'],{timeoutMs:3000,receipt:{...base,runDir:a}});
   assert.equal(result.code,0);
   const good=readNativeOperation(a,operationId),wrong=readNativeOperation(b,operationId);
-  assert.equal(good.execution_stopped,true);assert.equal(good.run_id,'run-a');assert.equal(wrong.execution_stopped,false);
+  assert.equal(good.execution_stopped,false);assert.equal(good.process_coverage,'observed_only');assert.equal(good.run_id,'run-a');assert.equal(wrong.execution_stopped,false);
   assert.equal(statSync(receiptPath(a,operationId)).mode&0o777,0o600);
   assert.doesNotMatch(readFileSync(receiptPath(a,operationId),'utf8'),/PRIVATE_ARG_MUST_NOT_APPEAR/);
   assert.doesNotMatch(readFileSync(receiptPath(a,operationId),'utf8'),/PRIVATE_STDERR_MUST_NOT_APPEAR/);
   const cli=fileURLToPath(new URL('../native-operation-receipt.mjs',import.meta.url));
   for(let i=0;i<2;i++){
    const readback=spawnSync(process.execPath,[cli,'readback','--run-dir',a,'--operation-id',operationId],{encoding:'utf8'});
-   assert.equal(readback.status,0);assert.equal(JSON.parse(readback.stdout).execution_stopped,true);
+   assert.equal(readback.status,1);assert.equal(JSON.parse(readback.stdout).execution_stopped,false);
   }
   const crossed=spawnSync(process.execPath,[cli,'readback','--run-dir',b,'--operation-id',operationId],{encoding:'utf8'});
   assert.equal(crossed.status,1);assert.equal(JSON.parse(crossed.stdout).execution_stopped,false);
@@ -68,7 +68,7 @@ test('受控输出上限也留下独立停止收据', {skip:process.platform==='
  const receipt={runDir:dir,operationId:'output-limit',runId:'run',taskId:'task',profile:'profile',serial:'serial',sourceCommit:'a'.repeat(40),owner:'owner',activity:'collect_videos'};
  try{
   await assert.rejects(execInput(process.execPath,['-e',`process.on('SIGTERM',()=>{});setTimeout(()=>process.stdout.write('x'.repeat(9*1024*1024)),100);setInterval(()=>{},1000)`],{timeoutMs:4000,receipt}),/EXECUTION_OUTPUT_LIMIT/);
-  assert.equal(readNativeOperation(dir,'output-limit').execution_stopped,true);
+  assert.equal(readNativeOperation(dir,'output-limit').execution_stopped,false);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 test('受控信号返回 EPERM 时不能给出停止正证', {skip:process.platform==='win32'},async()=>{
@@ -87,7 +87,8 @@ test('进程身份探针不可用时正常退出也不能当停止正证',async(
  const prior=process.env.PATH;
  try{
   process.env.PATH='';
-  await assert.rejects(execInput(process.execPath,['-e','setTimeout(()=>process.exit(0),100)'],{timeoutMs:1000,receipt}),error=>{assert.equal(error.message,'NATIVE_OPERATION_RECEIPT_UNKNOWN');assert.equal(error.executionStopped,false);return true;});
+  const result=await execInput(process.execPath,['-e','setTimeout(()=>process.exit(0),100)'],{timeoutMs:1000,receipt});
+  assert.equal(result.code,0);assert.equal(result.executionStopped,false);
   assert.equal(readNativeOperation(dir,'inspector-missing').execution_stopped,false);
  }finally{process.env.PATH=prior;rmSync(dir,{recursive:true,force:true});}
 });

@@ -4,6 +4,20 @@ import {fileURLToPath} from 'node:url';
 import {runWorkflow} from './activity-commander.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
+
+export async function invokeNativeActivity(execute,state){
+  try{
+    const result=await execute();
+    if(state.nativeStopUnproven&&['partial','failed'].includes(result?.status)){
+      state.executionUnknown=true;
+      return {...result,execution_stopped:false};
+    }
+    return result;
+  }catch(error){
+    if(state.nativeStopUnproven){state.executionUnknown=true;error.executionStopped=false;error.externalEffect='unknown';}
+    throw error;
+  }
+}
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {readFrozen,assertCommentSampling} from './runtime-definition.mjs';
@@ -68,7 +82,7 @@ async function main(){
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
-    const result=await handlers[activity.key]();
+    const result=await invokeNativeActivity(()=>handlers[activity.key](),handlers.state);
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
     return result;
   }]));

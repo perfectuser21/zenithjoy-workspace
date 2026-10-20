@@ -22,7 +22,8 @@ test('受控原生超时留下可独立读回的同一次操作身份和终态',
   assert.equal(receipt.run_id,'fixture-run');
   assert.ok(Number.isSafeInteger(receipt.pid));
   assert.ok(receipt.start_identity);
-  assert.equal(receipt.execution_stopped,true);
+  assert.equal(receipt.execution_stopped,false);
+  assert.equal(receipt.process_coverage,'observed_only');
   assert.equal(receipt.wait_signal,'SIGKILL');
   assert.ok(Array.isArray(receipt.processes)&&receipt.processes.length>=2);
   assert.ok(receipt.processes.every(p=>p.termination?.confirmed===true));

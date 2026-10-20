@@ -5,7 +5,7 @@ import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 const idPattern=/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
-const receiptKeys=new Set(['version','operation_id','run_dir','run_id','task_id','profile','serial','source_commit','owner','activity','status','execution_stopped','created_at','started_at','ended_at','pid','pgid','start_identity','signal','signals','wait_code','wait_signal','failure','processes']);
+const receiptKeys=new Set(['version','operation_id','run_dir','run_id','task_id','profile','serial','source_commit','owner','activity','status','execution_stopped','process_coverage','observed_processes_stopped','created_at','started_at','ended_at','pid','pgid','start_identity','signal','signals','wait_code','wait_signal','failure','processes']);
 const watcher=`import os,sys,select\np=int(sys.argv[1])\ntry:\n if hasattr(os,'pidfd_open'):\n  fd=os.pidfd_open(p,0); print('READY',flush=True); select.select([fd],[],[]); print('EXIT',flush=True)\n else:\n  k=select.kqueue(); k.control([select.kevent(p,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ENABLE,fflags=select.KQ_NOTE_EXIT)],0); print('READY',flush=True); k.control(None,1); print('EXIT',flush=True)\nexcept Exception:\n print('UNKNOWN',flush=True); sys.exit(1)\n`;
 const inspector=`import os,sys,json,ctypes,struct\np=int(sys.argv[1]); mode=sys.argv[2]; children=mode=='children'\nif sys.platform=='darwin':\n lib=ctypes.CDLL('/usr/lib/libproc.dylib',use_errno=True)\n def info(pid):\n  b=ctypes.create_string_buffer(136)\n  if lib.proc_pidinfo(pid,3,0,b,136)!=136:return None\n  x=b.raw\n  return {'pid':pid,'ppid':struct.unpack_from('=I',x,16)[0],'uid':struct.unpack_from('=I',x,20)[0],'pgid':struct.unpack_from('=I',x,100)[0],'start_identity':str(struct.unpack_from('=Q',x,120)[0])+':'+str(struct.unpack_from('=Q',x,128)[0])}\n def direct(pid):\n  b=ctypes.create_string_buffer(16384); n=lib.proc_listchildpids(pid,b,len(b))\n  if n<0 or n*4>=len(b):raise RuntimeError('PROCESS_INSPECTION_FAILED')\n  return [x[0] for x in struct.iter_unpack('=I',b.raw[:n*4]) if x[0]>0]\n def group(pid):\n  b=ctypes.create_string_buffer(16384); n=lib.proc_listpgrppids(pid,b,len(b))\n  if n<0 or n*4>=len(b):raise RuntimeError('PROCESS_GROUP_INSPECTION_FAILED')\n  return [x[0] for x in struct.iter_unpack('=I',b.raw[:n*4]) if x[0]>0 and x[0]!=pid]\nelse:\n def info(pid):\n  try:\n   s=open('/proc/%d/stat'%pid).read(); f=s[s.rfind(')')+2:].split()\n   return {'pid':pid,'ppid':int(f[1]),'uid':os.stat('/proc/%d'%pid).st_uid,'pgid':int(f[2]),'start_identity':f[19]}\n  except (FileNotFoundError,ProcessLookupError):return None\n def direct(pid):\n  out=[]\n  for name in os.listdir('/proc'):\n   if name.isdigit():\n    row=info(int(name))\n    if row and row['ppid']==pid:out.append(int(name))\n  return out\n def group(pid):\n  out=[]\n  for name in os.listdir('/proc'):\n   if name.isdigit():\n    row=info(int(name))\n    if row and row['pgid']==pid and row['pid']!=pid:out.append(row['pid'])\n  return out\nif children:\n result=[]; seen={p}; queue=[p]\n while queue:\n  for q in direct(queue.pop(0)):\n   if q not in seen:seen.add(q);result.append(q);queue.append(q)\n print(json.dumps(result))\nelif mode=='group': print(json.dumps(group(p)))\nelse: print(json.dumps(info(p)))\n`;
 
@@ -13,19 +13,22 @@ export function receiptPath(runDir,operationId){
  if(!isAbsolute(runDir)||!idPattern.test(operationId))throw Error('NATIVE_OPERATION_ID_INVALID');
  return join(resolve(runDir),'native-operations',operationId+'.json');
 }
+export function nativeOperationIdentityMatches(proof,context){
+ const fields={operation_id:'operationId',run_dir:'runDir',run_id:'runId',task_id:'taskId',profile:'profile',serial:'serial',source_commit:'sourceCommit',owner:'owner',activity:'activity'};
+ return Object.entries(fields).every(([actual,expected])=>typeof context?.[expected]==='string'&&context[expected].length>0&&proof?.[actual]===context[expected]);
+}
 export function readNativeOperation(runDir,operationId){
  let value;
  try{value=JSON.parse(readFileSync(receiptPath(runDir,operationId),'utf8'));}catch{return {operation_id:operationId,status:'unknown',execution_stopped:false};}
  const publicValue={version:value?.version,operation_id:value?.operation_id,run_dir:value?.run_dir,run_id:value?.run_id,task_id:value?.task_id,profile:value?.profile,serial:value?.serial,source_commit:value?.source_commit,owner:value?.owner,activity:value?.activity,
-  status:value?.status,execution_stopped:value?.execution_stopped,created_at:value?.created_at,started_at:value?.started_at,ended_at:value?.ended_at,pid:value?.pid,pgid:value?.pgid,start_identity:value?.start_identity,
+  status:value?.status,execution_stopped:value?.execution_stopped,process_coverage:value?.process_coverage,observed_processes_stopped:value?.observed_processes_stopped,created_at:value?.created_at,started_at:value?.started_at,ended_at:value?.ended_at,pid:value?.pid,pgid:value?.pgid,start_identity:value?.start_identity,
   signal:value?.signal,signals:Array.isArray(value?.signals)?value.signals.map(s=>({name:s?.name,at:s?.at,targets:s?.targets})):undefined,wait_code:value?.wait_code,wait_signal:value?.wait_signal,failure:value?.failure,
   processes:Array.isArray(value?.processes)?value.processes.map(p=>({pid:p?.pid,ppid:p?.ppid,uid:p?.uid,pgid:p?.pgid,start_identity:p?.start_identity,termination:{confirmed:p?.termination?.confirmed===true}})):[]};
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!receiptKeys.has(key))
    ||value.operation_id!==operationId||value.run_dir!==resolve(runDir)||value.execution_stopped!==true
    ||![value.run_id,value.task_id,value.profile,value.serial,value.source_commit,value.owner,value.activity].every(s=>typeof s==='string'&&s.length>0)
-   ||(value.status==='not_started'?value.failure!=='native_pre_spawn_error':value.status!=='stopped'
-   ||!Number.isSafeInteger(value.pid)||!value.start_identity||!Array.isArray(value.processes)||value.processes.length<1
-   ||value.processes.some(p=>!Number.isSafeInteger(p?.pid)||!p?.start_identity||p?.termination?.confirmed!==true)))
+   ||value.status!=='not_started'||value.failure!=='native_pre_spawn_error'
+   ||value.pid!==undefined||value.started_at!==undefined||!Array.isArray(value.processes)||value.processes.length!==0)
   return {...publicValue,status:'unknown',execution_stopped:false};
  return publicValue;
 }
@@ -63,7 +66,7 @@ export function beginNativeOperation(context){
  const {runDir,operationId,runId,taskId,profile,serial,sourceCommit,owner,activity}=context||{};
  if(!isAbsolute(runDir||'')||!idPattern.test(operationId||'')||![runId,taskId,profile,serial,sourceCommit,owner,activity].every(v=>typeof v==='string'&&v.length>0&&v.length<=256))throw Error('NATIVE_OPERATION_CONTEXT_INVALID');
  const path=receiptPath(runDir,operationId);mkdirSync(join(resolve(runDir),'native-operations'),{recursive:true,mode:0o700});
- const value={version:1,operation_id:operationId,run_dir:resolve(runDir),run_id:runId,task_id:taskId,profile,serial,source_commit:sourceCommit,owner,activity,status:'intent',execution_stopped:false,created_at:new Date().toISOString(),processes:[]};
+ const value={version:1,operation_id:operationId,run_dir:resolve(runDir),run_id:runId,task_id:taskId,profile,serial,source_commit:sourceCommit,owner,activity,status:'intent',execution_stopped:false,process_coverage:'observed_only',created_at:new Date().toISOString(),processes:[]};
  persist(path,value,true);
  let poller,unknown=false,stopped=false;
  const tracked=new Map();
@@ -100,7 +103,10 @@ export function beginNativeOperation(context){
    item.watcher.close();
   }
   value.processes=records;value.signal=signal||null;value.wait_code=code??null;value.wait_signal=waitSignal||null;
-  value.status=unknown||records.length===0?'unknown':'stopped';value.execution_stopped=value.status==='stopped';value.ended_at=new Date().toISOString();persist(path,value);
+  // Exit events prove only the observed PID set. A fork can escape between
+  // scans; neither an empty group nor every observed EXIT proves completeness.
+  value.observed_processes_stopped=!unknown&&records.length>0&&records.every(p=>p.termination.confirmed);
+  value.status='unknown';value.execution_stopped=false;value.ended_at=new Date().toISOString();persist(path,value);
   return value;
  };
  const maySignal=pid=>{
@@ -108,7 +114,7 @@ export function beginNativeOperation(context){
   if(!expected||!current||current.start_identity!==expected.start_identity||current.uid!==expected.uid||current.pgid!==expected.pgid){unknown=true;return false;}
   return true;
  };
- const notStarted=()=>{stopped=true;clearInterval(poller);value.status='not_started';value.execution_stopped=true;value.failure='native_pre_spawn_error';value.ended_at=new Date().toISOString();persist(path,value);return value;};
+ const notStarted=()=>{stopped=true;clearInterval(poller);value.status='not_started';value.execution_stopped=true;value.process_coverage='not_started';value.failure='native_pre_spawn_error';value.ended_at=new Date().toISOString();persist(path,value);return value;};
  const signalTargets=async signal=>{
   try{for(const child of descendants(value.pid))await add(child);}catch{unknown=true;}
   try{const root=processIdentity(value.pid);if(root?.start_identity===value.start_identity){for(const pid of groupMembers(value.pgid))await add(pid);}else unknown=true;}catch{unknown=true;}
