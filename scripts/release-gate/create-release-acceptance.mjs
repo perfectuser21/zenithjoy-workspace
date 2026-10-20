@@ -44,7 +44,9 @@ async function readVersion(url,field,fetchImpl) {
   const probe=new URL(url); probe.searchParams.set('release_probe',randomUUID());
   const response=await fetchImpl(probe,{redirect:'error',cache:'no-store',headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(20000)});
   need(response.ok,`读取实际staging版本失败: ${url} HTTP ${response.status}`);
-  const body=await response.json(), version=field==='backend'?body?.build?.sha:body?.sha;
+  let body;
+  try { body=await response.json(); } catch { throw new Error(`实际staging版本入口${url}未返回JSON版本回执`); }
+  const version=field==='backend'?body?.build?.sha:body?.sha;
   need(SHA40.test(version||''),`实际staging版本戳缺失或非法: ${url}`);
   return version;
 }
