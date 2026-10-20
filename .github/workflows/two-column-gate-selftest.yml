@@ -23,6 +23,9 @@ on:
       - '.github/workflows/two-column-gate-selftest.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   selftest:
     name: two-column-gate 业务准入回归

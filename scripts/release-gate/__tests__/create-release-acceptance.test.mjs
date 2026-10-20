@@ -51,14 +51,20 @@ test('建单入口实际读取两个可信部署面，覆盖用户伪造版本�
  assert.equal(result.status,'pending');assert.equal(s.writes.length,1);
  assert.equal(s.writes[0].detail.backend_sha,sha);assert.equal(s.writes[0].detail.frontend_sha,other);
  assert.equal(s.writes[0].detail.frontend_sha_src2,other);
- assert.ok(s.reads.includes('https://staging-autopilot.zenjoymedia.media/api/health'));
- assert.ok(s.reads.includes('https://staging-autopilot.zenjoymedia.media/release-sha.json'));
+ assert.deepEqual(s.reads,[
+  'https://staging-autopilot.zenjoymedia.media/api/health',
+  'https://staging-autopilot.zenjoymedia.media/release-sha.json',
+  'http://localhost:5221/api/brain/acceptance/runs',
+ ]);
 });
 test('staff使用独立Tailscale预发前端，后端允许独立版本但必须有同SHA部署证据',async()=>{
  const s=sources({backend:other});
  await producer.createReleaseAcceptance(input(),{sha,targets:['staff-hub'],fetchImpl:s.fetchImpl,api:s.api});
- assert.ok(s.reads.includes('http://100.86.118.99:8091/release-sha.json'));
- assert.ok(s.reads.includes('http://100.86.118.99:8091/api/health'));
+ assert.deepEqual(s.reads,[
+  'http://100.86.118.99:8091/api/health',
+  'http://100.86.118.99:8091/release-sha.json',
+  'http://localhost:5221/api/brain/acceptance/runs',
+ ]);
  assert.equal(s.writes[0].detail.backend_sha,other);
 });
 for(const [label,setup,targets] of [
