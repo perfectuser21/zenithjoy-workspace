@@ -30,13 +30,14 @@ on:
         required: true
         default: ''
 
+concurrency:
+  group: zenithjoy-production-hk
+  cancel-in-progress: false
+
 jobs:
   rollback-dashboard:
     name: Rollback 生产 dashboard → 上一个/指定 release（人工放行）
     runs-on: ubuntu-latest
-    concurrency:
-      group: zenithjoy-production-hk
-      cancel-in-progress: false
     env:
       INPUT_SHA: ${{ inputs.sha }}
       CONFIRM: ${{ inputs.confirm }}

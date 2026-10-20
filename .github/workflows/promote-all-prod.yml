@@ -17,9 +17,9 @@ on:
 permissions:
   contents: write
   actions: read
-# 生产锁由各单项部署 job 持有；编排层不能持相同锁，否则 reusable job 死锁。
+# 全链持有生产锁；单项 reusable 用本次 run 的子锁，阻止单项插队且避免嵌套死锁。
 concurrency:
-  group: zenithjoy-promote-all
+  group: zenithjoy-production-hk
   cancel-in-progress: false
 jobs:
   admission:
@@ -36,6 +36,7 @@ jobs:
       sha: ${{ needs.admission.outputs.sha }}
       acceptance_run_key: ${{ inputs.acceptance_run_key }}
       confirm: ${{ inputs.confirm }}
+      coordinated: true
     secrets: inherit
   promote-frontend:
     needs: [admission, promote-backend]
@@ -44,6 +45,7 @@ jobs:
       sha: ${{ needs.admission.outputs.sha }}
       acceptance_run_key: ${{ inputs.acceptance_run_key }}
       confirm: ${{ inputs.confirm }}
+      coordinated: true
     secrets: inherit
   release-tag:
     needs: [admission, promote-backend, promote-frontend]

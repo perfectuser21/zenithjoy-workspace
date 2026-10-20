@@ -16,6 +16,10 @@ on:
         type: string
   workflow_call:
     inputs:
+      coordinated:
+        description: '仅整体晋级编排持有生产锁时使用'
+        type: boolean
+        default: false
       sha:
         required: true
         type: string
@@ -25,6 +29,9 @@ on:
       confirm:
         required: true
         type: string
+concurrency:
+  group: ${{ inputs.coordinated && format('zenithjoy-nested-{0}-staff-hub', github.run_id) || 'zenithjoy-production-hk' }}
+  cancel-in-progress: false
 permissions:
   contents: read
   actions: read
@@ -40,9 +47,6 @@ jobs:
     needs: admission
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    concurrency:
-      group: zenithjoy-production-hk
-      cancel-in-progress: false
     env:
       DEPLOY_SHA: ${{ needs.admission.outputs.sha }}
       CONFIRM: ${{ inputs.confirm }}
