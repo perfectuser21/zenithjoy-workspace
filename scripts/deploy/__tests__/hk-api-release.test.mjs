@@ -100,3 +100,17 @@ test('失败候选不能作为人工回退目标', t => {
   const result = f.run(['rollback', f.next]);
   assert.notEqual(result.status, 0); assert.equal(f.state().images[f.state().active], f.old);
 });
+
+test('另一个发布占有宿主锁时不触碰镜像或容器', t => {
+  const f = fixture(t);
+  const result = spawnSync('flock', ['-n', f.env.ZJ_HK_LOCK, 'bash', script, 'promote', f.next], { env: f.env, encoding: 'utf8' });
+  assert.notEqual(result.status, 0); assert.match(result.stderr, /host lock/);
+  assert.equal(f.state().builds, 0); assert.deepEqual(f.state().ups, []);
+});
+test('留存镜像丢失时拒绝回退，不通过重建冒充旧版本', t => {
+  const f = fixture(t); assert.equal(f.run(['promote', f.next]).status, 0);
+  const state = f.state(); delete state.images['sha256:old-image'];
+  writeFileSync(f.env.FAKE_DOCKER, JSON.stringify(state));
+  assert.notEqual(f.run(['rollback']).status, 0);
+  assert.equal(f.state().images[f.state().active], f.next); assert.equal(f.state().builds, 1);
+});
