@@ -101,3 +101,19 @@ test('恢复门核对真实未启动能力的全部身份，磁盘副本和旧op
   await assert.rejects(createActivityRecovery(make())({activity:{key:'collection'},failure}),error=>error.message==='OLD_EXECUTION_TERMINATION_UNKNOWN'&&error.executionStopped===false);
  }finally{f.close();}
 });
+
+for(const boundary of ['verify-throw','verify-false','after-throw','after-finish','record-throw'])test('原生覆盖未知时后置边界失败仍隔离且不清场：'+boundary,async()=>{
+ const state={nativeStopUnproven:true};let cleaned=0,quarantined=0;
+ const result=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},
+  handlers:{collection:()=>workflow.invokeNativeActivity(async()=>({comments_saved:1}),state),cleanup:async()=>{cleaned++;return {};}},
+  terminationUnverified:()=>state.nativeStopUnproven===true,
+  commander:async receipt=>{if(receipt.phase==='after'&&boundary==='after-throw')throw Error('COMMANDER_READ_FAILED');return {action:receipt.phase==='after'&&boundary==='after-finish'?'finish':'continue'};},
+  record:async receipt=>{if(boundary==='record-throw'&&['execution','failure'].includes(receipt.phase))throw Error('LEDGER_WRITE_FAILED');},
+  verify:async()=>{if(boundary==='verify-throw')throw Error('VERIFY_RECEIPT_PARSE_FAILED');return {verified:boundary!=='verify-false'};},
+  quarantine:async()=>{quarantined++;return {verified:true};}});
+ assert.equal(cleaned,0);assert.equal(quarantined,1);assert.notEqual(result.status,'completed');
+});
+test('原生正常产出及后置验证通过仍可清场，不把覆盖未知当业务失败',async()=>{
+ let cleaned=0;const result=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},handlers:{collection:async()=>({comments_saved:1}),cleanup:async()=>{cleaned++;return {};}},terminationUnverified:()=>true,commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>({verified:true}),quarantine:async()=>{throw Error('unexpected quarantine');}});
+ assert.equal(result.status,'completed');assert.equal(cleaned,1);
+});
