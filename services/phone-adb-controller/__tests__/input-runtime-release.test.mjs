@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,unlinkSync,statSync,symlinkSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,unlinkSync,statSync,symlinkSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const service=new URL('../',import.meta.url).pathname;
@@ -143,4 +143,12 @@ for(const mode of ['missing-key','extra-key','target-inode','registry-inode','lo
 test('unchanged validates real files without staging, replacing, or taking any flock',()=>{
  const c=installedFixture();const code=`import importlib.util,sys\ns=importlib.util.spec_from_file_location('release',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ndef forbidden(*args,**kwargs): raise AssertionError('unchanged attempted mutation or lock')\nm.tempfile.mkstemp=forbidden;m.os.replace=forbidden;m.fcntl.flock=forbidden\nr=m.install(*sys.argv[2:7],sys.argv[7:]);assert r['status']=='unchanged',r\n`;
  const r=spawnSync('python3',['-c',code,script,join(c.source,'douyin-phone-adb'),join(c.source,'text-input-focus.py'),c.expected,c.registry,c.locks,c.a,c.b],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+for(const owner of [false,true])test('same bytes without executable mode still require the original guarded repair: '+owner,()=>{
+ const c=installedFixture();const target=join(c.b,'douyin-phone-adb');chmodSync(target,0o644);snapshot(c);
+ if(owner){mkdirSync(join(c.locks,'SER1.lock'));writeFileSync(join(c.locks,'SER1.lock','owner'),'original-unknown-run\n');}
+ const r=install(c);
+ if(owner){assert.equal(r.status,2,r.stdout);assert.match(r.stderr,/owner exists/);assert.equal(statSync(target).mode&0o777,0o644);}
+ else {assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout).status,'installed');assert.equal(statSync(target).mode&0o777,0o755);}
 });
