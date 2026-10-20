@@ -8,55 +8,7 @@ const crypto=require('node:crypto');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const sha=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-// 只把冻结公司政策中的明示意向信号当作可核查的个人诉求依据。
-// 模型的人群引用、同档位及视频话题不能凭空替评论补出诉求。
-function explicitIntent(comment, audiences){
-  return audiences.some(a=>String(a.fields?.['意向信号']||'').split(/[\/、，,；;\n]/)
-    .map(s=>s.trim()).filter(s=>s.length>=2).some(signal=>comment.includes(signal)));
-}
-
-// 同一语义核验供只读原批复核与写入前准入复用；失败时只返回脱敏摘要。
-async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile,reason,opts)=>judgeCommander(body,video,profile,reason,opts)}={}){
-  const config=row?.judgment_config;
-  const base={id:row?.id,status:'unknown',reason:'binding_unverified'};
-  if(!row||!config||config.company_id!==snapshot.company_id||config.tenant_id!==snapshot.tenant_id
-    ||Number(config.version)!==Number(snapshot.version)||config.policy_id!==snapshot.policy_id
-    ||!row.source_video||!row.source_video_url||!row.comment_body
-    ||!['相关','不相关'].includes(row.relevance)
-    ||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade)
-    ||row.relevance==='不相关'&&row.intent_grade!==null)return base;
-  try{
-    const verdict=await judgePolicy(row.comment_body,row.source_video,configTargetProfile(snapshot,'103'),'policy semantic verification',
-      {scoringRules:snapshot.runtime_config.comment_scoring});
-    const proof=verdict?.audit?.policy_evidence;
-    const audience=snapshot.runtime_config.comment_scoring.audiences?.find(a=>a.id===proof?.audience_id);
-    const fields=audience?.fields||{};
-    if(!['A','B','C','不相关'].includes(verdict?.grade)||!verdict?.audit?.response_id||!verdict.audit.model||!proof||!audience||!proof.reason||proof.reason.length>500
-      ||row.comment_body.length>=8&&proof.reason.includes(row.comment_body)
-      ||!proof.matched_rule||proof.matched_rule.length>300
-      ||!(String(fields['意向信号']||'').includes(proof.matched_rule)||String(fields['人群描述']||'').includes(proof.matched_rule))
-      ||!(proof.exclusion_rule===null||typeof proof.exclusion_rule==='string'&&proof.exclusion_rule.trim()
-        &&String(fields['排除信号']||'').includes(proof.exclusion_rule)))return {...base,reason:'policy_evidence_invalid'};
-    const expected=row.relevance==='不相关'?'不相关':row.intent_grade;
-    const contextualIntent=typeof proof.comment_signal==='string'&&proof.comment_signal.length>=3&&proof.comment_signal.length<=100
-      &&row.comment_body.includes(proof.comment_signal)&&/[?？]/.test(proof.comment_signal)
-      &&typeof proof.video_signal==='string'&&proof.video_signal.length>=2&&proof.video_signal.length<=100
-      &&row.source_video.includes(proof.video_signal)&&proof.video_signal.includes(proof.matched_rule)
-      &&String(fields['意向信号']||'').includes(proof.matched_rule);
-    const hasIntent=explicitIntent(row.comment_body,snapshot.runtime_config.comment_scoring.audiences||[])||contextualIntent;
-    if(verdict.grade!=='不相关'&&!hasIntent)return {...base,reason:'personal_intent_evidence_missing'};
-    if(verdict.grade==='不相关'&&hasIntent&&!proof.exclusion_rule)return {...base,reason:'exclusion_evidence_missing'};
-    const pass=verdict.grade===expected&&(!proof.exclusion_rule||verdict.grade==='不相关');
-    return {id:row.id,status:pass?'pass':'fail',reason:pass?'policy_match':'policy_exclusion_or_grade_mismatch',
-      evidence_sha256:sha({model:verdict.audit.model,response_id:verdict.audit.response_id,proof}),
-      model:verdict.audit.model,response_id:verdict.audit.response_id,confidence:verdict.audit.confidence??null,
-      policy_evidence:{audience_id:proof.audience_id,matched_rule:proof.matched_rule,
-        exclusion_rule:proof.exclusion_rule,reason:proof.reason},
-      original_sha256:sha({relevance:row.relevance,intent_grade:row.intent_grade,judgment_reason:row.judgment_reason,judgment_config:config}),
-      company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
-      video_url_sha256:sha(row.source_video_url),actor:'leadgen-policy-review',reviewed_at:new Date().toISOString()};
-  }catch{return {...base,reason:'policy_model_unavailable_or_invalid'};}
-}
+const {evaluatePolicy}=require('./leadgen-policy-review.js');
 
 async function reviewBoundComment(pool,lineKey,id,binding,deps={}){
   const unknown={id,status:'unknown',reason:'comment_outbox_binding_invalid'};
@@ -107,6 +59,12 @@ async function validateHistoryRows(client,lineKey,input,old,deps) {
   if(verified.some(r=>r.status!=='fulfilled'))throw Error('历史URL实际VID重验失败');
 }
 
+const validRun=value=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(value);
+function validSources(ids,sources){
+ return Array.isArray(ids)&&ids.length<=1000&&new Set(ids).size===ids.length&&ids.every(id=>uuid.test(id))
+  &&sources&&typeof sources==='object'&&!Array.isArray(sources)&&Object.keys(sources).length===ids.length
+  &&ids.every(id=>Object.hasOwn(sources,id)&&validRun(sources[id]));
+}
 async function queueRequest(pool, input, deps = { judgeComment }) {
   deps={judgeComment,...deps};
   const { lineKey } = resolveLine(input.line);
@@ -119,35 +77,34 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const ids=input.ids;
     if(!Array.isArray(ids)||ids.length<1||ids.length>50||ids.some(id=>typeof id!=='string'||!uuid.test(id))||new Set(ids).size!==ids.length)
       throw Error('POLICY_REVIEW_IDS_INVALID');
-    if(!sourceRun||input.claim!==run)throw Error('POLICY_REVIEW_SCOPE_INVALID');
+    if(input.claim!==run||!sourceRun&&!validSources(input.ids,input.sources))throw Error('POLICY_REVIEW_SCOPE_INVALID');
     const frozen=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
       WHERE run_id=$1 AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;
     if(frozen.length!==1||frozen[0].run_id!==run)throw Error('POLICY_REVIEW_SCOPE_INVALID');
     const snapshot=frozen[0].snapshot;
     if(!snapshot||snapshot.company_id!==frozen[0].company_id||snapshot.tenant_id!==frozen[0].tenant_id
       ||Number(snapshot.version)!==Number(frozen[0].version)||snapshot.runtime_config?.routing?.line_key!==lineKey)throw Error('POLICY_REVIEW_SCOPE_INVALID');
-    const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[]) AND harvest_batch=$3`,[lineKey,ids,sourceRun])).rows;
+    const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[]) AND ($3::text IS NULL OR harvest_batch=$3)`,[lineKey,ids,sourceRun])).rows;
     const urls=[...new Set(rows.map(r=>r.source_video_url).filter(Boolean))];
     const videos=urls.length?(await pool.query(`SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=ANY($2::text[])`,[lineKey,urls])).rows:[];
     const reviewed=[];
     for(const id of ids){const matches=rows.filter(r=>r.id===id);const row=matches[0];
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
-      reviewed.push(matches.length===1&&row.line_key===lineKey&&row.harvest_batch===sourceRun
+      reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun:row.harvest_batch===input.sources[id])
         &&owned.length===1&&row.judgment_config?.run_id===run
         ?await evaluatePolicy(row,snapshot,deps):{id,status:'unknown',reason:'row_or_video_scope_unverified'});
     }
     return {verified:reviewed.every(r=>r.status==='pass'),rows:reviewed,ids,scope:{line:lineKey,run,claim:input.claim,source_run:sourceRun}};
   }
   if(op==='score_scope'){
-    if(!sourceRun)throw Error('POLICY_SCORE_SCOPE_INVALID');
-    const rows=(await pool.query(`SELECT id FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND harvest_batch=$2
+    const rows=(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
       AND process_status='待分拣' ORDER BY collected_at,id LIMIT 1001`,[lineKey,sourceRun])).rows;
-    if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
-    return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id)};
+    if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
+    return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
   if(op==='score_recovery'){
     const ids=input.ids;
-    if(!sourceRun||!Array.isArray(ids)||ids.length>1000||new Set(ids).size!==ids.length||ids.some(id=>!uuid.test(id)))throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
+    if(!sourceRun&&!validSources(ids,input.sources)||!Array.isArray(ids)||ids.length>1000||new Set(ids).size!==ids.length||ids.some(id=>!uuid.test(id)))throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
     if(!ids.length)return {ids:[],scored:0,verified:true};
     const frozen=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
       WHERE run_id=$1 AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;
@@ -156,10 +113,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||Number(frozen[0].snapshot.version)!==Number(frozen[0].version))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
     const snapshot=frozen[0].snapshot;
     const rows=(await pool.query(`SELECT id,harvest_batch,line_key,relevance,intent_grade,judgment_config FROM zenithjoy.leadgen_comments
-      WHERE line_key=$1 AND harvest_batch=$2 AND id=ANY($3::uuid[])`,[lineKey,sourceRun,ids])).rows;
+      WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2) AND id=ANY($3::uuid[])`,[lineKey,sourceRun,ids])).rows;
     if(rows.length!==ids.length||new Set(rows.map(r=>r.id)).size!==ids.length)throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
     const committed=[];
-    for(const row of rows){const c=row.judgment_config;
+    for(const row of rows){if(row.line_key!==lineKey||!ids.includes(row.id)||row.harvest_batch!==(sourceRun||input.sources[row.id]))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');const c=row.judgment_config;
       if(c?.run_id!==run)continue;
       if(c.company_id!==snapshot.company_id||c.tenant_id!==snapshot.tenant_id||c.policy_id!==snapshot.policy_id||Number(c.version)!==Number(snapshot.version)
         ||!c.policy_audit||c.policy_audit.status!=='pass'||!c.policy_audit.response_id
@@ -383,10 +340,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||!Number.isFinite(Date.parse(cursor.collected_at))))throw Error('POLICY_SCORE_CURSOR_INVALID');
     if(input.blocked_ids!==undefined&&(!Array.isArray(input.blocked_ids)||input.blocked_ids.length>1000
       ||input.blocked_ids.some(id=>!uuid.test(id))||new Set(input.blocked_ids).size!==input.blocked_ids.length))throw Error('POLICY_SCORE_BLOCKED_IDS_INVALID');
-    if(input.ids!==undefined&&(!sourceRun||!Array.isArray(input.ids)||input.ids.length>1000
+    if(input.ids!==undefined&&(!sourceRun&&!validSources(input.ids,input.sources)||!Array.isArray(input.ids)||input.ids.length>1000
       ||input.ids.some(id=>!uuid.test(id))||new Set(input.ids).size!==input.ids.length))throw Error('POLICY_SCORE_IDS_INVALID');
     if(input.budget_max!==undefined&&(!Number.isSafeInteger(input.budget_max)||input.budget_max<1||input.budget_max>50
-      ||!sourceRun||input.ids===undefined))throw Error('POLICY_SCORE_BUDGET_INVALID');
+      ||!sourceRun&&!validSources(input.ids,input.sources)||input.ids===undefined))throw Error('POLICY_SCORE_BUDGET_INVALID');
     const snapshot = await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool, { lineHint: input.line, runId: run, sourceRun, step: '103' });
     const targetProfile = configTargetProfile(snapshot, '103');
     const evidence = configEvidence(snapshot, run);
@@ -398,7 +355,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         if(input.budget_max!==undefined){
           await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`leadgen-score:${lineKey}:${run}:${sourceRun}`]);
           const count=(await client.query(`SELECT count(*)::int AS used FROM zenithjoy.leadgen_comments
-            WHERE line_key=$1 AND harvest_batch=$2 AND judgment_config->>'run_id'=$3`,[lineKey,sourceRun,run])).rows;
+            WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2) AND judgment_config->>'run_id'=$3`,[lineKey,sourceRun,run])).rows;
           if(count.length!==1||!Number.isSafeInteger(count[0].used)||count[0].used<0)throw Error('POLICY_SCORE_BUDGET_UNKNOWN');
           if(count[0].used>=input.budget_max)return false;
         }
@@ -411,6 +368,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun,[...seen],cursor?.collected_at||null,cursor?.id||null,input.ids||null])).rows;
         if (!rows.length) return false;
         const row = rows[0];
+        if(input.sources&&row.harvest_batch!==input.sources[row.id])throw Error('POLICY_SCORE_ROW_SOURCE_CHANGED');
         const nextCursor=row.collected_at&&uuid.test(row.id)?{line:lineKey,run,source_run:sourceRun||null,
           collected_at:new Date(row.collected_at).toISOString(),id:row.id}:null;
         const videos=(await client.query(`SELECT video_id,video_url,title,judgment_status FROM zenithjoy.leadgen_videos

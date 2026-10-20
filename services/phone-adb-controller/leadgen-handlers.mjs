@@ -1,6 +1,7 @@
+import {createScoringHandler} from './leadgen-scoring-handler.mjs';
 import {readFileSync,writeFileSync,appendFileSync,chmodSync,renameSync,existsSync,readdirSync,lstatSync,realpathSync,mkdirSync,copyFileSync,constants} from 'node:fs';
 import {join,resolve} from 'node:path';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
@@ -461,45 +462,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit}) {
       if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
       return {sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
         identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},
-    scoring:async()=>{
-      if(env.LEADGEN_POLICY_REVIEW_IDS!==undefined){
-        const ids=JSON.parse(env.LEADGEN_POLICY_REVIEW_IDS);
-        if(env.LEADGEN_POLICY_CLAIM!==run||!env.LEADGEN_SOURCE_RUN)throw Error('POLICY_REVIEW_SCOPE_INVALID');
-        const review=await queue('policy_review',{claim:env.LEADGEN_POLICY_CLAIM,ids});
-        writeFileSync(join(env.WFR_RUN_DIR,`${run}-policy-review.json`),JSON.stringify(review),{mode:0o600});
-        return {scored:0,ids,policy_review_failures:review.verified?0:Math.max(1,review.rows?.filter(v=>v.status!=='pass').length||0),
-          ...(review.verified===true?{}:{status:'partial'})};
-      }
-      const attemptFile=join(env.WFR_RUN_DIR,`${run}-score-attempt.json`);
-      if(!env.LEADGEN_SOURCE_RUN)throw Error('POLICY_SCORE_SCOPE_INVALID');
-      const requested=Number(env.LEADGEN_LIMIT||2);
-      if(!Number.isSafeInteger(requested)||requested<1)throw Error('POLICY_SCORE_BUDGET_INVALID');
-      const budget=Math.min(50,requested);
-      const scope=await queue('score_scope');
-      const saveAttempt=value=>{const temp=`${attemptFile}.${process.pid}.${randomUUID()}.tmp`;
-        writeFileSync(temp,JSON.stringify(value),{flag:'wx',mode:0o600});renameSync(temp,attemptFile);};
-      let attempt=existsSync(attemptFile)?JSON.parse(readFileSync(attemptFile,'utf8')):null;
-      if(attempt){if(attempt.line!==line||attempt.run!==run||attempt.source_run!==env.LEADGEN_SOURCE_RUN
-        ||attempt.budget!==budget||!Array.isArray(attempt.ids)||!attempt.ids.every(id=>scope.ids.includes(id)))
-        throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
-      }else{attempt={line,run,source_run:env.LEADGEN_SOURCE_RUN,ids:scope.ids,budget,blocked_ids:[],cursor:null};saveAttempt(attempt);}
-      let recovered;
-      try{recovered=await queue('score_recovery',{ids:attempt.ids});}catch{return {scored:0,ids:[],status:'partial',reason:'POLICY_SCORE_RECOVERY_AMBIGUOUS'};}
-      if(recovered.verified!==true||recovered.scored>attempt.budget||new Set(recovered.ids).size!==recovered.ids.length
-        ||recovered.ids.some(id=>!attempt.ids.includes(id)))return {scored:0,ids:[],status:'partial',reason:'POLICY_SCORE_RECOVERY_AMBIGUOUS'};
-      const remaining=attempt.budget-recovered.scored;
-      const r=remaining>0&&(!state.budgetDeadline||Date.now()<state.budgetDeadline)
-        ?await queue('score',{limit:remaining,budget_max:attempt.budget,ids:attempt.ids,blocked_ids:attempt.blocked_ids,cursor:attempt.cursor})
-        :{scored:0,ids:[],blocked:attempt.blocked_ids.length,blocked_ids:attempt.blocked_ids,next_cursor:attempt.cursor};
-      attempt={...attempt,blocked_ids:r.blocked_ids||attempt.blocked_ids,cursor:r.next_cursor||attempt.cursor};saveAttempt(attempt);
-      const allIds=[...new Set([...recovered.ids,...r.ids])];
-      appendFileSync(join(env.WFR_RUN_DIR,'activity.log'),`SORT_STATS ${JSON.stringify(r)}\n`,{mode:0o600});
-      const readback=await queue('score_readback',{ids:allIds});
-      writeFileSync(join(env.WFR_RUN_DIR,`${run}-scoring-readback.json`),JSON.stringify(readback),{mode:0o600});
-      const review=allIds.length?await queue('policy_review',{claim:run,ids:allIds}):{verified:false,rows:[],reason:'empty_batch'};
-      writeFileSync(join(env.WFR_RUN_DIR,`${run}-policy-review.json`),JSON.stringify(review),{mode:0o600});
-      return {...r,scored:allIds.length,ids:allIds,recovered:recovered.scored,scoring_readback_failures:readback.failures,policy_review_failures:review.verified?0:Math.max(1,review.rows?.filter(v=>v.status!=='pass').length||0),
-        ...(!readback.verified||!review.verified||attempt.blocked_ids.length?{status:'partial'}:{})};},
+    scoring:createScoringHandler({env,run,line,state,queue}),
     mark_leads:async()=>{const cursorFile=join(env.WFR_RUN_DIR,`${run}-mark-cursor.json`);
       const cursor=existsSync(cursorFile)?JSON.parse(readFileSync(cursorFile,'utf8')):null;
       const r=await queue('mark_leads',cursor?{cursor}:{});

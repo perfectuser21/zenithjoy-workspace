@@ -52,6 +52,7 @@ export function readImplementationSource(root,revision,path,{source}={}){
  // Production always uses a new private cache outside the candidate checkout.
  const central=source?resolve(source):sourceCache();
  ensureSource(central,lock.revision);
+ if(checksum(git(central,'show',`${lock.revision}:distribution/skills_source.py`))!==lock.loader_sha256)fail('SKILL_SOURCE_LOADER_MISMATCH');
  const catalog=JSON.parse(git(central,'show',`${lock.revision}:distribution/catalog.json`));
  const matches=catalog.profiles?.[lock.profile]?.files?.filter(e=>e.path===path);
  if(!matches||matches.length!==1)fail('SKILL_SOURCE_ENTRY_MISSING');

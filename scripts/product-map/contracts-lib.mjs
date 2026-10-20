@@ -158,7 +158,6 @@ function validateStepDod(ctx, capId, a, s, errors) {
 // Commander 陪跑 skill（决策 2186700a / 26df670a）：结构由 schema 守；这里守「真有这份 skill 且版本一致」——
 // work-commander 按字段自加载，指向不存在或版本对不上 = 运行时装不上/装错，合同阶段就拦。
 export const COMMANDER_SKILLS_DIR = 'services/phone-adb-controller/commander/skills';
-const commanderSource = JSON.parse(readFileSync(new URL('./commander-skill-source.json', import.meta.url), 'utf8'));
 function validateCommanderSkill(ctx, capId, doc, errors) {
   const cs = doc.commander_skill;
   if (!cs) return;
@@ -169,17 +168,8 @@ function validateCommanderSkill(ctx, capId, doc, errors) {
     body = readFileSync(file, 'utf8');
   } else {
     try {
-      const snapshot = commanderSource.skills[cs.name];
-      const lockedSource = JSON.parse(readFileSync(join(ctx.repoRoot, '.skills-source.json'), 'utf8'));
-      // 本地预检无私有源凭据时，只接受已从固定 catalog 核验的路径、摘要与版本。
-      if (!process.env.SKILLS_SOURCE_DIR && !process.env.SKILLS_SOURCE_SSH_KEY &&
-          lockedSource.revision === commanderSource.revision && snapshot &&
-          /^[0-9a-f]{64}$/.test(snapshot.sha256)) {
-        if (snapshot.version !== cs.version) errors.push(`${capId}: commander_skill ${cs.name} 版本 ${cs.version} 与固定源 version=${snapshot.version} 不一致`);
-        return;
-      }
       const revision = execFileSync('git', ['-C', ctx.repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-      body = readImplementationSource(ctx.repoRoot, revision, path, { source: process.env.SKILLS_SOURCE_DIR }).toString('utf8');
+      body = readImplementationSource(ctx.repoRoot, revision, path, { source: process.env.SKILLS_SOURCE_DIR || join(ctx.repoRoot, '.skills-source') }).toString('utf8');
     } catch (error) {
       errors.push(`${capId}: commander_skill ${cs.name} 不存在且固定源不可读（${error.code || error.message}）`);
       return;

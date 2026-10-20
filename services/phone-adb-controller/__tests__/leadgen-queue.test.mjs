@@ -28,6 +28,8 @@ test('103独立队列冻结跨批CID来源，提交丢回执后保原范围与�
  const saved=JSON.parse(readFileSync(join(dir,'independent103-score-attempt.json')));assert.equal(saved.source_run,null);assert.deepEqual(saved.sources,sources);
  const result=await h.scoring();assert.equal(result.scored,2);assert.equal(result.recovered,1);
  assert.equal(requests.filter(r=>r.op==='score').length,2);
+ sources[ids[0]]='changed-batch';await assert.rejects(h.scoring(),/POLICY_SCORE_RECOVERY_SCOPE_INVALID/);
+ assert.equal(requests.filter(r=>r.op==='score').length,2);
 });
 test('独立队列scope保逐行批次，恢复时批次漂移拒绝且显式批次不扩大',async()=>{
  const ids=['00000000-0000-4000-8000-000000000141','00000000-0000-4000-8000-000000000142'];
@@ -41,13 +43,31 @@ test('独立队列scope保逐行批次，恢复时批次漂移拒绝且显式批
  await assert.rejects(queueRequest(pool,{op:'score_scope',line:'jinuo',run:'independent103',source_run:'batch0'}),/POLICY_SCORE_SCOPE_AMBIGUOUS/);
 });
 
+test('跨批冻结范围仍按同run总额锁内读回，来源变更在模型与写入前拒绝',async()=>{
+ const id='00000000-0000-4000-8000-000000000151',sources={[id]:'original102'};
+ for(const full of [true,false]){
+  const calls=[];let model=0;
+  const client={async query(sql,args=[]){calls.push({sql,args});
+   if(sql.includes('count(*)::int AS used'))return {rows:[{used:full?2:0}]};
+   if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[{id,harvest_batch:'changed102'}]};
+   return {rows:[]};},release(){}};
+  const input={op:'score',line:'jinuo',run:'independent103',ids:[id],sources,budget_max:2,limit:2};
+  const action=queueRequest({connect:async()=>client},input,{freezeCompanyConfig:async()=>companyFixture(),judgeComment:async()=>{model++;}});
+  if(full)assert.equal((await action).scored,0);else await assert.rejects(action,/POLICY_SCORE_ROW_SOURCE_CHANGED/);
+  const count=calls.find(x=>x.sql.includes('count(*)::int AS used'));
+  assert.deepEqual(count.args,['jinuo',null,'independent103']);assert.match(count.sql,/\$2::text IS NULL OR harvest_batch=\$2/);
+  assert.equal(model,0);assert.ok(!calls.some(x=>x.sql.includes('UPDATE zenithjoy.leadgen_comments')));
+ }
+ for(const bad of [undefined,{}, {[id]:'bad/batch'}])await assert.rejects(queueRequest({}, {op:'score',line:'jinuo',run:'independent103',ids:[id],sources:bad,budget_max:2}),/POLICY_SCORE_IDS_INVALID/);
+});
+
 test('评分冻结 CID 范围与提交读回只认本批本 run 的完整证据',async()=>{
  const id1='00000000-0000-4000-8000-000000000101',id2='00000000-0000-4000-8000-000000000102';
  const snapshot=companyFixture();snapshot.runtime_config.routing={line_key:'jinuo'};
  const c={run_id:'score-new',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
   model_audit:{model:'typesafe/jev-1.13',response_id:'primary'},policy_audit:{status:'pass',response_id:'review'}};
  const calls=[],pool={async query(sql,args){calls.push({sql,args});
-  if(sql.includes('SELECT id FROM zenithjoy.leadgen_comments'))return {rows:[{id:id1},{id:id2}]};
+  if(sql.includes('SELECT id,harvest_batch FROM zenithjoy.leadgen_comments'))return {rows:[{id:id1,harvest_batch:'batch-102'},{id:id2,harvest_batch:'batch-102'}]};
   if(sql.includes('company_config_runs'))return {rows:[{run_id:'score-new',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,snapshot}]};
   if(sql.includes('SELECT id,harvest_batch'))return {rows:[{id:id1,harvest_batch:'batch-102',line_key:'jinuo',relevance:'相关',intent_grade:'A',judgment_config:c},
     {id:id2,harvest_batch:'batch-102',line_key:'jinuo',relevance:null,intent_grade:null,judgment_config:null}]};
