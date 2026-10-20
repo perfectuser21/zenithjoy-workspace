@@ -73,6 +73,8 @@ Golden Path（黄金路径）归属于特定 App 和 Line，可跨多个 Surface
 
 ## 快速命令
 
+本地检出后先运行 `bash scripts/ensure-skills-source.sh "$PWD"`，从 `.skills-source.json` 锁定的版本还原被 Git 忽略的 Commander skill。CI 会在 product-map 检查前执行同一还原步骤；缺少这些文件时，Activity 契约校验会报告 `commander_skill ... 不存在`。
+
 ```bash
 # 校验 YAML 是否符合 schema + 关系约束
 npm run product-map:validate
