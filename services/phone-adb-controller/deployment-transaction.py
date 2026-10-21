@@ -9,6 +9,7 @@ import re
 import stat
 import sys
 import tempfile
+import uuid
 
 STATE = '.local/share/zenithjoy/phone-transactions'
 ROOTS = ('bin-harvest/', '.local/bin/', '.openclaw/leadgen-scripts/',
@@ -261,7 +262,7 @@ def restore_entry(home, directory, entry):
         sync_directory(path.parent)
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        temp = path.parent / ('.phone-link-' + str(os.getpid()))
+        temp = path.parent / ('.phone-link-' + uuid.uuid4().hex)
         os.symlink(previous['target'], temp)
         try:
             os.replace(temp, path)
@@ -300,6 +301,7 @@ def commit(home, transaction):
 
 def authorize(home, transaction, relative, after):
     """仅受信观察器在实际ACK落文件前，补记其准确新字节；旧快照永不覆盖。"""
+    require(relative in MANIFESTS, 'observation authorization must be manifest')
     record = read_transaction(home, transaction)
     owned(home, transaction)
     require(record['phase'] == 'prepared', 'write authorization requires prepared transaction')
@@ -308,7 +310,7 @@ def authorize(home, transaction, relative, after):
     entry = matches[0]
     require(describe(record_path(home, relative)) in (entry['before'], entry['after']), 'authorize writer conflict')
     validate_description(after)
-    validate_link(home, relative, after)
+    require(after['kind'] == 'file' and after['mode'] == 0o600, 'observation manifest file required')
     entry['after'] = after
     return save(transaction_directory(home, transaction), record)
 

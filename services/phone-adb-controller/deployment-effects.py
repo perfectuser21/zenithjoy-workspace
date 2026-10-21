@@ -2,6 +2,8 @@
 """只保存本部署会改的OpenClaw授权列；不复制包含密钥的整份配置。"""
 import importlib.util
 import json
+import os
+import pwd
 from pathlib import Path
 import re
 import subprocess
@@ -88,7 +90,7 @@ def cli_set(name, expected, value):
 if __name__ == '__main__':
     try:
         action, transaction = sys.argv[1:3]
-        home = Path.home().resolve()
+        home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
         tx.owned(home, transaction)
         path = tx.transaction_directory(home, transaction) / 'effects.json'
         if action == 'prepare':

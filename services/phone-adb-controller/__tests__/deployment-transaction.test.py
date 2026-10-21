@@ -147,9 +147,10 @@ class TransactionTest(unittest.TestCase):
         self.target = manifest
         self.prepare([self.file('bin-harvest/deployment-manifest.json')])
         final = b'official observation ACK'
-        value = self.file(data=final)['after']
+        value = {**self.file(data=final)['after'], 'mode': 0o600}
         self.module.authorize(self.home, self.tx, 'bin-harvest/deployment-manifest.json', value)
         self.target.write_bytes(final)
+        self.target.chmod(0o600)
         self.module.rollback(self.home, self.tx)
         self.assertEqual(self.target.read_bytes(), b'old verified runtime')
 

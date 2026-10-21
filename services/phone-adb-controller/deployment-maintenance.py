@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import stat
@@ -107,6 +108,38 @@ def check_owners(record, allow_missing=False):
         owned_directory(path, record['owner'])
 
 
+def retired_directories(record):
+    result = []
+    for serial in record['serials']:
+        path = canonical_path(Path(record['lock_root']) / ('.phone-retired-' + record['transaction'] + '-' + serial))
+        if not path.exists():
+            continue
+        require(path.is_dir(), 'retired owner directory required')
+        names = {p.name for p in path.iterdir()}
+        require(names <= {'owner', 'standalone_review_required', 'acquired_at'}, 'retired owner has unknown state')
+        # owner最后删除。缺owner只有空目录合法，不能清理无法归属的残片。
+        require('owner' in names or not names, 'retired owner identity missing')
+        for name in names & {'owner', 'standalone_review_required'}:
+            raw, _ = transaction.regular(path / name)
+            require(raw.decode().strip() == record['owner'], 'retired owner conflict')
+        if 'acquired_at' in names:
+            transaction.regular(path / 'acquired_at')
+        result.append(path)
+    return result
+
+
+def clean_retired(record):
+    paths = retired_directories(record)
+    for path in paths:
+        for name in ('acquired_at', 'standalone_review_required', 'owner'):
+            file = path / name
+            if file.exists():
+                file.unlink()
+                transaction.sync_directory(path)
+        path.rmdir()
+        transaction.sync_directory(path.parent)
+
+
 def acquire(home, tx, registry, root):
     current = context(home, tx, registry, root)
     directory = transaction.transaction_directory(home, tx)
@@ -115,6 +148,7 @@ def acquire(home, tx, registry, root):
         if intent.exists():
             read_intent(home, tx, current)
             check_owners(current, allow_missing=True)
+            clean_retired(current)
         else:
             require(not list(Path(root).glob('*.lock')), 'device owner exists; deployment cannot reap')
             transaction.atomic_bytes(intent, transaction.canonical(current))
@@ -154,6 +188,7 @@ def release(home, tx, registry, root):
     with guards(current) as check:
         # Validate all owners first; an unrelated owner never causes partial unlocking.
         check_owners(current, allow_missing=True)
+        clean_retired(current)
         for serial in current['serials']:
             path = Path(root) / (serial + '.lock')
             if not path.exists():
@@ -165,16 +200,14 @@ def release(home, tx, registry, root):
             require(not retired.exists(), 'previous maintenance release cleanup pending')
             os.rename(path, retired)
             transaction.sync_directory(Path(root))
-            for name in ('owner', 'standalone_review_required', 'acquired_at'):
-                (retired / name).unlink()
-            retired.rmdir()
+            clean_retired(current)
     return {'released': True, 'transaction': tx}
 
 
 if __name__ == '__main__':
     try:
         action, tx = sys.argv[1:3]
-        home = Path.home().resolve()
+        home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
         registry = home / '.config/openclaw/douyin-phone-profiles.tsv'
         root = Path('/private/tmp/openclaw-phone/locks')
         require(action in ('acquire', 'verify', 'release'), 'invalid maintenance action')
