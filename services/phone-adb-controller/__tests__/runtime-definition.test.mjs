@@ -194,3 +194,33 @@ test('生产入口遇未收尾事务拒绝新冻结，独立候选不冒充生�
  assert.throws(()=>assertDeploymentAdmission(join(home,'bin-harvest'),home),/整包部署/);
  const candidate=join(home,'candidate');mkdirSync(candidate);assert.doesNotThrow(()=>assertDeploymentAdmission(candidate,home));
 });
+
+
+test('明确collection_phone_scope纳入冻结摘要，续跑不得替换scope输入', async()=>{
+ const f=fixture(),scope={version:1,source_commit:'a'.repeat(40),target:'xian-m4',profile:'fixture',serial:'NO-DEVICE',policy:{adb_sha256:'1'.repeat(64)}};
+ const manifestPath=join(f.dir,'deployment-manifest.json');writeFileSync(manifestPath,JSON.stringify({...JSON.parse(readFileSync(manifestPath,'utf8')),target:'xian-m4'}));
+ const first=await freezeDefinition({...f.options,collectionPhoneScope:scope});
+ assert.deepEqual(first.collection_phone_scope,scope);
+ await assert.rejects(freezeDefinition({...f.options,collectionPhoneScope:{...scope,serial:'OTHER'}}),/collection.*scope|手机.*scope/i);
+});
+
+for(const automatic of [false,true])test(`正式prepare${automatic?'默认模板':'文件参数'}冻结scope，再经原bind-run public ACK保持task_id null`,async t=>{
+ const {createServer}=await import('node:http'),{spawn}=await import('node:child_process');const f=fixture(),target=deploymentTarget(hostname());f.options.runDir=join(f.dir,'formal-scope');
+ const workflow=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;
+ workflow.payload.key='douyin_video_processing';workflow.payload_sha256=hash({source:{repo:workflow.source_repo,path:workflow.source_path,commit:workflow.source_commit},payload:workflow.payload});
+ const release={id:'scope-cli-release',environment:'scratch',target,payload:{schema_version:1,workflows:[workflow],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]}};
+ release.manifest_sha256=hash({environment:release.environment,target,payload:release.payload});
+ const manifestFile=join(f.dir,'deployment-manifest.json');writeFileSync(manifestFile,JSON.stringify({...JSON.parse(readFileSync(manifestFile,'utf8')),release_id:release.id,observation_id:'scope-cli-observation',environment:'scratch',target}));
+ const tool={path:'/usr/bin/true',sha256:'1'.repeat(64)},scope={version:1,task_id:null,run_id:'formal-scope__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:'p',serial:'S',target,evidence_root:'/private/tmp/fixture/evidence/p',policy:{schema_version:1,host_id:target,transport:target==='xian-m4'?'usb':'tcp',endpoint:'tcp:127.0.0.1:5042',forbidden_ports:[],adb_bin:'/fixture/adb',adb_sha256:'1'.repeat(64)},executables:{python:tool,node:tool,zsh:tool}};
+ const input=join(f.dir,'scope-input.json');writeFileSync(input,JSON.stringify(scope),{mode:0o600});let binding;
+ const server=createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',()=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines')res.end(JSON.stringify([{id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}]));else if(req.url==='/api/brain/releases/'+release.id)res.end(JSON.stringify({release}));else if(req.url==='/api/brain/runs/formal-scope__a1/definition'){if(req.method==='POST')binding={id:'public-scope-binding',run_id:'formal-scope__a1',...JSON.parse(raw),task_run_id:null};res.end(JSON.stringify({binding}));}else{res.statusCode=404;res.end('{}');}});});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
+ const cli=new URL('../runtime-receipts.mjs',import.meta.url).pathname,env={...process.env,BRAIN_URL:'http://127.0.0.1:'+server.address().port,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_RUN_DIR:f.options.runDir,WF_DEPLOYMENT_ROOT:f.dir,WF_BRAIN_WORKFLOW:'douyin_video_processing',WF_CONTRACT_RAW_SHA256:f.options.rawContractSha256,WF_PLAN_PATH:f.options.planPath,WF_STEP_SPEC:'steps.json',WF_ARG_CAP:'test',WFR_TAG:'formal',P:'p',SERIAL:'S',WFR_RUN_ID:'formal-scope',WFR_HOME:f.dir};
+ const run=args=>new Promise(resolve=>{const child=spawn(process.execPath,[cli,...args],{env});let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);child.on('close',code=>resolve({code,stdout,stderr}));});
+ if(automatic){mkdirSync(join(f.dir,'config'));const template=join(f.dir,'config/collection-phone-hosts.json');writeFileSync(template,JSON.stringify({version:1,hosts:[{target,profile:'p',serial:'S',expected_account:'44997267357',evidence_root:scope.evidence_root,policy:scope.policy,executables:scope.executables}]}));const m=JSON.parse(readFileSync(manifestFile));m.files.push({path:'services/phone-adb-controller/config/collection-phone-hosts.json',deployed_path:'config/collection-phone-hosts.json',content_sha256:hash(readFileSync(template,'utf8'))});writeFileSync(manifestFile,JSON.stringify(m));scope.expected_account='44997267357';}
+ const prepared=await run(automatic?['prepare']:['prepare','--collection-phone-scope',input]);assert.equal(prepared.code,0,prepared.stderr);
+ const bound=await run(['bind-run']);assert.equal(bound.code,0,bound.stderr);assert.match(bound.stdout,/WFR_ATTEMPT=a1/);
+ const {readFrozen}=await import('../runtime-definition.mjs'),{readBinding}=await import('../runtime-binding.mjs'),frozen=readFrozen(f.options.runDir),actual=readBinding(f.options.runDir,'a1',frozen);
+ assert.deepEqual(frozen.collection_phone_scope,scope);assert.equal(actual.task_id,null);assert.equal(frozen.collection_phone_scope.task_id,actual.task_id);assert.equal(actual.run_id,scope.run_id);
+ if(automatic){writeFileSync(join(f.dir,'config/collection-phone-hosts.json'),JSON.stringify({version:1,hosts:[]}));const resumed=await run(['prepare']);assert.equal(resumed.code,0,resumed.stderr);assert.deepEqual(readFrozen(f.options.runDir).collection_phone_scope,scope);}
+});

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """固定宿主策略的ADB客户端；不拥有任何server生命周期权限。"""
 import importlib.util
+import base64
+import json
+import socket
 import os
 from pathlib import Path
 import re
@@ -60,7 +63,40 @@ def parse_args(argv, port):
     return serial, command
 
 
+def parent_leaf(argv):
+    path = os.environ.get('WFR_COLLECTION_LEAF_SOCKET')
+    nonce = os.environ.get('WFR_COLLECTION_LEAF_NONCE', '')
+    if not path or not os.path.isabs(path) or not re.fullmatch(r'[a-f0-9]{48}', nonce):
+        raise ValueError('ADB_MANAGED_COLLECTION_PARENT_REQUIRED')
+    try:
+        with socket.socket(socket.AF_UNIX) as peer:
+            peer.settimeout(300)
+            peer.connect(path)
+            peer.sendall(json.dumps({'nonce': nonce, 'argv': argv}).encode() + b'\n')
+            peer.shutdown(socket.SHUT_WR)
+            data = bytearray()
+            while True:
+                chunk = peer.recv(65536)
+                if not chunk:
+                    break
+                data.extend(chunk)
+                if len(data) > 12 * 1024 * 1024:
+                    raise ValueError('ADB_MANAGED_COLLECTION_OUTPUT_LIMIT')
+        result = json.loads(data)
+        if result.get('ok') is not True or type(result.get('code')) is not int:
+            raise ValueError('ADB_MANAGED_COLLECTION_PARENT_REJECTED')
+        return result['code'], base64.b64decode(result['stdout'], validate=True), base64.b64decode(result['stderr'], validate=True)
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError('ADB_MANAGED_COLLECTION_PARENT_UNAVAILABLE') from error
+
+
 def client_version(binary):
+    if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
+        code, stdout, _ = parent_leaf(['version'])
+        text = stdout.decode('utf8')
+        if code or re.findall(r'^Android Debug Bridge version 1\.0\.([0-9]+)\r?$', text, re.M) != ['41']:
+            raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH')
+        return text
     result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2)
     matches = re.findall(r'^Android Debug Bridge version 1\.0\.([0-9]+)\r?$', result.stdout, re.M)
     if result.returncode or matches != ['41']:
@@ -69,9 +105,11 @@ def client_version(binary):
 
 
 def main(argv):
-    os.environ['ZJ_ADB_HOST_CONFIG'] = policy_path()
+    scoped = 'WFR_COLLECTION_LEAF_SOCKET' in os.environ
+    if not scoped:
+        os.environ['ZJ_ADB_HOST_CONFIG'] = policy_path()
     route = route_module()
-    policy = route.read_host_policy()
+    policy = route.read_host_policy(os.environ.get('WFR_COLLECTION_POLICY_FILE')) if scoped else route.read_host_policy()
     if not policy:
         raise ValueError('ADB_MANAGED_CONFIG_REQUIRED')
     binary = policy.get('adb_bin')
@@ -94,14 +132,28 @@ def main(argv):
         for device in host['devices']:
             print(device['serial'] + '\t' + device['state'])
         return 0
-    route.select_route(serial, policy['endpoint'])
+    if scoped:
+        actual = route.select_existing_unique_route(serial, policy['endpoint'])
+        if actual != policy['port']:
+            raise ValueError('ADB_MANAGED_ENDPOINT_MISMATCH')
+        # 如宿主已有全局策略，仍须另过原严格检查，不能被本run策略削弱。
+        if route.read_host_policy() is not None:
+            route.select_route(serial, policy['endpoint'])
+    else:
+        route.select_route(serial, policy['endpoint'])
     client_version(binary)
     env = dict(os.environ, ADB_SERVER_SOCKET=policy['endpoint'])
     for name in ('ANDROID_ADB_SERVER_PORT', 'ANDROID_ADB_SERVER_ADDRESS', 'ANDROID_SERIAL',
                  'ADB_VENDOR_KEYS', 'ADB_LIBUSB', 'ADB_LOCAL_TRANSPORT_MAX_PORT'):
         env.pop(name, None)
     # numeric -H is deliberately not localhost: a missing server must not be spawned.
-    os.execve(binary, [binary, '-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial, *command], env)
+    actual = ['-H', '127.0.0.1', '-P', str(policy['port']), '-s', serial, *command]
+    if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
+        code, stdout, stderr = parent_leaf(actual)
+        sys.stdout.buffer.write(stdout)
+        sys.stderr.buffer.write(stderr)
+        return code
+    os.execve(binary, [binary, *actual], env)
 
 
 if __name__ == '__main__':

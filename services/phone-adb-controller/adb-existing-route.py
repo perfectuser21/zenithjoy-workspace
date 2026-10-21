@@ -13,9 +13,11 @@ import time
 PORTS = (5037, 5041, 5042)
 
 
-def read_host_policy():
+def read_host_policy(path=None):
     """Explicit or installed host policy is authoritative for every reader."""
-    if 'ZJ_ADB_HOST_CONFIG' in os.environ:
+    if path is not None:
+        pass
+    elif 'ZJ_ADB_HOST_CONFIG' in os.environ:
         path = os.environ['ZJ_ADB_HOST_CONFIG']
     else:
         path = str(Path.home() / '.config/zenithjoy/adb-service.json')
@@ -133,6 +135,18 @@ def select_route(serial, configured='', *, ports=PORTS, budget=2.0):
         if matching[0]['state'] != 'device':
             raise ValueError('ADB_ROUTE_TARGET_OFFLINE serial=%s port=%s state=%s' % (serial, policy['port'], matching[0]['state']))
         return policy['port']
+    return select_existing_unique_route(serial, configured, ports=ports, budget=budget)
+
+
+def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2.0):
+    if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,200}', serial):
+        raise ValueError('ADB_ROUTE_SERIAL_INVALID')
+    preferred = None
+    if configured:
+        match = re.fullmatch(r'tcp:127\.0\.0\.1:([0-9]{1,5})', configured)
+        if not match or not 1 <= int(match[1]) <= 65535:
+            raise ValueError('ADB_ROUTE_SOCKET_INVALID')
+        preferred = int(match[1])
     deadline = time.monotonic() + budget
 
     def request(port, service):

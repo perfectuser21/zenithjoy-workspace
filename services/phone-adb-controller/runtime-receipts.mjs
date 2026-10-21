@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput } from './runtime-definition.mjs';
 import { bindRun,readBinding } from './runtime-binding.mjs';
+import {readCollectionPhoneScopeInput,defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
 // 只在prepare前选择中央同一MMV的登记地址；恢复既有run仍读取原冻结路由。
@@ -62,6 +63,10 @@ export async function run(args){
     if(runDir)process.stdout.write(runDir+'\n');return;
   }
   if(cmd==='prepare'){
+    if(rest.length&&!(rest.length===2&&rest[0]==='--collection-phone-scope'))throw Error('COLLECTION_SCOPE_ARGUMENT_INVALID');
+    if(e.WF_MMV_SSH_ROUTE&&!['tailscale','public'].includes(e.WF_MMV_SSH_ROUTE))throw Error('WF_MMV_SSH_ROUTE仅允许tailscale或public');
+    const collectionPhoneScope=rest.length?readCollectionPhoneScopeInput(rest[1]):(e.WF_DEPLOYMENT_ROOT||e.WF_HOME?defaultCollectionPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e}):undefined);
+    if(collectionPhoneScope&&(e.WF_BRAIN_WORKFLOW!=='douyin_video_processing'||collectionPhoneScope.profile!==e.P||collectionPhoneScope.serial!==e.SERIAL||collectionPhoneScope.run_id!==`${e.WFR_RUN_ID}__${collectionPhoneScope.attempt}`))throw Error('COLLECTION_SCOPE_INPUT_IDENTITY_INVALID');
     const samplingInput=commentSamplingInput(e);
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
@@ -70,7 +75,7 @@ export async function run(args){
       const inventory=await request('/api/brain/machines');
       runtimeTransport=selectMmvTransport(inventory,e.WF_MMV_SSH_ROUTE);
     }
-    await freezeDefinition({samplingInput,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
+    await freezeDefinition({collectionPhoneScope,samplingInput,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){
       // prepare冻结入口统一在freezeDefinition中记录，不能由业务活动改投影台账。
       const snapshot=readFrozen(dir);

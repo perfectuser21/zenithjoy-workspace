@@ -79,7 +79,7 @@ export async function freezeDefinition(o) {
     if(canonical(checked)!==canonical(q)||q.workflow_key!==o.workflowKey)throw Error('冻结采样输入scope/schema非法');
     if(o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==q[k==='tag'?'run_tag':k]))throw Error('冻结采样输入运行身份不符');
   }
-  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
+  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(canonical(frozen.collection_phone_scope||null)!==canonical(o.collectionPhoneScope||null))throw Error('collection phone scope续跑输入与冻结请求不符');if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   assertDeploymentAdmission(o.deploymentRoot);
   const manifestPath=o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json');
   const originalManifest=readFileSync(manifestPath);
@@ -141,8 +141,9 @@ export async function freezeDefinition(o) {
   const manifestBytes=Buffer.from(JSON.stringify(manifest,null,2));
   if(files['runtime/deployment-manifest.json'])throw Error('源码不能占用冻结部署声明路径');
   files['runtime/deployment-manifest.json']=digest(manifestBytes);
+  if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+    ...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});

@@ -3,6 +3,12 @@
 set -euo pipefail
 setopt extendedglob
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+scope_args=()
+if (( $# == 7 )); then
+  [[ "$6" == --collection-phone-scope && "$7" == /* ]] || { print -u2 'collection scope参数无效'; exit 2; }
+  scope_args=(--collection-phone-scope "$7")
+  set -- "${@:1:5}"
+fi
 (( $# >= 4 && $# <= 5 )) || { print -u2 '用法: leadgen-run.sh FLOW PROFILE SERIAL LINE [RUN_TAG]'; exit 2; }
 export WF_ARG_CAP="$1" P="$2" SERIAL="$3" LEADGEN_LINE="$4" WFR_TAG="${5:-new$(date +%m%d%H%M%S)}"
 case "$WF_ARG_CAP" in
@@ -101,7 +107,7 @@ export WF_PLAN_PATH="$WF_HOME/plans/$WF_ARG_CAP.plan"
 source "$WF_PLAN_PATH"
 [[ "${WF_RUNNER:-}" == leadgen-workflow.mjs && -z "${WF_MISSING:-}" ]] || { print -u2 '计划缺正式实现'; exit 1; }
 export WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_STEP_SPEC
-node "$WF_HOME/runtime-receipts.mjs" prepare
+node "$WF_HOME/runtime-receipts.mjs" prepare "${scope_args[@]}"
 # 从此不再执行部署目录中的业务代码。
 export WF_HOME="$WFR_RUN_DIR/runtime"
 source "$WFR_RUN_DIR/workflow.plan"
