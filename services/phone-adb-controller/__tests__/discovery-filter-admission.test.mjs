@@ -28,7 +28,7 @@ function rig(outputs,{location='same_city',sources=['AI']}={}){
 
 for(const [name,output] of [
  ['same_city降级',good.replace('location=same_city','location=unavailable\nlocation_requested=same_city')],
- ['空stdout',''],['缺location',good.replace('location=same_city\n','')],
+ ['空stdout',''],['缺stdout',undefined],['缺location',good.replace('location=same_city\n','')],
  ['重复location',good+'location=same_city\n'],['重复sort',good+'sort=latest\n'],
  ['错误时间',good.replace('six_months','one_week')],['错误排序',good.replace('latest','most_liked')],
  ['错误地域',good.replace('same_city','unlimited')],['非法枚举',good.replace('same_city','nearby')]
@@ -88,5 +88,23 @@ test('独立筛选验收拒绝错run、错SHA、删除调用、伪造effective�
   for(const mutate of [p=>p.run_id='other',p=>p.source_commit='b'.repeat(40),p=>p.receipts=[],p=>p.receipts[0].effective.location='unlimited',p=>p.receipts[0].raw_stdout=good.replace('same_city','unavailable')]){
    const bad=structuredClone(proof);mutate(bad);writeFileSync(file,JSON.stringify(bad));assert.equal(verifyDiscoveryFilterEvidence(args),false);
   }
+ }finally{r.cleanup();}
+});
+
+ test('同源research恢复筛选降级立即停读，保留此前合法写入',async()=>{
+ const r=rig([good,good.replace('same_city','unavailable')]);try{
+  const original=r.options.phone;
+  r.options.phone=async(command,...args)=>{
+   if(command==='search-video-cards'){r.calls.push([command,...args]);return 'video_tab=1\nloading=0\nend_of_results=1\nevidence=/fixed/grid.xml\n100\t200\t00:12\t标题一\t作者一\n300\t400\t00:15\t标题二\t作者二\n';}
+   if(command==='current-video-link'){r.calls.push([command,...args]);return 'content_type=video\nvideo_id=7693970762462579121\nshort_url=https://v.douyin.com/abc123/\nreturn_mode=results\nreturn_recovered_via=research\n';}
+   return original(command,...args);
+  };
+  const h=createDiscoveryHandlers(r.options),out=await h.collect_videos();
+  assert.equal(out.status,'partial');assert.equal(out.stop_reason,'capture_failed');
+  assert.equal(out.counts.persisted,1);assert.equal(r.writes.length,1);
+  assert.equal(r.calls.filter(c=>c[0]==='search-video-cards').length,2);
+  assert.equal(r.calls.filter(c=>c[0]==='current-video-link').length,1);
+  assert.deepEqual(r.receipt().receipts.map(x=>x.verified),[true,false]);
+  assert.match(r.receipt().receipts[1].evidence_id,/-recover-filter$/);
  }finally{r.cleanup();}
 });

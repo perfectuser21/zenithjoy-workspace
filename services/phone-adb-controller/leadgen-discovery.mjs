@@ -43,6 +43,15 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=r
  if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!['same_city','unlimited'].includes(location)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
  const requested={sort,time_layer:time,location};
  const filterProof={version:1,run_id:runId,run,profile,source_commit:sourceCommit,requested,receipts:[]};
+ if(env.WFR_RUN_DIR&&/^[-A-Za-z0-9_]+$/.test(runId||'')){
+  const path=join(env.WFR_RUN_DIR,runId+'-filter-readback.json');
+  if(existsSync(path)){
+   const stat=lstatSync(path);if(stat.isSymbolicLink()||!stat.isFile()||(stat.mode&0o077)||stat.size>10000000)throw Error('DISCOVERY_FILTER_PRIOR_RECEIPT_INVALID');
+   const prior=JSON.parse(readFileSync(path,'utf8'));
+   if(prior.version!==1||prior.run_id!==runId||prior.run!==run||prior.profile!==profile||prior.source_commit!==sourceCommit||JSON.stringify(prior.requested)!==JSON.stringify(requested)||!Array.isArray(prior.receipts)||prior.receipts.some((r,i)=>r.invocation!==i+1||typeof r.verified!=='boolean'))throw Error('DISCOVERY_FILTER_PRIOR_RECEIPT_INVALID');
+   filterProof.receipts=prior.receipts;
+  }
+ }
  const saveFilters=()=>{
   if(!env.WFR_RUN_DIR||!/^[-A-Za-z0-9_]+$/.test(runId||''))throw Error('DISCOVERY_FILTER_IDENTITY_MISSING');
   mkdirSync(env.WFR_RUN_DIR,{recursive:true});const path=join(env.WFR_RUN_DIR,runId+'-filter-readback.json');
@@ -64,7 +73,8 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=r
   filterProof.receipts.push(receipt);saveFilters();
   try{
    receipt.raw_stdout=await phone('search-time-layer',time,eid+'-filter',sort,'unlimited','unlimited',location);
-   receipt.raw_sha256=filterHash(receipt.raw_stdout);receipt.effective=effectiveFilters(receipt.raw_stdout,requested);receipt.verified=true;
+   if(typeof receipt.raw_stdout==='string')receipt.raw_sha256=filterHash(receipt.raw_stdout);
+   receipt.effective=effectiveFilters(receipt.raw_stdout,requested);receipt.verified=true;
   }catch(error){receipt.error=error.message;throw error;}finally{saveFilters();}
   await pause(1);
  }
