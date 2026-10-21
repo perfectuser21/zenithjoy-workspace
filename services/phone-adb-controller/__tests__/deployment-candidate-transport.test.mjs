@@ -61,3 +61,12 @@ test('ACK 未知不发布manifest，权威读回不能替代观察ACK',t=>{
  const f=transportFixture(t),result=f.run('ack-fail');assert.equal(result.ok,false);assert.match(result.error,/ACK unavailable/);
  assert.equal(f.calls().filter(c=>c.manifest).length,0);assert.ok(f.calls().some(c=>c.collect));
 });
+
+for(const target of ['home','candidate','runtime','collector','wrapper'])test('可被其他用户写入的候选闭包不得签present：'+target,t=>{
+ const f=transportFixture(t);assert.equal(f.run('normal').ok,true);
+ const root=join(base(f),f.revision),path={home:join(f.top,'remote-mmv'),candidate:root,runtime:join(root,'runtime'),collector:join(root,'runtime/deployment-manifest.mjs'),wrapper:join(root,'run.sh')}[target];
+ const count=f.calls().length,posts=readFileSync(join(f.top,'brain.jsonl'),'utf8');chmodSync(path,0o777);
+ const result=f.run('recover');assert.equal(result.ok,false,JSON.stringify(result));
+ assert.equal(f.calls().slice(count).filter(c=>c.archive||c.collect||c.manifest).length,0);
+ assert.equal(readFileSync(join(f.top,'brain.jsonl'),'utf8'),posts);
+});
