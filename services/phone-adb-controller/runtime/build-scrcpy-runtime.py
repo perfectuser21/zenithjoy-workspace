@@ -110,7 +110,7 @@ def rebuild_candidate(source, build_dir, server, meson, ninja, pkg_config, runti
         raise ValueError('patch/server digest mismatch')
     subprocess.run(['git', '-C', str(source), 'apply', '--check', str(patch_file)], check=True)
     subprocess.run(['git', '-C', str(source), 'apply', str(patch_file)], check=True)
-    if runtime_kind == 'sdk31' and digest(source / 'app/src/recorder.c') != policy['patched_recorder_sha256']:
+    if digest(source / 'app/src/recorder.c') != policy.get('patched_recorder_sha256'):
         raise ValueError('patched recorder digest mismatch')
     if digest(source / 'app/src/util/log.c') != policy['patched_log_sha256']:
         raise ValueError('patched logger digest mismatch')
@@ -130,6 +130,10 @@ def rebuild_candidate(source, build_dir, server, meson, ninja, pkg_config, runti
                     'sdl3' if runtime_kind == 'sdk31' else 'sdl2'], env=env, check=True)
     subprocess.run([str(meson), 'test', '-C', str(build_dir), '--print-errorlogs'],
                    env=env, check=True)
+    if runtime_kind == 'sdk33':
+        subprocess.run([sys.executable, str(Path(__file__).parent / 'tests/test_recorder_media.py'),
+                        '--source', str(source), '--build-dir', str(build_dir),
+                        '--pkg-config', str(pkg_config)], env=env, check=True)
     executable = build_dir / 'app/scrcpy'
     result = {'candidate_only': True, 'client_path': str(executable),
               'client_sha256': digest(executable), 'source_commit': head,

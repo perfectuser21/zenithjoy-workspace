@@ -248,11 +248,14 @@ class RuntimeKindTests(RuntimeFixture):
         (source / 'app/src/util').mkdir(parents=True)
         log = source / 'app/src/util/log.c'
         log.write_bytes(b'patched sdk33 logger fixture')
+        recorder = source / 'app/src/recorder.c'
+        recorder.write_bytes(b'patched sdk33 recorder fixture')
         patch_file = self.root / 'scrcpy-v3.3.4-log-flush.patch'
         patch_file.write_bytes(b'approved sdk33 patch fixture')
         policy = dict(self.policy33, source_commit='a' * 40,
             source_archive_sha256=hashlib.sha256(b'official sdk33 archive').hexdigest(),
             patch_sha256=hashlib.sha256(patch_file.read_bytes()).hexdigest(),
+            patched_recorder_sha256=hashlib.sha256(recorder.read_bytes()).hexdigest(),
             patched_log_sha256=hashlib.sha256(log.read_bytes()).hexdigest())
         (self.root / 'runtime-policy-sdk33.json').write_text(json.dumps(policy))
         calls = []
@@ -273,7 +276,8 @@ class RuntimeKindTests(RuntimeFixture):
         logger = next(args for args, _ in calls if any(str(v).endswith('test_log_flush.py') for v in args))
         self.assertEqual(logger[-2:], ['--sdl-package', 'sdl2'])
         self.assertTrue(any(args[:2] == ['meson', 'test'] for args, _ in calls))
-        self.assertFalse((source / 'app/src/recorder.c').exists(), 'sdk33 must not require SDK31 recorder patch')
+        self.assertEqual(hashlib.sha256(recorder.read_bytes()).hexdigest(), policy['patched_recorder_sha256'])
+        self.assertTrue(any(any(str(a).endswith('test_recorder_media.py') for a in args) for args, _ in calls))
 
     def test_builder_rejects_cross_package_or_unknown_kind(self):
         builder = load(self, 'build-scrcpy-runtime.py')
