@@ -35,6 +35,8 @@ def directory(path, create=False):
                 return False
         if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
             raise ValueError('candidate directory is not a real directory')
+        if (parent == home or home in parent.parents) and (info.st_uid != os.getuid() or info.st_mode & 0o022):
+            raise ValueError('candidate directory owner/write permissions unsafe')
     return True
 
 
@@ -52,6 +54,8 @@ def regular(path, private=False):
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
             raise ValueError('candidate file type/owner mismatch')
+        if info.st_mode & 0o022:
+            raise ValueError('candidate file is writable by other users')
         if private and info.st_mode & 0o077:
             raise ValueError('candidate identity is not private')
         if info.st_size > (65536 if private else 128 * 1024 * 1024):
