@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {prepareAndDeploy} from '../deployment-prepare.mjs';
 import {digest} from '../runtime-definition.mjs';
@@ -136,3 +136,15 @@ test('无Pilot包不能被恢复例外用于promote，恢复也必须显式原�
 });
 
 test('旧native全绿但缺独立报告，在任何production POST和子进程前拒绝',async t=>{const f=await fixture(t);delete f.acceptanceTaskIds;await assert.rejects(prepareAndDeploy(f),/独立Skill/);assert.equal(f.requests.some(r=>r.method==='POST'),false);assert.equal(existsSync(f.marker),false);});
+
+test('部署CLI从真实controller cwd读取候选固定Skill，二次独立验收缺映射仍拒绝',async t=>{
+ const f=await fixture(t);await prepareAndDeploy(f);
+ const {plan,map}=JSON.parse(readFileSync(f.marker)),planFile=join(f.root,'plan.json'),mapFile=join(f.root,'map.json');
+ writeFileSync(planFile,JSON.stringify(plan));writeFileSync(mapFile,JSON.stringify(map));
+ const run=tasks=>new Promise((resolve,reject)=>{
+  const child=spawn(process.execPath,[new URL('../deployment-targets.mjs',import.meta.url).pathname,planFile,f.sha],{cwd:join(f.root,'services/phone-adb-controller'),env:{...process.env,WF_BUSINESS_RUN_IDS:JSON.stringify(f.businessRunIds),WF_BUSINESS_ACCEPTANCE_TASK_IDS:JSON.stringify(tasks),WF_COMMANDER_RELEASES_FILE:mapFile,BRAIN_URL:f.brainUrl,BRAIN_INTERNAL_TOKEN:'fixture-private-token'},stdio:['ignore','pipe','pipe']});
+  let out='';child.stdout.on('data',c=>out+=c);child.stderr.on('data',c=>out+=c);child.on('error',reject);child.on('close',status=>resolve({status,out}));
+ });
+ const accepted=await run(f.acceptanceTaskIds);assert.equal(accepted.status,0,accepted.out);
+ const rejected=await run({});assert.notEqual(rejected.status,0);assert.match(rejected.out,/独立Skill/);
+});
