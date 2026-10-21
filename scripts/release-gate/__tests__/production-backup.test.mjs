@@ -3,6 +3,34 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const source=fileURLToPath(new URL('../../backup/verify-hk-backup.py',import.meta.url));
+test('正式备份入口重复核验同一dump不能改写上轮Task引用的证明',()=>{
+ const script=`import importlib.util,tempfile,pathlib,json,hashlib,time,sys,types,io,contextlib
+s=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+items=[];data={}
+for db in ['zenithjoy','zenithjoy_staging']:
+ name=db+'-20261021-033001.dump';body=db.encode();data[name]=body
+ items.append(dict(database=db,name=name,size=len(body),mtime=time.time(),sha256=hashlib.sha256(body).hexdigest()))
+def command(args,**kwargs):
+ if args[0]=='ssh':return types.SimpleNamespace(stdout=json.dumps(items))
+ if args[0]=='scp':pathlib.Path(args[-1]).write_bytes(data[pathlib.PurePosixPath(args[-2]).name])
+ return types.SimpleNamespace(stdout='')
+m.command=command;m.verify_restore=lambda dump,run_id:dict(run_id=run_id,tables=116,total_rows=22583)
+with tempfile.TemporaryDirectory() as directory:
+ results=[]
+ for run_id in ['a'*32,'b'*32]:
+  sys.argv=['verify-hk-backup.py','--store',directory,'--run-id',run_id]
+  output=io.StringIO()
+  with contextlib.redirect_stdout(output):m.main()
+  results.append(json.loads(output.getvalue()))
+ first,second=results
+ for old,new in zip(first['backups'],second['backups']):
+  assert old['proof']!=new['proof'],'actual main overwrote a prior Task proof'
+  raw=pathlib.Path(old['proof']).read_bytes()
+  assert json.loads(raw)['restore']['run_id']=='a'*32
+  assert old['proof_sha256']==hashlib.sha256(raw).hexdigest()
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
 test('同一dump的每轮恢复证据独立保存且不可覆盖，回执摘要绑定真实字节',()=>{
  const script=`import importlib.util,tempfile,pathlib,json,hashlib
 s=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
