@@ -178,3 +178,19 @@ test('Android冷编译显式准备且不增加smoke预算，Gradle后台daemon�
   assert.match(workflow, /:app:compileDebugUnitTestKotlin --no-daemon/);
   assert.match(workflow, /GRADLE_OPTS: '-Dorg.gradle.daemon=false'/);
 });
+
+test('Staff验收API启动失败必须带原始诊断，不进入业务断言', t => {
+  const {root}=fixture(t);
+  for(const file of ['apps/api/src/services/acceptance.ts','apps/api/src/routes/staff.ts',
+    ...['AcceptancePage','AcceptanceDetailPage','AcceptanceHistoryPage'].map(n=>'apps/staff-hub/src/pages/'+n+'.tsx')]){
+    mkdirSync(join(root,file,'..'),{recursive:true});writeFileSync(join(root,file),'');
+  }
+  const bin=join(root,'fixture-bin');mkdirSync(bin);
+  for(const [name,body]of Object.entries({npm:'exit 0',node:'echo STAFF_FIXTURE_STARTUP_REFUSED >&2; exit 42',curl:'exit 7',sleep:'/bin/sleep 0.01'}))
+    writeFileSync(join(bin,name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
+  const script=readFileSync(new URL('../smoke/staff-acceptance-smoke.sh',import.meta.url),'utf8');
+  const run=spawnSync('bash',['-c',script],{cwd:root,env:{...process.env,PATH:bin+':'+process.env.PATH},encoding:'utf8',timeout:5000});
+  assert.notEqual(run.status,0);
+  assert.match(run.stdout+run.stderr,/STAFF_FIXTURE_STARTUP_REFUSED/);
+  assert.doesNotMatch(run.stdout,/三个验收端点无认证头/);
+});
