@@ -24,3 +24,29 @@ test('restore binds native original release IDs and source; never constructs a n
  manifests.mmv.source_commit='c'.repeat(40);
  assert.throws(()=>restorationPlan(records,manifests),/source/);
 });
+
+
+test('backend rejects drift in every execution helper before guard or remote activity',async t=>{
+ const {mkdtempSync,cpSync,rmSync,readFileSync,writeFileSync}=await import('node:fs');
+ const {tmpdir}=await import('node:os');
+ const {join}=await import('node:path');
+ const {execFileSync}=await import('node:child_process');
+ const {runPackageTransaction}=await import('../deployment-backend.mjs');
+ const root=mkdtempSync(join(tmpdir(),'phone-backend-source-'));
+ t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const relative='services/phone-adb-controller',folder=join(root,relative);
+ cpSync(new URL('../',import.meta.url),folder,{recursive:true});
+ const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null','-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ git('init','-q');git('add',relative);git('-c','user.name=Regression','-c','user.email=regression@example.invalid','commit','-qm','fixed source');
+ const sha=git('rev-parse','HEAD');
+ for(const name of ['deployment-preflight.mjs','deployment-targets.mjs','deployment-fixed-source.mjs','runtime-definition.mjs',
+  'deployment-release.mjs','deployment-business-admission.mjs','company-config-readiness.mjs','company-config-lib.js','line-routes.js',
+  'runtime-host.mjs','runtime-release.mjs','runtime-outbox.mjs','deployment-guard.py','deployment-installed.py','commander/wf-v2-io.py','drift-check.sh']){
+  await t.test(name,async()=>{
+   const path=join(folder,name),before=readFileSync(path);
+   writeFileSync(path,Buffer.concat([before,Buffer.from('\n# accidental working-copy drift\n')]));
+   try{await assert.rejects(runPackageTransaction({root,sha}),/部署工作区字节漂移/);}
+   finally{writeFileSync(path,before);}
+  });
+ }
+});
