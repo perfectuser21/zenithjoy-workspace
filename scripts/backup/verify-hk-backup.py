@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
 import uuid
 
@@ -30,7 +31,15 @@ print(json.dumps(out))
 
 def command(args, **kwargs):
     kwargs.setdefault('timeout', 600)
-    return subprocess.run(args, check=True, **kwargs)
+    try:
+        return subprocess.run(args, check=True, **kwargs)
+    except subprocess.CalledProcessError as error:
+        # Only local isolated trust-Postgres and SSH transport diagnostics; no credentials in argv.
+        detail = error.stderr
+        if detail:
+            print(detail.decode('utf-8', errors='replace') if isinstance(detail, bytes) else detail,
+                  file=sys.stderr, end='')
+        raise
 
 
 def file_digest(path):
@@ -101,13 +110,13 @@ def verify_restore(dump, run_id=None):
         command(container_args(name, run_id), capture_output=True)
         started = True
         for _ in range(60):
-            ready = subprocess.run(['docker', 'exec', name, 'pg_isready', '-U', 'postgres'], capture_output=True)
+            ready = subprocess.run(['docker', 'exec', name, 'pg_isready', '-h', '127.0.0.1', '-p', '5432', '-U', 'postgres'], capture_output=True)
             if ready.returncode == 0:
                 break
             time.sleep(1)
         else:
             raise RuntimeError('isolated restore server not ready')
-        command(['docker', 'exec', name, 'createdb', '-U', 'postgres', RESTORE_DATABASE], capture_output=True)
+        command(['docker', 'exec', name, 'createdb', '-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', RESTORE_DATABASE], capture_output=True)
         with dump.open('rb') as source:
             toc = command(['docker', 'exec', '-i', name, 'pg_restore', '--list'], stdin=source, capture_output=True).stdout.decode()
         expected = sum(' TABLE DATA ' in line for line in toc.splitlines())
@@ -115,8 +124,8 @@ def verify_restore(dump, run_id=None):
             raise ValueError('dump has no table data objects')
         with dump.open('rb') as source:
             command(['docker', 'exec', '-i', name, 'pg_restore', '--exit-on-error', '--no-owner', '--no-acl',
-                     '-U', 'postgres', '-d', RESTORE_DATABASE], stdin=source, capture_output=True)
-        psql = ['docker', 'exec', name, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', RESTORE_DATABASE, '-Atc']
+                     '-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', '-d', RESTORE_DATABASE], stdin=source, capture_output=True)
+        psql = ['docker', 'exec', name, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', '-d', RESTORE_DATABASE, '-Atc']
         sql = "SELECT json_agg(json_build_object('schema',schemaname,'table',tablename)) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')"
         tables = json.loads(command(psql + [sql], capture_output=True, text=True).stdout) or []
         counts = []

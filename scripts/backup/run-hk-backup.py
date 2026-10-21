@@ -6,6 +6,8 @@ import json
 import os
 import runpy
 import signal
+import shlex
+import socket
 from pathlib import Path
 import subprocess
 import sys
@@ -15,13 +17,32 @@ import urllib.request
 import uuid
 
 ACTOR = 'zenithjoy-backup-verifier'
+PROJECT_ID = '67bd1fc3-3027-4f13-83c8-c656e3408bfc'
+EXECUTION_HOST = 'us-mac-m4'
 
 
-def api(base, method, path, body):
+def api(base, method, path, body=None):
     request = urllib.request.Request(base.rstrip('/') + '/api/brain' + path,
-        data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'}, method=method)
+        data=None if body is None else json.dumps(body).encode(), headers={'Content-Type': 'application/json'}, method=method)
     with urllib.request.urlopen(request, timeout=20) as response:
         return json.load(response)
+
+
+def completion_matches(brain_url, task_id, body):
+    actual = api(brain_url, 'GET', '/tasks/' + task_id)
+    expected = body['result']
+    result = actual.get('result') or {}
+    return (actual.get('id') == task_id and actual.get('status') == 'completed'
+            and all(result.get(key) == expected[key] for key in ('run_id', 'actor', 'facts', 'evidence')))
+
+
+def complete_task(brain_url, task_id, body):
+    try:
+        api(brain_url, 'PATCH', '/tasks/' + task_id, body)
+    except (TimeoutError, socket.timeout):
+        # The server may have committed before its response timed out. Never repeat work or PATCH.
+        if not completion_matches(brain_url, task_id, body):
+            raise
 
 
 def receipt(store, value):
@@ -48,17 +69,26 @@ def receipt(store, value):
 
 def run_recorded(store, brain_url, verify, run_id=None):
     run_id = run_id or uuid.uuid4().hex
+    # Block before claim: this external scheduler owns execution; tick must not race it.
+    helper = Path(__file__).resolve().with_name('verify-hk-backup.py')
+    command = shlex.join([sys.executable, str(helper), '--store', str(store), '--run-id', run_id])
     created = api(brain_url, 'POST', '/tasks', {
-        'title': '核验香港业务库异地备份及隔离恢复', 'task_type': 'research', 'priority': 'P2',
-        'description': '读取香港实际生产/预生产备份，异地校验哈希，在独立无网络容器恢复并读表与行数。',
-        'payload': {'headed_manual': 'true', 'work_kind': 'operations', 'backup_run_id': run_id}})
+        'title': '核验香港业务库异地备份及隔离恢复 ' + run_id,
+        'task_type': 'script_run', 'priority': 'P2', 'status': 'blocked',
+        'domain': 'operations', 'mutation_intent': 'none', 'project_id': PROJECT_ID,
+        'source_id': run_id, 'trigger_source': 'external-scheduler',
+        'blocked_reason': 'external_runner_claim_pending',
+        'description': '外部备份调度器自行执行：先认领，再读取香港两库备份，在独立无网络容器恢复并读表与行数。Brain不派发外层包装。',
+        'payload': {'host': EXECUTION_HOST, 'cmd': command, 'timeout_sec': 3600,
+                    'backup_run_id': run_id, 'managed_by': ACTOR,
+                    'artifact_paths': [str(store / 'runs' / (run_id + '.json'))]}})
     task_id = (created.get('task') or created)['id']
     owner = ACTOR + ':' + run_id
     value = {'run_id': run_id, 'task_id': task_id, 'actor': ACTOR, 'started_at': time.time()}
     # 认领失败不能把可能已被其他执行者持有的任务改为失败。
     try:
         api(brain_url, 'POST', '/tasks/' + task_id + '/claim',
-            {'claimer': owner, 'executor_kind': ACTOR, 'lease_seconds': 5400})
+            {'claimer': owner, 'executor_kind': 'script', 'lease_seconds': 5400, 'on_lease_expire': 'fail'})
     except Exception as error:
         receipt(store, {**value, 'status': 'claim_failed', 'error': str(error)})
         raise
@@ -75,7 +105,7 @@ def run_recorded(store, brain_url, verify, run_id=None):
             {'status': 'failed', 'result': {**value, 'evidence': evidence}})
         raise
     evidence = receipt(store, value)
-    api(brain_url, 'PATCH', '/tasks/' + task_id, {'status': 'completed', 'result': {**value,
+    complete_task(brain_url, task_id, {'status': 'completed', 'result': {**value,
         'evidence': evidence, 'handoff': {'done': ['两库异地哈希和隔离恢复已真实核验'],
         'not_done': [], 'artifacts': [evidence], 'next_steps': []}}})
     return {**value, 'evidence': evidence}

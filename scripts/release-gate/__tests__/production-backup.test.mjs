@@ -178,7 +178,7 @@ else:raise AssertionError('failed command accepted')
 
 test('完成写入响应超时只读核同run真实结果，不重跑备份或接受别轮完成',()=>{
  const runner=fileURLToPath(new URL('../../backup/run-hk-backup.py',import.meta.url));
- const script=`import importlib.util,json,threading,time,urllib.request
+ const script=`import importlib.util,json,threading,time,urllib.request,socket
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 s=importlib.util.spec_from_file_location('runner',${JSON.stringify(runner)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 events=[];stored={};wrong=False
@@ -201,7 +201,7 @@ try:
   try:
    if hasattr(m,'complete_task'):m.complete_task('http://127.0.0.1:'+str(server.server_port),'task',body)
    else:m.api('http://127.0.0.1:'+str(server.server_port),'PATCH','/tasks/task',body)
-  except TimeoutError:
+  except (TimeoutError,socket.timeout):
    assert mismatch,'actual matching completion was not reconciled'
   else:assert not mismatch,'another run was accepted'
   assert events==['PATCH','GET'],events
