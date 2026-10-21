@@ -137,3 +137,17 @@ test('实际deploy.sh配套安装段在真实事务屏障下安装并读回两�
  assert.match(installs,/install-maintenance smoke-paired-transaction/);
  for(const serial of ['SER1','SER2','SER3','SER4'])assert.equal(readFileSync(join(root,'remote/locks',serial+'.lock/owner'),'utf8').trim(),'phone-deploy-smoke-paired-transaction');
 });
+
+
+for(const kind of ['wrong-host','wrong-directory','disabled-loop'])test(`真实安装段变异 ${kind} 必须拒绝且没有配套receipt`,t=>{
+ const root=mkdtempSync(join(tmpdir(),'paired-fragment-negative-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
+ const deploy=join(service,'deploy.sh'),original=readFileSync(deploy,'utf8'),start=original.indexOf('echo "=== [4/4]');
+ let block=original.slice(start);
+ if(kind==='wrong-host')block=block.replace('for host in xian-m4; do','for host in unregistered-host; do');
+ if(kind==='wrong-directory')block=block.replace('install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin','install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/wrong');
+ if(kind==='disabled-loop')block=block.replace('for host in xian-m4; do','for host in; do');
+ const mutation=join(root,'mutated-deploy.sh');writeFileSync(mutation,original.slice(0,start)+block);
+ const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/paired-deploy-install-fragment.mjs'),root,deploy,mutation],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH}});
+ assert.notEqual(result.status,0,result.stdout+result.stderr);
+ assert.throws(()=>verify(root),/not verified/);
+});
