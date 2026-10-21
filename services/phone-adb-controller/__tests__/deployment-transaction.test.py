@@ -141,6 +141,46 @@ class TransactionTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlink'):
             self.prepare()
 
+    def test_dynamic_manifest_change_is_authorized_before_write_without_losing_before(self):
+        self.prepare()
+        final = b'official observation ACK'
+        value = self.file(data=final)['after']
+        self.module.authorize(self.home, self.tx, 'bin-harvest/a.js', value)
+        self.target.write_bytes(final)
+        self.module.rollback(self.home, self.tx)
+        self.assertEqual(self.target.read_bytes(), b'old verified runtime')
+
+    def test_authorize_cannot_add_untracked_path_or_change_after_external_write(self):
+        self.prepare()
+        with self.assertRaisesRegex(ValueError, 'write set'):
+            self.module.authorize(self.home, self.tx, 'bin-harvest/unrecorded.js', self.file()['after'])
+        self.target.write_bytes(b'unknown writer')
+        with self.assertRaisesRegex(ValueError, 'conflict'):
+            self.module.authorize(self.home, self.tx, 'bin-harvest/a.js', self.file()['after'])
+
+    def test_failed_admission_marker_persistence_can_resume_only_before_any_write(self):
+        original = self.module.atomic_bytes
+        def fail_marker(path, *args, **kwargs):
+            if path.name == 'active.json':
+                raise OSError('disk full before marker')
+            return original(path, *args, **kwargs)
+        with patch.object(self.module, 'atomic_bytes', fail_marker):
+            with self.assertRaises(OSError):
+                self.prepare()
+        self.prepare()
+        self.module.rollback(self.home, self.tx)
+
+    def test_release_barrier_requires_committed_or_restored_and_matching_authority(self):
+        self.prepare()
+        with self.assertRaisesRegex(ValueError, 'final'):
+            self.module.release(self.home, self.tx, self.identity['release_id'])
+        self.module.rollback(self.home, self.tx)
+        with self.assertRaisesRegex(ValueError, 'release'):
+            self.module.release(self.home, self.tx, self.identity['release_id'])
+        self.module.release(self.home, self.tx, self.identity['previous_release_id'])
+        self.assertFalse(self.module.active_file(self.home).exists())
+        self.module.release(self.home, self.tx, self.identity['previous_release_id'])
+
 
 if __name__ == '__main__':
     unittest.main()
