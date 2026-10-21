@@ -50,3 +50,21 @@ test('backend rejects drift in every execution helper before guard or remote act
   });
  }
 });
+
+
+test('恢复实际持久descriptor/journal：未知事务、错SHA和双机身份错配均拒绝',async t=>{
+ const {mkdtempSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {execFileSync}=await import('node:child_process');
+ const {verifyRecoveryDescriptor,verifyRecoveryJournal}=await import('../deployment-backend.mjs');
+ const home=mkdtempSync(join(tmpdir(),'phone-original-descriptor-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const tx='phone-original',sha='b'.repeat(40),old='a'.repeat(40),ids={'xian-m4':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',mmv:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'},prior={'xian-m4':'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',mmv:'dddddddd-dddd-4ddd-8ddd-dddddddddddd'};
+ const descriptor={schema_version:1,transaction:tx,source_commit:sha,plan:{source_commit:sha,release_ids:ids},previous_plan:{source_commit:old,release_ids:prior}};
+ const code=`import importlib.util,json,sys\nfrom pathlib import Path\nhome=Path(sys.argv[1]).resolve();source=Path(sys.argv[2]);x=json.load(sys.stdin)\ndef module(name):\n s=importlib.util.spec_from_file_location(name,source/('deployment-'+name+'.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m\nhost=module('host');tx=module('transaction');d=x['descriptor'];tid=d['transaction'];host.record(home,tid,'coordinator',d,None)\nidentity={'target':'xian-m4','source_commit':d['source_commit'],'previous_source_commit':d['previous_plan']['source_commit'],'release_id':d['plan']['release_ids']['xian-m4'],'previous_release_id':d['previous_plan']['release_ids']['xian-m4']}\n(home/'bin-harvest').mkdir();tx.prepare(home,tid,[{'path':'bin-harvest/a.js','after':{'kind':'missing'}}],identity)\nprint(json.dumps({'descriptor':host.record(home,tid,'coordinator'),'unknown':host.record(home,'unknown','coordinator'),'journal':tx.read_transaction(home,tid)}))\n`;
+ const actual=JSON.parse(execFileSync('python3',['-c',code,home,new URL('../',import.meta.url).pathname],{input:JSON.stringify({descriptor}),encoding:'utf8'}));
+ assert.deepEqual(verifyRecoveryDescriptor(actual.descriptor,sha,tx),descriptor);
+ assert.throws(()=>verifyRecoveryDescriptor(actual.unknown,sha,'unknown'),/原始事务身份/);
+ assert.throws(()=>verifyRecoveryDescriptor(actual.descriptor,'c'.repeat(40),tx),/原始事务身份/);
+ assert.throws(()=>verifyRecoveryDescriptor(actual.descriptor,sha,'other'),/原始事务身份/);
+ assert.deepEqual(verifyRecoveryJournal(descriptor,'xian-m4',actual.journal),actual.journal);
+ for(const [key,value] of [['source_commit','c'.repeat(40)],['previous_source_commit',sha],['release_id',ids.mmv],['previous_release_id',prior.mmv],['target','mmv']])assert.throws(()=>verifyRecoveryJournal(descriptor,'xian-m4',{...actual.journal,identity:{...actual.journal.identity,[key]:value}}),/journal身份/);
+ assert.throws(()=>verifyRecoveryJournal(descriptor,'mmv',actual.journal),/journal身份/);
+});
