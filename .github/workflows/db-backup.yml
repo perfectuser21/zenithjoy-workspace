@@ -1,26 +1,12 @@
-name: DB Backup + Restore Drill (G2)
+name: CI Fixture Backup + Restore Drill (G2)
 
-# G2：pg_dump 定时备份 + 恢复演练。
-#
-# 两件事必须在**同一个 job 的同一次运行内**完成：备份跑了但从没还原过 = 假绿，
-# 真出事那一刻才发现备份是空的。所以这里没有"只备份"的路径——restore-drill.sh
-# 自己会种可判别数据、dump、还原到临时库、五表逐条比对全等，任一环红就整个 job 红。
-#
-# 明确不做的事（合同「未覆盖真实链路清单」#1/#2 已登记）：
-#   * 异地对象存储：需要 COS_SECRET_ID / COS_SECRET_KEY 两个仓库 secret，当前 repo 未配置。
-#     配好后由 Sprint B 补 upload step，并把 A5 断言扩展到"从 COS 拉回的备份还原全等"。
-#     在此之前 G2 状态是 logic-done-pending-offsite —— 备份与恢复演练这两件本身是真跑真验的。
-#   * 生产库接线：需要 PROD_DATABASE_URL，属主理人放行范围。库连接串已参数化，届时改 input 即可。
+# 仅在独立CI测试库种数据、备份、恢复并比对。
+# 此运行不证明生产备份或异地副本可恢复；生产证据另行留在任务账。
 on:
   schedule:
     # 每天 UTC 18:00 = 北京 02:00，避开白天负载
     - cron: '0 18 * * *'
   workflow_dispatch:
-    inputs:
-      database_url_secret_name:
-        description: '要备份的库（留空 = CI 库）。填 secret 名，不填连接串本身。'
-        required: false
-        default: ''
   pull_request:
     paths:
       - '.github/workflows/db-backup.yml'
@@ -71,7 +57,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pg-backup-${{ github.run_id }}
+          name: ci-fixture-backup-${{ github.run_id }}
           path: /tmp/wb-drill-*.dump
           retention-days: 14
           if-no-files-found: warn

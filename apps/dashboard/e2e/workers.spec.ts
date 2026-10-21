@@ -165,7 +165,11 @@ test('表格右边那条 24 小时占用条，涂色是占住的、留白是空�
 
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));
-  await page.goto('/dashboard/workers/a1');
+  // Vite首次转换详情页可能晚于HTML导航；从真实请求完成后开始核对渲染。
+  await Promise.all([
+    page.waitForResponse('**/api/workers/a1/activity'),
+    page.goto('/dashboard/workers/a1'),
+  ]);
   await expect(page.getByText('发布视频到抖音')).toBeVisible();
   await expect(page.locator('li', { hasText: '打开抖音' })).toContainText('✅');
   await expect(page.locator('li', { hasText: '设置可见范围' })).toContainText('▶️');
@@ -175,6 +179,11 @@ test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', as
 });
 test('帧龄超 15 秒显示"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(20_000) } }));
-  await page.goto('/dashboard/workers/a1');
+  await Promise.all([
+    page.waitForResponse('**/api/workers/a1/activity'),
+    page.goto('/dashboard/workers/a1'),
+  ]);
+  // 必须先看到本次活动，避免把尚未加载数据时的默认遮罩当成过期帧证据。
+  await expect(page.getByRole('heading', { name: '发布视频到抖音' })).toBeVisible();
   await expect(page.getByText('画面不可用')).toBeVisible();
 });

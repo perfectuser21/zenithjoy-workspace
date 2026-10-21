@@ -155,3 +155,26 @@ test('真实部署回归仅精确脚本获得180秒预算，其他及近似名�
   assert.equal(actual.status, 0, actual.stderr);
   assert.equal(actual.stdout, '180\n90\n90\n');
 });
+
+test('正式caller强制回收忽略TERM的子进程后才返回，重试不会与残留并跑', t => {
+  const { root } = fixture(t);
+  const script = join(root, 'stubborn.sh');
+  const pidFile = join(root, 'child.pid');
+  writeFileSync(script, `#!/bin/bash\ntrap '' TERM\necho $$ > '${pidFile}'\nwhile :; do sleep 1; done\n`);
+  const definition = caller.match(/run_one\(\) \{[^\n]+}/)?.[0];
+  assert.ok(definition);
+  const result = spawnSync('bash', ['-c', `DIR='${root}'; script_timeout() { echo 0.2; }; ${definition}; run_one stubborn.sh`],
+    { encoding: 'utf8', timeout: 8000, killSignal: 'SIGKILL' });
+  const pid = Number(readFileSync(pidFile, 'utf8'));
+  t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch {} });
+  assert.equal(result.error, undefined, '必须在外层超时前完成子进程回收');
+  assert.notEqual(result.status, 0, '超时不能标为通过');
+  const state = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).stdout.trim();
+  assert.ok(!state || state.startsWith('Z'), `子进程仍在执行: ${state}`);
+});
+
+test('Android冷编译显式准备且不增加smoke预算，Gradle后台daemon被关闭', () => {
+  assert.match(workflow, /name: Prepare Android unit-test artifacts/);
+  assert.match(workflow, /:app:compileDebugUnitTestKotlin --no-daemon/);
+  assert.match(workflow, /GRADLE_OPTS: '-Dorg.gradle.daemon=false'/);
+});

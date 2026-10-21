@@ -52,6 +52,7 @@ jobs:
     env:
       SMOKE_SHARD_INDEX: ${{ matrix.shard }}
       SMOKE_SHARD_COUNT: '2'
+      GRADLE_OPTS: '-Dorg.gradle.daemon=false'
       # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
@@ -205,6 +206,12 @@ jobs:
           docker pull mirror.gcr.io/library/nginx:1.27-alpine
           docker tag mirror.gcr.io/library/nginx:1.27-alpine nginx:1.27-alpine
 
+      # 冷下载/编译是显式准备；每个smoke仍在原有限预算内执行真实测试。
+      - name: Prepare Android unit-test artifacts
+        timeout-minutes: 5
+        working-directory: services/agent-android
+        run: ./gradlew :app:compileDebugUnitTestKotlin --no-daemon --console=plain
+
       - name: Discover + run all CI-capable smoke scripts (ratchet gate)
         id: glob
         run: |
@@ -250,7 +257,7 @@ jobs:
             esac
           }
 
-          run_one() { timeout "$(script_timeout "$1")" bash "$DIR/$1"; }
+          run_one() { timeout --kill-after=5s "$(script_timeout "$1")" bash "$DIR/$1"; }
 
           # 每个 worker 拥有独立数据库/API；这里只分完整文件清单，不在共享服务上并发脚本。
           SHARD_INDEX="${SMOKE_SHARD_INDEX:-0}"
@@ -346,6 +353,7 @@ jobs:
           TOTAL=$((PASS+DEBT_FAIL+GATE_FAIL))
           {
             echo "# Smoke Glob Gate 报告（棘轮闸）"
+            echo "> 证明范围：CI代码回归。SKIP=未评估；DEBT-FAIL=失败债务；均非业务验收通过，不能用于生产晋级。"
             echo ""
             echo "- 候选执行（非 denylist）: **$TOTAL**"
             echo "- ✅ PASS: **$PASS**"
@@ -436,6 +444,7 @@ jobs:
           assert indices == {0, 1} and len(all_rows) == len(inventory), "incomplete total coverage"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
               f.write("# Complete Smoke Glob shard results\n\n")
+              f.write("证明范围：CI代码回归；SKIP=未评估，DEBT-FAIL=失败债务；本报告不构成真实业务验收或生产晋级依据。\n\n")
               f.write("| Script | Result | Exit |\n|---|---|---|\n")
               for row in sorted(all_rows):
                   f.write("| " + " | ".join(row) + " |\n")
