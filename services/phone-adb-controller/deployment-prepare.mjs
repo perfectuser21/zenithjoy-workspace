@@ -17,10 +17,7 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  git('merge-base','--is-ancestor',sha,'origin/main');
  const origin=git('remote','get-url','origin');
  if(![`https://github.com/${DEPLOY_REPO}.git`,`https://github.com/${DEPLOY_REPO}`,`git@github.com:${DEPLOY_REPO}.git`].includes(origin))throw Error('部署来源仓库不符');
- const bundle=JSON.parse(readFileSync(bundlePath,'utf8'));
- if(bundle.run?.repo!==DEPLOY_REPO||bundle.run.sha!==sha||bundle.run.branch!=='main'||!['push','workflow_dispatch'].includes(bundle.run.event)||bundle.run.path!=='.github/workflows/pilot-release-verification.yml'||!Number.isSafeInteger(bundle.run.id)||!attemptKey.startsWith(`github:${bundle.run.id}:`))throw Error('部署证据与受信run不符');
  if(mode!=='candidate')verifyTransactionProtocol(readDeploymentSource(root,sha,'services/phone-adb-controller/deployment-protocol.json'));
- prepareDeploymentSkillSources(root,sha);
  const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
  if(['recover','rollback'].includes(mode)){
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(transaction||''))throw Error('恢复必须指定原始事务ID');
@@ -29,6 +26,10 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
   const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
   if(code!==0)throw Error('原始事务恢复未完成；保持实际失败证据');return;
  }
+
+ const bundle=JSON.parse(readFileSync(bundlePath,'utf8'));
+ if(bundle.run?.repo!==DEPLOY_REPO||bundle.run.sha!==sha||bundle.run.branch!=='main'||!['push','workflow_dispatch'].includes(bundle.run.event)||bundle.run.path!=='.github/workflows/pilot-release-verification.yml'||!Number.isSafeInteger(bundle.run.id)||!attemptKey.startsWith(`github:${bundle.run.id}:`))throw Error('部署证据与受信run不符');
+ prepareDeploymentSkillSources(root,sha);
 
  const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,attemptKey,request,readFile:path=>{
   return readDeploymentSource(root,sha,path,{materialize:true});

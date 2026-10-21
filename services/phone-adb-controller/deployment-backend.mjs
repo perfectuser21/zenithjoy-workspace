@@ -32,6 +32,21 @@ function verifyBackendSource(root,sha){
 }
 
 function transactionId(sha,attempt){return 'phone-'+sha.slice(0,12)+'-'+digest(attempt).slice(0,16);}
+export function verifyRecoveryDescriptor(value,sha,transaction){
+ need(value?.schema_version===1&&value.source_commit===sha&&value.transaction===transaction&&
+  value.plan?.source_commit===sha&&/^[a-f0-9]{40}$/.test(value.previous_plan?.source_commit||'')&&
+  HOSTS.every(host=>value.plan?.release_ids?.[host]&&value.previous_plan?.release_ids?.[host]),'原始事务身份缺失或不符');
+ return value;
+}
+export function verifyRecoveryJournal(descriptor,host,record,started=false){
+ // 首台准备失败时另一台可以尚无journal；已有journal绝不能借用其它事务。
+ if(record===null){need(!started,'已开始安装但journal缺失，保留屏障');return null;}
+ const identity=record?.identity;
+ need(HOSTS.includes(host)&&record?.transaction===descriptor.transaction&&identity?.target===host&&
+  identity.source_commit===descriptor.source_commit&&identity.previous_source_commit===descriptor.previous_plan.source_commit&&
+  identity.release_id===descriptor.plan.release_ids[host]&&identity.previous_release_id===descriptor.previous_plan.release_ids[host],'journal身份不符');
+ return record;
+}
 async function childDeployment(root,transaction){
  const child=spawn('bash',[join(root,'services/phone-adb-controller/deploy.sh')],{
   env:{...process.env,WF_PHONE_TRANSACTION:transaction},stdio:inheritedDeploymentStdio(process.env)});
@@ -110,7 +125,7 @@ export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,
    commanderFiles,skills:Object.keys(commanderFiles).filter(p=>p.startsWith('skills/')&&p.endsWith('/SKILL.md')).map(p=>p.split('/')[1])};
   writeRecord('coordinator',descriptor,null);
  }else{
-  need(descriptor?.schema_version===1&&descriptor.source_commit===sha&&descriptor.transaction===transaction,'原始事务身份缺失或不符');
+  verifyRecoveryDescriptor(descriptor,sha,transaction);
   await verifyDeploymentPlan(descriptor.plan,request);await verifyDeploymentPlan(descriptor.previous_plan,request);
  }
  let observation=null;
@@ -138,7 +153,7 @@ export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,
  const callbacks={
   readDecision:async()=>readRecord('decision'),
   writeDecision:async value=>writeRecord('decision',value,readRecord('decision')),
-  inspect:async host=>hostCall(host,'inspect'),
+  inspect:async host=>verifyRecoveryJournal(descriptor,host,hostCall(host,'inspect'),readRecord('started')),
   prepare:async host=>{
    hostCall(host,'prepare',{entries:descriptor.entries[host],identity:{target:host,source_commit:sha,previous_source_commit:descriptor.previous_plan.source_commit,
     release_id:descriptor.plan.release_ids[host],previous_release_id:descriptor.previous_plan.release_ids[host]}});
@@ -194,7 +209,7 @@ export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,
   const result=await coordinateDeployment(callbacks);guard('complete');return {transaction,source_commit:sha,...result};
  }catch(error){
   // 只有完整恢复并完成两机最终读回才释放Commander admission；失败原样向上报告。
-  const records=HOSTS.map(h=>hostCall(h,'inspect'));
+  const records=HOSTS.map(h=>verifyRecoveryJournal(descriptor,h,hostCall(h,'inspect'),readRecord('started')));
   if(records.every(r=>r?.phase==='released'&&r.released_direction==='restored'||!r&&!readRecord('started')))guard('complete');
   throw error;
  }

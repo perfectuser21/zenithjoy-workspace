@@ -17,15 +17,15 @@ on:
   workflow_dispatch:
     inputs:
       implementation_run_id:
-        description: '本仓候选SHA对应的成功Pilot release verification run ID'
-        required: true
+        description: 'candidate/promote必填：本仓候选SHA对应的成功Pilot run ID；恢复不依赖过期artifact'
+        required: false
         type: string
       candidate_sha:
         description: '已合并main的完整40位候选SHA'
         required: true
         type: string
       mode:
-        description: '准备候选或晋级已实跑通过的候选'
+        description: '准备候选、验收后晋级，或恢复原整包事务'
         required: true
         default: candidate
         type: choice
@@ -69,13 +69,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 校验同一次主线成功CI及固定JSON产物
+      - name: 核验固定来源（新部署核Pilot，恢复核原事务来源）
         id: evidence
         env:
           GH_TOKEN: ${{ github.token }}
           IMPLEMENTATION_RUN_ID: ${{ inputs.implementation_run_id || github.event.workflow_run.id }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA"
+          DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'candidate' }}
+        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA" "$DEPLOY_MODE"
       - name: 接入 Tailscale
         uses: tailscale/github-action@v3
         with:
