@@ -10,7 +10,7 @@ import {digest} from '../runtime-definition.mjs';
 import {normalizedDescriptions} from './fixtures/normalized-description-bindings.mjs';
 const repo='perfectuser21/zenithjoy-workspace';
 const uuid=n=>`${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
-async function fixture(t,{migrated=false}={}){
+async function fixture(t,{migrated=false,protocol=true}={}){
  const temp=mkdtempSync(join(tmpdir(),'phone-prepare-http-')),root=join(temp,'repo'),dir=join(root,'services/phone-adb-controller');mkdirSync(dir,{recursive:true});
  const marker=join(temp,'deployed.json'),path=migrated?'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md':'services/phone-adb-controller/entry.sh';mkdirSync(join(root,path,'..'),{recursive:true});writeFileSync(join(root,path),'fixed implementation\n');
  if(migrated){
@@ -25,6 +25,7 @@ async function fixture(t,{migrated=false}={}){
  }
  // 假部署入口仅记录显式参数；不调用任何机器或设备。
  writeFileSync(join(dir,'deploy.sh'),`#!/bin/bash\nnode -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({ids:JSON.parse(process.env.WF_RELEASE_IDS),plan:JSON.parse(fs.readFileSync(process.env.WF_DEPLOY_PLAN_FILE)),map:JSON.parse(fs.readFileSync(process.env.WF_COMMANDER_RELEASES_FILE)),collector:process.env.WF_DEPLOY_COLLECTOR,environment:process.env.WF_DEPLOY_ENVIRONMENT,attempt:process.env.WF_DEPLOY_ATTEMPT_KEY,token_present:process.env.BRAIN_INTERNAL_TOKEN==="fixture-private-token"}))' '${marker}'\n`);
+ if(protocol)writeFileSync(join(dir,'deployment-protocol.json'),JSON.stringify({protocol:'phone-package-transaction-v1'}));
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();git('init','-q','-b','cp-fixture');git('config','core.hooksPath','/dev/null');git('add','.');git('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture');
  const sha=git('rev-parse','HEAD');git('remote','add','origin',`https://github.com/${repo}.git`);git('update-ref','refs/remotes/origin/main',sha);
  const make=(id,payload,extra)=>({id,...extra,source_repo:repo,source_path:'product-map/contracts/phone.yaml',source_commit:sha,payload,payload_sha256:digest({source:{repo,path:'product-map/contracts/phone.yaml',commit:sha},payload})});
@@ -99,4 +100,11 @@ test('Pilot绿但业务失败时禁止创建production release及执行部署',a
 test('真实prepareAndDeploy在全新迁移checkout从固定catalog恢复Skill后才构造正式release',async t=>{
  const f=await fixture(t,{migrated:true});await prepareAndDeploy(f);assert.ok(existsSync(f.marker));
  assert.equal(readFileSync(join(f.root,'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md'),'utf8'),'fixed implementation\n');
+});
+
+
+test('历史候选缺事务协议时在生产release登记和部署前拒绝',async t=>{
+ const f=await fixture(t,{protocol:false});
+ await assert.rejects(prepareAndDeploy(f));
+ assert.equal(f.requests.length,0);assert.equal(existsSync(f.marker),false);
 });
