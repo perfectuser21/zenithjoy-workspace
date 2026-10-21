@@ -142,20 +142,31 @@ class TransactionTest(unittest.TestCase):
             self.prepare()
 
     def test_dynamic_manifest_change_is_authorized_before_write_without_losing_before(self):
-        self.prepare()
+        manifest = self.target.with_name('deployment-manifest.json')
+        self.target.rename(manifest)
+        self.target = manifest
+        self.prepare([self.file('bin-harvest/deployment-manifest.json')])
         final = b'official observation ACK'
         value = self.file(data=final)['after']
-        self.module.authorize(self.home, self.tx, 'bin-harvest/a.js', value)
+        self.module.authorize(self.home, self.tx, 'bin-harvest/deployment-manifest.json', value)
         self.target.write_bytes(final)
         self.module.rollback(self.home, self.tx)
         self.assertEqual(self.target.read_bytes(), b'old verified runtime')
 
     def test_authorize_cannot_add_untracked_path_or_change_after_external_write(self):
-        self.prepare()
+        manifest = self.target.with_name('deployment-manifest.json')
+        self.target.rename(manifest)
+        self.target = manifest
+        self.prepare([self.file('bin-harvest/deployment-manifest.json')])
         with self.assertRaisesRegex(ValueError, 'write set'):
-            self.module.authorize(self.home, self.tx, 'bin-harvest/unrecorded.js', self.file()['after'])
+            self.module.authorize(self.home, self.tx, '.openclaw/leadgen-scripts/deployment-manifest.json', self.file()['after'])
         self.target.write_bytes(b'unknown writer')
         with self.assertRaisesRegex(ValueError, 'conflict'):
+            self.module.authorize(self.home, self.tx, 'bin-harvest/deployment-manifest.json', self.file()['after'])
+
+    def test_observation_authority_cannot_redefine_candidate_runtime_bytes(self):
+        self.prepare()
+        with self.assertRaisesRegex(ValueError, 'manifest'):
             self.module.authorize(self.home, self.tx, 'bin-harvest/a.js', self.file()['after'])
 
     def test_failed_admission_marker_persistence_can_resume_only_before_any_write(self):
