@@ -11,6 +11,7 @@ function fixture(fail={}) {
     writeDecision:async value=>{decision=value;decisions.push(value);},
     prepare:action('prepare',host=>states[host]='prepared'),
     inspect:action('inspect',host=>states[host]||null),
+    reacquire:action('reacquire',()=>{}),
     install:action('install',()=>{}),
     verifyInstalled:action('verifyInstalled',()=>{}),
     commit:action('commit',host=>states[host]='committed'),
@@ -79,4 +80,14 @@ test('explicit rollback changes direction only after all journals can be read',a
   assert.deepEqual(f.decisions,['commit','restore']);
   assert.ok(f.calls.includes('restore:mmv'));
   assert.ok(!f.calls.some(x=>x.startsWith('install:')));
+});
+
+
+test('recovery first reacquires both released host barriers before verification or restoration',async()=>{
+ const f=fixture();await f.options.writeDecision('commit');
+ f.states['xian-m4']='released';f.states.mmv='committed';
+ await coordinateDeployment({...f.options,recover:true});
+ assert.ok(f.calls.indexOf('reacquire:xian-m4')>=0);
+ assert.ok(f.calls.indexOf('reacquire:mmv')<f.calls.indexOf('verifyInstalled:xian-m4'));
+ assert.ok(f.calls.indexOf('inspect:mmv')<f.calls.indexOf('reacquire:xian-m4'));
 });
