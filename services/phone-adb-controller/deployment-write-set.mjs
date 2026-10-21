@@ -40,7 +40,7 @@ export function buildWriteSet({groups:g,sha,homes,read,mode,commanderFiles,comma
  for(const f of [...g.DEVICE_NODE_FILES,...g.DEVICE_RPC_PROBE_FILES,...g.DEVICE_PLAN_FILES])file('xian-m4','bin-harvest/'+f,f);
  for(const f of g.DEVICE_CTL_FILES)for(const directory of g.DEVICE_CTL_DIRS)file('xian-m4',directory+'/'+f,f,true);
  // Match the original MMV_RUNTIME_FILES composition and its final executable-mode rule.
- const runtime=[...g.DEVICE_SH_FILES,...g.DEVICE_NODE_FILES,...g.DEVICE_CTL_FILES,...g.DEVICE_RPC_PROBE_FILES,...g.DEVICE_PLAN_FILES,...g.RPC_FILES];
+ const runtime=[...g.DEVICE_SH_FILES,...g.DEVICE_NODE_FILES,...g.DEVICE_CTL_FILES,...g.DEVICE_RPC_PROBE_FILES,...g.DEVICE_PLAN_FILES,...g.MMV_JS_FILES,...g.MMV_PROBE_FILES];
  for(const directory of ['bin-harvest','.openclaw/leadgen-scripts'])for(const f of runtime)
   file('mmv',directory+'/'+f,f,/\.(sh|py)$/.test(f)||f==='douyin-phone-adb');
  for(const entry of g.RELEASE_EVIDENCE_FILES){

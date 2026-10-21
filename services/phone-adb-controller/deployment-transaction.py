@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import stat
@@ -53,8 +54,20 @@ def sync_directory(path):
         os.close(fd)
 
 
+def durable_mkdir(path):
+    missing = []
+    cursor = path
+    while not cursor.exists():
+        missing.append(cursor)
+        cursor = cursor.parent
+    for directory in reversed(missing):
+        directory.mkdir(mode=0o700)
+        sync_directory(directory)
+        sync_directory(directory.parent)
+
+
 def atomic_bytes(path, data, mode=0o600):
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    durable_mkdir(path.parent)
     fd, temp = tempfile.mkstemp(prefix='.phone-write-', dir=path.parent)
     try:
         with os.fdopen(fd, 'wb') as out:
@@ -126,6 +139,23 @@ def validate_description(value):
         raise ValueError('phone transaction: unsupported file kind')
 
 
+MANIFESTS = {'bin-harvest/deployment-manifest.json', '.openclaw/leadgen-scripts/deployment-manifest.json'}
+LINKS = {'.codex-team1/skills/multi-platform-publish', '.openclaw/skills/multi-platform-publish'}
+
+
+def validate_link(home, relative, value):
+    if value['kind'] != 'symlink':
+        return
+    prefix = str(home) + '/.local/share/zenithjoy/publish-releases/'
+    require(relative in LINKS and value['target'].startswith(prefix) and
+            re.fullmatch('[a-f0-9]{40}/[.]agents/skills/multi-platform-publish', value['target'][len(prefix):]),
+            'symlink outside fixed publish release')
+
+
+def restored_value(entry):
+    return entry.get('restored_after', entry['before'])
+
+
 def save(directory, record):
     content = {**record}
     content.pop('sha256', None)
@@ -147,8 +177,10 @@ def read_transaction(home, transaction):
         record_path(home, entry['path'])
         require(entry['path'] not in seen, 'duplicate journal destination')
         seen.add(entry['path'])
-        for name in ('before', 'after'):
+        for name in ('before', 'after', *(['restored_after'] if 'restored_after' in entry else [])):
             validate_description(entry[name])
+            validate_link(home, entry['path'], entry[name])
+        require('restored_after' not in entry or entry['path'] in MANIFESTS, 'restored authorization must be manifest')
         if entry['before']['kind'] == 'file':
             blob = safe_path(home, STATE + '/' + transaction + '/blobs/' + entry['before']['sha256'])
             require(digest(regular(blob)[0]) == entry['before']['sha256'], 'snapshot hash mismatch')
@@ -188,11 +220,14 @@ def prepare(home, transaction, entries, identity):
         require(set(entry) == {'path', 'after'} and entry['path'] not in seen, 'invalid/duplicate destination')
         path = record_path(home, entry['path'])
         validate_description(entry['after'])
+        validate_link(home, entry['path'], entry['after'])
+        before = describe(path)
+        validate_link(home, entry['path'], before)
         seen.add(entry['path'])
-        rows.append({**entry, 'before': describe(path)})
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        rows.append({**entry, 'before': before})
+    durable_mkdir(directory)
     blobs = directory / 'blobs'
-    blobs.mkdir(mode=0o700, exist_ok=True)
+    durable_mkdir(blobs)
     for entry in rows:
         if entry['before']['kind'] == 'file':
             data, _ = regular(record_path(home, entry['path']))
@@ -210,8 +245,11 @@ def prepare(home, transaction, entries, identity):
 def restore_entry(home, directory, entry):
     path = record_path(home, entry['path'])
     current = describe(path)
-    require(current in (entry['before'], entry['after']), 'restore writer conflict: ' + entry['path'])
-    if current == entry['before']:
+    require(current in (entry['before'], entry['after'], restored_value(entry)), 'restore writer conflict: ' + entry['path'])
+    if current == restored_value(entry):
+        return
+    # An ACK authorized during a previous recovery is only installed by its observer.
+    if 'restored_after' in entry and current == entry['before']:
         return
     previous = entry['before']
     if previous['kind'] == 'file':
@@ -240,7 +278,7 @@ def rollback(home, transaction, explicit=False):
     require(record['phase'] not in ('committed', 'released') or explicit, 'committed release requires explicit rollback')
     # A conflict anywhere preserves every file. A crash after this pass remains resumable.
     for entry in record['entries']:
-        require(describe(record_path(home, entry['path'])) in (entry['before'], entry['after']), 'restore writer conflict: ' + entry['path'])
+        require(describe(record_path(home, entry['path'])) in (entry['before'], entry['after'], restored_value(entry)), 'restore writer conflict: ' + entry['path'])
     directory = transaction_directory(home, transaction)
     record['phase'] = 'restoring'
     save(directory, record)
@@ -270,7 +308,41 @@ def authorize(home, transaction, relative, after):
     entry = matches[0]
     require(describe(record_path(home, relative)) in (entry['before'], entry['after']), 'authorize writer conflict')
     validate_description(after)
+    validate_link(home, relative, after)
     entry['after'] = after
+    return save(transaction_directory(home, transaction), record)
+
+
+def authorize_restored(home, transaction, relative, after):
+    require(relative in MANIFESTS, 'restored authorization must be manifest')
+    record = read_transaction(home, transaction)
+    owned(home, transaction)
+    require(record['phase'] == 'restored', 'restored state required')
+    matches = [e for e in record['entries'] if e['path'] == relative]
+    require(len(matches) == 1, 'destination not in frozen write set')
+    entry = matches[0]
+    require(describe(record_path(home, relative)) in (entry['before'], restored_value(entry)), 'restored ACK conflict')
+    validate_description(after)
+    require(after['kind'] == 'file' and after['mode'] == 0o600, 'restored manifest file required')
+    entry['restored_after'] = after
+    return save(transaction_directory(home, transaction), record)
+
+
+def reopen(home, transaction, expected_source_commit):
+    record = read_transaction(home, transaction)
+    restored = record.get('released_direction') == 'restored' or record['phase'] == 'restored'
+    expected = record['identity']['previous_source_commit' if restored else 'source_commit']
+    require(expected_source_commit == expected, 'reopen release identity mismatch')
+    require(record['phase'] in ('committed', 'released', 'restored'), 'only finalized transaction can reopen')
+    active = active_file(home)
+    if active.exists():
+        owned(home, transaction)
+    for entry in record['entries']:
+        require(describe(record_path(home, entry['path'])) == (restored_value(entry) if restored else entry['after']),
+                'reopen installed bytes mismatch')
+    if not active.exists():
+        atomic_bytes(active, canonical({'transaction': transaction}))
+    record['phase'] = 'restored' if restored else 'committed'
     return save(transaction_directory(home, transaction), record)
 
 
@@ -282,7 +354,7 @@ def release(home, transaction, release_id):
     expected = record['identity']['previous_release_id' if restored else 'release_id']
     require(expected == release_id, 'release authority does not match restoration direction')
     for entry in record['entries']:
-        require(describe(record_path(home, entry['path'])) == entry['before' if restored else 'after'], 'final release bytes mismatch')
+        require(describe(record_path(home, entry['path'])) == (restored_value(entry) if restored else entry['after']), 'final release bytes mismatch')
     active = active_file(home)
     if record['phase'] == 'released' and not active.exists():
         return record
@@ -297,7 +369,7 @@ def release(home, transaction, release_id):
 if __name__ == '__main__':
     try:
         action, transaction = sys.argv[1:3]
-        home = Path.home().resolve()
+        home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
         if action == 'prepare':
             data = json.load(sys.stdin)
             result = prepare(home, transaction, data['entries'], data['identity'])
@@ -308,6 +380,11 @@ if __name__ == '__main__':
         elif action == 'authorize':
             data = json.load(sys.stdin)
             result = authorize(home, transaction, data['path'], data['after'])
+        elif action == 'authorize-restored':
+            data = json.load(sys.stdin)
+            result = authorize_restored(home, transaction, data['path'], data['after'])
+        elif action == 'reopen':
+            result = reopen(home, transaction, sys.argv[3])
         elif action == 'release':
             result = release(home, transaction, sys.argv[3])
         elif action in ('recover', 'rollback'):
