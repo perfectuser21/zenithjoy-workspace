@@ -245,6 +245,19 @@ class TransactionTest(unittest.TestCase):
             with self.subTest(path=path), self.assertRaisesRegex(ValueError, 'symlink'):
                 self.module.prepare(self.home, other, [{'path':path,'after':{'kind':'symlink','target':'/tmp/outside'}}], self.identity)
 
+    def test_previous_crash_link_staging_name_cannot_block_a_later_rollback(self):
+        relative = '.openclaw/skills/multi-platform-publish'
+        path = self.home/relative
+        path.parent.mkdir(parents=True)
+        target = lambda sha: str(self.home/'.local/share/zenithjoy/publish-releases'/sha/'.agents/skills/multi-platform-publish')
+        path.symlink_to(target('a'*40))
+        self.prepare([{'path':relative,'after':{'kind':'symlink','target':target('b'*40)}}])
+        path.unlink()
+        path.symlink_to(target('b'*40))
+        (path.parent/('.phone-link-'+str(os.getpid()))).symlink_to(target('a'*40))
+        self.module.rollback(self.home,self.tx)
+        self.assertEqual(os.readlink(path),target('a'*40))
+
 
 if __name__ == '__main__':
     unittest.main()
