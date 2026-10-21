@@ -30,3 +30,11 @@ test('交互执行器只使用明确批准的用户和专用profile，核实sess
  assert.match(runner,/Unregister-ScheduledTask/);
  assert.doesNotMatch(runner,/Get-ChildItem.*[Pp]rofile|Desktop\\zenithjoy-agent/);
 });
+test('异常路径必须留存证据并在返回前确认本次进程树退出',()=>{
+ const runner=read('.github/workflows/scripts/run-line02-candidate.ps1');
+ assert.match(runner,/ZJProcessGroup.*Attach/);
+ assert.match(runner,/start_ticks/);
+ assert.match(runner,/PROCESS_TREE_NOT_REAPED/);
+ assert.match(runner,/line02-candidate-evidence/);
+ assert.doesNotMatch(runner,/Remove-Item -LiteralPath \$directory -Recurse/);
+});
