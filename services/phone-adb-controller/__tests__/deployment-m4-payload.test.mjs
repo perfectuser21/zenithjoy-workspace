@@ -137,10 +137,10 @@ test('oversized sparse archive rejects before attempting an unbounded raw read',
  const r=spawnSync('python3',['-c',code,f.tool,f.archive],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });
 
-test('full deployment dry-run crosses real M4 payload staging before paired CAS verification',t=>{
+test('actual deployment installation segment crosses M4 payload before paired CAS verification',t=>{
  const root=mkdtempSync(join(tmpdir(),'paired-full-m4-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
  // Use the existing phone-adb-controller-smoke 180s bound; no deployment/CI budget changes.
- const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/deploy-smoke-runner.mjs'),join(service,'deploy.sh')],{encoding:'utf8',timeout:180000,env:{...process.env,PATH:root+':'+process.env.PATH}});
+ const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/paired-deploy-install-fragment.mjs'),root,join(service,'deploy.sh')],{encoding:'utf8',timeout:180000,env:{...process.env,PATH:root+':'+process.env.PATH,PAIR_INCLUDE_M4_PAYLOAD:'1'}});
  assert.equal(result.error,undefined,JSON.stringify({status:result.status,signal:result.signal,error:result.error?.message,stdout:result.stdout,stderr:result.stderr}));
  let receipt;assert.doesNotThrow(()=>{receipt=verify(root);},result.stdout+result.stderr);
  assert.deepEqual(receipt.remote_dirs,['~/bin-harvest','~/.local/bin']);
