@@ -194,3 +194,11 @@ test('生产入口遇未收尾事务拒绝新冻结，独立候选不冒充生�
  assert.throws(()=>assertDeploymentAdmission(join(home,'bin-harvest'),home),/整包部署/);
  const candidate=join(home,'candidate');mkdirSync(candidate);assert.doesNotThrow(()=>assertDeploymentAdmission(candidate,home));
 });
+
+
+test('明确collection_phone_scope纳入冻结摘要，续跑不得替换scope输入', async()=>{
+ const f=fixture(),scope={version:1,profile:'fixture',serial:'NO-DEVICE',policy:{adb_sha256:'1'.repeat(64)}};
+ const first=await freezeDefinition({...f.options,collectionPhoneScope:scope});
+ assert.deepEqual(first.collection_phone_scope,scope);
+ await assert.rejects(freezeDefinition({...f.options,collectionPhoneScope:{...scope,serial:'OTHER'}}),/collection.*scope|手机.*scope/i);
+});
