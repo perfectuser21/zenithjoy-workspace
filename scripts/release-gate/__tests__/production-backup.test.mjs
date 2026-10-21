@@ -60,7 +60,7 @@ with tempfile.TemporaryDirectory() as directory:
  docker.write_text("#!/usr/bin/env python3\nimport json,os,sys,pathlib\np=pathlib.Path(os.environ['FAKE_DOCKER_STATE']);s=json.loads(p.read_text()) if p.exists() else {};a=sys.argv[1:]\nif a[0]=='ps': print('\\n'.join(k for k,v in s.items() if v['Config']['Labels']['zenithjoy.backup-run']==a[a.index('--filter')+1].split('=',2)[2]))\nelif a[0]=='inspect': print(json.dumps([s[a[-1]]]))\nelif a[0]=='stop': pass\nelif a[0]=='rm': del s[a[-1]];p.write_text(json.dumps(s))\nelse: raise RuntimeError(a)\n")
  docker.chmod(0o755);os.environ['PATH']=str(root)+os.pathsep+os.environ['PATH'];os.environ['FAKE_DOCKER_STATE']=str(root/'docker-state.json')
  fixture=root/'verify-fixture.py'
- fixture.write_text("import subprocess,sys,os,json,pathlib,time\nr=sys.argv[sys.argv.index('--run-id')+1]\nstate={}\nfor identity,owner in [('owned',r),('foreign','b'*32)]:state[identity]={'Id':identity,'Name':'/zj-backup-proof-'+owner,'Config':{'Labels':{'zenithjoy.backup-run':owner,'zenithjoy.purpose':'isolated-backup-restore'}}}\npathlib.Path(os.environ['FAKE_DOCKER_STATE']).write_text(json.dumps(state))\nchild=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\npathlib.Path(os.environ['FAKE_DOCKER_STATE']+'.pid').write_text(str(child.pid))\ntime.sleep(60)\n")
+ fixture.write_text("import subprocess,sys,os,json,pathlib,time\nr=sys.argv[sys.argv.index('--run-id')+1]\nstate={}\nfor identity,owner in [('1'*64,r),('2'*64,'b'*32)]:state[identity]={'Id':identity,'Name':'/zj-backup-proof-'+owner+'-fixture','Config':{'Labels':{'zenithjoy.backup-run':owner,'zenithjoy.purpose':'isolated-backup-restore'}}}\npathlib.Path(os.environ['FAKE_DOCKER_STATE']).write_text(json.dumps(state))\nchild=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\npathlib.Path(os.environ['FAKE_DOCKER_STATE']+'.pid').write_text(str(child.pid))\ntime.sleep(60)\n")
  try:
   if hasattr(m,'run_verifier'):m.run_verifier(root,run_id,script=fixture,timeout=1)
   else:subprocess.run([sys.executable,str(fixture),'--store',str(root),'--run-id',run_id],check=True,capture_output=True,text=True,timeout=1)
@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory() as directory:
  else:raise AssertionError('timeout reported success')
  state=json.loads((root/'docker-state.json').read_text())
  pid=int((root/'docker-state.json.pid').read_text())
- if set(state)!={'foreign'}:
+ if set(state)!={'2'*64}:
   os.kill(pid,signal.SIGKILL)
   raise AssertionError('owned daemon container survived timeout: '+str(list(state)))
  for _ in range(40):
@@ -79,4 +79,46 @@ with tempfile.TemporaryDirectory() as directory:
 `;
  const r=spawnSync('python3',['-c',script],{encoding:'utf8',timeout:10000});
  assert.equal(r.status,0,r.stderr);
+});
+test('认领冲突只保存本地拒绝回执，不执行备份或PATCH他人任务',()=>{
+ const runner=fileURLToPath(new URL('../../backup/run-hk-backup.py',import.meta.url));
+ const script=`import importlib.util,tempfile,pathlib,json,threading,urllib.error
+from http.server import BaseHTTPRequestHandler,HTTPServer
+s=importlib.util.spec_from_file_location('runner',${JSON.stringify(runner)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+events=[]
+class Handler(BaseHTTPRequestHandler):
+ def log_message(self,*args):pass
+ def do_POST(self):
+  events.append(('POST',self.path));self.rfile.read(int(self.headers['Content-Length']))
+  self.send_response(409 if self.path.endswith('/claim') else 200);self.end_headers();self.wfile.write(b'{"id":"other-owner-task"}')
+ def do_PATCH(self):events.append(('PATCH',self.path));self.send_response(500);self.end_headers()
+server=HTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
+try:
+ with tempfile.TemporaryDirectory() as d:
+  def verify():raise AssertionError('must not verify after claim conflict')
+  try:m.run_recorded(pathlib.Path(d),'http://127.0.0.1:'+str(server.server_port),verify)
+  except urllib.error.HTTPError as e:assert e.code==409
+  else:raise AssertionError('conflict accepted')
+  assert len(events)==2 and all(method=='POST' for method,_ in events)
+  receipt=json.loads(next((pathlib.Path(d)/'runs').glob('*.json')).read_text());assert receipt['status']=='claim_failed'
+finally:server.shutdown()
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+test('Docker查询返回他人容器时必须拒绝清理，不按列表结果盲删',()=>{
+ const script=`import importlib.util,json,types
+s=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+calls=[]
+def command(args,**kwargs):
+ calls.append(args)
+ if args[1]=='ps':return types.SimpleNamespace(stdout='1'*64)
+ if args[1]=='inspect':return types.SimpleNamespace(stdout=json.dumps([{'Id':'1'*64,'Name':'/zj-backup-proof-'+('a'*32)+'-fixture','Config':{'Labels':{'zenithjoy.backup-run':'b'*32,'zenithjoy.purpose':'isolated-backup-restore'}}}]))
+ raise AssertionError('foreign resource mutated')
+m.command=command
+try:m.cleanup_run('a'*32)
+except ValueError:pass
+else:raise AssertionError('foreign owner accepted')
+assert len(calls)==2
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });

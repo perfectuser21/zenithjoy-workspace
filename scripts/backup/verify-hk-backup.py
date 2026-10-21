@@ -56,9 +56,35 @@ def validate_source(item):
         raise ValueError('backup is stale or timestamp is in the future')
 
 
-def container_args(name):
+def validate_run_id(run_id):
+    if not re.fullmatch(r'[a-f0-9]{32}', run_id):
+        raise ValueError('invalid backup run identity')
+    return run_id
+
+
+def cleanup_run(run_id):
+    """只回收本次run且用途/原生容器ID/名称均核实的隔离容器。"""
+    validate_run_id(run_id)
+    result = command(['docker', 'ps', '-aq', '--no-trunc', '--filter',
+                      'label=zenithjoy.backup-run=' + run_id], capture_output=True, text=True, timeout=30)
+    for identity in result.stdout.split():
+        if not re.fullmatch(r'[a-f0-9]{64}', identity):
+            raise ValueError('invalid container identity')
+        item = json.loads(command(['docker', 'inspect', identity], capture_output=True, text=True, timeout=30).stdout)[0]
+        labels = item.get('Config', {}).get('Labels', {}) or {}
+        if (item.get('Id') != identity or labels.get('zenithjoy.backup-run') != run_id
+                or labels.get('zenithjoy.purpose') != 'isolated-backup-restore'
+                or not item.get('Name', '').startswith('/zj-backup-proof-' + run_id + '-')):
+            raise ValueError('container ownership mismatch; refusing cleanup')
+        command(['docker', 'stop', '--time', '10', identity], capture_output=True, timeout=30)
+        command(['docker', 'rm', '-v', identity], capture_output=True, timeout=30)
+
+
+def container_args(name, run_id=None):
+    run_id = validate_run_id(run_id or uuid.uuid4().hex)
     return ['docker', 'run', '-d', '--name', name, '--network', 'none',
             '--label', 'zenithjoy.purpose=isolated-backup-restore',
+            '--label', 'zenithjoy.backup-run=' + run_id,
             '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', IMAGE]
 
 
@@ -67,11 +93,12 @@ def validate_restored(counts, expected_data_objects):
         raise ValueError('restore contains missing tables or no actual rows')
 
 
-def verify_restore(dump):
-    name = 'zj-backup-proof-' + uuid.uuid4().hex[:16]
+def verify_restore(dump, run_id=None):
+    run_id = validate_run_id(run_id or uuid.uuid4().hex)
+    name = 'zj-backup-proof-' + run_id + '-' + uuid.uuid4().hex[:8]
     started = False
     try:
-        command(container_args(name), capture_output=True)
+        command(container_args(name, run_id), capture_output=True)
         started = True
         for _ in range(60):
             ready = subprocess.run(['docker', 'exec', name, 'pg_isready', '-U', 'postgres'], capture_output=True)
@@ -109,9 +136,11 @@ def verify_restore(dump):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--run-id', default=uuid.uuid4().hex)
     parser.add_argument('--host', default='hk-vps')
     parser.add_argument('--store', type=Path, required=True)
     args = parser.parse_args()
+    run_id = validate_run_id(args.run_id)
     if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.@-]*', args.host):
         parser.error('invalid SSH host')
     os.umask(0o077)
@@ -125,29 +154,32 @@ def main():
         raise ValueError('missing or duplicate database backups')
     for item in items:
         validate_source(item)
-    command(['docker', 'pull', IMAGE], capture_output=True)
-    proofs = []
-    for item in items:
-        target = store / (item['sha256'] + '.dump')
-        part = store / (uuid.uuid4().hex + '.partial')
-        try:
-            command(['scp', '-q', '-o', 'BatchMode=yes', args.host + ':' + REMOTE_ROOT + '/' + item['name'], str(part)])
-            digest = file_digest(part)
-            if part.stat().st_size != item['size'] or digest != item['sha256']:
-                raise ValueError('offsite bytes differ from source backup')
-            if target.exists():
-                if file_digest(target) != digest:
-                    raise ValueError('existing immutable offsite backup is corrupt')
-            else:
-                part.chmod(0o600)
-                os.replace(part, target)
-            proof = {'source': item, 'offsite_path': str(target), 'verified_at': time.time(),
-                     'restore': verify_restore(target), 'status': 'verified'}
-            proof_path = store / (item['sha256'] + '.proof.json')
-            proof_path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n')
-            proofs.append({'database': item['database'], 'sha256': digest, 'proof': str(proof_path)})
-        finally:
-            part.unlink(missing_ok=True)
+    try:
+        command(['docker', 'pull', IMAGE], capture_output=True)
+        proofs = []
+        for item in items:
+            target = store / (item['sha256'] + '.dump')
+            part = store / (uuid.uuid4().hex + '.partial')
+            try:
+                command(['scp', '-q', '-o', 'BatchMode=yes', args.host + ':' + REMOTE_ROOT + '/' + item['name'], str(part)])
+                digest = file_digest(part)
+                if part.stat().st_size != item['size'] or digest != item['sha256']:
+                    raise ValueError('offsite bytes differ from source backup')
+                if target.exists():
+                    if file_digest(target) != digest:
+                        raise ValueError('existing immutable offsite backup is corrupt')
+                else:
+                    part.chmod(0o600)
+                    os.replace(part, target)
+                proof = {'source': item, 'offsite_path': str(target), 'verified_at': time.time(),
+                         'restore': verify_restore(target, run_id), 'status': 'verified'}
+                proof_path = store / (item['sha256'] + '.proof.json')
+                proof_path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n')
+                proofs.append({'database': item['database'], 'sha256': digest, 'proof': str(proof_path)})
+            finally:
+                part.unlink(missing_ok=True)
+    finally:
+        cleanup_run(run_id)
     print(json.dumps({'status': 'verified', 'backups': proofs}, ensure_ascii=False))
 
 
