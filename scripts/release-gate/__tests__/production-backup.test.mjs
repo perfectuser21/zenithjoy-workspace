@@ -18,3 +18,33 @@ test('恢复失败仍只清理本次容器及其匿名数据卷，不遗留生�
  const r=spawnSync('python3',['-c',script],{encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);
 });
+test('定时备份必须先认领任务，真实失败只记失败且保留回执',()=>{
+ const runner=fileURLToPath(new URL('../../backup/run-hk-backup.py',import.meta.url));
+ const script=`import importlib.util,tempfile,pathlib,json,threading
+from http.server import BaseHTTPRequestHandler,HTTPServer
+s=importlib.util.spec_from_file_location('runner',${JSON.stringify(runner)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+events=[]
+class Handler(BaseHTTPRequestHandler):
+ def log_message(self,*args):pass
+ def do_POST(self):
+  body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));events.append((self.path,body))
+  self.send_response(200);self.end_headers();self.wfile.write(json.dumps({'id':'fixture-task'} if self.path.endswith('/tasks') else {'ok':True}).encode())
+ def do_PATCH(self):self.do_POST()
+server=HTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
+try:
+ with tempfile.TemporaryDirectory() as d:
+  def fail():
+   assert events[-1][0].endswith('/claim'),'backup ran before claim'
+   raise RuntimeError('fixture restore failed')
+  try:m.run_recorded(pathlib.Path(d),'http://127.0.0.1:'+str(server.server_port),fail)
+  except RuntimeError:pass
+  else:raise AssertionError('failed restore accepted')
+  assert events[-1][1]['status']=='failed'
+  assert events[-1][1]['result']['actor']=='zenithjoy-backup-verifier'
+  receipts=list((pathlib.Path(d)/'runs').glob('*.json'));assert len(receipts)==1
+  assert json.loads(receipts[0].read_text())['status']=='failed'
+finally:server.shutdown()
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);
+});
