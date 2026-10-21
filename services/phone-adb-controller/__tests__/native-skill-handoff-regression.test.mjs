@@ -38,7 +38,7 @@ else if(command==='collect-comments'){
   handlers.state.currentActivity='collection';handlers.state.budgetDeadline=Date.now()+30000;
   const result=await invokeNativeActivity(()=>handlers.collection(),handlers.state);
   const calls=readFileSync(join(dir,'calls'),'utf8').trim().split('\n').map(JSON.parse);
-  const receipts=existsSync(join(dir,'native-operations'))?readdirSync(join(dir,'native-operations')).map(p=>JSON.parse(readFileSync(join(dir,'native-operations',p),'utf8'))):[];
+  const receipts=existsSync(join(dir,'native-operations'))?readdirSync(join(dir,'native-operations')).filter(p=>p.endsWith('.json')).map(p=>JSON.parse(readFileSync(join(dir,'native-operations',p),'utf8'))):[];
   return {result,actions,calls,receipts,state:handlers.state};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
@@ -46,8 +46,9 @@ else if(command==='collect-comments'){
 test('真实逐视频collection必须登记同run/activity的每次原生执行，不能绕过receipt',async()=>{
  const r=await runCase();assert.equal(r.result.videos_processed,2,'先证明真实原脚本已执行到完成，不能setup失败冒红');
  assert.equal(r.actions.length,2);
- for(const action of r.actions){assert.ok(action.receipt,'videoAction目前漏receipt');assert.equal(action.receipt.activity,'collection');assert.equal(action.receipt.runId,'run-red__a1');}
+ for(const action of r.actions){assert.ok(action.receipt,'videoAction目前漏receipt');assert.equal(action.receipt.activity,'collection');assert.equal(action.receipt.runId,'run-red__a1');assert.equal(action.result.executionStopped,false);}
  assert.equal(r.receipts.filter(x=>x.activity==='collection').length,2);
+ for(const receipt of r.receipts){assert.equal(receipt.execution_stopped,false);assert.equal(receipt.process_coverage,'observed_only');}
 });
 
 test('内层controller124折成业务code6后仍须粘滞unknown，禁止下一视频或Skill并发接管',async()=>{

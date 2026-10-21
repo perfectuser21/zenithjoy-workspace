@@ -4265,6 +4265,11 @@ run_bounded() {
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
     if (( waited >= limit )); then
+      # 固定来源调用方提供的每操作独享标记；只增加unknown，绝不签停止正证。
+      print -u2 -- 'NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN'
+      if [[ -n "${WFR_NATIVE_UNKNOWN_FILE:-}" ]]; then
+        ( umask 077; print -r -- 'controller_capture_timeout' >> "$WFR_NATIVE_UNKNOWN_FILE" ) || print -u2 -- "native unknown marker write failed"
+      fi
       kill_tree "$pid"
       wait "$pid" 2>/dev/null || true
       return 124

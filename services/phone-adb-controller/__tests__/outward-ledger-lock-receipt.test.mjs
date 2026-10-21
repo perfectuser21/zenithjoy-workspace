@@ -289,10 +289,11 @@ test("WAIT_MS 超过可配置上限 → 点击前就拒绝（tapped=no），绝�
 test("点击已发生、取证超时 → 退出码 3 + tapped=yes evidence=timeout，并已记入对外动作账", async () => {
   const ctx = setup();
   const eid = `${RUN}-07-publish`;
-  const t0 = Date.now();
+  const t0 = Date.now(), unknownFile = join(ctx.dir, 'native-inner.unknown');
   const r = await run(ctx, ["tap-evidence", "600", "2400", eid, "100", "--outward", "publish"], {
-    FAKE_HANG_AFTER_TAP: "1", DOUYIN_TAP_EVIDENCE_TIMEOUT_MS: "1500",
+    FAKE_HANG_AFTER_TAP: "1", DOUYIN_TAP_EVIDENCE_TIMEOUT_MS: "1500", WFR_NATIVE_UNKNOWN_FILE: unknownFile,
   });
+  assert.match(readFileSync(unknownFile, 'utf8'), /controller_capture_timeout/);
   assert.ok(Date.now() - t0 < 20000, "取证超时必须有界返回");
   assert.equal(r.code, 3, `out=${r.out} err=${r.err}`);
   const kv = parse(lineWith(r.out, "tap_evidence"));
@@ -377,4 +378,18 @@ test("同一 run 多次拿锁 → 回执事件追加，不覆盖前一次", asyn
   assert.equal(doc.events[0].seq, 1);
   assert.equal(doc.events[1].seq, 2);
   assert.match(doc.events[1].receipt, /idempotent=true/);
+});
+
+
+test('内层停止未知标记写失败仍执行原强停，stderr保留unknown且不重复点击', async () => {
+  const ctx = setup(), started = Date.now();
+  const r = await run(ctx, ['tap-evidence', '600', '2400', 'marker-failure-1', '100'], {
+    FAKE_HANG_AFTER_TAP: '1', DOUYIN_TAP_EVIDENCE_TIMEOUT_MS: '1500',
+    WFR_NATIVE_UNKNOWN_FILE: join(ctx.dir, 'missing-parent', 'native.unknown'),
+  }, {owner: null});
+  assert.equal(r.code, 3, r.err);
+  assert.match(r.err, /NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN/);
+  assert.match(r.err, /native unknown marker write failed/);
+  assert.ok(Date.now() - started < 20000, '写标记失败不可抢先return而遗留原bounded子进程');
+  assert.equal(taps(ctx).length, 1);
 });

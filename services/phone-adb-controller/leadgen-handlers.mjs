@@ -61,14 +61,16 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   };
   const nativeFailure=(error,command,args,opts)=>applyNativeFailure(error,command,args,opts,state);
   const bounded=async(command,args,opts={})=>{
+    const unknownFile=opts.receipt?join(env.WFR_RUN_DIR,'native-operations',opts.receipt.operationId+'.unknown'):null;
     if(opts.receipt)state.nativeStopProof=null;
     try {
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
-        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env}});
+        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
       recordDiagnostic(result.stderr||'');
       if(opts.receipt)state.nativeStopUnproven=true;
+      if(unknownFile&&existsSync(unknownFile)||/\bNATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN\b/.test(result.stderr||'')){const error=Error('NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN');error.executionStopped=false;throw error;}
       if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
       return result;
     } catch(error) {
@@ -77,10 +79,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     }
   };
   const checked=async(command,args,opts={})=>{const r=await bounded(command,args,opts);if(r.code!==0)throw nativeFailure(Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`),command,args,opts);return r.stdout;};
+  const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
   const phone=async(command,...args)=>{
     const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
     if(!locked&&!['lock-acquire','preflight'].includes(command))throw Error('设备操作未持本批锁');
-    const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
     if(locked&&!['lock-refresh','lock-release'].includes(command)){
       const held=await checked(ctl,['--profile',profile,'lock-refresh',run],{receipt:nativeReceipt()});
       if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
@@ -266,7 +268,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     }
     return bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
       v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
-      {maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),
+      {receipt:nativeReceipt(),maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),
         env:{...(mode==='qualification'&&(qualificationAttempts.get(v.video_id)||1)>1?{QUEUED_VIDEO_EVIDENCE_ATTEMPT:String(qualificationAttempts.get(v.video_id)-1)}:{}),...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget),QUEUED_RECIPIENT_COMPANY_BINDING_FILE:state.recipientCompanyBindingFile||'',QUEUED_RECIPIENT_COMPANY_BINDING_SHA:state.recipientCompanyBindingSha||''}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
   };
   const archiveQualification=v=>{
@@ -463,7 +465,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         if(partial)failures.push({video_id:v.video_id,code:7,reason:'采集在预算或停止边界结束，已保存核验评论，视频仍未采完',comments_saved:stored.comments});
         else if(quota){sampled++;}
         else {collected++;leased=leased.filter(p=>p.video_id!==v.video_id);}
-      }catch(error){failures.push({video_id:v.video_id,reason:error.message});}}
+      }catch(error){failures.push({video_id:v.video_id,reason:error.message});if(state.executionUnknown)break;}}
       if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
       return {sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
         identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},

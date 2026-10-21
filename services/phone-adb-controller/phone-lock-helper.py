@@ -62,10 +62,23 @@ def recording_unknown():
     print('RECORD_CAPTURE_EXIT_UNVERIFIED guarded recording canceled or guard readback failed; managed recorder requires independent readback; owner lock retained', file=sys.stderr, flush=True)
 
 
+def mark_native_unknown(reason):
+    path = os.environ.get('WFR_NATIVE_UNKNOWN_FILE')
+    print('NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN', file=sys.stderr, flush=True)
+    if path:
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, 'w') as target:
+                target.write(reason + '\n')
+        except OSError:
+            print('native unknown marker write failed', file=sys.stderr, flush=True)
+
+
 def bounded_command(argv, fd, owner_path=None, expected_owner=None):
     try:
         return _bounded_command(argv, fd, owner_path, expected_owner)
     except Exception:
+        mark_native_unknown('guard_exception')
         if is_recording_command(argv):
             recording_unknown()
         raise
@@ -97,6 +110,7 @@ def _bounded_command(argv, fd, owner_path=None, expected_owner=None):
             if not canceled[0]:
                 sys.exit(code if code >= 0 else 128 - code)
         break
+    mark_native_unknown('guard_canceled_or_timeout')
     if is_recording_command(argv):
         recording_unknown()
     # 不先reap根进程，避免PID被复用；终止整个原进程组后才回收并放开guard。
