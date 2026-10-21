@@ -162,7 +162,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const sources=keywordResult.result;
     if(keywordResult.config)appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(keywordResult.config)+'\n',{mode:0o600});
     discovery=createDiscoveryHandlers({phone,execute:bounded,queue,profile,run,root,
-      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,budgetDeadline:()=>state.budgetDeadline||0});
+      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,sourceCommit,runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,budgetDeadline:()=>state.budgetDeadline||0});
     return discovery;
   };
   const intake=async()=>{

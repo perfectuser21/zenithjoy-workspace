@@ -1,19 +1,53 @@
 // 101只负责搜索筛选后的真实视频链接；历史状态和资格判断交102。
 import {join} from 'node:path';
-import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync} from 'node:fs';
+import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,lstatSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 const normalized=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
 const fieldsOf=s=>Object.fromEntries(String(s??'').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1).trim()];}));
 function cardsOf(s,ctx){return String(s??'').split('\n').flatMap(l=>{const f=l.replace(/\r$/,'').split('\t');return /^\d+$/.test(f[0]??'')&&/^\d+$/.test(f[1]??'')?[{...ctx,x:Number(f[0]),y:Number(f[1]),duration:f[2]??'',title:f[3]??'',author:f[4]??''}]:[];});}
 const identity=c=>JSON.stringify([normalized(c.title),normalized(c.author),c.duration]);
 const fingerprint=cards=>JSON.stringify(cards.map(c=>[identity(c),c.x,c.y]));
+const filterKeys=['sort','time_layer','duration','scope','location'];
+const filterHash=raw=>createHash('sha256').update(raw).digest('hex');
+function effectiveFilters(raw,requested){
+ if(typeof raw!=='string'||!raw.length||Buffer.byteLength(raw)>65536)throw Error('DISCOVERY_FILTER_RECEIPT_MISSING');
+ const effective={};
+ for(const line of raw.split(/\r?\n/)){
+  const i=line.indexOf('=');if(i<0)continue;
+  const key=line.slice(0,i);if(!filterKeys.includes(key)&&key!=='location_requested')continue;
+  if(Object.hasOwn(effective,key))throw Error('DISCOVERY_FILTER_DUPLICATE_FIELD');
+  effective[key]=line.slice(i+1).trim();
+ }
+ if(filterKeys.some(key=>!Object.hasOwn(effective,key)))throw Error('DISCOVERY_FILTER_RECEIPT_MISSING');
+ const expected={...requested,duration:'unlimited',scope:'unlimited'};
+ if(filterKeys.some(key=>effective[key]!==expected[key])||Object.hasOwn(effective,'location_requested')&&effective.location_requested!==requested.location)throw Error('DISCOVERY_FILTER_MISMATCH');
+ return Object.fromEntries(filterKeys.map(key=>[key,effective[key]]));
+}
+export function verifyDiscoveryFilterEvidence({runDir,runId,run,profile,sourceCommit,requested,invocations}){
+ try{
+  if(!/^[a-f0-9]{40}$/.test(sourceCommit||'')||!Number.isSafeInteger(invocations)||invocations<1||!/^[-A-Za-z0-9_]+$/.test(runId||''))return false;
+  const path=join(runDir,runId+'-filter-readback.json'),stat=lstatSync(path);
+  if(stat.isSymbolicLink()||!stat.isFile()||(stat.mode&0o077)||stat.size>10000000)return false;
+  const proof=JSON.parse(readFileSync(path,'utf8'));
+  if(proof.version!==1||proof.run_id!==runId||proof.run!==run||proof.profile!==profile||proof.source_commit!==sourceCommit||JSON.stringify(proof.requested)!==JSON.stringify(requested)||!Array.isArray(proof.receipts)||proof.receipts.length!==invocations)return false;
+  return proof.receipts.every((r,i)=>r.invocation===i+1&&r.verified===true&&typeof r.evidence_id==='string'&&r.evidence_id.startsWith(run+'-')&&r.raw_sha256===filterHash(r.raw_stdout)&&JSON.stringify(effectiveFilters(r.raw_stdout,requested))===JSON.stringify(r.effective));
+ }catch{return false;}
+}
 function validVideoUrl(value,id){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&((u.hostname==='v.douyin.com'&&/^\/[A-Za-z0-9_-]+\/?$/.test(u.pathname))||(['www.douyin.com','douyin.com','www.iesdouyin.com','iesdouyin.com'].includes(u.hostname)&&new RegExp('/video/'+id+'(?:/|$)').test(u.pathname)));}catch{return false;}}
-export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0}){
+export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=run,sourceCommit=null,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0}){
  if(!['keyword','benchmark'].includes(sourceKind))throw Error('发现来源类型无效');
  if(!Array.isArray(sources)||!sources.length)throw Error('发现来源为空');
  if(!Number.isSafeInteger(limit)||limit<0||limit>1000)throw Error('发现成功目标上限无效');
  for(const [k,fn] of Object.entries({phone,execute,queue}))if(typeof fn!=='function')throw Error('缺少执行依赖：'+k);
  const sort=env.LEADGEN_SORT||'latest',time=env.LEADGEN_TIME_LAYER||'six_months',maxScreens=Number(env.LEADGEN_MAX_SCREENS||100);
- if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
+ if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!['same_city','unlimited'].includes(location)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
+ const requested={sort,time_layer:time,location};
+ const filterProof={version:1,run_id:runId,run,profile,source_commit:sourceCommit,requested,receipts:[]};
+ const saveFilters=()=>{
+  if(!env.WFR_RUN_DIR||!/^[-A-Za-z0-9_]+$/.test(runId||''))throw Error('DISCOVERY_FILTER_IDENTITY_MISSING');
+  mkdirSync(env.WFR_RUN_DIR,{recursive:true});const path=join(env.WFR_RUN_DIR,runId+'-filter-readback.json');
+  writeFileSync(path+'.tmp',JSON.stringify(filterProof),{mode:0o600});renameSync(path+'.tmp',path);
+ };
  const contexts=sources.slice(0,2).map((s,i)=>{const value=typeof s==='string'?s:s?.source??s?.keyword??s?.url;if(typeof value!=='string'||!value.trim())throw Error('发现来源格式无效');return {source:value,keyword:sourceKind==='keyword'?value:'',sourceKind,sourceIndex:i,sourceEncoded:encodeURIComponent(value)};});
  const state={sourceKind,sources:contexts,source_receipts:[],persisted:[],captures:[],failures:[],known_gaps:[],relocation_reveals:[],identity_enrichments:[],counts:{sources:contexts.length,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0,relocation_skipped:0},pending_capture:null,source_complete:false,write_complete:false};
  const request={keywords:contexts.map(c=>c.source),source_kind:sourceKind,sort,time_layer:time,location,target_count:limit,max_duration_s:Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||2400)};
@@ -24,7 +58,16 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
  const boundary=()=>{if(env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))throw Error('stop_requested');const deadline=budgetDeadline();if(deadline&&Date.now()>=deadline)throw Error('budget_exhausted');const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||1800);if(start>0&&Date.now()/1000-start>=max)throw Error('budget_exhausted');};
  const pause=async n=>{boundary();const r=await execute('/bin/sleep',[String(n)],{maxDurationS:n+2});if(r?.code!==0)throw Error('发现页面等待失败');};
  async function readPage(ctx,eid){boundary();const output=await phone('search-video-cards',eid),f=fieldsOf(output);if(f.video_tab!=='1'||!f.evidence)throw Error('当前页面未实际核验视频tab及UI树');let kw;try{kw=await phone('search-kw-matches',ctx.source,f.evidence);}catch(e){throw Error('搜索框回读与本来源关键词不一致: '+e.message);}if(!/^kw_matches=1$/m.test(kw))throw Error('搜索框回读与本来源关键词不一致');return {cards:cardsOf(output,ctx),loading:f.loading==='1',end:f.end_of_results==='1'||f.empty_results==='true',evidence:f.evidence};}
- async function filters(ctx,eid){await phone('search-video-tab',eid+'-vtab');await phone('search-time-layer',time,eid+'-filter',sort,'unlimited','unlimited',location);await pause(1);}
+ async function filters(ctx,eid){
+  await phone('search-video-tab',eid+'-vtab');
+  const receipt={invocation:filterProof.receipts.length+1,evidence_id:eid+'-filter',source_index:ctx.sourceIndex+1,observed_at:new Date().toISOString(),raw_stdout:null,verified:false};
+  filterProof.receipts.push(receipt);saveFilters();
+  try{
+   receipt.raw_stdout=await phone('search-time-layer',time,eid+'-filter',sort,'unlimited','unlimited',location);
+   receipt.raw_sha256=filterHash(receipt.raw_stdout);receipt.effective=effectiveFilters(receipt.raw_stdout,requested);receipt.verified=true;
+  }catch(error){receipt.error=error.message;throw error;}finally{saveFilters();}
+  await pause(1);
+ }
  async function setup(ctx){
   boundary();const eid=run+'-src'+(ctx.sourceIndex+1);
   if(sourceKind==='benchmark'){state.known_gaps.push({source:ctx.source,kind:'benchmark_identity_unavailable',reason:'对标主页无稳定标题作者'});throw Error('对标主页无稳定标题作者，拒绝沿用坐标取链');}
@@ -34,7 +77,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
   mkdirSync(env.WFR_RUN_DIR,{recursive:true});writeFileSync(join(env.WFR_RUN_DIR,run+'-source-'+(ctx.sourceIndex+1)+'-readback.json'),JSON.stringify(receipt,null,2),{mode:0o600});
   state.source_receipts.push(receipt);state.counts.sources_succeeded++;return page;
  }
- const result=()=>({counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],pending_capture:state.pending_capture,failures:[...state.failures],known_gaps:[...state.known_gaps],relocation_reveals:[...state.relocation_reveals],identity_enrichments:[...state.identity_enrichments],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||state.known_gaps.some(g=>g.kind==='candidate_viewport_unrestored')||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
+ const result=()=>({filter_invocations:filterProof.receipts.length,counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],pending_capture:state.pending_capture,failures:[...state.failures],known_gaps:[...state.known_gaps],relocation_reveals:[...state.relocation_reveals],identity_enrichments:[...state.identity_enrichments],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||state.known_gaps.some(g=>g.kind==='candidate_viewport_unrestored')||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
  async function source(){
   if(!state.source_complete){try{firstPage=await setup(contexts[0]);state.source_complete=true;}catch(e){state.counts.source_failed++;failure(contexts[0],'source_identity_unconfirmed',e);throw e;}}
   return {counts:{...state.counts},source_completed:1,sources_succeeded:state.counts.sources_succeeded,sources:[...state.source_receipts],candidates:firstPage.cards.length};
