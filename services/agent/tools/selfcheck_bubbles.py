@@ -257,16 +257,12 @@ def find_item_with_recovery(
     return None, "not_found"
 
 
-def classify_no_window(process_running: bool, login_required=False, privacy_locked=False) -> tuple:
+def classify_no_window(process_running: bool) -> tuple:
     """重试耗尽仍找不到 mmui 主窗口时，把「微信没跑」和「UIA 死区」分开报。
 
     2026-07-06 实证：rog UIA 死区 ~40h（微信启动时 SPI 标志未置位→树不构建），
     期间 gate 笼统报「微信没跑或没登录」误导运营（微信明明登录着）。
     """
-    if login_required:
-        return ("LOGIN_REQUIRED", "微信显示扫码登录页，需批准测试账号完成登录后重跑；未发送测试消息")
-    if privacy_locked:
-        return ("PRIVACY_LOCKED", "微信显示隐私锁页，解锁后重跑；未发送测试消息")
     if not process_running:
         return ("NO_PROCESS", "Weixin.exe 未运行 - 请在 runner 机启动并登录微信")
     return (
@@ -361,11 +357,7 @@ def _run_gate(result, cleanup_state) -> int:
                     print(f"[bubble-gate] window found after retry {i + 1}")
                     break
         if mw is None:
-            code, msg = classify_no_window(
-                _weixin_process_running(),
-                login_required=find_weixin.login_window_present(),
-                privacy_locked=find_weixin.is_privacy_locked(),
-            )
+            code, msg = classify_no_window(_weixin_process_running())
             result["err"] = f"no wechat window (mmui) [{code}] {msg}"
             _write(result)
             return 1
