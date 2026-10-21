@@ -1,4 +1,5 @@
 // 候选只写版本目录；不改正式入口、launchd、手机、账号或队列。
+import {deflateSync} from 'node:zlib';
 import {execFileSync} from 'node:child_process';
 import {mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
@@ -8,6 +9,24 @@ import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-so
 import {observeDeployment} from './deployment-release.mjs';
 import {commanderMap} from './deployment-targets.mjs';
 import {buildPublishRelease} from './deployment-publish-release.mjs';
+const remoteCode=readFileSync(new URL('./deployment-candidate-remote.py',import.meta.url),'utf8');
+const sshOptions=['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none'];
+function ssh(host,phase,command,options){
+ try{return execFileSync('ssh',[...sshOptions,host,command],options);}
+ catch(error){throw Object.assign(Error(`候选 SSH ${host}/${phase}: ${error.code||error.status||'unknown'}`),{cause:error});}
+}
+function remoteCommand(mode,spec){
+ const payload=deflateSync(Buffer.from(JSON.stringify(spec))).toString('base64');
+ const code=Buffer.from(remoteCode).toString('base64');
+ return `python3 -I -c 'import base64;exec(base64.b64decode("${code}"))' ${mode} ${payload}`;
+}
+function presence(host,spec){
+ const value=JSON.parse(ssh(host,'presence',remoteCommand('presence',spec),{encoding:'utf8',timeout:30000,maxBuffer:1024*1024}));
+ need(value?.protocol==='candidate_presence_v1'&&['present','absent'].includes(value.state),'候选存在状态未知');
+ need(digest(Object.keys(value).sort())===digest((value.state==='present'?['protocol','state','identity']:['protocol','state']).sort()),'候选存在协议异常');
+ if(value.state==='present')need(digest(value.identity)===digest(spec.identity),'候选身份不符');
+ return value.state;
+}
 const prefix='services/phone-adb-controller/';
 const need=(v,m)=>{if(!v)throw Error('候选准备: '+m);};
 export function candidateRelativeRoot(sha){
@@ -51,16 +70,16 @@ export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}
    const identity={source_commit:sha,release_id:release.id,manifest_sha256:release.manifest_sha256};
    writeFileSync(join(temp,host,'candidate-identity.json'),JSON.stringify(identity),{mode:0o600});
    writeFileSync(join(temp,host,'run.sh'),`#!/bin/bash\nset -euo pipefail\nunset WF_RELEASE_ID WF_DEPLOYMENT_MANIFEST\nexport WFR_HOME="$HOME/.local/share/zenithjoy/phone-candidate-runs/${sha}"\nexec zsh "$(cd "$(dirname "$0")" && pwd)/runtime/leadgen-run.sh" "$@"\n`,{mode:0o755});
-   const archive=execFileSync('tar',['-C',join(temp,host),'-cf','-','runtime','candidate-identity.json','run.sh'],{maxBuffer:128*1024*1024});
-   // 路径只由SHA构造；已存在版本不覆盖，后续完整字节采集验证再使用。
-   const install=`set -eu; base="$HOME/.local/share/zenithjoy/phone-candidates"; mkdir -p "$base"; test ! -L "$base"; test ! -L "$base/${sha}"; test ! -L "$base/${sha}/runtime"; if [ -e "$base/${sha}" ]; then cat >/dev/null; else stage=$(mktemp -d "$base/.${sha}.XXXXXX"); trap 'rm -rf "$stage"' EXIT; tar -xf - -C "$stage"; mv "$stage" "$base/${sha}"; fi`;
-   execFileSync('ssh',[host,install],{input:archive,stdio:['pipe','pipe','pipe'],timeout:120000});
-   const installedIdentity=JSON.parse(execFileSync('ssh',[host,`cat "$HOME/.local/share/zenithjoy/phone-candidates/${sha}/candidate-identity.json"`],{encoding:'utf8',timeout:30000}));
-   need(digest(installedIdentity)===digest(identity),'同SHA目录已绑定不同release；保留原候选，拒绝覆盖其Commander身份');
+   const spec={sha,identity,files:manifest.files,wrapper_sha256:digest(readFileSync(join(temp,host,'run.sh')))};
+   if(presence(host,spec)==='absent'){
+    const archive=execFileSync('tar',['-C',join(temp,host),'-cf','-','runtime','candidate-identity.json','run.sh'],{maxBuffer:128*1024*1024});
+    ssh(host,'install',remoteCommand('install',spec),{input:archive,stdio:['pipe','pipe','pipe'],timeout:120000});
+    need(presence(host,spec)==='present','安装后候选仍不存在');
+   }
    const observed=await observeDeployment({host,manifest,releaseId:release.id,environment:`staging:${sha}`,collector:'phone-adb-deployer',attemptKey:`${attemptKey}:candidate`,brainUrl,
     stateDir:join(homedir(),'.config/zenithjoy/candidate-observations',sha,host),request,
-    collect:async()=>JSON.parse(execFileSync('ssh',[host,`node "$HOME/${relative}/deployment-manifest.mjs" collect "$HOME/${relative}" -`],{input:JSON.stringify(manifest),encoding:'utf8',timeout:60000}))});
-   execFileSync('ssh',[host,`umask 077; cat > "$HOME/${relative}/deployment-manifest.json.tmp"; mv "$HOME/${relative}/deployment-manifest.json.tmp" "$HOME/${relative}/deployment-manifest.json"`],{input:JSON.stringify(observed),timeout:30000});
+    collect:async()=>JSON.parse(ssh(host,'collect',`node "$HOME/${relative}/deployment-manifest.mjs" collect "$HOME/${relative}" -`,{input:JSON.stringify(manifest),encoding:'utf8',timeout:60000}))});
+   ssh(host,'manifest',`umask 077; cat > "$HOME/${relative}/deployment-manifest.json.tmp"; mv "$HOME/${relative}/deployment-manifest.json.tmp" "$HOME/${relative}/deployment-manifest.json"`,{input:JSON.stringify(observed),timeout:30000});
    manifests[host]=observed;
   }
   const result={source_commit:sha,environment:`staging:${sha}`,release_ids:plan.release_ids,observation_ids:Object.fromEntries(Object.entries(manifests).map(([h,m])=>[h,m.observation_id])),commander_runtime_snapshot_sha256:commanderSnapshot,

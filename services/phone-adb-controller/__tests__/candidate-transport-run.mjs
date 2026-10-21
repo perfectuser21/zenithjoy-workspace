@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+import {readFileSync,appendFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {stageCandidate} from '../deployment-candidate.mjs';
 import {digest} from '../runtime-definition.mjs';
