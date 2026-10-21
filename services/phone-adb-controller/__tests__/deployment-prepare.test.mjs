@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {prepareAndDeploy} from '../deployment-prepare.mjs';
 import {digest} from '../runtime-definition.mjs';
+import {fixtureSkill,fixtureSkillTasks} from './fixtures/full-skill-acceptance.mjs';
 import {normalizedDescriptions} from './fixtures/normalized-description-bindings.mjs';
 const repo='perfectuser21/zenithjoy-workspace';
 const uuid=n=>`${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
@@ -24,7 +25,7 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
   writeFileSync(join(root,'.gitignore'),'.skills-source/\n'+path+'\n');
  }
  // 假部署入口仅记录显式参数；不调用任何机器或设备。
- writeFileSync(join(dir,'deploy.sh'),`#!/bin/bash\nnode -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({ids:JSON.parse(process.env.WF_RELEASE_IDS),plan:JSON.parse(fs.readFileSync(process.env.WF_DEPLOY_PLAN_FILE)),map:JSON.parse(fs.readFileSync(process.env.WF_COMMANDER_RELEASES_FILE)),collector:process.env.WF_DEPLOY_COLLECTOR,environment:process.env.WF_DEPLOY_ENVIRONMENT,attempt:process.env.WF_DEPLOY_ATTEMPT_KEY,token_present:process.env.BRAIN_INTERNAL_TOKEN==="fixture-private-token"}))' '${marker}'\n`);
+ writeFileSync(join(dir,'deploy.sh'),`#!/bin/bash\nnode -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({ids:JSON.parse(process.env.WF_RELEASE_IDS),plan:JSON.parse(fs.readFileSync(process.env.WF_DEPLOY_PLAN_FILE)),map:JSON.parse(fs.readFileSync(process.env.WF_COMMANDER_RELEASES_FILE)),collector:process.env.WF_DEPLOY_COLLECTOR,environment:process.env.WF_DEPLOY_ENVIRONMENT,attempt:process.env.WF_DEPLOY_ATTEMPT_KEY,acceptanceTasks:JSON.parse(process.env.WF_BUSINESS_ACCEPTANCE_TASK_IDS||\"{}\"),token_present:process.env.BRAIN_INTERNAL_TOKEN==="fixture-private-token"}))' '${marker}'\n`);
  if(protocol)writeFileSync(join(dir,'deployment-protocol.json'),JSON.stringify({protocol:'phone-package-transaction-v1'}));
  if(recovery){
   // 测试仅记录被准入的固定恢复进程参数；未知事务由正式backend核验而非此fixture证明。
@@ -32,6 +33,7 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
   writeFileSync(join(dir,'deployment-backend.mjs'),`import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(marker)},JSON.stringify({argv:process.argv.slice(2),token_present:process.env.BRAIN_INTERNAL_TOKEN==='fixture-private-token'}));`);
  }
 
+ for(const n of [101,102,103,104]){const p=join(dir,`skills/douyin-leadgen-${n}/SKILL.md`);mkdirSync(join(p,'..'),{recursive:true});writeFileSync(p,fixtureSkill(n));}
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();git('init','-q','-b','cp-fixture');git('config','core.hooksPath','/dev/null');git('add','.');git('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture');
  const sha=git('rev-parse','HEAD');git('remote','add','origin',`https://github.com/${repo}.git`);git('update-ref','refs/remotes/origin/main',sha);
  const make=(id,payload,extra)=>({id,...extra,source_repo:repo,source_path:'product-map/contracts/phone.yaml',source_commit:sha,payload,payload_sha256:digest({source:{repo,path:'product-map/contracts/phone.yaml',commit:sha},payload})});
@@ -58,10 +60,12 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
   releases.set(id,release);
   return [run_id,{binding:{id:`binding-${i}`,run_id,release_id:id,observation_id:`observation-${target}`,workflow_id:w.workflow_id,workflow_definition_version_id:w.id,snapshot_sha256:w.payload_sha256,runtime_snapshot_sha256:'e'.repeat(64)},release,workflow:w}];
  }));
+ const acceptanceTaskIds={},acceptanceTasks=new Map();
+ for(const [runId,proof]of proofs){const i=Number(runId.split('-')[1]);if(i>3)continue;const taskId=`aaaaaaaa-aaaa-4aaa-8aaa-${String(i+1).padStart(12,'0')}`;acceptanceTaskIds[runId]=taskId;for(const task of fixtureSkillTasks({n:101+i,taskId,proof,sha}))acceptanceTasks.set(task.id,task);}
  const server=createServer(async(req,res)=>{
   assert.equal(req.headers.authorization,'Bearer fixture-private-token');let body='';for await(const part of req)body+=part;requests.push({method:req.method,path:req.url,environment:body?JSON.parse(body).environment:undefined});
   if(req.method==='GET'&&req.url.startsWith('/api/brain/tasks/')){
-   const run_id=req.url.split('/').at(-1),proof=proofs.get(run_id),b=proof.binding;
+   const run_id=req.url.split('/').at(-1);if(acceptanceTasks.has(run_id)){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(acceptanceTasks.get(run_id)));return;}const proof=proofs.get(run_id),b=proof.binding;
    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({id:run_id,status:'completed',result:{workflow_control:{phase:'final',envelope:{definition:b},verification:{task_id:run_id,run_id,definition_sha256:b.snapshot_sha256,verdict:'PASS',assertions:[{name:'cleanup',pass:true}],evidence:['independent-readback']}}}}));return;
   }
   if(req.method==='GET'&&req.url.startsWith('/api/brain/runs/')){
@@ -83,12 +87,13 @@ async function fixture(t,{migrated=false,protocol=true,recovery=false}={}){
   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({release}));
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  if(migrated)rmSync(join(root,path));
- return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,mode:'promote',businessRunIds:[...proofs.keys()],setMode:value=>mode=value};
+ return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,mode:'promote',acceptanceTaskIds,businessRunIds:[...proofs.keys()],setMode:value=>mode=value};
 }
 test('真实normalized描述保留unknown，Git+HTTP两release回读后才部署固定组件',async t=>{
  const f=await fixture(t);await prepareAndDeploy(f);const actual=JSON.parse(readFileSync(f.marker));
  assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.deepEqual(Object.keys(actual.ids).sort(),['mmv','xian-m4']);
  assert.equal(actual.plan.releases.mmv.payload.workflows.length,7);assert.equal(actual.plan.releases['xian-m4'].payload.workflows.length,4);assert.deepEqual(actual.map,actual.plan.commander_releases);assert.deepEqual(Object.keys(actual.map),[actual.ids.mmv]);assert.equal(Object.keys(actual.map[actual.ids.mmv].workflows).length,7);
+ assert.deepEqual(actual.acceptanceTasks,f.acceptanceTaskIds);
  assert.equal(f.requests.filter(r=>r.method==='POST').length,2);
  assert.equal(f.requests.filter(r=>r.path.endsWith('/reconciliation')).length,6);
 });
@@ -128,4 +133,18 @@ test('无Pilot包不能被恢复例外用于promote，恢复也必须显式原�
  await assert.rejects(prepareAndDeploy({...f,mode:'promote'}));
  await assert.rejects(prepareAndDeploy({...f,mode:'recover'}),/恢复必须指定原始事务ID/);
  assert.equal(f.requests.length,0);assert.equal(existsSync(f.marker),false);
+});
+
+test('旧native全绿但缺独立报告，在任何production POST和子进程前拒绝',async t=>{const f=await fixture(t);delete f.acceptanceTaskIds;await assert.rejects(prepareAndDeploy(f),/独立Skill/);assert.equal(f.requests.some(r=>r.method==='POST'),false);assert.equal(existsSync(f.marker),false);});
+
+test('部署CLI从真实controller cwd读取候选固定Skill，二次独立验收缺映射仍拒绝',async t=>{
+ const f=await fixture(t);await prepareAndDeploy(f);
+ const {plan,map}=JSON.parse(readFileSync(f.marker)),planFile=join(f.root,'plan.json'),mapFile=join(f.root,'map.json');
+ writeFileSync(planFile,JSON.stringify(plan));writeFileSync(mapFile,JSON.stringify(map));
+ const run=tasks=>new Promise((resolve,reject)=>{
+  const child=spawn(process.execPath,[new URL('../deployment-targets.mjs',import.meta.url).pathname,planFile,f.sha],{cwd:join(f.root,'services/phone-adb-controller'),env:{...process.env,WF_BUSINESS_RUN_IDS:JSON.stringify(f.businessRunIds),WF_BUSINESS_ACCEPTANCE_TASK_IDS:JSON.stringify(tasks),WF_COMMANDER_RELEASES_FILE:mapFile,BRAIN_URL:f.brainUrl,BRAIN_INTERNAL_TOKEN:'fixture-private-token'},stdio:['ignore','pipe','pipe']});
+  let out='';child.stdout.on('data',c=>out+=c);child.stderr.on('data',c=>out+=c);child.on('error',reject);child.on('close',status=>resolve({status,out}));
+ });
+ const accepted=await run(f.acceptanceTaskIds);assert.equal(accepted.status,0,accepted.out);
+ const rejected=await run({});assert.notEqual(rejected.status,0);assert.match(rejected.out,/独立Skill/);
 });

@@ -25,7 +25,7 @@ function verifyBackendSource(root,sha){
  // 包含传递import、动态Python采集器与实际子进程；必须在guard/SSH之前核验。
  for(const file of ['deployment-backend.mjs','deployment-drift.mjs','deployment-protocol.mjs','deployment-transport.mjs',
   'deployment-coordinator.mjs','deployment-write-set.mjs','deployment-unified-observe.mjs','deployment-fixed-source.mjs',
-  'deployment-preflight.mjs','deployment-targets.mjs','deployment-release.mjs','deployment-business-admission.mjs',
+  'deployment-preflight.mjs','deployment-targets.mjs','deployment-release.mjs','deployment-business-admission.mjs','deployment-skill-acceptance.mjs',
   'company-config-readiness.mjs','company-config-lib.js','line-routes.js','runtime-definition.mjs','runtime-host.mjs',
   'runtime-release.mjs','runtime-outbox.mjs','deployment-guard.py','deployment-installed.py','commander/wf-v2-io.py',
   'drift-check.sh','deploy.sh'])ownSource(root,sha,file);
