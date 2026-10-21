@@ -29,16 +29,20 @@ try {
                 Start-Sleep -Milliseconds 100
             }
             $identities = Get-Content -LiteralPath $proof -Raw | ConvertFrom-Json
-            if ($method -eq 'Reap') { $group.Reap() } else { $group.Dispose() }
-            foreach ($identity in $identities) {
-                $deadline = (Get-Date).AddSeconds(5)
-                do {
-                    $live = Get-Process -Id $identity.pid -ErrorAction SilentlyContinue
-                    if (-not $live -or $live.StartTime.ToUniversalTime().Ticks -ne $identity.start_ticks) { break }
-                    Start-Sleep -Milliseconds 50
-                } while ((Get-Date) -lt $deadline)
-                if ($live -and $live.StartTime.ToUniversalTime().Ticks -eq $identity.start_ticks) { throw "process survived $method" }
-            }
+            # Capture handles before termination. Get-Process can return an exiting
+            # process whose StartTime is already unavailable; PID polling races exit.
+            $processes = @($identities | ForEach-Object {
+                $process = Get-Process -Id $_.pid -ErrorAction Stop
+                $null = $process.Handle
+                if ($process.StartTime.ToUniversalTime().Ticks -ne $_.start_ticks) { throw 'fixture process identity changed' }
+                $process
+            })
+            try {
+                if ($method -eq 'Reap') { $group.Reap() } else { $group.Dispose() }
+                foreach ($process in $processes) {
+                    if (-not $process.WaitForExit(5000)) { throw "process survived $method" }
+                }
+            } finally { $processes | ForEach-Object { $_.Dispose() } }
             Write-Output "PASS ${method}: worker and descendant reaped"
         } finally {
             $group.Dispose()

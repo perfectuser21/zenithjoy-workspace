@@ -93,7 +93,7 @@ KW_OUT=$("$NODE_EXE" "$KW_SCRIPT" "$SMOKE_KW" 2>&1) || KW_CODE=$?
 printf '%s\n' "$KW_OUT" | grep -v '^{' | head -20 || true
 KW_JSON=$(printf '%s\n' "$KW_OUT" | grep '^{' | tail -1 || true)
 [ -n "$KW_JSON" ] || fail "keyword-search 无 JSON 输出（分级=$(classify_node_failure "$KW_OUT")）— 完整输出: $KW_OUT"
-[ "$KW_CODE" -eq 0 ] || fail "keyword-search exit=$KW_CODE（分级=$(classify_node_failure "$KW_OUT")）"
+[ "$KW_CODE" -eq 0 ] || fail "keyword-search exit=${KW_CODE}（分级=$(classify_node_failure "$KW_OUT")）"
 
 KW_OK=$(node_parse "$KW_JSON" "String(d.ok)")
 [ "$KW_OK" = "true" ] || {
@@ -120,7 +120,7 @@ printf '%s\n' "$CM_OUT" | grep -v '^{' | head -20 || true
 CM_JSON=$(printf '%s\n' "$CM_OUT" | grep '^{' | tail -1 || true)
 [ -n "$CM_JSON" ] || fail "crawl-comments 无 JSON 输出（分级=$(classify_node_failure "$CM_OUT")）— 完整输出: $CM_OUT"
 
-[ "$CM_CODE" -eq 0 ] || fail "crawl-comments exit=$CM_CODE（分级=$(classify_node_failure "$CM_OUT")）"
+[ "$CM_CODE" -eq 0 ] || fail "crawl-comments exit=${CM_CODE}（分级=$(classify_node_failure "$CM_OUT")）"
 CM_OK=$(node_parse "$CM_JSON" "String(d.ok)")
 [ "$CM_OK" = "true" ] || {
   ERR=$(node_parse "$CM_JSON" "d.error||'unknown'")
