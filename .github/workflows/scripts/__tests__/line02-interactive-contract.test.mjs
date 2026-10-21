@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import YAML from 'yaml';
+const read = path => readFileSync(path,'utf8');
+test('nightly抖音在ROG串行运行同SHA交互候选，不选择latestinstalled',()=>{
+ const workflow=YAML.parse(read('.github/workflows/nightly-real-machine-staging.yml'));
+ const job=workflow.jobs['douyin-read'];
+ assert.deepEqual(job['runs-on'],['self-hosted','wechat-capable']);
+ assert.deepEqual(job.needs,['wechat-bubble']);
+ assert.equal(job.concurrency.group,'zj-rog-desktop');
+ assert.equal(job.concurrency['cancel-in-progress'],false);
+ const checkout=job.steps.find(s=>s.uses==='actions/checkout@v4');
+ assert.equal(checkout.with.ref,'${{ github.sha }}');
+ assert.match(checkout.with['sparse-checkout'],/services\/agent\/publishers/);
+ assert.ok(job.steps.some(s=>s.run?.includes('npm ci --ignore-scripts --omit=dev --workspaces=false')));
+ const runner=job.steps.find(s=>s.run?.includes('run-line02-candidate.ps1'));
+ assert.equal(runner.shell,'powershell');
+ assert.equal(job['continue-on-error'],undefined);
+ assert.doesNotMatch(JSON.stringify(job),/zenithjoy-agent-v|latest|最新 agent/);
+ assert.equal(workflow.jobs['wechat-bubble'].concurrency.group,'zj-rog-desktop');
+});
+test('交互执行器只使用明确批准的用户和专用profile，核实session和候选回执',()=>{
+ const runner=read('.github/workflows/scripts/run-line02-candidate.ps1');
+ assert.match(runner,/-LogonType Interactive -RunLevel Limited/);
+ assert.match(runner,/APPROVED_TEST_USER_NOT_LOGGED_IN/);
+ assert.match(runner,/CANDIDATE_SHA_MISMATCH/);
+ assert.match(runner,/CANDIDATE_RECEIPT_IDENTITY_MISMATCH/);
+ assert.match(runner,/CANDIDATE_GATE_FAILED/);
+ assert.match(runner,/Unregister-ScheduledTask/);
+ assert.doesNotMatch(runner,/Get-ChildItem.*[Pp]rofile|Desktop\\zenithjoy-agent/);
+});
