@@ -192,7 +192,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "cb7d659997f38ac43d93b2c4f5d0efac90359c2de57206a4b4b277b87f1ae64f",
         "current_code_digest": "a772a196e277d22a64f736b950bacd481fe4f6a99662a843bb4bf206473ecdae"
       }
@@ -399,7 +399,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "5e900b8e64921b68974ddb080470c1df7f410b695630e456d4298052c8df7e4e",
         "current_code_digest": "6d99b8bb44e7a79108b5880394384b2555a4dcb340db3aa5898514993a400c68"
       }
@@ -595,7 +595,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "30ab8e705574def87b008149b4d61b97222e3fd706a4f876ff779e28af22393b",
         "current_code_digest": "500693c585b3346d95d16c6523e3e418ac19c4104890b36e1d9380596d154e5b"
       }
@@ -847,7 +847,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "57cf1c6804073c30fff696d4898062080664747d81ec4c98313e15c93b7d5931",
         "current_code_digest": "35538f426028b7a6ccfbb76d32bfd83f8856bd3afae623aa9b6d7d2a17e8459c"
       }
@@ -1072,7 +1072,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "614922946ecc25f1b4dc8b9140ef2a86e8d5f7529b1e3d3aea1d38def9fa8f0b",
         "current_code_digest": "cbe5a957d011e395ee42d0d263f9737cd947a7246d2a5e82b0d8f30aa8201772"
       }
@@ -1264,7 +1264,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "d8c837da556bb519a2fc37006c1b5559c448f295774adea005dc793f81d5734e",
         "current_code_digest": "5c7ae85cdb3f2efc4ca91d3a56a0eb53ef522a5a202fe0a41a0cd70b9a39239e"
       }
@@ -1439,7 +1439,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "1119f304d19c31cf0cbb98623d350683cfa359ff0a86e27ad969aefae208afb1",
         "current_code_digest": "333d9cc6624db71f444c0e32eab7d1127aa82e4fc4f0f9ffb8bbc9830f6f4c85"
       }
@@ -1670,7 +1670,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "fe90af323a505ca60080756b891fb20ab143af26561feeabdcde57f884908819",
         "current_code_digest": "009a2171f049e5da2f7e156599be25a35081088a730186725fcf75085214fb88"
       }
@@ -1898,7 +1898,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "06d081513f865b94890f8bdce33912c3b1aa6e235528cd6a840cc205db478d2c",
         "current_code_digest": "f0746a7ef917edcc393e7debc4c3725573d8a92e8b2e12c27e120d655710baec"
       }
@@ -2101,7 +2101,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c",
         "current_code_digest": "54e31f21a04ac3783fa1159d5d992bccf6ba5f7eeb65970fa4d626044c0ef7f8"
       }
@@ -2304,7 +2304,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c",
         "current_code_digest": "54e31f21a04ac3783fa1159d5d992bccf6ba5f7eeb65970fa4d626044c0ef7f8"
       }
@@ -2510,7 +2510,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
-        "reviewed_by": "root:filter-admission-initial-review",
+        "reviewed_by": "root:filter-admission-final-review",
         "previous_code_digest": "fb17b1fca6afe8c7096788e85c7c7348d8b486c12f512276ba7a5b65b7deb2bf",
         "current_code_digest": "c2672115ac816d31d49ddeebf5d297b89cb1ab411462cbedbeb76516b8876e1f"
       }
