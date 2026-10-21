@@ -6,6 +6,8 @@ import {resolve,join,relative} from 'node:path';
 import {tmpdir} from 'node:os';
 import {commanderMap,bindingComponents} from '../../deployment-targets.mjs';
 import {digest} from '../../runtime-definition.mjs';
+import {skillAcceptanceDefinition} from '../../deployment-skill-acceptance.mjs';
+import {readDeploymentSource} from '../../deployment-fixed-source.mjs';
 import {normalizedDescriptions} from './normalized-description-bindings.mjs';
 const deploy=resolve(process.argv[2]),root=execFileSync('git',['-C',resolve(deploy,'..'),'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
 const sha=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
@@ -21,7 +23,7 @@ const releases=Object.fromEntries(Object.entries(ids).map(([target,id])=>{const 
 // 仅此本地HTTP测试服务模拟候选业务回执；生产代码仍执行完整原始准入。
 // 公司readiness测试必须先通过上一层闸，不能因新增闸缺fixture而死在无关位置。
 const responses=new Map(Object.values(releases).map(release=>['/api/brain/releases/'+release.id,{release}]));
-const businessRunIds=[],runtimeHash=digest({fixture:'paired-deploy-runtime',sha});
+const businessRunIds=[],acceptanceTaskIds={},runtimeHash=digest({fixture:'paired-deploy-runtime',sha});
 for(const production of Object.values(releases)){
  const release={...production,id:production.id.replace(/^./,'8'),environment:`staging:${sha}`};
  release.manifest_sha256=digest({environment:release.environment,target:release.target,payload:release.payload});
@@ -34,12 +36,19 @@ for(const production of Object.values(releases)){
   const target=key==='douyin_comment_scoring'||key==='workflow_report.internal'||key==='douyin_video_publish.android'?'mmv':'xian-m4';
   if(target!==release.target)continue;
   const runId='fixture-business-'+key,binding={id:'fixture-binding-'+key,run_id:runId,release_id:release.id,workflow_definition_version_id:workflow.id,workflow_id:workflow.workflow_id,snapshot_sha256:workflow.payload_sha256,observation_id:observation,runtime_snapshot_sha256:runtimeHash};
-  const taskId='fixture-task-'+key;
+  const taskId=workflowKeys.includes(key)?`aaaaaaaa-aaaa-4aaa-8aaa-${String(workflowKeys.indexOf(key)+1).padStart(12,'0')}`:'fixture-task-'+key;
   businessRunIds.push(runId);
   responses.set('/api/brain/runs/'+runId+'/definition',{binding});
   responses.set('/api/brain/runs/'+runId+'/reconciliation',{run_id:runId,run_binding_id:binding.id,release_id:release.id,business_outcome:process.env.PAIR_BUSINESS_ADMISSION_MODE==='failed'?'fail':'pass',evidence_status:'verified',gaps:[],missing:[],unexpected:[],expected_count:1,span_count:1,links:{task_id:taskId},task_run:{status:'success'}});
   responses.set('/api/brain/runs/'+runId+'?include=spans',{spans:[{run_binding_id:binding.id,evidence:{runtime_snapshot_sha256:runtimeHash}}]});
   responses.set('/api/brain/tasks/'+taskId,{id:taskId,status:'completed',result:{workflow_control:{phase:'final',envelope:{definition:{release_id:release.id,runtime_snapshot_sha256:runtimeHash}},verification:{task_id:taskId,run_id:runId,definition_sha256:workflow.payload_sha256,verdict:'PASS',assertions:[{name:'cleanup',pass:true}],evidence:['fixture://independent-readback/'+runId]}}}});
+  if(workflowKeys.includes(key)){
+   const d=skillAcceptanceDefinition(key,p=>readDeploymentSource(root,sha,p));
+   const execution={id:taskId.replace(/^a/,'b'),description:'隔离fixture的原授权范围',payload:{inputs:{location:'same_city'}},result:{run_id:runId,source_commit:sha}};
+   const task=responses.get('/api/brain/tasks/'+taskId),v=task.result.workflow_control.verification;
+   Object.assign(v,{execution_task_id:execution.id,scope:'full_skill',source_commit:sha,run_binding_id:binding.id,workflow_definition_version_id:workflow.id,skill:d.skill,acceptance_definition_sha256:digest(d),task_scope_sha256:digest({execution_task_id:execution.id,description:execution.description,payload:execution.payload}),assertions:[...d.checks.map(c=>c.id),'task_scope'].map(id=>({id,pass:true,evidence:['fixture://'+runId+'/'+id]}))});
+   responses.set('/api/brain/tasks/'+execution.id,execution);acceptanceTaskIds[runId]=taskId;
+  }
  }
 }
 const server=createServer((req,res)=>{
@@ -50,6 +59,6 @@ const server=createServer((req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const folder=mkdtempSync(join(tmpdir(),'deploy-smoke-plan-'));const plan={source_repo:repo,source_commit:sha,release_ids:ids,releases:Object.fromEntries(Object.entries(ids).map(([host,id])=>[host,releases[id]])),commander_releases:commanderMap(releases[ids.mmv])};
 const planFile=join(folder,'plan.json'),mapFile=join(folder,'map.json');writeFileSync(planFile,JSON.stringify(plan));writeFileSync(mapFile,JSON.stringify(plan.commander_releases));
-try{const child=spawn('bash',[relative(root,deploy)],{cwd:root,stdio:['ignore','inherit','inherit'],env:{...process.env,WF_DEPLOY_PLAN_FILE:planFile,WF_COMMANDER_RELEASES_FILE:mapFile,WF_RELEASE_IDS:JSON.stringify(ids),WF_BUSINESS_RUN_IDS:JSON.stringify(businessRunIds),WF_DEPLOY_ENVIRONMENT:'production',WF_DEPLOY_COLLECTOR:'fixture',WF_DEPLOY_ATTEMPT_KEY:'smoke',BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-deploy-only'}});
+try{const child=spawn('bash',[relative(root,deploy)],{cwd:root,stdio:['ignore','inherit','inherit'],env:{...process.env,WF_DEPLOY_PLAN_FILE:planFile,WF_COMMANDER_RELEASES_FILE:mapFile,WF_RELEASE_IDS:JSON.stringify(ids),WF_BUSINESS_RUN_IDS:JSON.stringify(businessRunIds),WF_BUSINESS_ACCEPTANCE_TASK_IDS:JSON.stringify(acceptanceTaskIds),WF_DEPLOY_ENVIRONMENT:'production',WF_DEPLOY_COLLECTOR:'fixture',WF_DEPLOY_ATTEMPT_KEY:'smoke',BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-deploy-only'}});
  process.exitCode=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',code=>resolve(code||0));});
 }finally{server.close();rmSync(folder,{recursive:true,force:true});}
