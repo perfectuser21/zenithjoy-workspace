@@ -3,6 +3,25 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const source=fileURLToPath(new URL('../../backup/verify-hk-backup.py',import.meta.url));
+test('同一dump的每轮恢复证据独立保存且不可覆盖，回执摘要绑定真实字节',()=>{
+ const script=`import importlib.util,tempfile,pathlib,json,hashlib
+s=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as directory:
+ store=pathlib.Path(directory);sha='c'*64
+ first=m.write_proof(store,'a'*32,sha,{'verified_at':1,'tables':116})
+ second=m.write_proof(store,'b'*32,sha,{'verified_at':2,'tables':116})
+ assert first['proof']!=second['proof'],'later run overwrote historical evidence'
+ original=pathlib.Path(first['proof']).read_bytes()
+ assert json.loads(original)['verified_at']==1
+ assert first['proof_sha256']==hashlib.sha256(original).hexdigest()
+ try:m.write_proof(store,'a'*32,sha,{'verified_at':3})
+ except FileExistsError:pass
+ else:raise AssertionError('same run evidence overwritten')
+ assert pathlib.Path(first['proof']).read_bytes()==original
+ assert len(list(store.iterdir()))==2,'partial proof files leaked'
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
 test('异地备份拒绝过期/错误库/非法路径/摘要/零字节，未开始任何恢复',()=>{
  const script=`import importlib.util,time\ns=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nv={'database':'zenithjoy','name':'zenithjoy-20261021-033001.dump','sha256':'a'*64,'size':123,'mtime':time.time()}\nm.validate_source(v)\nfor key,bad in [('database','cecelia'),('name','../outside.dump'),('sha256','abc'),('size',0),('mtime',0)]:\n x=dict(v);x[key]=bad\n try:m.validate_source(x)\n except ValueError:continue\n raise AssertionError(key)\n`;
  const r=spawnSync('python3',['-c',script],{encoding:'utf8'});
