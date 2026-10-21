@@ -64,7 +64,8 @@ export async function run(args){
   }
   if(cmd==='prepare'){
     if(rest.length&&!(rest.length===2&&rest[0]==='--collection-phone-scope'))throw Error('COLLECTION_SCOPE_ARGUMENT_INVALID');
-    const collectionPhoneScope=rest.length?readCollectionPhoneScopeInput(rest[1]):defaultCollectionPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e});
+    if(e.WF_MMV_SSH_ROUTE&&!['tailscale','public'].includes(e.WF_MMV_SSH_ROUTE))throw Error('WF_MMV_SSH_ROUTE仅允许tailscale或public');
+    const collectionPhoneScope=rest.length?readCollectionPhoneScopeInput(rest[1]):(e.WF_DEPLOYMENT_ROOT||e.WF_HOME?defaultCollectionPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e}):undefined);
     if(collectionPhoneScope&&(e.WF_BRAIN_WORKFLOW!=='douyin_video_processing'||collectionPhoneScope.profile!==e.P||collectionPhoneScope.serial!==e.SERIAL||collectionPhoneScope.run_id!==`${e.WFR_RUN_ID}__${collectionPhoneScope.attempt}`))throw Error('COLLECTION_SCOPE_INPUT_IDENTITY_INVALID');
     const samplingInput=commentSamplingInput(e);
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;

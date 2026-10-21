@@ -312,7 +312,7 @@ jobs:
       - name: Require real Darwin kernel tests
         run: |
           node -e "if(process.platform!=='darwin')process.exit(1)"
-          node --test services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs
+          node --test services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs
 
   # ─── apps/api/scripts ────────────────────────────────────────────────
   # apps/api/scripts/ 下的独立 Python 脚本（如 wechat-mp-freepublish.py）不属于任何

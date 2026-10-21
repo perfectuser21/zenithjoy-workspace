@@ -3,13 +3,14 @@ import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,fstatSync,rea
 import {join,resolve,isAbsolute} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {readFrozen} from './runtime-definition.mjs';
+import {prepareCollectionAcceptanceProbe,validateCollectionAcceptanceProbe,verifiedCollectionPanelFailure,verifyCollectionAcceptanceConsumption} from './collection-acceptance-probe.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
 const proofRecords=new WeakMap(),generations=new WeakMap();
 const sha=x=>createHash('sha256').update(x).digest('hex');
-const required=['process-queued-video.sh','queued-video-lib.sh','wf-limits.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','adb-managed-client.py','adb-existing-route.py','leadgen-handlers.mjs','leadgen-video-action.mjs','leadgen-client.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','queued-comment-history.js','queued-recipient-evidence.js','own-accounts-lib.js','nickname-match-lib.js','line-routes.js','leadgen-db-lib.js','lead-fields-lib.js','config/own-accounts.json','locate-element.py'];
+const required=['process-queued-video.sh','queued-video-lib.sh','wf-limits.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','adb-managed-client.py','adb-existing-route.py','leadgen-handlers.mjs','leadgen-video-action.mjs','leadgen-client.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','queued-comment-history.js','queued-recipient-evidence.js','own-accounts-lib.js','nickname-match-lib.js','line-routes.js','leadgen-db-lib.js','lead-fields-lib.js','config/own-accounts.json','locate-element.py'];
 function failureDigest(result){const {recovery_phone_scope,execution_stopped,...body}=result||{};return sha(JSON.stringify(body));}
-const semantic=new Set(['COLLECTION_VIDEO_IDENTITY_READBACK_FAILED','缺同视频采集完成标记','缺实际重扫计数，不能宣称采集通过','缺实际头像恢复计数，不能宣称采集通过']);
+const semantic=new Set(['COLLECTION_COMMENT_PANEL_READBACK_FAILED','COLLECTION_VIDEO_IDENTITY_READBACK_FAILED','缺同视频采集完成标记','缺实际重扫计数，不能宣称采集通过','缺实际头像恢复计数，不能宣称采集通过']);
 export const collectionSemanticReason=reason=>semantic.has(reason);
 export function invalidateCollectionPhoneProof(state){generations.set(state,(generations.get(state)||0)+1);}
 const identityKeys=['task_id','run_id','attempt','source_commit','profile','serial','activity','owner','target','deadline_ms','snapshot_sha256','binding_id'];
@@ -49,8 +50,9 @@ export function readCollectionPhoneScopeInput(path){
   fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);const st=fstatSync(fd);
   if(!st.isFile()||(st.mode&0o777)!==0o600||st.uid!==process.getuid()||st.size>65536)throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');
   const value=JSON.parse(readFileSync(fd,'utf8'));
-  const keys=['version','task_id','run_id','attempt','source_commit','profile','serial','target','evidence_root','policy','executables','expected_account'];
+  const keys=['version','task_id','run_id','attempt','source_commit','profile','serial','target','evidence_root','policy','executables','expected_account','acceptance_probe'];
   if(!value||typeof value!=='object'||Object.keys(value).some(k=>!keys.includes(k))||value.version!==1||!Object.hasOwn(value,'task_id')||value.task_id!==null&&typeof value.task_id!=='string'||!/^a[1-9][0-9]*$/.test(value.attempt||'')||!/^[a-f0-9]{40}$/.test(value.source_commit||'')||!['run_id','profile','serial','target','evidence_root'].every(k=>typeof value[k]==='string'&&value[k]))throw Error('COLLECTION_SCOPE_INPUT_INVALID');
+  if(value.acceptance_probe)validateCollectionAcceptanceProbe(value.acceptance_probe);
   return value;
  }catch(error){if(error.code==='ELOOP')throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');throw error;}finally{if(fd!==undefined)closeSync(fd);}
 }
@@ -64,7 +66,8 @@ export function defaultCollectionPhoneScope({root,env}){
  const bytes=readFileSync(join(root,relative));if(sha(bytes)!==entry.content_sha256||entry.path!=='services/phone-adb-controller/'+relative)throw Error('COLLECTION_DEFAULT_TEMPLATE_SOURCE_INVALID');
  const template=JSON.parse(bytes);if(template.version!==1||!Array.isArray(template.hosts))throw Error('COLLECTION_DEFAULT_TEMPLATE_INVALID');
  const matches=template.hosts.filter(x=>x.target===manifest.target&&x.profile===env.P&&x.serial===env.SERIAL);
- if(!matches.length)return undefined;if(matches.length!==1||!matches[0].expected_account)throw Error('COLLECTION_DEFAULT_TEMPLATE_INVALID');
+ if(!matches.length)return undefined;if(matches[0].acceptance_probe)throw Error('COLLECTION_ACCEPTANCE_PROBE_EXPLICIT_INPUT_REQUIRED');
+ if(matches.length!==1||!matches[0].expected_account)throw Error('COLLECTION_DEFAULT_TEMPLATE_INVALID');
  return {...structuredClone(matches[0]),version:1,task_id:null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};
 }
 function pinnedTool(tool){
@@ -73,7 +76,7 @@ function pinnedTool(tool){
  if(!stat.isFile()||(stat.mode&0o022)||sha(readFileSync(path))!==tool.sha256)throw Error('COLLECTION_INTERPRETER_PIN_MISMATCH');
  return path;
 }
-export async function startCollectionPhoneScope({root,env,state,sourceCommit,taskId}){
+export async function startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds}){
  let frozen;try{frozen=readFrozen(env.WFR_RUN_DIR);}catch(error){if(error.code==='ENOENT')return null;throw error;}
  if(!frozen.collection_phone_scope)return null;
  const specification=structuredClone(frozen.collection_phone_scope),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);
@@ -96,8 +99,9 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
  const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(policy),{flag:'wx',mode:0o600});
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});for(const [name,path] of [['python3',python],['node',node],['zsh',zsh]])symlinkSync(path,join(bin,name));
  const producer=await startCollectionLeafProducer({directory,policy,serial:identity.serial,deadlineMs:identity.deadline_ms,env});
- const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
- return {env:scopedEnv,zsh,
+ let acceptanceEnv;try{acceptanceEnv=prepareCollectionAcceptanceProbe({frozen,binding,env,qualifiedVideoIds,directory,producer});}catch(error){await producer.close();throw error;}
+ const scopedEnv={...producer.env,WFR_COLLECTION_ACCEPTANCE_INPUT:'',...acceptanceEnv,WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_PHONE_ADB:join(root,'douyin-phone-adb'),DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
+ return {env:scopedEnv,zsh,panelFailure:(result,videoId,startedAt)=>verifiedCollectionPanelFailure(result,{evidenceRoot:evidence,videoId,owner:identity.owner,attempt:identity.attempt,startedAt})&&verifyCollectionAcceptanceConsumption({frozen,binding,env}),
   finish:async result=>{
    const status=await producer.seal();await producer.close();
    const current=readFrozen(env.WFR_RUN_DIR);

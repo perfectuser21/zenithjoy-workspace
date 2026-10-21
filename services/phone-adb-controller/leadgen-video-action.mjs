@@ -20,6 +20,7 @@ export function createVideoAction({root,env,run,line,profile,serial,queue,bounde
       collectionBudgetVideos.push({video_id:v.video_id,...timing,observed_at:new Date().toISOString()});
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-collection-budget-readback.json`),JSON.stringify({run_tag:run,profile,serial,line,source_run:env.LEADGEN_SOURCE_RUN||null,collection_budget_s:collectionBudget,requested_explicit:collectionBudgetExplicit,global_start_ts:env.WF_RUN_START_TS===undefined?null:Number(env.WF_RUN_START_TS),global_max_seconds:Number(env.WF_RUN_MAX_SECONDS||1800),activity_deadline_ms:state.budgetDeadline||null,action_max_duration_s:timing.action_max_duration_s,sampling_input:sampleInput,videos:collectionBudgetVideos}),{mode:0o600});
     }
+    if(mode==='collection')state.collectionActionStartedAt=Date.now();
     return bounded(getCollectionScope()?.zsh||'zsh',[...(getCollectionScope()?['-f']:[]),join(root,'process-queued-video.sh'),mode,profile,
       v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
       {receipt:nativeReceipt(),maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),

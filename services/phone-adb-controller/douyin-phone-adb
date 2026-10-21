@@ -5095,7 +5095,19 @@ PYVTABCHECKPOINT
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE collect-comments EVIDENCE_ID"
     check_target
     cc_xml="$(ui_evidence "$2-comments")" || die "could not capture comment panel hierarchy"
-    comment_panel_open "$cc_xml" || die "comment panel is not open; run open-comments first"
+    if ! comment_panel_open "$cc_xml"; then
+      "$PYTHON_BIN" -c 'import sys,hashlib,base64,os
+p=sys.argv[1]; data=open(p,"rb").read(); digest=hashlib.sha256(data).hexdigest(); archived=p[:-4]+"-closed-"+digest+".xml"
+try:
+ fd=os.open(archived,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+ with os.fdopen(fd,"wb") as out: out.write(data)
+except FileExistsError:
+ fd=os.open(archived,os.O_RDONLY|os.O_NOFOLLOW)
+ with os.fdopen(fd,"rb") as source:
+  if source.read()!=data: raise ValueError("closed panel evidence changed")
+print("COLLECTION_COMMENT_PANEL_READBACK_FAILED xml_path_b64="+base64.b64encode(archived.encode()).decode()+" xml_sha256="+digest,file=sys.stderr)' "$cc_xml"
+      die "comment panel is not open; run open-comments first"
+    fi
     cc_w="$("$ADB" -s "$SERIAL" shell wm size | /usr/bin/sed -E 's/.*: ([0-9]+)x[0-9]+.*/\1/' | tr -d '\r' | /usr/bin/head -1)"
     [[ "$cc_w" == <-> ]] || die "could not read screen width"
     comments_from_xml "$cc_xml" "$cc_w"

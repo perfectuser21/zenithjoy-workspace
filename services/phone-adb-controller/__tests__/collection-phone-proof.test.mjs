@@ -17,12 +17,12 @@ async function recoveryCase(t,mutation,options={}){
  let launches=0,verified=0;const handlers=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',rpc:async body=>{
   if(body.kind==='activity_skill_authority')return {authorized:true};
   if(body.kind==='activity_skill'){
-   launches++;await callActivityTool(body.request.broker_request_path,'inspect');await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:[]});await callActivityTool(body.request.broker_request_path,'resume');return {result:{status:'ok',execution_stopped:true}};
+   launches++;await callActivityTool(body.request.broker_request_path,'inspect');await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:['scope-skill-repair']});await callActivityTool(body.request.broker_request_path,'resume');return {result:{status:'ok',execution_stopped:true}};
   }
   return {result:await f.queue(body.request)};
  }});
  handlers.state.currentActivity='preflight';await handlers.preflight();handlers.state.currentActivity='qualification';if(options.sample)handlers.state.intakeVideoIds=vids;await handlers.qualification();handlers.state.currentActivity='collection';handlers.state.budgetDeadline=Date.now()+90000;
- const rpc=async body=>body.kind==='activity_skill_authority'?{authorized:true}:body.kind==='activity_skill'?(launches++,await callActivityTool(body.request.broker_request_path,'inspect'),await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:[]}),await callActivityTool(body.request.broker_request_path,'resume'),{result:{status:'ok',execution_stopped:true}}):{result:await f.queue(body.request)};
+ const rpc=async body=>body.kind==='activity_skill_authority'?{authorized:true}:body.kind==='activity_skill'?(launches++,await callActivityTool(body.request.broker_request_path,'inspect'),await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:['scope-skill-repair']}),await callActivityTool(body.request.broker_request_path,'resume'),{result:{status:'ok',execution_stopped:true}}):{result:await f.queue(body.request)};
  const {collectionPhoneProofValid,consumeCollectionPhoneProof}=await load('collection-phone-scope.mjs');
  const proofContext={task_id:'scope-task',run_id:'scope-run__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:f.env.P,serial:f.env.SERIAL,activity:'collection',owner:f.env.WFR_TAG,target:f.frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:f.frozen.snapshot_sha256,binding_id:'scope-binding'};
  const recover=createActivityRecovery({runDir:f.d,frozen:f.frozen,binding:{id:'scope-binding',run_id:'scope-run__a1',task_id:'scope-task'},env:f.env,handlers,rpc});
@@ -32,6 +32,7 @@ async function recoveryCase(t,mutation,options={}){
  assert.equal(launches,1,'必须真实进入Skill，不能0调用却称接管成功');assert.equal(result.status,'completed',JSON.stringify(result));assert.equal(verified,1);
  assert.equal(f.dbCalls.filter(q=>q.op==='claim_videos').length,1);
  assert.equal(f.phoneCalls().filter(q=>q.cmd==='open-video'&&q.args[0]===vids[0]&&q.args[1].includes('-collection-')).length,1,'已成功VID不得重新操作手机');
+ if(options.panelProbe){const projection=JSON.parse(readFileSync(join(f.d,'collection-acceptance-probe.consumed.json')));assert.equal(projection.projection.video_id,vids[1]);assert.equal(projection.projection.snapshot_sha256,f.frozen.snapshot_sha256);assert.deepEqual(JSON.parse(readFileSync(join(f.d,'collection-acceptance-probe.back-returned.json'))).projection,projection.projection);assert.equal(f.phoneCalls().filter(q=>q.cmd==='back-evidence'&&q.args[0].endsWith('-acceptance-close')).length,1);assert.equal(result.results[0].code_failure.result.failures[0].reason,'COLLECTION_COMMENT_PANEL_READBACK_FAILED');}
  if(options.sample){assert.equal(result.results[0].result.sampling_readback_count,2);assert.equal(result.results[0].result.sampling_receipts.length,2);}
  assert.equal(handlers.state.nativeStopUnproven,true);
  assert.equal(result.results[0].code_failure.result.execution_stopped,false);
@@ -70,3 +71,16 @@ for(const mode of ['approved-account-mismatch','missing-required-helper','invali
 });
 
 test('冻结一次性验收probe通过原controller真实panel判定失败并原slot接管',{skip:process.platform!=='darwin'},t=>recoveryCase(t,undefined,{panelProbe:true}));
+
+test('私有probe消费防重放：原binding/VID/nonce/记录缺损拒绝，合法resume不再触发',{skip:process.platform!=='darwin'},async t=>{
+ const f=await collectionFixture(t,{panelProbe:true}),load=name=>import(pathToFileURL(join(f.runtime,name))),{startCollectionPhoneScope}=await load('collection-phone-scope.mjs'),{consumeCollectionAcceptanceProbe,verifyCollectionAcceptanceConsumption}=await load('collection-acceptance-probe.mjs'),{readBinding}=await load('runtime-binding.mjs');
+ const scope=await startCollectionPhoneScope({root:f.runtime,env:f.env,state:{currentActivity:'collection',account:'fixture-account',budgetDeadline:Date.now()+60000},sourceCommit:'a'.repeat(40),taskId:'scope-task',qualifiedVideoIds:vids});t.after(()=>scope.close());
+ const env={...f.env,...scope.env},input=scope.env.WFR_COLLECTION_ACCEPTANCE_INPUT,{spawn}=await import('node:child_process');
+ const ctl=(command,eid)=>new Promise(resolve=>{const p=spawn(scope.zsh,['-f',join(f.runtime,'fixture-original-controller'),'--profile',env.P,command,eid],{env});let out='',err='';p.stdout.on('data',b=>out+=b);p.stderr.on('data',b=>err+=b);p.on('close',code=>{assert.equal(code,0,err);resolve(out.trim());});});
+ const opened=await ctl('ui-evidence','probe-helper-open'),args={action:'consume',videoId:vids[1],input,controllerOutput:'comments_opened=1\nevidence='+opened,env};
+ for(const changed of [{...args,videoId:'7999999999999999999'},{...args,env:{...env,WFR_RUN_ID:'other'}},{...args,env:{...env,WFR_COLLECTION_LEAF_NONCE:'forged'}}])assert.throws(()=>consumeCollectionAcceptanceProbe(changed));
+ assert.equal(consumeCollectionAcceptanceProbe(args),'trigger');assert.throws(()=>consumeCollectionAcceptanceProbe(args),'消费后back未归还不能当成合法resume');
+ const back=await ctl('back-evidence','probe-helper-back');assert.equal(consumeCollectionAcceptanceProbe({...args,action:'back-returned',controllerOutput:back}),'back_returned');assert.equal(consumeCollectionAcceptanceProbe(args),'already_consumed');
+ const binding=readBinding(f.d,'a1',f.frozen);assert.equal(verifyCollectionAcceptanceConsumption({frozen:f.frozen,binding,env}),true);
+ writeFileSync(join(f.d,'collection-acceptance-probe.consumed.json'),'{}');assert.throws(()=>consumeCollectionAcceptanceProbe(args));assert.equal(verifyCollectionAcceptanceConsumption({frozen:f.frozen,binding,env}),false);
+});

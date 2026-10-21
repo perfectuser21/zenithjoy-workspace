@@ -333,6 +333,14 @@ qv_collect(){
     print -- "COLLECTION\t$VID\tno_comments\t0"; return 0
   fi
   [[ "$opened" == *comments_opened=1* ]] || return 6
+  if [[ -n "${WFR_COLLECTION_ACCEPTANCE_INPUT:-}" ]]; then
+    local probe_decision probe_back
+    probe_decision="$(node "$QV_DIR/collection-acceptance-probe.mjs" consume "$VID" "$WFR_COLLECTION_ACCEPTANCE_INPUT" "$opened")" || { print -u2 COLLECTION_ACCEPTANCE_PROBE_ABORTED; return 6; }
+    if [[ "$probe_decision" == trigger ]]; then
+      probe_back="$(qv_ctl --profile "$P" back-evidence "$QV_EID-acceptance-close" </dev/null)" || { print -u2 COLLECTION_ACCEPTANCE_PROBE_ABORTED; return 6; }
+      node "$QV_DIR/collection-acceptance-probe.mjs" back-returned "$VID" "$WFR_COLLECTION_ACCEPTANCE_INPUT" "$probe_back" >/dev/null || { print -u2 COLLECTION_ACCEPTANCE_PROBE_ABORTED; return 6; }
+    fi
+  fi
   count="$(qv_field "$opened" comment_count)"
   tier="$(python3 -c 'import sys
 try:

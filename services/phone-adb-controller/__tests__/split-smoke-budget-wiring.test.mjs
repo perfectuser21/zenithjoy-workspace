@@ -7,6 +7,10 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
 const originalFiles=[
+  "services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs",
+  "services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs",
+  "services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs",
+  "services/phone-adb-controller/__tests__/collection-scope-input.test.mjs",
   "scripts/product-map/__tests__/leadgen-methods.test.js",
   "scripts/product-map/__tests__/leadgen-split-contracts.test.js",
   "scripts/product-map/__tests__/leadgen-workflow-skill.test.js",

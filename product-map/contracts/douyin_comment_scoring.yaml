@@ -135,6 +135,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/collection-acceptance-probe.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/config/collection-phone-hosts.json
         revision: contract
       - kind: code
@@ -446,6 +450,10 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/collection-phone-scope.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/collection-acceptance-probe.mjs
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
