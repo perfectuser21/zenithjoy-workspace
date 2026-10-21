@@ -26,3 +26,7 @@ test('正式完整smoke永久执行新增ADB守卫，不以局部测试冒发布
   assert.ok(smoke.includes('/'+name+'.test.mjs'),'正式smoke遗漏 '+name);
  }
 });
+
+test('collection phone能力及真实leaf producer必须进入设备和MMV正式冻结包',()=>{
+ for(const name of ['collection-phone-scope.mjs','collection-leaf-producer.mjs'])for(const list of ['DEVICE_NODE_FILES','MMV_RUNTIME_FILES'])assert.ok(files(list).includes(name),list+'缺'+name);
+});

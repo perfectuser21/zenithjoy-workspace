@@ -157,3 +157,11 @@ for(const name of ['build-scrcpy-runtime.py','scrcpy-v3.3.4-log-flush.patch'])te
   assert.equal(after.activities[ref].skill.content_digest,before.activities[ref].skill.content_digest);
  }
 });
+
+test('collection phone issuer and real leaf producer belong to every consumer source closure',t=>{
+ for(const name of ['collection-phone-scope.mjs','collection-leaf-producer.mjs']){
+  const {root}=fixture(t),path='services/phone-adb-controller/'+name;put(root,path,readFileSync(join(source,path)));
+  const before=collectMethods(root);put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated phone-authority byte mutation\n');const after=collectMethods(root);
+  for(const [ref,method] of Object.entries(before.activities))assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted '+name);
+ }
+});
