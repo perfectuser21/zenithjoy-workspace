@@ -34,7 +34,8 @@ server=HTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_
 try:
  with tempfile.TemporaryDirectory() as d:
   def fail():
-   assert events[-1][0].endswith('/claim'),'backup ran before claim'
+   assert events[-2][0].endswith('/claim'),'backup ran before claim'
+   assert events[-1][1].get('status')=='in_progress','backup ran before in_progress'
    raise RuntimeError('fixture restore failed')
   try:m.run_recorded(pathlib.Path(d),'http://127.0.0.1:'+str(server.server_port),fail)
   except RuntimeError:pass
@@ -46,5 +47,36 @@ try:
 finally:server.shutdown()
 `;
  const r=spawnSync('python3',['-c',script],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);
+});
+
+test('真实验证子进程超时回收本run整进程组和Docker恢复容器，保留其他run',()=>{
+ const runner=fileURLToPath(new URL('../../backup/run-hk-backup.py',import.meta.url));
+ const script=String.raw`import importlib.util,tempfile,pathlib,json,os,subprocess,time,sys,signal
+s=importlib.util.spec_from_file_location('runner',${JSON.stringify(runner)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as directory:
+ root=pathlib.Path(directory);run_id='a'*32
+ docker=root/'docker'
+ docker.write_text("#!/usr/bin/env python3\nimport json,os,sys,pathlib\np=pathlib.Path(os.environ['FAKE_DOCKER_STATE']);s=json.loads(p.read_text()) if p.exists() else {};a=sys.argv[1:]\nif a[0]=='ps': print('\\n'.join(k for k,v in s.items() if v['Config']['Labels']['zenithjoy.backup-run']==a[a.index('--filter')+1].split('=',2)[2]))\nelif a[0]=='inspect': print(json.dumps([s[a[-1]]]))\nelif a[0]=='stop': pass\nelif a[0]=='rm': del s[a[-1]];p.write_text(json.dumps(s))\nelse: raise RuntimeError(a)\n")
+ docker.chmod(0o755);os.environ['PATH']=str(root)+os.pathsep+os.environ['PATH'];os.environ['FAKE_DOCKER_STATE']=str(root/'docker-state.json')
+ fixture=root/'verify-fixture.py'
+ fixture.write_text("import subprocess,sys,os,json,pathlib,time\nr=sys.argv[sys.argv.index('--run-id')+1]\nstate={}\nfor identity,owner in [('owned',r),('foreign','b'*32)]:state[identity]={'Id':identity,'Name':'/zj-backup-proof-'+owner,'Config':{'Labels':{'zenithjoy.backup-run':owner,'zenithjoy.purpose':'isolated-backup-restore'}}}\npathlib.Path(os.environ['FAKE_DOCKER_STATE']).write_text(json.dumps(state))\nchild=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\npathlib.Path(os.environ['FAKE_DOCKER_STATE']+'.pid').write_text(str(child.pid))\ntime.sleep(60)\n")
+ try:
+  if hasattr(m,'run_verifier'):m.run_verifier(root,run_id,script=fixture,timeout=1)
+  else:subprocess.run([sys.executable,str(fixture),'--store',str(root),'--run-id',run_id],check=True,capture_output=True,text=True,timeout=1)
+ except subprocess.TimeoutExpired:pass
+ else:raise AssertionError('timeout reported success')
+ state=json.loads((root/'docker-state.json').read_text())
+ pid=int((root/'docker-state.json.pid').read_text())
+ if set(state)!={'foreign'}:
+  os.kill(pid,signal.SIGKILL)
+  raise AssertionError('owned daemon container survived timeout: '+str(list(state)))
+ for _ in range(40):
+  probe=subprocess.run(['ps','-o','stat=','-p',str(pid)],capture_output=True,text=True)
+  if not probe.stdout.strip() or probe.stdout.strip().startswith('Z'):break
+  time.sleep(.05)
+ else:raise AssertionError('owned descendant survived timeout')
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8',timeout:10000});
  assert.equal(r.status,0,r.stderr);
 });
