@@ -126,3 +126,14 @@ test('paired M4 batch adapter rejects wrong host, unknown command and unreviewed
  assert.equal(transport(f.root,'scp',['-q','-p',join(f.root,'payload.tar'),join(f.root,'unreviewed.py'),`xian-m4:${stage}/`]).status,2);
  assert.throws(()=>verify(f.root),/not verified/);
 });
+
+
+test('实际deploy.sh配套安装段在真实事务屏障下安装并读回两个消费者',t=>{
+ const root=mkdtempSync(join(tmpdir(),'paired-transaction-fragment-'));t.after(()=>rmSync(root,{recursive:true,force:true}));prepare(root);
+ const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/paired-deploy-install-fragment.mjs'),root,join(service,'deploy.sh')],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH}});
+ assert.equal(result.status,0,result.stdout+result.stderr);
+ assert.equal(verify(root).status,'verified');
+ const installs=readFileSync(join(root,'ssh.log'),'utf8');
+ assert.match(installs,/install-maintenance smoke-paired-transaction/);
+ for(const serial of ['SER1','SER2','SER3','SER4'])assert.equal(readFileSync(join(root,'remote/locks',serial+'.lock/owner'),'utf8').trim(),'phone-deploy-smoke-paired-transaction');
+});
