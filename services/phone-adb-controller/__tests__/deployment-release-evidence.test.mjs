@@ -48,7 +48,9 @@ test('原部署函数从空目录原子安装三个SQL副本且只读校验，�
 });
 test('正式manifest调用、GP早期守卫及drift都必须包含同一附件声明',()=>{
  const deploy=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');assert.match(deploy,/^RELEASE_EVIDENCE_FILES=\(/m);assert.ok(deploy.includes(sql+'='+deployed));assert.equal((deploy.match(/"\$\{RELEASE_EVIDENCE_ARGS\[@\]\}"/g)||[]).length,2);
- assert.ok(deploy.indexOf('deploy_release_evidence\n')<deploy.indexOf('if [[ "${1:-}" == "--commander-only" ]]'));
+ const attachment=deploy.indexOf('deploy_release_evidence\n');
+ assert.ok(attachment>deploy.indexOf('deployment-backend.mjs" check-child'));
+ assert.ok(attachment<deploy.indexOf('echo "=== [1/3]'),'附件仍在正式整包首段安装前发布');
  const smoke=readFileSync(new URL('../../../scripts/smoke/leadgen-split-smoke.sh',import.meta.url),'utf8');assert.ok(smoke.indexOf('deployment-release-evidence.test.mjs')<smoke.indexOf('env -u HOME'));
  const drift=readFileSync(new URL('../drift-check.sh',import.meta.url),'utf8');assert.match(drift,/parse_array RELEASE_EVIDENCE_FILES/);assert.ok(drift.includes('release-evidence'));
 });

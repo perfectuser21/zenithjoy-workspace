@@ -116,3 +116,14 @@ test('artifact名正确仍拒绝scope串用、错误来源SHA或交叉回执',as
   const data=evidence(scope);mutate(data);const {github}=githubFixture(undefined,{[scope]:data});await assert.rejects(downloadDeploymentEvidence('42',github),/scope|回执/);
  }
 });
+
+
+test('恢复来源只核main祖先，不依赖会过期的Pilot artifact，也不返回晋级证明',async()=>{
+ const {recoverySource}=await implementation(),calls=[];
+ const value=await recoverySource(sha,async path=>{calls.push(path);if(path.endsWith('/git/ref/heads/main'))return {object:{sha:'b'.repeat(40)}};if(path.includes('/compare/'))return {status:'behind',merge_base_commit:{sha}};throw Error('artifact unavailable');});
+ assert.deepEqual(value,{source_repo:repo,source_commit:sha});
+ assert.equal(calls.length,2);assert.equal(calls.some(p=>p.includes('/actions/')),false);
+ assert.equal(value.run,undefined);assert.equal(value.receipt,undefined);
+ for(const input of ['', 'main', 'c'.repeat(39)])await assert.rejects(recoverySource(input,async()=>{throw Error('must reject first');}));
+ for(const status of ['ahead','diverged'])await assert.rejects(recoverySource(sha,async p=>p.includes('/compare/')?{status,merge_base_commit:{sha}}:{object:{sha:'b'.repeat(40)}}));
+});

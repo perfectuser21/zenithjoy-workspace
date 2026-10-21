@@ -94,7 +94,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -188,13 +188,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "46a1e827faf4f7be646bba4e77913eb2ee9dd81a98d36a013c921c3033f74cb3",
+      "code_digest": "1c0b0157ab417281cbe6d19914f39b80e60dab07b0bc16ba166c1e3a12997aac",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "5046bb53a116c2f2f02ccc71a9204d67b7e0e797fed3a61cb6a7a252a397c63b",
-        "current_code_digest": "46a1e827faf4f7be646bba4e77913eb2ee9dd81a98d36a013c921c3033f74cb3"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "46a1e827faf4f7be646bba4e77913eb2ee9dd81a98d36a013c921c3033f74cb3",
+        "current_code_digest": "1c0b0157ab417281cbe6d19914f39b80e60dab07b0bc16ba166c1e3a12997aac"
       }
     },
     "douyin_video_processing.preflight": {
@@ -297,7 +297,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -395,13 +395,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "ca591c011282877b831828144624e6c633bea915def8a3eda333745d0889389d",
+      "code_digest": "bc15fa6e535d9e407f569b24cc6124e53da835da8398f1ed98b9c4e355a0f942",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "8497655463adbb6180f2d8f6155df2c76c04765ed1ed64484d5d21a5a537de15",
-        "current_code_digest": "ca591c011282877b831828144624e6c633bea915def8a3eda333745d0889389d"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "ca591c011282877b831828144624e6c633bea915def8a3eda333745d0889389d",
+        "current_code_digest": "bc15fa6e535d9e407f569b24cc6124e53da835da8398f1ed98b9c4e355a0f942"
       }
     },
     "douyin_video_processing.dedup": {
@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -591,13 +591,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "8da6b63c9421db403dffe8d47697f3cf4329f5db02cfef73afb64ed8f7e3e098",
+      "code_digest": "b46a8cdfab147539d7e8be4949aab72b1ab5ad6a3328c84bda57a418464cc2b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "5ce4d191235499583feff544f80f58d47602beca4eb741cb66e0987146632506",
-        "current_code_digest": "8da6b63c9421db403dffe8d47697f3cf4329f5db02cfef73afb64ed8f7e3e098"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "8da6b63c9421db403dffe8d47697f3cf4329f5db02cfef73afb64ed8f7e3e098",
+        "current_code_digest": "b46a8cdfab147539d7e8be4949aab72b1ab5ad6a3328c84bda57a418464cc2b2"
       }
     },
     "douyin_video_processing.qualification": {
@@ -693,7 +693,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "1d1735be88d28796dab4d70f8c539a0841e41caffe17d316b3ec22c611c07d77",
+      "code_digest": "bd5ff8c82bbc503f2fc38844e311e71e8e30a8ad68b4ec061ee2539af4506f88",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "c46ea4bf04b5d1fac4f11a51714efe1b8a07c10d6755ce2476759e047b48aa66",
-        "current_code_digest": "1d1735be88d28796dab4d70f8c539a0841e41caffe17d316b3ec22c611c07d77"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "1d1735be88d28796dab4d70f8c539a0841e41caffe17d316b3ec22c611c07d77",
+        "current_code_digest": "bd5ff8c82bbc503f2fc38844e311e71e8e30a8ad68b4ec061ee2539af4506f88"
       }
     },
     "douyin_video_processing.collection": {
@@ -938,7 +938,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1054,13 +1054,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "9f345a89f85b655ee8217a1817f2de164d7959d64252d9b3c9ba5a2f086486e9",
+      "code_digest": "f17ae9abb0c5ecd12472483bd2b7848d6855225a7cd10032c759eb0442f9798e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "25d4a4d832516689d758f0a1b8e784b368a5d554a803f5394b4628efecf3d3be",
-        "current_code_digest": "9f345a89f85b655ee8217a1817f2de164d7959d64252d9b3c9ba5a2f086486e9"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "9f345a89f85b655ee8217a1817f2de164d7959d64252d9b3c9ba5a2f086486e9",
+        "current_code_digest": "f17ae9abb0c5ecd12472483bd2b7848d6855225a7cd10032c759eb0442f9798e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1156,7 +1156,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1246,13 +1246,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "f5717f8a0ed3c3c08b41cb7d49e4ce0cfb47a3ec3dd31f23b25fedfb83062ffd",
+      "code_digest": "ec3a268125b6d83aba55b033eeafee4bb1353d882fddcb38190365a3d8ea811e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "394ddfd0e7d42148a1875fcf9f344d923e30fe13a30edc35885b390efd374eb0",
-        "current_code_digest": "f5717f8a0ed3c3c08b41cb7d49e4ce0cfb47a3ec3dd31f23b25fedfb83062ffd"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "f5717f8a0ed3c3c08b41cb7d49e4ce0cfb47a3ec3dd31f23b25fedfb83062ffd",
+        "current_code_digest": "ec3a268125b6d83aba55b033eeafee4bb1353d882fddcb38190365a3d8ea811e"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1348,7 +1348,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1421,13 +1421,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "aaeaab8642af27ce1532407398c2b431e71bc549a547374be8d521f5a7f23a00",
+      "code_digest": "1aa60a28d186ef250e2bbaf90e2050aa75649fa1dc996a7e36cb8955dbc50f45",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "ac80b5b8c05a5fa43aade32ff57200aa6e374d9de3e56fcfabdb030bb3d190ca",
-        "current_code_digest": "aaeaab8642af27ce1532407398c2b431e71bc549a547374be8d521f5a7f23a00"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "aaeaab8642af27ce1532407398c2b431e71bc549a547374be8d521f5a7f23a00",
+        "current_code_digest": "1aa60a28d186ef250e2bbaf90e2050aa75649fa1dc996a7e36cb8955dbc50f45"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1530,7 +1530,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1652,13 +1652,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "2ec09ac262c243829e5635f0a4153e3e0b422756945ada5c9f266f5e7ed4072d",
+      "code_digest": "7beb492f8c418816f790d930cbe17eb65c4a535dfd36669a922a45985fb7ecdc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "606dc611d6cc69f7acc8af281b8d00139173a502f30fd2c9c1a8b7942a922c57",
-        "current_code_digest": "2ec09ac262c243829e5635f0a4153e3e0b422756945ada5c9f266f5e7ed4072d"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "2ec09ac262c243829e5635f0a4153e3e0b422756945ada5c9f266f5e7ed4072d",
+        "current_code_digest": "7beb492f8c418816f790d930cbe17eb65c4a535dfd36669a922a45985fb7ecdc"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1754,7 +1754,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1880,13 +1880,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "1d77917014ff298cdcc811b7a07340b034b73227a85dcc8ab11319b258967c27",
+      "code_digest": "600eeee27b8dc2529f7d296f7f8f8701fbee494e4c8a54f3c243522d1b60391c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "5b61e90104a7d5ad3f5e653b13bb2e899ef51cab846cd311df8186db3053cb16",
-        "current_code_digest": "1d77917014ff298cdcc811b7a07340b034b73227a85dcc8ab11319b258967c27"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "1d77917014ff298cdcc811b7a07340b034b73227a85dcc8ab11319b258967c27",
+        "current_code_digest": "600eeee27b8dc2529f7d296f7f8f8701fbee494e4c8a54f3c243522d1b60391c"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1982,7 +1982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -2083,13 +2083,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
+      "code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
-        "current_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
+        "current_code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2185,7 +2185,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -2286,13 +2286,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
+      "code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "d9caf08073cdab5de7e0fbfbaa0f77b78e340f30b9e05d3992f52a29dabe150c",
-        "current_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
+        "current_code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2388,7 +2388,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -2492,13 +2492,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "e7a886e5643e3c19af4f5ca0d4c63fd58e44a1d3a35411d2bc3c583af127b1c3",
+      "code_digest": "0e74b4365bf83538e25485aaa2028925d0878146ed134025ebf958987d3921ab",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "保持冻结Activity业务输入输出、方法步骤、Skill正文与原权限和累计预算；仅补权威冻结合同实际交付及校验、评分公司上下文和原坏来源行的有界隔离。实际main的新启动/停止与准入守卫按原字节保留；此评估不代表模型质量、Skill实机或部署验收通过。",
-        "reviewed_by": "/root/fixed_source_final_review",
-        "previous_code_digest": "7b1946d25d78230351392c935cfdf66f57b6bc70f75b2e04a522018d48513c2e",
-        "current_code_digest": "e7a886e5643e3c19af4f5ca0d4c63fd58e44a1d3a35411d2bc3c583af127b1c3"
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
+        "previous_code_digest": "e7a886e5643e3c19af4f5ca0d4c63fd58e44a1d3a35411d2bc3c583af127b1c3",
+        "current_code_digest": "0e74b4365bf83538e25485aaa2028925d0878146ed134025ebf958987d3921ab"
       }
     }
   },

@@ -643,7 +643,15 @@ jobs:
         run: python3 scripts/release-gate/__tests__/process-and-business-gates.test.py
       - name: Run release admission and HK rollback regressions
         run: |
+          python3 services/phone-adb-controller/__tests__/deployment-transaction.test.py
+          python3 services/phone-adb-controller/__tests__/deployment-maintenance.test.py
+          python3 services/phone-adb-controller/__tests__/deployment-effects.test.py
+          python3 services/phone-adb-controller/__tests__/deployment-service.test.py
+          sudo -n python3 services/phone-adb-controller/__tests__/deployment-service-root.test.py
+          python3 services/phone-adb-controller/__tests__/deployment-host.test.py
           node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/*.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-coordinator.test.mjs services/phone-adb-controller/__tests__/deployment-rehearsal.test.mjs services/phone-adb-controller/__tests__/deployment-protocol.test.mjs services/phone-adb-controller/__tests__/deployment-drift.test.mjs \
+            services/phone-adb-controller/__tests__/deployment-write-set.test.mjs \
             services/phone-adb-controller/__tests__/deployment-business-admission.test.mjs \
             services/phone-adb-controller/__tests__/deployment-candidate.test.mjs \
             services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs \

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import csv
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -92,7 +93,7 @@ def registry_serials(registry, raw=None):
 
 
 @contextmanager
-def device_barrier(registry, lock_root):
+def device_barrier(registry, lock_root, maintenance=None):
     # Same serial.guard kernel flock as phone-lock-helper.py; never reap/adopt/release owners.
     registry_raw = Path(registry).read_bytes()
     serials = registry_serials(registry, registry_raw)
@@ -113,7 +114,13 @@ def device_barrier(registry, lock_root):
             if digest(Path(registry).read_bytes()) != registry_hash:
                 raise ValueError("device registry changed while acquiring installation barrier")
             # Any owner directory, including malformed/stale/unknown serial, blocks deployment.
-            if list(root.glob("*.lock")):
+            if maintenance is not None:
+                # 同一事务已用原standalone隔离所有设备；不允许任意force/旧owner借道。
+                spec = importlib.util.spec_from_file_location('phone_maintenance', Path(__file__).with_name('deployment-maintenance.py'))
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                module.verify(maintenance[0], maintenance[1], registry, lock_root)
+            elif list(root.glob("*.lock")):
                 raise ValueError("kernel device owner exists; installation refused without reap")
             for serial, fd in zip(serials, descriptors):
                 actual, expected = os.fstat(fd), os.stat(root / (serial + ".guard"))
@@ -218,7 +225,7 @@ def unchanged_runtime(raw_directories, directories, expected, registry, lock_roo
     return None
 
 
-def install(controller, helper, expected_path, registry, lock_root, directories):
+def install(controller, helper, expected_path, registry, lock_root, directories, maintenance=None):
     # Freeze incoming bytes before validation/staging so the source cannot change midway.
     c, h = Path(controller).read_bytes(), Path(helper).read_bytes()
     info = source_info(controller, helper)
@@ -244,7 +251,7 @@ def install(controller, helper, expected_path, registry, lock_root, directories)
         return {"status": "unchanged", "component": info, "observed": observed}
     staged = []
     try:
-        with device_barrier(registry, lock_root) as verify_free, (Path(directories[0]) / ".input-runtime.deploy.guard").open("a") as lock:
+        with device_barrier(registry, lock_root, maintenance) as verify_free, (Path(directories[0]) / ".input-runtime.deploy.guard").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             if capture(directories) != expected:
                 raise ValueError("input deployment CAS mismatch; another deployment changed the target")
@@ -284,6 +291,9 @@ def main():
         result = capture(sys.argv[2:])
     elif command == "install":
         result = install(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7:])
+    elif command == "install-maintenance":
+        result = install(sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8:],
+                         maintenance=(Path.home().resolve(), sys.argv[2]))
     else:
         raise ValueError("unknown input release operation")
     print(json.dumps(result))

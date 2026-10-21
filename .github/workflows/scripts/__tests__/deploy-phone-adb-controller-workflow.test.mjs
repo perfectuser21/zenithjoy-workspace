@@ -41,7 +41,9 @@ test("远程执行块调用 deploy.sh 和 drift-check.sh", () => {
   assert.match(yamlText, /services\/phone-adb-controller\/deployment-prepare\.mjs/);
   const wrapper=fs.readFileSync(path.join(__dirname,"../../../../services/phone-adb-controller/deployment-prepare.mjs"),"utf8");
   assert.match(wrapper, /spawn\('bash',\[join\(root,'services\/phone-adb-controller\/deploy\.sh'\)/, "wrapper必须调用现有deploy.sh");
-  assert.match(yamlText, /services\/phone-adb-controller\/drift-check\.sh/, "必须调用现有 drift-check.sh 做后验");
+  const backend=fs.readFileSync(path.join(__dirname,"../../../../services/phone-adb-controller/deployment-backend.mjs"),"utf8");
+  assert.match(backend,/runDriftCheck\('bash',\[join\(HERE,'drift-check\.sh'\)\]/,"drift必须在事务提交前运行");
+  assert.match(backend,/DRIFT_REF:sha,DRIFT_SKIP_FETCH:'1'/);
 });
 
 test("远程执行块 source 固定SHA lib并使用独立checkout，原仓不reset", () => {
@@ -71,20 +73,15 @@ test("deploy.sh 和 drift-check.sh 调用都重定向 stdin（防 heredoc 假绿
     /deployment-prepare\.mjs[^\n]*<\/dev\/null/,
     "deploy.sh 调用必须加 </dev/null，否则会吃掉heredoc剩余内容导致后续步骤被跳过但job仍是绿的(C1)",
   );
-  assert.match(
-    yamlText,
-    /drift-check\.sh\s*<\/dev\/null/,
-    "drift-check.sh 调用必须加 </dev/null，同上",
-  );
+  const helper=fs.readFileSync(path.join(__dirname,"../../../../services/phone-adb-controller/deployment-drift.mjs"),"utf8");
+  assert.match(helper,/stdio:\['ignore','pipe','pipe'\]/,"事务内drift也不能消费外层stdin");
 });
 
-test("成功判定断言 drift-check 输出里真的含 DRIFT_CHECK OK（防第二种假绿，N3）", () => {
-  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
-  assert.match(
-    yamlText,
-    /grep -q ["']DRIFT_CHECK OK["']/,
-    "成功通知前必须校验 DRIFT_LOG 里包含 DRIFT_CHECK OK，不能只看 drift-check.sh 的退出码（必须是 grep -q \"DRIFT_CHECK OK\" 这个判断语句本身，不能只匹配裸字符串，否则判断语句被删掉换成 true 之类的，测试还是绿的）",
-  );
+test("事务内drift保留真实退出码和成功回执行为回归",async()=>{
+  const {runDriftCheck}=await import('../../../../services/phone-adb-controller/deployment-drift.mjs');
+  assert.throws(()=>runDriftCheck(process.execPath,['-e',"console.log('copied')"],process.env),/真实成功回执/);
+  assert.throws(()=>runDriftCheck(process.execPath,['-e',"console.log('DRIFT_CHECK OK');process.exit(1)"],process.env));
+  assert.match(runDriftCheck(process.execPath,['-e',"console.log('DRIFT_CHECK OK')"],process.env),/DRIFT_CHECK OK/);
 });
 
 test("DEPLOY_FAIL_DETAIL赋值带 || true(防set -e下grep空匹配杀脚本回归)", () => {
