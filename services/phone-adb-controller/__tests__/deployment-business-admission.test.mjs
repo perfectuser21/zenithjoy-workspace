@@ -72,7 +72,7 @@ function fullSkillFixture(){
  f.binding.runtime_snapshot_sha256='d'.repeat(64);
  const verification={task_id:taskId,run_id:'sample__a1',definition_sha256:'f'.repeat(64),verdict:'PASS',scope:'full_skill',source_commit:sha,run_binding_id:'binding',workflow_definition_version_id:'wf-version',skill:skillIdentity,acceptance_definition_sha256:hash(canonical(definition)),assertions:checks.map(c=>({id:c.id,pass:true,evidence:['immutable://same-run/'+c.id]})),evidence:['immutable://same-run/report']};
  const task={id:taskId,status:'completed',description:'仅同城AI考证，上限2，禁止发送',payload:{acceptance:{location:'same_city',limit:2}},result:{workflow_control:{phase:'final',envelope:{definition:{release_id:'candidate-release',runtime_snapshot_sha256:'d'.repeat(64)}},verification}}};
- const execution={id:'22222222-2222-4222-8222-222222222222',description:task.description,payload:task.payload,result:{run_id:'sample__a1',source_commit:sha}};
+ const execution={status:'completed',id:'22222222-2222-4222-8222-222222222222',description:task.description,payload:task.payload,result:{run_id:'sample__a1',source_commit:sha}};
  verification.execution_task_id=execution.id;
  verification.task_scope_sha256=hash(canonical({execution_task_id:execution.id,description:execution.description,payload:execution.payload}));
  verification.assertions.push({id:'task_scope',pass:true,evidence:['immutable://same-run/approved-filter']});
@@ -135,4 +135,8 @@ for(const [field,value]of [['send_authorized',true],['publication_authorized',tr
  f.verification.task_scope_sha256=hash(executionTaskScope(f.execution));
  f.execution.payload[field]=value;
  await assert.rejects(verifyBusinessAdmission(f.args),/输入\/授权已变化/);
+});
+
+for(const status of ['in_progress','blocked','failed'])test('原执行任务'+status+'不能凭独立报告先行放行',async()=>{
+ const f=fullSkillFixture();f.execution.status=status;await assert.rejects(verifyBusinessAdmission(f.args),/原执行任务/);
 });

@@ -44,7 +44,7 @@ for(const production of Object.values(releases)){
   responses.set('/api/brain/tasks/'+taskId,{id:taskId,status:'completed',result:{workflow_control:{phase:'final',envelope:{definition:{release_id:release.id,runtime_snapshot_sha256:runtimeHash}},verification:{task_id:taskId,run_id:runId,definition_sha256:workflow.payload_sha256,verdict:'PASS',assertions:[{name:'cleanup',pass:true}],evidence:['fixture://independent-readback/'+runId]}}}});
   if(workflowKeys.includes(key)){
    const d=skillAcceptanceDefinition(key,p=>readDeploymentSource(root,sha,p));
-   const execution={id:taskId.replace(/^a/,'b'),description:'隔离fixture的原授权范围',payload:{inputs:{location:'same_city'}},result:{run_id:runId,source_commit:sha}};
+   const execution={status:'completed',id:taskId.replace(/^a/,'b'),description:'隔离fixture的原授权范围',payload:{inputs:{location:'same_city'}},result:{run_id:runId,source_commit:sha}};
    const task=responses.get('/api/brain/tasks/'+taskId),v=task.result.workflow_control.verification;
    Object.assign(v,{execution_task_id:execution.id,scope:'full_skill',source_commit:sha,run_binding_id:binding.id,workflow_definition_version_id:workflow.id,skill:d.skill,acceptance_definition_sha256:digest(d),task_scope_sha256:digest({execution_task_id:execution.id,description:execution.description,payload:execution.payload}),assertions:[...d.checks.map(c=>c.id),'task_scope'].map(id=>({id,pass:true,evidence:['fixture://'+runId+'/'+id]}))});
    responses.set('/api/brain/tasks/'+execution.id,execution);acceptanceTaskIds[runId]=taskId;
