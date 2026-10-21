@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SERVICE = Path(__file__).resolve().parents[1]
 
@@ -107,6 +108,34 @@ class MaintenanceTest(unittest.TestCase):
         with self.assertRaises((ValueError, FileNotFoundError)):
             with tool.device_barrier(self.registry, self.locks, maintenance=(self.home, 't1')):
                 self.fail('missing maintenance intent cannot authorize installation')
+
+    def test_interrupted_retired_owner_cleanup_resumes_without_leaving_partial_directories(self):
+        self.acquire()
+        original = Path.unlink
+        stopped = [False]
+        def interrupted(path, *args, **kwargs):
+            if path.parent.name.startswith('.phone-retired-') and path.name == 'standalone_review_required' and not stopped[0]:
+                stopped[0] = True
+                raise OSError('process lost during retired cleanup')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'unlink', interrupted):
+            with self.assertRaises(OSError):
+                self.module.release(self.home, 't1', self.registry, self.locks)
+        self.module.release(self.home, 't1', self.registry, self.locks)
+        self.assertFalse(list(self.locks.glob('.phone-retired-*')))
+        self.assertFalse(list(self.locks.glob('*.lock')))
+        self.acquire()
+        self.module.verify(self.home, 't1', self.registry, self.locks)
+
+    def test_unknown_retired_owner_refuses_release_before_other_owners_are_removed(self):
+        self.acquire()
+        retired = self.locks / '.phone-retired-t1-SERIAL1'
+        retired.mkdir()
+        (retired / 'owner').write_text('someone-else')
+        with self.assertRaisesRegex(ValueError, 'owner'):
+            self.module.release(self.home, 't1', self.registry, self.locks)
+        self.assertEqual(len(list(self.locks.glob('*.lock'))), 2)
+        self.assertEqual((retired / 'owner').read_text(), 'someone-else')
 
 
 if __name__ == '__main__':
