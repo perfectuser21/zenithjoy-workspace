@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 export const vids=['7681632828384394202','7681632828384394203'];
 const hash=x=>createHash('sha256').update(x).digest('hex');
 export async function collectionFixture(t){
- const d=mkdtempSync(join(tmpdir(),'collection-real-recovery-')),runtime=join(d,'runtime'),source=new URL('../../',import.meta.url).pathname;
+ const d=realpathSync(mkdtempSync(join(tmpdir(),'collection-real-recovery-'))),runtime=join(d,'runtime'),source=new URL('../../',import.meta.url).pathname;
  cpSync(source,runtime,{recursive:true,filter:path=>!path.includes('/__tests__')&&!path.includes('/runtime/')});
  const sockets=new Set(),server=createServer(c=>{sockets.add(c);c.on('close',()=>sockets.delete(c));c.on('error',()=>{});let b='';c.on('data',s=>{b+=s;if(b.length<4)return;const n=parseInt(b.slice(0,4),16);if(b.length<4+n)return;const q=b.slice(4,4+n),out=q==='host:version'?'0029':q==='host:devices'?'NO-DEVICE\tdevice\n':null;if(out===null){c.end('FAIL0003bad');return;}c.end('OKAY'+Buffer.byteLength(out).toString(16).padStart(4,'0')+out);});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{for(const c of sockets)c.destroy();server.close();});
