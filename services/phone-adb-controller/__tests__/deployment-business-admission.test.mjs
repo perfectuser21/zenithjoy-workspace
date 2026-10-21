@@ -70,12 +70,12 @@ function fullSkillFixture(){
  const definition={schema_version:1,workflow_key:'douyin_video_processing',skill:skillIdentity,checks};
  const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
  f.binding.runtime_snapshot_sha256='d'.repeat(64);
- const verification={task_id:taskId,run_id:'sample__a1',definition_sha256:'f'.repeat(64),verdict:'PASS',scope:'full_skill',source_commit:sha,run_binding_id:'binding',workflow_definition_version_id:'wf-version',skill:skillIdentity,acceptance_definition_sha256:hash(canonical(definition)),assertions:checks.map(c=>({id:c.id,pass:true,evidence:['immutable://same-run/'+c.id]})),evidence:['immutable://same-run/report']};
+ const verification={task_id:taskId,run_id:'sample__a1',definition_sha256:'f'.repeat(64),verdict:'PASS',scope:'full_skill',missing:[],overreach:'无',source_commit:sha,run_binding_id:'binding',workflow_definition_version_id:'wf-version',skill:skillIdentity,acceptance_definition_sha256:hash(canonical(definition)),assertions:checks.map(c=>({id:c.id,pass:true,result:'pass',evidence:['immutable://same-run/'+c.id]})),evidence:['immutable://same-run/report']};
  const task={id:taskId,status:'completed',description:'仅同城AI考证，上限2，禁止发送',payload:{acceptance:{location:'same_city',limit:2}},result:{workflow_control:{phase:'final',envelope:{definition:{release_id:'candidate-release',runtime_snapshot_sha256:'d'.repeat(64)}},verification}}};
  const execution={status:'completed',id:'22222222-2222-4222-8222-222222222222',description:task.description,payload:task.payload,result:{run_id:'sample__a1',source_commit:sha}};
  verification.execution_task_id=execution.id;
  verification.task_scope_sha256=hash(canonical({execution_task_id:execution.id,description:execution.description,payload:execution.payload}));
- verification.assertions.push({id:'task_scope',pass:true,evidence:['immutable://same-run/approved-filter']});
+ verification.assertions.push({id:'task_scope',pass:true,result:'pass',evidence:['immutable://same-run/approved-filter']});
  const original=f.request;f.request=async path=>path==='/api/brain/tasks/'+taskId?task:path==='/api/brain/tasks/'+execution.id?execution:original(path);
  return {...f,task,execution,verification,args:{sha,targets:{'xian-m4':{definitions}},runIds:['sample__a1'],acceptanceTaskIds:{sample__a1:taskId},readFile:path=>{assert.equal(path,skillIdentity.path);return Buffer.from(skill);},request:f.request}};
 }
@@ -140,3 +140,12 @@ for(const [field,value]of [['send_authorized',true],['publication_authorized',tr
 for(const status of ['in_progress','blocked','failed'])test('原执行任务'+status+'不能凭独立报告先行放行',async()=>{
  const f=fullSkillFixture();f.execution.status=status;await assert.rejects(verifyBusinessAdmission(f.args),/原执行任务/);
 });
+
+for(const [label,change]of [
+ ['missing',f=>f.verification.missing=['缺同城证据']],
+ ['overreach',f=>f.verification.overreach='存在未授权发送'],
+ ['unknown',f=>f.verification.assertions[0].result='unknown'],
+ ['partial',f=>f.verification.assertions[0].status='partial'],
+ ['缺missing',f=>delete f.verification.missing],
+ ['缺overreach',f=>delete f.verification.overreach],
+])test('完整Skill PASS不允许矛盾报告：'+label,async()=>{const f=fullSkillFixture();change(f);await assert.rejects(verifyBusinessAdmission(f.args),/独立验收/);});

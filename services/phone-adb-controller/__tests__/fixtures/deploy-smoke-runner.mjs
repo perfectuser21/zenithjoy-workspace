@@ -46,7 +46,7 @@ for(const production of Object.values(releases)){
    const d=skillAcceptanceDefinition(key,p=>readDeploymentSource(root,sha,p));
    const execution={status:'completed',id:taskId.replace(/^a/,'b'),description:'隔离fixture的原授权范围',payload:{inputs:{location:'same_city'}},result:{run_id:runId,source_commit:sha}};
    const task=responses.get('/api/brain/tasks/'+taskId),v=task.result.workflow_control.verification;
-   Object.assign(v,{execution_task_id:execution.id,scope:'full_skill',source_commit:sha,run_binding_id:binding.id,workflow_definition_version_id:workflow.id,skill:d.skill,acceptance_definition_sha256:digest(d),task_scope_sha256:digest({execution_task_id:execution.id,description:execution.description,payload:execution.payload}),assertions:[...d.checks.map(c=>c.id),'task_scope'].map(id=>({id,pass:true,evidence:['fixture://'+runId+'/'+id]}))});
+   Object.assign(v,{execution_task_id:execution.id,scope:'full_skill',missing:[],overreach:'无',source_commit:sha,run_binding_id:binding.id,workflow_definition_version_id:workflow.id,skill:d.skill,acceptance_definition_sha256:digest(d),task_scope_sha256:digest({execution_task_id:execution.id,description:execution.description,payload:execution.payload}),assertions:[...d.checks.map(c=>c.id),'task_scope'].map(id=>({id,pass:true,result:'pass',evidence:['fixture://'+runId+'/'+id]}))});
    responses.set('/api/brain/tasks/'+execution.id,execution);acceptanceTaskIds[runId]=taskId;
   }
  }
