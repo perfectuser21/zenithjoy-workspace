@@ -155,3 +155,65 @@ test('真实部署回归仅精确脚本获得180秒预算，其他及近似名�
   assert.equal(actual.status, 0, actual.stderr);
   assert.equal(actual.stdout, '180\n90\n90\n');
 });
+
+test('正式caller强制回收忽略TERM的子进程后才返回，重试不会与残留并跑', t => {
+  const { root } = fixture(t);
+  const script = join(root, 'stubborn.sh');
+  const pidFile = join(root, 'child.pid');
+  writeFileSync(script, `#!/bin/bash\ntrap '' TERM\necho $$ > '${pidFile}'\nwhile :; do sleep 1; done\n`);
+  const definition = caller.match(/run_one\(\) \{[^\n]+}/)?.[0];
+  assert.ok(definition);
+  const result = spawnSync('bash', ['-c', `DIR='${root}'; script_timeout() { echo 0.2; }; ${definition}; run_one stubborn.sh`],
+    { encoding: 'utf8', timeout: 8000, killSignal: 'SIGKILL' });
+  const pid = Number(readFileSync(pidFile, 'utf8'));
+  t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch {} });
+  assert.equal(result.error, undefined, '必须在外层超时前完成子进程回收');
+  assert.notEqual(result.status, 0, '超时不能标为通过');
+  const state = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).stdout.trim();
+  assert.ok(!state || state.startsWith('Z'), `子进程仍在执行: ${state}`);
+});
+
+test('Android冷编译显式准备且不增加smoke预算，Gradle后台daemon被关闭', () => {
+  assert.match(workflow, /name: Prepare Android unit-test artifacts/);
+  assert.match(workflow, /:app:compileDebugUnitTestKotlin --no-daemon/);
+  assert.match(workflow, /GRADLE_OPTS: '-Dorg.gradle.daemon=false'/);
+});
+
+test('Staff验收API启动失败必须带原始诊断，不进入业务断言', t => {
+  const {root}=fixture(t);
+  for(const file of ['apps/api/src/services/acceptance.ts','apps/api/src/routes/staff.ts',
+    ...['AcceptancePage','AcceptanceDetailPage','AcceptanceHistoryPage'].map(n=>'apps/staff-hub/src/pages/'+n+'.tsx')]){
+    mkdirSync(join(root,file,'..'),{recursive:true});writeFileSync(join(root,file),'');
+  }
+  const bin=join(root,'fixture-bin');mkdirSync(bin);
+  for(const [name,body]of Object.entries({npm:'exit 0',node:'echo STAFF_FIXTURE_STARTUP_REFUSED >&2; exit 42',curl:'exit 7',sleep:'/bin/sleep 0.01'}))
+    writeFileSync(join(bin,name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
+  const script=readFileSync(new URL('../smoke/staff-acceptance-smoke.sh',import.meta.url),'utf8');
+  const run=spawnSync('bash',['-c',script],{cwd:root,env:{...process.env,PATH:bin+':'+process.env.PATH},encoding:'utf8',timeout:5000});
+  assert.notEqual(run.status,0);
+  assert.match(run.stdout+run.stderr,/STAFF_FIXTURE_STARTUP_REFUSED/);
+  assert.doesNotMatch(run.stdout,/三个验收端点无认证头/);
+});
+
+test('OpenClaw两片完整覆盖同一文件集合，失败片不能报通过',t=>{
+ const source=readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8');
+ const job=source.split('  openclaw-scripts-test:')[1].split('  api-scripts-test:')[0];
+ assert.match(job,/shard: \[1, 2\]/);assert.match(job,/fail-fast: false/);
+ assert.match(job,/--test-shard=\$\{\{ matrix.shard \}\}\/2/);
+ assert.match(job,/timeout-minutes: 10/);
+ assert.doesNotMatch(job,/continue-on-error|test-name-pattern|test-skip-pattern/);
+ const {root}=fixture(t),files=Array.from({length:8},(_,i)=>join(root,`case-${i}.test.mjs`));
+ const childEnv={...process.env};delete childEnv.NODE_TEST_CONTEXT;
+ for(const [i,file]of files.entries())writeFileSync(file,`import {test} from 'node:test';import {appendFileSync} from 'node:fs';test('case-${i}',()=>appendFileSync(process.env.TRACE,'${i}\\n'));`);
+ const sets=[];
+ for(const shard of [1,2]){
+  const trace=join(root,'trace-'+shard);
+  const r=spawnSync(process.execPath,['--test',`--test-shard=${shard}/2`,...files],{env:{...childEnv,TRACE:trace},encoding:'utf8',timeout:10000});
+  assert.equal(r.status,0,r.stderr);sets.push(readFileSync(trace,'utf8').trim().split('\n'));
+ }
+ assert.equal(sets[0].filter(x=>sets[1].includes(x)).length,0);
+ assert.deepEqual(sets.flat().sort(),['0','1','2','3','4','5','6','7']);
+ writeFileSync(files[0],"import {test} from 'node:test';test('must fail',()=>{throw Error('fixture');});");
+ const codes=[1,2].map(shard=>spawnSync(process.execPath,['--test',`--test-shard=${shard}/2`,...files],{env:{...childEnv,TRACE:join(root,'failed-trace')},encoding:'utf8',timeout:10000}).status);
+ assert.equal(codes.filter(x=>x!==0).length,1);
+});

@@ -263,7 +263,7 @@ jobs:
   openclaw-scripts-test:
     name: OpenClaw Scripts Test (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    # 正式3048项测试约562秒，加依赖准备后撞10分钟；原完整选择器原生分片，不延长单任务预算。
+    # 3049项实测543秒，加准备已逼近10分钟。原生分片覆盖完整同一集合，不筛测试。
     timeout-minutes: 10
     strategy:
       fail-fast: false

@@ -33,14 +33,22 @@ export CECELIA_BRAIN_URL="http://127.0.0.1:39999"
 AUTH_HEADER="X-User-Email: ${STAFF_EMAILS%%,*}"
 API="http://localhost:${PORT}"
 
-node -r dotenv/config dist/index.js > /tmp/staff-acceptance-smoke-api.log 2>&1 &
+API_LOG=$(mktemp "${TMPDIR:-/tmp}/staff-acceptance-smoke-api.XXXXXX")
+node -r dotenv/config dist/index.js > "$API_LOG" 2>&1 &
 API_PID=$!
-trap 'kill $API_PID 2>/dev/null || true' EXIT
+trap 'kill "$API_PID" 2>/dev/null || true; wait "$API_PID" 2>/dev/null || true' EXIT
 
+READY=false
 for _ in $(seq 1 30); do
-  if curl -s -o /dev/null "${API}/health"; then break; fi
+  if ! kill -0 "$API_PID" 2>/dev/null; then break; fi
+  if curl -fs --max-time 1 -o /dev/null "${API}/health"; then READY=true; break; fi
   sleep 0.5
 done
+if [ "$READY" != true ]; then
+  echo 'FAIL: Staff验收API未就绪，以下为本次启动日志' >&2
+  cat "$API_LOG" >&2
+  exit 1
+fi
 
 fail() { echo "FAIL: $1"; exit 1; }
 
