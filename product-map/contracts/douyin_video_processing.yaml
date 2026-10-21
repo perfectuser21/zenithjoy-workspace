@@ -851,6 +851,14 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/runtime/runtime-policy-sdk33.json
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/build-scrcpy-runtime.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime/scrcpy-v3.3.4-log-flush.patch
+        revision: contract
     model:
       - provider: dashscope
         model: qwen-audio-3.0-asr-flash

@@ -9,7 +9,7 @@ helper 不领取、刷新或释放设备锁，不创建 ADB server。
 | SDK | 固定策略 | 客户端 / server | 默认独立安装目录 |
 |---|---|---|---|
 | 31 | output PCM / WAV | 5.0.1，两项SHA见 `runtime-policy.json` | `$HOME/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8` |
-| ≥33 | playback + audio-dup / Matroska | 3.3.4，两项SHA见 `runtime-policy-sdk33.json` | `$HOME/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-flush` |
+| ≥33 | playback + audio-dup / Matroska | 3.3.4，两项SHA见 `runtime-policy-sdk33.json` | `$HOME/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-recorder-init-952ee084` |
 
 32或未知SDK保持不支持。两客户端只在既有修复基础上刷新日志，保留8秒就绪及精确PID/argv门禁；不升级Homebrew。
 helper及builder的 `--runtime-kind sdk31|sdk33` 只允许上述固定文件，默认sdk31以兼容既有调用；环境不得指定任意policy。

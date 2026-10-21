@@ -7,7 +7,7 @@ export function assertCaptureStrategy(p){
  if(!Number.isSafeInteger(p.audio_streams)||p.audio_streams<1)throw Error('RECORD_AUDIO_TRACK_UNVERIFIED');
  const r=p.capture_runtime,t=p.capture_runtime_end;
  const sdk33=p.capture_audio_mode==='playback_dup'&&p.capture_audio_sdk>=33;
- const client=sdk33?'d474146594d6f42ec04eede0049391a647ab27cdcf30c627ac30b281cf5069d7':'2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258';
+ const client=sdk33?'952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d':'2823f8e89c3cdb014457d47cb5d9a08d067bd5a1e9e6c9e784a6a6e0f5b8e258';
  const server=sdk33?'8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e':'764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536';
  if(!r||!t||r.client_sha256!==client||r.server_sha256!==server||r.evidence_file!==p.evidence_id+'.capture-runtime.json'||!/^[a-f0-9]{64}$/.test(r.evidence_sha256||'')||Object.keys(r).length!==4||Object.keys(t).length!==4||Object.keys(r).some(k=>r[k]!==t[k]))fail();
  if(sdk33)return;

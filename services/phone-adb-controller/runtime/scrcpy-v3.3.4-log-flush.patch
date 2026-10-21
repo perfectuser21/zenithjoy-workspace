@@ -7,3 +7,78 @@ index 9114a25..9299756 100644
 +    // Readiness consumers tail redirected logs while recording is alive.
 +    fflush(out);
  }
+diff --git a/app/src/recorder.c b/app/src/recorder.c
+--- a/app/src/recorder.c
++++ b/app/src/recorder.c
+@@ -150,4 +150,5 @@
+     if (!file_url) {
+         avformat_free_context(recorder->ctx);
++        recorder->ctx = NULL;
+         return false;
+     }
+@@ -158,4 +159,5 @@
+         LOGE("Failed to open output file: %s", recorder->filename);
+         avformat_free_context(recorder->ctx);
++        recorder->ctx = NULL;
+         return false;
+     }
+@@ -178,4 +180,5 @@
+     avio_close(recorder->ctx->pb);
+     avformat_free_context(recorder->ctx);
++    recorder->ctx = NULL;
+ }
+
+@@ -461,12 +464,5 @@
+ static bool
+ sc_recorder_record(struct sc_recorder *recorder) {
+-    bool ok = sc_recorder_open_output_file(recorder);
+-    if (!ok) {
+-        return false;
+-    }
+-
+-    ok = sc_recorder_process_packets(recorder);
+-    sc_recorder_close_output_file(recorder);
+-    return ok;
++    return sc_recorder_process_packets(recorder);
+ }
+
+@@ -484,4 +480,6 @@
+     // Prevent the producer to push any new packet
+     recorder->stopped = true;
++    // Reject sink opens/pushes before releasing their shared output context.
++    sc_recorder_close_output_file(recorder);
+     // Discard pending packets
+     sc_recorder_queue_clear(&recorder->video_queue);
+@@ -643,4 +641,8 @@
+
+     sc_mutex_lock(&recorder->mutex);
++    if (recorder->stopped) {
++        sc_mutex_unlock(&recorder->mutex);
++        return false;
++    }
+
+     AVStream *stream = avformat_new_stream(recorder->ctx, ctx->codec);
+@@ -785,4 +787,5 @@
+
+     recorder->format = format;
++    recorder->ctx = NULL;
+
+     assert(cbs && cbs->on_ended);
+@@ -823,8 +826,16 @@
+ bool
+ sc_recorder_start(struct sc_recorder *recorder) {
+-    bool ok = sc_thread_create(&recorder->thread, run_recorder,
++    // Demuxer sinks can open immediately after start returns. Publish a valid
++    // output context before the worker or either producer can run.
++    bool ok = sc_recorder_open_output_file(recorder);
++    if (!ok) {
++        return false;
++    }
++
++    ok = sc_thread_create(&recorder->thread, run_recorder,
+                                "scrcpy-recorder", recorder);
+     if (!ok) {
+         LOGE("Could not start recorder thread");
++        sc_recorder_close_output_file(recorder);
+         return false;
+     }

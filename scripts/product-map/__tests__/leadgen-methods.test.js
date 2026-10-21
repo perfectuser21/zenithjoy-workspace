@@ -143,3 +143,17 @@ test('verified runtime binding bytes belong to every consumer method source clos
   assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
  }
 });
+
+for(const name of ['build-scrcpy-runtime.py','scrcpy-v3.3.4-log-flush.patch'])test('SDK33 qualification tracks actual build source '+name,t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/runtime/'+name;
+ put(root,path,readFileSync(join(source,path)));
+ const before=collectMethods(root);
+ put(root,path,Buffer.concat([readFileSync(join(root,path)),Buffer.from('\n# isolated build-source mutation\n')]));
+ const after=collectMethods(root);
+ const changed=Object.keys(before.activities).filter(ref=>after.activities[ref].code_digest!==before.activities[ref].code_digest);
+ assert.deepEqual(changed,['douyin_video_processing.qualification']);
+ for(const ref of Object.keys(before.activities)){
+  assert.equal(after.activities[ref].contract_digest,before.activities[ref].contract_digest);
+  assert.equal(after.activities[ref].skill.content_digest,before.activities[ref].skill.content_digest);
+ }
+});
