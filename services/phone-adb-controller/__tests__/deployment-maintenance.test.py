@@ -86,6 +86,28 @@ class MaintenanceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlink'):
             self.acquire()
 
+    def test_input_pair_accepts_only_its_frozen_transaction_quarantine(self):
+        self.acquire()
+        spec = importlib.util.spec_from_file_location('input_release', SERVICE / 'input-runtime-release.py')
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        with self.assertRaisesRegex(ValueError, 'owner'):
+            with tool.device_barrier(self.registry, self.locks):
+                self.fail('legacy installer cannot bypass quarantine')
+        with tool.device_barrier(self.registry, self.locks, maintenance=(self.home, 't1')) as verify:
+            verify()
+            (self.locks / 'SERIAL1.lock/owner').write_text('different owner')
+            with self.assertRaisesRegex(ValueError, 'owner'):
+                verify()
+
+    def test_input_pair_maintenance_cannot_take_a_free_device_without_its_owner(self):
+        spec = importlib.util.spec_from_file_location('input_release', SERVICE / 'input-runtime-release.py')
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            with tool.device_barrier(self.registry, self.locks, maintenance=(self.home, 't1')):
+                self.fail('missing maintenance intent cannot authorize installation')
+
 
 if __name__ == '__main__':
     unittest.main()
