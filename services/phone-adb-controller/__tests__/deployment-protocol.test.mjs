@@ -68,3 +68,14 @@ test('恢复实际持久descriptor/journal：未知事务、错SHA和双机身�
  for(const [key,value] of [['source_commit','c'.repeat(40)],['previous_source_commit',sha],['release_id',ids.mmv],['previous_release_id',prior.mmv],['target','mmv']])assert.throws(()=>verifyRecoveryJournal(descriptor,'xian-m4',{...actual.journal,identity:{...actual.journal.identity,[key]:value}}),/journal身份/);
  assert.throws(()=>verifyRecoveryJournal(descriptor,'mmv',actual.journal),/journal身份/);
 });
+
+test('安装已开始且真实持久journal缺失时拒绝恢复，不视为prepare失败',async t=>{
+ const {mkdtempSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {execFileSync}=await import('node:child_process');
+ const {verifyRecoveryJournal}=await import('../deployment-backend.mjs');
+ const home=mkdtempSync(join(tmpdir(),'phone-started-missing-journal-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const code=`import importlib.util,json,sys\nfrom pathlib import Path\np=Path(sys.argv[2])/'deployment-host.py';s=importlib.util.spec_from_file_location('host',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);home=Path(sys.argv[1]).resolve();m.record(home,'phone-started','started',True,None)\nprint(json.dumps({'started':m.record(home,'phone-started','started'),'journal':m.dispatch(home,'inspect',{'transaction':'phone-started'})}))\n`;
+ const actual=JSON.parse(execFileSync('python3',['-c',code,home,new URL('../',import.meta.url).pathname],{encoding:'utf8'}));
+ assert.equal(actual.started,true);assert.equal(actual.journal,null);
+ for(const host of ['xian-m4','mmv'])assert.throws(()=>verifyRecoveryJournal({transaction:'phone-started'},host,actual.journal,actual.started),/已开始安装.*journal缺失/);
+ assert.equal(verifyRecoveryJournal({transaction:'phone-started'},'mmv',null,false),null);
+});
