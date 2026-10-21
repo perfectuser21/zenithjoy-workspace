@@ -2,7 +2,7 @@
 # diagnostics.test.sh — 抓评论 smoke 的诊断必须可达（无需真机，CI linux runner 可跑）
 #
 # 防的退化：`set -e` 下写 `X=$(cmd)`，cmd 非 0 时会静默杀死整个脚本，把脚本自己
-# 写好的错误输出与优雅 skip 分支全部跳过。
+# 写好的错误输出与失败诊断 分支全部跳过。
 #
 # 08-17 实测：line02-keyword-comment 在 Step 1 两秒内 exit 1、**零输出**；手动跑
 # 那个 node 脚本才看到真因 {"ok":false,"error":"NO_HEADFUL_CHROME: 无
@@ -21,10 +21,10 @@ check() { # check DESC EXPECT ACTUAL
 
 echo "== A. 静态：set -e 下的命令替换不得裸奔 =="
 # 两处都要：:70 的 KW_OUT（关键词搜索）与 :110 的 CM_OUT（评论抓取）同病。
-check "KW_OUT 赋值带 || true" "yes" \
-  "$(grep -qE 'KW_OUT=\$\(.*\)[[:space:]]*\|\|[[:space:]]*true' "$SCRIPT" && echo yes || echo no)"
-check "CM_OUT 赋值带 || true" "yes" \
-  "$(grep -qE 'CM_OUT=\$\(.*\)[[:space:]]*\|\|[[:space:]]*true' "$SCRIPT" && echo yes || echo no)"
+check "KW_OUT 赋值保存退出码" "yes" \
+  "$(grep -qE 'KW_OUT=\$\(.*\)[[:space:]]*\|\|[[:space:]]*[A-Z_]+=\$\?'  "$SCRIPT" && echo yes || echo no)"
+check "CM_OUT 赋值保存退出码" "yes" \
+  "$(grep -qE 'CM_OUT=\$\(.*\)[[:space:]]*\|\|[[:space:]]*[A-Z_]+=\$\?'  "$SCRIPT" && echo yes || echo no)"
 
 echo "== B. 行为：classify_node_failure 分级 =="
 # shellcheck source=/dev/null
@@ -36,7 +36,7 @@ check "NO_HEADFUL_CHROME 判 fail 且带上原因" "fail:NO_HEADFUL_CHROME" \
   "$(classify_node_failure "$OUT_NOCHROME")"
 
 OUT_EXPIRED='{"ok":false,"error":"DOUYIN_SESSION_EXPIRED"}'
-check "DOUYIN_SESSION_EXPIRED 判 skip（已知环境限制）" "skip:DOUYIN_SESSION_EXPIRED" \
+check "DOUYIN_SESSION_EXPIRED 判 fail（未完成真机验收）" "fail:DOUYIN_SESSION_EXPIRED" \
   "$(classify_node_failure "$OUT_EXPIRED")"
 
 check "连 JSON 都没有也要给结论" "fail:NO_JSON" \

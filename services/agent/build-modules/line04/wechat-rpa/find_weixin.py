@@ -579,50 +579,30 @@ def get_main_window() -> Optional[Any]:
     return None
 
 
-def login_window_present() -> bool:
-    """是否检测到真正未登录界面（需扫码登录）。
-
-    区分两种 mmui::LoginWindow 状态：
-    - title='登录'：真正未登录，需要扫码 → 返回 True
-    - title='微信'：隐私锁屏（账号已登录但屏幕被锁）→ 返回 False（见 is_privacy_locked）
-    """
+def _login_window_kind_present(expected: str) -> bool:
     from pywinauto import Desktop
-
-    for w in Desktop(backend="uia").windows():
-        try:
-            cls = w.element_info.class_name
-            title = w.element_info.name or ""
-            if cls == LOGIN_WINDOW_CLASS and title == "登录":
-                return True
-            # "Weixin"/"微信" = 已登录或隐私锁，不是真正未登录；只有"登录"才是扫码登录页
-            if cls == QT5_WINDOW_CLASS and title == "登录":
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def is_privacy_locked() -> bool:
-    """检测微信是否处于隐私锁屏状态（账号已登录但屏幕被锁）。
-
-    当微信启用隐私保护（隐私锁）时，锁屏界面复用 mmui::LoginWindow 类，
-    但 title 保持 '微信'（app 名），区别于真正未登录的 '登录' title。
-    枚举失败（UIA 未就绪）时保守返回 False，不阻断监听主循环。
-    """
-    from pywinauto import Desktop
+    from login_window_state import login_window_kind
 
     try:
-        for w in Desktop(backend="uia").windows():
+        for window in Desktop(backend="uia").windows():
             try:
-                cls = w.element_info.class_name
-                title = w.element_info.name or ""
-                if cls == LOGIN_WINDOW_CLASS and title == "微信":
+                if login_window_kind(window) == expected:
                     return True
             except Exception:
                 continue
     except Exception:
         pass
     return False
+
+
+def login_window_present() -> bool:
+    """识别真正未登录页面；微信标题的二维码页也必须报告需扫码。"""
+    return _login_window_kind_present("scan_login")
+
+
+def is_privacy_locked() -> bool:
+    """扫码页与欢迎页不属于隐私锁，不能建议用户关闭无关设置。"""
+    return _login_window_kind_present("privacy_lock")
 
 
 def classify_login_window(button_names: list) -> str:

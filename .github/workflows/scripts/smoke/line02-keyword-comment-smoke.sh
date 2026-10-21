@@ -4,15 +4,14 @@
 #
 # 依赖：
 #   - 真机 Windows（xian-rog, [self-hosted, wechat-capable]）
-#   - ZenithJoy Agent 已安装，含 publishers/keyword-search-douyin.cjs
-#                            和 publishers/crawl-comments-douyin.cjs
+#   - 当前候选 checkout 中的 services/agent/publishers，已按 lockfile 安装依赖
 #   - .env 中 ZJ_MAIN_DATA_DIR 指向含有效抖音 session 的 Chrome profile
 #
 # 运行：
 #   bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
 #
 # 环境变量（可选覆盖）：
-#   AGENT_DIR   — agent 安装目录（默认自动探测）
+#   AGENT_DIR   — 必须是当前候选 checkout/services/agent，不接受安装目录
 #   SMOKE_KW    — 测试关键词（默认"美甲"）
 
 set -euo pipefail
@@ -20,17 +19,7 @@ set -euo pipefail
 ok()   { echo "✅ $1"; }
 fail() { echo "❌ $1"; exit 1; }
 
-# ── 诊断分级纯函数（可 source，变异测试锚点）──────────────────────────────
-# classify_node_failure NODE_OUTPUT
-#   把 node 脚本（可能非 0 退出）的输出分级成 "<verdict>:<reason>"：
-#     skip:<ERR>   已知环境限制，不算产品缺陷（DOUYIN_SESSION_EXPIRED：CI 以 SYSTEM
-#                  运行、DPAPI 解不开 asus 账号的 Chrome cookie）
-#     fail:<ERR>   真失败，且必须带上具体 error 便于定位（如 NO_HEADFUL_CHROME）
-#     fail:NO_JSON 连 JSON 都没输出（node 本身没起来）——也要给结论，不能静默
-#
-# 为什么需要它：本脚本 set -euo pipefail，而下方 `KW_OUT=$(node ...)` 在 node 非 0
-# 退出时会**静默杀死整个脚本**，让其后的 fail「完整输出」与 skip 分支永远执行不到。
-# 08-17 实测：Step 1 两秒 exit 1、零输出，手动跑 node 才看到 NO_HEADFUL_CHROME。
+# ── 诊断分级纯函数：环境失效同样拒绝验收 ─────────────────────────────
 classify_node_failure() {
   local out="${1:-}" json err
   json=$(printf '%s\n' "$out" | grep '^{' | tail -1)
@@ -38,7 +27,7 @@ classify_node_failure() {
   err=$(printf '%s' "$json" \
     | grep -oE '"error"[[:space:]]*:[[:space:]]*"[^":]+' | head -1 | sed -E 's/.*"//')
   case "$err" in
-    DOUYIN_SESSION_EXPIRED) printf 'skip:%s' "$err" ;;
+    DOUYIN_SESSION_EXPIRED) printf 'fail:%s' "$err" ;;
     '')                     printf 'fail:UNKNOWN' ;;
     *)                      printf 'fail:%s' "$err" ;;
   esac
@@ -56,24 +45,27 @@ echo "  Line02 Keyword→Comment Smoke"
 echo "  KW=$SMOKE_KW"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── 1. 定位 agent 安装目录 ────────────────────────────────────────
-if [ -n "${AGENT_DIR:-}" ]; then
-  echo "[smoke] 使用手动指定 AGENT_DIR=$AGENT_DIR"
-else
-  # runner 可能以系统账号运行，USERPROFILE 不可靠，搜索所有用户 Desktop
-  AGENT_DIR=$(ls -d /c/Users/*/Desktop/zenithjoy-agent-v* 2>/dev/null \
-    | sort -t'v' -k2 -V | tail -1 || true)
-fi
+# ── 1. 固定当前候选源码，禁止验证另一份已安装版本 ──────────────────
+ROOT="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}"
+if command -v cygpath >/dev/null; then ROOT=$(cygpath -u "$ROOT"); fi
+ROOT=$(cd "$ROOT" && pwd -P)
+EXPECTED_AGENT="$ROOT/services/agent"
+AGENT_DIR="${AGENT_DIR:-$EXPECTED_AGENT}"
+if command -v cygpath >/dev/null; then AGENT_DIR=$(cygpath -u "$AGENT_DIR"); fi
+[ -d "$AGENT_DIR" ] || fail "CANDIDATE_SOURCE_MISMATCH: 缺少候选 services/agent"
+AGENT_DIR=$(cd "$AGENT_DIR" && pwd -P)
+[ "$AGENT_DIR" = "$EXPECTED_AGENT" ] || fail "CANDIDATE_SOURCE_MISMATCH: 不允许安装目录"
+ACTUAL_SHA=$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)
+EXPECTED_SHA="${GITHUB_SHA:-$ACTUAL_SHA}"
+[ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || fail "CANDIDATE_SHA_MISMATCH: expected=$EXPECTED_SHA actual=$ACTUAL_SHA"
+[ -z "$(git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain -- services/agent/publishers)" ] \
+  || fail "CANDIDATE_SOURCE_DIRTY: publishers 与候选提交不一致"
+ok "candidate sha=$ACTUAL_SHA"
 
-[ -n "$AGENT_DIR" ] && [ -d "$AGENT_DIR" ] \
-  || fail "找不到 agent 安装目录。请设置 AGENT_DIR 环境变量"
-ok "agent 目录: $AGENT_DIR"
-
-# ── 2. 定位 Node.js ────────────────────────────────────────────────
-# runner 以系统账号运行，搜索所有用户的 ZenithJoy runtime
-NODE_EXE=$(ls /c/Users/*/AppData/Roaming/ZenithJoy/runtime/nodejs/node.exe 2>/dev/null | head -1 || true)
-[ -f "$NODE_EXE" ] || NODE_EXE="$(which node 2>/dev/null || true)"
-[ -f "$NODE_EXE" ] || fail "找不到 node.exe。请确认 agent 已完成首次启动（node runtime 自动安装）"
+# ── 2. 明确运行时；业务代码仅来自上述候选 ──────────────────────────
+NODE_EXE="${NODE_EXE:-$(command -v node || true)}"
+if command -v cygpath >/dev/null; then NODE_EXE=$(cygpath -u "$NODE_EXE"); fi
+[ -f "$NODE_EXE" ] || fail "找不到已准备的 node 运行时"
 ok "node: $NODE_EXE"
 
 KW_SCRIPT="$AGENT_DIR/publishers/keyword-search-douyin.cjs"
@@ -96,32 +88,16 @@ node_parse() {
 # ── 3. 关键词搜索 ─────────────────────────────────────────────────
 echo ""
 echo "=== Step 1: 关键词搜索 kw=$SMOKE_KW ==="
-# || true 是必须的：set -e 下 node 非 0 退出会静默杀死脚本，下面的 fail「完整输出」
-# 与 DOUYIN_SESSION_EXPIRED skip 分支就永远执行不到（08-17 实测 exit 1 零输出）。
-KW_OUT=$("$NODE_EXE" "$KW_SCRIPT" "$SMOKE_KW" 2>&1) || true
-echo "$KW_OUT" | grep -v '^{' | head -20
-KW_JSON=$(echo "$KW_OUT" | grep '^{' | tail -1)
+KW_CODE=0
+KW_OUT=$("$NODE_EXE" "$KW_SCRIPT" "$SMOKE_KW" 2>&1) || KW_CODE=$?
+printf '%s\n' "$KW_OUT" | grep -v '^{' | head -20 || true
+KW_JSON=$(printf '%s\n' "$KW_OUT" | grep '^{' | tail -1 || true)
 [ -n "$KW_JSON" ] || fail "keyword-search 无 JSON 输出（分级=$(classify_node_failure "$KW_OUT")）— 完整输出: $KW_OUT"
+[ "$KW_CODE" -eq 0 ] || fail "keyword-search exit=$KW_CODE（分级=$(classify_node_failure "$KW_OUT")）"
 
 KW_OK=$(node_parse "$KW_JSON" "String(d.ok)")
 [ "$KW_OK" = "true" ] || {
   ERR=$(node_parse "$KW_JSON" "d.error||'unknown'")
-  # DPAPI 限制：CI runner 以 SYSTEM 运行无法解密 asus 账号的 Chrome cookies
-  # 此时 skip（exit 0）而不是 fail — 需要 PsExec -i 1 才能根治
-  if [ "$ERR" = "DOUYIN_SESSION_EXPIRED" ]; then
-    echo "⚠️  SKIP: Douyin session 不可用（DPAPI cookie 解密失败 — CI 以 SYSTEM 运行）"
-    echo "    手动运行方式: bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh"
-    # 让绿灯不撒谎：把 SKIPPED 冒到 Actions run 页面顶部 summary，而不是埋在日志里没人看
-    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-      {
-        echo "## ⚠️ 抖音真机闸未执行（SKIPPED，非通过）"
-        echo ""
-        echo "本次 **未验证** keyword→comment 真机链路：DPAPI 解不开 Douyin cookie（CI 以 SYSTEM 运行）。"
-        echo "job 显示绿（continue-on-error）**不代表真机跑过**。根治需 PsExec -i 1 进 session 1。"
-      } >> "$GITHUB_STEP_SUMMARY"
-    fi
-    exit 0
-  fi
   fail "keyword-search ok=false: $ERR"
 }
 
@@ -138,11 +114,13 @@ echo ""
 echo "=== Step 2: 评论抓取 url=$FIRST_VIDEO ==="
 # 参数：<video_url> <task_id> <apiBase=''> <cdpPort=''> <mode=--stdout-only>
 # task_id 传 'smoke-test'（非空字符串，避免脚本提前退出，--stdout-only 不用 apiBase）
-CM_OUT=$("$NODE_EXE" "$CM_SCRIPT" "$FIRST_VIDEO" "smoke-test" "" "" "--stdout-only" 2>&1) || true
-echo "$CM_OUT" | grep -v '^{' | head -20
-CM_JSON=$(echo "$CM_OUT" | grep '^{' | tail -1)
+CM_CODE=0
+CM_OUT=$("$NODE_EXE" "$CM_SCRIPT" "$FIRST_VIDEO" "smoke-test" "" "" "--stdout-only" 2>&1) || CM_CODE=$?
+printf '%s\n' "$CM_OUT" | grep -v '^{' | head -20 || true
+CM_JSON=$(printf '%s\n' "$CM_OUT" | grep '^{' | tail -1 || true)
 [ -n "$CM_JSON" ] || fail "crawl-comments 无 JSON 输出（分级=$(classify_node_failure "$CM_OUT")）— 完整输出: $CM_OUT"
 
+[ "$CM_CODE" -eq 0 ] || fail "crawl-comments exit=$CM_CODE（分级=$(classify_node_failure "$CM_OUT")）"
 CM_OK=$(node_parse "$CM_JSON" "String(d.ok)")
 [ "$CM_OK" = "true" ] || {
   ERR=$(node_parse "$CM_JSON" "d.error||'unknown'")

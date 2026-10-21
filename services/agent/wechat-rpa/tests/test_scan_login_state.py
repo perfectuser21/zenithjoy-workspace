@@ -44,7 +44,7 @@ def test_chat_message_about_scan_login_cannot_be_mistaken_for_login(desktop):
 
 def test_nightly_reports_scan_required_and_never_sends(desktop, monkeypatch, tmp_path):
     desktop(Window([('二维码', 'Button'), ('扫码登录', 'Text')]))
-    path=Path(__file__).resolve().parents[2]/'tools/selfcheck_bubbles.py'
+    path=next(parent/'tools/selfcheck_bubbles.py' for parent in Path(__file__).resolve().parents if (parent/'tools/selfcheck_bubbles.py').is_file())
     spec=importlib.util.spec_from_file_location('scan_login_bubble_gate', path)
     gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
     monkeypatch.setitem(sys.modules,'listen_chat',SimpleNamespace(_SENT_TEXTS=[],_load_sent_texts=lambda:[]))
