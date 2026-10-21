@@ -20,6 +20,17 @@ const need=(v,m)=>{if(!v)throw Error('手机整包事务: '+m);};
 const command=(file,args,extra={})=>execFileSync(file,args,{encoding:'utf8',timeout:120000,maxBuffer:32*1024*1024,...extra});
 const guard=(action)=>command('python3',[join(HERE,'deployment-guard.py'),action],{stdio:inheritedDeploymentStdio(process.env)});
 const ownSource=(root,sha,path)=>readDeploymentSource(root,sha,'services/phone-adb-controller/'+path);
+function verifyBackendSource(root,sha){
+ verifyTransactionProtocol(ownSource(root,sha,'deployment-protocol.json'));
+ // 包含传递import、动态Python采集器与实际子进程；必须在guard/SSH之前核验。
+ for(const file of ['deployment-backend.mjs','deployment-drift.mjs','deployment-protocol.mjs','deployment-transport.mjs',
+  'deployment-coordinator.mjs','deployment-write-set.mjs','deployment-unified-observe.mjs','deployment-fixed-source.mjs',
+  'deployment-preflight.mjs','deployment-targets.mjs','deployment-release.mjs','deployment-business-admission.mjs',
+  'company-config-readiness.mjs','company-config-lib.js','line-routes.js','runtime-definition.mjs','runtime-host.mjs',
+  'runtime-release.mjs','runtime-outbox.mjs','deployment-guard.py','deployment-installed.py','commander/wf-v2-io.py',
+  'drift-check.sh','deploy.sh'])ownSource(root,sha,file);
+}
+
 function transactionId(sha,attempt){return 'phone-'+sha.slice(0,12)+'-'+digest(attempt).slice(0,16);}
 async function childDeployment(root,transaction){
  const child=spawn('bash',[join(root,'services/phone-adb-controller/deploy.sh')],{
@@ -39,6 +50,7 @@ async function gate(request,releaseId,observationId){
  return value;
 }
 export function verifyChildTransaction(sha,transaction){
+ verifyBackendSource(resolve(HERE,'../..'),sha);
  guard('check');
  need(/^[a-f0-9]{40}$/.test(sha)&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(transaction),'非法child事务身份');
  const transport=deploymentTransport(sha);
@@ -55,9 +67,7 @@ export function verifyChildTransaction(sha,transaction){
 }
 export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,action='deploy',transaction}){
  need(['deploy','recover','rollback'].includes(action)&&/^[a-f0-9]{40}$/.test(sha),'非法操作或SHA');
- verifyTransactionProtocol(ownSource(root,sha,'deployment-protocol.json'));
- // 执行器和全部引用的恢复工具必须是本次候选固定字节。
- for(const file of ['deployment-backend.mjs','deployment-drift.mjs','deployment-protocol.mjs','deployment-transport.mjs','deployment-coordinator.mjs','deployment-write-set.mjs','deployment-unified-observe.mjs'])ownSource(root,sha,file);
+ verifyBackendSource(root,sha);
  guard('check');
  guard('admit');
  let began=false,initialPending;
