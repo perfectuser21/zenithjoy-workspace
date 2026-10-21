@@ -15,10 +15,14 @@ const DEFAULT_MANIFEST_PATH =
   '/opt/zenithjoy/install-pack/manifest.json';
 
 export function readInstallPackManifest(
-  filePath: string = DEFAULT_MANIFEST_PATH
+  filePath: string = DEFAULT_MANIFEST_PATH,
+  strict = false
 ): InstallPackManifest | null {
   try {
-    if (!fs.existsSync(filePath)) return null;
+    if (!fs.existsSync(filePath)) {
+      if (strict && fs.existsSync(filePath + '.releases')) throw new Error('released manifest missing');
+      return null;
+    }
     const raw = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(raw) as InstallPackManifest;
     if (
@@ -28,8 +32,10 @@ export function readInstallPackManifest(
     ) {
       return parsed;
     }
+    if (strict) throw new Error('invalid release manifest');
     return null;
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return null;
   }
 }

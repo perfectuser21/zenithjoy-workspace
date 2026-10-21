@@ -1,0 +1,46 @@
+name: Promote Verified Install Pack
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 已通过安装及业务验收的完整源码SHA
+        required: true
+        type: string
+      candidate_run_id:
+        description: 成功构建候选的GitHub运行ID
+        required: true
+        type: string
+      acceptance_run_key:
+        description: 同包及四模块真实验收已定案的Brain单
+        required: true
+        type: string
+concurrency:
+  group: zenithjoy-production-hk
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 -m pip install coscmd
+      - name: Verify evidence and promote exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          ACCEPTANCE_RUN_KEY: ${{ inputs.acceptance_run_key }}
+          VPS_API_URL: ${{ secrets.VPS_API_URL }}
+          VPS_INTERNAL_TOKEN: ${{ secrets.VPS_INTERNAL_TOKEN }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: node scripts/release-gate/installpack-promote.mjs

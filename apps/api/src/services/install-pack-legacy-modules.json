@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-10-21T00:52:00Z",
+  "evidence": "hk-vps zenithjoy-api-prod dist/services/walking-skeleton.service.js 只读实测；这是迁移前状态，不是新业务验收",
+  "versions": {
+    "line04-wechat-cs": "1.0.153",
+    "line01-publish": "1.0.1",
+    "line02-lead-gen": "1.0.11",
+    "line05-video": "1.0.1"
+  }
+}

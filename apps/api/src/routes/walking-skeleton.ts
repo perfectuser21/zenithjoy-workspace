@@ -13,6 +13,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import {selectReleasedModules} from '../services/released-modules';
 import { licenseAuth } from '../middleware/license-auth';
 import {
   upsertAgentByHeartbeat,
@@ -100,7 +101,7 @@ heartbeatRouter.post(
       return res.status(200).json({
         ok: true,
         agent_id: null,
-        modules: HEARTBEAT_MODULES,
+        modules: selectReleasedModules(HEARTBEAT_MODULES),
         required_agent_version: getRequiredAgentVersion(),
         queued_tasks: [],
       });
@@ -157,7 +158,7 @@ heartbeatRouter.post(
         ok: true,
         agent_id: agent.id,
         // 服务端下发模块清单（第一刀硬编码 active，含 status + required_version）
-        modules: HEARTBEAT_MODULES,
+        modules: selectReleasedModules(HEARTBEAT_MODULES),
         // 核心自升级（Sprint 06222100）：下发 Agent 核心要求版本（含 sha256/size 供下载校验）。
         // 客户端 CoreUpgrader 对比自身 version，> 自身则下载新核心包自换重启。
         required_agent_version: getRequiredAgentVersion(),
