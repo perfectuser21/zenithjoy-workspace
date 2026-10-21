@@ -85,6 +85,7 @@ remote_md5() { ssh "$1" "if [ -f $2 ]; then if command -v md5 >/dev/null 2>&1; t
 # kickstart_if_changed <host> <label> <旧md5> <远端路径> —— md5 变了才 launchctl kickstart -k(KeepAlive 长驻进程读的是旧 inode)
 kickstart_if_changed() {
   local host="$1" label="$2" before="$3" rpath="$4" after
+  [[ -z "${WF_PHONE_TRANSACTION:-}" ]] || return 0 # 协调器整包写完才精确重载。
   after="$(remote_md5 "$host" "$rpath")"
   if [[ "$before" == "$after" ]]; then echo "    · $label 内容未变,不重载"; return 0; fi
   # 10-08: 有意 launchctl disable 的服务(如 mmv 分身 watcher)kickstart 必失败,不能因此卡住 manifest 发布;文件照常换版,启用时自然读新版
@@ -205,7 +206,7 @@ MMV_MANIFEST=$(mktemp)
 PUBLISH_PENDING_SHA=''
 cleanup_deployment() {
   local status=$?
-  if [[ -n "$PUBLISH_PENDING_SHA" ]]; then
+  if [[ -n "$PUBLISH_PENDING_SHA" && -z "${WF_PHONE_TRANSACTION:-}" ]]; then
     ssh mmv node '~/.openclaw/leadgen-scripts/deployment-publish-release.mjs' rollback "$PUBLISH_PENDING_SHA" || echo '❌ 发布链接回退未完成，保留部署admission' >&2
   fi
   rm -f "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
@@ -230,6 +231,12 @@ python3 "$D/input-runtime-release.py" source-info "$D/douyin-phone-adb" "$D/text
 
 # 新公司模块只在PG schema已就绪时安装；只读探针先于远端admission写入。
 node "$D/company-config-readiness.mjs"
+if [[ -z "${WF_PHONE_TRANSACTION:-}" ]]; then
+  [[ "${1:-}" != --commander-only ]] || { echo '整包事务不允许局部Commander覆盖；请晋级完整已验候选' >&2; exit 1; }
+  node "$D/deployment-backend.mjs" deploy "$(git rev-parse HEAD)" '' "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
+  exit $?
+fi
+node "$D/deployment-backend.mjs" check-child "$(git rev-parse HEAD)" "$WF_PHONE_TRANSACTION"
 commander_admission
 [[ "$FAILED" == 0 ]] || exit 1
 deploy_release_evidence
@@ -240,7 +247,7 @@ if [[ "${1:-}" == "--commander-only" ]]; then
   activate_publish_package
   node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
   PUBLISH_PENDING_SHA=''
-  python3 "$D/deployment-guard.py" complete
+  : # 完整事务由协调器读回后提交并释放admission
   echo "✅ Commander与既有本机视图已绑定同一正式release/ACK"
   exit 0
 fi
@@ -316,16 +323,16 @@ for host in xian-m4; do
   # Capture both runtime paths before upload; install compares them under one deployment guard.
   # A new paused/viewport controller is allowed when it carries the same verified input pair.
   _input_stage="$(ssh "$host" 'mktemp -d /tmp/input-runtime-deploy.XXXXXX')"
-  scp -q -p "$D/input-runtime-release.py" "$host:$_input_stage/input-runtime-release.py"
+  scp -q -p "$D/input-runtime-release.py" "$D/deployment-transaction.py" "$D/deployment-maintenance.py" "$host:$_input_stage/"
   if ssh "$host" "python3 $_input_stage/input-runtime-release.py capture ~/bin-harvest ~/.local/bin > $_input_stage/expected.json" && \
      scp -q -p "$D/douyin-phone-adb" "$D/text-input-focus.py" "$host:$_input_stage/" && \
-     ssh "$host" "python3 $_input_stage/input-runtime-release.py install $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin"; then
+     ssh "$host" "python3 $_input_stage/input-runtime-release.py install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin"; then
     echo "    ✅ input controller/helper pair CAS verified in both runtime paths"
   else
     echo "    ❌ input pair rejected (revision/source/CAS/readback); deployment cannot be declared successful"
     FAILED=1
   fi
-  ssh "$host" "rm -f $_input_stage/input-runtime-release.py $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json; rmdir $_input_stage" || true
+  ssh "$host" "rm -f $_input_stage/deployment-transaction.py $_input_stage/deployment-maintenance.py $_input_stage/input-runtime-release.py $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json; rmdir $_input_stage" || true
   for f in "${DEVICE_CTL_FILES[@]}"; do
     [[ "$f" != "douyin-phone-adb" && "$f" != "text-input-focus.py" ]] || continue
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
@@ -361,7 +368,7 @@ done
 
 deploy_commander
 
-if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then
+if ! phone_transaction_tool xian-m4 service apply; then
   echo "❌ PHONE_RECOVERY 开机自检安装失败"; FAILED=1
 fi
 
@@ -400,5 +407,5 @@ fi
 activate_publish_package
 node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
 PUBLISH_PENDING_SHA=''
-python3 "$D/deployment-guard.py" complete
+: # 完整事务由协调器读回后提交并释放admission
 echo "✅ 同一目标完整release已部署，旧运行包与Commander共享正式观测。"

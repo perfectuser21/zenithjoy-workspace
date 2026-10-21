@@ -21,8 +21,9 @@ export async function coordinateDeployment(o){
   for(const host of HOSTS)await o.release(host);
  }
  if(o.recover||o.rollback){
-  need(['install','commit','restore'].includes(decision),'缺可信持久决定');
+  need(['install','commit','restore'].includes(decision)||(o.recover&&decision===null),'缺可信持久决定');
   await inspectAll();
+  for(const host of HOSTS.filter(host=>states[host]))await o.reacquire(host);
   if(o.rollback){await o.writeDecision('restore');decision='restore';}
   if(decision==='commit')await finishCommit();
   else {

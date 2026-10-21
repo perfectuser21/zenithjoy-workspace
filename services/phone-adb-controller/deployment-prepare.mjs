@@ -8,9 +8,10 @@ import {fileURLToPath} from 'node:url';
 import {readDeploymentToken,brainRequest,DEPLOY_REPO} from './deployment-preflight.mjs';
 import {readDeploymentSource,fixedSourceEnvironment,prepareDeploymentSkillSources} from './deployment-fixed-source.mjs';
 import {prepareTargetReleases} from './deployment-targets.mjs';
+import {verifyTransactionProtocol} from './deployment-protocol.mjs';
 import {stageCandidate} from './deployment-candidate.mjs';
-export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[]}){
- if(!['candidate','promote'].includes(mode))throw Error('必须选择candidate或promote');
+export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[],transaction}){
+ if(!['candidate','promote','recover','rollback'].includes(mode))throw Error('无效手机部署操作');
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:fixedSourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024}).trim();
  if(!/^[0-9a-f]{40}$/.test(sha)||git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署源不是干净的固定main');
  git('merge-base','--is-ancestor',sha,'origin/main');
@@ -18,8 +19,17 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  if(![`https://github.com/${DEPLOY_REPO}.git`,`https://github.com/${DEPLOY_REPO}`,`git@github.com:${DEPLOY_REPO}.git`].includes(origin))throw Error('部署来源仓库不符');
  const bundle=JSON.parse(readFileSync(bundlePath,'utf8'));
  if(bundle.run?.repo!==DEPLOY_REPO||bundle.run.sha!==sha||bundle.run.branch!=='main'||!['push','workflow_dispatch'].includes(bundle.run.event)||bundle.run.path!=='.github/workflows/pilot-release-verification.yml'||!Number.isSafeInteger(bundle.run.id)||!attemptKey.startsWith(`github:${bundle.run.id}:`))throw Error('部署证据与受信run不符');
+ if(mode!=='candidate')verifyTransactionProtocol(readDeploymentSource(root,sha,'services/phone-adb-controller/deployment-protocol.json'));
  prepareDeploymentSkillSources(root,sha);
  const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
+ if(['recover','rollback'].includes(mode)){
+  if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(transaction||''))throw Error('恢复必须指定原始事务ID');
+  const child=spawn('python3',[join(root,'services/phone-adb-controller/deployment-guard.py'),'node',join(root,'services/phone-adb-controller/deployment-backend.mjs'),mode,sha,transaction],{
+   stdio:['ignore','inherit','inherit'],env:{...fixedSourceEnvironment({network:true}),BRAIN_URL:brainUrl,BRAIN_INTERNAL_TOKEN:token}});
+  const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
+  if(code!==0)throw Error('原始事务恢复未完成；保持实际失败证据');return;
+ }
+
  const plan=await prepareTargetReleases({bundle,sha,environment:mode==='promote'?'production':`staging:${sha}`,businessRunIds,attemptKey,request,readFile:path=>{
   return readDeploymentSource(root,sha,path,{materialize:true});
  }});
@@ -37,6 +47,6 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  } finally {rmSync(folder,{recursive:true,force:true});}
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env')});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
+ try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),transaction:process.argv[7],brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env')});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
  catch(error){process.stderr.write(`${error.message}\n`);process.exitCode=1;}
 }
