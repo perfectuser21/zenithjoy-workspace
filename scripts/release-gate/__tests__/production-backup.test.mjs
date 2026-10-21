@@ -134,3 +134,42 @@ assert len(calls)==2
 `;
  const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });
+
+test('Postgres初始化临时socket不算就绪，恢复与读回统一使用最终TCP服务',()=>{
+ const script=`import importlib.util,tempfile,pathlib,types
+s=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+calls=[];probes=[];ready=False
+def probe(args,**kwargs):
+ global ready
+ probes.append(args)
+ if '-h' not in args:return types.SimpleNamespace(returncode=0)
+ ready=len(probes)>1
+ return types.SimpleNamespace(returncode=0 if ready else 1)
+def command(args,**kwargs):
+ calls.append(args)
+ if args[0:2]==['docker','exec']:
+  assert ready,'initialization-only socket was accepted before final TCP server'
+  assert args[args.index('-h')+1]=='127.0.0.1'
+  assert args[args.index('-U')+1]=='postgres'
+ if '--list' in args:return types.SimpleNamespace(stdout=b'1; 0 1 TABLE DATA public actual postgres')
+ if 'json_agg' in args[-1]:return types.SimpleNamespace(stdout='[{"schema":"public","table":"actual"}]')
+ if 'count(*)' in args[-1]:return types.SimpleNamespace(stdout='3')
+ return types.SimpleNamespace(stdout=b'')
+m.command=command;m.subprocess.run=probe;m.time.sleep=lambda n:None
+with tempfile.TemporaryDirectory() as root:
+ p=pathlib.Path(root)/'source.dump';p.write_bytes(b'dump')
+ assert m.verify_restore(p)['total_rows']==3
+assert len(probes)==2
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+test('子命令失败的原始stderr写入运行日志且仍然拒绝',()=>{
+ const script=`import importlib.util,sys,subprocess
+s=importlib.util.spec_from_file_location('backup',${JSON.stringify(source)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+try:m.command([sys.executable,'-c',"import sys;sys.stderr.write('ISOLATED_POSTGRES_STARTUP_FAILURE');sys.exit(3)"],capture_output=True)
+except subprocess.CalledProcessError:pass
+else:raise AssertionError('failed command accepted')
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.match(r.stderr,/ISOLATED_POSTGRES_STARTUP_FAILURE/);
+});
