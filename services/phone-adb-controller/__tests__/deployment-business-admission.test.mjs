@@ -149,3 +149,8 @@ for(const [label,change]of [
  ['缺missing',f=>delete f.verification.missing],
  ['缺overreach',f=>delete f.verification.overreach],
 ])test('完整Skill PASS不允许矛盾报告：'+label,async()=>{const f=fullSkillFixture();change(f);await assert.rejects(verifyBusinessAdmission(f.args),/独立验收/);});
+
+test('两个runtime摘要同时缺失不能以undefined相等通过完整Skill验收',async()=>{
+ const f=fullSkillFixture();delete f.binding.runtime_snapshot_sha256;delete f.task.result.workflow_control.envelope.definition.runtime_snapshot_sha256;
+ await assert.rejects(verifyBusinessAdmission(f.args),/运行字节身份/);
+});
