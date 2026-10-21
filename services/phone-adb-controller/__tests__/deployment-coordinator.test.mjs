@@ -91,3 +91,11 @@ test('recovery first reacquires both released host barriers before verification 
  assert.ok(f.calls.indexOf('reacquire:mmv')<f.calls.indexOf('verifyInstalled:xian-m4'));
  assert.ok(f.calls.indexOf('inspect:mmv')<f.calls.indexOf('reacquire:xian-m4'));
 });
+
+
+test('recover before first install may have no durable decision or host journals',async()=>{
+ const f=fixture();
+ assert.deepEqual(await coordinateDeployment({...f.options,recover:true}),{direction:'restored'});
+ assert.deepEqual(f.decisions,['restore']);
+ assert.ok(!f.calls.some(x=>/^(install|release|restore):/.test(x)));
+});
