@@ -14,8 +14,8 @@ const execFileAsync: (file: string, args?: readonly string[] | null) => Promise<
 import { fromNodeHeaders } from 'better-auth/node';
 import pool from '../db/connection';
 import { auth } from '../auth';
-import { readInstallPackManifest, type InstallPackManifest } from '../services/install-pack-manifest';
-import { internalAuth } from '../middleware/internal-auth';
+import { readInstallPackManifest } from '../services/install-pack-manifest';
+import { installPackReleaseRouter } from './agent-install-pack-release';
 
 // 从远端 URL 下载 tar.gz 到本地路径，原子写（先 .downloading 再 rename）
 // dest 必须在可写目录（如 /tmp），不能是只读挂载路径
@@ -111,31 +111,8 @@ agentInstallPackRouter.get('/manifest', (_req: Request, res: Response) => {
   return res.status(200).json(m);
 });
 
-// CI deploy endpoint — update manifest.json without SSH
-// Protected by ZENITHJOY_INTERNAL_TOKEN (same as other internal endpoints)
-agentInstallPackRouter.put('/manifest', internalAuth, (req: Request, res: Response) => {
-  const body = req.body as Partial<InstallPackManifest>;
-  if (
-    typeof body?.version !== 'string' ||
-    typeof body?.sha256 !== 'string' ||
-    typeof body?.download_url !== 'string'
-  ) {
-    return res.status(400).json({ ok: false, code: 'INVALID_MANIFEST', message: 'version/sha256/download_url required' });
-  }
-  const manifestPath =
-    process.env.INSTALL_PACK_MANIFEST_PATH ||
-    '/opt/zenithjoy/install-pack/manifest.json';
-  try {
-    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
-    fs.writeFileSync(manifestPath, JSON.stringify(body, null, 2) + '\n', 'utf-8');
-    console.log(`[install-pack/manifest] updated to v${body.version} via HTTP deploy`);
-    return res.status(200).json({ ok: true, version: body.version });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'unknown';
-    console.error('[install-pack/manifest] write failed:', msg);
-    return res.status(500).json({ ok: false, code: 'WRITE_FAILED', message: msg });
-  }
-});
+// 正式manifest只允许通过固定候选+真实验收晋级。
+agentInstallPackRouter.use(installPackReleaseRouter);
 
 // Sprint 2.1f Fix 7 — server-side license burn-in
 // 客户登录 → 查 license → 拷贝静态 tar.gz 到 tmp → 替换 .env 里 ZENITHJOY_LICENSE=

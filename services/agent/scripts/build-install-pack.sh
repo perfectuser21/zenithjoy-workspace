@@ -379,6 +379,10 @@ echo "[build] playwright-browsers/chromium_headless_shell-${PW_HS_REV}/ bundled"
 
 # （python-embedded + pywinauto 预装 + wechat-rpa 脚本拷贝已在上方统一处理，去除重复块）
 
+SOURCE_SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}"
+[[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'fixed source SHA required' >&2; exit 1; }
+printf '{"source_sha":"%s","version":"%s"}\n' "$SOURCE_SHA" "$VERSION" > "$PACK_DIR/release-source.json"
+
 echo "[build] reproducible tar.gz (mtime locked)"
 TAR_NAME="${OUT_DIR}/${PACK_NAME}.tar.gz"
 find "$PACK_DIR" -exec touch -t 202001010000.00 {} +
@@ -419,60 +423,4 @@ JSON
 echo "[build] OK — ${TAR_NAME} (${SIZE} bytes)"
 ls -la "${OUT_DIR}/"
 
-# ── Notion 版本记录 ───────────────────────────────────────────────────────────
-# 构建成功后自动往 Notion "ZenithJoy Agent 版本更新记录" 数据库写一条记录
-NOTION_DB_ID="364c40c2-ba63-8125-8a9a-dbbdc486485b"
-NOTION_TOKEN_FILE="${HOME}/.credentials/notion-agent-token"
-
-# 读 token：优先本地缓存，次之从 1Password 拉
-if [ -f "$NOTION_TOKEN_FILE" ]; then
-    NOTION_TOKEN=$(cat "$NOTION_TOKEN_FILE")
-elif command -v op >/dev/null 2>&1; then
-    OP_TOKEN_FILE="${HOME}/.credentials/1password.env"
-    if [ -f "$OP_TOKEN_FILE" ]; then
-        # shellcheck disable=SC1090
-        source "$OP_TOKEN_FILE"
-        export OP_SERVICE_ACCOUNT_TOKEN
-        NOTION_TOKEN=$(op item get "Notion" --vault CS --format json 2>/dev/null \
-            | python3 -c "import json,sys; d=json.load(sys.stdin); print(next(f['value'] for f in d['fields'] if f.get('label','').lower()=='credential'))" 2>/dev/null || true)
-        # 缓存到本地，下次不用再走 op
-        if [ -n "$NOTION_TOKEN" ]; then
-            echo "$NOTION_TOKEN" > "$NOTION_TOKEN_FILE"
-            chmod 600 "$NOTION_TOKEN_FILE"
-        fi
-    fi
-fi
-
-if [ -z "${NOTION_TOKEN:-}" ]; then
-    echo "[notion] WARN: 找不到 Notion token，跳过版本记录推送"
-    echo "[notion] 提示：把 token 存到 ~/.credentials/notion-agent-token（chmod 600）"
-else
-    SIZE_MB=$(python3 -c "print(round($SIZE / 1024 / 1024, 1))")
-    # 从 git log 取最近 commit message 作为更新内容
-    CHANGES=$(git log --oneline -5 --no-merges 2>/dev/null | sed 's/"/\\"/g' | head -5 | tr '\n' ' ' || echo "v${VERSION} 发布")
-
-    HTTP_STATUS=$(curl -s -o /tmp/notion-push.json -w "%{http_code}" \
-        -X POST "https://api.notion.com/v1/pages" \
-        -H "Authorization: Bearer $NOTION_TOKEN" \
-        -H "Notion-Version: 2022-06-28" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"parent\": {\"database_id\": \"$NOTION_DB_ID\"},
-            \"properties\": {
-                \"版本号\": {\"title\": [{\"text\": {\"content\": \"v${VERSION}\"}}]},
-                \"发布日期\": {\"date\": {\"start\": \"$(date -u +%Y-%m-%d)\"}},
-                \"更新内容\": {\"rich_text\": [{\"text\": {\"content\": \"${CHANGES}\"}}]},
-                \"SHA256\": {\"rich_text\": [{\"text\": {\"content\": \"${SHA}\"}}]},
-                \"包大小(MB)\": {\"number\": ${SIZE_MB}},
-                \"构建时间(UTC)\": {\"rich_text\": [{\"text\": {\"content\": \"${BUILD_TIME}\"}}]}
-            }
-        }")
-
-    if [ "$HTTP_STATUS" = "200" ]; then
-        echo "[notion] ✅ 版本 v${VERSION} 已推送到 Notion 版本记录"
-        echo "[notion] 链接: https://www.notion.so/364c40c2ba6381258a9adbbdc486485b"
-    else
-        echo "[notion] WARN: 推送失败 HTTP $HTTP_STATUS"
-        cat /tmp/notion-push.json 2>/dev/null || true
-    fi
-fi
+# 构建产物只代表候选；正式发布与验收证据由发布任务写入Brain。

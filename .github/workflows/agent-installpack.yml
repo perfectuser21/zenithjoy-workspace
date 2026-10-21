@@ -1,4 +1,4 @@
-name: Agent Install Pack
+name: Agent Install Pack Candidate
 on:
   workflow_dispatch:
   push:
@@ -7,6 +7,9 @@ on:
       - ".skills-source.json"
       - 'services/agent/**'
       - '.github/workflows/agent-installpack.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -140,7 +143,7 @@ jobs:
         id: get_pack
         shell: bash
         run: |
-          PACK=$(basename "$(ls services/agent/dist-installpack/zenithjoy-agent-v*.tar.gz | head -1)")
+          PACK=$(node -e 'const fs=require("fs");const p=fs.readdirSync("services/agent/dist-installpack").filter(x=>/^zenithjoy-agent-v.*\.tar\.gz$/.test(x));if(p.length!==1)throw Error("exactly one package required");console.log(p[0]);')
           echo "pack_name=${PACK}" >> "$GITHUB_OUTPUT"
           echo "[build] pack_name=${PACK}"
       - name: Upload to COS (cos.accelerate CDN bypass)
@@ -154,7 +157,8 @@ jobs:
           $pack = (Get-ChildItem services\agent\dist-installpack\*.tar.gz | Select-Object -First 1).Name
           $bucket = "zenithjoy-static-1333590468"
           $endpoint = "cos.accelerate.myqcloud.com"
-          $cosKey = "install-pack/$pack"
+          $sha = (Get-FileHash "services\agent\dist-installpack\$pack" -Algorithm SHA256).Hash.ToLower()
+          $cosKey = "install-pack/candidates/$env:GITHUB_SHA/$sha/$pack"
           $cosUrl = "https://$bucket.$endpoint/$cosKey"
 
           Write-Host "[upload] Installing coscmd..."
@@ -165,7 +169,8 @@ jobs:
           coscmd config -a $env:COS_SECRET_ID -s $env:COS_SECRET_KEY -b $bucket -e $endpoint
 
           Write-Host "[upload] Uploading services\agent\dist-installpack\$pack -> cos://$bucket/$cosKey"
-          coscmd upload "services\agent\dist-installpack\$pack" "/install-pack/$pack" --force
+          coscmd upload "services\agent\dist-installpack\$pack" "/$cosKey"
+          if ($LASTEXITCODE -ne 0) { throw "candidate upload failed" }
 
           "cos_url=$cosUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
           "pack_name=$pack" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
@@ -197,6 +202,7 @@ jobs:
         run: |
           $m = Get-Content "services\agent\dist-installpack\manifest.json" | ConvertFrom-Json
           $m | Add-Member -MemberType NoteProperty -Name "cos_url" -Value $env:COS_URL -Force
+          $m | Add-Member -MemberType NoteProperty -Name "source_sha" -Value $env:GITHUB_SHA -Force
           $m | ConvertTo-Json -Depth 5 | Set-Content "services\agent\dist-installpack\manifest.json" -Encoding ascii
           Write-Host "manifest.json updated: $env:COS_URL"
 
@@ -205,13 +211,12 @@ jobs:
         with:
           name: zenithjoy-agent-manifest
           path: services/agent/dist-installpack/manifest.json
-          retention-days: 1
+          retention-days: 30
 
   # 各 Line 模块独立打包（与 build 并行），上传到 COS modules/ 目录。
   # core.exe 轻量，Line 模块按需下载安装。
   build-line-modules:
     runs-on: ubuntu-latest
-    needs: []   # 与 build job 并行，不依赖 core
     strategy:
       matrix:
         lineId: [line04, line01, line02, line05]
@@ -233,12 +238,9 @@ jobs:
         shell: bash
         working-directory: services/agent
         run: |
-          # build-line-module.sh 由 beta 负责；未合并前占位通过，保证 CI 结构验证
-          if [ -f scripts/build-line-module.sh ]; then
-            bash scripts/build-line-module.sh ${{ matrix.lineId }}
-          else
-            echo "::warning::scripts/build-line-module.sh pending (beta), skip build"
-          fi
+          set -euo pipefail
+          test -f scripts/build-line-module.sh
+          bash scripts/build-line-module.sh ${{ matrix.lineId }}
       - name: Upload ${{ matrix.lineId }} to COS
         shell: bash
         env:
@@ -250,19 +252,27 @@ jobs:
           # find 无文件时 exit 0（ls 无文件时 exit 2，pipefail 下会提前退出脚本）
           PACK=$(find dist-modules -maxdepth 1 -name "${MANIFEST_LINE_ID}-v*.tar.gz" 2>/dev/null | head -1)
           if [ -z "$PACK" ]; then
-            echo "::warning::dist-modules/${MANIFEST_LINE_ID}-v*.tar.gz 不存在，跳过上传"
-            exit 0
+            echo "::error::module artifact missing"
+            exit 1
           fi
+          python3 ../../scripts/release-gate/prepare-module-candidate.py "$PACK"
           pip install coscmd -q
           PACK_NAME=$(basename "$PACK")
           BUCKET="zenithjoy-static-1333590468"
           ENDPOINT="cos.accelerate.myqcloud.com"
-          COS_PATH="/install-pack/modules/${PACK_NAME}"
+          DIGEST=$(sha256sum "$PACK" | cut -d' ' -f1)
+          COS_PATH="/install-pack/modules/candidates/${GITHUB_SHA}/${DIGEST}/${PACK_NAME}"
           coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" -b "$BUCKET" -e "$ENDPOINT"
-          coscmd upload "$PACK" "$COS_PATH" --force
-          echo "Uploaded: https://${BUCKET}.${ENDPOINT}${COS_PATH}"
+          coscmd upload "$PACK" "$COS_PATH"
+          export PACK_NAME DIGEST COS_PATH MANIFEST_LINE_ID
+          node -e 'const fs=require("fs");const e=process.env;fs.writeFileSync("module-candidate.json",JSON.stringify({line_id:e.MANIFEST_LINE_ID,filename:e.PACK_NAME,sha256:e.DIGEST,cos_url:"https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com"+e.COS_PATH}));'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module-candidate-${{ matrix.lineId }}
+          path: services/agent/module-candidate.json
+          retention-days: 30
 
-  publish:
+  register-candidate:
     needs: [build, build-line-modules]
     runs-on: ubuntu-latest
     steps:
@@ -279,48 +289,30 @@ jobs:
           name: zenithjoy-agent-manifest
           path: services/agent/dist-installpack/
 
-      # 幂等镜像微信 4.1.8 安装器到 COS（env-doctor preflight 自愈时的内网回退源）
-      # 增强项，非 agent 包硬依赖：env-doctor 有官方 dldir1v6.qq.com 回退，故此步失败不红 job。
-      - name: Mirror WeChat 4.1.8 to COS (idempotent)
-        continue-on-error: true
-        env:
-          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
-          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+      - name: Download module candidates
+        uses: actions/download-artifact@v4
+        with:
+          pattern: module-candidate-*
+          path: module-candidates/
+      - name: Bind module inventory to candidate
         run: |
-          BUCKET="zenithjoy-static-1333590468"
-          ENDPOINT="cos.accelerate.myqcloud.com"
-          COS_PATH="/install-pack/wechat/WeChatWin_4.1.8.exe"
-          COS_URL="https://${BUCKET}.${ENDPOINT}${COS_PATH}"
-          OFFICIAL="https://dldir1v6.qq.com/weixin/Universal/Windows/WeChatWin_4.1.8.exe"
-
-          if curl -sf -I "$COS_URL" >/dev/null 2>&1; then
-            echo "[mirror-wechat] 已镜像，跳过：$COS_URL"
-            exit 0
-          fi
-
-          echo "[mirror-wechat] COS 无缓存，从官方下载 $OFFICIAL ..."
-          curl -L -o WeChatWin_4.1.8.exe "$OFFICIAL" || { echo "[mirror-wechat] 官方下载失败，跳过镜像（非致命）"; exit 0; }
-
-          SIZE=$(stat -c%s WeChatWin_4.1.8.exe 2>/dev/null || stat -f%z WeChatWin_4.1.8.exe)
-          if [ "${SIZE:-0}" -lt 209715200 ]; then
-            echo "[mirror-wechat] 下载体积异常（${SIZE} bytes < 200MB），跳过上传（非致命）"
-            exit 0
-          fi
-
-          pip install coscmd -q
-          coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" \
-            -b "zenithjoy-static-1333590468" -e "cos.accelerate.myqcloud.com"
-          coscmd upload WeChatWin_4.1.8.exe \
-            "/install-pack/wechat/WeChatWin_4.1.8.exe" --force \
-            || echo "[mirror-wechat] coscmd upload 失败（非致命，有官方回退源）"
-
-      - name: Deploy manifest.json to HK VPS
+          node --input-type=module -e '
+          import fs from "node:fs";import crypto from "node:crypto";
+          const p="services/agent/dist-installpack/manifest.json",m=JSON.parse(fs.readFileSync(p));
+          m.modules=fs.readdirSync("module-candidates").sort().map(d=>JSON.parse(fs.readFileSync("module-candidates/"+d+"/module-candidate.json")));
+          m.bundle_sha256=crypto.createHash("sha256").update(JSON.stringify({source_sha:m.source_sha,sha256:m.sha256,modules:m.modules})).digest("hex");
+          fs.writeFileSync(p,JSON.stringify(m));'
+      - name: Register candidate without changing production
         env:
           VPS_API_URL: ${{ secrets.VPS_API_URL }}
           VPS_INTERNAL_TOKEN: ${{ secrets.VPS_INTERNAL_TOKEN }}
         run: |
-          curl -sf -X PUT "${VPS_API_URL}/api/agent/install-pack/manifest" \
+          curl --fail-with-body -sS -X POST "${VPS_API_URL}/api/agent/install-pack/candidates" \
             -H "Content-Type: application/json" \
             -H "X-Internal-Token: ${VPS_INTERNAL_TOKEN}" \
-            -d @services/agent/dist-installpack/manifest.json \
-            --max-time 30
+            -d @services/agent/dist-installpack/manifest.json --max-time 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installpack-candidate
+          path: services/agent/dist-installpack/manifest.json
+          retention-days: 30

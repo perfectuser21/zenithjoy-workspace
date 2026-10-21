@@ -7,6 +7,7 @@ with tempfile.TemporaryDirectory() as d:
  a,b,c=[pathlib.Path(d)/x for x in ['a.tar.gz','b.tar.gz','c.tar.gz']]
  def tar(p,t,data):
   with tarfile.open(p,'w:gz') as out:
+   root=tarfile.TarInfo('.');root.type=tarfile.DIRTYPE;out.addfile(root)
    info=tarfile.TarInfo('./index.js');info.size=len(data);info.mtime=t;info.mode=0o644;out.addfile(info,io.BytesIO(data))
  tar(a,1,b'old');tar(b,999,b'old');old=a.read_bytes();m.prepare(b,a);assert b.read_bytes()==old
  tar(b,999,b'changed')

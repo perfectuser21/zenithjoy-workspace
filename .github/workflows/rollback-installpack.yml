@@ -1,0 +1,33 @@
+name: Rollback Install Pack Manifest
+on:
+  workflow_dispatch:
+    inputs:
+      expected_current_manifest_sha256:
+        description: 当前正式manifest原始字节SHA256（只恢复此次发布保存的前驱）
+        required: true
+        type: string
+concurrency:
+  group: zenithjoy-production-hk
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  rollback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Restore saved predecessor and read back
+        env:
+          DIGEST: ${{ inputs.expected_current_manifest_sha256 }}
+          VPS_API_URL: ${{ secrets.VPS_API_URL }}
+          VPS_INTERNAL_TOKEN: ${{ secrets.VPS_INTERNAL_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          jq -n --arg sha "$DIGEST" '{expected_current_manifest_sha256:$sha}' > request.json
+          curl --fail-with-body -sS -X POST "$VPS_API_URL/api/agent/install-pack/rollback" \
+            -H "X-Internal-Token: $VPS_INTERNAL_TOKEN" -H 'Content-Type: application/json' \
+            -d @request.json --max-time 30 > rollback.json
+          curl -fsS "$VPS_API_URL/api/agent/install-pack/manifest" --max-time 30 > current.json
+          jq -e --slurpfile current current.json '.ok==true and .manifest==$current[0]' rollback.json
