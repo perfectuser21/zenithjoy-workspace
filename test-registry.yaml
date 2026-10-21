@@ -1907,6 +1907,30 @@ tests:
     product: 内容发布
     note: "Sprint 2.1e — /api/agent/install-pack manifest + download endpoints; PUT /manifest CI deploy endpoint added in fix #356"
 
+  - id: api-agent-install-pack-release
+    path: apps/api/src/routes/__tests__/agent-install-pack-release.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 内容发布
+    note: "候选与生产接口鉴权、旧直发入口拒绝"
+
+  - id: api-install-pack-release
+    path: apps/api/src/services/__tests__/install-pack-release.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 内容发布
+    note: "真实文件、验收回执、CAS 与前驱恢复"
+
+  - id: api-released-modules
+    path: apps/api/src/services/__tests__/released-modules.test.ts
+    type: integration
+    ci: L4-INT
+    status: active
+    product: 内容发布
+    note: "生产 manifest 控制模块版本，候选不可分发"
+
   - id: agent-build-install-pack-script
     path: services/agent/scripts/__tests__/build-install-pack.test.sh
     type: unit

@@ -8,8 +8,10 @@ import type {InstallPackManifest} from './install-pack-manifest';
 type ModuleArtifact = {line_id:string;filename:string;sha256:string;cos_url:string};
 type Candidate = InstallPackManifest & {source_sha:string;modules:ModuleArtifact[];bundle_sha256:string};
 type Promotion = {source_sha:string;sha256:string;acceptance_run_key:string;expected_current_manifest_sha256:string|null};
+type AcceptanceCheck = Record<string,unknown>;
+type AcceptanceRecord = {run?:Record<string,unknown>&{detail?:Record<string,unknown>};checks?:AcceptanceCheck[]};
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
-const need=(ok:unknown,message:string):void=>{if(!ok)throw new Error(message);};
+function need(ok:unknown,message:string):asserts ok {if(!ok)throw new Error(message);}
 const validSha=(s:unknown,n:number)=>typeof s==='string'&&new RegExp(`^[a-f0-9]{${n}}$`).test(s);
 
 export function installPackContract(){return {...contract,spec_sha:'sha256:'+hash(JSON.stringify(contract))};}
@@ -62,7 +64,7 @@ export function publishCandidate(file:string,body:Candidate){
  const value=candidate(body);immutable(candidatePath(file,value.source_sha,value.sha256),JSON.stringify(value));return value;
 }
 
-export function validateInstallPackAcceptance(record:any,value:Candidate,key:string){
+export function validateInstallPackAcceptance(record:AcceptanceRecord|null|undefined,value:Candidate,key:string){
  const {run,checks}=record||{},d=run?.detail||{},c=installPackContract();
  need(run?.run_key===key&&run.id&&run.gp_id&&run.status==='adjudicated','acceptance is not adjudicated');
  need(d.source_repo==='perfectuser21/zenithjoy-workspace'&&d.environment==='staging'&&Array.isArray(d.release_targets)&&d.release_targets.length===1&&d.release_targets[0]==='install-pack','acceptance scope mismatch');
@@ -70,9 +72,9 @@ export function validateInstallPackAcceptance(record:any,value:Candidate,key:str
  need(d.package_sha256===value.sha256&&d.observed_package_sha256===value.sha256,'package mismatch');
  need(d.bundle_sha256===value.bundle_sha256&&d.observed_bundle_sha256===value.bundle_sha256,'module bundle mismatch');
  need(d.spec_sha===c.spec_sha&&d.gate_verdict==='绿'&&d.ai_status!=='dumb'&&!d.blocked_reason,'acceptance gate not passed');
- need(Array.isArray(checks)&&checks.length===c.checks.length&&new Set(checks.map((x:any)=>x.check_key)).size===c.checks.length,'missing acceptance checks');
+ need(Array.isArray(checks)&&checks.length===c.checks.length&&new Set(checks.map(x=>x.check_key)).size===c.checks.length,'missing acceptance checks');
  for(const expected of c.checks){
-  const check=checks.find((x:any)=>x.check_key===expected.check_key);
+  const check=checks?.find(x=>x.check_key===expected.check_key);
   need(check?.run_id===run.id&&check.name===expected.name&&check.kind===expected.kind&&check.result==='通过'&&typeof check.note==='string'&&check.note.trim(),'business acceptance failed or has no evidence');
  }
  return {run_id:run.id,run_key:key,spec_sha:c.spec_sha};
