@@ -51,6 +51,7 @@ export function verifyIndependentTask(task,{runId,expected,release,binding}){
  return v;
 }
 export async function verifyFullSkillTask({task,runId,sha,expected,release,binding,readFile,request}){
+ need(/^[a-f0-9]{64}$/.test(binding.runtime_snapshot_sha256||''),'缺真实运行字节身份');
  const v=verifyIndependentTask(task,{runId,expected,release,binding});
  const definition=skillAcceptanceDefinition(expected.payload.key,readFile);
  need(v.scope==='full_skill'&&Array.isArray(v.missing)&&v.missing.length===0&&v.overreach==='无'&&v.source_commit===sha&&v.run_binding_id===binding.id
