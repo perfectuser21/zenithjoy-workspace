@@ -107,12 +107,17 @@ class FrontendBrowserDodTest(unittest.TestCase):
                     result = self.run_frontend_check([f"apps/{app}/{relative}"])
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_real_source_in_each_app_still_requires_browser_dod(self):
-        for app in ("api", "dashboard", "staff-hub"):
+    def test_real_frontend_source_still_requires_browser_dod(self):
+        for app in ("dashboard", "staff-hub"):
             for relative in ("src/app.ts", "src/TestButton.tsx", "src/styles.css"):
                 with self.subTest(app=app, relative=relative):
                     result = self.run_frontend_check([f"apps/{app}/{relative}"])
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_api_source_uses_api_gate_not_browser_dod(self):
+        result = self.run_frontend_check(["apps/api/src/services/walking-skeleton.service.ts",
+                                          "apps/api/src/routes/agent.ts"])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_test_changes_cannot_hide_real_source(self):
         result = self.run_frontend_check(["apps/api/tests/deploy/health.test.ts",

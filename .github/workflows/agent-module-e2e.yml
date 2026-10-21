@@ -164,6 +164,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore complete agent source after reused checkout
+        shell: bash
+        working-directory: .
+        run: |
+          git sparse-checkout disable
+          test -f services/agent/src/handlers/__tests__/wechat-rpa.test.ts
+          test -f services/agent/tsconfig.build.json
+          test -f services/agent/modules/line04/preflight.ts
+
       - name: Verify Node.js (self-hosted, skip setup-node to avoid proxy timeout)
         run: node --version
 

@@ -37,6 +37,9 @@ jobs:
     # startswith 匹配作放行证据——改 job 名必须同步改 promote，否则会全部落入 missing 判红。
     name: 真微信 — 气泡门 full check（真发文件传输助手）
     runs-on: [self-hosted, wechat-capable]
+    concurrency:
+      group: zj-rog-desktop
+      cancel-in-progress: false
     timeout-minutes: 10
     env:
       PYTHONUTF8: '1'
@@ -57,6 +60,7 @@ jobs:
       # 由 lint-nightly-sparse-checkout-deps.sh 机械对账守卫。
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           sparse-checkout: |
             services/agent/tools
             services/agent/wechat-rpa
@@ -169,56 +173,45 @@ jobs:
             }
           }
 
-  # ─── 真抖音·读侧 full check：复用 line02 keyword→comment smoke（DPAPI 真 session）───
-  # 迁 pc4 手机池轨（android-capable）：原绑 xian-rog(wechat-capable) 已于 PR#1600 退役，
-  # 改为 pc4 安卓手机池 runner。出境网络方案同 pc4 车道 PR#1590/#1592/#1596 已验证方案。
+  # 真抖音使用ROG专用测试profile；与微信和独立F06共享桌面互斥。
   douyin-read:
     name: 真抖音 — keyword→comment 读侧 full check
     needs: [wechat-bubble]
     if: always()
-    runs-on: [self-hosted, android-capable]
+    runs-on: [self-hosted, wechat-capable]
+    concurrency:
+      group: zj-rog-desktop
+      cancel-in-progress: false
     timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash
     env:
       SMOKE_KW: '美甲'
     steps:
-      # pc4 手机池轨出境网络方案（PR#1590/#1592/#1596 已验证）：HK exit-node 临时开关
-      # 解决 GFW 带宽限速 + 间歇性 TCP 连接失败（"Failed to connect to github.com port 443"）；
-      # --exit-node-allow-lan-access 保证手机池 USB/局域网访问不受影响，checkout 完立即关闭。
-      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
-        shell: bash
-        run: |
-          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
-
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           sparse-checkout: |
-            .github/workflows/scripts/smoke
+            .github/workflows/scripts
+            services/agent/publishers
+            services/agent/package.json
+            services/agent/package-lock.json
           sparse-checkout-cone-mode: false
-
-      - name: 关闭 exit-node（不常驻占用）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare candidate dependencies from lockfile
+        shell: powershell
+        working-directory: services/agent
+        run: npm ci --ignore-scripts --omit=dev --workspaces=false
+      - name: Run fixed candidate with approved interactive test user
+        shell: powershell
+        run: .\.github\workflows\scripts\run-line02-candidate.ps1
+      - name: Retain actual candidate receipt and output
         if: always()
-        shell: bash
-        run: |
-          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
-
-      - name: 定位最新 agent 安装目录
-        run: |
-          AGENT_DIR=$(ls -d /c/Users/*/Desktop/zenithjoy-agent-v* 2>/dev/null \
-            | sort -t'v' -k2 -V | tail -1 || true)
-          echo "AGENT_DIR=$AGENT_DIR" >> "$GITHUB_ENV"
-          echo "agent dir: $AGENT_DIR"
-          [ -n "$AGENT_DIR" ] && [ -d "$AGENT_DIR" ] || { echo "no agent dir found"; exit 1; }
-
-      # 注意：smoke 脚本内 DPAPI 解不开 session 时会 exit 0 并写 SKIPPED 到
-      # GITHUB_STEP_SUMMARY（诚实自报，PR#1193）。nightly 沿用该行为：
-      # skip 不算红，但 summary 会明示「本晚抖音读侧未验」。根治=PsExec -i 1（TODO）。
-      - name: Run keyword→comment smoke
-        run: |
-          chmod +x .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
-          bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
+        uses: actions/upload-artifact@v4
+        with:
+          name: line02-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: line02-candidate-evidence/
+          if-no-files-found: warn
 
   # ─── 真安卓 account-scan 真机验证车道 full check（刀D，2026-07-30 接入）───
   # envfail(exit 3,环境未就绪)与真机 bug 同级计红（decision 2f11ae25，supersede 07292330
@@ -306,7 +299,7 @@ jobs:
             echo "| 真安卓 account-scan 真机验证车道 | $ACCOUNT_SCAN_LABEL |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$WECHAT" = "failure" ] || [ "$DOUYIN" = "failure" ] || [ "$ACCOUNT_SCAN" = "failure" ]; then
+          if [ "$WECHAT" != "success" ] || [ "$DOUYIN" != "success" ] || [ "$ACCOUNT_SCAN" != "success" ]; then
             TITLE="[nightly-red] 真机回归失败 $TODAY (微信=$WECHAT 抖音=$DOUYIN account-scan=$ACCOUNT_SCAN_LABEL)"
             # 同日去重：已有同标题 open issue 则不重复开
             EXIST=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
