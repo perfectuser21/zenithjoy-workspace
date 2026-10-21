@@ -1,8 +1,9 @@
+import {userInfo} from 'node:os';
 import { assertRuntimeHost } from './runtime-host.mjs';
 import { loadRuntimeRelease } from './runtime-release.mjs';
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync, lstatSync } from 'node:fs';
 import { resolve, dirname, sep, basename } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
@@ -62,6 +63,15 @@ export function locateRun(indexRoot,identity){
   if(!existsSync(file))return null;
   const record=JSON.parse(readFileSync(file,'utf8'));assertRunIdentity(readFrozen(record.run_dir),identity,record.run_dir);return record.run_dir;
 }
+export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir){
+ const actual=realpathSync(deploymentRoot),base=realpathSync(home);
+ if(![resolve(base,'bin-harvest'),resolve(base,'.openclaw/leadgen-scripts')].includes(actual))return;
+ const marker=resolve(base,'.local/share/zenithjoy/phone-transactions/active.json');
+ for(let path=dirname(marker);path!==base;path=dirname(path)){
+  try{if(lstatSync(path).isSymbolicLink())throw Error('整包部署状态路径异常');}catch(error){if(error.code!=='ENOENT')throw error;}
+ }
+ try{lstatSync(marker);throw Error('整包部署或恢复未完成，拒绝新运行冻结');}catch(error){if(error.code!=='ENOENT')throw error;}
+}
 export async function freezeDefinition(o) {
   if(o.samplingInput){
     const q=o.samplingInput;
@@ -70,7 +80,10 @@ export async function freezeDefinition(o) {
     if(o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==q[k==='tag'?'run_tag':k]))throw Error('冻结采样输入运行身份不符');
   }
   if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(canonical(frozen.sampling_input||null)!==canonical(o.samplingInput||null))throw Error('评论采样续跑输入与冻结请求不符');if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
-  const manifest=JSON.parse(readFileSync(o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json'),'utf8'));
+  assertDeploymentAdmission(o.deploymentRoot);
+  const manifestPath=o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json');
+  const originalManifest=readFileSync(manifestPath);
+  const manifest=JSON.parse(originalManifest);
   const fixed=(o.releaseId||manifest.release_id||o.requireRelease)?await loadRuntimeRelease(o,manifest,digest):null;
   let version;
   if(fixed){assertRuntimeHost(fixed.release,manifest);version=fixed.version;}
@@ -141,6 +154,8 @@ export async function freezeDefinition(o) {
     writeFileSync(resolve(staging,'runtime/deployment-manifest.json'),manifestBytes,{mode:0o600});
     writeFileSync(resolve(staging,'workflow.plan'),plan);writeFileSync(resolve(staging,'step-dod.json'),steps);
     writeFileSync(resolve(staging,'run-definition.json'),JSON.stringify(snapshot,null,2));
+    assertDeploymentAdmission(o.deploymentRoot);
+    if(!readFileSync(manifestPath).equals(originalManifest))throw Error('冻结期间部署声明发生变化');
     mkdirSync(dirname(o.runDir),{recursive:true}); renameSync(staging,o.runDir);
   } finally {rmSync(staging,{recursive:true,force:true});}
   return snapshot;

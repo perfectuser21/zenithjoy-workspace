@@ -29,9 +29,9 @@ deploy_release_evidence() {
   done
 }
 
-# Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
-# Commander与旧MMV包共享完整release；--commander-only仍须真实核对其它已安装组件。
+# Commander 入口整段封成函数：仅由完整已准入的双机事务在原位置调用。
 commander_admission() {
+  [[ -z "${WF_PHONE_TRANSACTION:-}" ]] || return 0 # check-child已核验原内核租约及双机日志。
   # 在途外壳保留原版本；整套文件和skills同步完成才发布新manifest。
   if ! python3 "$D/deployment-guard.py" admit
   then
@@ -77,45 +77,9 @@ deploy_commander() {
     CMDR_SKILLS+=("$_name")
     echo "  ✅ skills/$_name/SKILL.md"
   done
-  # work-commander 的 skills 白名单放开到上面部署的全部 skill（只增不删：保留人工加的项），变了才写
-  if (( ${#CMDR_SKILLS[@]} )); then
-    _want="$(printf '%s\n' "${CMDR_SKILLS[@]}")"
-    _cur="$(ssh mmv "/opt/homebrew/bin/openclaw config get agents.entries.work-commander.skills" 2>/dev/null || echo '[]')"
-    _merged="$(python3 -c 'import json,sys; cur=json.loads(sys.argv[1] or "[]"); want=[w for w in sys.argv[2].split("\n") if w]; out=list(cur)+[w for w in want if w not in cur]; print(json.dumps(out) if out!=cur else "")' "$_cur" "$_want" 2>/dev/null || echo ERR)"
-    if [[ "$_merged" == ERR ]]; then
-      echo "  ❌ work-commander skills 白名单读不到/解析失败: $_cur"; FAILED=1
-    elif [[ -n "$_merged" ]]; then
-      if ssh mmv "/opt/homebrew/bin/openclaw config set agents.entries.work-commander.skills '$_merged' --strict-json" >/dev/null 2>/tmp/deploy-err-$$; then
-        echo "  ✅ work-commander skills 白名单 → $_merged"
-      else
-        echo "  ❌ work-commander skills 白名单写入失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1
-      fi
-      rm -f /tmp/deploy-err-$$
-    else
-      echo "  ✅ work-commander skills 白名单已含全部陪跑 skill"
-    fi
+  if ! phone_transaction_tool mmv effects apply; then
+    echo '  ❌ Commander原授权列CAS写入或读回失败'; FAILED=1
   fi
-  # 正式 sessions_spawn 只补业务执行者；CAS 保留人工授权，冲突时重新读，不扩其他权限。
-  if ssh mmv /usr/bin/env python3 <<'PYREMOTE'
-import json, subprocess, sys
-cli = '/opt/homebrew/bin/openclaw'
-path = 'agents.entries.work-commander.subagents.allowAgents'
-for attempt in range(3):
-    current = json.loads(subprocess.check_output([cli, 'config', 'get', path], text=True))
-    if not isinstance(current, list):
-        raise ValueError('Commander allowAgents must be an authored list')
-    if 'skill-factory' in current:
-        break
-    merged = current + ['skill-factory']
-    result = subprocess.run([cli, 'config', 'set', path, json.dumps(merged), '--strict-json',
-                             '--expect-current-json', json.dumps(current)], stdout=subprocess.DEVNULL)
-    if result.returncode == 0:
-        break
-else:
-    sys.exit('Commander allowAgents CAS conflict')
-PYREMOTE
-  then echo "  ✅ work-commander 允许正式派发 skill-factory（CAS 只增）"
-  else echo "  ❌ work-commander 子代理授权未完成"; FAILED=1; fi
   # 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
   if [[ -s "$D/commander/AGENTS.md" ]]; then
     push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
@@ -147,3 +111,9 @@ PYMANIFEST
 }
 
 source "${BASH_SOURCE[0]%/*}/deployment-m4-payload.sh"
+
+# 只调用协调器已固定和逐字核验的工具，不把tx/environment当绕过锁的开关。
+phone_transaction_tool() {
+  local host="$1" name="$2" action="$3"
+  node "$D/deployment-transport.mjs" "$(git rev-parse HEAD)" "$host" "deployment-$name.py" "$action" "$WF_PHONE_TRANSACTION" </dev/null
+}

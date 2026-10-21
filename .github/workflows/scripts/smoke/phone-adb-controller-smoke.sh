@@ -468,19 +468,16 @@ grep -qF 'export DOUYIN_PHONE_ADB="$C"' "$D/wf-run-lib.sh" || fail "冻结run未
 if [[ -n "$_CALL_PATH" ]]; then
   # 调用方用的目录（去掉文件名），必须出现在 deploy.sh 的下发目标里
   _CALL_DIR="${_CALL_PATH%/douyin-phone-adb}"
-  # 只 grep 路径字符串拦不住「if 条件被改成恒假」——字符串照样躺在文件里。
-  # 所以这里**真跑一遍 deploy.sh**：把 scp/ssh 打桩成只记账不出网，
-  # 读它实际送出的目标清单。查的是行为，不是措辞。
-  #
-  # 不断言 deploy.sh 的退出码：那受一堆与落点无关的环境差异影响（跑场机有没有
-  # zsh、/tmp 可不可写……），本地绿 CI 红查不动。真正要守的是「送到哪了」，
-  # 这条断言本身就拦得住去掉 scp / 条件恒假 / 送错目录 / 漏掉一台四种改法。
+  # 真正执行deploy.sh里的配套安装循环，保留host/命令/目录/条件原样；
+  # 运输映射至隔离目录，真实事务journal和serial.guard屏障仍由生产模块建立。
+  # 完整入口的业务/readiness/在途准入另由paired-deploy-smoke.test.mjs运行原entry验证；
+  # 整包失败方向由deployment-rehearsal.test.mjs独立进程/SSH演练验证。
   _STUB=$(mktemp -d)
   trap 'rm -rf "$_STUB"' EXIT   # fail 走 exit 1,显式 rm 够不着,交给 trap 兜底
   # 配套输入现在经capture/install CAS安装，不能再要求旧版controller单文件scp/mv。
   # 临时运输桩只执行本地真实installer；其它部署仍只记账，不接触远端。
   node "$D/__tests__/fixtures/paired-deploy-smoke-transport.mjs" prepare "$_STUB"
-  PATH="$_STUB:$PATH" node "$D/__tests__/fixtures/deploy-smoke-runner.mjs" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
+  PATH="$_STUB:$PATH" node "$D/__tests__/fixtures/paired-deploy-install-fragment.mjs" "$_STUB" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || { tail -15 "$_STUB/run.log" >&2; fail "真实配套安装段失败"; }
   for _h in xian-m4; do
     if [[ "$_CALL_DIR" != "~/.local/bin" ]] \
        || ! node "$D/__tests__/fixtures/paired-deploy-smoke-transport.mjs" verify "$_STUB" > "$_STUB/pair-verified.json"; then

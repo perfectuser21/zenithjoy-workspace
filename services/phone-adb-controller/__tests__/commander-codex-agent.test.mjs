@@ -303,14 +303,13 @@ test("wf-status mmv：读本机 runner 日志，FINISHED 标记即 finished", ()
   assert.equal(read(home, "ssh-argv.log"), "", "mmv 本机不经 ssh");
 });
 
-test("deploy.sh：Commander 入口下发 runner/lib/合同清单与全部 commander skills，白名单只增不删，可 --commander-only 单独部署", () => {
+test("deploy.sh：Commander 入口下发 runner/lib/合同清单与全部 commander skills，白名单经事务CAS只增不删", () => {
   const deploy = readFileSync(join(HERE, "..", "deploy.sh"), "utf8");
   assert.match(deploy, /^source "\$D\/deployment-functions\.sh"$/m);
   const functions = readFileSync(join(HERE, "..", "deployment-functions.sh"), "utf8");
   assert.match(functions, /for f in wf-launch\.sh wf-status\.sh wf-agent-run\.sh wf-agent-lib\.py wf-agent-handoff\.py workflow-contracts\.json/);
   assert.match(functions, /commander\/skills\/\*\/SKILL\.md/);
-  assert.match(functions, /openclaw config set agents\.entries\.work-commander\.skills/);
-  assert.match(deploy, /--commander-only[\s\S]*deploy_commander/);
+  assert.match(functions, /phone_transaction_tool mmv effects apply/);
 });
 
 // 实际故障：gateway_exec 中的 CLI agent 消息丢失父归属，被 OpenClaw 拒绝。
@@ -359,4 +358,13 @@ for(const failure of ["desktop","png","xml","wrong_package"]) test(`cleanup：${
   assert.match(d.fail_reason,/cleanup_evidence_incomplete/);
   assert.equal(d.lock_released,true);
   assert.equal(existsSync(join(runDir(home),"evidence",`${RUN}-cleanup-original.json`)),false);
+});
+
+
+test('commander-only退役入口在安装或远端预检前明确拒绝',()=>{
+ const result=spawnSync('bash',[join(HERE,'..','deploy.sh'),'--commander-only'],{encoding:'utf8',timeout:15000,env:{...process.env,WF_PHONE_TRANSACTION:''}});
+ assert.notEqual(result.status,0);
+ assert.equal(result.stdout,'');
+ assert.match(result.stderr,/手机发布必须使用已验收候选的完整事务/);
+ assert.doesNotMatch(result.stderr,/ENOTFOUND|ECONNREFUSED|source|missing|缺少/);
 });

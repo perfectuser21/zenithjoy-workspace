@@ -44,6 +44,15 @@ function scopedEvidence(zip,scope,sha){
  }
  return {snapshot,report,receipt};
 }
+// 仅恢复路由来源，不是Pilot/业务PASS；实际恢复权威仍是原生release与两机持久journal。
+export async function recoverySource(sha,github){
+ ensure(/^[0-9a-f]{40}$/.test(sha||''),'恢复必须显式完整SHA');
+ const main=(await github(`repos/${REPO}/git/ref/heads/main`)).object.sha;
+ ensure(/^[0-9a-f]{40}$/.test(main),'主线SHA');
+ const ancestry=await github(`repos/${REPO}/compare/${main}...${sha}`);
+ ensure(['identical','behind'].includes(ancestry.status)&&ancestry.merge_base_commit?.sha===sha,'恢复源必须是主线已合并祖先');
+ return {source_repo:REPO,source_commit:sha};
+}
 export async function downloadDeploymentEvidence(runId,github,candidateSha){
  ensure(/^[1-9]\d{0,14}$/.test(String(runId))&&Number.isSafeInteger(Number(runId)),'run_id');
  const mainSha=(await github(`repos/${REPO}/git/ref/heads/main`)).object.sha;
@@ -63,8 +72,10 @@ export async function downloadDeploymentEvidence(runId,github,candidateSha){
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
  try{const github=async(path,binary=false)=>{const bytes=execFileSync('gh',['api',path],{maxBuffer:32*1024*1024,stdio:['ignore','pipe','pipe']});return binary?bytes:JSON.parse(bytes.toString());};
-  const bundle=await downloadDeploymentEvidence(process.argv[2],github,process.argv[4]||undefined);
+  const mode=process.argv[5]||'candidate';ensure(['candidate','promote','recover','rollback'].includes(mode),'操作类型');
+  const restoring=['recover','rollback'].includes(mode);
+  const bundle=restoring?await recoverySource(process.argv[4],github):await downloadDeploymentEvidence(process.argv[2],github,process.argv[4]||undefined);
   writeFileSync(process.argv[3],JSON.stringify(bundle)+'\n',{mode:0o600});
-  if(process.env.GITHUB_OUTPUT)appendFileSync(process.env.GITHUB_OUTPUT,`sha=${bundle.run.sha}\nrun_id=${bundle.run.id}\n`);
+  if(process.env.GITHUB_OUTPUT)appendFileSync(process.env.GITHUB_OUTPUT,`sha=${restoring?bundle.source_commit:bundle.run.sha}\nrun_id=${restoring?'':bundle.run.id}\n`);
  }catch{process.stderr.write('部署CI证据来源或固定JSON不满足要求；未发起部署。\n');process.exitCode=1;}
 }

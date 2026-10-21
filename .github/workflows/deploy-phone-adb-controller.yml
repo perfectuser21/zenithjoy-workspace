@@ -17,19 +17,23 @@ on:
   workflow_dispatch:
     inputs:
       implementation_run_id:
-        description: '本仓候选SHA对应的成功Pilot release verification run ID'
-        required: true
+        description: 'candidate/promote必填：本仓候选SHA对应的成功Pilot run ID；恢复不依赖过期artifact'
+        required: false
         type: string
       candidate_sha:
         description: '已合并main的完整40位候选SHA'
         required: true
         type: string
       mode:
-        description: '准备候选或晋级已实跑通过的候选'
+        description: '准备候选、验收后晋级，或恢复原整包事务'
         required: true
         default: candidate
         type: choice
-        options: [candidate, promote]
+        options: [candidate, promote, recover, rollback]
+      transaction_id:
+        description: 'recover/rollback必填：原部署日志PHONE_PACKAGE_TRANSACTION的完整ID'
+        required: false
+        type: string
       business_run_ids:
         description: 'promote必填：Brain候选run ID的JSON数组，不接受PASS声明'
         required: false
@@ -65,13 +69,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 校验同一次主线成功CI及固定JSON产物
+      - name: 核验固定来源（新部署核Pilot，恢复核原事务来源）
         id: evidence
         env:
           GH_TOKEN: ${{ github.token }}
           IMPLEMENTATION_RUN_ID: ${{ inputs.implementation_run_id || github.event.workflow_run.id }}
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA"
+          DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'candidate' }}
+        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$IMPLEMENTATION_RUN_ID" phone-release-evidence.json "$CANDIDATE_SHA" "$DEPLOY_MODE"
       - name: 接入 Tailscale
         uses: tailscale/github-action@v3
         with:
@@ -98,6 +103,7 @@ jobs:
           IMPLEMENTATION_RUN_ID: ${{ steps.evidence.outputs.run_id }}
           DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'candidate' }}
           BUSINESS_RUN_IDS: ${{ inputs.business_run_ids || '[]' }}
+          TRANSACTION_ID: ${{ inputs.transaction_id }}
         timeout-minutes: 30
         run: |
           KEY_FILE=$(mktemp)
@@ -108,6 +114,7 @@ jobs:
           {
           printf "CI_BUNDLE_B64='%s'\n" "$(base64 -w0 phone-release-evidence.json)"
           printf "BUSINESS_RUNS_B64='%s'\n" "$(printf '%s' "$BUSINESS_RUN_IDS" | base64 -w0)"
+          printf "TRANSACTION_B64='%s'\n" "$(printf '%s' "$TRANSACTION_ID" | base64 -w0)"
           cat << 'REMOTE_EOF'
           set -euo pipefail
           DEPLOY_SHA="$1"
@@ -115,7 +122,8 @@ jobs:
           DEPLOY_MODE="$5"
           TOOL_SHA="$6"
           BUSINESS_RUN_IDS="$(printf '%s' "$BUSINESS_RUNS_B64" | node -e 'process.stdout.write(Buffer.from(require("fs").readFileSync(0,"utf8"),"base64").toString())')"
-          [[ "$DEPLOY_MODE" == candidate || "$DEPLOY_MODE" == promote ]] || exit 1
+          TRANSACTION_ID="$(printf '%s' "$TRANSACTION_B64" | node -e 'process.stdout.write(Buffer.from(require("fs").readFileSync(0,"utf8"),"base64").toString())')"
+          case "$DEPLOY_MODE" in candidate|promote) ;; recover|rollback) [[ "$TRANSACTION_ID" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$ ]] || exit 1;; *) exit 1;; esac
           [[ "$TOOL_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
           CI_BUNDLE=$(mktemp)
           trap 'rm -f "$CI_BUNDLE"' EXIT
@@ -162,7 +170,7 @@ jobs:
           cd "$DEPLOY_CHECKOUT"
           export PYTHONDONTWRITEBYTECODE=1
           # wrapper从mmv 0600凭据镜像读token，先构造/核验release，再调用现有deploy.sh。
-          if ! DEPLOY_LOG=$(node "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-prepare.mjs" "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" "$DEPLOY_MODE" "$BUSINESS_RUN_IDS" </dev/null 2>&1); then
+          if ! DEPLOY_LOG=$(node "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-prepare.mjs" "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" "$DEPLOY_MODE" "$BUSINESS_RUN_IDS" "$TRANSACTION_ID" </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
             DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"
             [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
@@ -179,21 +187,13 @@ jobs:
             exit 0
           fi
 
-          echo "=== [3/4] drift-check.sh 后验(锁定本次部署的SHA,不重新fetch避免中途又有合并造成误报) ==="
-          if ! DRIFT_LOG=$(DRIFT_REPO="$DEPLOY_CHECKOUT" DRIFT_REF="$DEPLOY_SHA" DRIFT_SKIP_FETCH=1 bash services/phone-adb-controller/drift-check.sh </dev/null 2>&1); then
-            echo "$DRIFT_LOG"
-            notify "phone-adb自动部署后验失败" "drift-check未通过(sha=${DEPLOY_SHA:0:8}): $(echo "$DRIFT_LOG" | tail -3 | tr '\n' ';')"
-            exit 1
+          # 固定SHA drift-check、双机真实观测和恢复均已在事务屏障内完成。
+          # 外层不在提交后再做一次可能与后续调度竞争的验收。
+          if [[ "$DEPLOY_MODE" == promote ]]; then
+            notify "phone-adb自动部署成功" "已部署到mmv+xian-m4并通过drift-check与整包事务(sha=${DEPLOY_SHA:0:8})" "active"
+          else
+            notify "phone-adb原事务已处理" "${DEPLOY_MODE}已完成双机核验(transaction=${TRANSACTION_ID}, sha=${DEPLOY_SHA:0:8})" "active"
           fi
-          echo "$DRIFT_LOG"
-
-          # 防第二种假绿(N3)：drift-check.sh 退出码是0不代表真的做了对账，必须确认输出里有 DRIFT_CHECK OK。
-          if ! echo "$DRIFT_LOG" | grep -q "DRIFT_CHECK OK"; then
-            notify "phone-adb自动部署可疑" "drift-check退出码是0但输出里没有DRIFT_CHECK OK,可能没有真的对账(sha=${DEPLOY_SHA:0:8})"
-            exit 1
-          fi
-
-          notify "phone-adb自动部署成功" "已部署到mmv+xian-m4并通过drift-check(sha=${DEPLOY_SHA:0:8})" "active"
           echo "✅ 全部完成"
           REMOTE_EOF
           } | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \

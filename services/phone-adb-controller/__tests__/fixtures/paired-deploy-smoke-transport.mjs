@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 const self=fileURLToPath(import.meta.url);
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";
-const paths=root=>({stage:join(root,'input-runtime-deploy.fixture'),home:join(root,'remote'),registry:join(root,'remote/registry.tsv'),locks:join(root,'remote/locks'),receipt:join(root,'pair-receipt.json')});
+const paths=value=>{const root=realpathSync(value);return {stage:join(root,'input-runtime-deploy.fixture'),home:join(root,'remote'),registry:join(root,'remote/registry.tsv'),locks:join(root,'remote/locks'),receipt:join(root,'pair-receipt.json')};};
 export function prepare(root){
  root=resolve(root);const p=paths(root);
  for(const d of [root,p.stage,p.home,join(p.home,'bin-harvest'),join(p.home,'.local/bin'),p.locks])mkdirSync(d,{recursive:true,mode:0o700});
@@ -97,7 +97,7 @@ export function transport(root,mode,args){
     const sources=args.slice(0,-1).filter(a=>!a.startsWith('-'));
     if(![p.stage+'/',join(p.stage,'input-runtime-release.py')].includes(destination))throw Error('unexpected paired upload destination');
     for(const source of sources){
-     const name=basename(source);if(!['input-runtime-release.py','douyin-phone-adb','text-input-focus.py'].includes(name))throw Error('unexpected paired source');
+     const name=basename(source);if(!['input-runtime-release.py','deployment-transaction.py','deployment-maintenance.py','douyin-phone-adb','text-input-focus.py'].includes(name))throw Error('unexpected paired source');
      copyFileSync(source,join(p.stage,name));
     }
    }
@@ -128,9 +128,10 @@ export function transport(root,mode,args){
     return {status:r.status??2,stdout:'',stderr:r.stderr||''};
    }
    if(existsSync(p.receipt))unlinkSync(p.receipt);
-   if(cmd!==`python3 ${script} install ${p.stage}/douyin-phone-adb ${p.stage}/text-input-focus.py ${expected} ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin`)throw Error('unexpected paired install command/destination');
-   argv=[script,'install',join(p.stage,'douyin-phone-adb'),join(p.stage,'text-input-focus.py'),expected,p.registry,p.locks,join(p.home,'bin-harvest'),join(p.home,'.local/bin')];
-   const r=spawnSync('python3',argv,{encoding:'utf8'});
+   const install=cmd.startsWith(`python3 ${script} install-maintenance `)?'install-maintenance smoke-paired-transaction':'install';
+   if(cmd!==`python3 ${script} ${install} ${p.stage}/douyin-phone-adb ${p.stage}/text-input-focus.py ${expected} ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin`)throw Error('unexpected paired install command/destination');
+   argv=[script,...install.split(' '),join(p.stage,'douyin-phone-adb'),join(p.stage,'text-input-focus.py'),expected,p.registry,p.locks,join(p.home,'bin-harvest'),join(p.home,'.local/bin')];
+   const r=spawnSync('python3',argv,{encoding:'utf8',env:{...process.env,HOME:p.home}});
    if(r.status===0){
     // Receipt exists only after the real source/revision/CAS/kernel guard and pair readback.
     const hashes=Object.fromEntries(['douyin-phone-adb','text-input-focus.py'].map(n=>[n,digest(readFileSync(join(p.stage,n)))]));

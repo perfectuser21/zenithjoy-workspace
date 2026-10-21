@@ -25,7 +25,8 @@ cat > "$stage" <<PLIST
 <key>StandardErrorPath</key><string>$HOME/phone-recovery.err</string>
 </dict></plist>
 PLIST
-/usr/bin/plutil -lint "$stage"
+/usr/bin/plutil -lint "$stage" >&2
+if [[ "${2:-}" == --render ]]; then cat "$stage"; exit 0; fi
 if [[ -f "$plist" ]] && cmp -s "$stage" "$plist"; then
   if ! sudo -n launchctl print "system/$label" >/dev/null 2>&1; then
     sudo -n launchctl bootstrap system "$plist"

@@ -94,7 +94,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -164,7 +164,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -188,13 +188,13 @@
           "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
         }
       ],
-      "code_digest": "3a542ff4f916ecaef3c4661afaba1fa4df840f3602a206ad1f86776ec0b090e8",
+      "code_digest": "1c0b0157ab417281cbe6d19914f39b80e60dab07b0bc16ba166c1e3a12997aac",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "46a1e827faf4f7be646bba4e77913eb2ee9dd81a98d36a013c921c3033f74cb3",
-        "current_code_digest": "3a542ff4f916ecaef3c4661afaba1fa4df840f3602a206ad1f86776ec0b090e8"
+        "current_code_digest": "1c0b0157ab417281cbe6d19914f39b80e60dab07b0bc16ba166c1e3a12997aac"
       }
     },
     "douyin_video_processing.preflight": {
@@ -297,7 +297,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -319,7 +319,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -343,7 +343,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -378,7 +378,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -395,13 +395,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "617ad1be9f97c8920ab7ad2667b0b84efed01eebb68f90ce4cf8d9ef060ac080",
+      "code_digest": "bc15fa6e535d9e407f569b24cc6124e53da835da8398f1ed98b9c4e355a0f942",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "ca591c011282877b831828144624e6c633bea915def8a3eda333745d0889389d",
-        "current_code_digest": "617ad1be9f97c8920ab7ad2667b0b84efed01eebb68f90ce4cf8d9ef060ac080"
+        "current_code_digest": "bc15fa6e535d9e407f569b24cc6124e53da835da8398f1ed98b9c4e355a0f942"
       }
     },
     "douyin_video_processing.dedup": {
@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -518,7 +518,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -560,7 +560,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -591,13 +591,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "1d5687e0598dbc0d60876f455fb7796e4ef5f7f00eecd8046d0e222aeafdb5eb",
+      "code_digest": "b46a8cdfab147539d7e8be4949aab72b1ab5ad6a3328c84bda57a418464cc2b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "8da6b63c9421db403dffe8d47697f3cf4329f5db02cfef73afb64ed8f7e3e098",
-        "current_code_digest": "1d5687e0598dbc0d60876f455fb7796e4ef5f7f00eecd8046d0e222aeafdb5eb"
+        "current_code_digest": "b46a8cdfab147539d7e8be4949aab72b1ab5ad6a3328c84bda57a418464cc2b2"
       }
     },
     "douyin_video_processing.qualification": {
@@ -693,7 +693,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -714,7 +714,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -784,14 +784,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "6a26938065923750d08ff96a142c1463a4cc9da82f8b5c9931a6c12b2e6be250"
+          "sha256": "bd47edb8c4bea78f21d99f599eeeeb2297179abde34d65adfaee6c34c3bb4aa8"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -826,30 +826,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime/runtime-policy-sdk33.json",
           "revision": "contract",
-          "sha256": "564880b3185cb9466849cf3e69e89751d5554ad286a6bff8f97e2ab7060bd916"
-        },
-        {
-          "kind": "code",
-          "repo": "perfectuser21/zenithjoy-workspace",
-          "path": "services/phone-adb-controller/runtime/build-scrcpy-runtime.py",
-          "revision": "contract",
-          "sha256": "c331892ad64272bfb52fafa436fc6d7630a62f45518d9a7268c1e33e5cf851ce"
-        },
-        {
-          "kind": "code",
-          "repo": "perfectuser21/zenithjoy-workspace",
-          "path": "services/phone-adb-controller/runtime/scrcpy-v3.3.4-log-flush.patch",
-          "revision": "contract",
-          "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
+          "sha256": "1b6e96aa0b0360ce838fc8a14a360a9fbb68d2fb94f9ecf9d7cdc76985841554"
         }
       ],
-      "code_digest": "91f0184289aeabc3889728d32060420d83ecbc857664145b38b2db534045b707",
+      "code_digest": "bd5ff8c82bbc503f2fc38844e311e71e8e30a8ad68b4ec061ee2539af4506f88",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 此Activity另纳真实builder及实际应用patch的构建来源绑定，原实现步骤与业务政策不变。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "1d1735be88d28796dab4d70f8c539a0841e41caffe17d316b3ec22c611c07d77",
-        "current_code_digest": "91f0184289aeabc3889728d32060420d83ecbc857664145b38b2db534045b707"
+        "current_code_digest": "bd5ff8c82bbc503f2fc38844e311e71e8e30a8ad68b4ec061ee2539af4506f88"
       }
     },
     "douyin_video_processing.collection": {
@@ -952,7 +938,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -995,7 +981,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -1030,7 +1016,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1058,7 +1044,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "6a26938065923750d08ff96a142c1463a4cc9da82f8b5c9931a6c12b2e6be250"
+          "sha256": "bd47edb8c4bea78f21d99f599eeeeb2297179abde34d65adfaee6c34c3bb4aa8"
         },
         {
           "kind": "code",
@@ -1068,13 +1054,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "4f1a71860120298eb9773a4f35675ea99e16cf2f6093ec828b85bfb5d67b7960",
+      "code_digest": "f17ae9abb0c5ecd12472483bd2b7848d6855225a7cd10032c759eb0442f9798e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "9f345a89f85b655ee8217a1817f2de164d7959d64252d9b3c9ba5a2f086486e9",
-        "current_code_digest": "4f1a71860120298eb9773a4f35675ea99e16cf2f6093ec828b85bfb5d67b7960"
+        "current_code_digest": "f17ae9abb0c5ecd12472483bd2b7848d6855225a7cd10032c759eb0442f9798e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1170,7 +1156,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1192,7 +1178,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -1243,7 +1229,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1260,13 +1246,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "1d6acbb4d39326b80d86ef8cac6db5700c152d31e07ad63ec1cbf0653b459e3e",
+      "code_digest": "ec3a268125b6d83aba55b033eeafee4bb1353d882fddcb38190365a3d8ea811e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "f5717f8a0ed3c3c08b41cb7d49e4ce0cfb47a3ec3dd31f23b25fedfb83062ffd",
-        "current_code_digest": "1d6acbb4d39326b80d86ef8cac6db5700c152d31e07ad63ec1cbf0653b459e3e"
+        "current_code_digest": "ec3a268125b6d83aba55b033eeafee4bb1353d882fddcb38190365a3d8ea811e"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1362,7 +1348,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1404,7 +1390,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1435,13 +1421,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "5385b351ff069c4e4d60950b9d5df8c4a32ea0d6eedfb9e0cc8d76c4f5034dfb",
+      "code_digest": "1aa60a28d186ef250e2bbaf90e2050aa75649fa1dc996a7e36cb8955dbc50f45",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "aaeaab8642af27ce1532407398c2b431e71bc549a547374be8d521f5a7f23a00",
-        "current_code_digest": "5385b351ff069c4e4d60950b9d5df8c4a32ea0d6eedfb9e0cc8d76c4f5034dfb"
+        "current_code_digest": "1aa60a28d186ef250e2bbaf90e2050aa75649fa1dc996a7e36cb8955dbc50f45"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1544,7 +1530,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1586,7 +1572,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1666,13 +1652,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "133ad094539b4daa608f04afb93c45a97b398812f0f1b7e354f4febb1cb51728",
+      "code_digest": "7beb492f8c418816f790d930cbe17eb65c4a535dfd36669a922a45985fb7ecdc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "2ec09ac262c243829e5635f0a4153e3e0b422756945ada5c9f266f5e7ed4072d",
-        "current_code_digest": "133ad094539b4daa608f04afb93c45a97b398812f0f1b7e354f4febb1cb51728"
+        "current_code_digest": "7beb492f8c418816f790d930cbe17eb65c4a535dfd36669a922a45985fb7ecdc"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1768,7 +1754,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -1790,7 +1776,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -1814,7 +1800,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -1849,7 +1835,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -1894,13 +1880,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a3fed8ae2a2dfe3f1665953a72fd29f0e0b1325a47070956063d963995326634",
+      "code_digest": "600eeee27b8dc2529f7d296f7f8f8701fbee494e4c8a54f3c243522d1b60391c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "1d77917014ff298cdcc811b7a07340b034b73227a85dcc8ab11319b258967c27",
-        "current_code_digest": "a3fed8ae2a2dfe3f1665953a72fd29f0e0b1325a47070956063d963995326634"
+        "current_code_digest": "600eeee27b8dc2529f7d296f7f8f8701fbee494e4c8a54f3c243522d1b60391c"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -1996,7 +1982,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -2017,7 +2003,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -2066,7 +2052,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -2097,13 +2083,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "ba02ae0146823a69b97ebfef4b2bab0c302a2b47a499c93fab26422a80d74c14",
+      "code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
-        "current_code_digest": "ba02ae0146823a69b97ebfef4b2bab0c302a2b47a499c93fab26422a80d74c14"
+        "current_code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2199,7 +2185,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -2220,7 +2206,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -2269,7 +2255,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -2300,13 +2286,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "ba02ae0146823a69b97ebfef4b2bab0c302a2b47a499c93fab26422a80d74c14",
+      "code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "456451c757a1164a60e7837cfb5d164df2793476d19acf5259bdce12baff846c",
-        "current_code_digest": "ba02ae0146823a69b97ebfef4b2bab0c302a2b47a499c93fab26422a80d74c14"
+        "current_code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2402,7 +2388,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "62ba9c987946935637df0459f5337e2d45c4ee4c6dc3a98cc59aafd8b763d210"
+          "sha256": "163ab4f0d5e3812e9d4e0a52b226e6adcc388792ba8969ac051d18879467b74c"
         },
         {
           "kind": "code",
@@ -2424,7 +2410,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "235237c7100c03af36647e50719032250962c0c75590a89e15a616b4089a38ca"
+          "sha256": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33"
         },
         {
           "kind": "code",
@@ -2475,7 +2461,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/capture-strategy.mjs",
           "revision": "contract",
-          "sha256": "b25970805830d8ce31958494cc340081fd93da9f46f9104c7a6dfa143192568a"
+          "sha256": "9c0cc24a941b4d3ff6031812060a2ff3b7ef8c7796efea848344320446da7454"
         },
         {
           "kind": "code",
@@ -2506,13 +2492,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "63879b64877f4c0b67bcdd8fcf1b5e0d4eab81f69b660281e5a5b146ccb7ee56",
+      "code_digest": "0e74b4365bf83538e25485aaa2028925d0878146ed134025ebf958987d3921ab",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。",
-        "reviewed_by": "fixed_source_final_review",
+        "reason": "仅增加生产部署pending屏障及冻结前后manifest一致性校验；候选独立根与既有冻结run继续原路径，Activity输入输出和Skill方法未改变。",
+        "reviewed_by": "codex:release_review",
         "previous_code_digest": "e7a886e5643e3c19af4f5ca0d4c63fd58e44a1d3a35411d2bc3c583af127b1c3",
-        "current_code_digest": "63879b64877f4c0b67bcdd8fcf1b5e0d4eab81f69b660281e5a5b146ccb7ee56"
+        "current_code_digest": "0e74b4365bf83538e25485aaa2028925d0878146ed134025ebf958987d3921ab"
       }
     }
   },

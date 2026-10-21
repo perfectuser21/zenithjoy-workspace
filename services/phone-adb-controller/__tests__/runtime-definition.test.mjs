@@ -176,3 +176,21 @@ test('真实部署闭包冻结后导入新handler；缺文件、错hash或冻结
  const missing=setup();rmSync(join(missing.dir,'leadgen-handlers.mjs'));await assert.rejects(freezeDefinition(missing.options),/ENOENT/);
  const wrong=setup();writeFileSync(join(wrong.dir,'leadgen-handlers.mjs'),'export const forged=true;');await assert.rejects(freezeDefinition(wrong.options),/实际部署文件digest不符/);
 });
+
+test('冻结期间正式manifest切换时不发布旧run身份',async()=>{
+ const f=fixture(),get=f.options.get;let changed=false;
+ f.options.get=async path=>{
+  if(!changed){changed=true;const p=join(f.dir,'deployment-manifest.json');const m=JSON.parse(readFileSync(p));m.source_commit='c'.repeat(40);writeFileSync(p,JSON.stringify(m));}
+  return get(path);
+ };
+ await assert.rejects(freezeDefinition(f.options),/部署声明.*变化/);
+});
+
+test('生产入口遇未收尾事务拒绝新冻结，独立候选不冒充生产路径',async()=>{
+ const {assertDeploymentAdmission}=await import('../runtime-definition.mjs');
+ const home=mkdtempSync(join(tmpdir(),'phone-admission-'));
+ mkdirSync(join(home,'bin-harvest'));
+ const state=join(home,'.local/share/zenithjoy/phone-transactions');mkdirSync(state,{recursive:true});writeFileSync(join(state,'active.json'),'{}');
+ assert.throws(()=>assertDeploymentAdmission(join(home,'bin-harvest'),home),/整包部署/);
+ const candidate=join(home,'candidate');mkdirSync(candidate);assert.doesNotThrow(()=>assertDeploymentAdmission(candidate,home));
+});

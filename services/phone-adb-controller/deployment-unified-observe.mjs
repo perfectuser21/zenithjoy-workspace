@@ -21,23 +21,54 @@ export function aggregateManifest(plan,local){
  }
  return{schema_version:1,source_repo:plan.source_repo,source_commit:plan.source_commit,files:[...files.values()].sort((a,b)=>a.path.localeCompare(b.path))};
 }
-function atomicManifest(host,relative,manifest,expected){
- const py="import os,json,hashlib,sys,tempfile;from pathlib import Path;x=json.load(sys.stdin);p=Path.home()/x['path'];assert x['path'] in ['bin-harvest/deployment-manifest.json','.openclaw/leadgen-scripts/deployment-manifest.json'];raw=p.read_bytes() if p.exists() else None;assert (hashlib.sha256(raw).hexdigest() if raw is not None else None)==x['expected'],'manifest CAS conflict';fd,tmp=tempfile.mkstemp(prefix='.deployment-manifest.',dir=p.parent);f=os.fdopen(fd,'w');json.dump(x['manifest'],f);f.close();os.chmod(tmp,0o600);os.replace(tmp,p)";
- run('ssh',['-T',host,'python3 -c '+quote(py)],JSON.stringify({path:relative,manifest,expected}));
+export function atomicManifest(host,relative,manifest,expected,transaction){
+ const py=`import os,json,hashlib,sys,tempfile,importlib.util,re,pwd
+from pathlib import Path
+x=json.load(sys.stdin);home=Path(pwd.getpwuid(os.getuid()).pw_dir).resolve();p=home/x['path']
+assert x['path'] in ['bin-harvest/deployment-manifest.json','.openclaw/leadgen-scripts/deployment-manifest.json']
+for parent in [p,*p.parents]:assert not parent.is_symlink()
+raw=p.read_bytes() if p.exists() else None
+assert (hashlib.sha256(raw).hexdigest() if raw is not None else None)==x['expected'],'manifest CAS conflict'
+b=json.dumps(x['manifest'],ensure_ascii=False).encode()
+t=x.get('transaction')
+if t:
+ assert re.fullmatch('[a-f0-9]{40}',t['sha']) and t['direction'] in ['installed','restored']
+ root=home/'.local/share/zenithjoy/phone-deploy-tools'/t['sha']
+ for parent in [root,*root.parents]:assert not parent.is_symlink()
+ f=root/'deployment-transaction.py';m=root/'manifest.json';assert not f.is_symlink() and not m.is_symlink()
+ assert hashlib.sha256(f.read_bytes()).hexdigest()==json.loads(m.read_bytes())[f.name],'fixed transaction tool changed'
+ spec=importlib.util.spec_from_file_location('transaction',f);tx=importlib.util.module_from_spec(spec);spec.loader.exec_module(tx)
+ fn=tx.authorize_restored if t['direction']=='restored' else tx.authorize
+ fn(home,t['id'],x['path'],{'kind':'file','sha256':hashlib.sha256(b).hexdigest(),'mode':0o600})
+ assert (p.read_bytes() if p.exists() else None)==raw,'manifest CAS conflict'
+ tx.atomic_bytes(p,b)
+else:
+ fd,tmp=tempfile.mkstemp(prefix='.deployment-manifest.',dir=p.parent)
+ try:
+  with os.fdopen(fd,'wb') as f:f.write(b);f.flush();os.fchmod(f.fileno(),0o600);os.fsync(f.fileno())
+  os.replace(tmp,p)
+  fd=os.open(p.parent,os.O_RDONLY)
+  try:os.fsync(fd)
+  finally:os.close(fd)
+ finally:
+  if os.path.exists(tmp):os.unlink(tmp)
+`;
+ run('ssh',['-T',host,'python3 -c '+quote(py)],JSON.stringify({path:relative,manifest,expected,transaction}));
 }
-function manifestHash(host,relative){
+
+export function manifestHash(host,relative){
  const py="import sys,hashlib;from pathlib import Path;p=Path.home()/sys.argv[1];print(hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else 'missing')";
  const value=run('ssh',['-T',host,'python3 -c '+quote(py)+' '+quote(relative)]).trim();return value==='missing'?null:value;
 }
-function runtimeFiles(){
+export function runtimeFiles(){
  const py="import importlib.util,json,sys;from pathlib import Path;p=Path(sys.argv[1]);s=importlib.util.spec_from_file_location('wfio',p/'wf-v2-io.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m);print(json.dumps(m.components(p)))";
  return JSON.parse(run('python3',['-c',py,join(HERE,'commander')]));
 }
-async function collectMmv(plan,local,manifest,xianAck,request){
+export async function collectMmv(plan,local,manifest,xianAck,request,commanderFiles=runtimeFiles()){
  const endpoint=`/api/brain/releases/${xianAck.release_id}`;
  const gate=await request(endpoint+'/gate');need(gate.deployed&&gate.actual_matches&&gate.current_observation_id===xianAck.observation_id,'xian正式观测已被其它release覆盖');
  const receipt=(await request(endpoint+'/observations/'+xianAck.observation_id)).observation;need(receipt?.release_id===xianAck.release_id,'xian ACK身份错误');
- const spec={manifest,local_manifest:local,commander_files:runtimeFiles(),commander_releases:plan.commander_releases,xian_ack:xianAck};
+ const spec={manifest,local_manifest:local,commander_files:commanderFiles,commander_releases:plan.commander_releases,xian_ack:xianAck};
  const measured=JSON.parse(run('ssh',['-T','mmv','python3 -c '+quote(readFileSync(join(HERE,'deployment-installed.py'),'utf8'))],JSON.stringify(spec)));
  const finalGate=await request(endpoint+'/gate');need(finalGate.deployed&&finalGate.actual_matches&&finalGate.current_observation_id===xianAck.observation_id,'采集期间xian正式观测变化');
  return{...measured,xian_formal_ack:{observation:receipt,gate:finalGate}};
@@ -63,7 +94,7 @@ if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(i
   const result=await observeUnified({plan,xianManifest:xian,mmvManifest:mmv,options,
    collectXian:async m=>JSON.parse(run('ssh',['-T','xian-m4','node ~/bin-harvest/deployment-manifest.mjs collect ~/bin-harvest -'],JSON.stringify(m))),
    collectMmv:(manifest,ack)=>collectMmv(plan,mmv,manifest,ack,request),
-   publish:async(host,path,value)=>atomicManifest(host,path,value,previous.get(host+':'+path))});
+   publish:async(host,path,value)=>atomicManifest(host,path,value,previous.get(host+':'+path),env.WF_PHONE_TRANSACTION?{id:env.WF_PHONE_TRANSACTION,sha:plan.source_commit,direction:'installed'}:undefined)});
   console.log(JSON.stringify(result));
  }catch(e){console.error(e.message);process.exitCode=1;}
 }
