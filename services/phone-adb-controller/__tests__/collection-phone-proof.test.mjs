@@ -11,8 +11,8 @@ import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
 import {writeFileSync,mkdirSync,readFileSync,symlinkSync} from 'node:fs';
 
-async function recoveryCase(t,mutation){
- const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name)));
+async function recoveryCase(t,mutation,options={}){
+ const f=await collectionFixture(t,options),load=name=>import(pathToFileURL(join(f.runtime,name)));
  const {createHandlers}=await load('leadgen-handlers.mjs'),{invokeNativeActivity,runWorkflow}=await load('leadgen-workflow.mjs'),{createActivityRecovery}=await load('activity-skill-recovery.mjs'),{callActivityTool}=await load('activity-skill-tool.mjs');
  let launches=0,verified=0;const handlers=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',rpc:async body=>{
   if(body.kind==='activity_skill_authority')return {authorized:true};
@@ -21,17 +21,18 @@ async function recoveryCase(t,mutation){
   }
   return {result:await f.queue(body.request)};
  }});
- handlers.state.currentActivity='preflight';await handlers.preflight();handlers.state.currentActivity='qualification';await handlers.qualification();handlers.state.currentActivity='collection';handlers.state.budgetDeadline=Date.now()+90000;
+ handlers.state.currentActivity='preflight';await handlers.preflight();handlers.state.currentActivity='qualification';if(options.sample)handlers.state.intakeVideoIds=vids;await handlers.qualification();handlers.state.currentActivity='collection';handlers.state.budgetDeadline=Date.now()+90000;
  const rpc=async body=>body.kind==='activity_skill_authority'?{authorized:true}:body.kind==='activity_skill'?(launches++,await callActivityTool(body.request.broker_request_path,'inspect'),await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:[]}),await callActivityTool(body.request.broker_request_path,'resume'),{result:{status:'ok',execution_stopped:true}}):{result:await f.queue(body.request)};
  const {collectionPhoneProofValid,consumeCollectionPhoneProof}=await load('collection-phone-scope.mjs');
  const proofContext={task_id:'scope-task',run_id:'scope-run__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:f.env.P,serial:f.env.SERIAL,activity:'collection',owner:f.env.WFR_TAG,target:f.frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:f.frozen.snapshot_sha256,binding_id:'scope-binding'};
  const recover=createActivityRecovery({runDir:f.d,frozen:f.frozen,binding:{id:'scope-binding',run_id:'scope-run__a1',task_id:'scope-task'},env:f.env,handlers,rpc});
- const result=await runWorkflow({activities:[{key:'collection',retry_safe:false}],context:{run_id:'scope-run__a1',task_id:'scope-task',source_commit:'a'.repeat(40)},handlers:{collection:async()=>{const value=await invokeNativeActivity(()=>handlers.collection(),handlers.state);assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,proofContext),true,'反例注入前须真的从完整原生leaf取得能力');for(const key of Object.keys(proofContext))assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,{...proofContext,[key]:'other'}),false,'跨'+key+'必须拒绝');assert.equal(collectionPhoneProofValid(value.recovery_phone_scope),false,'缺context不可准入');await mutation?.({f,handlers,value});return value;}},recover,commander:async()=>({action:'continue'}),record:async()=>{},verify:async(_a,e)=>{verified++;return {verified:e.result.videos_processed===2};}});
+ const result=await runWorkflow({activities:[{key:'collection',retry_safe:false}],context:{run_id:'scope-run__a1',task_id:'scope-task',source_commit:'a'.repeat(40)},handlers:{collection:async()=>{const value=await invokeNativeActivity(()=>handlers.collection(),handlers.state);if(value.status==='partial'){assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,proofContext),true,'反例注入前须真的从完整原生leaf取得能力');for(const key of Object.keys(proofContext))assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,{...proofContext,[key]:'other'}),false,'跨'+key+'必须拒绝');assert.equal(collectionPhoneProofValid(value.recovery_phone_scope),false,'缺context不可准入');await mutation?.({f,handlers,value});}return value;}},recover,commander:async()=>({action:'continue'}),record:async()=>{},verify:async(_a,e)=>{verified++;return {verified:e.result.videos_processed===2};}});
  assert.equal(f.stored.has(vids[0]),true,'必须先完成首VID真实原脚本和PG边界，不把setup失败当RED '+JSON.stringify(result));
  if(mutation){assert.equal(launches,0,'变化/污染后不得启动Skill');assert.notEqual(result.status,'completed');return;}
- assert.equal(launches,1,'必须真实进入Skill，不能0调用却称接管成功');assert.equal(result.status,'completed');assert.equal(verified,1);
+ assert.equal(launches,1,'必须真实进入Skill，不能0调用却称接管成功');assert.equal(result.status,'completed',JSON.stringify(result));assert.equal(verified,1);
  assert.equal(f.dbCalls.filter(q=>q.op==='claim_videos').length,1);
  assert.equal(f.phoneCalls().filter(q=>q.cmd==='open-video'&&q.args[0]===vids[0]&&q.args[1].includes('-collection-')).length,1,'已成功VID不得重新操作手机');
+ if(options.sample){assert.equal(result.results[0].result.sampling_readback_count,2);assert.equal(result.results[0].result.sampling_receipts.length,2);}
  assert.equal(handlers.state.nativeStopUnproven,true);
  assert.equal(result.results[0].code_failure.result.execution_stopped,false);
  const proof=result.results[0].code_failure.result.recovery_phone_scope;assert.equal(consumeCollectionPhoneProof(proof,proofContext),false,'已消费能力不可二次使用');assert.equal(collectionPhoneProofValid(structuredClone(proof),proofContext),false,'序列化副本无能力');
@@ -55,3 +56,15 @@ const mutations=[
  ['caller伪能力不能替换真正能力',({value})=>{value.recovery_phone_scope={verified:true,execution_stopped:true};}],
 ];
 for(const [name,mutation] of mutations)test('完整恢复门反例：'+name,{skip:process.platform!=='darwin'},t=>recoveryCase(t,mutation));
+
+test('首VID no_comments采样回执在原slot续跑中保留且不重做手机',{skip:process.platform!=='darwin'},t=>recoveryCase(t,undefined,{sample:true}));
+
+for(const mode of ['approved-account-mismatch','missing-required-helper','invalid-recording-pid','deadline-expired'])test('真实issuer签发前拒绝：'+mode,{skip:process.platform!=='darwin'},async t=>{
+ const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name))),{digest}=await load('runtime-definition.mjs'),{startCollectionPhoneScope}=await load('collection-phone-scope.mjs');
+ if(mode==='approved-account-mismatch')f.frozen.collection_phone_scope.expected_account='44997267357';
+ if(mode==='missing-required-helper')delete f.frozen.files['runtime/queued-recipient-evidence.js'];
+ if(mode==='invalid-recording-pid'){const d=f.frozen.collection_phone_scope.evidence_root;mkdirSync(d,{recursive:true});writeFileSync(join(d,'invalid.rec.pid'),'not-a-pid');}
+ delete f.frozen.snapshot_sha256;f.frozen.snapshot_sha256=digest(f.frozen);writeFileSync(join(f.d,'run-definition.json'),JSON.stringify(f.frozen));
+ const request=join(f.d,'run-bindings/a1.request.json'),value=JSON.parse(readFileSync(request));value.runtime_snapshot_sha256=f.frozen.snapshot_sha256;writeFileSync(request,JSON.stringify(value));
+ await assert.rejects(startCollectionPhoneScope({root:f.runtime,env:f.env,state:{currentActivity:'collection',account:'different-account',budgetDeadline:Date.now()+(mode==='deadline-expired'?-1:30000)},sourceCommit:'a'.repeat(40),taskId:'scope-task'}),new RegExp({ 'approved-account-mismatch':'COLLECTION_PHONE_ACCOUNT_INVALID','missing-required-helper':'COLLECTION_PHONE_SOURCE_INVALID','invalid-recording-pid':'COLLECTION_MANAGED_RECORDING_UNVERIFIED','deadline-expired':'COLLECTION_PHONE_SCOPE_IDENTITY_INVALID'}[mode]));
+});

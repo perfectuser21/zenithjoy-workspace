@@ -11,6 +11,8 @@ import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {assertCaptureStrategy} from './capture-strategy.mjs';
 import {readBinding} from './runtime-binding.mjs';
+import {createVideoAction} from './leadgen-video-action.mjs';
+import {startCollectionPhoneScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
   if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
@@ -52,7 +54,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   // MMV入口已核的绝对客户端必须贯穿设备命令，不能再从PATH取另一个adb。
   const adbClient=mmvDeviceRuntime?(env.DOUYIN_ADB_BIN||'/opt/homebrew/bin/adb'):'adb';
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
-  const state={profile,line,run,source_commit:sourceCommit};
+  const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`};
+  let collectionScope=null;const collectionProgress=new Map();
   let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{
     const file=join(env.WFR_RUN_DIR,'activity.log');
@@ -61,6 +64,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   };
   const nativeFailure=(error,command,args,opts)=>applyNativeFailure(error,command,args,opts,state);
   const bounded=async(command,args,opts={})=>{
+    invalidateCollectionPhoneProof(state);
     const unknownFile=opts.receipt?join(env.WFR_RUN_DIR,'native-operations',opts.receipt.operationId+'.unknown'):null;
     if(opts.receipt)state.nativeStopProof=null;
     try {
@@ -249,28 +253,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     return {action_max_duration_s:actionMax,timeout_ms:timeoutMs,global_remaining_ms:globalRemaining,activity_remaining_ms:Number.isFinite(activityRemaining)?activityRemaining:null};
   };
   const collectionBudgetVideos=[];
-  const videoAction=async(mode,v)=>{
-    let historyFile='';
-    if(mode==='collection')collectionTiming();
-    if(mode==='collection'){
-      const receipt=await queue('comment_history',{video_id:v.video_id,video_url:v.video_url});
-      historyFile=join(env.WFR_RUN_DIR,`${run}-history-${v.video_id}.json`);
-      const temp=historyFile+`.tmp-${process.pid}`;
-      writeFileSync(temp,JSON.stringify(receipt),{mode:0o600,flag:'wx'});renameSync(temp,historyFile);
-      history.load(historyFile,env.WFR_RUN_DIR,{line,run,source_run:env.LEADGEN_SOURCE_RUN||null,video_id:v.video_id,video_url:v.video_url});
-      historyScoped++;
-    }
-    let timing;
-    if(mode==='collection'){
-      timing=collectionTiming();
-      collectionBudgetVideos.push({video_id:v.video_id,...timing,observed_at:new Date().toISOString()});
-      writeFileSync(join(env.WFR_RUN_DIR,`${run}-collection-budget-readback.json`),JSON.stringify({run_tag:run,profile,serial,line,source_run:env.LEADGEN_SOURCE_RUN||null,collection_budget_s:collectionBudget,requested_explicit:collectionBudgetExplicit,global_start_ts:env.WF_RUN_START_TS===undefined?null:Number(env.WF_RUN_START_TS),global_max_seconds:Number(env.WF_RUN_MAX_SECONDS||1800),activity_deadline_ms:state.budgetDeadline||null,action_max_duration_s:timing.action_max_duration_s,sampling_input:sampleInput,videos:collectionBudgetVideos}),{mode:0o600});
-    }
-    return bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
-      v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
-      {receipt:nativeReceipt(),maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),
-        env:{...(mode==='qualification'&&(qualificationAttempts.get(v.video_id)||1)>1?{QUEUED_VIDEO_EVIDENCE_ATTEMPT:String(qualificationAttempts.get(v.video_id)-1)}:{}),...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget),QUEUED_RECIPIENT_COMPANY_BINDING_FILE:state.recipientCompanyBindingFile||'',QUEUED_RECIPIENT_COMPANY_BINDING_SHA:state.recipientCompanyBindingSha||''}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
-  };
+  const videoAction=createVideoAction({root,env,run,line,profile,serial,queue,bounded,nativeReceipt,collectionTiming,collectionBudget,collectionBudgetExplicit,collectionBudgetVideos,qualificationAttempts,sampleInput,state,getCollectionScope:()=>collectionScope,onHistoryScoped:()=>historyScoped++});
   const archiveQualification=v=>{
     const attempt=(qualificationAttempts.get(v.video_id)||0)-1;
     const folder=join(env.WFR_RUN_DIR,'qualification-attempts',v.video_id,String(attempt));
@@ -424,12 +407,25 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsUnverified?null:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,avatarRecoveries=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
+      collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId});
+      const counts=()=>[comments,collected,sampled,rescans,avatarRecoveries,inserted,historyVerified,coverage,historyConsumed,historyScoped];
+      const add=values=>{[comments,collected,sampled,rescans,avatarRecoveries,inserted,historyVerified,coverage,historyConsumed,historyScoped]=counts().map((v,i)=>v+values[i]);};
+      try{
       // 空候选也产出可读回的空工件；保留已有行，缺文件判定仍由统一裁判严格执行。
       appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),'',{mode:0o600});
       for(const v of qualified){try{
         collectionTiming();
+        const saved=collectionProgress.get(v.video_id);
+        if(saved){
+          const actual=await queue('inspect_videos',{video_ids:[v.video_id]});
+          if(actual.length!==1||actual[0].video_id!==v.video_id||actual[0].judgment_status!=='matched'||actual[0].harvest_batch!==run||actual[0].process_status!==(saved.sampled?'处理中:'+run:'评论已采'))throw Error('COLLECTION_COMMITTED_VIDEO_READBACK_FAILED');
+          for(let offset=0;offset<Math.max(1,saved.rows.length);offset+=50){const rows=saved.rows.slice(offset,offset+50),proof=await queue('sample_readback',{video_id:v.video_id,video_url:v.video_url,rows});if(proof.verified!==true||proof.video_id!==v.video_id||proof.coverage!==rows.length)throw Error('COLLECTION_COMMITTED_ROWS_READBACK_FAILED');}
+          add(saved.counts);if(saved.sampleReceipt)sampleReceipts.push(saved.sampleReceipt);continue;
+        }
+        const before=counts();
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
         appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),result.stdout);
+        if(![0,7].includes(result.code)&&/\bvideo_identity_mismatch\b/.test(result.stderr||''))throw Error('COLLECTION_VIDEO_IDENTITY_READBACK_FAILED');
         const rows=parseCollection(result,v.video_id,{allowPartial:true,recipientScope:{runDir:env.WFR_RUN_DIR,lineKey:lineRoutes.routeOf(line).key,run,sourceRun:env.LEADGEN_SOURCE_RUN,profile,companyBinding:state.recipientCompanyBinding}});
         const telemetry=result.stdout.split('\n').find(s=>s.startsWith(`RESCAN\t${v.video_id}\t`))?.split('\t')[2];
         if(!/^\d+$/.test(telemetry||''))throw Error('缺实际重扫计数，不能宣称采集通过');
@@ -465,10 +461,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         if(partial)failures.push({video_id:v.video_id,code:7,reason:'采集在预算或停止边界结束，已保存核验评论，视频仍未采完',comments_saved:stored.comments});
         else if(quota){sampled++;}
         else {collected++;leased=leased.filter(p=>p.video_id!==v.video_id);}
+        if(!partial)collectionProgress.set(v.video_id,{sampled:quota,counts:counts().map((value,i)=>value-before[i]),rows:[...old.consumed,...rows].map(r=>({...(r.id?{id:r.id}:{}),douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl||v.video_url})),sampleReceipt:sampleInput?sampleReceipts.at(-1):null});
       }catch(error){failures.push({video_id:v.video_id,reason:error.message});if(state.executionUnknown)break;}}
       if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
-      return {sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
-        identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},
+      const outcome={sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
+        identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};
+      return collectionScope?await collectionScope.finish(outcome):outcome;
+      }finally{await collectionScope?.close();collectionScope=null;}},
     scoring:createScoringHandler({env,run,line,state,queue}),
     mark_leads:async()=>{const cursorFile=join(env.WFR_RUN_DIR,`${run}-mark-cursor.json`);
       const cursor=existsSync(cursorFile)?JSON.parse(readFileSync(cursorFile,'utf8')):null;

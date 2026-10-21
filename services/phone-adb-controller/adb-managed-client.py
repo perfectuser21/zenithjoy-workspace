@@ -105,9 +105,11 @@ def client_version(binary):
 
 
 def main(argv):
-    os.environ['ZJ_ADB_HOST_CONFIG'] = policy_path()
+    scoped = 'WFR_COLLECTION_LEAF_SOCKET' in os.environ
+    if not scoped:
+        os.environ['ZJ_ADB_HOST_CONFIG'] = policy_path()
     route = route_module()
-    policy = route.read_host_policy()
+    policy = route.read_host_policy(os.environ.get('WFR_COLLECTION_POLICY_FILE')) if scoped else route.read_host_policy()
     if not policy:
         raise ValueError('ADB_MANAGED_CONFIG_REQUIRED')
     binary = policy.get('adb_bin')
@@ -130,7 +132,15 @@ def main(argv):
         for device in host['devices']:
             print(device['serial'] + '\t' + device['state'])
         return 0
-    route.select_route(serial, policy['endpoint'])
+    if scoped:
+        actual = route.select_existing_unique_route(serial, policy['endpoint'])
+        if actual != policy['port']:
+            raise ValueError('ADB_MANAGED_ENDPOINT_MISMATCH')
+        # 如宿主已有全局策略，仍须另过原严格检查，不能被本run策略削弱。
+        if route.read_host_policy() is not None:
+            route.select_route(serial, policy['endpoint'])
+    else:
+        route.select_route(serial, policy['endpoint'])
     client_version(binary)
     env = dict(os.environ, ADB_SERVER_SOCKET=policy['endpoint'])
     for name in ('ANDROID_ADB_SERVER_PORT', 'ANDROID_ADB_SERVER_ADDRESS', 'ANDROID_SERIAL',

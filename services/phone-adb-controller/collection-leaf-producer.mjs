@@ -18,11 +18,11 @@ function pinnedClient(policy){
 }
 async function run(command,args,env,timeoutMs,onStart=()=>{}){
  return new Promise((resolve,reject)=>{
-  const p=spawn(command,args,{env,stdio:['ignore','pipe','pipe']}),chunks=[[],[]];let bytes=0,tainted=false,force;
+  const p=spawn(command,args,{env,stdio:['ignore','pipe','pipe']}),chunks=[[],[]];let bytes=0,tainted=false,force,startError;
   const timer=setTimeout(()=>{tainted=true;p.kill('SIGTERM');force=setTimeout(()=>p.kill('SIGKILL'),200);},Math.max(1,timeoutMs));
-  p.once('spawn',()=>onStart(p.pid));p.once('error',error=>{clearTimeout(timer);clearTimeout(force);reject(error);});
+  p.once('spawn',()=>{try{onStart(p.pid);}catch(error){startError=error;tainted=true;p.kill('SIGKILL');}});p.once('error',error=>{startError=error;});
   for(const [index,stream] of [p.stdout,p.stderr].entries())stream.on('data',b=>{bytes+=b.length;if(bytes>8*1024*1024){tainted=true;p.kill('SIGKILL');}else chunks[index].push(b);});
-  p.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(force);resolve({code,signal,tainted,stdout:Buffer.concat(chunks[0]),stderr:Buffer.concat(chunks[1])});});
+  p.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(force);if(startError){reject(startError);return;}resolve({code,signal,tainted,stdout:Buffer.concat(chunks[0]),stderr:Buffer.concat(chunks[1])});});
  });
 }
 export async function startCollectionLeafProducer({directory,policy,serial,deadlineMs,env=process.env}){
@@ -39,7 +39,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  mkdirSync(directory,{recursive:true,mode:0o700});
  const socket=join(tmpdir(),'cl-'+randomBytes(12).toString('hex')+'.sock'),nonce=randomBytes(24).toString('hex');
  const ledger=join(directory,'collection-leaves-'+randomBytes(8).toString('hex')+'.jsonl');
- const leaves=[],clients=new Set();let active=0,sealed=false,tainted=false;
+ const leaves=[],clients=new Set(),finishedClients=new WeakSet();let active=0,sealed=false,tainted=false,draining;
  const append=entry=>appendFileSync(ledger,JSON.stringify(entry)+'\n',{mode:0o600});
  const dispatch=async request=>{
   if(sealed||Date.now()>=deadlineMs||active)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
@@ -49,27 +49,31 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   if(pinnedClient(policy)!==binary)throw Error('COLLECTION_CLIENT_PIN_MISMATCH');
   active++;
   const entry={sequence:leaves.length+1,argv_sha256:sha(JSON.stringify(argv)),intent_at:Date.now(),boundary:'darwin-sandbox-deny-process-fork-v1'};
-  leaves.push(entry);append({...entry,phase:'intent'});
+  leaves.push(entry);
   try{
+   append({...entry,phase:'intent'});
    const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});});
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;append({...entry,phase:'exit'});
    if(result.code!==0||result.signal||result.tainted)tainted=true;
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
-  }catch(error){tainted=true;append({...entry,phase:'unknown'});throw error;}finally{active--;}
+  }catch(error){tainted=true;try{append({...entry,phase:'unknown'});}catch{}throw error;}finally{active--;}
  };
  const server=createServer({allowHalfOpen:true},client=>{
   clients.add(client);client.once('close',()=>clients.delete(client));client.on('error',()=>{});let bytes='';
   client.setTimeout(Math.max(1,deadlineMs-Date.now()),()=>client.destroy());
   client.on('data',b=>{bytes+=b;if(bytes.length>32000){tainted=true;client.destroy();}});
-  client.on('end',async()=>{try{client.end(JSON.stringify(await dispatch(JSON.parse(bytes)))+'\n');}catch(error){tainted=true;client.end(JSON.stringify({ok:false,error:String(error.message)})+'\n');}});
+  client.on('end',async()=>{try{const response=await dispatch(JSON.parse(bytes));finishedClients.add(client);client.end(JSON.stringify(response)+'\n');}catch(error){tainted=true;finishedClients.add(client);client.end(JSON.stringify({ok:false,error:String(error.message)})+'\n');}});
  });
  await new Promise((yes,no)=>{server.once('error',no);server.listen(socket,yes);});chmodSync(socket,0o600);
+ const drain=()=>draining??=(async()=>{
+  sealed=true;
+  for(const client of clients){if(!finishedClients.has(client))tainted=true;client.destroy();}
+  await new Promise(r=>server.close(r));
+  while(active&&Date.now()<deadlineMs+3000)await sleep(10);
+  try{unlinkSync(socket);}catch(error){if(error.code!=='ENOENT')throw error;}
+  if(active){tainted=true;throw Error('COLLECTION_LEAF_DRAIN_UNVERIFIED');}
+ })();
  const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),leaves:structuredClone(leaves),ledger});
  return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},
-  seal:async()=>{sealed=true;while(active&&Date.now()<deadlineMs)await sleep(10);if(active)tainted=true;return snapshot();},
-  close:async()=>{sealed=true;for(const client of clients)client.destroy();await new Promise(r=>server.close(r));
-   while(active&&Date.now()<deadlineMs+3000)await sleep(10);
-   try{unlinkSync(socket);}catch(error){if(error.code!=='ENOENT')throw error;}
-   if(active){tainted=true;throw Error('COLLECTION_LEAF_DRAIN_UNVERIFIED');}},
-  snapshot};
+  seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }

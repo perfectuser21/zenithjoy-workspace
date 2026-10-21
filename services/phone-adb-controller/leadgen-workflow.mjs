@@ -4,12 +4,14 @@ import {fileURLToPath} from 'node:url';
 import {runWorkflow} from './activity-commander.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
+import {collectionEvidenceProof} from './collection-phone-scope.mjs';
 
 export async function invokeNativeActivity(execute,state){
   try{
     const result=await execute();
     if(state.nativeStopUnproven&&['partial','failed'].includes(result?.status)){
-      state.executionUnknown=true;
+      const proof=collectionEvidenceProof(result,{run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,activity:state.currentActivity});
+      if(!proof)state.executionUnknown=true;
       return {...result,execution_stopped:false};
     }
     return result;
