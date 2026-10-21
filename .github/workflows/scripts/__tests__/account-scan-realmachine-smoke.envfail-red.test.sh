@@ -7,7 +7,7 @@
 #   1. 不存在 "-eq 3 → exit 0" 包装分支
 #   2. exit "$CODE" 真实退出码保留
 #   3. outputs.code 写入保留（nightly-report 靠它区分 envfail 标签）
-#   4. nightly-report 红判定仍 key 在 result=failure（不依赖 code，容忍 code 为空）
+#   4. nightly-report 根据真实result判定；failure/cancelled/skipped均红，不依赖code
 set -uo pipefail
 WF="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/.github/workflows/nightly-real-machine-staging.yml"
 echo "━━ envfail-red 结构性测试 ━━"
@@ -23,6 +23,19 @@ else
 fi
 grep -q 'exit "\$CODE"' "$WF" || { echo "❌ FAIL: exit \"\$CODE\" 真实退出码丢失"; FAIL=1; }
 grep -q 'code=\$CODE.*GITHUB_OUTPUT' "$WF" || { echo "❌ FAIL: outputs.code 写入丢失"; FAIL=1; }
-grep -q '"\$ACCOUNT_SCAN" = "failure"' "$WF" || { echo "❌ FAIL: nightly-report 红判定不再 key 在 result=failure"; FAIL=1; }
+CONDITION=$(grep '^[[:space:]]*if .*"\$ACCOUNT_SCAN".*; then' "$WF" | head -1)
+if [ -z "$CONDITION" ]; then
+  echo "❌ FAIL: nightly-report 缺少真实result判定"; FAIL=1
+else
+  for STATE in success failure cancelled skipped; do
+    EXPECTED=red; [ "$STATE" = success ] && EXPECTED=green
+    ACTUAL=$(WECHAT=success DOUYIN=success ACCOUNT_SCAN="$STATE" bash -c "$CONDITION echo red; else echo green; fi")
+    if [ "$ACTUAL" = "$EXPECTED" ]; then
+      echo "✅ nightly account-scan=$STATE → $ACTUAL"
+    else
+      echo "❌ FAIL: account-scan=$STATE 期望$EXPECTED，实际$ACTUAL"; FAIL=1
+    fi
+  done
+fi
 
 [ "$FAIL" -eq 0 ] && { echo "✅ PASS"; exit 0; } || { echo "❌ RED/FAIL"; exit 1; }

@@ -205,9 +205,9 @@ jobs:
           CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
 
           # 测试目录和 *.test.* / *.spec.* 只验证实现，不要求虚构浏览器操作。
-          # API 保持原有覆盖；Staff Hub 与 Dashboard 一样属于真实界面入口。
+          # API 由 L4 api-test 的实际API测试硬门覆盖；浏览器DoD仅识别真实界面入口。
           if ! echo "$CHANGED" |
-            grep -E '^apps/(dashboard|api|staff-hub)/' |
+            grep -E '^apps/(dashboard|staff-hub)/' |
             grep -vE '(^|/)(__tests__|tests?)/|(^|/)[^/]+\.(test|spec)\.[^/]+$' |
             grep . >/dev/null; then
             echo "无前端文件改动，跳过浏览器验证检查"

@@ -222,10 +222,22 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/agent-form-smoke.sh
           bash .github/workflows/scripts/smoke/agent-form-smoke.sh
 
+  windows-process-cleanup:
+    name: Windows Candidate Process Cleanup
+    needs: changes
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify real job process tree cleanup and cancellation
+        shell: powershell
+        run: .\.github\workflows\scripts\__tests__\line02-process-job.test.ps1
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed
-    needs: [changes, dashboard-test, api-test, agent-test]
+    needs: [changes, dashboard-test, api-test, agent-test, windows-process-cleanup]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -263,6 +275,13 @@ jobs:
           if [ "${{ needs.changes.outputs.agent }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
             if [ "${{ needs.agent-test.result }}" != "success" ]; then
               echo "FAIL: Agent Test (${{ needs.agent-test.result }})"
+              FAILED=true
+            fi
+          fi
+
+          if [ "${{ needs.changes.outputs.agent }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
+            if [ "${{ needs.windows-process-cleanup.result }}" != "success" ]; then
+              echo "FAIL: Windows Candidate Process Cleanup (${{ needs.windows-process-cleanup.result }})"
               FAILED=true
             fi
           fi
