@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
@@ -69,6 +70,30 @@ def validate_run_id(run_id):
     if not re.fullmatch(r'[a-f0-9]{32}', run_id):
         raise ValueError('invalid backup run identity')
     return run_id
+
+
+def write_proof(store, run_id, dump_sha256, proof):
+    validate_run_id(run_id)
+    if not re.fullmatch(r'[a-f0-9]{64}', dump_sha256):
+        raise ValueError('invalid proof dump identity')
+    target = store / (run_id + '-' + dump_sha256 + '.proof.json')
+    data = (json.dumps(proof, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+    fd, temporary = tempfile.mkstemp(prefix='.proof-', dir=store)
+    try:
+        with os.fdopen(fd, 'wb') as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        # Exclusive link publishes complete bytes and refuses to replace any historical proof.
+        os.link(temporary, target)
+        directory = os.open(store, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        os.unlink(temporary)
+    return {'proof': str(target), 'proof_sha256': hashlib.sha256(data).hexdigest()}
 
 
 def cleanup_run(run_id):
@@ -180,11 +205,10 @@ def main():
                 else:
                     part.chmod(0o600)
                     os.replace(part, target)
-                proof = {'source': item, 'offsite_path': str(target), 'verified_at': time.time(),
+                proof = {'run_id': run_id, 'source': item, 'offsite_path': str(target), 'verified_at': time.time(),
                          'restore': verify_restore(target, run_id), 'status': 'verified'}
-                proof_path = store / (item['sha256'] + '.proof.json')
-                proof_path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n')
-                proofs.append({'database': item['database'], 'sha256': digest, 'proof': str(proof_path)})
+                saved = write_proof(store, run_id, digest, proof)
+                proofs.append({'database': item['database'], 'sha256': digest, **saved})
             finally:
                 part.unlink(missing_ok=True)
     finally:
