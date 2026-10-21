@@ -38,3 +38,13 @@ test('异常路径必须留存证据并在返回前确认本次进程树退出',
  assert.match(runner,/line02-candidate-evidence/);
  assert.doesNotMatch(runner,/Remove-Item -LiteralPath \$directory -Recurse/);
 });
+test('独立F06与nightly用同一候选交互入口和设备锁，业务失败不得软放行',()=>{
+ const workflow=YAML.parse(read('.github/workflows/e2e-line02-keyword-comment.yml'));
+ const job=workflow.jobs['keyword-comment-smoke'];
+ assert.equal(job['continue-on-error'],undefined);
+ assert.equal(job.concurrency.group,'zj-rog-desktop');
+ assert.equal(job.concurrency['cancel-in-progress'],false);
+ assert.equal(job.steps.find(s=>s.uses==='actions/checkout@v4').with.ref,'${{ github.sha }}');
+ assert.ok(job.steps.some(s=>s.run?.includes('run-line02-candidate.ps1')&&s.shell==='powershell'));
+ assert.doesNotMatch(JSON.stringify(job),/zenithjoy-agent-v|最新 agent/);
+});
