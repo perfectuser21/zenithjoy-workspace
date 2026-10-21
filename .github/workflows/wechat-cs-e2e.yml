@@ -176,6 +176,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore complete agent source after reused checkout
+        shell: bash
+        run: |
+          # checkout removes worktreeConfig after disabling sparse mode; old local
+          # core.sparseCheckout can become effective again on this reused runner.
+          git sparse-checkout disable
+          test -f services/agent/src/handlers/__tests__/wechat-rpa.test.ts
+
       # 不用 actions/setup-node：self-hosted runner 走国内 proxy 拉 codeload.github.com
       # 100s 超时×3 必挂（2026-07-02 排查实锤，agent-module-e2e.yml 同款处理）。用本机 node。
       - name: Verify Node.js (self-hosted, skip setup-node to avoid proxy timeout)
