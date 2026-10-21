@@ -2,6 +2,19 @@
 version: 1
 workflow: douyin-video-discovery
 probes:
+  - key: discovery_filters_verified
+    stage: collect_videos
+    journey_cell: stage:collect_videos
+    probe:
+      type: metric
+      ref: metrics.filters_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: 独立读回同run及候选SHA的每次原始筛选回执，实际排序、时间和地域必须等于请求；缺失、降级和不一致不得放行。
   - key: pf_device_verified
     stage: preflight
     journey_cell: stage:preflight

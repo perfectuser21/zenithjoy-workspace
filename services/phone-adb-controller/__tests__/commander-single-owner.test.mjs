@@ -89,6 +89,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
   './runtime-definition.mjs':{readFrozen:()=>frozen,assertCommentSampling:()=>{}},
   './runtime-binding.mjs':{readBinding:()=>({run_id:'original-run__a1',id:'fixed-binding'})},
   './leadgen-client.mjs':{createRpc:()=>async()=>({}),execInput:async()=>({code:0,stdout:'WFR_EVIDENCE_STATUS=sent'})},
+  './leadgen-discovery.mjs':{verifyDiscoveryFilterEvidence:()=>{throw Error('unexpected filter verifier after stop');}},
   './step-judge.mjs':{judgeSteps:()=>{throw Error('unexpected verifier');}}
  };
  const source=fs.readFileSync(process.argv[2],'utf8');

@@ -156,6 +156,7 @@ test('真实workflow包装器达到目标且仅有消失候选缺口时保留成
    if(command==='/test/phone'){
     const op=args[2]==='--lock-owner'?args[4]:args[2];
     const values={preflight:'serial=test-serial\n','lock-acquire':'lock=acquired\n','lock-refresh':'lock=refreshed\n','account-current':'douyin_id=test-account\n','search-kw-matches':'kw_matches=1\n'};stdout=values[op]||'';
+    if(op==='search-time-layer')stdout='sort=latest\ntime_layer=six_months\nduration=unlimited\nscope=unlimited\nlocation=same_city\n';
     if(op==='search-video-cards'){
      reads++;stdout=(reads===1?'100\t200\t00:20\t消失候选\t甲\n':'')+'300\t200\t00:20\t存在候选\t乙\nvideo_tab=1\nloading=0\nend_of_results=1\nevidence=/test/fresh.xml\n';
     }

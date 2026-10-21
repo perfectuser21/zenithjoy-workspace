@@ -39,6 +39,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/deployment-release-evidence.test.mjs \
  services/phone-adb-controller/__tests__/deployment-unified.test.mjs \
  services/phone-adb-controller/__tests__/deregistered-comment.test.mjs \
+ services/phone-adb-controller/__tests__/discovery-filter-admission.test.mjs \
  services/phone-adb-controller/__tests__/discovery-receipt-recovery.test.mjs \
  services/phone-adb-controller/__tests__/drift-check.test.mjs \
  services/phone-adb-controller/__tests__/empty-collection.test.mjs \

@@ -24,6 +24,7 @@ import {readFrozen,assertCommentSampling} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput} from './leadgen-client.mjs';
 import {judgeSteps} from './step-judge.mjs';
+import {verifyDiscoveryFilterEvidence} from './leadgen-discovery.mjs';
 
 export function activityExecutionDeadline({activity,env,previous,now=Date.now()}){
   const budget=Number(activity.budget?.max_duration_s||120);
@@ -59,6 +60,10 @@ async function main(){
   const verify=async(activity,result)=>{
     const receipts=records.filter(r=>r.activity===activity.key&&['before','after'].includes(r.phase));
     const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>=2&&receipts.every(r=>r.commander_status==='available'))};
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
+      metrics.filters_verified=Number(verifyDiscoveryFilterEvidence({runDir:dir,runId:binding.run_id,run:env.WFR_TAG,profile:env.P,sourceCommit:frozen.deployment.source_commit,
+        requested:{sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'},invocations:result.result?.filter_invocations}));
+    }
     const response=await rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
     const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
     // 多源取证分别按真实source索引检查，不能拿一个来源的截图代替另一个。
