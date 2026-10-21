@@ -1,9 +1,9 @@
 // 原handler/逐视频脚本/execInput/broker/nofork均真实，仅手机、PG和Agent传输为隔离夹具。
-import {mkdtempSync,cpSync,writeFileSync,readFileSync,mkdirSync,readdirSync,statSync,realpathSync,symlinkSync,existsSync} from 'node:fs';
+import {mkdtempSync,cpSync,writeFileSync,readFileSync,mkdirSync,readdirSync,statSync,lstatSync,realpathSync,symlinkSync,existsSync} from 'node:fs';
 import {join,dirname,basename} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {createServer} from 'node:net';
+import {Worker} from 'node:worker_threads';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 export const vids=['7681632828384394202','7681632828384394203'];
@@ -11,13 +11,13 @@ const hash=x=>createHash('sha256').update(x).digest('hex');
 export async function collectionFixture(t,{sample=false,panelProbe=false,blockIdentity=false}={}){
  const d=realpathSync(mkdtempSync(join(tmpdir(),'collection-real-recovery-'))),runtime=join(d,'runtime'),source=new URL('../../',import.meta.url).pathname;
  cpSync(source,runtime,{recursive:true,filter:path=>!path.includes('/__tests__')&&!path.includes('/runtime/')&&!path.includes('/__pycache__')&&!path.endsWith('.pyc')});
- const sockets=new Set(),server=createServer(c=>{sockets.add(c);c.on('close',()=>sockets.delete(c));c.on('error',()=>{});let b='';c.on('data',s=>{b+=s;if(b.length<4)return;const n=parseInt(b.slice(0,4),16);if(b.length<4+n)return;const q=b.slice(4,4+n),out=q==='host:version'?'0029':q==='host:devices'?'NO-DEVICE\tdevice\n':null;if(out===null){c.end('FAIL0003bad');return;}c.end('OKAY'+Buffer.byteLength(out).toString(16).padStart(4,'0')+out);});});
- await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{for(const c of sockets)c.destroy();server.close();});
+ const server=new Worker(new URL('./collection-adb-server-worker.mjs',import.meta.url),{workerData:{serial:'NO-DEVICE'}});
+ const {port}=await new Promise((resolve,reject)=>{server.once('message',resolve);server.once('error',reject);});t.after(()=>server.terminate());
  const c=join(d,'client.c'),client=join(d,'adb'),bin=join(d,'bin');mkdirSync(bin);
  writeFileSync(c,'#include <stdio.h>\n#include <string.h>\nint main(int n,char **a){if(n==2&&!strcmp(a[1],"version"))puts("Android Debug Bridge version 1.0.41");else if(!strcmp(a[n-1],"telephony.registry"))puts("mCallState=0");else puts("device");return 0;}\n');
  if(panelProbe)writeFileSync(c,`#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\n#include <unistd.h>\nint main(int n,char **a){char closed[4096];snprintf(closed,sizeof closed,"%s/panel-closed",getenv("COLLECTION_FIXTURE_DIR"));if(n==2&&!strcmp(a[1],"version")){puts("Android Debug Bridge version 1.0.41");return 0;}if(!strcmp(a[n-1],"get-state")){puts("device");return 0;}if(!strcmp(a[n-1],"ro.product.model")){puts("MODEL");return 0;}if(!strcmp(a[n-1],"telephony.registry")){puts("mCallState=0");return 0;}for(int i=1;i<n;i++){if(!strcmp(a[i],"keyevent")&&i+1<n&&!strcmp(a[i+1],"4")){FILE*f=fopen(closed,"w");fputs("closed",f);fclose(f);return 0;}if(!strcmp(a[i],"stat")){puts("999");return 0;}if(!strcmp(a[i],"size")){puts("Physical size: 1200x2664");return 0;}if(!strcmp(a[i],"pull")){FILE*f=fopen(a[n-1],"w");if(!f)return 3;fprintf(f,"<hierarchy><node text=\\"%s\\" package=\\"com.ss.android.ugc.aweme\\" /></hierarchy>",access(closed,F_OK)==0?"首页":"暂无评论");fclose(f);return 0;}}return 0;}\n`);
  const cc=spawnSync('cc',[c,'-o',client],{encoding:'utf8'});if(cc.status)throw Error(cc.stderr);symlinkSync(client,join(bin,'adb'));
- const policy={schema_version:1,host_id:'xian-m4',transport:'usb',endpoint:'tcp:127.0.0.1:'+server.address().port,forbidden_ports:[],adb_bin:client,adb_sha256:hash(readFileSync(client))};
+ const policy={schema_version:1,host_id:'xian-m4',transport:'usb',endpoint:'tcp:127.0.0.1:'+port,forbidden_ports:[],adb_bin:client,adb_sha256:hash(readFileSync(client))};
  const policyFile=join(d,'baseline-policy.json');writeFileSync(policyFile,JSON.stringify(policy),{mode:0o600});
  const controller=join(runtime,'douyin-phone-adb'),actualController=join(runtime,'fixture-original-controller');
  if(panelProbe){writeFileSync(actualController,readFileSync(controller),{mode:0o755});writeFileSync(join(d,'profiles'),'scope-profile\tNO-DEVICE\tMODEL\t1199\t2663\n');}
@@ -51,5 +51,5 @@ switch(cmd){case 'preflight':console.log('serial=NO-DEVICE');break;case 'account
 export function saveCollectionFailure(f,details){
  const destination=join(process.env.RUNNER_TEMP||tmpdir(),'collection-phone-failures',basename(f.d));mkdirSync(destination,{recursive:true});
  writeFileSync(join(destination,'diagnostic.json'),JSON.stringify({fixture_root:f.d,node:process.version,parent_exec_path:process.execPath,details,db_calls:f.dbCalls,stored_video_ids:[...f.stored.keys()],execution_records:f.executionRecords,phone_calls:existsSync(join(f.d,'phone-calls'))?f.phoneCalls():[]},null,2));
- cpSync(f.d,join(destination,'fixture'),{recursive:true,filter:path=>path!==f.runtime&&!path.startsWith(f.runtime+'/')});return destination;
+ cpSync(f.d,join(destination,'fixture'),{recursive:true,filter:path=>path!==f.runtime&&!path.startsWith(f.runtime+'/')&&!lstatSync(path).isSymbolicLink()&&!path.slice(f.d.length+1).split('/').some(part=>['.credentials','credentials','.env','.ssh','.gnupg'].includes(part)||part.startsWith('.env.')||/\.(key|pem|p12|pfx)$/.test(part))});return destination;
 }

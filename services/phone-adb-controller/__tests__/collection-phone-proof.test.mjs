@@ -9,7 +9,7 @@ test('caller true或序列化JSON不能成为collection phone authority能力',a
 import {collectionFixture,vids,saveCollectionFailure} from './helpers/collection-recovery-fixture.mjs';
 import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
-import {writeFileSync,mkdirSync,readFileSync,symlinkSync} from 'node:fs';
+import {writeFileSync,mkdirSync,readFileSync,symlinkSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
 
 async function recoveryCase(t,mutation,options={}){
  const f=await collectionFixture(t,options);try{return await runRecoveryCase(t,mutation,options,f);}catch(error){const path=saveCollectionFailure(f,{error:{message:error.message,stack:error.stack},...f.diagnostics});t.diagnostic('collection_failure_evidence='+path);throw error;}
@@ -30,7 +30,7 @@ async function runRecoveryCase(t,mutation,options,f){
  const proofContext={task_id:'scope-task',run_id:'scope-run__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:f.env.P,serial:f.env.SERIAL,activity:'collection',owner:f.env.WFR_TAG,target:f.frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:f.frozen.snapshot_sha256,binding_id:'scope-binding'};
  const recover=createActivityRecovery({runDir:f.d,frozen:f.frozen,binding:{id:'scope-binding',run_id:'scope-run__a1',task_id:'scope-task'},env:f.env,handlers,rpc});
  const result=await runWorkflow({activities:[{key:'collection',retry_safe:false}],context:{run_id:'scope-run__a1',task_id:'scope-task',source_commit:'a'.repeat(40)},handlers:{collection:async()=>{const value=await invokeNativeActivity(()=>handlers.collection(),handlers.state);if(value.status==='partial'){assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,proofContext),true,'反例注入前须真的从完整原生leaf取得能力');for(const key of Object.keys(proofContext))assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,{...proofContext,[key]:'other'}),false,'跨'+key+'必须拒绝');assert.equal(collectionPhoneProofValid(value.recovery_phone_scope),false,'缺context不可准入');await mutation?.({f,handlers,value});}return value;}},recover,commander:async()=>({action:'continue'}),record:async()=>{},verify:async(_a,e)=>{verified++;return {verified:e.result.videos_processed===2};}});
- f.diagnostics.result=result;
+ f.diagnostics.result=result;if(options.blockIdentity)assert.ok(Number(readFileSync(join(f.d,'observer-block-duration-ms'),'utf8'))>=700,'须真实阻塞父observer超过原0.4秒socket时限');
  assert.equal(f.stored.has(vids[0]),true,'必须先完成首VID真实原脚本和PG边界，不把setup失败当RED '+JSON.stringify(result));
  if(mutation){assert.equal(launches,0,'变化/污染后不得启动Skill');assert.notEqual(result.status,'completed');return;}
  assert.equal(launches,1,'必须真实进入Skill，不能0调用却称接管成功');assert.equal(result.status,'completed',JSON.stringify(result));assert.equal(verified,1);
@@ -90,3 +90,9 @@ test('私有probe消费防重放：原binding/VID/nonce/记录缺损拒绝，合
 });
 
 test('真实资格与接管在父observer同步阻塞750ms时仍由独立ADB服务响应',{skip:process.platform!=='darwin'},t=>recoveryCase(t,undefined,{blockIdentity:true}));
+
+test('失败工件保留XML和回执，拒runtime/凭据路径及任何host软链',async t=>{
+ const {tmpdir}=await import('node:os'),d=mkdtempSync(join(tmpdir(),'collection-artifact-safety-')),runtime=join(d,'runtime');mkdirSync(runtime);writeFileSync(join(runtime,'not-uploaded'),'source');mkdirSync(join(d,'.credentials'));writeFileSync(join(d,'.credentials','fake.env'),'fixture-only');writeFileSync(join(d,'.env'),'fixture-only');writeFileSync(join(d,'raw.xml'),'<hierarchy/>');symlinkSync(process.execPath,join(d,'host-node'));
+ const destination=saveCollectionFailure({d,runtime,dbCalls:[],stored:new Map(),executionRecords:[]},{error:'fixture'});t.after(()=>{rmSync(d,{recursive:true,force:true});rmSync(destination,{recursive:true,force:true});});
+ for(const path of ['runtime','.credentials','.env','host-node'])assert.equal(existsSync(join(destination,'fixture',path)),false,path);assert.equal(readFileSync(join(destination,'fixture/raw.xml'),'utf8'),'<hierarchy/>');assert.equal(existsSync(join(destination,'diagnostic.json')),true);
+});
