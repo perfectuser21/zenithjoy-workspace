@@ -12,6 +12,7 @@ function rig({rejectWrite=false,copyFails=false,benchmark=false,multi=false,wron
  writeFileSync(ctl,`#!/bin/zsh
 print -r -- "$3 $4 $5" >> "$CALLS"
 case "$3" in
+ search-time-layer) print "sort=$6";print "time_layer=$4";print "duration=$7";print "scope=$8";print "location=$9";;
  open-search) print -r -- "$4" > "$FAKE_TMP/keyword";;
  search-kw-matches) python3 -c 'import sys,xml.etree.ElementTree as ET
 ok=any(n.get("resource-id","").endswith("et_search_kw") and n.get("text")==sys.argv[1] for n in ET.parse(sys.argv[2]).iter("node"))

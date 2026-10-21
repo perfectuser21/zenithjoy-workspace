@@ -136,14 +136,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -185,16 +185,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-discovery.mjs",
           "revision": "contract",
-          "sha256": "6fc1936b0da0f248488364cea5d59f8a26622b2c0f247169cd744cc08675d6d9"
+          "sha256": "ea6e35b7bc63041f8f4d7ae750f39a0ede1f7dfc6270993674d47f3654f5a059"
         }
       ],
-      "code_digest": "cb7d659997f38ac43d93b2c4f5d0efac90359c2de57206a4b4b277b87f1ae64f",
+      "code_digest": "a772a196e277d22a64f736b950bacd481fe4f6a99662a843bb4bf206473ecdae",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "1c0b0157ab417281cbe6d19914f39b80e60dab07b0bc16ba166c1e3a12997aac",
-        "current_code_digest": "cb7d659997f38ac43d93b2c4f5d0efac90359c2de57206a4b4b277b87f1ae64f"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "cb7d659997f38ac43d93b2c4f5d0efac90359c2de57206a4b4b277b87f1ae64f",
+        "current_code_digest": "a772a196e277d22a64f736b950bacd481fe4f6a99662a843bb4bf206473ecdae"
       }
     },
     "douyin_video_processing.preflight": {
@@ -350,14 +350,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -395,13 +395,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "5e900b8e64921b68974ddb080470c1df7f410b695630e456d4298052c8df7e4e",
+      "code_digest": "6d99b8bb44e7a79108b5880394384b2555a4dcb340db3aa5898514993a400c68",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "bc15fa6e535d9e407f569b24cc6124e53da835da8398f1ed98b9c4e355a0f942",
-        "current_code_digest": "5e900b8e64921b68974ddb080470c1df7f410b695630e456d4298052c8df7e4e"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "5e900b8e64921b68974ddb080470c1df7f410b695630e456d4298052c8df7e4e",
+        "current_code_digest": "6d99b8bb44e7a79108b5880394384b2555a4dcb340db3aa5898514993a400c68"
       }
     },
     "douyin_video_processing.dedup": {
@@ -539,14 +539,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -591,13 +591,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "30ab8e705574def87b008149b4d61b97222e3fd706a4f876ff779e28af22393b",
+      "code_digest": "500693c585b3346d95d16c6523e3e418ac19c4104890b36e1d9380596d154e5b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "b46a8cdfab147539d7e8be4949aab72b1ab5ad6a3328c84bda57a418464cc2b2",
-        "current_code_digest": "30ab8e705574def87b008149b4d61b97222e3fd706a4f876ff779e28af22393b"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "30ab8e705574def87b008149b4d61b97222e3fd706a4f876ff779e28af22393b",
+        "current_code_digest": "500693c585b3346d95d16c6523e3e418ac19c4104890b36e1d9380596d154e5b"
       }
     },
     "douyin_video_processing.qualification": {
@@ -735,14 +735,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -843,13 +843,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "57cf1c6804073c30fff696d4898062080664747d81ec4c98313e15c93b7d5931",
+      "code_digest": "35538f426028b7a6ccfbb76d32bfd83f8856bd3afae623aa9b6d7d2a17e8459c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 此Activity另纳真实builder及实际应用patch的构建来源绑定，原实现步骤与业务政策不变。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "bd5ff8c82bbc503f2fc38844e311e71e8e30a8ad68b4ec061ee2539af4506f88",
-        "current_code_digest": "57cf1c6804073c30fff696d4898062080664747d81ec4c98313e15c93b7d5931"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "57cf1c6804073c30fff696d4898062080664747d81ec4c98313e15c93b7d5931",
+        "current_code_digest": "35538f426028b7a6ccfbb76d32bfd83f8856bd3afae623aa9b6d7d2a17e8459c"
       }
     },
     "douyin_video_processing.collection": {
@@ -1002,14 +1002,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -1068,13 +1068,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "614922946ecc25f1b4dc8b9140ef2a86e8d5f7529b1e3d3aea1d38def9fa8f0b",
+      "code_digest": "cbe5a957d011e395ee42d0d263f9737cd947a7246d2a5e82b0d8f30aa8201772",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "f17ae9abb0c5ecd12472483bd2b7848d6855225a7cd10032c759eb0442f9798e",
-        "current_code_digest": "614922946ecc25f1b4dc8b9140ef2a86e8d5f7529b1e3d3aea1d38def9fa8f0b"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "614922946ecc25f1b4dc8b9140ef2a86e8d5f7529b1e3d3aea1d38def9fa8f0b",
+        "current_code_digest": "cbe5a957d011e395ee42d0d263f9737cd947a7246d2a5e82b0d8f30aa8201772"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1215,14 +1215,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -1260,13 +1260,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "d8c837da556bb519a2fc37006c1b5559c448f295774adea005dc793f81d5734e",
+      "code_digest": "5c7ae85cdb3f2efc4ca91d3a56a0eb53ef522a5a202fe0a41a0cd70b9a39239e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "ec3a268125b6d83aba55b033eeafee4bb1353d882fddcb38190365a3d8ea811e",
-        "current_code_digest": "d8c837da556bb519a2fc37006c1b5559c448f295774adea005dc793f81d5734e"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "d8c837da556bb519a2fc37006c1b5559c448f295774adea005dc793f81d5734e",
+        "current_code_digest": "5c7ae85cdb3f2efc4ca91d3a56a0eb53ef522a5a202fe0a41a0cd70b9a39239e"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1383,14 +1383,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -1435,13 +1435,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "1119f304d19c31cf0cbb98623d350683cfa359ff0a86e27ad969aefae208afb1",
+      "code_digest": "333d9cc6624db71f444c0e32eab7d1127aa82e4fc4f0f9ffb8bbc9830f6f4c85",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "1aa60a28d186ef250e2bbaf90e2050aa75649fa1dc996a7e36cb8955dbc50f45",
-        "current_code_digest": "1119f304d19c31cf0cbb98623d350683cfa359ff0a86e27ad969aefae208afb1"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "1119f304d19c31cf0cbb98623d350683cfa359ff0a86e27ad969aefae208afb1",
+        "current_code_digest": "333d9cc6624db71f444c0e32eab7d1127aa82e4fc4f0f9ffb8bbc9830f6f4c85"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -1565,14 +1565,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -1666,13 +1666,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "fe90af323a505ca60080756b891fb20ab143af26561feeabdcde57f884908819",
+      "code_digest": "009a2171f049e5da2f7e156599be25a35081088a730186725fcf75085214fb88",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "7beb492f8c418816f790d930cbe17eb65c4a535dfd36669a922a45985fb7ecdc",
-        "current_code_digest": "fe90af323a505ca60080756b891fb20ab143af26561feeabdcde57f884908819"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "fe90af323a505ca60080756b891fb20ab143af26561feeabdcde57f884908819",
+        "current_code_digest": "009a2171f049e5da2f7e156599be25a35081088a730186725fcf75085214fb88"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -1821,14 +1821,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -1894,13 +1894,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "06d081513f865b94890f8bdce33912c3b1aa6e235528cd6a840cc205db478d2c",
+      "code_digest": "f0746a7ef917edcc393e7debc4c3725573d8a92e8b2e12c27e120d655710baec",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "600eeee27b8dc2529f7d296f7f8f8701fbee494e4c8a54f3c243522d1b60391c",
-        "current_code_digest": "06d081513f865b94890f8bdce33912c3b1aa6e235528cd6a840cc205db478d2c"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "06d081513f865b94890f8bdce33912c3b1aa6e235528cd6a840cc205db478d2c",
+        "current_code_digest": "f0746a7ef917edcc393e7debc4c3725573d8a92e8b2e12c27e120d655710baec"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2038,14 +2038,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -2097,13 +2097,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c",
+      "code_digest": "54e31f21a04ac3783fa1159d5d992bccf6ba5f7eeb65970fa4d626044c0ef7f8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0",
-        "current_code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c",
+        "current_code_digest": "54e31f21a04ac3783fa1159d5d992bccf6ba5f7eeb65970fa4d626044c0ef7f8"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2241,14 +2241,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -2300,13 +2300,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c",
+      "code_digest": "54e31f21a04ac3783fa1159d5d992bccf6ba5f7eeb65970fa4d626044c0ef7f8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "beab1bf797b1706d93fedcb4da53f01bd1e506b6e0644eaebe1aac7f52fb18f0",
-        "current_code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "a97e693a2d022d6a25c4daa6f2d493cf6f6aeeda81014ea65b3ecd5d0c9dfd8c",
+        "current_code_digest": "54e31f21a04ac3783fa1159d5d992bccf6ba5f7eeb65970fa4d626044c0ef7f8"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -2447,14 +2447,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "d42cec252ae456d3f6a8c8db284a36c472e14ddcb6c6bb45185080492a80aec0"
+          "sha256": "569ed64f2912ca432bed6141f712cb28a38c5b6c01fddb2ffd96e689b78d0e3b"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e9d3022413635f9741cf144e7f9cc7cf04d370d4e5f25b7b3b3c3932823333ea"
+          "sha256": "88aee12d7c3e0f6a6540e1c14fc57f619759ac1cfd025c4bc252fabec57bbd7f"
         },
         {
           "kind": "code",
@@ -2506,13 +2506,13 @@
           "sha256": "08096dc71e0477599b05001eba91d7d38e20f7fe67f45ed530487bff29d21725"
         }
       ],
-      "code_digest": "fb17b1fca6afe8c7096788e85c7c7348d8b486c12f512276ba7a5b65b7deb2bf",
+      "code_digest": "c2672115ac816d31d49ddeebf5d297b89cb1ab411462cbedbeb76516b8876e1f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "SDK33固定3.3.4录音器同步初始化和停止后拒绝生产者的内部兼容修复；使用独立审核新client SHA与immutable目录并严格替换旧pin，保持原Activity业务输入输出、步骤、公司政策、SDK支持范围、server、协议、预算与权限不变；不是实机验收或旧运行恢复成功。 本评估已按实际d4事务部署基线重新计算，完整保留上游runtime-definition和部署协议，不沿用旧摘要。",
-        "reviewed_by": "fixed_source_final_review",
-        "previous_code_digest": "0e74b4365bf83538e25485aaa2028925d0878146ed134025ebf958987d3921ab",
-        "current_code_digest": "fb17b1fca6afe8c7096788e85c7c7348d8b486c12f512276ba7a5b65b7deb2bf"
+        "reason": "落实既有101筛选选中项必须等于输入参数的合同要求；独立校验每次实际筛选stdout与同run/候选SHA原件，缺失、降级、重复键或不一致在业务读页和入队前失败。冻结Step截图仍仅是现场证据，正式业务验收及晋级须另过新增filter probe；不改业务输入输出、Step合同、公司政策、低层兼容行为或Skill正文，不声明真机验收通过。",
+        "reviewed_by": "root:filter-admission-initial-review",
+        "previous_code_digest": "fb17b1fca6afe8c7096788e85c7c7348d8b486c12f512276ba7a5b65b7deb2bf",
+        "current_code_digest": "c2672115ac816d31d49ddeebf5d297b89cb1ab411462cbedbeb76516b8876e1f"
       }
     }
   },

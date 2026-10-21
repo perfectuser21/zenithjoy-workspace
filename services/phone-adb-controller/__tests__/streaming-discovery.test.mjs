@@ -13,7 +13,7 @@ function rig({loading=false,failWrite=false,limit=0,stall=false}={}){
   {x:300,y:200,title:'同标题视频内容',author:'同作者',duration:'00:20',id:id(2)}],
   [{x:100,y:200,title:'加载后新的视频',author:'另一作者',duration:'00:20',id:id(3)}]];
  const rows=cards=>cards.map(c=>[c.x,c.y,c.duration,c.title,c.author].join('\t')).join('\n');
- const phone=async(cmd,...args)=>{events.push([cmd,...args]);
+ const phone=async(cmd,...args)=>{if(cmd==='search-time-layer')return 'sort=latest\ntime_layer=six_months\nduration=unlimited\nscope=unlimited\nlocation=same_city\n';events.push([cmd,...args]);
   if(cmd==='search-video-cards'){readCount++;const old=loading&&screen===1&&readCount<6;const page=pages[old?0:screen];return rows(page)+'\nvideo_tab=1\nloading='+(old?'1':'0')+'\nend_of_results='+(screen===1&&!old&&!stall?'1':'0')+'\nevidence='+join(dir,'grid.xml');}
   if(cmd==='search-kw-matches')return 'kw_matches=1\n';
   if(cmd==='search-grid-scroll'){if(!stall)screen=1;return 'scrolled=up';}
