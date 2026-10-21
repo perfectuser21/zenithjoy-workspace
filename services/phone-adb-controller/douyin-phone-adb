@@ -2914,7 +2914,7 @@ record_sdk31_runtime() {
   local eid="$1" kind="${2:-sdk31}" root policy proof="$EVIDENCE_ROOT/$1.capture-runtime.json" verified staged port
   case "$kind" in
     sdk31) root="${DOUYIN_SDK31_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk31-2823f8e8}"; policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy.json"; port="${DOUYIN_ADB_PORT:-5041}";;
-    sdk33) root="${DOUYIN_SDK33_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-flush}"; policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy-sdk33.json"; port="${DOUYIN_ADB_PORT:-5037}";;
+    sdk33) root="${DOUYIN_SDK33_RUNTIME_ROOT:-$HOME/.local/share/zenithjoy/scrcpy-sdk33-v3.3.4-recorder-init-952ee084}"; policy="$PHONE_CONTROLLER_DIR/runtime/runtime-policy-sdk33.json"; port="${DOUYIN_ADB_PORT:-5037}";;
     *) die RECORD_CAPTURE_STRATEGY_UNVERIFIED;;
   esac
   [[ -n "$LOCK_OWNER" ]] || die "RECORD_CAPTURE_STRATEGY_UNVERIFIED explicit_owner_required"
