@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 
-test('ROG历史local sparse开关不能让完整checkout漏掉微信源码测试',()=>{
+for (const [file, job] of [['wechat-cs-e2e.yml','agent-windows'], ['agent-module-e2e.yml','preflight-xian-rog']]) test(`${file}: ROG历史local sparse开关不能让完整checkout漏掉微信源码测试`,()=>{
  const root=mkdtempSync(join(tmpdir(),'zj-checkout-reuse-'));
  const required='services/agent/src/handlers/__tests__/wechat-rpa.test.ts';
  function run(cmd,args){const r=spawnSync(cmd,args,{cwd:root,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r;}
@@ -25,11 +25,11 @@ test('ROG历史local sparse开关不能让完整checkout漏掉微信源码测试
   git('sparse-checkout','disable');git('config','--local','--unset-all','extensions.worktreeConfig');
   git('checkout','--force','HEAD');
   assert.equal(existsSync(join(root,required)),false,'reproduce inherited sparse source omission');
-  const workflow=YAML.parse(readFileSync('.github/workflows/wechat-cs-e2e.yml','utf8'));
-  const step=workflow.jobs['agent-windows'].steps.find(s=>s.name==='Restore complete agent source after reused checkout');
+  const workflow=YAML.parse(readFileSync('.github/workflows/'+file,'utf8'));
+  const step=workflow.jobs[job].steps.find(s=>s.name==='Restore complete agent source after reused checkout');
   run('bash',['-e','-o','pipefail','-c',step?.run||':']);
   assert.equal(existsSync(join(root,required)),true,'actual workflow must restore required tracked source');
-  const checkout=workflow.jobs['agent-windows'].steps.findIndex(s=>s.uses?.startsWith('actions/checkout@'));
-  assert.ok(workflow.jobs['agent-windows'].steps.indexOf(step)>checkout);
+  const checkout=workflow.jobs[job].steps.findIndex(s=>s.uses?.startsWith('actions/checkout@'));
+  assert.ok(workflow.jobs[job].steps.indexOf(step)>checkout);
  } finally {rmSync(root,{recursive:true,force:true});}
 });
