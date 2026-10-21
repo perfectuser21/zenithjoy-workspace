@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parse} from 'yaml';
-import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {createDiscoveryHandlers,verifyDiscoveryFilterEvidence} from '../leadgen-discovery.mjs';
 import {runProbes} from '../verify-step.mjs';
 
 const good='sort=latest\ntime_layer=six_months\nduration=unlimited\nscope=unlimited\nlocation=same_city\n';
@@ -68,4 +68,25 @@ test('正式101 probe拒绝缺失或失败的筛选独立回执，不因其它me
   const result=await runProbes({doc:metricDoc,stage:'collect_videos',params:{metrics}});
   assert.ok(result.probes.some(p=>p.pass!==true),'无可信筛选回执时必须至少一个正式业务probe拒绝');
  }
+});
+
+test('同一attempt重新进入不能覆盖第一次筛选失败的原件',async()=>{
+ const r=rig([good.replace('same_city','unavailable'),good]);try{
+  await assert.rejects(r.h.collect_videos(),/DISCOVERY_FILTER/);
+  const again=createDiscoveryHandlers(r.options);await again.collect_videos();
+  assert.deepEqual(r.receipt().receipts.map(r=>r.verified),[false,true]);
+  assert.equal(verifyDiscoveryFilterEvidence({runDir:r.dir,runId,run:'filter-proof',profile:'legacy',sourceCommit:commit,requested:{sort:'latest',time_layer:'six_months',location:'same_city'},invocations:2}),false);
+ }finally{r.cleanup();}
+});
+
+test('独立筛选验收拒绝错run、错SHA、删除调用、伪造effective或原始stdout',async()=>{
+ const r=rig([good]);try{
+  const result=await r.h.collect_videos(),proof=r.receipt();
+  const args={runDir:r.dir,runId,run:'filter-proof',profile:'legacy',sourceCommit:commit,requested:{sort:'latest',time_layer:'six_months',location:'same_city'},invocations:result.filter_invocations};
+  assert.equal(verifyDiscoveryFilterEvidence(args),true);
+  const file=join(r.dir,runId+'-filter-readback.json');
+  for(const mutate of [p=>p.run_id='other',p=>p.source_commit='b'.repeat(40),p=>p.receipts=[],p=>p.receipts[0].effective.location='unlimited',p=>p.receipts[0].raw_stdout=good.replace('same_city','unavailable')]){
+   const bad=structuredClone(proof);mutate(bad);writeFileSync(file,JSON.stringify(bad));assert.equal(verifyDiscoveryFilterEvidence(args),false);
+  }
+ }finally{r.cleanup();}
 });
