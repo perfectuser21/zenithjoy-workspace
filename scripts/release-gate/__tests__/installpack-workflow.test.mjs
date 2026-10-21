@@ -17,3 +17,8 @@ test('正式晋级单独执行：共享生产锁、完整固定来源、实际�
  assert.match(file,/acceptance_run_key/);assert.match(file,/scripts\/release-gate\/installpack-promote.mjs/);
  assert.doesNotMatch(file,/continue-on-error/);
 });
+
+test('包内必须带固定源码身份，候选构建不能写正式版本记录',()=>{
+ const build=readFileSync(new URL('services/agent/scripts/build-install-pack.sh',root),'utf8');
+ assert.match(build,/release-source\.json/);assert.doesNotMatch(build,/notion-agent-token/);
+});
