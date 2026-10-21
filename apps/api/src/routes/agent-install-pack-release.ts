@@ -1,8 +1,16 @@
 import {Router} from 'express';
+import {rateLimit} from 'express-rate-limit';
 import {internalAuth} from '../middleware/internal-auth';
 import {manifestState,verifyCandidate,installPackContract,publishCandidate,promoteCandidate,rollbackManifest} from '../services/install-pack-release';
 
 export const installPackReleaseRouter=Router();
+installPackReleaseRouter.use(rateLimit({windowMs:60_000,limit:60,standardHeaders:'draft-8',legacyHeaders:false}));
+installPackReleaseRouter.use((_req,res,next)=>{
+ if(!process.env.ZENITHJOY_INTERNAL_TOKEN?.trim()){
+  res.status(503).json({ok:false,code:'RELEASE_AUTH_NOT_CONFIGURED'});return;
+ }
+ next();
+});
 const manifestPath=()=>process.env.INSTALL_PACK_MANIFEST_PATH||'/opt/zenithjoy/install-pack/manifest.json';
 installPackReleaseRouter.put('/manifest',internalAuth,(_req,res)=>{
  res.status(409).json({ok:false,code:'RELEASE_ADMISSION_REQUIRED',message:'使用候选登记和真实业务验收晋级接口'});

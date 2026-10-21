@@ -27,7 +27,8 @@ function candidate(body:Candidate):Candidate {
  need(Array.isArray(body.modules)&&body.modules.length===4,'four module artifacts required');
  const modules=body.modules.map(m=>{
   need(['line01-publish','line02-lead-gen','line04-wechat-cs','line05-video'].includes(m.line_id)&&validSha(m.sha256,64),'invalid module');
-  need(new RegExp(`^${m.line_id}-v[0-9]+\\.[0-9]+\\.[0-9]+\\.tar\\.gz$`).test(m.filename),'invalid module filename');
+  const filename=m.filename.match(/^(line01-publish|line02-lead-gen|line04-wechat-cs|line05-video)-v[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz$/);
+  need(filename?.[1]===m.line_id,'invalid module filename');
   need(m.cos_url===`https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/modules/candidates/${body.source_sha}/${m.sha256}/${m.filename}`,'invalid module origin');
   return {line_id:m.line_id,filename:m.filename,sha256:m.sha256,cos_url:m.cos_url};
  });
@@ -38,7 +39,8 @@ function candidate(body:Candidate):Candidate {
 
 function candidatePath(file:string,sha:string,digest:string){
  need(validSha(sha,40)&&validSha(digest,64),'invalid candidate identity');
- return path.join(file+'.candidates',sha,digest+'.json');
+ // 磁盘键由服务端生成，任何调用方字符串都不能成为路径分段。
+ return path.join(file+'.candidates',hash(JSON.stringify([sha,digest]))+'.json');
 }
 function immutable(file:string,text:string){
  fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});
