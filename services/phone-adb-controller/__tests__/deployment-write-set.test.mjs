@@ -8,7 +8,7 @@ const service=fileURLToPath(new URL('..',import.meta.url));
 const groups=parseDeployArrays(readFileSync(service+'/deploy.sh','utf8'));
 const build=()=>buildWriteSet({groups,sha:'b'.repeat(40),homes:{mmv:'/Users/mmv','xian-m4':'/Users/m4'},
  read:path=>readFileSync(root+'/'+path),mode:()=>0o644,
- commanderFiles:['wf-v2.py','AGENTS.md','contracts/workflow_report.internal.json','skills/workflow-commander/SKILL.md'],
+ commanderFiles:['wf-v2.py','AGENTS.md','contracts/workflow-report.json','skills/workflow-commander/SKILL.md'],
  commanderManifest:Buffer.from('{"protocol":"commander-v2"}')});
 
 test('frozen deployment write set includes every physical alias and all metadata',()=>{

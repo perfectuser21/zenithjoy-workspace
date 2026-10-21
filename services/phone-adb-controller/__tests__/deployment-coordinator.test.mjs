@@ -5,7 +5,7 @@ import {coordinateDeployment} from '../deployment-coordinator.mjs';
 function fixture(fail={}) {
   const calls=[], states={}, decisions=[];
   let decision=null;
-  const action=(name,fn)=>async host=>{calls.push(`${name}:${host||''}`);if(fail[name]===host)throw Error(`${name} lost`);return fn?.(host);};
+  const action=(name,fn)=>async host=>{calls.push(`${name}:${host||''}`);if(Object.hasOwn(fail,name)&&fail[name]===host)throw Error(`${name} lost`);return fn?.(host);};
   return {calls,states,decisions,options:{
     readDecision:async()=>decision,
     writeDecision:async value=>{decision=value;decisions.push(value);},

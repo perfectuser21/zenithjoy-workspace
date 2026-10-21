@@ -20,7 +20,7 @@ class EffectsTest(unittest.TestCase):
         self.journal = self.home / 'effects.json'
 
     def get(self, name):
-        return self.state[name].copy()
+        return json.loads(json.dumps(self.state[name]))
 
     def set(self, name, expected, value):
         self.calls.append((name, expected, value))
