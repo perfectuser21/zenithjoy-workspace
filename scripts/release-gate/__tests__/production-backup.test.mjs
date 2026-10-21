@@ -149,8 +149,10 @@ def command(args,**kwargs):
  calls.append(args)
  if args[0:2]==['docker','exec']:
   assert ready,'initialization-only socket was accepted before final TCP server'
-  assert args[args.index('-h')+1]=='127.0.0.1'
-  assert args[args.index('-U')+1]=='postgres'
+  if '--list' not in args:
+   assert args[args.index('-h')+1]=='127.0.0.1'
+   assert args[args.index('-p')+1]=='5432'
+   assert args[args.index('-U')+1]=='postgres'
  if '--list' in args:return types.SimpleNamespace(stdout=b'1; 0 1 TABLE DATA public actual postgres')
  if 'json_agg' in args[-1]:return types.SimpleNamespace(stdout='[{"schema":"public","table":"actual"}]')
  if 'count(*)' in args[-1]:return types.SimpleNamespace(stdout='3')
@@ -172,4 +174,38 @@ except subprocess.CalledProcessError:pass
 else:raise AssertionError('failed command accepted')
 `;
  const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.match(r.stderr,/ISOLATED_POSTGRES_STARTUP_FAILURE/);
+});
+
+test('完成写入响应超时只读核同run真实结果，不重跑备份或接受别轮完成',()=>{
+ const runner=fileURLToPath(new URL('../../backup/run-hk-backup.py',import.meta.url));
+ const script=`import importlib.util,json,threading,time,urllib.request
+from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+s=importlib.util.spec_from_file_location('runner',${JSON.stringify(runner)});m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+events=[];stored={};wrong=False
+class Handler(BaseHTTPRequestHandler):
+ def log_message(self,*args):pass
+ def do_PATCH(self):
+  global stored
+  body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));events.append('PATCH');stored={'id':'task',**body}
+  if wrong:stored['result']['run_id']='other-run'
+  time.sleep(.2)
+ def do_GET(self):
+  events.append('GET');self.send_response(200);self.end_headers();self.wfile.write(json.dumps(stored).encode())
+server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
+original=m.urllib.request.urlopen
+m.urllib.request.urlopen=lambda req,**kwargs:original(req,timeout=.05)
+try:
+ for mismatch in [False,True]:
+  wrong=mismatch;events.clear()
+  body={'status':'completed','result':{'run_id':'actual-run','actor':m.ACTOR,'evidence':'actual.json','facts':{'status':'verified','backups':[{'database':'zenithjoy'},{'database':'zenithjoy_staging'}]}}}
+  try:
+   if hasattr(m,'complete_task'):m.complete_task('http://127.0.0.1:'+str(server.server_port),'task',body)
+   else:m.api('http://127.0.0.1:'+str(server.server_port),'PATCH','/tasks/task',body)
+  except TimeoutError:
+   assert mismatch,'actual matching completion was not reconciled'
+  else:assert not mismatch,'another run was accepted'
+  assert events==['PATCH','GET'],events
+finally:server.shutdown()
+`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);
 });
