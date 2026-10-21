@@ -40,3 +40,12 @@ test('write set preserves source modes and never includes directories or travers
  const bad=structuredClone(groups);bad.DEVICE_CTL_FILES.push('../outside');
  assert.throws(()=>buildWriteSet({groups:bad,sha:'b'.repeat(40),homes:{mmv:'/Users/mmv','xian-m4':'/Users/m4'},read:()=>Buffer.from('x'),mode:()=>0o644,commanderFiles:[],commanderManifest:Buffer.from('{}')}),/path/);
 });
+
+
+test('write set matches the actual dynamic MMV union including JS-only runtime files',()=>{
+ const result=build();
+ const runtime=new Set([...groups.DEVICE_SH_FILES,...groups.DEVICE_NODE_FILES,...groups.DEVICE_PLAN_FILES,
+  ...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES,...groups.MMV_JS_FILES,...groups.MMV_PROBE_FILES]);
+ for(const file of runtime)for(const root of ['bin-harvest','.openclaw/leadgen-scripts'])
+  assert.ok(result.mmv.some(entry=>entry.path===root+'/'+file),root+'/'+file);
+});

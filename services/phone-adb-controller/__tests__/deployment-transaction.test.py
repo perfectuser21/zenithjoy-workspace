@@ -181,6 +181,59 @@ class TransactionTest(unittest.TestCase):
         self.assertFalse(self.module.active_file(self.home).exists())
         self.module.release(self.home, self.tx, self.identity['previous_release_id'])
 
+    def test_explicit_reopen_requires_exact_installed_version_and_no_new_transaction(self):
+        self.prepare()
+        self.target.write_bytes(self.new)
+        self.module.commit(self.home, self.tx)
+        self.module.release(self.home, self.tx, self.identity['release_id'])
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            self.module.reopen(self.home, self.tx, 'c' * 40)
+        self.module.reopen(self.home, self.tx, self.identity['source_commit'])
+        self.module.rollback(self.home, self.tx, explicit=True)
+        self.assertEqual(self.target.read_bytes(), b'old verified runtime')
+
+    def test_reopen_cannot_replace_newer_transaction_or_unknown_file(self):
+        self.prepare()
+        self.target.write_bytes(self.new)
+        self.module.commit(self.home, self.tx)
+        self.module.release(self.home, self.tx, self.identity['release_id'])
+        self.target.write_bytes(b'newer operator')
+        with self.assertRaisesRegex(ValueError, 'bytes'):
+            self.module.reopen(self.home, self.tx, self.identity['source_commit'])
+        self.target.write_bytes(self.new)
+        self.module.atomic_bytes(self.module.active_file(self.home), b'{"transaction":"newer"}')
+        with self.assertRaisesRegex(ValueError, 'owner'):
+            self.module.reopen(self.home, self.tx, self.identity['source_commit'])
+
+    def test_restored_ack_authorization_is_separate_and_survives_another_recovery(self):
+        manifest = self.target.with_name('deployment-manifest.json')
+        before = b'previous formal ACK'
+        after = b'restored formal ACK'
+        manifest.write_bytes(before)
+        manifest.chmod(0o600)
+        self.prepare([self.file(), self.file('bin-harvest/deployment-manifest.json')])
+        self.target.write_bytes(self.new)
+        self.module.rollback(self.home, self.tx)
+        value = {'kind': 'file', 'sha256': hashlib.sha256(after).hexdigest(), 'mode': 0o600}
+        self.module.authorize_restored(self.home, self.tx, 'bin-harvest/deployment-manifest.json', value)
+        manifest.write_bytes(after)
+        self.module.rollback(self.home, self.tx)
+        self.assertEqual(manifest.read_bytes(), after)
+        self.module.release(self.home, self.tx, self.identity['previous_release_id'])
+        record = self.module.read_transaction(self.home, self.tx)
+        self.assertEqual(record['entries'][1]['before']['sha256'], hashlib.sha256(before).hexdigest())
+
+    def test_restored_authority_cannot_change_runtime_files_or_escape_links(self):
+        self.prepare()
+        self.module.rollback(self.home, self.tx)
+        with self.assertRaisesRegex(ValueError, 'manifest'):
+            self.module.authorize_restored(self.home, self.tx, 'bin-harvest/a.js', self.file()['after'])
+        other = 'github-other'
+        self.module.release(self.home, self.tx, self.identity['previous_release_id'])
+        for path in ['bin-harvest/surprise', '.openclaw/skills/multi-platform-publish']:
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, 'symlink'):
+                self.module.prepare(self.home, other, [{'path':path,'after':{'kind':'symlink','target':'/tmp/outside'}}], self.identity)
+
 
 if __name__ == '__main__':
     unittest.main()
