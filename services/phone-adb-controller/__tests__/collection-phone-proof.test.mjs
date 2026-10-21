@@ -68,3 +68,5 @@ for(const mode of ['approved-account-mismatch','missing-required-helper','invali
  const request=join(f.d,'run-bindings/a1.request.json'),value=JSON.parse(readFileSync(request));value.runtime_snapshot_sha256=f.frozen.snapshot_sha256;writeFileSync(request,JSON.stringify(value));
  await assert.rejects(startCollectionPhoneScope({root:f.runtime,env:f.env,state:{currentActivity:'collection',account:'different-account',budgetDeadline:Date.now()+(mode==='deadline-expired'?-1:30000)},sourceCommit:'a'.repeat(40),taskId:'scope-task'}),new RegExp({ 'approved-account-mismatch':'COLLECTION_PHONE_ACCOUNT_INVALID','missing-required-helper':'COLLECTION_PHONE_SOURCE_INVALID','invalid-recording-pid':'COLLECTION_MANAGED_RECORDING_UNVERIFIED','deadline-expired':'COLLECTION_PHONE_SCOPE_IDENTITY_INVALID'}[mode]));
 });
+
+test('冻结一次性验收probe通过原controller真实panel判定失败并原slot接管',{skip:process.platform!=='darwin'},t=>recoveryCase(t,undefined,{panelProbe:true}));
