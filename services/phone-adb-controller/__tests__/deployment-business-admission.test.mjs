@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {verifyBusinessAdmission} from '../deployment-business-admission.mjs';
 const sha='a'.repeat(40), repo='perfectuser21/zenithjoy-workspace';
@@ -56,4 +57,46 @@ test('共享Commander由真实业务run覆盖；Activity绿但独立核验未结
  assert.equal((await verifyBusinessAdmission(args)).runs.length,1,'不要求伪造shared协议独立run');
  task.result.workflow_control.phase='awaiting_verify';await assert.rejects(verifyBusinessAdmission(args),/独立验收/);
  task.result.workflow_control.phase='final';f.release.payload.components.pop();await assert.rejects(verifyBusinessAdmission(args),/共享Commander/);
+});
+
+// 回归真实缺口：旧 native 23/23 不等于完整 Skill；独立 task 是只读核验来源。
+function fullSkillFixture(){
+ const f=context(), taskId='11111111-1111-4111-8111-111111111111';
+ const skill='---\nname: douyin-leadgen-102\n---\n# 102\n\n## 验收\n\n1. 真实原生身份与公司一致。\n\n2. 评论持久化并独立读回。\n';
+ // 固定输入的摘要由 crypto 独立计算，不能调用被测定义生成器自证。
+ const hash=x=>createHash('sha256').update(x).digest('hex');
+ const checks=['1. 真实原生身份与公司一致。','2. 评论持久化并独立读回。'].map(text=>({id:hash('验收\n'+text),section:'验收',text}));
+ const skillIdentity={path:'services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md',sha256:hash(skill)};
+ const definition={schema_version:1,workflow_key:'douyin_video_processing',skill:skillIdentity,checks};
+ const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
+ f.binding.runtime_snapshot_sha256='d'.repeat(64);
+ const verification={task_id:taskId,run_id:'sample__a1',definition_sha256:'f'.repeat(64),verdict:'PASS',scope:'full_skill',source_commit:sha,run_binding_id:'binding',workflow_definition_version_id:'wf-version',skill:skillIdentity,acceptance_definition_sha256:hash(canonical(definition)),assertions:checks.map(c=>({id:c.id,pass:true,evidence:['immutable://same-run/'+c.id]})),evidence:['immutable://same-run/report']};
+ const task={id:taskId,status:'completed',result:{workflow_control:{phase:'final',envelope:{definition:{release_id:'candidate-release',runtime_snapshot_sha256:'d'.repeat(64)}},verification}}};
+ const original=f.request;f.request=async path=>path==='/api/brain/tasks/'+taskId?task:original(path);
+ return {...f,task,verification,args:{sha,targets:{'xian-m4':{definitions}},runIds:['sample__a1'],acceptanceTaskIds:{sample__a1:taskId},readFile:path=>{assert.equal(path,skillIdentity.path);return Buffer.from(skill);},request:f.request}};
+}
+for(const [label,change]of [
+ ['缺独立报告',f=>delete f.args.acceptanceTaskIds],
+ ['错误run',f=>f.verification.run_id='other'],
+ ['错误源码SHA',f=>f.verification.source_commit='b'.repeat(40)],
+ ['错误Skill摘要',f=>f.verification.skill.sha256='b'.repeat(64)],
+ ['错误验收定义摘要',f=>f.verification.acceptance_definition_sha256='b'.repeat(64)],
+ ['错误release',f=>f.task.result.workflow_control.envelope.definition.release_id='other'],
+ ['错误binding',f=>f.verification.run_binding_id='other'],
+ ['空断言',f=>f.verification.assertions=[]],
+ ['部分断言',f=>f.verification.assertions.pop()],
+ ['重复断言',f=>f.verification.assertions[1]=f.verification.assertions[0]],
+ ['无逐项证据',f=>f.verification.assertions[0].evidence=[]],
+ ['FAIL',f=>f.verification.verdict='FAIL'],
+ ['unknown',f=>f.verification.assertions[0].pass='unknown'],
+ ['partial',f=>f.verification.scope='partial'],
+ ['未终态',f=>f.task.status='in_progress'],
+ ['缺固定Skill源',f=>delete f.args.readFile],
+])test('旧native pass必须拒绝完整Skill验收异常：'+label,async()=>{
+ const f=fullSkillFixture();change(f);await assert.rejects(verifyBusinessAdmission(f.args),/独立|Skill/);
+});
+test('精确同run完整Skill独立终态报告可准入，实际GET而非调用方PASS',async()=>{
+ const f=fullSkillFixture();const result=await verifyBusinessAdmission(f.args);
+ assert.equal(result.runs[0].acceptance_task_id,f.task.id);
+ assert.match(result.runs[0].acceptance_report_sha256,/^[a-f0-9]{64}$/);
 });
