@@ -681,17 +681,14 @@ describe('PUT /api/agent/install-pack/manifest', () => {
     build_time: '2026-05-20T04:17:25Z',
   };
 
-  it('有效 token + 有效 manifest → 200 + 文件写入', async () => {
+  it('有效 token 不能绕过业务准入直接覆盖正式 manifest', async () => {
     const res = await request(app)
       .put('/api/agent/install-pack/manifest')
       .set('X-Internal-Token', 'test-internal-token-put')
       .send(validManifest);
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.version).toBe('1.2.0');
-    const written = JSON.parse(fs.readFileSync(tmpManifestPath, 'utf-8'));
-    expect(written.version).toBe('1.2.0');
-    expect(written.sha256).toBe('a'.repeat(64));
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('RELEASE_ADMISSION_REQUIRED');
+    expect(fs.existsSync(tmpManifestPath)).toBe(false);
   });
 
   it('缺 token → 401 UNAUTHORIZED', async () => {
@@ -709,13 +706,13 @@ describe('PUT /api/agent/install-pack/manifest', () => {
     expect(res.status).toBe(401);
   });
 
-  it('缺必填字段 → 400 INVALID_MANIFEST', async () => {
+  it('旧入口对不完整输入同样拒绝覆盖', async () => {
     const res = await request(app)
       .put('/api/agent/install-pack/manifest')
       .set('X-Internal-Token', 'test-internal-token-put')
       .send({ version: '1.2.0' });
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('INVALID_MANIFEST');
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('RELEASE_ADMISSION_REQUIRED');
   });
 });
 
