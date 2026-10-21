@@ -38,6 +38,7 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/deployment-release-evidence.test.mjs",
   "services/phone-adb-controller/__tests__/deployment-unified.test.mjs",
   "services/phone-adb-controller/__tests__/deregistered-comment.test.mjs",
+  "services/phone-adb-controller/__tests__/discovery-filter-admission.test.mjs",
   "services/phone-adb-controller/__tests__/discovery-receipt-recovery.test.mjs",
   "services/phone-adb-controller/__tests__/drift-check.test.mjs",
   "services/phone-adb-controller/__tests__/empty-collection.test.mjs",
@@ -104,7 +105,7 @@ test('split smoke retains the actual HOME-free preflight and span assertions',()
  assert.ok(isolated[0].args.includes('services/phone-adb-controller/__tests__/workflow-result-span.test.mjs'));
 });
 test('split smoke propagates both methods validation and complete-suite failures',()=>{
- for(const fail of ['scripts/product-map/leadgen-methods.mjs','services/phone-adb-controller/__tests__/continuous-identity.test.mjs','home-free']){
+ for(const fail of ['scripts/product-map/leadgen-methods.mjs','services/phone-adb-controller/__tests__/continuous-identity.test.mjs','services/phone-adb-controller/__tests__/discovery-filter-admission.test.mjs','home-free']){
   const {result}=run(fail);assert.equal(result.status,13,result.stderr);
  }
 });
