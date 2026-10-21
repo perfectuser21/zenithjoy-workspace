@@ -29,8 +29,7 @@ deploy_release_evidence() {
   done
 }
 
-# Commander 入口整段封成函数：全量部署时在原位置调用；`deploy.sh --commander-only` 只部署这一段
-# Commander与旧MMV包共享完整release；--commander-only仍须真实核对其它已安装组件。
+# Commander 入口整段封成函数：仅由完整已准入的双机事务在原位置调用。
 commander_admission() {
   [[ -z "${WF_PHONE_TRANSACTION:-}" ]] || return 0 # check-child已核验原内核租约及双机日志。
   # 在途外壳保留原版本；整套文件和skills同步完成才发布新manifest。

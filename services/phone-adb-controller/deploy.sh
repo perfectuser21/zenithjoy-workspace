@@ -42,6 +42,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 D="."
+if [[ "${1:-}" == "--commander-only" ]]; then
+  echo "手机发布必须使用已验收候选的完整事务" >&2
+  exit 1
+fi
 # Materialize the pinned skill bundle before copying any runtime documents.
 node ../../scripts/ci/implementation-skill-source.mjs --install-regression-skills ../.. >&2
 FAILED=0
@@ -232,7 +236,6 @@ python3 "$D/input-runtime-release.py" source-info "$D/douyin-phone-adb" "$D/text
 # 新公司模块只在PG schema已就绪时安装；只读探针先于远端admission写入。
 node "$D/company-config-readiness.mjs"
 if [[ -z "${WF_PHONE_TRANSACTION:-}" ]]; then
-  [[ "${1:-}" != --commander-only ]] || { echo '整包事务不允许局部Commander覆盖；请晋级完整已验候选' >&2; exit 1; }
   node "$D/deployment-backend.mjs" deploy "$(git rev-parse HEAD)" '' "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
   exit $?
 fi
@@ -241,16 +244,6 @@ commander_admission
 [[ "$FAILED" == 0 ]] || exit 1
 deploy_release_evidence
 
-if [[ "${1:-}" == "--commander-only" ]]; then
-  deploy_commander
-  [[ "$FAILED" == 0 ]] || exit 1
-  activate_publish_package
-  node "$D/deployment-unified-observe.mjs" "$WF_DEPLOY_PLAN_FILE" "$DEPLOY_MANIFEST" "$MMV_MANIFEST"
-  PUBLISH_PENDING_SHA=''
-  : # 完整事务由协调器读回后提交并释放admission
-  echo "✅ Commander与既有本机视图已绑定同一正式release/ACK"
-  exit 0
-fi
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do

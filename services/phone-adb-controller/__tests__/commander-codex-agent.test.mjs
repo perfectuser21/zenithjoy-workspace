@@ -309,7 +309,7 @@ test("deploy.sh：Commander 入口下发 runner/lib/合同清单与全部 comman
   const functions = readFileSync(join(HERE, "..", "deployment-functions.sh"), "utf8");
   assert.match(functions, /for f in wf-launch\.sh wf-status\.sh wf-agent-run\.sh wf-agent-lib\.py wf-agent-handoff\.py workflow-contracts\.json/);
   assert.match(functions, /commander\/skills\/\*\/SKILL\.md/);
-  assert.match(functions, /phone_transaction_tool mmv deployment-effects\.py apply/);
+  assert.match(functions, /phone_transaction_tool mmv effects apply/);
 });
 
 // 实际故障：gateway_exec 中的 CLI agent 消息丢失父归属，被 OpenClaw 拒绝。
