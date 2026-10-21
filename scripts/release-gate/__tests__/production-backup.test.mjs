@@ -28,13 +28,25 @@ class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_POST(self):
   body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));events.append((self.path,body))
-  self.send_response(200);self.end_headers();self.wfile.write(json.dumps({'id':'fixture-task'} if self.path.endswith('/tasks') else {'ok':True}).encode())
+  self.send_response(200);self.end_headers();self.wfile.write(json.dumps({'id':'fixture-task',**body} if self.path.endswith('/tasks') else {'ok':True}).encode())
  def do_PATCH(self):self.do_POST()
 server=HTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
 try:
  with tempfile.TemporaryDirectory() as d:
   def fail():
+   created=events[0][1]
+   assert created['task_type']=='script_run','backup must use native script contract'
+   assert created['domain']=='operations' and created['mutation_intent']=='none'
+   assert created['status']=='blocked','tick can race creation and claim'
+   assert created['project_id']=='67bd1fc3-3027-4f13-83c8-c656e3408bfc'
+   assert created['payload']['host']=='us-mac-m4'
+   assert created['payload']['timeout_sec']==3600
+   assert 'verify-hk-backup.py' in created['payload']['cmd']
+   assert 'run-hk-backup.py' not in created['payload']['cmd'],'Brain retry must not recursively create tasks'
+   assert 'headed_manual' not in created['payload']
    assert events[-2][0].endswith('/claim'),'backup ran before claim'
+   assert events[-2][1]['executor_kind']=='script','must use real executor enum, not actor'
+   assert events[-2][1]['on_lease_expire']=='fail'
    assert events[-1][1].get('status')=='in_progress','backup ran before in_progress'
    raise RuntimeError('fixture restore failed')
   try:m.run_recorded(pathlib.Path(d),'http://127.0.0.1:'+str(server.server_port),fail)
