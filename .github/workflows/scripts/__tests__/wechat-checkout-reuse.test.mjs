@@ -18,6 +18,9 @@ for (const [file, job] of [['wechat-cs-e2e.yml','agent-windows'], ['agent-module
   mkdirSync(join(root,'services/agent/publishers'),{recursive:true});
   writeFileSync(join(root,required),'// real tracked test fixture\n');
   writeFileSync(join(root,'services/agent/publishers/keep.cjs'),'// publisher\n');
+  mkdirSync(join(root,'services/agent/modules/line04'),{recursive:true});
+  writeFileSync(join(root,'services/agent/tsconfig.build.json'),'{}');
+  writeFileSync(join(root,'services/agent/modules/line04/preflight.ts'),'// preflight');
   git('add','.');git('commit','-qm','fixture');
   git('sparse-checkout','set','services/agent/publishers');
   git('config','--local','core.sparseCheckout','true');
