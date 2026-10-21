@@ -1,6 +1,6 @@
 // 原handler/逐视频脚本/execInput/broker/nofork均真实，仅手机、PG和Agent传输为隔离夹具。
 import {mkdtempSync,cpSync,writeFileSync,readFileSync,mkdirSync,readdirSync,statSync,realpathSync,symlinkSync,existsSync} from 'node:fs';
-import {join,dirname} from 'node:path';
+import {join,dirname,basename} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {createServer} from 'node:net';
@@ -8,7 +8,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 export const vids=['7681632828384394202','7681632828384394203'];
 const hash=x=>createHash('sha256').update(x).digest('hex');
-export async function collectionFixture(t,{sample=false,panelProbe=false}={}){
+export async function collectionFixture(t,{sample=false,panelProbe=false,blockIdentity=false}={}){
  const d=realpathSync(mkdtempSync(join(tmpdir(),'collection-real-recovery-'))),runtime=join(d,'runtime'),source=new URL('../../',import.meta.url).pathname;
  cpSync(source,runtime,{recursive:true,filter:path=>!path.includes('/__tests__')&&!path.includes('/runtime/')&&!path.includes('/__pycache__')&&!path.endsWith('.pyc')});
  const sockets=new Set(),server=createServer(c=>{sockets.add(c);c.on('close',()=>sockets.delete(c));c.on('error',()=>{});let b='';c.on('data',s=>{b+=s;if(b.length<4)return;const n=parseInt(b.slice(0,4),16);if(b.length<4+n)return;const q=b.slice(4,4+n),out=q==='host:version'?'0029':q==='host:devices'?'NO-DEVICE\tdevice\n':null;if(out===null){c.end('FAIL0003bad');return;}c.end('OKAY'+Buffer.byteLength(out).toString(16).padStart(4,'0')+out);});});
@@ -23,6 +23,7 @@ export async function collectionFixture(t,{sample=false,panelProbe=false}={}){
  if(panelProbe){writeFileSync(actualController,readFileSync(controller),{mode:0o755});writeFileSync(join(d,'profiles'),'scope-profile\tNO-DEVICE\tMODEL\t1199\t2663\n');}
  writeFileSync(controller,`#!/usr/bin/env node
 const fs=require('fs'),path=require('path'),cp=require('child_process');const a=process.argv.slice(2),d=process.env.COLLECTION_FIXTURE_DIR;if(a[2]==='--lock-owner')a.splice(2,2);const cmd=a[2],args=a.slice(3);fs.appendFileSync(path.join(d,'phone-calls'),JSON.stringify({cmd,args})+'\\n');
+if(${blockIdentity}&&cmd==='current-video-link'&&args[0].includes('-v${vids[0]}-identity-')){fs.writeFileSync(path.join(d,'observer-block-ready'),'ready');while(!fs.existsSync(path.join(d,'observer-block-go')))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5);}
 const r=cp.spawnSync('python3',[path.join(${JSON.stringify(runtime)},'adb-managed-client.py'),'-s','NO-DEVICE','get-state'],{encoding:'utf8',env:process.env});if(r.status){process.stderr.write(r.stderr);process.exit(r.status||2);}
 if(${panelProbe}&&(cmd==='collect-comments'||cmd==='back-evidence')){if(cmd==='back-evidence')fs.writeFileSync(path.join(d,'repaired'),'yes');const x=cp.spawnSync('zsh',[${JSON.stringify(actualController)},'--profile',a[1],cmd,...args],{env:process.env,encoding:'utf8'});process.stdout.write(x.stdout||'');process.stderr.write(x.stderr||'');process.exit(x.status??2);}
 switch(cmd){case 'preflight':console.log('serial=NO-DEVICE');break;case 'account-current':console.log('douyin_id=fixture-account');break;case 'lock-acquire':console.log('lock=acquired');break;case 'lock-refresh':console.log('lock=refreshed owner=scope-owner ttl=300s');break;case 'open-video':fs.writeFileSync(path.join(d,'active'),args[0]);break;case 'current-video-link':{let vid=fs.readFileSync(path.join(d,'active'),'utf8');if(!${panelProbe}&&args[0].includes('-collection-')&&vid===${JSON.stringify(vids[1])}&&!fs.existsSync(path.join(d,'repaired')))vid='7999999999999999999';console.log('content_type=video\\nvideo_id='+vid);break;}case 'open-comments':if(${panelProbe}&&fs.readFileSync(path.join(d,'active'),'utf8')===${JSON.stringify(vids[1])}){fs.rmSync(path.join(d,'panel-closed'),{force:true});const proof=cp.spawnSync('zsh',[${JSON.stringify(actualController)},'--profile',a[1],'ui-evidence',args[0]+'-panel'],{env:process.env,encoding:'utf8'});if(proof.status){process.stderr.write(proof.stderr);process.exit(proof.status);}console.log('comments_opened=1\\ncomment_count=1\\nevidence='+proof.stdout.trim());}else console.log('reason=no_comments_on_this_video');break;case 'back-evidence':fs.writeFileSync(path.join(d,'repaired'),'yes');break;}
@@ -40,7 +41,15 @@ switch(cmd){case 'preflight':console.log('serial=NO-DEVICE');break;case 'account
  const env={...process.env,HOME:d,PATH:bin+':'+process.env.PATH,WFR_RUN_DIR:d,WFR_RUN_ID:'scope-run',WFR_ATTEMPT:'a1',WFR_TAG:'scope-owner',P:'scope-profile',SERIAL:'NO-DEVICE',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'scope-source101',DOUYIN_PHONE_ADB:controller,DOUYIN_PHONE_TMP_ROOT:join(d,'phone'),COLLECTION_FIXTURE_DIR:d,PYTHONDONTWRITEBYTECODE:'1',ZJ_ADB_HOST_CONFIG:policyFile,HARVEST_KEYWORD_TESTING:'1'};
  if(panelProbe)env.DOUYIN_PHONE_REGISTRY=join(d,'profiles');
  if(sample){env.LEADGEN_COMMENT_LIMIT='1';env.WF_BRAIN_WORKFLOW='douyin_video_processing';}
+ if(blockIdentity){let blocked=false;const timer=setInterval(()=>{if(blocked||!existsSync(join(d,'observer-block-ready')))return;blocked=true;writeFileSync(join(d,'observer-block-go'),'go');const started=Date.now();Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,750);writeFileSync(join(d,'observer-block-duration-ms'),String(Date.now()-started));},1);t.after(()=>clearInterval(timer));}
  const dbCalls=[],stored=new Map();
  const queue=async q=>{dbCalls.push(q);const base={video_id:q.video_id,video_url:q.video_url};switch(q.op){case 'company_config':return {company_id:'fixture-company',version:1};case 'claim_videos':return vids.map(video_id=>({video_id,video_url:'https://www.douyin.com/video/'+video_id,judgment_status:'matched',judgment_config:{company_id:'fixture-company',version:1}}));case 'renew_video':return {renewed:true};case 'comment_history':return {version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'scope-owner',source_run:'scope-source101',...base,rows:[]};case 'collect':stored.set(q.video_id,true);return {comments:0,inserted:0,history_verified:0,coverage:0};case 'comment_history_readback':return {...base,verified:true,ids:[],history_verified:0};case 'sample_readback':return {...base,verified:true,coverage:0,rows:[]};case 'inspect_videos':return q.video_ids.map(video_id=>({video_id,line_key:'jinuo',judgment_status:'matched',judgment_config:{company_id:'fixture-company',version:1},process_status:stored.has(video_id)?'评论已采':'处理中:scope-owner',harvest_batch:'scope-owner'}));default:return {};}};
- return {d,runtime,frozen,env,dbCalls,stored,queue,phoneCalls:()=>readFileSync(join(d,'phone-calls'),'utf8').trim().split('\n').map(JSON.parse)};
+ return {d,runtime,frozen,env,dbCalls,stored,queue,diagnostics:{},executionRecords:[],phoneCalls:()=>readFileSync(join(d,'phone-calls'),'utf8').trim().split('\n').map(JSON.parse)};
+}
+
+// 只在失败时保留隔离夹具原件；不保存继承环境或真实凭据。
+export function saveCollectionFailure(f,details){
+ const destination=join(process.env.RUNNER_TEMP||tmpdir(),'collection-phone-failures',basename(f.d));mkdirSync(destination,{recursive:true});
+ writeFileSync(join(destination,'diagnostic.json'),JSON.stringify({fixture_root:f.d,node:process.version,parent_exec_path:process.execPath,details,db_calls:f.dbCalls,stored_video_ids:[...f.stored.keys()],execution_records:f.executionRecords,phone_calls:existsSync(join(f.d,'phone-calls'))?f.phoneCalls():[]},null,2));
+ cpSync(f.d,join(destination,'fixture'),{recursive:true,filter:path=>path!==f.runtime&&!path.startsWith(f.runtime+'/')});return destination;
 }

@@ -6,27 +6,31 @@ test('caller true或序列化JSON不能成为collection phone authority能力',a
  for(const proof of [true,{verified:true},{protocol:'collection-phone-scope-v1',execution_stopped:true},JSON.parse('{"phone_authority_returned":true}')])assert.equal(collectionPhoneProofValid(proof),false);
 });
 
-import {collectionFixture,vids} from './helpers/collection-recovery-fixture.mjs';
+import {collectionFixture,vids,saveCollectionFailure} from './helpers/collection-recovery-fixture.mjs';
 import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
 import {writeFileSync,mkdirSync,readFileSync,symlinkSync} from 'node:fs';
 
 async function recoveryCase(t,mutation,options={}){
- const f=await collectionFixture(t,options),load=name=>import(pathToFileURL(join(f.runtime,name)));
- const {createHandlers}=await load('leadgen-handlers.mjs'),{invokeNativeActivity,runWorkflow}=await load('leadgen-workflow.mjs'),{createActivityRecovery}=await load('activity-skill-recovery.mjs'),{callActivityTool}=await load('activity-skill-tool.mjs');
- let launches=0,verified=0;const handlers=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',rpc:async body=>{
+ const f=await collectionFixture(t,options);try{return await runRecoveryCase(t,mutation,options,f);}catch(error){const path=saveCollectionFailure(f,{error:{message:error.message,stack:error.stack},...f.diagnostics});t.diagnostic('collection_failure_evidence='+path);throw error;}
+}
+async function runRecoveryCase(t,mutation,options,f){
+ const load=name=>import(pathToFileURL(join(f.runtime,name)));
+ const {createHandlers}=await load('leadgen-handlers.mjs'),{invokeNativeActivity,runWorkflow}=await load('leadgen-workflow.mjs'),{createActivityRecovery}=await load('activity-skill-recovery.mjs'),{callActivityTool}=await load('activity-skill-tool.mjs'),{execInput}=await load('leadgen-client.mjs');
+ let launches=0,verified=0;const handlers=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',execute:async(command,args,opts)=>{try{const result=await execInput(command,args,opts);f.executionRecords.push({command,args,result});return result;}catch(error){f.executionRecords.push({command,args,error:{message:error.message,stdout:error.stdout,stderr:error.stderr}});throw error;}},rpc:async body=>{
   if(body.kind==='activity_skill_authority')return {authorized:true};
   if(body.kind==='activity_skill'){
    launches++;await callActivityTool(body.request.broker_request_path,'inspect');await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:['scope-skill-repair']});await callActivityTool(body.request.broker_request_path,'resume');return {result:{status:'ok',execution_stopped:true}};
   }
   return {result:await f.queue(body.request)};
  }});
- handlers.state.currentActivity='preflight';await handlers.preflight();handlers.state.currentActivity='qualification';if(options.sample)handlers.state.intakeVideoIds=vids;await handlers.qualification();handlers.state.currentActivity='collection';handlers.state.budgetDeadline=Date.now()+90000;
+ handlers.state.currentActivity='preflight';f.diagnostics.preflight=await handlers.preflight();handlers.state.currentActivity='qualification';if(options.sample)handlers.state.intakeVideoIds=vids;f.diagnostics.qualification=await handlers.qualification();assert.equal(f.diagnostics.qualification.matched,2,'资格前置必须先实际核验两VID '+JSON.stringify(f.diagnostics.qualification));assert.equal(f.diagnostics.qualification.videos_verified,2);assert.deepEqual(f.diagnostics.qualification.failures,[]);handlers.state.currentActivity='collection';handlers.state.budgetDeadline=Date.now()+90000;
  const rpc=async body=>body.kind==='activity_skill_authority'?{authorized:true}:body.kind==='activity_skill'?(launches++,await callActivityTool(body.request.broker_request_path,'inspect'),await callActivityTool(body.request.broker_request_path,'phone',{command:'back-evidence',args:['scope-skill-repair']}),await callActivityTool(body.request.broker_request_path,'resume'),{result:{status:'ok',execution_stopped:true}}):{result:await f.queue(body.request)};
  const {collectionPhoneProofValid,consumeCollectionPhoneProof}=await load('collection-phone-scope.mjs');
  const proofContext={task_id:'scope-task',run_id:'scope-run__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:f.env.P,serial:f.env.SERIAL,activity:'collection',owner:f.env.WFR_TAG,target:f.frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:f.frozen.snapshot_sha256,binding_id:'scope-binding'};
  const recover=createActivityRecovery({runDir:f.d,frozen:f.frozen,binding:{id:'scope-binding',run_id:'scope-run__a1',task_id:'scope-task'},env:f.env,handlers,rpc});
  const result=await runWorkflow({activities:[{key:'collection',retry_safe:false}],context:{run_id:'scope-run__a1',task_id:'scope-task',source_commit:'a'.repeat(40)},handlers:{collection:async()=>{const value=await invokeNativeActivity(()=>handlers.collection(),handlers.state);if(value.status==='partial'){assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,proofContext),true,'反例注入前须真的从完整原生leaf取得能力');for(const key of Object.keys(proofContext))assert.equal(collectionPhoneProofValid(value.recovery_phone_scope,{...proofContext,[key]:'other'}),false,'跨'+key+'必须拒绝');assert.equal(collectionPhoneProofValid(value.recovery_phone_scope),false,'缺context不可准入');await mutation?.({f,handlers,value});}return value;}},recover,commander:async()=>({action:'continue'}),record:async()=>{},verify:async(_a,e)=>{verified++;return {verified:e.result.videos_processed===2};}});
+ f.diagnostics.result=result;
  assert.equal(f.stored.has(vids[0]),true,'必须先完成首VID真实原脚本和PG边界，不把setup失败当RED '+JSON.stringify(result));
  if(mutation){assert.equal(launches,0,'变化/污染后不得启动Skill');assert.notEqual(result.status,'completed');return;}
  assert.equal(launches,1,'必须真实进入Skill，不能0调用却称接管成功');assert.equal(result.status,'completed',JSON.stringify(result));assert.equal(verified,1);
@@ -84,3 +88,5 @@ test('私有probe消费防重放：原binding/VID/nonce/记录缺损拒绝，合
  const binding=readBinding(f.d,'a1',f.frozen);assert.equal(verifyCollectionAcceptanceConsumption({frozen:f.frozen,binding,env}),true);
  writeFileSync(join(f.d,'collection-acceptance-probe.consumed.json'),'{}');assert.throws(()=>consumeCollectionAcceptanceProbe(args));assert.equal(verifyCollectionAcceptanceConsumption({frozen:f.frozen,binding,env}),false);
 });
+
+test('真实资格与接管在父observer同步阻塞750ms时仍由独立ADB服务响应',{skip:process.platform!=='darwin'},t=>recoveryCase(t,undefined,{blockIdentity:true}));

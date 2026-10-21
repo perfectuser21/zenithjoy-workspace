@@ -313,6 +313,14 @@ jobs:
         run: |
           node -e "if(process.platform!=='darwin')process.exit(1)"
           node --test services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs
+      - name: Preserve failed collection fixture evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-phone-darwin-failures
+          path: ${{ runner.temp }}/collection-phone-failures
+          if-no-files-found: warn
+          retention-days: 7
 
   # ─── apps/api/scripts ────────────────────────────────────────────────
   # apps/api/scripts/ 下的独立 Python 脚本（如 wechat-mp-freepublish.py）不属于任何
