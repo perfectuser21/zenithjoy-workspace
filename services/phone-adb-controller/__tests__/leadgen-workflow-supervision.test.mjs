@@ -181,6 +181,7 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
      const path=join(dir,'evidence',profile,`${args[3]}-aftertab.xml`);mkdirSync(join(dir,'evidence',profile),{recursive:true});
      writeFileSync(path,'<hierarchy><node resource-id="com.ss.android.ugc.aweme:id/et_search_kw" text="人工智能训练师"/></hierarchy>');
     }
+    if(op==='search-time-layer')stdout='sort=latest\ntime_layer=six_months\nduration=unlimited\nscope=unlimited\nlocation=same_city\n';
     if(op==='search-video-cards')stdout='100\t200\t00:20\t目标视频\t别人\t0\nvideo_tab=1\nend_of_results=1\nevidence=/test/grid.xml\n';
     if(op==='current-video-link'){
      timeouts.push(opts.timeoutMs);

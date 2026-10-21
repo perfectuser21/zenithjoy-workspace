@@ -83,6 +83,7 @@ const modules={
  './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{}},
  './runtime-definition.mjs':definition,'./runtime-binding.mjs':binding,
  './leadgen-client.mjs':{createRpc:()=>async()=>{throw Error('unexpected RPC');},execInput:async()=>({code:0,stdout:'',stderr:''})},
+ './leadgen-discovery.mjs':{verifyDiscoveryFilterEvidence:()=>{throw Error('unexpected filter verify during failed preflight');}},
  './step-judge.mjs':{judgeSteps:()=>{throw Error('unexpected verify');}}};
 const source=fs.readFileSync(root+'leadgen-workflow.mjs','utf8');
 const main=new vm.SourceTextModule(source+'\\nexport {main as probeMain};',{context,identifier:pathToFileURL(path.join(runtime,'leadgen-workflow.mjs')).href,initializeImportMeta:meta=>{meta.url=pathToFileURL(path.join(runtime,'leadgen-workflow.mjs')).href;}});
