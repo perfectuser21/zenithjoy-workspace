@@ -29,6 +29,7 @@ print(json.dumps(out))
 
 
 def command(args, **kwargs):
+    kwargs.setdefault('timeout', 600)
     return subprocess.run(args, check=True, **kwargs)
 
 
@@ -103,7 +104,7 @@ def verify_restore(dump):
         # 只清理本次创建的唯一容器；从不连接或删除生产容器/数据库。
         if started:
             command(['docker', 'stop', '--time', '10', name], capture_output=True)
-            command(['docker', 'rm', name], capture_output=True)
+            command(['docker', 'rm', '-v', name], capture_output=True)
 
 
 def main():
