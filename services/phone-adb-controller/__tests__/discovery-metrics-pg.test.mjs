@@ -6,6 +6,7 @@ import db from '../leadgen-db-lib.js';
 import {handleRpc} from '../leadgen-rpc.mjs';
 import {createRpc,RPC_FILES} from '../leadgen-client.mjs';
 import {queueMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+import {parse as parseYaml} from 'yaml';
 
 test('真实PG：101独立观测读回、102实采数隔离、重发现不覆盖历史状态及较新观测', {skip:process.env.ZJ_METRICS_PG_REQUIRED!=='1'},async()=>{
  const {Pool}=await import('pg');const pool=new Pool();const schema='android101_'+randomUUID().replaceAll('-','');
@@ -50,6 +51,13 @@ test('真实PG：101独立观测读回、102实采数隔离、重发现不覆盖
   const receipt=await rpc(request);assert.equal(receipt.result.metrics_verified,true);assert.equal(receipt.result.recovered,true);assert.equal(receipt.result.metrics_digest,f.video.metrics.digest);
   assert.deepEqual(operations,['discover','discover_readback']);
   const persisted=(await scoped.query('SELECT discovery_metrics FROM zenithjoy.leadgen_videos WHERE video_id=$1',[f.video.videoId])).rows[0].discovery_metrics;
+  const contract=parseYaml(readFileSync(new URL('../../../product-map/contracts/douyin_video_discovery.yaml',import.meta.url),'utf8'));
+  const activity=contract.activities.find(item=>item.key==='collect_videos');
+  assert.ok(activity.outputs.find(item=>item.type==='Video').fields.includes('discovery_metrics'));
+  assert.ok(activity.postconditions.some(item=>item.probe==='discovery_metrics_verified'));
+  const {company_binding:companyBinding,...storedObservation}=persisted;
+  assert.deepEqual(storedObservation,f.video.metrics,'正式Video.discovery_metrics由真实RPC将运行Video.metrics映射至专用PG列');
+  assert.deepEqual(companyBinding,{company_id:company.company_id,tenant_id:company.tenant_id,version:company.version,run_id:company.run_id,line_key:'jinuo'});
   assert.equal(persisted.company_binding.company_id,company.company_id);assert.equal(persisted.comment_total.value,4);
   for(const change of [m=>{m.source_commit='f'.repeat(40);},m=>{m.run='foreign';},m=>{m.video_id=videoId;},m=>{m.evidence.xml+=' ';},m=>{m.comment_total.value=0;}]){
    const bad=structuredClone(request);change(bad.request.video.metrics);await assert.rejects(rpc(bad),/METRICS_/);

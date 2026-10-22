@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.3.0
+  version: 0.4.0
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -27,7 +27,7 @@ activities:
   - key: collect_videos
     name: 搜索采集视频
     order: 2
-    version: 4.1.0
+    version: 5.0.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -70,6 +70,7 @@ activities:
           - title
           - keyword
           - comment_count
+          - discovery_metrics
           - harvest_batch
           - author
       - type: Run
@@ -83,6 +84,8 @@ activities:
       - 设备预检通过，持有本run设备锁
       - 关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤
     postconditions:
+      - probe: discovery_metrics_verified
+        asserts: 每个实际视频的同次原生详情XML、VID、run及attempt、公司和固定来源一致；指标重算与持久化完整观测独立读回相符，unknown保留null，不冒充0
       - probe: source_completed
         asserts: 来源读取实际成功且无旧入口回退
       - probe: collect_videos_commander_verified
@@ -107,7 +110,7 @@ activities:
           value: 1000
     idempotency:
       dedupe_key: Video.line_key+Video.video_id
-      on_duplicate: skip
+      on_duplicate: merge
     failure:
       empty_ok:
         - no_cards 本词无视频卡片
@@ -127,7 +130,7 @@ activities:
     side_effects:
       - kind: internal_write
         target: pg zenithjoy.leadgen_videos
-        description: 实际ID和有效链接验证后落库，收到pending/matched/rejected实际回执才计成功
+        description: 实际ID和有效链接验证后落库，收到pending/matched/rejected且完整指标读回才计成功。同VID相同观测幂等，仅较新observed_at替换discovery_metrics，旧观测拒绝本次成功回执且不改旧行；保留102状态、转写、实采comment_count及历史来源，评论已采视频保留原harvest_batch。
     invokers:
       - code
       - agent
@@ -142,7 +145,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.2.0
+        version: 0.3.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -275,6 +278,14 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-discovery.mjs
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/discovery-metrics.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/discovery-metrics-queue.js
+        revision: contract
     model:
       - provider: openrouter
         model: bytedance/ui-tars-1.5-7b
@@ -385,7 +396,6 @@ activities:
           - Device.lock_holder
         writes:
           - Video.title
-          - Video.comment_count
         check: 视频tab和搜索词均已核验；明确空结果可返回0，不将未加载当空
         implementation:
           status: implemented
@@ -407,7 +417,8 @@ activities:
         writes:
           - Video.video_id
           - Video.video_url
-        check: 每张卡取得 video_id（剪贴板守卫：回读链接含 video_id）
+          - Video.discovery_metrics
+        check: 每张卡取得真实video_id，并绑定成功取链同次、离开详情前的原生XML指标；不可用结果页或旧重试原件代替
         implementation:
           status: implemented
           ref: leadgen-discovery.mjs collect_videos.resolve_video_links（原约束保留，真PG/证据读回）
@@ -431,7 +442,8 @@ activities:
           - Video.harvest_batch
           - Video.keyword
           - Video.line_key
-        check: 本批所有保存VID逐个PG独立读回，含旧批次幂等更新的ID
+          - Video.discovery_metrics
+        check: 本批每个实际VID的专用观测、run/attempt/来源与公司绑定完整PG独立读回；原件重算相符且旧观测不得当本次ACK
         implementation:
           status: implemented
           ref: leadgen-discovery.mjs collect_videos.persist_candidates（原约束保留，真PG/证据读回）
@@ -440,7 +452,7 @@ activities:
           mode: checkpoint
           readback:
             type: metric
-            ref: metrics.manifest_verified
+            ref: metrics.discovery_metrics_verified
             expect:
               op: ==
               value: 1

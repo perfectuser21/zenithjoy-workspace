@@ -65,6 +65,7 @@ types:
       - author
       - keyword
       - comment_count
+      - discovery_metrics
       - harvest_batch
       - process_status
       - judgment_status
