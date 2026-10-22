@@ -165,3 +165,14 @@ test('collection phone issuer and real leaf producer belong to every consumer so
   for(const [ref,method] of Object.entries(before.activities))assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted '+name);
  }
 });
+
+for(const name of ['commander-owner-state.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs'])test('owner reservation and maintenance bytes belong to every real Commander consumer '+name,t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/'+name;
+ put(root,path,readFileSync(join(source,path)));const before=collectMethods(root);
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated owner safety byte mutation\n');const after=collectMethods(root);
+ assert.equal(Object.keys(before.activities).length,12);
+ for(const [ref,method] of Object.entries(before.activities)){
+  assert.notEqual(after.activities[ref].code_digest,method.code_digest,ref+' omitted owner safety module '+name);
+  assert.equal(after.activities[ref].contract_digest,method.contract_digest);assert.equal(after.activities[ref].skill.content_digest,method.skill.content_digest);
+ }
+});
