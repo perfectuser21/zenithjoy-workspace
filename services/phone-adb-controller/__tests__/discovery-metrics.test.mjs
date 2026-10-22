@@ -22,3 +22,25 @@ test('远端由核验来源重算原文、数值和digest，不接受调用者�
  assert.throws(()=>validateObservation({...m,evidence:{...m.evidence,xml:m.evidence.xml.replace('喜欢67','喜欢68')}},scope),/METRICS_EVIDENCE_HASH_MISMATCH/);
  assert.throws(()=>validateObservation({...m,digest:'f'.repeat(64)},scope),/METRICS_DIGEST_MISMATCH/);
 });
+
+test('成功取链原件封存与最终逐VID读回，路径/原件/权限/ACK不符均拒绝',async()=>{
+ const {mkdtempSync,writeFileSync,rmSync,symlinkSync,chmodSync}=await import('node:fs');
+ const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const {captureObservation,verifyArchivedObservations}=require('../discovery-metrics.js');
+ const dir=mkdtempSync(join(tmpdir(),'metrics-original-')),file=join(dir,scope.evidence_id+'-share.xml');
+ try{
+  writeFileSync(file,tree('67','4'));
+  const observation=captureObservation({...scope,file,evidenceRoot:dir,runDir:dir});
+  const videos=[{videoId:scope.video_id,videoUrl:scope.video_url,metrics:observation}],archive=join(dir,'discovery-metrics',observation.digest+'.json');let reads=0;
+  const options={videos,runDir:dir,scope,readback:async()=>{reads++;return {metrics_verified:true,metrics_digest:observation.digest,recovered:true};}};
+  assert.equal(await verifyArchivedObservations(options),true);assert.equal(reads,1);
+  for(const reply of [null,{metrics_verified:true,recovered:true,metrics_digest:'stale'},{metrics_verified:true,metrics_digest:observation.digest}])assert.equal(await verifyArchivedObservations({...options,readback:async()=>reply}),false);
+  assert.equal(await verifyArchivedObservations({...options,videos:[...videos,...videos]}),false);
+  assert.equal(await verifyArchivedObservations({...options,scope:{...scope,run_id:'douyin_video_discovery-real101__a1'}}),false);
+  chmodSync(archive,0o644);assert.equal(await verifyArchivedObservations(options),false);chmodSync(archive,0o600);
+  writeFileSync(archive,JSON.stringify({...observation,likes:{raw:'67',value:0}}));assert.equal(await verifyArchivedObservations(options),false);
+  assert.throws(()=>captureObservation({...scope,file,evidenceRoot:dir,runDir:dir}),/METRICS_ARCHIVE_CHANGED/);
+  rmSync(file);symlinkSync(archive,file);assert.throws(()=>captureObservation({...scope,file,evidenceRoot:dir,runDir:dir}),/METRICS_EVIDENCE_PATH_INVALID/);
+  rmSync(file);writeFileSync(file,'x'.repeat(1024*1024+1));assert.throws(()=>captureObservation({...scope,file,evidenceRoot:dir,runDir:dir}),/METRICS_EVIDENCE_PATH_INVALID/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
