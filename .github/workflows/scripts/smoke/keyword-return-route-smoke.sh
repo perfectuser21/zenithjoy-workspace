@@ -7,3 +7,5 @@ test -s services/phone-adb-controller/__tests__/fixtures/real-keyword-return-ske
 zsh -n services/phone-adb-controller/douyin-phone-adb
 node --test services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs
 node --test --test-name-pattern='results-only' services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
+# 搜索/回退共用的视频类别定位：真实629b双同名树、选中后验与固定checkpoint。
+node --test services/phone-adb-controller/__tests__/search-video-tab-reorder.test.mjs services/phone-adb-controller/__tests__/search-video-tab-checkpoint.test.mjs

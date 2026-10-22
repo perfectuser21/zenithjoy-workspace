@@ -39,6 +39,14 @@ api_suite:
 
 tests:
 
+- id: search-video-tab-native-category
+  path: services/phone-adb-controller/__tests__/search-video-tab-reorder.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "629b真机脱敏XML复现；同名筛选chip不冒充顶部tab，错包/查询漂移/结构歧义及假selected拒绝，最多一次重定位"
+
 - id: clipboard-nonce-native-context
   path: services/phone-adb-controller/__tests__/clipboard-nonce-context.test.mjs
   type: integration
