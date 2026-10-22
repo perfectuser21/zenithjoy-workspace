@@ -22,3 +22,11 @@ for(const bad of [{provider:null},{model:'unknown'},{terminalReceipt:null},{term
  const folder=join(dir,'.openclaw/leadgen-owner-turns'),name=readdirSync(folder).find(n=>n.endsWith('.returned.json'));
  const proof=JSON.parse(readFileSync(join(folder,name),'utf8'));assert.equal(proof.raw_response,output);assert.equal(proof.activity,scope.activity);assert.equal(proof.phase,scope.phase);
 });
+
+test('调用统计区分可核咨询、失败与unknown，不把缺失供应商调用数记零',async()=>{
+ const {commanderModelReceipt,summarizeCommanderEvidence}=await import('../commander-model-receipt.mjs');
+ const proof=commanderModelReceipt(JSON.stringify(raw()),scope);
+ const events=[{...scope,commander_status:'available',decision:{model_receipt:proof}},{...scope,phase:'after',commander_status:'unavailable',error:'timeout'}];
+ assert.deepEqual(summarizeCommanderEvidence(events,scope),{consultations:2,verified_cli_receipts:1,failed_consultations:1,missing_or_invalid_receipts:1,assistant_turns:2,assistant_turns_coverage:'partial',provider_call_count:null,provider_call_count_status:'unknown',response_ids_verified:0,response_ids_unavailable:1});
+ const duplicate=summarizeCommanderEvidence([events[0],events[0]],scope);assert.equal(duplicate.verified_cli_receipts,0);assert.equal(duplicate.assistant_turns,null);assert.equal(duplicate.missing_or_invalid_receipts,2);
+});
