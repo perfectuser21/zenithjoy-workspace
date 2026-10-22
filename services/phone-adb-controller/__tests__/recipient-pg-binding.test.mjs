@@ -157,6 +157,7 @@ test('MMV102真实preflight只在PG和当前原生账号均相等后写私有bin
  const {line_key,source_run,...device_binding}=b;
  const h=createHandlers({root:d,env,rpc:async body=>({result:{company_id:b.company_id,tenant_id:b.tenant_id,version:b.version,run_id:run,device_binding}}),execute:async(command,args)=>{
   calls.push([command,args]);let stdout='';
+  if(args[0]===join(d,'adb-existing-route.py')){assert.equal(command,'python3');assert.deepEqual(args,[join(d,'adb-existing-route.py'),b.device_serial,'/approved/adb']);stdout='5042\n';}
   if(command==='/approved/adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
   if(command==='/fixture/controller'){const op=args[2]==='--lock-owner'?args[4]:args[2];if(op==='preflight')stdout='serial='+b.device_serial+'\n';if(op==='lock-acquire')stdout='lock=acquired\n';if(op==='lock-refresh')stdout='lock=refreshed\n';if(op==='account-current')stdout='douyin_id='+b.douyin_id+'\n';}
   return {code:0,stdout,stderr:''};
