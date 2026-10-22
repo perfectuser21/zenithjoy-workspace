@@ -94,11 +94,12 @@ test('末次读回新队列或新子agent不能被首轮空与owner无active覆�
  }
 });
 
-test('内核持锁helper丢失后旧持有者不得声称仍持锁，新持有者可正常获得',async t=>{
+test('helper丢失后父仍保同一内核锁，显式关闭后新持有者才可获得',async t=>{
  const {acquireOwnerLock}=await import('../commander-owner-lock.mjs');const f=await fixture(t),first=await acquireOwnerLock(f.file);
  process.kill(first.pid,'SIGTERM');await new Promise(r=>setTimeout(r,60));
  assert.throws(()=>first.assertHeld(),/COMMANDER_OWNER_TURN_UNRESOLVED/);
- const next=await acquireOwnerLock(f.file);assert.doesNotThrow(()=>next.assertHeld());await next();await first();
+ await assert.rejects(acquireOwnerLock(f.file),/COMMANDER_OWNER_TURN_UNRESOLVED/);await first();
+ const next=await acquireOwnerLock(f.file);assert.doesNotThrow(()=>next.assertHeld());await next();
  assert.deepEqual(readFileSync(f.file),f.raw);
 });
 
@@ -157,4 +158,29 @@ test('returned同样不能在helper已死但Node缓存未更新时清除原reser
  killOwnLockWithoutPolling(file);
  await assert.rejects(Promise.resolve().then(()=>turn.returned('official returned response')),/COMMANDER_OWNER_TURN_UNRESOLVED/);
  assert.deepEqual(readFileSync(file),raw);await turn.close();
+});
+
+test('helper已提交而ACK丢失时只读归档证明，不自动重发或恢复旧pending',async t=>{
+ const cp=(await import('node:child_process')).default,{syncBuiltinESMExports}=await import('node:module'),{readdirSync}=await import('node:fs');
+ const f=await fixture(t),spawn=cp.spawn;let committedAcks=0;
+ cp.spawn=(command,args,options)=>{
+  const child=spawn(command,args,options);
+  if(command==='/usr/bin/python3'&&args.at(-1)===f.file+'.guard'){
+   const on=child.stdout.on.bind(child.stdout);child.stdout.on=(event,listener)=>{
+    if(event!=='data')return on(event,listener);let buffer='';
+    return on(event,chunk=>{buffer+=chunk.toString();while(buffer.includes('\n')){const end=buffer.indexOf('\n'),line=buffer.slice(0,end);buffer=buffer.slice(end+1);const frame=JSON.parse(line);if(frame.result?.original_path){committedAcks++;child.kill('SIGKILL');}else listener(Buffer.from(line+'\n'));}});
+   };
+  }
+  return child;
+ };
+ syncBuiltinESMExports();
+ try{await assert.rejects(owner.reconcileWorkflowCommanderTurn(f.request,{home:f.home,...readers(f)}),/COMMANDER_OWNER_RECONCILE_/);}
+ finally{cp.spawn=spawn;syncBuiltinESMExports();}
+ assert.equal(committedAcks,1);assert.equal(existsSync(f.file),false);
+ const directory=join(f.home,'.openclaw/leadgen-owner-turns'),archives=()=>readdirSync(directory).filter(x=>x.endsWith('.reconciled_inactive'));
+ assert.equal(archives().length,1);const archive=join(directory,archives()[0]);
+ assert.deepEqual(readFileSync(join(archive,'original.pending.json')),f.raw);
+ const proof=JSON.parse(readFileSync(join(archive,'receipt.json')));assert.equal(proof.status,'reconciled_inactive');assert.equal(proof.business_result,'unknown');assert.equal(proof.original.status,'reserved');
+ await assert.rejects(owner.reconcileWorkflowCommanderTurn(f.request,{home:f.home,...readers(f)}),/COMMANDER_OWNER_RECONCILE_/);
+ assert.equal(archives().length,1,'no second commit and no rollback after missing ACK');
 });

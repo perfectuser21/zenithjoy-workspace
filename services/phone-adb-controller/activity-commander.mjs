@@ -43,13 +43,13 @@ export function openClawCommander({ agent = 'work-commander', model, timeoutMs =
     if (model) args.push('--model', model);
     const reservation=await reserveWorkflowCommanderTurn(receipt,{home});
     try {
-      reservation.assertHeld();
+      await reservation.check();
       const { stdout } = await execute('openclaw', args, { timeout: timeoutMs + 5000, maxBuffer: 1024 * 1024 });
-      const decision=parseCommanderResponse(stdout);reservation.returned(stdout);return decision;
+      const decision=parseCommanderResponse(stdout);await reservation.returned(stdout);return decision;
     } catch (error) {
       // execFile错误通常包含完整prompt/argv；绝不把它原样写进回执。
       const notStarted=executionDidNotStart(error,'openclaw',args);
-      if(notStarted)reservation.notStarted(error,'openclaw',args);
+      if(notStarted)await reservation.notStarted(error,'openclaw',args);
       const unavailable=Error(`COMMANDER_UNAVAILABLE code=${String(error.code || 'invalid_response')} signal=${String(error.signal || '')}`);
       unavailable.executionStopped=notStarted;
       throw unavailable;

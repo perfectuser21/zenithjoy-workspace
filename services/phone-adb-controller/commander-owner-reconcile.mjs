@@ -1,7 +1,7 @@
 // Maintenance only: current owner inactivity is not the lost turn's outcome,
 // native-operation termination, business success, or permission to release devices.
-import {readFileSync,lstatSync,openSync,closeSync,fstatSync,constants,mkdirSync,writeFileSync,renameSync} from 'node:fs';
-import {resolve,join} from 'node:path';
+import {readFileSync,lstatSync,openSync,closeSync,fstatSync,constants} from 'node:fs';
+import {resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
@@ -15,9 +15,9 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function snapshot(file){
  const fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);
  try{
-  const s=fstatSync(fd),raw=readFileSync(fd),after=fstatSync(fd),path=lstatSync(file);
-  if(!s.isFile()||s.uid!==process.getuid()||(s.mode&0o077)!==0||s.size>16384||s.nlink!==1||s.dev!==path.dev||s.ino!==path.ino||s.ctimeMs!==after.ctimeMs||s.size!==raw.length)fail('PENDING_INVALID');
-  return {raw,stat:{dev:s.dev,ino:s.ino,size:s.size,ctime:s.ctimeMs},sha256:hash(raw),record:JSON.parse(raw)};
+  const s=fstatSync(fd,{bigint:true}),raw=readFileSync(fd),after=fstatSync(fd,{bigint:true}),path=lstatSync(file,{bigint:true});
+  if(!s.isFile()||s.uid!==BigInt(process.getuid())||(s.mode&0o077n)!==0n||s.size>16384n||s.nlink!==1n||s.dev!==path.dev||s.ino!==path.ino||s.ctimeNs!==after.ctimeNs||s.size!==BigInt(raw.length))fail('PENDING_INVALID');
+  return {raw,stat:{dev:Number(s.dev),ino:Number(s.ino),size:Number(s.size),ctime_ns:String(s.ctimeNs)},sha256:hash(raw),record:JSON.parse(raw)};
  }finally{closeSync(fd);}
 }
 function verify(request,value,session){
@@ -90,16 +90,13 @@ export async function reconcileWorkflowCommanderTurn(request,{home=homedir(),rea
   release.assertHeld();
   const current=snapshot(file);verify(request,current,session);
   if(!same(current.stat,original.stat)||!same(identity,privateDir(directory))||!same(parentIdentity,privateDir(resolve(directory,'..'))))fail('CAS_CHANGED');
-  const archive=file+'.'+original.record.transport_nonce+'.'+randomUUID()+'.reconciled_inactive';mkdirSync(archive,{mode:0o700});
+  const archiveId=randomUUID();
   const receipt={protocol:'commander-owner-reconcile-v1',status:'reconciled_inactive',business_result:'unknown',original:original.record,original_sha256:original.sha256,original_identity:original.stat,scope:request.scope,session,host_before:hostBefore,host_after:hostAfter,official_evidence:evidence,reconciled_at:new Date().toISOString(),limitations:['仅当前登记owner与本机观察集合inactive；不追认丢失turn结果或全集原生停止','不释放设备、不改变旧失败或未知副作用']};
-  const originalPath=join(archive,'original.pending.json'),receiptPath=join(archive,'receipt.json');
-  writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{flag:'wx',mode:0o600});
-  // All participating launchers hold the same kernel guard; preserve the exact
-  // original inode/bytes before making a later launch possible.
-  const final=snapshot(file);if(!same(final.stat,original.stat)||final.sha256!==original.sha256)fail('CAS_CHANGED');
-  release.assertHeld();
-  renameSync(file,originalPath);
-  return {status:'reconciled_inactive',business_result:'unknown',original_path:originalPath,receipt_path:receiptPath,receipt_sha256:hash(readFileSync(receiptPath))};
+  // Submit once. Only the live process holding flock can compare/archive/rename;
+  // an ACK loss is unknown and must be resolved by inspecting that archive, never
+  // by replaying this mutation or rewriting the old business outcome.
+  const committed=await release.command('reconciled_inactive',{expected:{identity:original.stat,sha256:original.sha256},archive_id:archiveId,receipt_json:JSON.stringify(receipt,null,2)+'\n'});
+  return {status:'reconciled_inactive',business_result:'unknown',...committed};
  }catch(error){if(/^COMMANDER_OWNER_RECONCILE_/.test(error.message))throw error;fail('READBACK_OR_CAS_UNKNOWN');}
  finally{await release();}
 }

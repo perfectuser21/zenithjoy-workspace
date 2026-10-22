@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,mkdirSync,lstatSync,openSync,closeSync,fstatSync,unlinkSync,renameSync} from 'node:fs';
+import {mkdirSync,lstatSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
@@ -27,29 +27,24 @@ export function assertWorkflowOwnerAvailable(scope,{home=homedir()}={}){
 // A reservation can only deny another transport launch. It is never evidence
 // that business succeeded, a child stopped, or resources may be released.
 export async function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
-  const {file,session}=ownerPending(scope,home),nonce=randomUUID();let fd;
-  const release=await acquireOwnerLock(file);
-  try{fd=openSync(file,'wx',0o600);}catch(error){await release();if(error.code==='EEXIST')throw unresolved();throw error;}
-  const stat=fstatSync(fd),record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
-  writeFileSync(fd,JSON.stringify(record));
-  let closed=false;
-  const archive=(status,details)=>{
-    release.assertHeld();
-    const current=lstatSync(file);
-    if(current.isSymbolicLink()||current.dev!==stat.dev||current.ino!==stat.ino||readFileSync(file,'utf8')!==JSON.stringify(record))throw unresolved();
-    const receipt={...record,status,...details};
-    const tmp=file+'.'+nonce+'.tmp',target=file+'.'+nonce+'.'+status+'.json';
-    writeFileSync(tmp,JSON.stringify(receipt),{flag:'wx',mode:0o600});renameSync(tmp,target);
-    unlinkSync(file);
+  const {file,session}=ownerPending(scope,home),nonce=randomUUID(),release=await acquireOwnerLock(file);
+  const record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
+  const raw=JSON.stringify(record);let reservation;
+  try{reservation=await release.command('reserve',{raw});}catch{await release();throw unresolved();}
+  const archive=async(status,details)=>{
+    const receipt={...record,status,...details,original_sha256:reservation.sha256};
+    return release.command(status,{expected:reservation,receipt_json:JSON.stringify(receipt)});
   };
   return {
+    // This cached check is diagnostic only. Mutations are executed by the
+    // kernel-lock holder, and parent keeps the shared lock FD until close.
     assertHeld:release.assertHeld,
+    check:()=>release.command('check'),
     returned:raw=>archive('returned',{returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex')}),
-    notStarted:(error,command,args)=>{
+    notStarted:async(error,command,args)=>{
       if(!executionDidNotStart(error,command,args))throw unresolved();
-      archive('not_started',{failed_at:new Date().toISOString(),failure:'native_pre_spawn_error'});
+      return archive('not_started',{failed_at:new Date().toISOString(),failure:'native_pre_spawn_error'});
     },
-    close:async()=>{if(!closed){closed=true;closeSync(fd);await release();}},
+    close:release,
   };
 }
-
