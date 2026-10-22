@@ -7,6 +7,7 @@ import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
 import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
+import {captureCleanupReadback,verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {assertCaptureStrategy} from './capture-strategy.mjs';
@@ -93,7 +94,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       const held=await checked(ctl,['--profile',profile,'lock-refresh',run],{receipt:nativeReceipt()});
       if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
     }
-    const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence'].includes(command)?['--lock-owner',run]:[];
+    const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence','snapshot-evidence','ui-evidence'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     const receipt=nativeReceipt();
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
@@ -489,15 +490,23 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-bridge-readback.json`),JSON.stringify(bridgeReadback),{mode:0o600});
       return {...r,bridge,mark_leads_readback_failures:readback.failures,bridge_readback_failures:bridgeReadback.failures+(bridge.verified===false?1:0),...(bridge.verified===false||!bridgeReadback.verified?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
-    cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false;
+    cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}
       if(!locked&&failures.length===0)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
       if(locked){try{const refreshed=await phone('lock-refresh',run);if(!refreshed.startsWith('lock=refreshed'))throw Error('锁所有权不可确认');
-        await phone('close-app');closed=true;await phone('return-safe-desktop');desktop=true;
+        const close_stdout=await phone('close-app');closed=true;const desktop_stdout=await phone('return-safe-desktop');
+        if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'){
+          const evidenceId=`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`,scope={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial};
+          const pngFile=(await phone('snapshot-evidence',evidenceId)).split('\n')[0],xmlFile=(await phone('ui-evidence',evidenceId)).trim();
+          cleanupProof=captureCleanupReadback({runDir:env.WFR_RUN_DIR,evidenceRoot:env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',profile),scope,close_stdout,desktop_stdout,pngFile,xmlFile,evidenceId});
+          if(!verifyCleanupReadback({runDir:env.WFR_RUN_DIR,scope,digest:cleanupProof.digest}))throw Error('CLEANUP_NATIVE_READBACK_INVALID');
+        }
+        desktop=true;
         const result=await phone('lock-release',run);if(!result.startsWith('lock=released'))throw Error('锁释放未确认');released=true;locked=false;
       }catch(error){failures.push({reason:error.message});}}
       return {close_app:closed,close_app_attempts:Number(closed),safe_desktop:desktop,safe_desktop_visible:Number(desktop),lock_released:Number(released),no_lock:!locked,failures,
+        ...(cleanupProof?{cleanup_readback_verified:Number(desktop),cleanup_readback_digest:cleanupProof.digest}:{}),
         ...(failures.length?{status:'partial'}:{})};},
   };
 }

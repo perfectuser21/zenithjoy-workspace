@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_discovery",
   "brain_workflow_key": "douyin_video_discovery",
-  "contract_sha256": "35ed466d91b4932ed8e740d0ff751d4eb44b0684c9844db66cd9d8aba333da43",
+  "contract_sha256": "5c0be32b0816cd624cf296176182185c638c55f9e235304340dc07a216af03b3",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -266,7 +266,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "metric",
-        "ref": "metrics.manifest_verified",
+        "ref": "metrics.discovery_metrics_verified",
         "expect": {
           "op": "==",
           "value": 1

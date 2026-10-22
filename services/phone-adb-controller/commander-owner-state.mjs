@@ -40,7 +40,8 @@ export async function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
     // kernel-lock holder, and parent keeps the shared lock FD until close.
     assertHeld:release.assertHeld,
     check:()=>release.command('check'),
-    returned:raw=>archive('returned',{returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex')}),
+    returned:raw=>archive('returned',{returned_at:new Date().toISOString(),response_sha256:createHash('sha256').update(raw).digest('hex'),
+      ...(scope.workflow_key==='douyin_video_discovery'?{workflow_key:scope.workflow_key,activity:scope.activity,phase:scope.phase,raw_response:raw}:{})}),
     notStarted:async(error,command,args)=>{
       if(!executionDidNotStart(error,command,args))throw unresolved();
       return archive('not_started',{failed_at:new Date().toISOString(),failure:'native_pre_spawn_error'});

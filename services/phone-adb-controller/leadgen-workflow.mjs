@@ -29,6 +29,8 @@ import {judgeSteps} from './step-judge.mjs';
 import {verifyDiscoveryFilterEvidence} from './leadgen-discovery.mjs';
 import discoveryMetrics from './discovery-metrics.js';
 import lineRoutes from './line-routes.js';
+import {verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
+import {summarizeCommanderEvidence} from './commander-model-receipt.mjs';
 
 export function activityExecutionDeadline({activity,env,previous,now=Date.now()}){
   const budget=Number(activity.budget?.max_duration_s||120);
@@ -64,6 +66,12 @@ async function main(){
   const verify=async(activity,result)=>{
     const receipts=records.filter(r=>r.activity===activity.key&&['before','after'].includes(r.phase));
     const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>=2&&receipts.every(r=>r.commander_status==='available'))};
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')metrics.commander_verified=Number(receipts.length>=2&&summarizeCommanderEvidence(receipts,context).missing_or_invalid_receipts===0);
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
+      const valid=result.result?.cleanup_readback_verified===1&&verifyCleanupReadback({runDir:dir,digest:result.result.cleanup_readback_digest,
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL}});
+      metrics.close_app_attempts=metrics.safe_desktop_visible=Number(valid);
+    }
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
       metrics.filters_verified=Number(verifyDiscoveryFilterEvidence({runDir:dir,runId:binding.run_id,run:env.WFR_TAG,profile:env.P,sourceCommit:frozen.deployment.source_commit,
         requested:{sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'},invocations:result.result?.filter_invocations}));
@@ -118,6 +126,7 @@ async function main(){
   const delivery=await execInput(process.execPath,[join(root,'runtime-receipts.mjs'),'flush']);
   result.evidence_status=delivery.code===0&&/WFR_EVIDENCE_STATUS=sent/.test(delivery.stdout)?'sent':'pending_or_blocked';
   if(result.evidence_status!=='sent')result.status='failed';
+  if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')result.model_call_evidence=summarizeCommanderEvidence(records,context);
   writeFileSync(join(dir,'split-result.json'),JSON.stringify({...context,...result},null,2));
   process.stdout.write(JSON.stringify({...context,...result})+'\n');
   if(result.status!=='completed')process.exitCode=1;
