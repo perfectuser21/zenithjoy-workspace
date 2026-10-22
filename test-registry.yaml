@@ -7807,3 +7807,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "机械归位原Workflow监督与评分冻结读回用例；现行controller L3 glob执行，GP-Anchor: line02/keyword_acquisition keep-green"
+
+- id: commander-owner-reconcile
+  path: services/phone-adb-controller/__tests__/commander-owner-reconcile.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "单owner显式维护CLI、fresh官方读回与内核互斥CAS；不证明旧业务成功或释放手机，GP-Anchor: line02/keyword_acquisition keep-green"

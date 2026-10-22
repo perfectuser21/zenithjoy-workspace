@@ -189,8 +189,9 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
  const previous=q.transport_generation===1?previousGeneration(q,home):null;
  if(previous)await verifyPreviousOwner(previous,q,execute);
- const ownerTurn=reserveWorkflowCommanderTurn(q,{home});
+ const ownerTurn=await reserveWorkflowCommanderTurn(q,{home});
  try{
+ ownerTurn.assertHeld();
  if(previous)writeFileSync(join(previous,'generation-revoked.json'),JSON.stringify({next_generation:1,at:Date.now()}),{flag:'wx',mode:0o600});
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
  const parent=workflowCommanderSession(q);
@@ -256,7 +257,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   }
   return {status:'unknown',execution_stopped:false,reason:'official_child_terminal_missing'};
  }
- }finally{ownerTurn.close();}
+ }finally{await ownerTurn.close();}
 }
 
 if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){

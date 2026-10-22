@@ -283,6 +283,18 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-state.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-lock.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-reconcile.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-outreach-bridge.js
         revision: contract
       - kind: code
@@ -709,6 +721,18 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-state.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-lock.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-reconcile.mjs
+        revision: contract
     steps:
       - key: pick_order
         name: 取单预写触达中
@@ -1029,6 +1053,18 @@ activities:
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
         revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-state.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-lock.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-reconcile.mjs
+        revision: contract
     steps:
       - key: write_back_result
         name: 结果回写
@@ -1263,6 +1299,18 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-state.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-lock.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/commander-owner-reconcile.mjs
         revision: contract
     steps:
       - key: close_app

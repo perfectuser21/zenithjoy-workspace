@@ -168,7 +168,7 @@ test('collection phone issuer and real leaf producer belong to every consumer so
 
 for(const name of ['commander-owner-state.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs'])test('owner reservation and maintenance bytes belong to every real Commander consumer '+name,t=>{
  const {root}=fixture(t),path='services/phone-adb-controller/'+name;
- put(root,path,readFileSync(join(source,path)));const before=collectMethods(root);
+ put(root,path,'// isolated owner safety module bytes\n');const before=collectMethods(root);
  put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated owner safety byte mutation\n');const after=collectMethods(root);
  assert.equal(Object.keys(before.activities).length,12);
  for(const [ref,method] of Object.entries(before.activities)){
