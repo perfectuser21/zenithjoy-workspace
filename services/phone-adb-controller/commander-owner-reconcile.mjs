@@ -33,7 +33,7 @@ function privateDir(path){const s=lstatSync(path);if(!s.isDirectory()||s.isSymbo
 export function readOwnerHost(scope,nonce){
  const raw=execFileSync('/bin/ps',['-axo','pid=,ppid=,uid=,lstart=,command='],{encoding:'utf8',timeout:5000,maxBuffer:4*1024*1024});
  const rows=raw.trim().split('\n').map(line=>{
-  const m=line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\w+\s+\w+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(.+)$/);
+  const m=line.match(/^\s*(\d+)\s+(\d+)\s+(-?\d+)\s+(\w+\s+\w+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(.+)$/);
   if(!m)fail('HOST_CENSUS_UNKNOWN');return {pid:Number(m[1]),ppid:Number(m[2]),uid:Number(m[3]),started_at_ms:Date.parse(m[4]),command:m[5]};
  });
  const gateways=rows.filter(r=>/\/openclaw\/dist\/index\.js gateway(?:\s|$)/.test(r.command)&&r.uid===process.getuid());
