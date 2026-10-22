@@ -4,6 +4,7 @@ import {mkdtempSync,rmSync,readFileSync,lstatSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import * as owner from '../activity-commander.mjs';
 
 const scope={run_id:'unknown-owner__a2',binding_id:'binding-two',source_commit:'a'.repeat(40),task_id:null};
@@ -134,4 +135,26 @@ test('maintenance读回期间真实helper意外退出，提交被拒且pending�
  };
  await assert.rejects(owner.reconcileWorkflowCommanderTurn(f.request,{home:f.home,...io}),/COMMANDER_OWNER_RECONCILE_/);
  assert.deepEqual(readFileSync(f.file),f.raw);assert.equal(killed,true);
+});
+
+function killOwnLockWithoutPolling(file){
+ // Only the helper owned by this isolated test process and exact private file.
+ const {pid}=process;const rows=execFileSync('/bin/ps',['-axo','pid=,ppid=,command='],{encoding:'utf8'}).split('\n');
+ const row=rows.filter(x=>x.includes(file+'.guard')&&x.includes('fcntl.flock')).map(x=>x.match(/^\s*(\d+)\s+(\d+)\s/)).find(x=>x&&Number(x[2])===pid);
+ assert.ok(row,'exact owned fixture helper must exist');process.kill(Number(row[1]),'SIGKILL');
+ const until=performance.now()+150;while(performance.now()<until){} // intentionally do not poll Node close events
+}
+test('末次host读回杀死真实helper且不poll退出事件时禁止归档pending',async t=>{
+ const f=await fixture(t),io=readers(f),host=io.readHost;let calls=0;
+ io.readHost=async()=>{const r=await host();if(++calls===2)killOwnLockWithoutPolling(f.file);return r;};
+ await assert.rejects(owner.reconcileWorkflowCommanderTurn(f.request,{home:f.home,...io}),/COMMANDER_OWNER_RECONCILE_/);
+ assert.deepEqual(readFileSync(f.file),f.raw);assert.equal(lstatSync(f.file).ino,f.request.expected.ino);
+});
+test('returned同样不能在helper已死但Node缓存未更新时清除原reservation',async t=>{
+ const home=mkdtempSync(join(tmpdir(),'owner-return-race-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const turn=await owner.reserveWorkflowCommanderTurn(scope,{home});
+ const file=join(home,'.openclaw/leadgen-owner-turns',owner.workflowCommanderSession(scope).split(':').at(-1)+'.pending.json'),raw=readFileSync(file);
+ killOwnLockWithoutPolling(file);
+ await assert.rejects(Promise.resolve().then(()=>turn.returned('official returned response')),/COMMANDER_OWNER_TURN_UNRESOLVED/);
+ assert.deepEqual(readFileSync(file),raw);await turn.close();
 });
