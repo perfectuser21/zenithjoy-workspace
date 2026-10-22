@@ -184,3 +184,20 @@ test('helper已提交而ACK丢失时只读归档证明，不自动重发或恢�
  await assert.rejects(owner.reconcileWorkflowCommanderTurn(f.request,{home:f.home,...readers(f)}),/COMMANDER_OWNER_RECONCILE_/);
  assert.equal(archives().length,1,'no second commit and no rollback after missing ACK');
 });
+
+test('真实macOS ps负UID是合法census行；关联进程仍可见且非法UID不能被过滤',async()=>{
+ const cp=(await import('node:child_process')).default,{syncBuiltinESMExports}=await import('node:module');
+ const {readOwnerHost}=await import('../commander-owner-reconcile.mjs'),original=cp.execFileSync;
+ const gateway='200 1 '+process.getuid()+' Wed Oct 21 23:15:02 2026 /opt/homebrew/lib/node_modules/openclaw/dist/index.js gateway --port 18789\n';
+ let extra='  884   851    -2 Thu Oct 15 04:25:38 2026     nginx: worker process\n 4365     1    -2 Thu Oct 15 04:30:00 2026     /usr/libexec/dhcp6d\n';
+ cp.execFileSync=(command,args)=>{assert.equal(command,'/bin/ps');assert.deepEqual(args,['-axo','pid=,ppid=,uid=,lstart=,command=']);return gateway+extra;};syncBuiltinESMExports();
+ try{
+  assert.equal(readOwnerHost(scope,'nonce').scope_processes.length,0);
+  extra='884 851 -2 Thu Oct 15 04:25:38 2026 node leadgen-rpc.mjs '+scope.run_id+'\n';
+  assert.equal(readOwnerHost(scope,'nonce').scope_processes[0].pid,884,'negative UID must not hide a matching execution');
+  for(const invalid of ['--2','-','2x','2.5','+2']){
+   extra='884 851 '+invalid+' Thu Oct 15 04:25:38 2026 nginx: worker process\n';
+   assert.throws(()=>readOwnerHost(scope,'nonce'),/COMMANDER_OWNER_RECONCILE_HOST_CENSUS_UNKNOWN/,invalid);
+  }
+ }finally{cp.execFileSync=original;syncBuiltinESMExports();}
+});
