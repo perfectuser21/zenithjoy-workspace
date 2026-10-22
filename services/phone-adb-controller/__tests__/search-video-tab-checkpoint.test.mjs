@@ -16,7 +16,7 @@ const checkpoint=spec.steps.find(s=>s.key==='douyin_video_discovery.collect_vide
 assert.ok(checkpoint);
 const before=readFileSync(new URL('./fixtures/search-tabs-before-reorder.xml',import.meta.url),'utf8');
 const moved=readFileSync(new URL('./fixtures/search-tabs-after-reorder.xml',import.meta.url),'utf8');
-const selected=xml=>xml.replace(/<node\b[^>]*>/g,node=>node.replace(/selected="(?:true|false)"/,`selected="${node.includes('text="视频"')?'true':'false'}"`));
+const selected=xml=>xml.replace(/<node\b[^>]*>/g,(node,offset)=>node.replace(/selected="(?:true|false)"/,`selected="${(node.includes('text="视频"')||node.includes('ActionBar$Tab')&&/^<node[^>]*text="视频"/.test(xml.slice(offset+node.length)))?'true':'false'}"`));
 
 function run({first=moved,last=selected(moved),wanted=1,publicationFailure=false,archiveCollision=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'vtab-checkpoint-'));
@@ -50,7 +50,7 @@ _ui_evidence_wave(){
 set -- search-video-tab "$CASE_EID"
 ${body}
 `;
-  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,CASE_EID:eid,PUBLICATION_FAILURE:publicationFailure?'1':'0',EVIDENCE_ROOT:dir,ADB:join(dir,'adb'),SERIAL:'offline-fixture',PYTHON_BIN:'python3'}});
+  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,CASE_EID:eid,PUBLICATION_FAILURE:publicationFailure?'1':'0',EVIDENCE_ROOT:dir,ADB:join(dir,'adb'),SERIAL:'offline-fixture',PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,PYTHON_BIN:'python3'}});
   const judged=judgeSteps({spec:{steps:[checkpoint]},stage:'collect_videos',ctx:{tag:'checkpoint',evidenceDir:dir,metrics:{sources_succeeded:wanted}}});
   const get=name=>{try{return readFileSync(join(dir,name),'utf8');}catch{return null;}};
   return {...result,checkpoint:judged.steps[0],canonical:get(eid+'-aftertab.xml'),firstArchive:get(eid+'-aftertab-first.xml'),retry:get(eid+'-aftertab-retry.xml'),stagedFiles:readdirSync(dir).filter(n=>n.endsWith('.tmp'))};

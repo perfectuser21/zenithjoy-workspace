@@ -11,7 +11,7 @@ assert.ok(body,'must exercise the actual production search-video-tab case');
 const fixture=name=>readFileSync(new URL('./fixtures/'+name,import.meta.url),'utf8');
 const before=fixture('search-tabs-before-reorder.xml');
 const moved=fixture('search-tabs-after-reorder.xml');
-const selected=xml=>xml.replace(/<node\b[^>]*>/g,node=>node.replace(/selected="(?:true|false)"/,`selected="${node.includes('text="视频"')?'true':'false'}"`));
+const selected=xml=>xml.replace(/<node\b[^>]*>/g,(node,offset)=>node.replace(/selected="(?:true|false)"/,`selected="${(node.includes('text="视频"')||node.includes('ActionBar$Tab')&&/^<node[^>]*text="视频"/.test(xml.slice(offset+node.length)))?'true':'false'}"`));
 const absent=xml=>xml.replace(/<node\b[^>]*text="视频"[^>]*\/>/g,'');
 const duplicate=xml=>xml.replace('</hierarchy>',xml.match(/<node\b[^>]*text="视频"[^>]*\/>/)[0]+'</hierarchy>');
 
@@ -28,7 +28,7 @@ function run({initial=before,first=moved,retry=moved,last=selected(moved),unread
  if [[ "$1" == *aftertab-retry ]]; then print -- "$CASE_DIR/last.xml";
  else print -- "$CASE_DIR/first.xml"; fi
 }\nset -- search-video-tab evidence\n${body}\n`;
-  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,TAP_LOG:join(dir,'taps'),INITIAL_UNREADABLE:unreadable?'1':'0',ADB:join(dir,'adb'),SERIAL:'fixture-device',EVIDENCE_ROOT:dir,PYTHON_BIN:'python3',SHOT_MISSING:shotMissing?'1':'0'}});
+  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,TAP_LOG:join(dir,'taps'),INITIAL_UNREADABLE:unreadable?'1':'0',ADB:join(dir,'adb'),SERIAL:'fixture-device',EVIDENCE_ROOT:dir,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,PYTHON_BIN:'python3',SHOT_MISSING:shotMissing?'1':'0'}});
   let taps=[];try{taps=readFileSync(join(dir,'taps'),'utf8').trim().split('\n').filter(Boolean);}catch{}
   return {...result,taps};
  }finally{rmSync(dir,{recursive:true,force:true});}
@@ -58,4 +58,23 @@ test('原树不可读的视觉兜底仍保留选中后验，成功只点击一�
 
 test('诊断截图不可用时保留原失败而不把不存在文件报成截图证据',()=>{
  const r=run({last:moved,shotMissing:true});assert.notEqual(r.status,0);assert.match(r.stderr,/video tab is not selected after tap/);assert.match(r.stderr,/failure_screenshot=unavailable/);assert.equal(r.taps.length,2);
+});
+
+const withChip=fixture('search-tabs-with-video-chip.xml');
+const chipSelected=xml=>xml.replace(/<node\b[^>]*resource-id="com.ss.android.ugc.aweme:id\/5cy"[^>]*>/g,n=>n.includes('text="视频"')?n.replace('selected="false"','selected="true"'):n);
+test('629b真实树：顶部不可clickable的视频tab和同名筛选chip并存，点击真正tab',()=>{
+ const r=run({initial:withChip,first:selected(withChip)});assert.equal(r.status,0,r.stderr);assert.deepEqual(r.taps,['-s fixture-device shell input tap 316 350']);
+});
+test('只有筛选chip选中不算视频tab成功',()=>{
+ const r=run({initial:before,first:chipSelected(withChip),retry:withChip,last:chipSelected(withChip)});assert.notEqual(r.status,0);assert.doesNotMatch(r.stdout,/video_tab=1/);
+});
+for(const [name,xml] of [
+ ['错包',selected(before).replaceAll('com.ss.android.ugc.aweme','com.example.wrong')],
+ ['查询漂移',selected(before).replaceAll('测试关键词','其他关键词')],
+ ['类别结构消失',selected(before).replaceAll('ActionBar$Tab','FrameLayout')],
+ ['两个tab同时选中',selected(before).replaceAll('text="综合"','text="视频"')],
+ ['禁用tab',selected(before).replaceAll('enabled="true"','enabled="false"')],
+ ['零面积tab',selected(before).replaceAll('[162,125][206,156]','[162,125][162,156]')],
+])test('后验'+name+'应立即拒绝，不再次点击',()=>{
+ const r=run({first:xml});assert.notEqual(r.status,0);assert.equal(r.taps.length,1);assert.doesNotMatch(r.stdout,/video_tab=1/);
 });

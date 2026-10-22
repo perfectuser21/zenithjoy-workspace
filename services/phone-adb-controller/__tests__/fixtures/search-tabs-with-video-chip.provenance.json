@@ -1,0 +1,14 @@
+{
+  "source_run": "cicd629b_20261022_0726",
+  "source_sha256": "dcc9546b18003edfba37551b1b47b20970458d075f9ff5897315fe7de5d91427",
+  "redactions": [
+    "search query replaced",
+    "non-category chip text replaced",
+    "result body removed"
+  ],
+  "retained": [
+    "native ancestors and category labels",
+    "node package/class/resource-id/selected/clickable",
+    "native bounds"
+  ]
+}
