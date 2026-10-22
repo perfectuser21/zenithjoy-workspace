@@ -232,6 +232,10 @@ activities:
         enabler_key: device_lock
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/search-video-tab.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/phone-lock-lib.sh
         revision: contract
         enabler_key: device_lock
@@ -679,6 +683,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/search-video-tab.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/phone-lock-lib.sh
         revision: contract
       - kind: code
@@ -1011,6 +1019,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/search-video-tab.py
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/phone-lock-lib.sh
         revision: contract
       - kind: code
@@ -1254,6 +1266,10 @@ activities:
         path: services/phone-adb-controller/douyin-phone-adb
         revision: contract
         enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/search-video-tab.py
+        revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/phone-lock-lib.sh

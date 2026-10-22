@@ -5019,40 +5019,50 @@ PYCARDFOCUS
       print -u2 -- "failure_foreground=$EVIDENCE_ROOT/${vt_eid}-failure.foreground.txt"
       die "$message"
     }
-    vt_src=""; vt_relocalized=0
-    # 这里是「机会性读树」：综合 tab 上明知读不到（feed 永不 idle），
-    # 所以只用单波快速失败，立刻退到视觉兜底；不能用带三波重试的 ui_evidence，
-    # 否则每次切 tab 都要先白烧约 180 秒（0912 我改三波时引入的回归，已修）。
+    vt_src=""; vt_relocalized=0; vt_query=""
+    _vtab_read() {
+      local state query
+      state="$("$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/search-video-tab.py" "$1" "$vt_query")" \
+        || _vtab_fail "video tab structure or search query is invalid" "$1"
+      read vt_x vt_y vt_selected query <<< "$state"
+      vt_query="$query"
+    }
+    _vtab_foreground() {
+      local current
+      current="$(foreground_package)" || _vtab_fail "video tab foreground unreadable"
+      _foreground_is_exact_douyin "$current" || _vtab_fail "video tab wrong foreground"
+    }
+    # 可读但结构不可信即拒绝；只有树不可读才使用原视觉兜底。
     if vt_xml="$(_ui_evidence_wave "$2-tabs" opportunistic-search-tab)"; then
-      vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_xml" || true)"
-      [[ "$(print -r -- "$vt_line" | /usr/bin/grep -c '<node' || true)" == 1 ]] || _vtab_fail "video tab missing or ambiguous in fresh tree"
-      if [[ -n "$vt_line" ]]; then
-        read vt_x1 vt_y1 vt_x2 vt_y2 <<< "$(print -- "$vt_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
-        vt_x=$(( (vt_x1 + vt_x2) / 2 )); vt_y=$(( (vt_y1 + vt_y2) / 2 )); vt_src=tree
-      fi
-    fi
-    if [[ -z "$vt_src" ]]; then
+      _vtab_read "$vt_xml"
+      vt_src=tree
+    else
+      _vtab_foreground
       vt_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "$2-vtab")" || _vtab_fail "video tab locate failed (tree unreadable and vision fallback failed)"
       read vt_x vt_y <<< "$vt_center"; vt_src=vision
     fi
-    "$ADB" -s "$SERIAL" shell input tap "$vt_x" "$vt_y"
+    _vtab_foreground
+    vt_tapped_x="$vt_x"; vt_tapped_y="$vt_y"
+    "$ADB" -s "$SERIAL" shell input tap "$vt_tapped_x" "$vt_tapped_y"
     wait_ms 1500
-    # 打开后验证：切成功的标志是树能读出来且「视频」处于 selected
     vt_after="$(ui_evidence "$2-aftertab")" || _vtab_fail "video tab tap did not settle into a readable page"
     vt_first="$vt_after"
-    if ! /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after"; then
-      # 搜索结果加载可能重排页签；旧坐标已失效，只按另一份新鲜树重定位一次。
+    _vtab_foreground
+    _vtab_read "$vt_after"
+    if [[ "$vt_selected" != 1 ]]; then
+      # 只有同一搜索页仍可信且未选中时允许按新树重定位一次。
       vt_retry_xml="$(_ui_evidence_wave "$2-tabs-retry" opportunistic-search-tab)" || _vtab_fail "video tab relocation tree unreadable"
-      vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_retry_xml" || true)"
-      [[ "$(print -r -- "$vt_line" | /usr/bin/grep -c '<node' || true)" == 1 ]] || _vtab_fail "video tab missing or ambiguous in fresh relocation tree" "$vt_retry_xml"
-      read vt_x1 vt_y1 vt_x2 vt_y2 <<< "$(print -- "$vt_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
-      vt_x=$(( (vt_x1 + vt_x2) / 2 )); vt_y=$(( (vt_y1 + vt_y2) / 2 )); vt_src=tree; vt_relocalized=1
-      "$ADB" -s "$SERIAL" shell input tap "$vt_x" "$vt_y"
+      _vtab_read "$vt_retry_xml"
+      vt_src=tree; vt_relocalized=1
+      _vtab_foreground
+      vt_tapped_x="$vt_x"; vt_tapped_y="$vt_y"
+      "$ADB" -s "$SERIAL" shell input tap "$vt_tapped_x" "$vt_tapped_y"
       wait_ms 1500
       vt_after="$(_ui_evidence_wave "$2-aftertab-retry" opportunistic-search-tab)" || _vtab_fail "video tab relocation tap did not settle into a readable page"
+      _vtab_foreground
+      _vtab_read "$vt_after"
     fi
-    /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after" \
-      || _vtab_fail "video tab is not selected after tap"
+    [[ "$vt_selected" == 1 ]] || _vtab_fail "video tab is not selected after tap"
     # 契约只计 canonical aftertab.xml；重定位原件不单独计数，首点树另存以保诊断。
     vt_canonical="$EVIDENCE_ROOT/${vt_eid}-aftertab.xml"
     if [[ "$vt_after" != "$vt_canonical" ]]; then
@@ -5081,13 +5091,13 @@ finally:
         os.unlink(staging)
 PYVTABCHECKPOINT
       vt_after="$vt_canonical"
-      /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after" \
-        || _vtab_fail "published video tab checkpoint is not selected"
+      _vtab_read "$vt_after"
+      [[ "$vt_selected" == 1 ]] || _vtab_fail "published video tab checkpoint is not selected"
     fi
     print -- "video_tab=1"
     print -- "video_tab_relocalized=$vt_relocalized"
     print -- "coord_source=$vt_src"
-    print -- "tapped=$vt_x $vt_y"
+    print -- "tapped=$vt_tapped_x $vt_tapped_y"
     print -- "evidence=$vt_after"
     ;;
   collect-comments)
