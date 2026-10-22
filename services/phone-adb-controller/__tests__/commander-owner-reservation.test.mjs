@@ -67,28 +67,28 @@ test('坏文件、目录与symlink pending均deny-only且不删除原件',async 
  for(const kind of ['malformed','empty','directory','symlink']){
   const home=isolated(t);assertWorkflowOwnerAvailable(scope,{home});const file=pending(home,workflowCommanderSession(scope));
   if(kind==='directory')mkdirSync(file);else if(kind==='symlink'){const target=join(home,'authority');writeFileSync(target,'do not change');symlinkSync(target,file);}else writeFileSync(file,kind==='empty'?'':'{broken');
-  assert.throws(()=>reserveWorkflowCommanderTurn(scope,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
+  await assert.rejects(reserveWorkflowCommanderTurn(scope,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
   assert.throws(()=>assertWorkflowOwnerAvailable(scope,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);assert.equal(existsSync(file),true);
  }
 });
 
 test('过期或旧nonce pending不能按TTL清除，返回错nonce也不释放',async t=>{
- const {reserveWorkflowCommanderTurn,assertWorkflowOwnerAvailable,workflowCommanderSession}=await reservationApi();const home=isolated(t),turn=reserveWorkflowCommanderTurn(scope,{home});
+ const {reserveWorkflowCommanderTurn,assertWorkflowOwnerAvailable,workflowCommanderSession}=await reservationApi();const home=isolated(t),turn=await reserveWorkflowCommanderTurn(scope,{home});
  const file=pending(home,workflowCommanderSession(scope)),original=JSON.parse(readFileSync(file));
  const changed={...original,started_at:'1970-01-01T00:00:00.000Z',transport_nonce:'old-nonce'};writeFileSync(file,JSON.stringify(changed));
- assert.throws(()=>turn.returned('official response'),/COMMANDER_OWNER_TURN_UNRESOLVED/);turn.close();
+ await assert.rejects(turn.returned('official response'),/COMMANDER_OWNER_TURN_UNRESOLVED/);await turn.close();
  assert.throws(()=>assertWorkflowOwnerAvailable(scope,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
  assert.deepEqual(JSON.parse(readFileSync(file)),changed);
 });
 
 test('旧已返回turn不能清掉同owner新reservation，已返回旁证不能解锁pending',async t=>{
  const {reserveWorkflowCommanderTurn,assertWorkflowOwnerAvailable,workflowCommanderSession}=await reservationApi();const home=isolated(t);
- const first=reserveWorkflowCommanderTurn(scope,{home});first.returned('first official');first.close();
- const next=reserveWorkflowCommanderTurn(scope,{home}),file=pending(home,workflowCommanderSession(scope)),bytes=readFileSync(file);
+ const first=await reserveWorkflowCommanderTurn(scope,{home});await first.returned('first official');await first.close();
+ const next=await reserveWorkflowCommanderTurn(scope,{home}),file=pending(home,workflowCommanderSession(scope)),bytes=readFileSync(file);
  assert.equal(readdirSync(join(home,'.openclaw/leadgen-owner-turns')).filter(x=>x.endsWith('.returned.json')).length,1);
  assert.throws(()=>assertWorkflowOwnerAvailable(scope,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
- assert.throws(()=>first.returned('late old response'),/COMMANDER_OWNER_TURN_UNRESOLVED/);assert.deepEqual(readFileSync(file),bytes);
- next.returned('next official');next.close();assert.doesNotThrow(()=>assertWorkflowOwnerAvailable(scope,{home}));
+ await assert.rejects(first.returned('late old response'),/COMMANDER_OWNER_TURN_UNRESOLVED/);assert.deepEqual(readFileSync(file),bytes);
+ await next.returned('next official');await next.close();assert.doesNotThrow(()=>assertWorkflowOwnerAvailable(scope,{home}));
 });
 
 function nativeFailureProcess(home,mode){

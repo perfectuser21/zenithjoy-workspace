@@ -189,8 +189,9 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
  const previous=q.transport_generation===1?previousGeneration(q,home):null;
  if(previous)await verifyPreviousOwner(previous,q,execute);
- const ownerTurn=reserveWorkflowCommanderTurn(q,{home});
+ const ownerTurn=await reserveWorkflowCommanderTurn(q,{home});
  try{
+ await ownerTurn.check();
  if(previous)writeFileSync(join(previous,'generation-revoked.json'),JSON.stringify({next_generation:1,at:Date.now()}),{flag:'wx',mode:0o600});
  const dir=directory(q,home);mkdirSync(dir,{recursive:true,mode:0o700});
  const parent=workflowCommanderSession(q);
@@ -229,7 +230,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  const parentArgs=['agent','--agent','work-commander','--session-key',parent,'--message-file',messagePath,'--json','--timeout',String(Math.max(1,Math.floor((q.deadline_ms-Date.now())/1000)))];
  try{parentResult=await execute('openclaw',parentArgs,{timeoutMs:Math.max(1,q.deadline_ms-Date.now()),env:process.env});
   writeFileSync(join(dir,'parent-cli-result.json'),JSON.stringify(parentResult),{mode:0o600});
- }catch(error){writeFileSync(join(dir,'parent-cli-error.json'),JSON.stringify({reason:String(error.message).slice(0,200)}),{mode:0o600});if(executionDidNotStart(error,'openclaw',parentArgs)){ownerTurn.notStarted(error,'openclaw',parentArgs);return {status:'blocked',execution_stopped:true,reason:'parent_cli_not_started'};}}
+ }catch(error){writeFileSync(join(dir,'parent-cli-error.json'),JSON.stringify({reason:String(error.message).slice(0,200)}),{mode:0o600});if(executionDidNotStart(error,'openclaw',parentArgs)){await ownerTurn.notStarted(error,'openclaw',parentArgs);return {status:'blocked',execution_stopped:true,reason:'parent_cli_not_started'};}}
  try{
   const binding=official(q,dir);
   const awaited=await execute('python3',[helper,'await',dir],{timeoutMs:Math.max(1,q.deadline_ms-Date.now())});
@@ -238,7 +239,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   if(terminal.runId!==binding.child_run_id||terminal.endedAt==null||!['ok','error','aborted','timeout'].includes(terminal.status))throw Error('RPC_SKILL_TERMINAL_INVALID');
   if(terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id||terminal.terminalReceipt?.effective?.provider!=='openai'||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_MODEL_INVALID');
   if(!ownerReturned(q,parentResult))return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
-  ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
+  await ownerTurn.returned(JSON.stringify({parent_result:parentResult,terminal}));
   writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
   return {status:terminal.status,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
  }catch{
@@ -248,7 +249,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
     const binding=official(q,dir);
     if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null){
      if(!ownerReturned(q,parentResult))return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
-     ownerTurn.returned(JSON.stringify({parent_result:parentResult,stop_readback:terminal}));
+     await ownerTurn.returned(JSON.stringify({parent_result:parentResult,stop_readback:terminal}));
      writeFileSync(join(dir,'agent-returned.json'),JSON.stringify(generationEvidence(q,dir,terminal)),{flag:'wx',mode:0o600});
      return {terminal,status:'failed',execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,reason:'child_stopped_after_failed_handoff',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key};
     }
@@ -256,7 +257,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   }
   return {status:'unknown',execution_stopped:false,reason:'official_child_terminal_missing'};
  }
- }finally{ownerTurn.close();}
+ }finally{await ownerTurn.close();}
 }
 
 if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){
