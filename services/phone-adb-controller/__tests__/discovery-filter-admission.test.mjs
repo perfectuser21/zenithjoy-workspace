@@ -4,7 +4,9 @@ import {mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parse} from 'yaml';
-import {createDiscoveryHandlers,verifyDiscoveryFilterEvidence} from '../leadgen-discovery.mjs';
+import {createDiscoveryHandlers as rawCreateDiscoveryHandlers,verifyDiscoveryFilterEvidence} from '../leadgen-discovery.mjs';
+import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+const createDiscoveryHandlers=withDiscoveryMetricsFixture(rawCreateDiscoveryHandlers);
 import {runProbes} from '../verify-step.mjs';
 
 const good='sort=latest\ntime_layer=six_months\nduration=unlimited\nscope=unlimited\nlocation=same_city\n';

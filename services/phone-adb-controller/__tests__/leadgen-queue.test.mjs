@@ -1,3 +1,4 @@
+import {queueMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -223,13 +224,14 @@ test('显式VID清单非法或空清单不得降级成全库认领',async()=>{co
 
 test('显式null视频清单不能变成全库认领',async()=>{const pool=fakePool([]);await assert.rejects(queueRequest(pool,{op:'claim_videos',line:'jinuo',run:'new102',video_ids:null}),/视频ID/);assert.equal(pool.calls.length,0);});
 
-test('发现恢复只按业务线、实际ID、完整本次URL读回，不把不同链接当成功',async()=>{
- const input={op:'discover_readback',line:'jinuo',run:'receipt-test',video:{videoId:'7617105883093603314',videoUrl:'https://v.douyin.com/yjrYaiSbMcg/'}};
- const p=fakePool([{rows:[{judgment_status:'matched',has_transcript:true}]}]);
- assert.deepEqual(await queueRequest(p,input),{status:'matched',has_transcript:true,inserted:false,recovered:true});
- assert.match(p.calls[0].sql,/line_key=\$1 AND video_id=\$2 AND video_url=\$3/);assert.deepEqual(p.calls[0].args,['jinuo',input.video.videoId,input.video.videoUrl]);
- assert.equal(await queueRequest(fakePool([{rows:[]}]),input),null);
- const bad=fakePool([]);await assert.rejects(queueRequest(bad,{...input,video:{videoId:'wrong',videoUrl:input.video.videoUrl}}));assert.equal(bad.calls.length,0);
+test('发现恢复按业务线、ID、完整URL及本次指标读回，不把旧观测当成功',async()=>{
+ const f=queueMetricsFixture(),input={op:'discover_readback',line:'jinuo',run:'receipt-test',video:f.video};
+ const company={rows:[f.company]},p=fakePool([company,{rows:[{judgment_status:'matched',has_transcript:true,metrics_verified:true}]}]);
+ assert.deepEqual(await queueRequest(p,input,f.deps),{status:'matched',has_transcript:true,inserted:false,recovered:true,metrics_verified:true,metrics_digest:f.video.metrics.digest});
+ assert.match(p.calls[1].sql,/line_key=\$1 AND video_id=\$2 AND video_url=\$3/);assert.deepEqual(p.calls[1].args.slice(0,3),['jinuo',input.video.videoId,input.video.videoUrl]);
+ assert.equal(await queueRequest(fakePool([company,{rows:[]}]),input,f.deps),null);
+ await assert.rejects(queueRequest(fakePool([company,{rows:[{metrics_verified:false}]}]),input,f.deps),/METRICS_READBACK_MISMATCH/);
+ const bad=fakePool([]);await assert.rejects(queueRequest(bad,{...input,video:{...f.video,videoId:'wrong'}},f.deps));assert.equal(bad.calls.length,0);
 });
 
 // 执行生产CTE中的选择SQL，只有PG方言（数组、过期时钟、锁）做显式SQLite适配；排序原样执行。

@@ -83,6 +83,8 @@ const modules={
  './leadgen-handlers.mjs':{createHandlers:options=>{result.task_own=Object.hasOwn(options,'taskId');result.task_is_null=options.taskId===null;return createHandlers({...options,execute:async(command,args,opts)=>{if(args[0]?.endsWith('/adb-existing-route.py'))return {code:0,stdout:'5042\\n',stderr:''};result.calls.push(command==='adb'?'adb-read-state':'controller');if(command==='adb')return {code:0,stdout:'device\\n',stderr:''};return execInput(command,args,opts);}});},parseCollection:()=>{}},
  './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{}},
  './collection-phone-scope.mjs':await import(pathToFileURL(root+'collection-phone-scope.mjs')),
+ './discovery-metrics.js':await import(pathToFileURL(root+'discovery-metrics.js')),
+ './line-routes.js':await import(pathToFileURL(root+'line-routes.js')),
  './runtime-definition.mjs':definition,'./runtime-binding.mjs':binding,
  './leadgen-client.mjs':{createRpc:()=>async()=>{throw Error('unexpected RPC');},execInput:async()=>({code:0,stdout:'',stderr:''})},
  './leadgen-discovery.mjs':{verifyDiscoveryFilterEvidence:()=>{throw Error('unexpected filter verify during failed preflight');}},

@@ -85,24 +85,37 @@ function markVideoJudgeError(pool, { lineKey, videoId, reason, transcript = null
 // 不改归属(6b133a81:0929 前先采后判留下的 rejected+评论已采 老行若被搬进本批,coll_only_matched 会误判本批白采而停跑);
 // 已有判定(judgment_status)与转写绝不覆盖,回报给调用方当缓存:rejected 不再录不再判,matched 直接采。
 async function discoverVideo(pool, row) {
-  const { lineKey, videoId, videoUrl = null, title = "", keyword = null, harvestBatch = null } = row;
+  const { lineKey, videoId, videoUrl = null, title = "", keyword = null, harvestBatch = null, discoveryMetrics = null } = row;
   if (!lineKey || !videoId) throw new Error("discoverVideo: lineKey/videoId 必填");
   const res = await pool.query(
     `INSERT INTO zenithjoy.leadgen_videos
-       (line_key, video_id, video_url, title, keyword, comment_count, harvest_batch, process_status)
-     VALUES ($1,$2,$3,$4,$5,0,$6,$7)
+       (line_key, video_id, video_url, title, keyword, comment_count, harvest_batch, process_status, discovery_metrics)
+     VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8::jsonb)
      ON CONFLICT (line_key, video_id) DO UPDATE
        SET harvest_batch = CASE WHEN zenithjoy.leadgen_videos.process_status = '评论已采'
                                 THEN zenithjoy.leadgen_videos.harvest_batch ELSE EXCLUDED.harvest_batch END,
            keyword = CASE WHEN zenithjoy.leadgen_videos.process_status = '评论已采'
                           THEN zenithjoy.leadgen_videos.keyword ELSE COALESCE(EXCLUDED.keyword, zenithjoy.leadgen_videos.keyword) END,
            video_url = COALESCE(EXCLUDED.video_url, zenithjoy.leadgen_videos.video_url),
+           discovery_metrics = CASE WHEN EXCLUDED.discovery_metrics IS NULL THEN zenithjoy.leadgen_videos.discovery_metrics
+             WHEN zenithjoy.leadgen_videos.discovery_metrics IS NULL
+               OR EXCLUDED.discovery_metrics->>'observed_at' > zenithjoy.leadgen_videos.discovery_metrics->>'observed_at'
+               OR EXCLUDED.discovery_metrics = zenithjoy.leadgen_videos.discovery_metrics
+             THEN EXCLUDED.discovery_metrics ELSE zenithjoy.leadgen_videos.discovery_metrics END,
            updated_at = now()
+     WHERE EXCLUDED.discovery_metrics IS NULL OR zenithjoy.leadgen_videos.discovery_metrics IS NULL
+       OR EXCLUDED.discovery_metrics->>'observed_at' > zenithjoy.leadgen_videos.discovery_metrics->>'observed_at'
+       OR EXCLUDED.discovery_metrics = zenithjoy.leadgen_videos.discovery_metrics
      RETURNING judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript, (xmax = 0) AS inserted`,
-    [lineKey, videoId, videoUrl, title, keyword, harvestBatch, "待判定"]
+    [lineKey, videoId, videoUrl, title, keyword, harvestBatch, "待判定", discoveryMetrics === null ? null : JSON.stringify(discoveryMetrics)]
   );
   const r = res.rows[0] || {};
-  return { status: r.judgment_status || "pending", has_transcript: !!r.has_transcript, inserted: !!r.inserted };
+  if(discoveryMetrics!==null){
+    const proof=await pool.query('SELECT discovery_metrics=$3::jsonb AS verified FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2',[lineKey,videoId,JSON.stringify(discoveryMetrics)]);
+    if(proof.rows.length!==1||proof.rows[0].verified!==true)throw Error('METRICS_READBACK_MISMATCH');
+  }
+  return { status: r.judgment_status || "pending", has_transcript: !!r.has_transcript, inserted: !!r.inserted,
+    ...(discoveryMetrics!==null?{metrics_verified:true,metrics_digest:discoveryMetrics.digest}:{}) };
 }
 
 async function getVideo(pool, lineKey, videoId) {

@@ -5,7 +5,9 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {createDiscoveryHandlers as rawCreateDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+const createDiscoveryHandlers=withDiscoveryMetricsFixture(rawCreateDiscoveryHandlers);
 const exec=promisify(execFile),root=resolve('services/phone-adb-controller');
 function rig({rejectWrite=false,copyFails=false,benchmark=false,multi=false,wrongSearch=false,expireAfterWrite=false,limit=0}={}){
  const dir=mkdtempSync(join(tmpdir(),'stream-cli-discovery-')),log=join(dir,'calls'),ctl=join(dir,'ctl');
