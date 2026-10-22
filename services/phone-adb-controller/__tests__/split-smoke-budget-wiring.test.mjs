@@ -47,6 +47,7 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/drift-check.test.mjs",
   "services/phone-adb-controller/__tests__/empty-collection.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-client.test.mjs",
+  "services/phone-adb-controller/__tests__/leadgen-adb-route.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-queue.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-rpc.test.mjs",
