@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,readdirSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {openClawCommander} from '../activity-commander.mjs';
@@ -17,5 +17,8 @@ test('正式Commander保存供应商元数据和官方运行链，不将官方tu
  assert.equal(verifyCommanderModelReceipt({...decision.model_receipt,raw_response:output+' '},scope),false);
 });
 for(const bad of [{provider:null},{model:'unknown'},{terminalReceipt:null},{terminalReceipt:{runId:'wrong',sessionId:'official-session',turnId:'official-turn',effective:{provider:'openai',model:'gpt-6.1-sol'}}}])test('101不得凭成功文本伪报缺失或冲突的模型元数据 '+JSON.stringify(bad),async t=>{
- await assert.rejects(openClawCommander({home:home(t),execute:async()=>({stdout:JSON.stringify(raw(bad))})})(scope),/COMMANDER_MODEL_RECEIPT_INVALID/);
+ const dir=home(t),output=JSON.stringify(raw(bad));
+ await assert.rejects(openClawCommander({home:dir,execute:async()=>({stdout:output})})(scope),/COMMANDER_MODEL_RECEIPT_INVALID/);
+ const folder=join(dir,'.openclaw/leadgen-owner-turns'),name=readdirSync(folder).find(n=>n.endsWith('.returned.json'));
+ const proof=JSON.parse(readFileSync(join(folder,name),'utf8'));assert.equal(proof.raw_response,output);assert.equal(proof.activity,scope.activity);assert.equal(proof.phase,scope.phase);
 });
