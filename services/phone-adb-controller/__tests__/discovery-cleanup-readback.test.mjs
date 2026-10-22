@@ -34,4 +34,5 @@ test('101 cleanup必须保留同run原生stdout与桌面原件并独立核验',a
 });
 for(const options of [{missing:true},{foreign:true}])test('101 cleanup不得仅凭exit0或错误前台宣布读回通过 '+JSON.stringify(options),async t=>{
  const r=rig(t,options);await r.h.preflight();const result=await r.h.cleanup();assert.equal(result.status,'partial');assert.notEqual(result.cleanup_readback_verified,1);assert.equal(result.safe_desktop_visible,0);
+ const attempt=JSON.parse(readFileSync(join(r.dir,'cleanup-attempt.json'),'utf8'));assert.equal(attempt.run_id,r.scope.run_id);assert.equal(typeof attempt.desktop_stdout,'string');
 });
