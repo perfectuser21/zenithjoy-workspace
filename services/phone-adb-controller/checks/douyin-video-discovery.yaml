@@ -2,6 +2,19 @@
 version: 1
 workflow: douyin-video-discovery
 probes:
+  - key: discovery_metrics_verified
+    stage: collect_videos
+    journey_cell: stage:collect_videos
+    probe:
+      type: metric
+      ref: metrics.discovery_metrics_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: 同run/attempt/SHA原生树与归档逐VID重算，原discover_readback独立核PG完整观测和公司绑定相等；旧值、缺值、未知伪0不得放行。
   - key: discovery_filters_verified
     stage: collect_videos
     journey_cell: stage:collect_videos

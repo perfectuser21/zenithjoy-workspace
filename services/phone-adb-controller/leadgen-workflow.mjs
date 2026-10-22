@@ -27,6 +27,10 @@ import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput} from './leadgen-client.mjs';
 import {judgeSteps} from './step-judge.mjs';
 import {verifyDiscoveryFilterEvidence} from './leadgen-discovery.mjs';
+import discoveryMetrics from './discovery-metrics.js';
+import lineRoutes from './line-routes.js';
+import {verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
+import {summarizeCommanderEvidence} from './commander-model-receipt.mjs';
 
 export function activityExecutionDeadline({activity,env,previous,now=Date.now()}){
   const budget=Number(activity.budget?.max_duration_s||120);
@@ -45,7 +49,7 @@ async function main(){
   env.DOUYIN_PHONE_ADB=join(root,'douyin-phone-adb');
   if(resolve(env.WF_HOME)!==root||resolve(fileURLToPath(import.meta.url))!==join(root,'leadgen-workflow.mjs'))throw Error('执行器必须来自本批冻结字节');
   if(frozen.runtime_transport){env.LEADGEN_MMV_HOSTNAME=frozen.runtime_transport.ssh_hostname;env.LEADGEN_MMV_HOSTKEY_ALIAS=frozen.runtime_transport.ssh_hostkey_alias;}
-  const rpc=createRpc({frozen,local:env.LEADGEN_LOCAL_RPC==='1'});
+  const rpc=createRpc({frozen,local:env.LEADGEN_LOCAL_RPC==='1',runContext:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,line:env.LEADGEN_LINE}});
   const context={sampling_input:frozen.sampling_input||null,run_id:binding.run_id,binding_id:binding.id,task_id:binding.task_id??null,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:frozen.deployment.source_commit};
   writeFileSync(join(dir,'activity.log'),'');
   const records=[];const record=async r=>{
@@ -62,9 +66,18 @@ async function main(){
   const verify=async(activity,result)=>{
     const receipts=records.filter(r=>r.activity===activity.key&&['before','after'].includes(r.phase));
     const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>=2&&receipts.every(r=>r.commander_status==='available'))};
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')metrics.commander_verified=Number(receipts.length>=2&&summarizeCommanderEvidence(receipts,context).missing_or_invalid_receipts===0);
+    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
+      const valid=result.result?.cleanup_readback_verified===1&&verifyCleanupReadback({runDir:dir,digest:result.result.cleanup_readback_digest,
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL}});
+      metrics.close_app_attempts=metrics.safe_desktop_visible=Number(valid);
+    }
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='collect_videos'){
       metrics.filters_verified=Number(verifyDiscoveryFilterEvidence({runDir:dir,runId:binding.run_id,run:env.WFR_TAG,profile:env.P,sourceCommit:frozen.deployment.source_commit,
         requested:{sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'},invocations:result.result?.filter_invocations}));
+      metrics.discovery_metrics_verified=Number(await discoveryMetrics.verifyArchivedObservations({videos:result.result?.videos,runDir:dir,
+        scope:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,source_commit:frozen.deployment.source_commit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key},
+        readback:async video=>(await rpc({kind:'queue',request:{op:'discover_readback',run:env.WFR_TAG,line:env.LEADGEN_LINE,video}},{timeoutMs:60000})).result}));
     }
     const response=await rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
     const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
@@ -113,6 +126,7 @@ async function main(){
   const delivery=await execInput(process.execPath,[join(root,'runtime-receipts.mjs'),'flush']);
   result.evidence_status=delivery.code===0&&/WFR_EVIDENCE_STATUS=sent/.test(delivery.stdout)?'sent':'pending_or_blocked';
   if(result.evidence_status!=='sent')result.status='failed';
+  if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')result.model_call_evidence=summarizeCommanderEvidence(records,context);
   writeFileSync(join(dir,'split-result.json'),JSON.stringify({...context,...result},null,2));
   process.stdout.write(JSON.stringify({...context,...result})+'\n');
   if(result.status!=='completed')process.exitCode=1;

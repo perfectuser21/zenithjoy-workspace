@@ -91,6 +91,10 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
   './runtime-binding.mjs':{readBinding:()=>({run_id:'original-run__a1',id:'fixed-binding'})},
   './leadgen-client.mjs':{createRpc:()=>async()=>({}),execInput:async()=>({code:0,stdout:'WFR_EVIDENCE_STATUS=sent'})},
   './leadgen-discovery.mjs':{verifyDiscoveryFilterEvidence:()=>{throw Error('unexpected filter verifier after stop');}},
+  './discovery-metrics.js':{default:{verifyArchivedObservations:()=>{throw Error('unexpected metrics verifier after stop');}}},
+  './line-routes.js':{default:{routeOf:()=>{throw Error('unexpected line routing after stop');}}},
+  './discovery-cleanup-readback.mjs':{verifyCleanupReadback:()=>{throw Error('unexpected cleanup verifier after stop');}},
+  './commander-model-receipt.mjs':{summarizeCommanderEvidence:()=>{throw Error('unexpected model verifier after stop');}},
   './step-judge.mjs':{judgeSteps:()=>{throw Error('unexpected verifier');}}
  };
  const source=fs.readFileSync(process.argv[2],'utf8');

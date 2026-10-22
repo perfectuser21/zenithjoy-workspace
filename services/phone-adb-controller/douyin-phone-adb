@@ -1212,6 +1212,8 @@ _current_video_link_once() {
   if [[ "$content_type" == "video" ]]; then
     print -- "content_id=$content_id"
     print -- "video_id=$video_id"
+    print -- "metrics_evidence=$share_xml"
+    print -- "metrics_evidence_id=$evidence_id"
     print -- "short_url=$short_url"
     print -- "resolved_url=$resolved_url"
     print -- "reopen_url=$reopen_url"

@@ -31,6 +31,7 @@ test('public ACK 显式空task经真实createHandlers保留空身份，缺键不
    env:{P:'fixture',SERIAL:'fixture-device',WFR_TAG:'public-run',WFR_RUN_ID:'public-run',WFR_ATTEMPT:'a1',WFR_RUN_DIR:dir,HOME:dir,
     DOUYIN_PHONE_ADB:join(dir,'missing-controller')},
    execute:async(command,args,options)=>{
+    if(args[0]===join(dir,'adb-existing-route.py'))return {code:0,stdout:'5042\n',stderr:''};
     if(command==='adb'){assert.deepEqual(args,['-s','fixture-device','get-state']);return {code:0,stdout:'device\n',stderr:''};}
     controllerCalls++;return execInput(command,args,options);
    },rpc:async()=>{throw Error('unexpected RPC');}});
@@ -79,9 +80,13 @@ const proc={env,argv:['node','not-main'],execPath:process.execPath,pid:process.p
 const context=vm.createContext({process:proc,console,Date,Map,Set,Buffer,JSON});
 const modules={
  './activity-commander.mjs':{runWorkflow:async options=>{await options.handlers.preflight();throw Error('unexpected preflight success');}},
- './leadgen-handlers.mjs':{createHandlers:options=>{result.task_own=Object.hasOwn(options,'taskId');result.task_is_null=options.taskId===null;return createHandlers({...options,execute:async(command,args,opts)=>{result.calls.push(command==='adb'?'adb-read-state':'controller');if(command==='adb')return {code:0,stdout:'device\\n',stderr:''};return execInput(command,args,opts);}});},parseCollection:()=>{}},
+ './leadgen-handlers.mjs':{createHandlers:options=>{result.task_own=Object.hasOwn(options,'taskId');result.task_is_null=options.taskId===null;return createHandlers({...options,execute:async(command,args,opts)=>{if(args[0]?.endsWith('/adb-existing-route.py'))return {code:0,stdout:'5042\\n',stderr:''};result.calls.push(command==='adb'?'adb-read-state':'controller');if(command==='adb')return {code:0,stdout:'device\\n',stderr:''};return execInput(command,args,opts);}});},parseCollection:()=>{}},
  './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{}},
  './collection-phone-scope.mjs':await import(pathToFileURL(root+'collection-phone-scope.mjs')),
+ './commander-model-receipt.mjs':await import(pathToFileURL(root+'commander-model-receipt.mjs')),
+ './discovery-cleanup-readback.mjs':await import(pathToFileURL(root+'discovery-cleanup-readback.mjs')),
+ './discovery-metrics.js':await import(pathToFileURL(root+'discovery-metrics.js')),
+ './line-routes.js':await import(pathToFileURL(root+'line-routes.js')),
  './runtime-definition.mjs':definition,'./runtime-binding.mjs':binding,
  './leadgen-client.mjs':{createRpc:()=>async()=>{throw Error('unexpected RPC');},execInput:async()=>({code:0,stdout:'',stderr:''})},
  './leadgen-discovery.mjs':{verifyDiscoveryFilterEvidence:()=>{throw Error('unexpected filter verify during failed preflight');}},

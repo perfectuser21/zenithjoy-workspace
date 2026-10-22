@@ -4,7 +4,9 @@ import {readFileSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {createDiscoveryHandlers as rawCreateDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+const createDiscoveryHandlers=withDiscoveryMetricsFixture(rawCreateDiscoveryHandlers);
 const base=join(import.meta.dirname,'..'),script=readFileSync(join(base,'douyin-phone-adb'),'utf8'),fixtures=join(import.meta.dirname,'fixtures/card-bottom');
 function hint(xml,title,author){const fn=script.match(/^card_bottom_hint_from_xml\(\) \{[\s\S]*?^\}/m)?.[0];assert.ok(fn,'真实控制器应提供纯裁切诊断');return spawnSync('zsh',['-c',`${fn}\ncard_bottom_hint_from_xml "$1" "$2" "$3"`, 'test',xml,encodeURIComponent(title),encodeURIComponent(author)],{encoding:'utf8',env:{...process.env,SCREEN_H:'2664',PYTHON_BIN:'python3'}});}
 for(const [n,screen] of [[9,2],[12,3],[16,4]])test(`真实candidate${n}仅底部裁切允许导航hint，原完整卡不可`,()=>{

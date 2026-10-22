@@ -2,6 +2,8 @@
 import {join} from 'node:path';
 import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync,lstatSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import metricsContract from './discovery-metrics.js';
+import lineRoutes from './line-routes.js';
 const normalized=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
 const fieldsOf=s=>Object.fromEntries(String(s??'').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1).trim()];}));
 function cardsOf(s,ctx){return String(s??'').split('\n').flatMap(l=>{const f=l.replace(/\r$/,'').split('\t');return /^\d+$/.test(f[0]??'')&&/^\d+$/.test(f[1]??'')?[{...ctx,x:Number(f[0]),y:Number(f[1]),duration:f[2]??'',title:f[3]??'',author:f[4]??''}]:[];});}
@@ -183,13 +185,16 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=r
        if(f.content_type!=='video'){state.counts.non_video++;continue;}
        if(!/^\d{16,24}$/.test(f.video_id??'')||!validVideoUrl(f.short_url||f.resolved_url,f.video_id)||f.return_mode!=='results')throw Error('视频ID、链接或结果页归位未核验');
        state.counts.linked++;
-       const video={videoId:f.video_id,videoUrl:f.short_url||f.resolved_url,title:target.title,keyword:ctx.keyword,author:target.author,harvestBatch:run};
+       const metrics=metricsContract.captureObservation({file:f.metrics_evidence,evidenceRoot:env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',profile),runDir:env.WFR_RUN_DIR,
+         run,run_id:runId,profile,source_commit:sourceCommit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key,video_id:f.video_id,video_url:f.resolved_url,evidence_id:f.metrics_evidence_id});
+       const video={videoId:f.video_id,videoUrl:f.resolved_url,title:target.title,keyword:ctx.keyword,author:target.author,harvestBatch:run,metrics};
        state.pending_capture={...video,evidence_id:eid+'-link',observed_at:new Date().toISOString()};progress();
        let stored;try{stored=await queue('discover',{video});}catch(e){failure(target,'persistence_failed',e);stopReason='persistence_failed';break sourceLoop;}
-       if(!['pending','matched','rejected'].includes(stored?.status)||typeof stored.inserted!=='boolean'){failure(target,'persistence_failed','PG无实际入库回执');stopReason='persistence_failed';break sourceLoop;}
+       if(!['pending','matched','rejected'].includes(stored?.status)||typeof stored.inserted!=='boolean'||stored.metrics_verified!==true||stored.metrics_digest!==metrics.digest){failure(target,'persistence_failed','PG无完整指标独立读回回执');stopReason='persistence_failed';break sourceLoop;}
        state.pending_capture=null;
        state.captures.push({...video,status:stored.status,inserted:stored.inserted,observed_at:new Date().toISOString()});
-       if(state.persisted.some(v=>v.videoId===video.videoId))state.counts.duplicate++;
+       const existing=state.persisted.findIndex(v=>v.videoId===video.videoId);
+       if(existing>=0){state.counts.duplicate++;state.persisted[existing]={...video,status:stored.status,inserted:stored.inserted};}
        else{state.persisted.push({...video,status:stored.status,inserted:stored.inserted});state.counts.persisted++;if(stored.inserted)state.counts.created++;else state.counts.reused++;}
        progress();
        if(f.return_recovered_via==='research'){await filters(ctx,eid+'-recover');for(let s=0;s<screen;s++){await phone('search-grid-scroll',eid+'-restore'+s,'up');await pause(2);}}

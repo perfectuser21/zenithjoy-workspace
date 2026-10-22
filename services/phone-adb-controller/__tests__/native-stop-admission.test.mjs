@@ -13,7 +13,7 @@ const root=new URL('..',import.meta.url).pathname;
 function setup(execute){
  const dir=mkdtempSync(join(tmpdir(),'native-stop-admission-'));
  const env={HOME:dir,WFR_RUN_DIR:dir,P:'actual-profile',SERIAL:'ACTUAL-SERIAL',WFR_TAG:'owner',WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',LEADGEN_LINE:'jinuo',DOUYIN_PHONE_ADB:join(dir,'missing-native-program')};
- const handlers=createHandlers({root,env,sourceCommit:'a'.repeat(40),taskId:'task',rpc:async()=>{throw Error('unexpected RPC');},execute:async(command,args,opts)=>opts.receipt?execute(command,args,opts):{code:0,stdout:'device\n',stderr:''}});
+ const handlers=createHandlers({root,env,sourceCommit:'a'.repeat(40),taskId:'task',rpc:async()=>{throw Error('unexpected RPC');},execute:async(command,args,opts)=>opts.receipt?execute(command,args,opts):{code:0,stdout:args[0]===join(root,'adb-existing-route.py')?'5042\n':'device\n',stderr:''}});
  handlers.state.currentActivity='preflight';handlers.state.budgetDeadline=Date.now()+30000;
  return {dir,env,handlers,close:()=>rmSync(dir,{recursive:true,force:true})};
 }

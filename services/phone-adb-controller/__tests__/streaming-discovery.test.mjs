@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {createDiscoveryHandlers as rawCreateDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+const createDiscoveryHandlers=withDiscoveryMetricsFixture(rawCreateDiscoveryHandlers);
 import {execFileSync} from 'node:child_process';
 const id=n=>'76856629997972584'+String(n).padStart(2,'0');
 function rig({loading=false,failWrite=false,limit=0,stall=false}={}){
@@ -78,7 +80,7 @@ test('丢失写回执仍留下真实待写ID、URL、证据引用，不计入成
  const r=rig({failWrite:true});try{
   const out=await r.h.collect_videos(),saved=JSON.parse(readFileSync(join(r.dir,'discovery-progress.json'),'utf8'));
   assert.equal(out.status,'partial');assert.equal(saved.videos.length,0);assert.equal(saved.counts.persisted,0);
-  assert.equal(saved.pending_capture.videoId,id(1));assert.equal(saved.pending_capture.videoUrl,'https://v.douyin.com/'+id(1)+'/');assert.ok(saved.pending_capture.evidence_id.endsWith('-link'));
+  assert.equal(saved.pending_capture.videoId,id(1));assert.equal(saved.pending_capture.videoUrl,'https://www.douyin.com/video/'+id(1));assert.ok(saved.pending_capture.evidence_id.endsWith('-link'));
  }finally{r.cleanup();}
 });
 
@@ -120,5 +122,16 @@ test('出现消失候选仍可继续翻屏，但不能声称已扫描全部结�
   assert.deepEqual(out.videos.map(v=>v.videoId),[id(2),id(3)]);
   assert.equal(out.all_results_scanned,false);assert.equal(out.status,'partial');
   assert.equal(out.stop_reason,'exhausted_with_gaps');
+ }finally{r.cleanup();}
+});
+
+test('同run重遇同VID后最终清单绑定最新成功观测，不拿旧digest做独立读回',async()=>{
+ const r=rig();try{
+  const h=createDiscoveryHandlers({...r.options,phone:async(cmd,...args)=>{
+   const output=await r.options.phone(cmd,...args);
+   return cmd==='current-video-link'?output.replace(/^video_id=\d+$/m,'video_id='+id(1)):output;
+  }});
+  const out=await h.collect_videos();assert.equal(out.videos.length,1);assert.equal(out.counts.duplicate,2);assert.equal(r.writes.length,3);
+  assert.equal(out.videos[0].metrics.digest,r.writes.at(-1).metrics.digest);
  }finally{r.cleanup();}
 });

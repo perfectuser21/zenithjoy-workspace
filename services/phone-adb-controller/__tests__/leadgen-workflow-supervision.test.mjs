@@ -1,4 +1,5 @@
 import {withCompanyFixture} from "./company-config-fixture.mjs";
+import {metricPhoneReceipt} from './helpers/discovery-metrics-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync} from "node:fs";
@@ -98,7 +99,7 @@ test('profile注册的手机与命令serial不符时，在拿锁与手势前拒�
   const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers);const dir=mkdtempSync(join(tmpdir(),'leadgen-identity-'));const calls=[];
   try{
     const handlers=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,P:'work',SERIAL:'S1',WFR_TAG:'run'},rpc:async()=>{},
-      execute:async(command,args)=>{calls.push({command,args});return {code:0,stdout:command==='adb'?'device\n':'serial=S2\n',stderr:''};}});
+      execute:async(command,args)=>{calls.push({command,args});if(args[0]===join(dir,'adb-existing-route.py')){assert.equal(command,'python3');assert.deepEqual(args,[join(dir,'adb-existing-route.py'),'S1','adb']);return {code:0,stdout:'5042\n',stderr:''};}return {code:0,stdout:command==='adb'?'device\n':'serial=S2\n',stderr:''};}});
     await assert.rejects(handlers.preflight(),/serial不一致/);
     assert.ok(!calls.some(c=>c.args.includes('lock-acquire')||c.args.includes('input')));
   }finally{rmSync(dir,{recursive:true,force:true});}
@@ -164,10 +165,11 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
   const profile='test-profile',videoId='7663337150875733275',written=[],timeouts=[];
   const own=join(dir,'own.json'),registry=join(dir,'accounts.tsv');
   writeFileSync(own,JSON.stringify({nicknames:[],ids:[]}));writeFileSync(registry,`${profile}\ttest-account\n`);
-  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'new-budget-run',P:profile,SERIAL:'test-serial',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',
+  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'new-budget-run',WFR_RUN_ID:'douyin_video_discovery-new-budget-run',WFR_ATTEMPT:'a1',LEADGEN_EVIDENCE_DIR:dir,P:profile,SERIAL:'test-serial',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',
    DOUYIN_PHONE_ADB:'/test/phone-controller',DOUYIN_PHONE_TMP_ROOT:dir,DOUYIN_ACCOUNT_REGISTRY:registry,OWN_ACCOUNTS_CONF:own};
   const execute=async(command,args,opts={})=>{
    let stdout='';
+   if(args[0]===join(dir,'adb-existing-route.py')){assert.equal(command,'python3');assert.deepEqual(args,[join(dir,'adb-existing-route.py'),'test-serial','adb']);stdout='5042\n';}
    if(command==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
    else if(command==='zsh')stdout='100\t200\t00:20\t目标视频\t别人\t0\n';
    else if(command==='/test/phone-controller'){
@@ -186,7 +188,7 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
     if(op==='current-video-link'){
      timeouts.push(opts.timeoutMs);
      if(opts.timeoutMs<140000)throw Error('EXECUTION_DEADLINE');
-     stdout=`return_mode=results\ncontent_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/newTarget/\n`;
+     stdout=metricPhoneReceipt(`return_mode=results\ncontent_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/newTarget/\n`,args[5],dir);
     }
    }
    return {code:0,stdout,stderr:''};
@@ -194,10 +196,10 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
   const rpc=async body=>{
    if(body.kind==='keywords')return {result:['人工智能训练师']};
    if(body.request.op==='inspect_videos')return {result:written.map(video_id=>({video_id,line_key:'jinuo'}))};
-   assert.equal(body.request.op,'discover');written.push(body.request.video.videoId);return {result:{status:'pending',inserted:true}};
+   assert.equal(body.request.op,'discover');written.push(body.request.video.videoId);return {result:{status:'pending',inserted:true,metrics_verified:true,metrics_digest:body.request.video.metrics.digest}};
   };
   try{
-   const h=createHandlers({root:dir,env,rpc,execute});
+   const h=createHandlers({root:dir,env,rpc,execute,sourceCommit:'a'.repeat(40)});
    await h.preflight();h.state.budgetDeadline=Date.now()+remaining;
    const result=await h.collect_videos();
    assert.equal(result.persisted,remaining===480000?1:0);

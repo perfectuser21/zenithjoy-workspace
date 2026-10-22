@@ -39,7 +39,7 @@ test('unknown claim receipt is not re-claimed or converted into zero-row success
 test('handoff heartbeat rejects a code-zero phone receipt for another owner',async()=>{
  const d=mkdtempSync(join(tmpdir(),'skill-heartbeat-'));let wrong=false;const registry=join(d,'accounts.tsv');writeFileSync(registry,'fixture\tfixture-account\n');
  try{const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture-run',P:'fixture',SERIAL:'fixture-serial',LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller'},rpc:async()=>({result:{}}),execute:async(cmd,args)=>{
-  let stdout='';if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
+  let stdout=args[0]===join(d,'adb-existing-route.py')?'5042\n':'';if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
   if(cmd==='/fixture/controller'){const op=args[2]==='--lock-owner'?args[4]:args[2];if(op==='preflight')stdout='serial=fixture-serial\n';if(op==='lock-acquire')stdout='lock=acquired\n';if(op==='lock-refresh')stdout=`lock=refreshed owner=${wrong?'another-run':'fixture-run'} ttl=3600s\n`;if(op==='account-current')stdout='douyin_id=fixture-account\n';}
   return {code:0,stdout,stderr:''};
  }});await h.preflight();wrong=true;await assert.rejects(()=>h.handoffHeartbeat({key:'qualification'}),/所有权|续期/);
@@ -51,7 +51,7 @@ test('native Skill readback keeps the original owner and generates its own uniqu
  writeFileSync(registry,'fixture\tfixture-account\n');
  try{
   const h=createHandlers({root:d,env:{HOME:d,WFR_RUN_DIR:d,WFR_TAG:'fixture-run',P:'fixture',SERIAL:'fixture-serial',LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller'},rpc:async()=>({result:{}}),execute:async(cmd,args)=>{
-   let stdout='';if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
+   let stdout=args[0]===join(d,'adb-existing-route.py')?'5042\n':'';if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
    if(cmd==='/fixture/controller'){
     const op=args[2]==='--lock-owner'?args[4]:args[2];
     if(op==='preflight')stdout='serial=fixture-serial\n';if(op==='lock-acquire')stdout='lock=acquired\n';if(op==='lock-refresh')stdout='lock=refreshed owner=fixture-run ttl=3600s\n';if(op==='account-current')stdout='douyin_id=fixture-account\n';

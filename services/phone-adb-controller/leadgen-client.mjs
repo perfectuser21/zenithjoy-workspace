@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
 import {beginNativeOperation,nativeOperationIdentityMatches} from './native-operation-receipt.mjs';
 
-export const RPC_FILES = ['capture-strategy.mjs','outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js','leadgen-policy-review.js','leadgen-scoring-handler.mjs', 'activity-commander.mjs','commander-owner-state.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','leadgen-client.mjs','native-operation-receipt.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py',
+export const RPC_FILES = ['capture-strategy.mjs','outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js','leadgen-policy-review.js','leadgen-scoring-handler.mjs', 'commander-model-receipt.mjs','activity-commander.mjs','commander-owner-state.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','leadgen-client.mjs','native-operation-receipt.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py',
   'leadgen-outreach-orders.js','next-outreach-lib.js','dm-rate-ramp-lib.js','config/collection-phone-hosts.json','config/own-accounts.json','config/leadgen-outreach-rate-ramp.json',
-  'leadgen-db-lib.js', 'company-config-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
+  'discovery-metrics.js','discovery-metrics-queue.js','leadgen-db-lib.js', 'company-config-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
   'judge-jev.js', 'judge-comment.js', 'qualify-video.js', 'transcribe-qwen-audio.js',
   'line-routes.js', 'stats-line.js', 'next-keywords.js', 'keyword-enabled-lib.js',
   'verify-step.mjs', 'step-judge.mjs', 'checks/probes-lib.js', 'checks/schema.json',
@@ -143,8 +143,9 @@ export function rpcSource(frozen) {
   }) };
 }
 
-export function createRpc({ frozen, execute = execInput, local = false } = {}) {
+export function createRpc({ frozen, execute = execInput, local = false, runContext } = {}) {
   const source = rpcSource(frozen);
+  if(runContext)source.execution={...runContext};
   if(frozen.deployment.environment&&frozen.deployment.environment!=='production'
     &&(!/^[a-f0-9]{40}$/.test(source.commit)||frozen.deployment.environment!==`staging:${source.commit}`))throw Error('候选RPC缺固定SHA或环境版本不符');
   const peerRoot=frozen.deployment.environment?.startsWith('staging:')
@@ -197,6 +198,7 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
         const readback=await send({...body,request:{...body.request,op:'discover_readback'}},20000);
         if(readback.result!==null){
           if(!['pending','matched','rejected'].includes(readback.result?.status)||readback.result.inserted!==false||readback.result.recovered!==true)throw Error('发现恢复读回无效');
+          if(body.request.video?.metrics&&(readback.result.metrics_verified!==true||readback.result.metrics_digest!==body.request.video.metrics.digest))throw Error('发现指标恢复读回无效');
           return readback;
         }
         // discover以(line_key,video_id)唯一键upsert，相同输入补写一次；不恢复评论/评分等其他写操作。

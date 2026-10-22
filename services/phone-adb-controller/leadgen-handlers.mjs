@@ -7,6 +7,7 @@ import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
 import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
+import {captureCleanupReadback,verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {assertCaptureStrategy} from './capture-strategy.mjs';
@@ -51,8 +52,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
   const mmvDeviceRuntime=env.WFR_HOSTKEY==='mmv'&&env.LEADGEN_MMV_DEVICE_RUNTIME==='1';
-  // MMV入口已核的绝对客户端必须贯穿设备命令，不能再从PATH取另一个adb。
-  const adbClient=mmvDeviceRuntime?(env.DOUYIN_ADB_BIN||'/opt/homebrew/bin/adb'):'adb';
+  // 与controller同一宿主政策；所有原生调用必须沿用已核客户端及既有server。
+  const hostPolicy=join(env.HOME,'.config/zenithjoy/adb-service.json');
+  const managedAdb=Object.hasOwn(env,'ZJ_ADB_HOST_CONFIG')||existsSync(hostPolicy)||(()=>{try{return lstatSync(hostPolicy).isSymbolicLink();}catch{return false;}})();
+  const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`};
   let collectionScope=null;const collectionProgress=new Map();
@@ -91,7 +94,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       const held=await checked(ctl,['--profile',profile,'lock-refresh',run],{receipt:nativeReceipt()});
       if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
     }
-    const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence'].includes(command)?['--lock-owner',run]:[];
+    const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence','snapshot-evidence','ui-evidence'].includes(command)?['--lock-owner',run]:[];
     // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
     const receipt=nativeReceipt();
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
@@ -125,6 +128,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       state.company_config.expected_sender=account.douyin_id;
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
+    const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
+    if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');
+    env.ADB_SERVER_SOCKET=`tcp:127.0.0.1:${route}`;env.DOUYIN_ADB_PORT=route;
+    delete env.ANDROID_ADB_SERVER_PORT;delete env.ANDROID_ADB_SERVER_ADDRESS;
     const device=await checked(adbClient,['-s',serial,'get-state']);
     if(device.trim()!=='device')throw Error('设备未在线');
     const target=await phone('preflight');
@@ -483,15 +490,23 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-bridge-readback.json`),JSON.stringify(bridgeReadback),{mode:0o600});
       return {...r,bridge,mark_leads_readback_failures:readback.failures,bridge_readback_failures:bridgeReadback.failures+(bridge.verified===false?1:0),...(bridge.verified===false||!bridgeReadback.verified?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
-    cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false;
+    cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}
       if(!locked&&failures.length===0)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
       if(locked){try{const refreshed=await phone('lock-refresh',run);if(!refreshed.startsWith('lock=refreshed'))throw Error('锁所有权不可确认');
-        await phone('close-app');closed=true;await phone('return-safe-desktop');desktop=true;
+        const close_stdout=await phone('close-app');closed=true;const desktop_stdout=await phone('return-safe-desktop');
+        if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'){
+          const evidenceId=`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`,scope={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial};
+          const pngFile=(await phone('snapshot-evidence',evidenceId)).split('\n')[0],xmlFile=(await phone('ui-evidence',evidenceId)).trim();
+          cleanupProof=captureCleanupReadback({runDir:env.WFR_RUN_DIR,evidenceRoot:env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',profile),scope,close_stdout,desktop_stdout,pngFile,xmlFile,evidenceId});
+          if(!verifyCleanupReadback({runDir:env.WFR_RUN_DIR,scope,digest:cleanupProof.digest}))throw Error('CLEANUP_NATIVE_READBACK_INVALID');
+        }
+        desktop=true;
         const result=await phone('lock-release',run);if(!result.startsWith('lock=released'))throw Error('锁释放未确认');released=true;locked=false;
       }catch(error){failures.push({reason:error.message});}}
       return {close_app:closed,close_app_attempts:Number(closed),safe_desktop:desktop,safe_desktop_visible:Number(desktop),lock_released:Number(released),no_lock:!locked,failures,
+        ...(cleanupProof?{cleanup_readback_verified:Number(desktop),cleanup_readback_digest:cleanupProof.digest}:{}),
         ...(failures.length?{status:'partial'}:{})};},
   };
 }

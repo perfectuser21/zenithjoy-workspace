@@ -269,6 +269,24 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: zenithjoy_metrics_scratch
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: scratch-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zenithjoy_metrics_scratch"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      ZJ_METRICS_PG_REQUIRED: '1'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: zenithjoy_metrics_scratch
+      PGUSER: postgres
+      PGPASSWORD: scratch-only
     steps:
       - uses: actions/checkout@v4
       - name: Restore pinned skill sources

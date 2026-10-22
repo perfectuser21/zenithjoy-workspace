@@ -4,7 +4,9 @@ import {readFileSync,writeFileSync,mkdtempSync,rmSync,copyFileSync} from 'node:f
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {createDiscoveryHandlers as rawCreateDiscoveryHandlers} from '../leadgen-discovery.mjs';
+import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+const createDiscoveryHandlers=withDiscoveryMetricsFixture(rawCreateDiscoveryHandlers);
 const base=join(import.meta.dirname,'..'),script=readFileSync(join(base,'douyin-phone-adb'),'utf8'),fixtures=join(import.meta.dirname,'fixtures/viewport-restore');
 const cases=[{name:'14',old:'candidate10-loc-retry1-grid',fresh:'candidate12-link-t1-returned-grid',title:'AI到底是什么？它的学习方式和人类是一样吗？ #智能制造 #科普 #AI #千万IP创科普 #你好崇小科',author:'崇州市科学技术协会',duration:'01:33',offset:698,anchors:3},{name:'23',old:'src0-screen4-wait0-grid',fresh:'candidate20-link-t1-returned-grid',title:'AI：你的生活搭档！ #ai #人工智能 #科技改变生活 #有ai就有无限可能 #一键开启ai世界',author:'AI知识小助手',duration:'01:14',offset:852,anchors:1},{name:'24',old:'src0-screen4-wait0-grid',fresh:'candidate20-link-t1-returned-grid',title:'什么是AI#人工智能 #什么是AI #AI #科技 #可控核聚变',author:'C&Z 游戏日记🎮',duration:'01:36',offset:852,anchors:1},{name:'27',old:'src0-screen5-wait0-grid',fresh:'candidate25-link-t1-returned-grid',title:'AI到底是什么？别把AI想成机器人了#AI #大模型',author:'鹏总All in AI（AI绝活大会）',duration:'00:57',offset:532,anchors:1},{name:'28',old:'src0-screen5-wait0-grid',fresh:'candidate25-link-t1-returned-grid',title:'AI到底是什么？纯大白话讲透 #AI科普#人工智能#涨知识#AI干货#科技常识',author:'没事儿',duration:'00:32',offset:532,anchors:1}];
 function helper(old,fresh,c,run){const fn=script.match(/^card_viewport_hint_from_xml\(\) \{[\s\S]*?^\}/m)?.[0];if(!fn)return 'restore=0';const r=spawnSync('zsh',['-c',`${fn}\ncard_viewport_hint_from_xml "$1" "$2" "$3" "$4" "$5" "$6" "$7"`,'test',old,fresh,encodeURIComponent(c.title),encodeURIComponent(c.author),c.duration,'AI',run],{encoding:'utf8',env:{...process.env,SCREEN_H:'2664',PYTHON_BIN:'python3'}});assert.equal(r.status,0,r.stderr);return r.stdout;}

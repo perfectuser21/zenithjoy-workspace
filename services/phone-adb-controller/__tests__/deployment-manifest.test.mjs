@@ -63,3 +63,16 @@ test('MMV完整正式部署清单用固定Git字节覆盖CORE/SH/PLAN/CTL及原�
   const actual=collectDeployment(target,manifest);assert.equal(actual.source_commit,commit);assert.deepEqual(actual.files,manifest.files);}
  writeFileSync(join(rpc,'leadgen-queue.js'),'drift');assert.throws(()=>collectDeployment(rpc,manifest),/实际文件digest不符/);
 });
+
+test('101指标迁移必须进入正式固定release附件并由实际部署字节读回',()=>{
+ const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8'),marker='# 在任何SSH前核验部署源字节';
+ const mappings=execFileSync('/bin/bash',['-c',source.slice(0,source.indexOf(marker))+"\nprintf '%s\\0' \"${RELEASE_EVIDENCE_FILES[@]}\"",new URL('../deploy.sh',import.meta.url).pathname],{encoding:'utf8'}).split('\0').filter(Boolean);
+ const path='apps/api/db/migrations/20261022_120000_discovery_metrics.sql',deployed_path='release-evidence/20261022_120000_discovery_metrics.sql';
+ assert.ok(mappings.includes(path+'='+deployed_path),'正式deploy漏掉本次指标迁移证据');
+ const root=mkdtempSync(join(tmpdir(),'metrics-migration-release-')),runtime=join(root,'runtime');mkdirSync(dirname(join(root,path)),{recursive:true});mkdirSync(join(root,'services/phone-adb-controller'),{recursive:true});
+ const bytes=readFileSync(new URL('../../../'+path,import.meta.url));writeFileSync(join(root,path),bytes);
+ const git=(...args)=>execFileSync('git',['-C',root,...args],{stdio:'pipe'});git('init','-b','cp-10221140-migration-fixture');git('add','.');const tree=git('write-tree').toString().trim(),commit=git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit-tree',tree,'-m','fixture').toString().trim();git('update-ref','HEAD',commit);
+ const manifest=deploymentManifest(root,[],{commit,repositoryFiles:[{path,deployed_path}]});mkdirSync(join(runtime,'release-evidence'),{recursive:true});writeFileSync(join(runtime,deployed_path),bytes);
+ assert.equal(collectDeployment(runtime,manifest).files[0].content_sha256,createHash('sha256').update(bytes).digest('hex'));
+ writeFileSync(join(runtime,deployed_path),'wrong migration');assert.throws(()=>collectDeployment(runtime,manifest),/digest/);
+});

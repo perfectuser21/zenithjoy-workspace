@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {execFileReceipt,executionDidNotStart} from './leadgen-client.mjs';
+import {commanderModelReceipt} from './commander-model-receipt.mjs';
 const exec = execFileReceipt;
 const require = createRequire(import.meta.url);
 const safeError = error => String(error?.message || error)
@@ -42,11 +43,19 @@ export function openClawCommander({ agent = 'work-commander', model, timeoutMs =
       '--timeout', String(Math.floor(timeoutMs / 1000)), '--json', '--message', workflowProgressRule+prompt];
     if (model) args.push('--model', model);
     const reservation=await reserveWorkflowCommanderTurn(receipt,{home});
+    let modelReceiptFailure;
     try {
       await reservation.check();
       const { stdout } = await execute('openclaw', args, { timeout: timeoutMs + 5000, maxBuffer: 1024 * 1024 });
-      const decision=parseCommanderResponse(stdout);await reservation.returned(stdout);return decision;
+      const decision=parseCommanderResponse(stdout);await reservation.returned(stdout);
+      if(receipt.workflow_key==='douyin_video_discovery'){
+        try{decision.model_receipt=commanderModelReceipt(stdout,receipt);}catch{
+          modelReceiptFailure=Error('COMMANDER_MODEL_RECEIPT_INVALID');modelReceiptFailure.executionStopped=true;throw modelReceiptFailure;
+        }
+      }
+      return decision;
     } catch (error) {
+      if(error===modelReceiptFailure)throw error;
       // execFile错误通常包含完整prompt/argv；绝不把它原样写进回执。
       const notStarted=executionDidNotStart(error,'openclaw',args);
       if(notStarted)await reservation.notStarted(error,'openclaw',args);
