@@ -7,6 +7,8 @@ import {spawnSync} from 'node:child_process';
 
 const source=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
 const body=source.split('  search-video-tab)\n')[1]?.split('\n    ;;\n  collect-comments)')[0];
+const foregroundHelper=source.slice(source.indexOf('_foreground_is_exact_douyin() {'),source.indexOf('\n_is_complete_douyin_xml() {'));
+assert.ok(foregroundHelper.includes('PYFOCUS'));
 assert.ok(body,'must exercise the actual production search-video-tab case');
 const fixture=name=>readFileSync(new URL('./fixtures/'+name,import.meta.url),'utf8');
 const before=fixture('search-tabs-before-reorder.xml');
@@ -15,20 +17,21 @@ const selected=xml=>xml.replace(/<node\b[^>]*>/g,(node,offset)=>node.replace(/se
 const absent=xml=>xml.replace(/<node\b[^>]*text="视频"[^>]*\/>/g,'');
 const duplicate=xml=>xml.replace('</hierarchy>',xml.match(/<node\b[^>]*text="视频"[^>]*\/>/)[0]+'</hierarchy>');
 
-function run({initial=before,first=moved,retry=moved,last=selected(moved),unreadable=false,shotMissing=false}={}){
+function run({initial=before,first=moved,retry=moved,last=selected(moved),unreadable=false,shotMissing=false,foreground='mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.SearchResultActivity}'}={}){
  const dir=mkdtempSync(join(tmpdir(),'vtab-reorder-'));
  try{
   for(const [name,xml]of Object.entries({initial,first,retry,last}))writeFileSync(join(dir,name+'.xml'),xml);
   writeFileSync(join(dir,'adb'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$TAP_LOG"\n',{mode:0o700});
-  const script=`set -e\ncheck_target(){ :; }\nwait_ms(){ :; }\nrequire_evidence_id(){ :; }\nforeground_package(){ print com.ss.android.ugc.aweme; }\nsnapshot_evidence(){ [[ "$SHOT_MISSING" == 1 ]] || print synthetic-offline-fixture > "$CASE_DIR/diagnostic.png"; print -- "$CASE_DIR/diagnostic.png"; }\ndie(){ print -u2 -- "$*"; exit 2; }\nlocate_cached(){ print '184 140'; }\n_ui_evidence_wave(){
+  const script=`set -e\ncheck_target(){ :; }\nwait_ms(){ :; }\nrequire_evidence_id(){ :; }\nforeground_package(){ print -- "$CASE_FOREGROUND"; }\nsnapshot_evidence(){ [[ "$SHOT_MISSING" == 1 ]] || print synthetic-offline-fixture > "$CASE_DIR/diagnostic.png"; print -- "$CASE_DIR/diagnostic.png"; }\ndie(){ print -u2 -- "$*"; exit 2; }\nlocate_cached(){ print '184 140'; }\n_ui_evidence_wave(){
  if [[ "$1" == *aftertab-retry ]]; then print -- "$CASE_DIR/last.xml";\n elif [[ "$1" == *tabs-retry ]]; then print -- "$CASE_DIR/retry.xml";
  elif [[ "$INITIAL_UNREADABLE" == 1 ]]; then return 1;
  else print -- "$CASE_DIR/initial.xml"; fi
 }\nui_evidence(){
  if [[ "$1" == *aftertab-retry ]]; then print -- "$CASE_DIR/last.xml";
  else print -- "$CASE_DIR/first.xml"; fi
-}\nset -- search-video-tab evidence\n${body}\n`;
-  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,TAP_LOG:join(dir,'taps'),INITIAL_UNREADABLE:unreadable?'1':'0',ADB:join(dir,'adb'),SERIAL:'fixture-device',EVIDENCE_ROOT:dir,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,PYTHON_BIN:'python3',SHOT_MISSING:shotMissing?'1':'0'}});
+}\n${foregroundHelper}
+set -- search-video-tab evidence\n${body}\n`;
+  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,CASE_FOREGROUND:foreground,TAP_LOG:join(dir,'taps'),INITIAL_UNREADABLE:unreadable?'1':'0',ADB:join(dir,'adb'),SERIAL:'fixture-device',EVIDENCE_ROOT:dir,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',PYTHON_BIN:'python3',SHOT_MISSING:shotMissing?'1':'0'}});
   let taps=[];try{taps=readFileSync(join(dir,'taps'),'utf8').trim().split('\n').filter(Boolean);}catch{}
   return {...result,taps};
  }finally{rmSync(dir,{recursive:true,force:true});}
@@ -77,4 +80,36 @@ for(const [name,xml] of [
  ['零面积tab',selected(before).replaceAll('[162,125][206,156]','[162,125][162,156]')],
 ])test('后验'+name+'应立即拒绝，不再次点击',()=>{
  const r=run({first:xml});assert.notEqual(r.status,0);assert.equal(r.taps.length,1);assert.doesNotMatch(r.stdout,/video_tab=1/);
+});
+
+for(const [name,xml] of [
+ ['父子selected冲突',selected(before).replace('class="androidx.appcompat.app.ActionBar$Tab" enabled="true" selected="true"','class="androidx.appcompat.app.ActionBar$Tab" enabled="true" selected="false"')],
+ ['坐标超出窗口',before.replaceAll('[162,125][206,156]','[1162,125][1206,156]')],
+ ['父tab异包',before.replace('package="com.ss.android.ugc.aweme" class="androidx.appcompat.app.ActionBar$Tab"','package="com.example.other" class="androidx.appcompat.app.ActionBar$Tab"')],
+ ['筛选chip冒用资源名',withChip.replaceAll('com.ss.android.ugc.aweme:id/5cy','android:id/text1')],
+ ['XML破损','<hierarchy><node'],
+])test('初始'+name+'拒绝且不走视觉兜底',()=>{
+ const r=run({initial:xml,first:selected(before)});assert.notEqual(r.status,0);assert.equal(r.taps.length,0);assert.doesNotMatch(r.stdout,/video_tab=1/);
+});
+for(const unreadable of [false,true])test('前台异包拒绝点击（树不可读='+unreadable+'）',()=>{
+ const r=run({unreadable,foreground:'mCurrentFocus=Window{abc u0 com.example.other/.Activity}',first:selected(before)});assert.notEqual(r.status,0);assert.equal(r.taps.length,0);assert.match(r.stderr,/wrong foreground/);
+});
+test('原生dumpsys前台格式可验证',()=>{
+ const r=run({foreground:'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}',first:selected(before)});assert.equal(r.status,0,r.stderr);assert.equal(r.taps.length,1);
+});
+
+test('综合和视频两个不同类别同时selected拒绝',()=>{
+ const xml=selected(before).replace(/(<node\b[^>]*ActionBar\$Tab[^>]*selected=")false("[^>]*><node[^>]*text="综合"[^>]*selected=")false(")/,'$1true$2true$3');
+ assert.notEqual(xml,selected(before));const r=run({first:xml});assert.notEqual(r.status,0);assert.equal(r.taps.length,1);
+});
+test('只有孤立视频类别而无综合/用户的错误页拒绝',()=>{
+ const xml=before.replace(/<node\b[^>]*ActionBar\$Tab[^>]*><node[^>]*\/><\/node>/g,n=>n.includes('text="视频"')?n:'');
+ const r=run({initial:xml});assert.notEqual(r.status,0);assert.equal(r.taps.length,0);
+});
+
+for(const foreground of ['com.ss.android.ugc.aweme','mCurrentFocus=Window{abc u0 com.example.other/.Activity com.ss.android.ugc.aweme/.SearchResultActivity}'])test('非唯一原生前台不能凭出现包名通过：'+foreground,()=>{
+ const r=run({foreground,first:selected(before)});assert.notEqual(r.status,0);assert.equal(r.taps.length,0);
+});
+test('点击后已选中tab换位时tapped仍记录实际点击而非后验坐标',()=>{
+ const r=run({first:selected(moved)});assert.equal(r.status,0,r.stderr);assert.deepEqual(r.taps,['-s fixture-device shell input tap 184 140']);assert.match(r.stdout,/tapped=184 140/);
 });

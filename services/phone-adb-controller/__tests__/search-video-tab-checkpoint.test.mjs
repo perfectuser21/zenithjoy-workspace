@@ -10,6 +10,8 @@ import {judgeSteps} from '../step-judge.mjs';
 // generated checkpoint, rather than merely print video_tab=1 for a retry file.
 const source=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
 const body=source.split('  search-video-tab)\n')[1]?.split('\n    ;;\n  collect-comments)')[0];
+const foregroundHelper=source.slice(source.indexOf('_foreground_is_exact_douyin() {'),source.indexOf('\n_is_complete_douyin_xml() {'));
+assert.ok(foregroundHelper.includes('PYFOCUS'));
 assert.ok(body);
 const spec=JSON.parse(readFileSync(new URL('../plans/douyin_video_discovery.steps.json',import.meta.url)));
 const checkpoint=spec.steps.find(s=>s.key==='douyin_video_discovery.collect_videos.switch_video_tab');
@@ -29,7 +31,7 @@ function run({first=moved,last=selected(moved),wanted=1,publicationFailure=false
 check_target(){ :; }
 wait_ms(){ :; }
 require_evidence_id(){ :; }
-foreground_package(){ print com.ss.android.ugc.aweme; }
+foreground_package(){ print "mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.SearchResultActivity}"; }
 snapshot_evidence(){ print fixture > "$CASE_DIR/failure.png"; print "$CASE_DIR/failure.png"; }
 die(){ print -u2 -- "$*"; exit 2; }
 locate_cached(){ return 1; }
@@ -47,10 +49,11 @@ _ui_evidence_wave(){
  /bin/cp "$CASE_DIR/$input.xml" "$EVIDENCE_ROOT/$1.xml"
  print "$EVIDENCE_ROOT/$1.xml"
 }
+${foregroundHelper}
 set -- search-video-tab "$CASE_EID"
 ${body}
 `;
-  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,CASE_EID:eid,PUBLICATION_FAILURE:publicationFailure?'1':'0',EVIDENCE_ROOT:dir,ADB:join(dir,'adb'),SERIAL:'offline-fixture',PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,PYTHON_BIN:'python3'}});
+  const result=spawnSync('zsh',['-c',script],{encoding:'utf8',env:{...process.env,CASE_DIR:dir,CASE_EID:eid,PUBLICATION_FAILURE:publicationFailure?'1':'0',EVIDENCE_ROOT:dir,ADB:join(dir,'adb'),SERIAL:'offline-fixture',PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',PYTHON_BIN:'python3'}});
   const judged=judgeSteps({spec:{steps:[checkpoint]},stage:'collect_videos',ctx:{tag:'checkpoint',evidenceDir:dir,metrics:{sources_succeeded:wanted}}});
   const get=name=>{try{return readFileSync(join(dir,name),'utf8');}catch{return null;}};
   return {...result,checkpoint:judged.steps[0],canonical:get(eid+'-aftertab.xml'),firstArchive:get(eid+'-aftertab-first.xml'),retry:get(eid+'-aftertab-retry.xml'),stagedFiles:readdirSync(dir).filter(n=>n.endsWith('.tmp'))};
