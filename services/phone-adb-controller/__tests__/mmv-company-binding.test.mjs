@@ -18,6 +18,7 @@ async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',rece
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_HOSTKEY:host,LEADGEN_MMV_DEVICE_RUNTIME:flag,WF_BRAIN_WORKFLOW:flow,P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/approved/adb'};
  const h=createHandlers({root:dir,env,rpc:async body=>{const {request}=body;if(request)requests.push(request);if(rpcImpl)return rpcImpl(body);if(body.kind==='keywords')return {result:['AI']};if(receipt instanceof Error)throw receipt;return {result:receipt};},execute:async(command,args)=>{
   calls.push({command,args});let stdout='';
+  if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
   if(command==='adb'||command==='/approved/adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
   if(command==='/fixture/controller'){const op=args[2]==='--lock-owner'?args[4]:args[2];if(op==='preflight')stdout='serial='+serial+'\n';if(op==='lock-acquire')stdout='lock=acquired\n';if(op==='lock-refresh')stdout='lock=refreshed owner='+run+' ttl=3600s\n';if(op==='account-current')stdout='douyin_id='+observed+'\n';}
   return {code:0,stdout,stderr:''};
@@ -42,7 +43,7 @@ test('MMV actual globally registered login must equal this company frozen accoun
  const r=await preflight({observed:'another-global-account'});assert.match(r.error?.message||'',/COMPANY_ACCOUNT_IDENTITY_MISMATCH/);
 });
 for(const opts of [{host:'xian-m4',flag:'1'},{host:'mmv',flag:''}])test('legacy phone path does not gain MMV-only company semantics '+JSON.stringify(opts),async()=>{
- const r=await preflight(opts);assert.ifError(r.error);assert.equal(r.requests.length,0);assert.ok(r.calls.some(c=>c.command==='adb'));
+ const r=await preflight(opts);assert.ifError(r.error);assert.equal(r.requests.length,0);assert.ok(r.calls.some(c=>c.command==='/approved/adb'));
 });
 
 const snapshot=()=>({...company,runtime_config:{platform_accounts:[{profile,device_serial:serial,douyin_id:account,verification_status:'verified',enabled:true}]} });

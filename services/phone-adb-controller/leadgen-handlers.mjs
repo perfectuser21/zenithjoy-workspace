@@ -51,8 +51,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
   const mmvDeviceRuntime=env.WFR_HOSTKEY==='mmv'&&env.LEADGEN_MMV_DEVICE_RUNTIME==='1';
-  // MMV入口已核的绝对客户端必须贯穿设备命令，不能再从PATH取另一个adb。
-  const adbClient=mmvDeviceRuntime?(env.DOUYIN_ADB_BIN||'/opt/homebrew/bin/adb'):'adb';
+  // 与controller同一宿主政策；所有原生调用必须沿用已核客户端及既有server。
+  const hostPolicy=join(env.HOME,'.config/zenithjoy/adb-service.json');
+  const managedAdb=Object.hasOwn(env,'ZJ_ADB_HOST_CONFIG')||existsSync(hostPolicy)||(()=>{try{return lstatSync(hostPolicy).isSymbolicLink();}catch{return false;}})();
+  const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`};
   let collectionScope=null;const collectionProgress=new Map();
@@ -125,6 +127,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       state.company_config.expected_sender=account.douyin_id;
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
+    const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
+    if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');
+    env.ADB_SERVER_SOCKET=`tcp:127.0.0.1:${route}`;env.DOUYIN_ADB_PORT=route;
+    delete env.ANDROID_ADB_SERVER_PORT;delete env.ANDROID_ADB_SERVER_ADDRESS;
     const device=await checked(adbClient,['-s',serial,'get-state']);
     if(device.trim()!=='device')throw Error('设备未在线');
     const target=await phone('preflight');

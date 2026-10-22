@@ -25,6 +25,7 @@ function fixture(){
   throw Error('unexpected fake RPC '+JSON.stringify(body));};
  const execute=async(cmd,args,opts)=>{events.push({cmd,args,opts});let stdout='';
   const action=args.find(x=>['preflight','lock-acquire','lock-refresh','lock-release','account-current','close-app','return-safe-desktop','private-message-send','ui-evidence'].includes(x));
+  if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
   if(cmd==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
   if(action==='preflight')stdout='serial=FAKE6983\n';
   if(action?.startsWith('lock-'))stdout='lock='+({'lock-acquire':'acquired','lock-refresh':'refreshed','lock-release':'released'}[action])+'\n';

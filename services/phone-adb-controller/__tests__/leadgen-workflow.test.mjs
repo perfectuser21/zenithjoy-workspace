@@ -152,6 +152,7 @@ test('真实workflow包装器达到目标且仅有消失候选缺口时保留成
   const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'relocation-run',P:'work',SERIAL:'test-serial',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',DOUYIN_PHONE_ADB:'/test/phone',DOUYIN_ACCOUNT_REGISTRY:registry};
   const execute=async(command,args)=>{
    let stdout='';
+   if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
    if(command==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
    if(command==='/test/phone'){
     const op=args[2]==='--lock-owner'?args[4]:args[2];

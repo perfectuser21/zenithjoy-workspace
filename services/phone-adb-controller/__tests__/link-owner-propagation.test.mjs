@@ -13,6 +13,7 @@ test('workflow真实phone调用将本run owner传给取链，未取得本批锁�
   const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:run,P:'cloud',SERIAL:'fake-sdk31',LEADGEN_LINE:'jinuo',DOUYIN_PHONE_ADB:'/fake/controller',DOUYIN_ACCOUNT_REGISTRY:registry,LOCK_OWNER:'another-run'},rpc:async()=>{throw Error('unexpected RPC');},execute:async(command,args)=>{
    calls.push({command,args});
    let stdout='';
+   if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
    if(command==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
    if(command==='/fake/controller'){
     const op=args[2]==='--lock-owner'?args[4]:args[2];
