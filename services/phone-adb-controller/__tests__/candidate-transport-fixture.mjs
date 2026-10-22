@@ -25,7 +25,7 @@ function baseFixture(t){
  return {top,home,source,revision,put,git,commit,runtime,skill};
 }
 
-export function transportFixture(t){
+export function transportFixture(t,{payloadBytes=270000}={}){
  const f=baseFixture(t),prefix='services/phone-adb-controller/';
  // 全部部署执行器使用原件；手机业务不会执行。
  for(const name of ['deployment-manifest.mjs','deployment-fixed-source.mjs','runtime-definition.mjs','runtime-host.mjs','runtime-release.mjs']){
@@ -35,7 +35,7 @@ export function transportFixture(t){
  for(const name of commander)f.put(f.source,prefix+'commander/'+name,readFileSync(new URL('../commander/'+name,import.meta.url)));
  f.put(f.source,prefix+'commander/skills/workflow-commander/SKILL.md','# fixed fixture commander\n');
  f.put(f.source,prefix+'leadgen-run.sh','#!/bin/sh\nexit 0\n');f.put(f.source,prefix+'leadgen-rpc.mjs','export const fixed=true;\n');
- f.put(f.source,prefix+'transport-payload.bin',Buffer.alloc(270000,67));
+ f.put(f.source,prefix+'transport-payload.bin',Buffer.alloc(payloadBytes,67));
  f.revision=f.commit(f.source);
  const environment='staging:'+f.revision,repo='perfectuser21/zenithjoy-workspace';
  f.plan={environment,releases:{},release_ids:{}};

@@ -2,7 +2,15 @@ import {readFileSync,appendFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {stageCandidate} from '../deployment-candidate.mjs';
 import {digest} from '../runtime-definition.mjs';
+import childProcess from 'node:child_process';
+import {syncBuiltinESMExports} from 'node:module';
 const c=JSON.parse(readFileSync(process.argv[2])),observations=new Map();
+const originalExec=childProcess.execFileSync;
+childProcess.execFileSync=(file,args,options)=>{
+ if(file==='ssh')appendFileSync(join(c.top,'ssh-options.jsonl'),JSON.stringify({host:args.at(-2),install:args.at(-1).includes("' install "),timeout:options?.timeout,input_bytes:options?.input?.length})+'\n');
+ return originalExec(file,args,options);
+};
+syncBuiltinESMExports();
 for(const r of Object.values(c.plan.releases))r.manifest_sha256=digest({environment:r.environment,target:r.target,payload:r.payload});
 const request=async(url,body)=>{
  const path=new URL(url).pathname,id=path.split('/')[4],r=Object.values(c.plan.releases).find(r=>r.id===id);
