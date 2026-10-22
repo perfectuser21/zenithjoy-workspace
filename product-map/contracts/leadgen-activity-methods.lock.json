@@ -241,7 +241,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -251,13 +251,13 @@
           "sha256": "ea6e35b7bc63041f8f4d7ae750f39a0ede1f7dfc6270993674d47f3654f5a059"
         }
       ],
-      "code_digest": "c13fc82da322c86a6a50620c6243d0a333550154b566b70b5472693bf6e03833",
+      "code_digest": "38237e66023569be47ac91aff694ab5025c77b0d013442636938dc5cff0d7347",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "4b9bea6a687bc13a40b10ce61b6e0633783f8be5ad44d163b483c82acb9b2c48",
-        "current_code_digest": "c13fc82da322c86a6a50620c6243d0a333550154b566b70b5472693bf6e03833"
+        "current_code_digest": "38237e66023569be47ac91aff694ab5025c77b0d013442636938dc5cff0d7347"
       }
     },
     "douyin_video_processing.preflight": {
@@ -518,16 +518,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9f4ef8e9730a710d75da195e4904b67979853babe62a78bcdc9e1b9f3888d3c7",
+      "code_digest": "2d0e0009955e787fa6c3f549744a3727b94406d9f73cb57ef7f712798e5dd475",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "8047ac538874c0d2137d75afb23cc3c5fbe9d9c32dd317bda55bf09863d645bb",
-        "current_code_digest": "9f4ef8e9730a710d75da195e4904b67979853babe62a78bcdc9e1b9f3888d3c7"
+        "current_code_digest": "2d0e0009955e787fa6c3f549744a3727b94406d9f73cb57ef7f712798e5dd475"
       }
     },
     "douyin_video_processing.dedup": {
@@ -763,7 +763,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -780,13 +780,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "df43fa562b5079d96b6c9f694deb70d51def26c5bb93ff1471c793c550180515",
+      "code_digest": "ff10b16e0978fadc4f5ccd82adfb79619487561d69e48ff0d6d9a36765b72c35",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "e4746d48d5b2d2db8d001fd8d24f9681dc4b01139f1efefef426cf2a2c8d86e3",
-        "current_code_digest": "df43fa562b5079d96b6c9f694deb70d51def26c5bb93ff1471c793c550180515"
+        "current_code_digest": "ff10b16e0978fadc4f5ccd82adfb79619487561d69e48ff0d6d9a36765b72c35"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1022,7 +1022,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -1095,13 +1095,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "4aa181707b19832973417ec23e7a3802da906c0e57da4e5904fd2d54b9361d41",
+      "code_digest": "d4e914c212ed157333dcd9c52e49dd4c2eebe2dfc903f44a049ce6804402d330",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "578e1d30a048a52788bab4b50982e2ae54e76e6e8e6631af967f01cca9d93130",
-        "current_code_digest": "4aa181707b19832973417ec23e7a3802da906c0e57da4e5904fd2d54b9361d41"
+        "current_code_digest": "d4e914c212ed157333dcd9c52e49dd4c2eebe2dfc903f44a049ce6804402d330"
       }
     },
     "douyin_video_processing.collection": {
@@ -1359,7 +1359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -1383,13 +1383,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "8fd6e54fda2f24c394b779cca93351bf581018605ab24b15a57417324a0886f2",
+      "code_digest": "a83453f0bced42f8730b5e140a39d9a4c6a9f54fc2321d047b0e02945706b7c8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "dce4ac3fa33588e7db75d4d484ce7a651016ef4a359c436ae14b4ff4ec41820a",
-        "current_code_digest": "8fd6e54fda2f24c394b779cca93351bf581018605ab24b15a57417324a0886f2"
+        "current_code_digest": "a83453f0bced42f8730b5e140a39d9a4c6a9f54fc2321d047b0e02945706b7c8"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1635,16 +1635,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e38640a766f4d4c0fbac39789ca7885973e56a3c4bd4ebe6f9e7994accc09368",
+      "code_digest": "08116e40d52d208cbf2e4e0f3f7563c491cea37ac1ec575e48fbb2614c3286e2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "a1563228c9910d274a8a343bc837c547b094964a4081a9d26ebe291f47eff739",
-        "current_code_digest": "e38640a766f4d4c0fbac39789ca7885973e56a3c4bd4ebe6f9e7994accc09368"
+        "current_code_digest": "08116e40d52d208cbf2e4e0f3f7563c491cea37ac1ec575e48fbb2614c3286e2"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1859,7 +1859,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -1876,13 +1876,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "b38099fd25a4583fa7f68a96e056f5c3d7a3806d259e9864a3af4d0e582a09c4",
+      "code_digest": "59c75a454b5aa53ba5b616cb599e16649e0b0b85bd9de9e9103a706772ba9f32",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "0d326bca989b9fe0265e8038ec68a4f427c9e10c264a565bb38c3cfc9f4fee5c",
-        "current_code_digest": "b38099fd25a4583fa7f68a96e056f5c3d7a3806d259e9864a3af4d0e582a09c4"
+        "current_code_digest": "59c75a454b5aa53ba5b616cb599e16649e0b0b85bd9de9e9103a706772ba9f32"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2104,7 +2104,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -2170,13 +2170,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8079b65196e77805584151650ab11fcf2b85076b98300fd9cee250ef5ded3380",
+      "code_digest": "5676f4134e07a3032bd4490cd896155bc5eed8cac7436964910f5fa804812b3d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "4cd8e37e9e7541ff0f995127632221b1e783fee4463d31b00cbca5d8b9a26930",
-        "current_code_digest": "8079b65196e77805584151650ab11fcf2b85076b98300fd9cee250ef5ded3380"
+        "current_code_digest": "5676f4134e07a3032bd4490cd896155bc5eed8cac7436964910f5fa804812b3d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2444,7 +2444,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         },
         {
           "kind": "code",
@@ -2461,13 +2461,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "594a7742da52780fdc5dfe6e7d2371cb7af06a4ec5ad34a368ed4d4f6b5d6f6b",
+      "code_digest": "37689d617f7639f5f420ffd476747a5d0996e1fa778bb21834ec5f53b9ca6168",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "6b8a20e8cd5f8e19d8a12fb2a192a401b1d4150cabe6c2c72722711a927159e0",
-        "current_code_digest": "594a7742da52780fdc5dfe6e7d2371cb7af06a4ec5ad34a368ed4d4f6b5d6f6b"
+        "current_code_digest": "37689d617f7639f5f420ffd476747a5d0996e1fa778bb21834ec5f53b9ca6168"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2724,16 +2724,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4c566e8a54bc9d0df6bbceafa0f84a968655ad16565f529c5049900258bd7578",
+      "code_digest": "1eeb0133131e4035ceb94c24ce846e5c78c87cede0e79558b2b2fb2c1436c60c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "04316355d27b522d53546134a19eb4f1372b1b5bdc8c8cb13818b2fa434cf9ce",
-        "current_code_digest": "4c566e8a54bc9d0df6bbceafa0f84a968655ad16565f529c5049900258bd7578"
+        "current_code_digest": "1eeb0133131e4035ceb94c24ce846e5c78c87cede0e79558b2b2fb2c1436c60c"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2990,16 +2990,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4c566e8a54bc9d0df6bbceafa0f84a968655ad16565f529c5049900258bd7578",
+      "code_digest": "1eeb0133131e4035ceb94c24ce846e5c78c87cede0e79558b2b2fb2c1436c60c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "04316355d27b522d53546134a19eb4f1372b1b5bdc8c8cb13818b2fa434cf9ce",
-        "current_code_digest": "4c566e8a54bc9d0df6bbceafa0f84a968655ad16565f529c5049900258bd7578"
+        "current_code_digest": "1eeb0133131e4035ceb94c24ce846e5c78c87cede0e79558b2b2fb2c1436c60c"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3259,16 +3259,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-reconcile.mjs",
           "revision": "contract",
-          "sha256": "c29fc538c63d7376b8d214faf206d147db87cb2e52116d6761debf97b0e6cfe8"
+          "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1eee24ab319d3e68a36a7342e9a87d7fa82389b1378c16eaf5c1138a4082db70",
+      "code_digest": "6533857561a6ccd1f23c39fbbd13852daf764c8e591dbb0a921cb7c3c5925c69",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查68e9dcfa：仅内部owner中断恢复与内核锁提交修复；业务I/O、Activity契约及Skill方法文本不变；不追认旧turn成功，不释放设备。",
-        "reviewed_by": "independent-owner-reconcile-review@68e9dcfa9e4faa39ad2dce87c8a68a0d97f88fb1",
+        "reason": "根独立审查18217629：保留既审owner恢复与内核锁语义，仅接纳真实macOS合法负UID，非法行仍拒绝；业务I/O、Activity和Skill契约不变，不追认旧结果或释放设备。",
+        "reviewed_by": "root-independent-signed-uid@182176292e8e3c9d273682f76d8782adeb387abf",
         "previous_code_digest": "82156ca7ff23802506ebcbc1b46cb073a7244738109f82b63b0dc00f91a6be30",
-        "current_code_digest": "1eee24ab319d3e68a36a7342e9a87d7fa82389b1378c16eaf5c1138a4082db70"
+        "current_code_digest": "6533857561a6ccd1f23c39fbbd13852daf764c8e591dbb0a921cb7c3c5925c69"
       }
     }
   },
