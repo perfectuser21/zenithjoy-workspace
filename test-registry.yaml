@@ -7879,3 +7879,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "五处record值语义、UUID-like与对象键策略、真实HTTP400外层兼容"
+
+- id: phone-single-video-recovery-qualification-source
+  path: services/phone-adb-controller/__tests__/single-video-recovery-qualification-source.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实scratchPG双冻结完整policy：0353 owner保留2052资格，preapply/consumed严格来源与隔离负例；不操作真机"
