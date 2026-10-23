@@ -316,10 +316,26 @@ jobs:
         timeout-minutes: 2
         run: |
           echo "PREFLIGHT_START os-packages"
-          timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=20 -y zsh libxml2-utils ffmpeg
-          command -v zsh
-          command -v xmllint
-          command -v ffmpeg
+          missing=()
+          for pair in zsh:zsh xmllint:libxml2-utils ffmpeg:ffmpeg; do
+            tool="${pair%%:*}"
+            if path="$(command -v "$tool")"; then
+              echo "PREFLIGHT_TOOL $tool existing_path=$path"
+            else
+              echo "PREFLIGHT_TOOL $tool existing_path=missing"
+              missing+=("${pair#*:}")
+            fi
+          done
+          if ((${#missing[@]})); then
+            # 20s仅约束连接/无数据等待；1次失败文件重试仍受原90s总预算约束。
+            timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=20 -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -y "${missing[@]}"
+          fi
+          for tool in zsh xmllint ffmpeg; do
+            echo "PREFLIGHT_TOOL $tool path=$(command -v "$tool")"
+          done
+          zsh --version
+          xmllint --version
+          ffmpeg -version
           echo "PREFLIGHT_DONE os-packages"
       - name: 安装并核验 Pillow（有界诊断）
         id: openclaw-pillow
