@@ -7225,6 +7225,14 @@ agent_suite:
   product: AI员工
   note: "Darwin真实leaf验证固定授权证据别名与目录身份；拒绝start/finish/fresh漂移及坏或活pid，零合格项不创建设备服务；实机评论仍独立验收"
 
+- id: leadgen-honor-cleanup-widgets
+  path: services/phone-adb-controller/__tests__/honor-cleanup-widgets.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "原HONOR桌面XML复现已证天气与助手widget；只允许精确launcher，保foreign/前台/PNG/hash/scope拒绝"
+
 - id: leadgen-split-leadgen-discovery
   path: services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs
   type: unit

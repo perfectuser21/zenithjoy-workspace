@@ -1649,7 +1649,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/discovery-cleanup-readback.mjs",
           "revision": "contract",
-          "sha256": "e4c1e53b9a133f38dc71463a711cd0f75640087fa12e32c43b70e0de28eb7c8f"
+          "sha256": "bb7b4c27ad29d6b46d5c2b03d4b34f1646bacd68d3d7f81c678cbf9e5516183b"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ddf6e1e36f66d4dc9aaa4a01f5ffac5503e74cdff21df689c8f26ecb28c10072",
+      "code_digest": "3929d6e6f0c2f608597e6171828508c6e6b5bb37c893a12410a5ece1da297edc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅恢复102零合格项不初始化设备，以及已固定xian证据别名的canonical身份约束；start/执行前后/finish/fresh保持未知链与目录漂移及录制状态拒绝；原公司资格/采样/身份与Skill方法合同不变。",
-        "reviewed_by": "root（2026-10-23独立净diff审查与23项真实leaf回归PASS）",
-        "previous_code_digest": "c9722e8ee35c2fa50ee06bfb52c147b9926ca8fa07817c23948165f44b159041",
-        "current_code_digest": "ddf6e1e36f66d4dc9aaa4a01f5ffac5503e74cdff21df689c8f26ecb28c10072"
+        "reason": "仅精确HONOR launcher接受真实桌面XML已证天气与助手两包；前台、PNG、hash、冻结身份、未知执行及其他launcher守卫不变。",
+        "reviewed_by": "root",
+        "previous_code_digest": "ddf6e1e36f66d4dc9aaa4a01f5ffac5503e74cdff21df689c8f26ecb28c10072",
+        "current_code_digest": "3929d6e6f0c2f608597e6171828508c6e6b5bb37c893a12410a5ece1da297edc"
       }
     },
     "douyin_comment_scoring.scoring": {
