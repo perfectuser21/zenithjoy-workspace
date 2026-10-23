@@ -5,6 +5,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import YAML from 'yaml';
 const script = new URL('../../../.github/workflows/scripts/smoke/capability-phone-regression-smoke.sh', import.meta.url).pathname;
 function run(t, mode = 'pass') {
   const dir = mkdtempSync(join(tmpdir(), 'capability-smoke-test-'));
@@ -34,12 +35,32 @@ test('任何动态用例跳过都拒绝宣称完整回归通过', t => {
   assert.match(result.stderr, /跳过/);
   assert.doesNotMatch(result.stdout, /PASS capability-phone-regression-smoke/);
 });
+function capabilityDependency(workflow, wrapper, installer) {
+ const step=Object.values(YAML.parse(workflow).jobs).flatMap(j=>j.steps||[]).find(s=>s.run?.includes('prepare-smoke-os-packages.sh'));
+ assert.ok(step,'正式Smoke必须调用固定依赖准备入口');
+ assert.match(step.run,/^timeout 300s bash \.github\/workflows\/scripts\/prepare-smoke-os-packages\.sh$/);
+ assert.match(wrapper,/^packages=\(zsh python3 jq libxml2-utils\)$/m);
+ assert.match(wrapper,/if ! command -v ffmpeg[^\n]*packages\+=\(ffmpeg\)/);
+ assert.match(wrapper,/^bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh[^\n]*"\$\{packages\[@\]\}"$/m);
+ for(const tool of ['zsh','python3','jq','xmllint'])assert.match(wrapper,new RegExp('^'+tool+' --version$','m'));
+ assert.match(installer,/stage official-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{isolated\[@\]\}" "\$\{opts\[@\]\}" install -y "\$@"/);
+}
+const smokeWrapper=readFileSync(new URL('../../../.github/workflows/scripts/prepare-smoke-os-packages.sh',import.meta.url),'utf8');
+const signedInstaller=readFileSync(new URL('../../../.github/workflows/scripts/prepare-openclaw-os-packages.sh',import.meta.url),'utf8');
 test('完整动态回归进入必绿基线，Glob runner显式安装所选套的真实依赖',()=>{
  const baseline=readFileSync(new URL('../../../.github/workflows/scripts/smoke-baseline.txt',import.meta.url),'utf8').split('\n');
  assert.ok(baseline.includes('capability-phone-regression-smoke.sh'),'新动态回归必须纳入必绿棘轮');
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
- assert.match(workflow,/apt-get install -y zsh python3 jq libxml2-utils/);
+ capabilityDependency(workflow,smokeWrapper,signedInstaller);
  assert.match(workflow,/npm ci --workspace=apps\/api --workspace=apps\/agent-panel --include-workspace-root/);
+});
+test('capability依赖守卫拒绝包缺失、准备入口或helper断链及漏版本核验',()=>{
+ const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
+ for(const pkg of ['zsh','python3','jq','libxml2-utils'])assert.throws(()=>capabilityDependency(workflow,smokeWrapper.replace('packages=(zsh python3 jq libxml2-utils)','packages=('+['zsh','python3','jq','libxml2-utils'].filter(p=>p!==pkg).join(' ')+')'),signedInstaller));
+ for(const tool of ['zsh','python3','jq','xmllint'])assert.throws(()=>capabilityDependency(workflow,smokeWrapper.replace('\n'+tool+' --version\n','\ntrue\n'),signedInstaller));
+ for(const wrapper of [smokeWrapper.replace('prepare-openclaw-os-packages.sh','unrelated.sh'),smokeWrapper.replace('"${packages[@]}"','"zsh"')])assert.throws(()=>capabilityDependency(workflow,wrapper,signedInstaller));
+ assert.throws(()=>capabilityDependency(workflow.replace('prepare-smoke-os-packages.sh','unrelated.sh'),smokeWrapper,signedInstaller));
+ assert.throws(()=>capabilityDependency(workflow,smokeWrapper,signedInstaller.replace('install -y "$@"','install -y zsh')));
 });
 test('OpenClaw全套执行真实YAML契约前安装已锁定根依赖，不靠全局包或跳过',()=>{
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8');
