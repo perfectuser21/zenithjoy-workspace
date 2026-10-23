@@ -73,7 +73,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   try{unlinkSync(socket);}catch(error){if(error.code!=='ENOENT')throw error;}
   if(active){tainted=true;throw Error('COLLECTION_LEAF_DRAIN_UNVERIFIED');}
  })();
- const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),leaves:structuredClone(leaves),ledger});
+ const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,leaves:structuredClone(leaves),ledger});
  return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},
   seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }

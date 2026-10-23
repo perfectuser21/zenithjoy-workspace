@@ -36,7 +36,7 @@ export function verifyDiscoveryFilterEvidence({runDir,runId,run,profile,sourceCo
  }catch{return false;}
 }
 function validVideoUrl(value,id){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&((u.hostname==='v.douyin.com'&&/^\/[A-Za-z0-9_-]+\/?$/.test(u.pathname))||(['www.douyin.com','douyin.com','www.iesdouyin.com','iesdouyin.com'].includes(u.hostname)&&new RegExp('/video/'+id+'(?:/|$)').test(u.pathname)));}catch{return false;}}
-export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=run,sourceCommit=null,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0}){
+export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=run,sourceCommit=null,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0,captureBudgetMs=0}){
  if(!['keyword','benchmark'].includes(sourceKind))throw Error('发现来源类型无效');
  if(!Array.isArray(sources)||!sources.length)throw Error('发现来源为空');
  if(!Number.isSafeInteger(limit)||limit<0||limit>1000)throw Error('发现成功目标上限无效');
@@ -112,7 +112,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=r
      for(const target of targets){
       if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
       if(state.counts.persisted>=1000){stopReason='manifest_limit';break sourceLoop;}
-      boundary();const eid=run+'-candidate'+(state.counts.attempted+1);state.counts.attempted++;
+      boundary();if(captureBudgetMs&&budgetDeadline()-Date.now()<captureBudgetMs)throw Error('budget_exhausted');const eid=run+'-candidate'+(state.counts.attempted+1);state.counts.attempted++;
       if(!normalized(target.title)||!normalized(target.author)){state.counts.missing_identity++;failure(target,'missing_identity','卡片无稳定标题或作者');continue;}
       try{
        let fresh,hit,revealed=false,clipped=false,revealReceipt;
@@ -232,5 +232,5 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,runId=r
   firstPage=undefined;state.source_complete=false;state.write_complete=false;
   await source();const out=await write_videos();return {...out,source_completed:1};
  }
- return {source,write_videos,collect_videos,state};
+ return {source,write_videos,collect_videos,state,stopForBudget:()=>{stopReason='budget_exhausted';progress();return result();}};
 }

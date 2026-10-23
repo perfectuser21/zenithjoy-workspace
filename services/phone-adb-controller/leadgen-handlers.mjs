@@ -6,7 +6,8 @@ import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
 import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
 import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
-import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
+import {createDiscoveryAction} from './leadgen-discovery-action.mjs';
+import {createPhoneAction} from './leadgen-phone-action.mjs';
 import {captureCleanupReadback,verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
 import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
@@ -14,6 +15,7 @@ import {assertCaptureStrategy} from './capture-strategy.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createVideoAction} from './leadgen-video-action.mjs';
 import {startCollectionPhoneScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
+import {startDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
   if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
@@ -56,9 +58,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const hostPolicy=join(env.HOME,'.config/zenithjoy/adb-service.json');
   const managedAdb=Object.hasOwn(env,'ZJ_ADB_HOST_CONFIG')||existsSync(hostPolicy)||(()=>{try{return lstatSync(hostPolicy).isSymbolicLink();}catch{return false;}})();
   const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
-  let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
+  let locked=false,leased=[],qualified=[],historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`};
-  let collectionScope=null;const collectionProgress=new Map();
+  let collectionScope=null,discoveryScope=null,discoveryClosed=false;const collectionProgress=new Map();
   let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{
     const file=join(env.WFR_RUN_DIR,'activity.log');
@@ -72,15 +74,17 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     if(opts.receipt)state.nativeStopProof=null;
     try {
       collectionScope?.assertEvidence();
+      discoveryScope?.assert();
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
-        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...(collectionScope?.env.DOUYIN_PHONE_TMP_ROOT?{DOUYIN_PHONE_TMP_ROOT:collectionScope.env.DOUYIN_PHONE_TMP_ROOT}:{}),...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
+        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...discoveryScope?.env,...(collectionScope?.env.DOUYIN_PHONE_TMP_ROOT?{DOUYIN_PHONE_TMP_ROOT:collectionScope.env.DOUYIN_PHONE_TMP_ROOT}:{}),...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
       collectionScope?.assertEvidence();
       recordDiagnostic(result.stderr||'');
       if(opts.receipt)state.nativeStopUnproven=true;
       if(unknownFile&&existsSync(unknownFile)||/\bNATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN\b/.test(result.stderr||'')){const error=Error('NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN');error.executionStopped=false;throw error;}
       if(/\bRECORD_CAPTURE_EXIT_UNVERIFIED\b/.test(result.stderr||'')){const error=Error('RECORD_CAPTURE_EXIT_UNVERIFIED');error.executionStopped=false;throw error;}
+      if(!opts.discoveryLockRelease)discoveryScope?.assert();
       return result;
     } catch(error) {
       nativeFailure(error,command,args,opts);
@@ -89,19 +93,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   };
   const checked=async(command,args,opts={})=>{const r=await bounded(command,args,opts);if(r.code!==0)throw nativeFailure(Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`),command,args,opts);return r.stdout;};
   const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
-  const phone=async(command,...args)=>{
-    const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
-    if(!locked&&!['lock-acquire','preflight'].includes(command))throw Error('设备操作未持本批锁');
-    if(locked&&!['lock-refresh','lock-release'].includes(command)){
-      const held=await checked(ctl,['--profile',profile,'lock-refresh',run],{receipt:nativeReceipt()});
-      if(!held.startsWith('lock=refreshed'))throw Error('设备锁续期未确认');
-    }
-    const ownerArgs=['close-app','return-safe-desktop','current-video-link','native-audio-evidence','snapshot-evidence','ui-evidence'].includes(command)?['--lock-owner',run]:[];
-    // 取链包含nonce、UI重抓、复制与归位；仍由bounded夹在活动剩余预算内。
-    const receipt=nativeReceipt();
-    return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
-      {...(command==='current-video-link'?{maxDurationS:300}:command==='search-video-tab'?{maxDurationS:180}:command==='private-message-send'?{maxDurationS:480}:{}),receipt});
-  };
+  const phone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope,checked,nativeReceipt});
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
   const preflight=async()=>{
@@ -170,16 +162,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
     return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,...outreachProof};
   };
-  const getDiscovery=async()=>{
-    if(discovery)return discovery;
-    const requested=env.LEADGEN_SOURCES_FILE?readFileSync(env.LEADGEN_SOURCES_FILE,'utf8').split('\n').filter(Boolean):undefined;
-    const keywordResult=await rpc({kind:'keywords',line,run,limit:2,keywords:requested});
-    const sources=keywordResult.result;
-    if(keywordResult.config)appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(keywordResult.config)+'\n',{mode:0o600});
-    discovery=createDiscoveryHandlers({phone,execute:bounded,queue,profile,run,root,
-      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,sourceCommit,runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,budgetDeadline:()=>state.budgetDeadline||0});
-    return discovery;
-  };
+  const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;}});
+  const getDiscovery=discoveryAction.getDiscovery;
   const intake=async()=>{
     state.companyConfig=await queue('company_config',{step:'102'});
     appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.companyConfig)+'\n',{mode:0o600});
@@ -321,13 +305,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     },handoffContext:async()=>({profile,serial,line,run,account:state.account||null,company_id:(state.company_config||state.companyConfig)?.company_id||null,leased_video_ids:leased.map(v=>v.video_id),qualified_video_ids:qualified.map(v=>v.video_id),sampling_input:sampleInput}),
     source:async()=>(await getDiscovery()).source(),
     dedup:intake,
-    collect_videos:async()=>{const result=await (await getDiscovery()).collect_videos();
-      const readback=await queue('inspect_videos',{video_ids:result.videos.map(v=>v.videoId)});
-      const readbackFailures=result.videos.filter(v=>!readback.some(r=>r.video_id===v.videoId&&r.line_key)).length;
-      return {...result,persisted:result.counts.created,candidates:result.videos.length,videos_pushed:result.counts.created,
-        video_manifest_readback_failures:readbackFailures,manifest_verified:Number(readbackFailures===0),
-        ...(readbackFailures?{status:'partial'}:{}),
-        ...(result.failures.length||result.known_gaps.some(g=>g.kind!=='candidate_disappeared'||result.stop_reason!=='limit_reached')?{status:'partial'}:{})};},
+    collect_videos:discoveryAction.collect,
     qualification:async()=>{
       if(!state.companyConfig)state.companyConfig=await queue('company_config',{step:'102'});
       if(!state.companyConfig?.company_id||!state.companyConfig.version)throw Error('COMPANY_CONFIG_RECEIPT_MISSING');
@@ -493,6 +471,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {...r,bridge,mark_leads_readback_failures:readback.failures,bridge_readback_failures:bridgeReadback.failures+(bridge.verified===false?1:0),...(bridge.verified===false||!bridgeReadback.verified?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
+      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence});
+      try{
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}
       if(!locked&&failures.length===0)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
@@ -505,11 +485,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
           if(!verifyCleanupReadback({runDir:env.WFR_RUN_DIR,scope,digest:cleanupProof.digest}))throw Error('CLEANUP_NATIVE_READBACK_INVALID');
         }
         desktop=true;
+        await discoveryScope?.seal();
         const result=await phone('lock-release',run);if(!result.startsWith('lock=released'))throw Error('锁释放未确认');released=true;locked=false;
       }catch(error){failures.push({reason:error.message});}}
       return {close_app:closed,close_app_attempts:Number(closed),safe_desktop:desktop,safe_desktop_visible:Number(desktop),lock_released:Number(released),no_lock:!locked,failures,
         ...(cleanupProof?{cleanup_readback_verified:Number(desktop),cleanup_readback_digest:cleanupProof.digest}:{}),
-        ...(failures.length?{status:'partial'}:{})};},
+        ...(failures.length?{status:'partial'}:{})};
+      }finally{await discoveryScope?.close();discoveryScope=null;}},
   };
 }
 

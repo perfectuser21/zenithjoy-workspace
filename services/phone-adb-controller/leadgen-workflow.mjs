@@ -5,12 +5,14 @@ import {runWorkflow} from './activity-commander.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
 import {collectionEvidenceProof} from './collection-phone-scope.mjs';
+import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 
 export async function invokeNativeActivity(execute,state){
   try{
     const result=await execute();
     if(state.nativeStopUnproven&&['partial','failed'].includes(result?.status)){
-      const proof=collectionEvidenceProof(result,{run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,activity:state.currentActivity});
+      const scope={run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,activity:state.currentActivity};
+      const proof=collectionEvidenceProof(result,scope)||discoveryCleanupEvidence(result,scope);
       if(!proof)state.executionUnknown=true;
       return {...result,execution_stopped:false};
     }
@@ -32,13 +34,14 @@ import lineRoutes from './line-routes.js';
 import {verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
 import {summarizeCommanderEvidence} from './commander-model-receipt.mjs';
 
-export function activityExecutionDeadline({activity,env,previous,now=Date.now()}){
+export function activityExecutionDeadline({activity,env,previous,now=Date.now(),cleanupReserveMs=0}){
   const budget=Number(activity.budget?.max_duration_s||120);
   const requested=activity.key==='collect_videos'?Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||budget):budget;
   const start=Number(env.WF_RUN_START_TS),whole=Number(env.WF_RUN_MAX_SECONDS);
   if(!Number.isSafeInteger(budget)||budget<1||!Number.isSafeInteger(requested)||requested<1||requested>budget||!Number.isSafeInteger(start)||start<=0||!Number.isSafeInteger(whole)||whole<1)throw Error('请求预算超过Activity合同或全局预算非法');
   if(previous!==undefined&&!Number.isSafeInteger(previous))throw Error('原Activity截止非法');
-  return Math.min(previous??now+requested*1000,(start+whole)*1000);
+  if(!Number.isSafeInteger(cleanupReserveMs)||cleanupReserveMs<0||cleanupReserveMs>=whole*1000)throw Error('原全局清场预留非法');
+  return Math.min(previous??now+requested*1000,(start+whole)*1000-(activity.key==='collect_videos'?cleanupReserveMs:0));
 }
 
 async function main(){
@@ -96,7 +99,8 @@ async function main(){
   const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:binding.task_id});
   const activityDeadlines=new Map();
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
-    const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key)});
+    const cleanupReserveMs=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?Number(activities.find(a=>a.key==='cleanup')?.budget?.max_duration_s||120)*1000:0;
+    const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key),cleanupReserveMs});
     activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;
     handlers.state.currentActivity=activity.key;
     if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
