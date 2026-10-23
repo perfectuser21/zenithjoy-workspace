@@ -7839,3 +7839,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "单owner显式维护CLI、fresh官方读回与内核互斥CAS；不证明旧业务成功或释放手机，GP-Anchor: line02/keyword_acquisition keep-green"
+
+- id: leadgen-single-video-recovery
+  path: services/phone-adb-controller/__tests__/single-video-recovery.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实scratchPG：精确单VID授权恢复/原子审计/并发幂等/COMMIT未知读回，不操作业务库"
+
+- id: leadgen-single-video-recovery-authority
+  path: services/phone-adb-controller/__tests__/single-video-recovery-authority.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "固定canonical决定和原件、真实adapter官方读取/本人双锁协议与未知拒绝；不做手机动作"
