@@ -7217,6 +7217,14 @@ agent_suite:
   product: AI员工
   note: "无合格视频真实空评论工件；缺文件与坏主页链接仍拦截，零评论不冒充采样成功"
 
+- id: leadgen-collection-evidence-layout
+  path: services/phone-adb-controller/__tests__/collection-evidence-layout.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "Darwin真实leaf验证固定授权证据别名与目录身份；拒绝start/finish/fresh漂移及坏或活pid，零合格项不创建设备服务；实机评论仍独立验收"
+
 - id: leadgen-split-leadgen-discovery
   path: services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs
   type: unit
