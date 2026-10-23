@@ -9,6 +9,7 @@ const hash=x=>createHash('sha256').update(canonical(x)).digest('hex');
 const fail=code=>{throw Error('RECOVERY_'+code);};
 function createRecovery({scope,decision,run,authority:authorityFactory}){
 const SCOPE=scope,DECISION=decision,RECOVERY_RUN=run;
+const qualificationRun=SCOPE.qualification_run||SCOPE.original_run;
 const scopeHash=hash(SCOPE),hex=/^[a-f0-9]{64}$/;
 function checkAuthority(a,input){
  let s;try{s=JSON.parse(a?.decision?.decision);}catch{fail('DECISION_INVALID');}
@@ -35,15 +36,25 @@ function receiptResult(receipts,row,authority,input){
  if(row.process_status===SCOPE.target_status&&hash(row)===r.detail.after_sha256)return {status:'already_applied',decision_id:DECISION,video_id:input.video_id};
  const c=row.judgment_config;
  if(row.line_key!=='jinuo'||row.video_id!==input.video_id||row.video_url!==`https://www.douyin.com/video/${input.video_id}`||row.judgment_status!=='matched'
-  ||c?.company_id!==SCOPE.company_id||c.tenant_id!==SCOPE.tenant_id||c.version!==14||c.policy_id!==SCOPE.policy_id||![SCOPE.original_run,row.harvest_batch].includes(c.run_id)
+  ||c?.company_id!==SCOPE.company_id||c.tenant_id!==SCOPE.tenant_id||c.version!==14||c.policy_id!==SCOPE.policy_id||![qualificationRun,row.harvest_batch].includes(c.run_id)
   ||!/^处理中:[a-zA-Z0-9_-]+$/.test(row.process_status)&&row.process_status!=='评论已采'
   ||row.process_status.startsWith('处理中:')&&row.harvest_batch!==row.process_status.slice(4))fail('RECEIPT_STATE_CONFLICT');
  return {status:'consumed',decision_id:DECISION,video_id:input.video_id};
 }
+// 仅显式V2资格来源启用；V1仍沿原单run合同。
+async function qualificationPolicy(pool){
+ const rows=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=ANY($2::text[])',[SCOPE.company_id,[SCOPE.original_run,qualificationRun]])).rows;
+ if(rows.length!==2||[SCOPE.original_run,qualificationRun].some(run=>rows.filter(f=>f.run_id===run).length!==1)
+  ||rows.some(f=>f.company_id!==SCOPE.company_id||f.tenant_id!==SCOPE.tenant_id||f.version!==SCOPE.company_config_version||f.source_run!=='cicd24c9_101_20261023_2013'
+   ||f.snapshot?.company_id!==SCOPE.company_id||f.snapshot.tenant_id!==SCOPE.tenant_id||f.snapshot.version!==SCOPE.company_config_version||f.snapshot.policy_id!==SCOPE.policy_id)
+  ||hash(rows[0].snapshot)!==hash(rows[1].snapshot))fail('QUALIFICATION_SOURCE_CONFLICT');
+ return hash(rows[0].snapshot);
+}
 async function consumedSource(pool,row,result){
+ const policyHash=SCOPE.qualification_run?await qualificationPolicy(pool):null;
  if(result?.status==='consumed'){
   const a=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[SCOPE.company_id,row.harvest_batch])).rows;
-  const f=a[0];if(a.length!==1||f.tenant_id!==SCOPE.tenant_id||f.version!==14||f.source_run!=='cicd24c9_101_20261023_2013'||f.snapshot?.policy_id!==SCOPE.policy_id)fail('RECEIPT_SOURCE_CONFLICT');
+  const f=a[0];if(a.length!==1||f.tenant_id!==SCOPE.tenant_id||f.version!==14||f.source_run!=='cicd24c9_101_20261023_2013'||f.snapshot?.policy_id!==SCOPE.policy_id||policyHash&&hash(f.snapshot)!==policyHash)fail('RECEIPT_SOURCE_CONFLICT');
  }
  return result;
 }
@@ -71,10 +82,11 @@ async function recoverSingleVideo(pool,input,deps){
   if(receipts.length){const result=await consumedSource(client,row,receiptResult(receipts,row,authority,input));await client.query('ROLLBACK');return result;}
   const c=row.judgment_config;
   if(row.process_status!==SCOPE.source_status||row.judgment_status!=='matched'||row.harvest_batch!==SCOPE.original_run||row.video_url!==`https://www.douyin.com/video/${input.video_id}`
-   ||c?.company_id!==SCOPE.company_id||c.tenant_id!==SCOPE.tenant_id||c.version!==14||c.policy_id!==SCOPE.policy_id||c.run_id!==SCOPE.original_run)fail('VIDEO_SCOPE_CONFLICT');
+   ||c?.company_id!==SCOPE.company_id||c.tenant_id!==SCOPE.tenant_id||c.version!==14||c.policy_id!==SCOPE.policy_id||c.run_id!==qualificationRun)fail('VIDEO_SCOPE_CONFLICT');
   const frozen=(await client.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[SCOPE.company_id,SCOPE.original_run])).rows;
   const f=frozen[0];if(frozen.length!==1||f.tenant_id!==SCOPE.tenant_id||f.version!==14||f.source_run!=='cicd24c9_101_20261023_2013'
    ||f.snapshot?.company_id!==SCOPE.company_id||f.snapshot.tenant_id!==SCOPE.tenant_id||f.snapshot.version!==14||f.snapshot.policy_id!==SCOPE.policy_id)fail('POLICY_CONFLICT');
+  if(SCOPE.qualification_run)await qualificationPolicy(client);
   const comments=(await client.query('SELECT id FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND source_video_url=$2 LIMIT 1',['jinuo',row.video_url])).rows;
   if(comments.length)fail('COMMENTS_PRESENT');
   // 事务持锁后再次读取真实资源与决定，不能信调用方的布尔值或缓存批准。
