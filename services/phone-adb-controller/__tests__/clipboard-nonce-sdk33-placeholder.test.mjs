@@ -54,7 +54,7 @@ require_target_for(){ :; }
 foreground_package(){ print 'com.ss.android.ugc.aweme/.Search'; }
 ui_evidence(){ "$ADB" test-ui "$EVIDENCE_ROOT/$1.xml"; }
 _leave_scratch_route(){ :; }
-${['nonce_sdk31_field','nonce_native_copy','seed_clipboard_nonce'].map(fn).join('\n')}
+${['nonce_sdk31_field','nonce_native_copy','cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(fn).join('\n')}
 ${flags.registryProfile?registryParsing:flags.sdkMode==='unset'?'unset DEVICE_SDK':''}
 print -r -- "\${DEVICE_SDK-unset}|$SCREEN_W|$SCREEN_H" > "$EVIDENCE_ROOT/fixture-context.txt"
 seed_clipboard_nonce fixture`;

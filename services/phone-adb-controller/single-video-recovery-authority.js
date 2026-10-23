@@ -19,10 +19,11 @@ const proofs={
  'honor24c9-102-central-lock-readback.json':'34312fe718f5412d00a03bf7f4e0b8fab7ec85a83e72bc5a81500b3ac0ff77af',
  'honor24c9-102-local-lock-status.json':'77c2e2922f0ce42e6821c6c0a683a757699e74a0c1a1ab6fe8b555f0a7d88a73'};
 const allowed=new Set(['op','line','run','decision_id','maintenance_task_id','video_id','evidence_root']);
-function request(input){if(!input||input.run!==RECOVERY_RUN||Object.keys(input).some(k=>!allowed.has(k)))fail('REQUEST_INVALID');}
-function proofFiles(root){
- const records={};for(const [name,sha]of Object.entries(proofs)){const fd=openSync(join(root,name),constants.O_RDONLY|constants.O_NOFOLLOW);try{const s=fstatSync(fd),raw=readFileSync(fd);if(!s.isFile()||s.nlink!==1||s.size>10*1024*1024||createHash('sha256').update(raw).digest('hex')!==sha)fail('EVIDENCE_INVALID');if(name==='honor24c9-102-local-lock-status.json'){if(raw.toString().trim()!=='lock=free')fail('EVIDENCE_INVALID');}else records[name]=JSON.parse(raw);}finally{closeSync(fd);}}
- const p=records['honor24c9-102-original-split-result.json'];if(p.status!=='failed'||p.run_id!==`douyin_video_processing-${SCOPE.original_run}__a1`||p.source_commit!=='24c9e6b97b81ae144985474d9e33665bf65a6a8e')fail('EVIDENCE_INVALID');
+function request(input,run=RECOVERY_RUN){if(!input||input.run!==run||Object.keys(input).some(k=>!allowed.has(k)))fail('REQUEST_INVALID');}
+function proofFiles(root,config={}){
+ const scope=config.scope||SCOPE,proofSet=config.proofs||proofs;
+ const records={};for(const [name,sha]of Object.entries(proofSet)){const fd=openSync(join(root,name),constants.O_RDONLY|constants.O_NOFOLLOW);try{const s=fstatSync(fd),raw=readFileSync(fd);if(!s.isFile()||s.nlink!==1||s.size>10*1024*1024||createHash('sha256').update(raw).digest('hex')!==sha)fail('EVIDENCE_INVALID');if(name===(config.lockTextFile||'honor24c9-102-local-lock-status.json')){if(raw.toString().trim()!=='lock=free')fail('EVIDENCE_INVALID');}else records[name]=JSON.parse(raw);}finally{closeSync(fd);}}
+ const record=records[config.splitFile||'honor24c9-102-original-split-result.json'],p=config.splitContainer?record[config.splitContainer]:record;if(p.status!=='failed'||p.run_id!==`douyin_video_processing-${scope.original_run}__a1`||p.source_commit!=='24c9e6b97b81ae144985474d9e33665bf65a6a8e')fail('EVIDENCE_INVALID');
  return records;
 }
 // 原PID的真实内核start identity和PGID读回；未知/权限失败不是退出证明。
@@ -49,8 +50,11 @@ for line in subprocess.check_output(['/bin/ps','-axo','pid=,pgid=,command='],tex
  if p['old'] in cmd or p['session'] in cmd or p['device'] in cmd or ('douyin-phone' in cmd and 'legacy' in cmd):active.append(pid)
 print(json.dumps({'live':live,'groups':groups,'active':active}))
 `;
-function createAuthority(io={}){
- const execute=io.execute||(async(command,args,options)=>{const p=exec(command,args,options);p.child.stdin?.end(options.input||'');return p;}),readProofs=io.readProofs||proofFiles;
+function createAuthority(io={},config={}){
+ const scope=config.scope||SCOPE,decision=config.decision||DECISION,recoveryRun=config.run||RECOVERY_RUN,proofSet=config.proofs||proofs;
+ const session=config.session||SESSION,sessionId=config.sessionId||SESSION_ID;
+ const validate=input=>request(input,recoveryRun);
+ const execute=io.execute||(async(command,args,options)=>{const p=exec(command,args,options);p.child.stdin?.end(options.input||'');return p;}),readProofs=io.readProofs||(root=>proofFiles(root,config));
  const token=io.readToken||(()=>{const fd=openSync(join(homedir(),'.credentials/single-video-recovery-internal.env'),constants.O_RDONLY|constants.O_NOFOLLOW);try{const s=fstatSync(fd);if(!s.isFile()||s.uid!==process.getuid()||(s.mode&0o077)!==0)fail('CREDENTIAL_INVALID');const m=readFileSync(fd,'utf8').match(/^CECELIA_INTERNAL_TOKEN=([^\r\n]+)$/m);if(!m)fail('CREDENTIAL_INVALID');return m[1];}finally{closeSync(fd);}});
  const brain=io.brain||(async(path,body)=>{
   if(!/^\/(?:strategic-decisions\?made_by=user&limit=100|tasks\/[a-f0-9-]{36}|device-locks(?:\/acquire|\/release)?)$/.test(path))fail('BRAIN_ORIGIN_INVALID');
@@ -59,36 +63,36 @@ function createAuthority(io={}){
  });
  const run=async(command,args,timeout=20000,input)=>{try{const r=await execute(command,args,{encoding:'utf8',timeout,maxBuffer:4*1024*1024,input});return r.stdout;}catch{fail('EXECUTION_UNKNOWN');}};
  const official=async(method,params)=>{try{return JSON.parse(await run('openclaw',['gateway','call',method,'--params',JSON.stringify(params),'--json','--timeout','10000'],12000));}catch{fail('SESSION_UNKNOWN');}};
- async function readAuthority(input){request(input);let d,t,m;
-  try{const list=await brain('/strategic-decisions?made_by=user&limit=100');const rows=list?.success===true?list.data:null;const matches=Array.isArray(rows)?rows.filter(r=>r.id===DECISION):[];
+ async function readAuthority(input){validate(input);let d,t,m;
+  try{const list=await brain('/strategic-decisions?made_by=user&limit=100');const rows=list?.success===true?list.data:null;const matches=Array.isArray(rows)?rows.filter(r=>r.id===decision):[];
    if(matches.length!==1||list.has_more||list.hasMore)fail('DECISION_NOT_FOUND');d=matches[0];
-   t=await brain('/tasks/'+SCOPE.original_task_id);m=await brain('/tasks/'+input.maintenance_task_id);
+   t=await brain('/tasks/'+scope.original_task_id);m=await brain('/tasks/'+input.maintenance_task_id);
   }catch(e){if(e.message==='RECOVERY_DECISION_NOT_FOUND')throw e;fail('AUTHORITY_UNAVAILABLE');}
   let records;try{records=readProofs(input.evidence_root||'/tmp');}catch{fail('EVIDENCE_INVALID');}
-  return {decision:d,originalTask:t,maintenanceTask:m,actor:'codex:single-video-recovery',evidence_sha256:hash(proofs),records};
+  return {decision:d,originalTask:t,maintenanceTask:m,actor:'codex:single-video-recovery',evidence_sha256:hash(proofSet),records};
  }
  async function stopped(records){
   const start=Date.now(),fresh=value=>Number.isFinite(value)&&value>=start-1000&&value<=Date.now()+1000;
-  const d=await official('sessions.describe',{key:SESSION,agentId:'work-commander'}),s=d.session;
-  if(s?.key!==SESSION||s.sessionId!==SESSION_ID||s.hasActiveRun!==false||!Array.isArray(s.activeRunIds)||s.activeRunIds.length||s.status!=='done'||!Number.isFinite(s.endedAt)||!fresh(s.snapshotAt))fail('SESSION_ACTIVE_OR_UNKNOWN');
-  const h=await official('chat.history',{sessionKey:SESSION,limit:1}),q=h.pendingInputs;
-  if(h.sessionKey!==SESSION||h.sessionId!==SESSION_ID||q?.total!==0||!Array.isArray(q.items)||q.items.length||q.queuedCount!==undefined&&q.queuedCount!==0||q.nextBefore!==undefined)fail('SESSION_ACTIVE_OR_UNKNOWN');
-  const c=await official('sessions.list',{agentId:'work-commander',spawnedBy:SESSION,limit:5,includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false});
+  const d=await official('sessions.describe',{key:session,agentId:'work-commander'}),s=d.session;
+  if(s?.key!==session||s.sessionId!==sessionId||s.hasActiveRun!==false||!Array.isArray(s.activeRunIds)||s.activeRunIds.length||s.status!=='done'||!Number.isFinite(s.endedAt)||!fresh(s.snapshotAt))fail('SESSION_ACTIVE_OR_UNKNOWN');
+  const h=await official('chat.history',{sessionKey:session,limit:1}),q=h.pendingInputs;
+  if(h.sessionKey!==session||h.sessionId!==sessionId||q?.total!==0||!Array.isArray(q.items)||q.items.length||q.queuedCount!==undefined&&q.queuedCount!==0||q.nextBefore!==undefined)fail('SESSION_ACTIVE_OR_UNKNOWN');
+  const c=await official('sessions.list',{agentId:'work-commander',spawnedBy:session,limit:5,includeLastMessage:false,includeDerivedTitles:false,includeActivitySummary:false});
   if(!fresh(c.ts)||c.hasMore!==false||!Array.isArray(c.sessions)||c.sessions.length)fail('SESSION_ACTIVE_OR_UNKNOWN');
-  const core=await official('tools.invoke',{name:'subagents',sessionKey:SESSION,args:{action:'list'}}),v=core.output?.details;
-  if(core.ok!==true||core.toolName!=='subagents'||core.source!=='core'||v?.status!=='ok'||v.action!=='list'||v.callerIsSubagent!==false||v.callerSessionKey!==SESSION||v.requesterSessionKey!==SESSION||!Array.isArray(v.active)||v.active.length)fail('SESSION_ACTIVE_OR_UNKNOWN');
+  const core=await official('tools.invoke',{name:'subagents',sessionKey:session,args:{action:'list'}}),v=core.output?.details;
+  if(core.ok!==true||core.toolName!=='subagents'||core.source!=='core'||v?.status!=='ok'||v.action!=='list'||v.callerIsSubagent!==false||v.callerSessionKey!==session||v.requesterSessionKey!==session||!Array.isArray(v.active)||v.active.length)fail('SESSION_ACTIVE_OR_UNKNOWN');
   const host=[];
   for(const name of ['mmv','xian-m4']){
-   const proof=records[`honor24c9-102-${name}-stop-proof.json`],identities=proof.native_start_identity_readback||[];
-   if(name==='xian-m4'&&identities.length!==246)fail('NATIVE_EVIDENCE_INVALID');
-   const data=Buffer.from(JSON.stringify({identities,groups:name==='xian-m4'?records['honor24c9-102-group-readback.json'].original_groups:[],old:SCOPE.original_run,session:SESSION_ID,device:DEVICE})).toString('base64');
+   const proof=records[name==='mmv'?(config.mmvProofFile||'honor24c9-102-mmv-stop-proof.json'):(config.xianProofFile||'honor24c9-102-xian-m4-stop-proof.json')],identities=proof.native_start_identity_readback||[];
+   if(name==='xian-m4'&&identities.length!==(config.identityCount||246))fail('NATIVE_EVIDENCE_INVALID');
+   const data=Buffer.from(JSON.stringify({identities,groups:name==='xian-m4'?(config.groupsFromNative?[...new Set(records[config.splitFile].native.flatMap(r=>r.processes||[]).map(p=>p.pgid).filter(Number.isSafeInteger))]:records['honor24c9-102-group-readback.json'].original_groups):[],old:scope.original_run,session:sessionId,device:DEVICE})).toString('base64');
    const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";
    const raw=name==='mmv'?await run('python3',['-c',hostProgram,data]):await run('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=10','xian-m4','python3 - '+quote(data)],30000,hostProgram);
    const r=JSON.parse(raw);if(!Array.isArray(r.live)||r.live.length||!Array.isArray(r.groups)||r.groups.length||!Array.isArray(r.active)||r.active.length)fail('NATIVE_ACTIVE_OR_UNKNOWN');host.push(r);
   }
   return hash({session:s,queue:q,children:c,core,host});
  }
- async function acquireGuard(input){request(input);const auth=await readAuthority(input);await stopped(auth.records);
+ async function acquireGuard(input){validate(input);const auth=await readAuthority(input);await stopped(auth.records);
   let manifest;try{manifest=io.readManifest?io.readManifest():JSON.parse(readFileSync(resolve(__dirname,'deployment-manifest.json'),'utf8'));}catch{fail('SOURCE_INVALID');}if(!/^[a-f0-9]{40}$/.test(manifest.source_commit||''))fail('SOURCE_INVALID');
   const relative='.local/share/zenithjoy/phone-candidates/'+manifest.source_commit+'/runtime/douyin-phone-adb';
   const phone=async(command,owner)=>{

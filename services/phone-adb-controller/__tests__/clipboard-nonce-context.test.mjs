@@ -10,16 +10,24 @@ const fn=name=>controller.match(new RegExp(name+'\\(\\) \\{[\\s\\S]*?\\n\\}'))?.
 function run(flags={}) {
  const dir=mkdtempSync(join(tmpdir(),'nonce-context-')),adb=join(dir,'adb');
  writeFileSync(join(dir,'state.json'),JSON.stringify({field:'',clip:'https://v.douyin.com/Old/',selected:false,typed:false,escaped:false,events:[]}));
+ if(flags.staleEmpty)writeFileSync(join(dir,'fixture-seed-empty.xml'),readFileSync(widgetFixture));
  writeFileSync(adb,`#!/usr/bin/python3
 import os,sys,json,xml.etree.ElementTree as E
 from pathlib import Path
 p=Path(os.environ['D'])/'state.json';s=json.loads(p.read_text());a=sys.argv[1:];f=json.loads(os.environ['FLAGS'])
 if a[:1]==['-s']:a=a[2:]
 s['events'].append(' '.join(a))
-if a[:1]==['test-ui']:
+if a[:3]==['shell','screencap','-p']:
+ if f.get('snapshotFail'):sys.exit(1)
+elif a[:1]==['pull']:Path(a[2]).write_bytes(b'fixture-png')
+elif a[:1]==['test-ui']:
  r=E.Element('hierarchy')
  if s['escaped'] and f.get('widget'):
   raw=Path(os.environ['WIDGET_FIXTURE']).read_text().replace('抖音搜索',f.get('widgetName','抖音搜索')).replace('com.hihonor.android.launcher',f.get('widgetPackage','com.hihonor.android.launcher'))
+  if f.get('overlapAdd'):raw=raw.replace('bounds="[620,2402][1082,2546]"','bounds="[118,2402][580,2546]"')
+  if f.get('extraText'):raw=raw.replace('</hierarchy>','<node text="无害说明" package="com.hihonor.android.launcher" class="android.widget.TextView" clickable="false" />'+'</hierarchy>')
+  if f.get('otherButton'):raw=raw.replace('</hierarchy>','<node text="其它操作" package="com.hihonor.android.launcher" class="android.widget.Button" clickable="true" enabled="true" resource-id="android:id/button3" />'+'</hierarchy>')
+  if f.get('duplicateCancel'):raw=raw.replace('</hierarchy>','<node text="取消" package="com.hihonor.android.launcher" class="android.widget.Button" clickable="true" enabled="true" resource-id="android:id/button2" />'+'</hierarchy>')
   Path(a[1]).write_text(raw)
  elif s['escaped']:
   E.SubElement(r,'node',{'text':'添加到主屏幕','package':'com.hihonor.android.launcher','class':'android.widget.TextView'})
@@ -29,11 +37,16 @@ if a[:1]==['test-ui']:
   E.SubElement(r,'node',attrs)
  if not (s['escaped'] and f.get('widget')):E.ElementTree(r).write(a[1],encoding='unicode')
  if a[1].endswith('-seed-typed.xml'):s['typed']=True
-elif a[:1]==['test-foreground']:print(f.get('widgetForeground','com.hihonor.android.launcher/com.hihonor.android.launcher.dragndrop.AddItemActivity') if s['escaped'] and f.get('widget') else 'com.hihonor.android.launcher/.Main' if s['escaped'] else 'com.ss.android.ugc.aweme/.Search')
+elif a[:1]==['test-foreground']:
+ if s.get('closing'):
+  s['closing']-=1
+  if not s['closing']:s['escaped']=False;s['field']=''
+ print(f.get('widgetForeground','com.hihonor.android.launcher/com.hihonor.android.launcher.dragndrop.AddItemActivity') if s['escaped'] and f.get('widget') else 'com.hihonor.android.launcher/.Main' if s['escaped'] else 'com.ss.android.ugc.aweme/.Search')
 elif a[:3]==['shell','input','tap'] and s['escaped'] and f.get('widget'):
  if a[3:]==['349','2474']:
   s['dismissals']=s.get('dismissals',0)+1
-  if not f.get('cancelFail'):s['escaped']=False;s['field']=''
+  if f.get('closeDelayReads'):s['closing']=f['closeDelayReads']
+  elif not f.get('cancelFail'):s['escaped']=False;s['field']=''
 elif a[:3]==['shell','input','text']:s['field']=a[3]
 elif a[:3]==['shell','input','keycombination']:
  s['selected']=not f.get('noSelection')
@@ -61,12 +74,13 @@ require_held_lock(){ [[ -n "$LOCK_OWNER" && "$LOCK_OWNER" != wrong ]] || die CLI
 require_target_for(){ :; }
 foreground_package(){ "$ADB" test-foreground; }
 node_center(){ print '200 65'; }
+snapshot_evidence(){ print -r -- fake-png > "$EVIDENCE_ROOT/$1.png"; print -r -- "$EVIDENCE_ROOT/$1.png"; }
 ui_evidence(){ "$ADB" test-ui "$EVIDENCE_ROOT/$1.xml"; }
 _leave_scratch_route(){ [[ "$LEAVE_FAIL" != 1 ]]; }
 ${['nonce_sdk31_field','nonce_native_copy','nonce_sdk31_copy','cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(fn).join('\n')}
 seed_clipboard_nonce fixture`;
- const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:15000,env:{...process.env,D:dir,WIDGET_FIXTURE:widgetFixture,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,FLAGS:JSON.stringify(flags),ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,DEVICE_SDK:'33',SCREEN_W:flags.widget?'1200':'720',SCREEN_H:flags.widget?'2664':'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',LOCK_OWNER:flags.noOwner?'':flags.wrongOwner?'wrong':'fixture-only',LEAVE_FAIL:flags.leaveFail?'1':'0'}});
- return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'),'utf8'))};
+ const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:15000,env:{...process.env,D:dir,WIDGET_FIXTURE:widgetFixture,PHONE_CONTROLLER_DIR:new URL('../',import.meta.url).pathname,FLAGS:JSON.stringify(flags),ADB:adb,SERIAL:'FAKE',REMOTE_SHOT:'/sdcard/widget-fixture.png',PYTHON_BIN:'/usr/bin/python3',EVIDENCE_ROOT:dir,DEVICE_SDK:'33',SCREEN_W:flags.widget?'1200':'720',SCREEN_H:flags.widget?'2664':'1280',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',LOCK_OWNER:flags.noOwner?'':flags.wrongOwner?'wrong':'fixture-only',LEAVE_FAIL:flags.leaveFail?'1':'0'}});
+ return {...r,dir,state:JSON.parse(readFileSync(join(dir,'state.json'),'utf8'))};
 }
 test('成功路径保持完整nonce证明，typed之后不再发送组合键',()=>{
  const r=run();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/^clipnonce[a-f0-9]{32}\n$/);
@@ -101,3 +115,14 @@ test('真实HONOR抖音搜索小组件在empty抢前台时，只取消一次并�
  const values=r.state.events.filter(e=>e.startsWith('shell input text ')).map(e=>e.split(' ').at(-1));assert.equal(values.length,2);assert.notEqual(values[0],values[1]);assert.ok(r.state.events.some(e=>e.endsWith('-seed-pasted.xml')));
 });
 for(const [name,flags]of Object.entries({其它launcher:{widgetPackage:'com.other.launcher'},非抖音widget:{widgetName:'天气'},错误Activity:{widgetForeground:'com.hihonor.android.launcher/.Main'},取消未生效:{cancelFail:true},第二次浮层:{repeatWidget:true},无owner:{noOwner:true}}))test('widget精确守卫拒绝 '+name,()=>{const r=run({widget:true,...flags});assert.notEqual(r.status,0);assert.ok((r.state.dismissals||0)<=1);});
+
+test('widget多一个无害文本仍按唯一语义取消，短Activity规范形态等价',()=>{const r=run({widget:true,extraText:true,widgetForeground:'com.hihonor.android.launcher/.dragndrop.AddItemActivity'});assert.equal(r.status,0,r.stderr);assert.equal(r.state.dismissals,1);});
+for(const flag of ['otherButton','duplicateCancel'])test('widget额外操作或重复取消不点击 '+flag,()=>{const r=run({widget:true,[flag]:true});assert.notEqual(r.status,0);assert.equal(r.state.dismissals||0,0);});
+test('本次copy阶段失败不能借旧empty文件触发取消',()=>{const r=run({widget:true,staleEmpty:true,escape:'copy'});assert.notEqual(r.status,0);assert.equal(r.state.dismissals||0,0);});
+
+test('只点一次取消后允许有界关闭动画，随后重做完整nonce',()=>{const r=run({widget:true,closeDelayReads:3});assert.equal(r.status,0,r.stderr);assert.equal(r.state.dismissals,1);assert.equal(r.state.field,r.state.clip);});
+test('取消动画超过明确上限保持失败且不再点击',()=>{const r=run({widget:true,closeDelayReads:9999});assert.notEqual(r.status,0);assert.equal(r.state.dismissals,1);assert.equal(readFileSync(join(r.dir,'fixture-widget-status.txt'),'utf8').trim(),'wait_app');});
+
+test('取消与添加按钮bounds重叠拒绝，不能误点添加',()=>{const r=run({widget:true,overlapAdd:true});assert.notEqual(r.status,0);assert.equal(r.state.dismissals||0,0);assert.match(readFileSync(join(r.dir,'fixture-widget-identification.txt'),'utf8'),/overlapping_actions/);assert.equal(readFileSync(join(r.dir,'fixture-widget-status.txt'),'utf8').trim(),'identify');});
+
+test('widget分支保留本次前台截图路径与识别原件；截图失败拒绝不点取消',()=>{const ok=run({widget:true});assert.equal(ok.status,0,ok.stderr);for(const name of ['fixture-widget-foreground.txt','fixture-widget-confirm.png','fixture-widget-snapshot-path.txt','fixture-widget-identification.txt'])assert.ok(readFileSync(join(ok.dir,name)).length||name.endsWith('identification.txt'));const bad=run({widget:true,snapshotFail:true});assert.notEqual(bad.status,0);assert.equal(bad.state.dismissals||0,0);});

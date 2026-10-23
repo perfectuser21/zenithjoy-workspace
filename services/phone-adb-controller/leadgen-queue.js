@@ -67,8 +67,16 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   deps={judgeComment,...deps};
   const { lineKey } = resolveLine(input.line);
   const { op, run } = input;
+  if(op==='recover_single_video_0353_readback')return require('./single-video-recovery-0353.js').readbackSingleVideo(pool,input,deps.recovery0353);
+  if(op==='recover_single_video_0353')return require('./single-video-recovery-0353.js').recoverSingleVideo(pool,input,deps.recovery0353);
   if(op==='recover_single_video_readback')return require('./single-video-recovery.js').readbackSingleVideo(pool,input,deps.recovery);
   if(op==='recover_single_video')return require('./single-video-recovery.js').recoverSingleVideo(pool,input,deps.recovery);
+  if(op==='verify_producer_company'){
+    const {validateProducerDescriptor}=await import('./producer-descriptor.mjs');const d=validateProducerDescriptor(input.descriptor);if(!validRun(run)||lineKey!==d.line)throw Error('PRODUCER_REQUEST_SCOPE_INVALID');
+    const rows=(await pool.query('SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[d.company_id,d.run_tag])).rows;
+    const f=rows[0],p=f?.snapshot;const verified=rows.length===1&&f.tenant_id===d.tenant_id&&f.version===d.company_config_version&&p?.company_id===d.company_id&&p.tenant_id===d.tenant_id&&p.version===d.company_config_version&&p.policy_id===d.policy_id;
+    return {verified,...(verified?{company_id:f.company_id,tenant_id:f.tenant_id,version:f.version,run_id:f.run_id,policy_id:p.policy_id}:{})};
+  }
   const sourceRun=input.source_run??null;
   if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');

@@ -30,3 +30,14 @@ for(const [key,value]of Object.entries({source_commit:'c'.repeat(40),snapshot_sh
 
 test('原producer公司PG冻结核验失败不能靠descriptor自报通过',async()=>{const f=fixture();try{f.producerCompany.verified=false;await assert.rejects(f.make().dedup(),/上游|PRODUCER/);assert.equal(f.calls.filter(q=>q.op==='claim_videos').length,0);}finally{rmSync(f.dir,{recursive:true,force:true});}});
 test('同公司原producer政策漂移仍拒绝',async()=>{const f=fixture();try{f.descriptor.policy_id='another-valid-policy';snapshot(f.current,f.body);await assert.rejects(f.make().dedup(),/上游|PRODUCER/);}finally{rmSync(f.dir,{recursive:true,force:true});}});
+test('私有descriptor固定实际文件：拒权限、symlink、扩展授权字段，真实queue仅SELECT核producer公司',async()=>{
+ const {readProducerDescriptor}=await import('../producer-descriptor.mjs'),{chmodSync,symlinkSync}=await import('node:fs'),{createRequire}=await import('node:module');const {queueRequest}=createRequire(import.meta.url)('../leadgen-queue.js');
+ const f=fixture(),path=join(f.dir,'descriptor.json');try{
+  writeFileSync(path,JSON.stringify(f.descriptor),{mode:0o600});assert.deepEqual(readProducerDescriptor(path),f.descriptor);
+  chmodSync(path,0o644);assert.throws(()=>readProducerDescriptor(path),/PRODUCER/);chmodSync(path,0o600);symlinkSync(path,path+'.link');assert.throws(()=>readProducerDescriptor(path+'.link'));
+  writeFileSync(path,JSON.stringify({...f.descriptor,allow_all:true}));assert.throws(()=>readProducerDescriptor(path),/PRODUCER/);
+  const row={...config,run_id:source,snapshot:{...config}};let calls=0;const pool={query:async(sql,args)=>{calls++;assert.match(sql,/^SELECT /);assert.deepEqual(args,[company,source]);return {rows:[row]};}};
+  assert.equal((await queueRequest(pool,{op:'verify_producer_company',run:'new102',line:'jinuo',descriptor:f.descriptor})).verified,true);
+  for(const bad of [{run:''},{line:'yuesheng'}])await assert.rejects(queueRequest(pool,{op:'verify_producer_company',run:'new102',line:'jinuo',descriptor:f.descriptor,...bad}),/PRODUCER_REQUEST_SCOPE/);assert.equal(calls,1);row.snapshot.version=15;assert.equal((await queueRequest(pool,{op:'verify_producer_company',run:'new102',line:'jinuo',descriptor:f.descriptor})).verified,false);assert.equal(calls,2);
+ }finally{rmSync(f.dir,{recursive:true,force:true});}
+});

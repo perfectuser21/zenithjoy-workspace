@@ -28,3 +28,18 @@ test('新0353恢复实际PG：新user精确授权才可单VID CAS，旧ab689审�
  }finally{if(created)await pool.query('DROP SCHEMA '+schema+' CASCADE');await pool.end();}
 });
 test('旧ab689常量与原scope不改指0353',()=>{const legacy=require('../single-video-recovery.js');assert.equal(legacy.DECISION,oldDecision);assert.equal(legacy.SCOPE.original_task_id,'0c764ecc-9260-4a3b-a85e-29c75c8966dc');assert.equal(legacy.SCOPE.original_run,'cicd24c9_102_20261023_2052');});
+test('默认legacy与0353依赖选择实际到authority，不受局部authority TDZ遮蔽且不触外部IO',async()=>{
+ const legacy=require('../single-video-recovery.js'),next=require('../single-video-recovery-0353.js');
+ const oldPath=require.resolve('../single-video-recovery-authority.js'),newPath=require.resolve('../single-video-recovery-0353-authority.js');require(oldPath);require(newPath);
+ const old=require.cache[oldPath].exports,newer=require.cache[newPath].exports;let calls=0;
+ const stop={readAuthority:async()=>{calls++;throw Error('AUTHORITY_SELECTION_REACHED');}};
+ try{require.cache[oldPath].exports=stop;require.cache[newPath].exports={authority:()=>stop};
+  for(const [api,run]of [[legacy,legacy.RECOVERY_RUN],[next,next.RECOVERY_RUN]])await assert.rejects(api.recoverSingleVideo({}, {line:'jinuo',run,decision_id:api===legacy?legacy.DECISION:randomUUID(),video_id:vid,maintenance_task_id:randomUUID()}),/^Error: AUTHORITY_SELECTION_REACHED$/);
+  assert.equal(calls,2);
+ }finally{require.cache[oldPath].exports=old;require.cache[newPath].exports=newer;}
+});
+test('0353真正默认adapter只认官方新决定精确ID，缺项/分页/旧授权不领锁不写库',async()=>{
+ const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs'),{tmpdir}=await import('node:os'),{join}=await import('node:path'),{spawnSync}=await import('node:child_process');const dir=mkdtempSync(join(tmpdir(),'0353-default-'));mkdirSync(join(dir,'.credentials'));writeFileSync(join(dir,'.credentials/single-video-recovery-internal.env'),'CECELIA_INTERNAL_TOKEN=test-only-sentinel\n',{mode:0o600});
+ try{for(const mode of ['missing','old','pagination']){const script=`const assert=require('node:assert/strict');let calls=[];globalThis.fetch=async(url,o)=>{calls.push({url,method:o.method});return {ok:true,json:async()=>({success:true,data:${mode==='old'?JSON.stringify([{id:oldDecision,made_by:'user',status:'active'}]):'[]'},hasMore:${mode==='pagination'}})};};const next=require(${JSON.stringify(new URL('../single-video-recovery-0353.js',import.meta.url).pathname)});next.recoverSingleVideo({query:()=>{throw Error('NO_DB_ALLOWED')}},${JSON.stringify({line:'jinuo',run:'single_video_recovery_0353_a1',decision_id:randomUUID(),video_id:vid,maintenance_task_id:randomUUID()})}).then(()=>process.exit(9),e=>{assert.equal(e.message,'RECOVERY_DECISION_NOT_FOUND');assert.deepEqual(calls,[{url:'http://localhost:5221/api/brain/strategic-decisions?made_by=user&limit=100',method:'GET'}]);});`;const r=spawnSync(process.execPath,['-e',script],{encoding:'utf8',env:{...process.env,HOME:dir,BRAIN_URL:'https://evil.invalid'}});assert.equal(r.status,0,r.stderr);}}
+ finally{rmSync(dir,{recursive:true,force:true});}
+});

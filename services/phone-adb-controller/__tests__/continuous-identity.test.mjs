@@ -194,7 +194,7 @@ test('keyword已暂停分享遇idle失败：原85兜底成对恢复原暂停状�
 });
 
 test('nonce内部typed归位未知值在随机数/ADB前拒绝',()=>{
- const seed=readFileSync(controller,'utf8').match(/^seed_clipboard_nonce\(\) \{[\s\S]*?^\}/m)[0];
+ const raw=readFileSync(controller,'utf8');const seed=['cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(name=>raw.match(new RegExp('^'+name+'\\(\\) \\{[\\s\\S]*?^\\}','m'))[0]).join('\n');
  const r=spawnSync('zsh',['-c',`set -eu; die(){ print -u2 -- "$1"; exit 2; }; ADB=/usr/bin/false; PYTHON_BIN=/usr/bin/false; ${seed}\nseed_clipboard_nonce fixture unsupported`],{encoding:'utf8'});
  assert.equal(r.status,2);assert.match(r.stderr,/CLIPBOARD_NONCE_RETURN_MODE_INVALID/);
 });

@@ -828,7 +828,7 @@ nonce_native_copy() {
   done
 }
 
-seed_clipboard_nonce() {
+seed_clipboard_nonce_once() {
   local eid="$1" leave_mode="${2:-detail}" nonce xml line text hint center x y phase
   case "$leave_mode" in detail|detail-paused) ;; *) die "CLIPBOARD_NONCE_RETURN_MODE_INVALID" ;; esac
   if [[ "${DEVICE_SDK:-}" == 31 ]]; then
@@ -858,7 +858,11 @@ seed_clipboard_nonce() {
     ui_evidence "${eid}-seed-${phase}" >/dev/null || die "CLIPBOARD_NONCE_TREE_UNAVAILABLE:$phase"
     xml="$EVIDENCE_ROOT/${eid}-seed-${phase}.xml"
     line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
-    [[ -n "$line" ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT:$phase"
+    if [[ -z "$line" ]]; then
+      print -u2 -- "CLIPBOARD_NONCE_FIELD_ABSENT:$phase"
+      [[ "$phase" != empty ]] || return 73
+      return 2
+    fi
     text="$(print -r -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
     if [[ "${DEVICE_SDK:-}" == 31 || ( ( -z "${DEVICE_SDK:-}" || "${DEVICE_SDK:-}" == 33 ) && "$phase" != typed ) ]]; then
       nonce_sdk31_field "$xml" >/dev/null || die "CLIPBOARD_NONCE_FIELD_UNVERIFIED:$phase"
@@ -893,6 +897,50 @@ seed_clipboard_nonce() {
   [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || leave_mode=detail-paused
   _leave_scratch_route "${eid}-seed-leave" "$leave_mode" "${eid}-seed-detail-verified" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
   print -- "$nonce"
+}
+
+cancel_nonce_widget() {
+  local eid="$1" fg center x y deadline shot
+  [[ -n "$LOCK_OWNER" ]] || return 1
+  require_held_lock clipboard_nonce
+  require_target_for clipboard_nonce
+  fg="$(foreground_package)"
+  [[ "$fg" == *'com.hihonor.android.launcher/com.hihonor.android.launcher.dragndrop.AddItemActivity'* || "$fg" == *'com.hihonor.android.launcher/.dragndrop.AddItemActivity'* ]] || return 1
+  print -r -- "$fg" > "$EVIDENCE_ROOT/${eid}-widget-foreground.txt"
+  print -r -- capture > "$EVIDENCE_ROOT/${eid}-widget-status.txt"
+  shot="$EVIDENCE_ROOT/${eid}-widget-confirm.png"
+  "$ADB" -s "$SERIAL" shell screencap -p "$REMOTE_SHOT" || return 1
+  "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$shot" >/dev/null || return 1
+  [[ -s "$shot" ]] || return 1
+  print -r -- "$shot" > "$EVIDENCE_ROOT/${eid}-widget-snapshot-path.txt"
+  ui_evidence "${eid}-widget-confirm" >/dev/null || return 1
+  print -r -- identify > "$EVIDENCE_ROOT/${eid}-widget-status.txt"
+  center="$("$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/clipboard-widget-cancel.py" "$EVIDENCE_ROOT/${eid}-widget-confirm.xml" "$fg" "$SCREEN_W" "$SCREEN_H" 2> "$EVIDENCE_ROOT/${eid}-widget-identification.txt")" || return 1
+  [[ "$(foreground_package)" == "$fg" ]] || return 1
+  read x y <<< "$center"
+  print -r -- cancel > "$EVIDENCE_ROOT/${eid}-widget-status.txt"
+  "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || return 1
+  print -r -- wait_app > "$EVIDENCE_ROOT/${eid}-widget-status.txt"
+  deadline=$((SECONDS+3))
+  while [[ "$(foreground_package)" != *"$DOUYIN_PACKAGE/"* ]]; do
+    (( SECONDS < deadline )) || return 1
+    wait_ms 100
+  done
+  print -r -- field_readback > "$EVIDENCE_ROOT/${eid}-widget-status.txt"
+  ui_evidence "${eid}-widget-return" >/dev/null || return 1
+  nonce_sdk31_field "$EVIDENCE_ROOT/${eid}-widget-return.xml" >/dev/null || return 1
+  print -r -- complete > "$EVIDENCE_ROOT/${eid}-widget-status.txt"
+}
+
+seed_clipboard_nonce() {
+  local eid="$1" mode="${2:-detail}" proof rc=0
+  proof="$(seed_clipboard_nonce_once "$eid" "$mode")" || rc=$?
+  if (( rc == 0 )); then print -r -- "$proof"; return 0; fi
+  # 保留中断的原件；只取消已证的精确widget一次，第二轮绝不递归恢复。
+  (( rc == 73 )) || return "$rc"
+  cancel_nonce_widget "$eid" || return "$rc"
+  proof="$(seed_clipboard_nonce_once "${eid}-widget-retry" "$mode")" || return $?
+  print -r -- "$proof"
 }
 
 extract_copied_share_link() {
@@ -1060,12 +1108,13 @@ _current_video_link_once() {
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   seed_witness="$EVIDENCE_ROOT/${evidence_id}-seed-detail-verified.xml"
-  /bin/rm -f "$seed_witness"
+  /bin/rm -f "$seed_witness" "$EVIDENCE_ROOT/${evidence_id}-widget-retry-seed-detail-verified.xml"
   if [[ -s "$(clip_state_file)" ]]; then
     # keyword出口不录音；nonce严格归位后保持暂停，后续分享仍独立取新鲜树。
     local nonce_seed_mode=detail
     [[ -z "$return_keyword" ]] || nonce_seed_mode=detail-paused
     nonce_proof="$(seed_clipboard_nonce "$evidence_id" "$nonce_seed_mode")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
+    [[ ! -s "$EVIDENCE_ROOT/${evidence_id}-widget-retry-seed-detail-verified.xml" ]] || seed_witness="$EVIDENCE_ROOT/${evidence_id}-widget-retry-seed-detail-verified.xml"
     if _is_fresh_share_detail_xml "$seed_witness"; then share_policy=verified-seed-share; fi
   fi
   # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：

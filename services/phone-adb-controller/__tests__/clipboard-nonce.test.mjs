@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const controller=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
 function run({copyFail=false,clearFail=false,leaveFail=false,inputFail=false,longpressFail=false,emptyHint="",falseHint=false,noProof=false}={}){
- const seed=controller.match(/seed_clipboard_nonce\(\) \{[\s\S]*?\n\}/)?.[0];assert.ok(seed,'必须实际验证nonce已写入clipboard');
+ const seed=['cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(name=>controller.match(new RegExp(name+'\\(\\) \\{[\\s\\S]*?\\n\\}'))?.[0]||'').join('\n');assert.ok(seed,'必须实际验证nonce已写入clipboard');
  const guard=controller.match(/clip_guard_check\(\) \{[\s\S]*?\n\}/)[0];
  const dir=mkdtempSync(join(tmpdir(),'clipnonce-')),adb=join(dir,'adb');writeFileSync(join(dir,'last'),'https://v.douyin.com/Same/');writeFileSync(join(dir,'clip'),'https://v.douyin.com/Same/');writeFileSync(join(dir,'field'),'');
  writeFileSync(adb,`#!/bin/sh
