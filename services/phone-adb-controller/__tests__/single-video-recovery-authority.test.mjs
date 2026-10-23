@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {spawnSync} from 'node:child_process';
+import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,existsSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 const require=createRequire(import.meta.url);
 const input={op:'recover_single_video',line:'jinuo',run:'single_video_recovery_ab68977b',decision_id:'ab68977b-2670-4a90-9d84-bdd3b25f3e04',maintenance_task_id:'1cbcc881-c52d-437a-ba11-701d849330a9',video_id:'7699316353698753663'};
 async function factory(io){let exported;try{exported=require('../single-video-recovery-authority.js');}catch(e){if(e.code!=='MODULE_NOT_FOUND')throw e;}assert.equal(typeof exported?.createAuthority,'function','默认生产authority adapter尚未交付');return exported.createAuthority(io);}
@@ -29,3 +33,24 @@ test('生产adapter真实执行official+census+本人双锁协议，release只�
 for(const mode of ['active','livepid','hostunknown','otherlock','stalesession','stalechildren'])test('默认adapter拒绝实际'+mode+'而不申请资源',async()=>{const f=fixture(mode),a=await factory(f.io);await assert.rejects(a.acquireGuard(input),/RECOVERY_/);assert.equal(f.calls.some(c=>c.path?.endsWith('/acquire')),false);});
 test('领锁ACK丢失必须先读回本人锁再精确清场，不能留本机锁却释放中央锁',async()=>{const f=fixture('acquirelost'),a=await factory(f.io);await assert.rejects(a.acquireGuard(input),/RECOVERY_/);assert.deepEqual(f.state(),{owner:null,central:null});});
 test('本机释放unknown时保持中央本人锁，不谎称free',async()=>{const f=fixture('releaselost'),a=await factory(f.io),g=await a.acquireGuard(input);await assert.rejects(g.release(),/RECOVERY_/);assert.equal(f.state().central,input.maintenance_task_id);});
+
+// 真controller+真实锁回执/guard/文件，仅隔离目录与不可触设备的ADB哨兵。
+// 原2256适配器只测手写单行stdout，漏掉真实run_claim前缀和evidence尾行。
+test('真实controller新_a2三行acquire及两行release回执可被adapter严格验收',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'recovery-lock-receipt-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const registry=join(dir,'registry.tsv'),adb=join(dir,'no-device-adb'),root=join(dir,'phone'),evidenceRoot=join(root,'evidence','legacy');
+ writeFileSync(registry,'legacy\tANGYVB4402004137\tMODEL\t1199\t2663\n');
+ writeFileSync(adb,'#!/bin/sh\nprintf touched >> "'+join(dir,'adb-touched')+'"\nexit 99\n',{mode:0o755});
+ const oldClaim=join(root,'locks','standalone-claims','ANGYVB4402004137',input.run);mkdirSync(join(oldClaim,'..'),{recursive:true});writeFileSync(oldClaim,input.run+'\n');
+ const python=spawnSync('sh',['-c','command -v python3'],{encoding:'utf8'}).stdout.trim();assert.ok(python);
+ const env={...process.env,DOUYIN_PHONE_REGISTRY:registry,DOUYIN_ADB_BIN:adb,DOUYIN_PHONE_TMP_ROOT:root,DOUYIN_PYTHON_BIN:python,DOUYIN_BYPASS_REPORT:'off'};
+ const outputs=[],controller=(cmd,owner)=>{const r=spawnSync('zsh',[new URL('../douyin-phone-adb',import.meta.url).pathname,'--profile','legacy',cmd,...(owner?[owner]:[])],{env,encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);outputs.push({cmd,stdout:r.stdout});return {stdout:r.stdout,stderr:r.stderr};};
+ const f=fixture(),execute=async(command,args,options)=>{const text=args.join(' ');if(command==='ssh'&&text.includes('douyin-phone-adb')){const m=text.match(/(lock-acquire-new|lock-release-exact|lock-status)(?: ([A-Za-z0-9_-]+))?$/);assert.ok(m,text);return controller(m[1],m[2]);}return f.io.execute(command,args,options);};
+ const a=await factory({...f.io,execute,evidenceRoot,readLockReceipt:async({kind,run})=>JSON.parse(readFileSync(join(evidenceRoot,run+'-lock-'+kind+'.json'),'utf8'))});
+ const q={...input,run:input.run+'_a2'};const g=await a.acquireGuard(q);
+ assert.match(outputs.find(x=>x.cmd==='lock-acquire-new').stdout,new RegExp('^run_claim=recorded owner='+q.run+'\\nlock=acquired owner='+q.run+'\\nlock_evidence_id='+q.run+'-lock-acquire '));
+ assert.equal((await g.read()).local_owner,q.run);await g.release();
+ assert.match(outputs.find(x=>x.cmd==='lock-release-exact').stdout,new RegExp('^lock=released owner='+q.run+'\\nlock_evidence_id='+q.run+'-lock-release '));
+ assert.deepEqual(f.state(),{owner:null,central:null});assert.equal(controller('lock-status').stdout,'lock=free\n');
+ assert.equal(readFileSync(oldClaim,'utf8'),input.run+'\n');assert.equal(existsSync(join(dir,'adb-touched')),false);
+});
