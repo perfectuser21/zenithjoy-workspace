@@ -316,7 +316,7 @@ jobs:
         timeout-minutes: 2
         run: |
           echo "PREFLIGHT_START os-packages"
-          timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=20 install -y zsh libxml2-utils ffmpeg
+          timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=20 -y zsh libxml2-utils ffmpeg
           command -v zsh
           command -v xmllint
           command -v ffmpeg
