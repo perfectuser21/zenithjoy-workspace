@@ -7,11 +7,14 @@ import express from 'express';
 import request from 'supertest';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { mockGetPersona, mockSavePersona, mockGetBusinessKB, mockSaveBusinessKB } = vi.hoisted(() => ({
+const { mockGetPersona, mockSavePersona, mockGetBusinessKB, mockSaveBusinessKB, mockGetAutoAgent, mockSaveAutoAgent, mockBroadcast } = vi.hoisted(() => ({
   mockGetPersona: vi.fn(),
   mockSavePersona: vi.fn(),
   mockGetBusinessKB: vi.fn(),
   mockSaveBusinessKB: vi.fn(),
+  mockGetAutoAgent: vi.fn(),
+  mockSaveAutoAgent: vi.fn(),
+  mockBroadcast: vi.fn(),
 }));
 
 vi.mock('../../services/wechat/cs-config-store', () => ({
@@ -19,7 +22,11 @@ vi.mock('../../services/wechat/cs-config-store', () => ({
   savePersona: mockSavePersona,
   getBusinessKB: mockGetBusinessKB,
   saveBusinessKB: mockSaveBusinessKB,
+  getAutoAgentConfig: mockGetAutoAgent,
+  saveAutoAgentConfig: mockSaveAutoAgent,
 }));
+
+vi.mock('../../services/wechat/cs-outbound', () => ({ enqueueKeyContactBroadcast: mockBroadcast }));
 
 const { mockCallOpenRouter } = vi.hoisted(() => ({ mockCallOpenRouter: vi.fn() }));
 vi.mock('../../llm/openrouter', () => ({ callOpenRouter: mockCallOpenRouter }));
@@ -47,6 +54,30 @@ beforeEach(() => {
 });
 
 describe('wechat-config 路由（mock store）', () => {
+  it('PUT /cs/auto-agent 保留原UUID-like标识的合法输入', async () => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'local-contract-token';
+    mockGetAutoAgent.mockResolvedValue({ auto_agent_enabled: false, key_contact_wechat: '' });
+    mockSaveAutoAgent.mockResolvedValue(undefined);
+    mockBroadcast.mockResolvedValue({ action: 'skip' });
+    const agentId = '11111111-1111-1111-1111-111111111111';
+    const res = await request(app).put('/api/wechat/cs/auto-agent')
+      .set('Authorization', 'Bearer local-contract-token').send({ daily_limit: 3, agent_id: agentId });
+    expect(res.status).toBe(200);
+    expect(mockSaveAutoAgent).toHaveBeenCalledWith({ daily_limit: 3 });
+    expect(mockBroadcast).toHaveBeenCalledWith(expect.objectContaining({ agentId }));
+  });
+
+  it('PUT /cs/auto-agent 继续拒绝畸形UUID和未知配置键且不写入', async () => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'local-contract-token';
+    for (const body of [{ agent_id: 'not-a-uuid' }, { agent_id: '11111111-1111-1111-1111-111111111111', unknown_key: true }]) {
+      const res = await request(app).put('/api/wechat/cs/auto-agent')
+        .set('Authorization', 'Bearer local-contract-token').send(body);
+      expect(res.status).toBe(400);
+    }
+    expect(mockSaveAutoAgent).not.toHaveBeenCalled();
+    expect(mockBroadcast).not.toHaveBeenCalled();
+  });
+
   it('GET /persona → 返回 store 的人设', async () => {
     mockGetPersona.mockResolvedValue(VALID_PERSONA);
     const res = await request(app).get('/api/wechat/persona');
