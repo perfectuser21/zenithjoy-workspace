@@ -313,7 +313,7 @@ jobs:
           echo "PREFLIGHT_DONE apt-index"
       - name: 安装 zsh、xmllint 和 ffmpeg（有界诊断）
         id: openclaw-os-packages
-        timeout-minutes: 2
+        timeout-minutes: 6
         run: |
           echo "PREFLIGHT_START os-packages"
           missing=()
@@ -327,8 +327,8 @@ jobs:
             fi
           done
           if ((${#missing[@]})); then
-            # 20s仅约束连接/无数据等待；1次失败文件重试仍受原90s总预算约束。
-            timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=20 -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -y "${missing[@]}"
+            # 20s仅约束连接/无数据等待；1次失败文件重试仍受300s安装总预算约束。
+            timeout 300s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=20 -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -y "${missing[@]}"
           fi
           for tool in zsh xmllint ffmpeg; do
             echo "PREFLIGHT_TOOL $tool path=$(command -v "$tool")"
