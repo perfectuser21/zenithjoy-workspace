@@ -56,7 +56,7 @@ async function recoverSingleVideo(pool,input,deps){
  deps=deps||require('./single-video-recovery-authority.js');
  const authority=await deps.readAuthority(input);checkAuthority(authority,input);
  const existing=await readbackSingleVideo(pool,input,deps);if(existing.status!=='unknown')return existing;
- const guard=await deps.acquireGuard(input);let client,commitStarted=false,committed=false,failure;
+ const guard=await deps.acquireGuard(input);let client,commitStarted=false,committed=false,discardConnection=false,failure;
  try{
   client=await pool.connect();
   await checkGuard(guard,input);
@@ -88,7 +88,7 @@ async function recoverSingleVideo(pool,input,deps){
   return {status:'applied',decision_id:DECISION,video_id:input.video_id,receipt_sha256:hash(detail)};
  }catch(error){
   if(commitStarted&&!committed){const unknown=Error('RECOVERY_COMMIT_UNKNOWN_READBACK_REQUIRED');unknown.code='RECOVERY_COMMIT_UNKNOWN';failure=unknown;throw unknown;}
-  failure=error;try{if(client)await client.query('ROLLBACK');}catch{}throw error;
- }finally{client?.release(commitStarted&&!committed?true:undefined);try{await guard.release();}catch{if(failure)failure.cleanup_code='RECOVERY_LOCK_RELEASE_UNKNOWN';else{const e=Error('RECOVERY_LOCK_RELEASE_UNKNOWN_READBACK_REQUIRED');e.code='RECOVERY_LOCK_RELEASE_UNKNOWN';throw e;}}}
+  failure=error;try{if(client)await client.query('ROLLBACK');}catch{discardConnection=true;error.rollback_code='RECOVERY_ROLLBACK_UNKNOWN';}throw error;
+ }finally{client?.release(discardConnection||commitStarted&&!committed?true:undefined);try{await guard.release();}catch{if(failure)failure.cleanup_code='RECOVERY_LOCK_RELEASE_UNKNOWN';else{const e=Error('RECOVERY_LOCK_RELEASE_UNKNOWN_READBACK_REQUIRED');e.code='RECOVERY_LOCK_RELEASE_UNKNOWN';throw e;}}}
 }
 module.exports={recoverSingleVideo,readbackSingleVideo,SCOPE,DECISION,hash};
