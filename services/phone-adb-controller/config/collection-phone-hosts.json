@@ -7,6 +7,10 @@
       "serial": "ANGYVB4402004137",
       "expected_account": "44997267357",
       "evidence_root": "/private/tmp/openclaw-phone/evidence/legacy",
+      "evidence_alias": {
+        "path": "/private/tmp/openclaw-phone",
+        "target": "/Users/jinnuoshengyuan/Library/Application Support/ZenithJoy/phone-runtime-20261011"
+      },
       "policy": {
         "schema_version": 1,
         "host_id": "xian-m4",

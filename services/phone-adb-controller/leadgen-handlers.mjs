@@ -71,10 +71,12 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const unknownFile=opts.receipt?join(env.WFR_RUN_DIR,'native-operations',opts.receipt.operationId+'.unknown'):null;
     if(opts.receipt)state.nativeStopProof=null;
     try {
+      collectionScope?.assertEvidence();
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
-        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
+        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...(collectionScope?.env.DOUYIN_PHONE_TMP_ROOT?{DOUYIN_PHONE_TMP_ROOT:collectionScope.env.DOUYIN_PHONE_TMP_ROOT}:{}),...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
+      collectionScope?.assertEvidence();
       recordDiagnostic(result.stderr||'');
       if(opts.receipt)state.nativeStopUnproven=true;
       if(unknownFile&&existsSync(unknownFile)||/\bNATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN\b/.test(result.stderr||'')){const error=Error('NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN');error.executionStopped=false;throw error;}
@@ -414,7 +416,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsUnverified?null:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,avatarRecoveries=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
-      collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id)});
+      collectionScope=qualified.length?await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id)}):null;
       const counts=()=>[comments,collected,sampled,rescans,avatarRecoveries,inserted,historyVerified,coverage,historyConsumed,historyScoped];
       const add=values=>{[comments,collected,sampled,rescans,avatarRecoveries,inserted,historyVerified,coverage,historyConsumed,historyScoped]=counts().map((v,i)=>v+values[i]);};
       try{
