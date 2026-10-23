@@ -2209,7 +2209,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-outreach-bridge.js",
           "revision": "contract",
-          "sha256": "18c72f963c30efd1811a6931ac6a677a733dd3f6ad662ed7b5b7370c84e44a9c"
+          "sha256": "1890110a8778aef2eabb1b3f2395cadd60a6fedfc4d3dae077da198c14159898"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8c095b969136d3addfaf05db4d5b46614707c10928a2f7cbf095ab8848ed0218",
+      "code_digest": "96b93da4b1a7fa7ab8159ea51200479ccbfa93f0f488d87ab84ccc677f4fbceb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅恢复102零合格项不初始化设备，以及已固定xian证据别名的canonical身份约束；start/执行前后/finish/fresh保持未知链与目录漂移及录制状态拒绝；原公司资格/采样/身份与Skill方法合同不变。",
-        "reviewed_by": "root（2026-10-23独立净diff审查与23项真实leaf回归PASS）",
-        "previous_code_digest": "dae7df1095b05a0564426cf9fcc57b11579749fededf253a4ff96cb7a2286a37",
-        "current_code_digest": "8c095b969136d3addfaf05db4d5b46614707c10928a2f7cbf095ab8848ed0218"
+        "reason": "103显式SOURCE_RUN在既有桥接SQL、任何副作用前及独立读回精确限批，恢复Skill既有输入范围合同；未指定来源保持原整线消费，政策、字段、持久未知POST只读回与公共方法版本不变。",
+        "reviewed_by": "root（2026-10-23独立净diff/35桥接回归PASS）",
+        "previous_code_digest": "8c095b969136d3addfaf05db4d5b46614707c10928a2f7cbf095ab8848ed0218",
+        "current_code_digest": "96b93da4b1a7fa7ab8159ea51200479ccbfa93f0f488d87ab84ccc677f4fbceb"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2528,7 +2528,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-outreach-bridge.js",
           "revision": "contract",
-          "sha256": "18c72f963c30efd1811a6931ac6a677a733dd3f6ad662ed7b5b7370c84e44a9c"
+          "sha256": "1890110a8778aef2eabb1b3f2395cadd60a6fedfc4d3dae077da198c14159898"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e2c295a995f73d4877604857c825eb0b3619c0a6bfb0364ce0ee18aac1e463ab",
+      "code_digest": "b2512267861b0306b8ae0c3dc2a81503e20642ed33d83d05cb562c2cc6c89628",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅恢复102零合格项不初始化设备，以及已固定xian证据别名的canonical身份约束；start/执行前后/finish/fresh保持未知链与目录漂移及录制状态拒绝；原公司资格/采样/身份与Skill方法合同不变。",
-        "reviewed_by": "root（2026-10-23独立净diff审查与23项真实leaf回归PASS）",
-        "previous_code_digest": "19344969cf0aecea5049cdd6fa191ae063d91e5e282a41a539b4c33593892739",
-        "current_code_digest": "e2c295a995f73d4877604857c825eb0b3619c0a6bfb0364ce0ee18aac1e463ab"
+        "reason": "仅共享bridge模块的103显式批次范围内部修复；104 preflight实际eligibleOrders及准备/发送函数均未修改，不扩大104授权、资格政策或未知POST重发范围。",
+        "reviewed_by": "root（2026-10-23独立净diff/35桥接回归PASS）",
+        "previous_code_digest": "e2c295a995f73d4877604857c825eb0b3619c0a6bfb0364ce0ee18aac1e463ab",
+        "current_code_digest": "b2512267861b0306b8ae0c3dc2a81503e20642ed33d83d05cb562c2cc6c89628"
       }
     },
     "douyin_lead_outreach.send_dm": {
