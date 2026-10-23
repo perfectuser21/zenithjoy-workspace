@@ -50,6 +50,7 @@ API_LOG="/tmp/wb-smoke-api.log"
 
 API_PORT="${WORKBENCH_SMOKE_PORT:-52320}"
 MUT_PORT=$((API_PORT + 1))
+source "$REPO_ROOT/.github/workflows/scripts/smoke/lib/workbench-api-process.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 段1 静态守卫（无需 DB / 服务）
@@ -697,21 +698,6 @@ seed_two_tenants() {
   export NODE_ENV=development
 }
 
-start_api() {
-  local port="$1" log="$2"
-  if curl -sf -m 2 "http://localhost:$port/api/health" >/dev/null 2>&1; then
-    fail "端口 $port 已被占用（改 WORKBENCH_SMOKE_PORT 或先停掉那个进程）—— 继续跑会验到别人的进程上去"
-  fi
-  PORT="$port" node apps/api/dist/index.js > "$log" 2>&1 &
-  API_PID=$!
-  local up=0
-  for _ in $(seq 1 40); do
-    curl -sf "http://localhost:$port/api/health" >/dev/null 2>&1 && { up=1; break; }
-    kill -0 "$API_PID" 2>/dev/null || break
-    sleep 1
-  done
-  [ "$up" = "1" ] || { tail -30 "$log" >&2; fail "apps/api 未在 40s 内就绪（端口 ${port}）"; }
-}
 
 login_cookie() {
   local openid="$1" hdr; hdr=$(mktemp)
@@ -777,7 +763,12 @@ fixture_down() {
     . "$FIXTURE_ENV"
   fi
   if [ -f "$FIXTURE_PID" ]; then
-    kill "$(cat "$FIXTURE_PID")" 2>/dev/null
+    if [ -n "${API_OWNER_PID:-}" ]; then
+      [ "$(cat "$FIXTURE_PID")" = "$API_PID" ] || fail "fixture PID 与本人启动身份不符"
+      workbench_stop_started_child || fail "本人 fixture child 停止未确认"
+    else
+      kill "$(cat "$FIXTURE_PID")" 2>/dev/null
+    fi
     rm -f "$FIXTURE_PID"
   fi
   if [ -n "${ORGA_TENANT_ID:-}" ]; then

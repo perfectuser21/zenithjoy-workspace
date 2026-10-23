@@ -67,6 +67,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   deps={judgeComment,...deps};
   const { lineKey } = resolveLine(input.line);
   const { op, run } = input;
+  if(op==='recover_single_video_readback')return require('./single-video-recovery.js').readbackSingleVideo(pool,input,deps.recovery);
+  if(op==='recover_single_video')return require('./single-video-recovery.js').recoverSingleVideo(pool,input,deps.recovery);
   const sourceRun=input.source_run??null;
   if(sourceRun!==null&&!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(run || '')) throw Error('缺有效运行号');

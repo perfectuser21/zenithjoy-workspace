@@ -146,15 +146,9 @@ jobs:
 
       # material-tagging-smoke.sh（批量混剪 S1）需要真 ffmpeg 抽帧——runner 镜像不保证自带，
       # 显式装，不能像 golden-path-7-video-remake-smoke.sh 那样绕过（那条本来就没测真抽帧）。
-      - name: Install ffmpeg (material-tagging-smoke.sh 真抽帧需要)
-        run: |
-          command -v ffmpeg >/dev/null 2>&1 || (sudo apt-get update -y && sudo apt-get install -y ffmpeg)
-          ffmpeg -version | head -1
-
-      - name: Install capability protocol regression dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y zsh python3 jq libxml2-utils
+      - name: Install ffmpeg and capability protocol regression dependencies
+        timeout-minutes: 6
+        run: timeout 300s bash .github/workflows/scripts/prepare-smoke-os-packages.sh
 
       - name: Create zenithjoy schema + pgcrypto
         run: |
@@ -257,7 +251,16 @@ jobs:
             esac
           }
 
-          run_one() { timeout --kill-after=5s "$(script_timeout "$1")" bash "$DIR/$1"; }
+          run_one() {
+            if [ "$1" = structured-workbench-smoke.sh ]; then
+              timeout --kill-after=5s "$(script_timeout "$1")" bash -c '
+                port="${WORKBENCH_SMOKE_PORT:-$(node "$1/lib/workbench-port.mjs" allocate)}" || exit 1
+                WORKBENCH_SMOKE_PORT="$port" exec bash "$1/$2"
+              ' workbench "$DIR" "$1"
+            else
+              timeout --kill-after=5s "$(script_timeout "$1")" bash "$DIR/$1"
+            fi
+          }
 
           # 每个 worker 拥有独立数据库/API；这里只分完整文件清单，不在共享服务上并发脚本。
           SHARD_INDEX="${SMOKE_SHARD_INDEX:-0}"

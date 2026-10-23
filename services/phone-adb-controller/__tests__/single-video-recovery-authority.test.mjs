@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const input={op:'recover_single_video',line:'jinuo',run:'single_video_recovery_ab68977b',decision_id:'ab68977b-2670-4a90-9d84-bdd3b25f3e04',maintenance_task_id:'1cbcc881-c52d-437a-ba11-701d849330a9',video_id:'7699316353698753663'};
+async function factory(io){let exported;try{exported=require('../single-video-recovery-authority.js');}catch(e){if(e.code!=='MODULE_NOT_FOUND')throw e;}assert.equal(typeof exported?.createAuthority,'function','默认生产authority adapter尚未交付');return exported.createAuthority(io);}
+test('adapter不以请求中old_native_stopped/guard_held/actor/evidence为授权',async()=>{const a=await factory({brain:async()=>{throw Error('offline');}});await assert.rejects(a.readAuthority({...input,old_native_stopped:true,guard_held:true,actor:'root',evidence_sha256:'a'.repeat(64)}),/RECOVERY_REQUEST_INVALID/);});
+test('Brain超时固定错误，不传播可能敏感异常',async()=>{const a=await factory({brain:async()=>{throw Error('secret-sentinel');}});await assert.rejects(a.readAuthority(input),e=>e.message==='RECOVERY_AUTHORITY_UNAVAILABLE'&&!e.message.includes('sentinel'));});
+test('canonical批准缺失时不能拿相近决定或callerJSON代替',async()=>{const a=await factory({brain:async()=>({success:true,data:[{id:'other',made_by:'user',status:'active',decision:'{}'}]})});await assert.rejects(a.readAuthority(input),/RECOVERY_DECISION_NOT_FOUND/);});
+test('默认HTTP origin固定，拒绝重定向/非Brain origin与截断分页',async()=>{const a=await factory({readToken:()=> 'test-not-secret',fetch:async(url,options)=>{assert.ok(String(url).startsWith('http://localhost:5221/api/brain/'));assert.equal(options.redirect,'error');assert.equal(options.headers['X-Internal-Token'],'test-not-secret');return {ok:true,json:async()=>({success:true,data:[],has_more:true,next_cursor:'https://evil.example'})};}});await assert.rejects(a.readAuthority(input),/RECOVERY_DECISION_NOT_FOUND|RECOVERY_AUTHORITY_UNAVAILABLE/);});
+const session='agent:work-commander:workflow-1cc217514f7153f5308c722757c05a3d',sid='a4e63bbb-1ce2-4feb-af1f-daa1cbd73dff';
+function fixture(mode='ok'){
+ const calls=[];let owner=null,central=null;
+ const records={'honor24c9-102-mmv-stop-proof.json':{},'honor24c9-102-xian-m4-stop-proof.json':{native_start_identity_readback:Array.from({length:246},(_,i)=>({pid:100+i,expected:'123:456'}))},'honor24c9-102-group-readback.json':{original_groups:[999]}};
+ const brain=async(path,body)=>{calls.push({path,body});if(path==='/strategic-decisions?made_by=user&limit=100')return {success:true,data:[{id:input.decision_id,made_by:'user',status:'active',decision:'{}'}]};if(path.startsWith('/tasks/'))return {id:path.split('/').at(-1)};
+  if(path==='/device-locks')return {success:true,locks:[{device_name:'ANGYVB4402004137',locked_by:mode==='otherlock'?'other':central,expires_at:central?new Date(Date.now()+300000).toISOString():null}]};
+  if(path.endsWith('/acquire')){central=body.locked_by;return {acquired:true,lock:{locked_by:central}};}if(path.endsWith('/release')){assert.equal(central,body.locked_by);central=null;return {success:true};}throw Error('unexpected Brain operation');};
+ const execute=async(command,args)=>{calls.push({command,args});if(command==='openclaw'){
+  const method=args[2];const responses={'sessions.describe':{session:{key:session,sessionId:sid,snapshotAt:mode==='stalesession'?1:Date.now(),hasActiveRun:mode==='active',activeRunIds:mode==='active'?['live']:[],status:'done',endedAt:Date.now()}},'chat.history':{sessionKey:session,sessionId:sid,pendingInputs:{total:0,items:[]}},'sessions.list':{ts:mode==='stalechildren'?1:Date.now(),hasMore:false,sessions:[]},'tools.invoke':{ok:true,toolName:'subagents',source:'core',output:{details:{status:'ok',action:'list',callerIsSubagent:false,callerSessionKey:session,requesterSessionKey:session,active:[]}}}};return {stdout:JSON.stringify(responses[method])};}
+  const text=args.join(' ');if(command==='python3'||text.includes('python3 - ')){if(mode==='hostunknown')throw Error('host probe timed out');return {stdout:JSON.stringify({live:mode==='livepid'?[123]:[],groups:[],active:[]})};}
+  assert.equal(command,'ssh');assert.equal(args.includes('xian-m4'),true);assert.match(text,/douyin-phone-adb.*--profile legacy lock-/);assert.doesNotMatch(text,/close-app|return-safe| tap |record-/);
+  if(text.includes('lock-acquire-new')){owner=input.run;if(mode==='acquirelost')throw Error('ACK lost');return {stdout:'lock=acquired owner='+owner+'\n'};}
+  if(text.includes('lock-release-exact')){if(mode==='releaselost')throw Error('release unknown');assert.equal(owner,input.run);owner=null;return {stdout:'lock=released owner='+input.run+'\n'};}
+  return {stdout:owner?'lock=held owner='+owner+' age=0 stale=false reclaimable=false ttl=1800\n':'lock=free\n'};
+ };
+ return {io:{brain,execute,readProofs:()=>records,readManifest:()=>({source_commit:'a'.repeat(40)})},calls,state:()=>({owner,central})};
+}
+test('生产adapter真实执行official+census+本人双锁协议，release只释放本人',async()=>{const f=fixture(),a=await factory(f.io),g=await a.acquireGuard(input);const r=await g.read();assert.equal(r.old_native_stopped,true);assert.equal(r.central_owner,input.maintenance_task_id);assert.ok(f.calls.some(c=>c.command==='python3'));assert.ok(f.calls.some(c=>c.command==='ssh'&&c.args.join(' ').includes('python3 - ')));assert.equal(f.calls.filter(c=>c.command==='openclaw').length,8);await g.release();assert.deepEqual(f.state(),{owner:null,central:null});});
+for(const mode of ['active','livepid','hostunknown','otherlock','stalesession','stalechildren'])test('默认adapter拒绝实际'+mode+'而不申请资源',async()=>{const f=fixture(mode),a=await factory(f.io);await assert.rejects(a.acquireGuard(input),/RECOVERY_/);assert.equal(f.calls.some(c=>c.path?.endsWith('/acquire')),false);});
+test('领锁ACK丢失必须先读回本人锁再精确清场，不能留本机锁却释放中央锁',async()=>{const f=fixture('acquirelost'),a=await factory(f.io);await assert.rejects(a.acquireGuard(input),/RECOVERY_/);assert.deepEqual(f.state(),{owner:null,central:null});});
+test('本机释放unknown时保持中央本人锁，不谎称free',async()=>{const f=fixture('releaselost'),a=await factory(f.io),g=await a.acquireGuard(input);await assert.rejects(g.release(),/RECOVERY_/);assert.equal(f.state().central,input.maintenance_task_id);});
