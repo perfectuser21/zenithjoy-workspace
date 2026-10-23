@@ -4,6 +4,7 @@ import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import YAML from 'yaml';
 const root=new URL('../../../../',import.meta.url);
 const path=p=>new URL(p,root);
 const smoke=readFileSync(path('.github/workflows/scripts/smoke/phone-adb-controller-smoke.sh'),'utf8');
@@ -21,7 +22,18 @@ test('录音电平闸实际拒绝伪造的legacy电平、decoder电平和断开�
   const r=run(c,d);assert.notEqual(r.status,0,'mutated real guard must fire');
  }
 });
-test('OpenClaw CI安装实际decoder回归的ffmpeg依赖',()=>{
- const ci=readFileSync(path('.github/workflows/ci-l3-code.yml'),'utf8').split('  openclaw-scripts-test:')[1].split('\n  api-scripts-test:')[0];
- assert.match(ci,/apt-get install[^\n]*\bffmpeg\b/);
+function decoderDependency(ci,installer){
+ const step=YAML.parse(ci).jobs['openclaw-scripts-test'].steps.find(s=>s.id==='openclaw-os-packages');
+ assert.match(step.run,/for pair in zsh:zsh xmllint:libxml2-utils ffmpeg:ffmpeg;/);
+ assert.match(step.run,/missing\+=\("\$\{pair#\*:\}"\)/);
+ assert.match(step.run,/timeout 300s bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh[^\n]*"\$\{missing\[@\]\}"/);
+ assert.match(step.run,/ffmpeg -version/);
+ assert.match(installer,/stage official-install sudo env DEBIAN_FRONTEND=noninteractive LC_ALL=C apt-get "\$\{isolated\[@\]\}" "\$\{opts\[@\]\}" install -y "\$@"/);
+}
+const ci=readFileSync(path('.github/workflows/ci-l3-code.yml'),'utf8');
+const installer=readFileSync(path('.github/workflows/scripts/prepare-openclaw-os-packages.sh'),'utf8');
+test('OpenClaw CI安装实际decoder回归的ffmpeg依赖',()=>decoderDependency(ci,installer));
+test('decoder依赖守卫拒绝删除ffmpeg映射、断helper/参数或漏真实版本核验',()=>{
+ for(const mutated of [ci.replace('ffmpeg:ffmpeg',''),ci.replace('bash .github/workflows/scripts/prepare-openclaw-os-packages.sh','bash unrelated.sh'),ci.replace('"${missing[@]}"','"zsh"'),ci.replace('ffmpeg -version','true')])assert.throws(()=>decoderDependency(mutated,installer));
+ assert.throws(()=>decoderDependency(ci,installer.replace('install -y "$@"','install -y zsh')));
 });
