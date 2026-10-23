@@ -19,17 +19,31 @@ function validate(w){
  assert.match(setup(w)[2].run,/pip install.*Pillow/);
 }
 test('依赖准备拆成可定位有界三阶段，原10分钟和全量门禁保持',()=>validate(workflow));
-function invoke(t,failed=''){
+function invoke(t,failed='',present=[],broken=''){
  validate(workflow);const top=mkdtempSync(join(tmpdir(),'ci-dependency-preflight-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const trace=join(top,'trace');
  const put=(name,script)=>writeFileSync(join(top,name),'#!/bin/sh\n'+script+'\n',{mode:0o755});
- put('timeout','shift; exec "$@"');put('sudo','exec "$@"');
- put('apt-get','printf "apt %s\\n" "$*" >> "$DEPENDENCY_TRACE"; case "$*" in *update*) phase=apt-index;; *) phase=os-packages;; esac; [ "$DEPENDENCY_FAILED" != "$phase" ] || exit 43');
+ put('timeout','printf "timeout %s\\n" "$*" >> "$DEPENDENCY_TRACE"; shift; exec "$@"');put('sudo','exec "$@"');
+ put('env','exec /usr/bin/env "$@"');
+ put('apt-get',`printf "apt %s\\n" "$*" >> "$DEPENDENCY_TRACE"
+ case "$*" in *update*) phase=apt-index;; *) phase=os-packages;; esac
+ [ "$DEPENDENCY_FAILED" != "$phase" ] || exit 43
+ if [ "$phase" = os-packages ]; then
+  for pair in zsh:zsh libxml2-utils:xmllint ffmpeg:ffmpeg; do
+   pkg="\${pair%%:*}"; tool="\${pair#*:}"
+   case " $* " in *" $pkg "*)
+    printf '#!/bin/sh\n' > "$DEPENDENCY_BIN/$tool"
+    printf 'printf "tool %s %%s\\n" "$*" >> "$DEPENDENCY_TRACE"\n' "$tool" >> "$DEPENDENCY_BIN/$tool"
+    printf '[ "$DEPENDENCY_BROKEN" != "%s" ] || exit 44\n' "$tool" >> "$DEPENDENCY_BIN/$tool"
+    /bin/chmod +x "$DEPENDENCY_BIN/$tool";;
+   esac
+  done
+ fi`);
  put('python3','printf "python %s\\n" "$*" >> "$DEPENDENCY_TRACE"; [ "$DEPENDENCY_FAILED" != pillow ] || exit 43');
- for(const name of ['zsh','xmllint','ffmpeg'])put(name,'exit 0');
+ for(const name of present)put(name,'printf "tool '+name+' %s\\n" "$*" >> "$DEPENDENCY_TRACE"; [ "$DEPENDENCY_BROKEN" != "'+name+'" ] || exit 44');
  let output='',status=0;
  for(const s of setup()){
-  const r=spawnSync('bash',['-e','-o','pipefail','-c',s.run],{env:{...process.env,PATH:top+':'+process.env.PATH,DEPENDENCY_TRACE:trace,DEPENDENCY_FAILED:failed},encoding:'utf8',timeout:5000});
+  const r=spawnSync('/bin/bash',['-e','-o','pipefail','-c',s.run],{env:{...process.env,PATH:top,DEPENDENCY_BIN:top,DEPENDENCY_TRACE:trace,DEPENDENCY_FAILED:failed,DEPENDENCY_BROKEN:broken},encoding:'utf8',timeout:5000});
   output+=r.stdout+r.stderr;status=r.status;if(status!==0)break;
  }
  return {status,output,trace:readFileSync(trace,'utf8')};
@@ -39,3 +53,9 @@ for(const [i,phase] of ['apt-index','os-packages','pillow'].entries())test('依�
 test('准备阶段缺失/放行失败/扩大总时限仍被守卫拒绝',()=>{
  for(const mutate of [w=>{w.jobs['openclaw-scripts-test']['timeout-minutes']=11;},w=>{w.jobs['openclaw-scripts-test'].steps=w.jobs['openclaw-scripts-test'].steps.filter(s=>s.id!==ids[0]);},w=>{setup(w)[1]['continue-on-error']=true;}]){const w=structuredClone(workflow);mutate(w);assert.throws(()=>validate(w));}
 });
+
+test('已有ffmpeg不重复下载其依赖，确实缺zsh/xmllint仍安装',t=>{const r=invoke(t,'',['ffmpeg']);assert.equal(r.status,0,r.output);const install=r.trace.split('\n').find(l=>l.startsWith('apt ')&&l.includes(' install '));assert.ok(install);assert.match(install,/zsh libxml2-utils/);assert.doesNotMatch(install,/\bffmpeg\b/);});
+test('三工具已存在不发apt install，但必须真实执行三种版本核验',t=>{const r=invoke(t,'',['zsh','xmllint','ffmpeg']);assert.equal(r.status,0,r.output);assert.doesNotMatch(r.trace,/apt .*install/);for(const name of ['zsh','xmllint','ffmpeg']){assert.match(r.output,new RegExp('PREFLIGHT_TOOL '+name+' path='));assert.match(r.trace,new RegExp('tool '+name+' --?version'));}});
+test('只有xmllint缺失只安装libxml2-utils，不重新安装其余两种工具',t=>{const r=invoke(t,'',['zsh','ffmpeg']);assert.equal(r.status,0,r.output);const install=r.trace.split('\n').find(l=>l.startsWith('apt ')&&l.includes(' install '));assert.match(install,/libxml2-utils/);assert.doesNotMatch(install,/\bzsh\b|\bffmpeg\b/);});
+test('install请求超时20秒/失败文件仅重试1次，外层仍90秒不扩大',t=>{const r=invoke(t);assert.equal(r.status,0,r.output);const line=r.trace.split('\n').find(l=>l.startsWith('timeout ')&&l.includes(' install '));assert.match(line,/^timeout 90s /);for(const option of ['Acquire::Retries=1','Acquire::http::Timeout=20','Acquire::https::Timeout=20','DPkg::Lock::Timeout=20'])assert.ok(line.includes(option),option);});
+test('PATH可找到但真实工具不可执行时硬失败，不发OS完成或进Pillow',t=>{const r=invoke(t,'',['zsh','xmllint','ffmpeg'],'ffmpeg');assert.equal(r.status,44,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);});
