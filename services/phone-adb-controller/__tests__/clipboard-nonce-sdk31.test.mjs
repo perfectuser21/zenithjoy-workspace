@@ -45,7 +45,7 @@ elif args[:3]==['shell','input','keyevent']:
   elif k=='279':s['field']+='https://v.douyin.com/Old/' if f.get('pasteOld') else s['clip']
 p.write_text(json.dumps(s))
 `,{mode:0o755});
- const helpers=['nonce_sdk31_field','nonce_sdk31_input','nonce_native_copy','current_ime','ti_restore_ime','seed_clipboard_nonce'].map(fn).join('\n');
+ const helpers=['nonce_sdk31_field','nonce_sdk31_input','nonce_native_copy','current_ime','ti_restore_ime','cancel_nonce_widget','seed_clipboard_nonce_once','seed_clipboard_nonce'].map(fn).join('\n');
  const script=`set -eu;setopt EXTENDED_GLOB
 die(){ print -u2 -- "$1";exit 2; }
 wait_ms(){ :; }

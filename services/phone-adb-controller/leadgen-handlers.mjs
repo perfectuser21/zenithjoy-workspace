@@ -1,3 +1,4 @@
+import {verifyProducerDescriptor,verifyProducerCompany} from './producer-descriptor.mjs';
 import {createScoringHandler} from './leadgen-scoring-handler.mjs';
 import {readFileSync,writeFileSync,appendFileSync,chmodSync,renameSync,existsSync,readdirSync,lstatSync,realpathSync,mkdirSync,copyFileSync,constants} from 'node:fs';
 import {join,resolve} from 'node:path';
@@ -172,8 +173,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const upstreamDir=resolve(env.WFR_RUN_DIR,'..',`douyin_video_discovery-${sourceRun}`);
     const upstream=readFrozen(upstreamDir),current=readFrozen(env.WFR_RUN_DIR);
     if(upstream.run_identity?.capability!=='douyin_video_discovery'||upstream.run_identity.tag!==sourceRun
-      ||upstream.run_identity.profile!==profile||upstream.deployment.source_commit!==current.deployment.source_commit)throw Error('上游101冻结身份或发布来源不一致');
-    const input=JSON.parse(readFileSync(join(upstreamDir,'discovery-progress.json'),'utf8'));
+      ||upstream.run_identity.profile!==profile||upstream.deployment.source_commit!==current.deployment.source_commit&&!current.producer_descriptor)throw Error('上游101冻结身份或发布来源不一致');
+    const progressRaw=readFileSync(join(upstreamDir,'discovery-progress.json'));
+    const input=JSON.parse(progressRaw);
+    const producer=current.producer_descriptor?verifyProducerDescriptor(current.producer_descriptor,{upstream,progressRaw,progress:input,env,company:state.companyConfig}):null;
+    if(producer)verifyProducerCompany(producer,await queue('verify_producer_company',{descriptor:producer}));
     if(input.run!==sourceRun||input.profile!==profile||!Array.isArray(input.videos)||input.videos.length>1000
       ||!Array.isArray(input.captures)||input.captures.length>10000)throw Error('上游101交接清单身份或数量无效');
     const all=[...input.videos,...input.captures];
@@ -223,11 +227,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     for(const v of input.videos){const row=rows.find(r=>r.video_id===v.videoId);
       if(!['pending','matched','rejected'].includes(row.judgment_status)||typeof row.process_status!=='string')throw Error('PG视频状态缺合法终态');
       const currentPolicy=row.judgment_config?.company_id===state.companyConfig.company_id&&row.judgment_config?.version===state.companyConfig.version;
-      const reason=row.judgment_status==='rejected'&&currentPolicy?'rejected':row.process_status==='评论已采'?'completed':fulfilled.has(v.videoId)?'sample_fulfilled':ownNames.has(normalize(v.author))?'own':null;
+      const reason=producer&&!producer.video_ids.includes(v.videoId)?'producer_scope':row.judgment_status==='rejected'&&currentPolicy?'rejected':row.process_status==='评论已采'?'completed':fulfilled.has(v.videoId)?'sample_fulfilled':ownNames.has(normalize(v.author))?'own':null;
       if(reason)skipped.push({video_id:v.videoId,reason});else eligible.push(v.videoId);
     }
     state.intakeVideoIds=eligible;
-    const proof={verified:true,source_run:sourceRun,source_commit:upstream.deployment.source_commit,
+    const proof={verified:true,source_run:sourceRun,source_commit:upstream.deployment.source_commit,...(producer?{consumer_source_commit:current.deployment.source_commit,producer_descriptor:producer}:{}),
       prior_sampling_readbacks:priorProofs,ignored_failed_sampling_runs:ignoredFailedSamplingRuns,observed_at:new Date().toISOString(),video_ids:ids,eligible_video_ids:eligible,skipped,rows,
       duplicate_observations:input.captures.length-ids.length};
     writeFileSync(join(env.WFR_RUN_DIR,`${run}-intake-readback.json`),JSON.stringify(proof),{mode:0o600});

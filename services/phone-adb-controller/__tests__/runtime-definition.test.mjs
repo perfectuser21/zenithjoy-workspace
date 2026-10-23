@@ -234,3 +234,11 @@ test('101独立discovery_phone_scope入冻结摘要，不能变更或借给102',
  await assert.rejects(freezeDefinition({...f.options,discoveryPhoneScope:{...scope,serial:'OTHER'}}),/discovery phone scope/);
  const other=fixture();await assert.rejects(freezeDefinition({...other.options,discoveryPhoneScope:scope}),/discovery phone scope部署来源不符/);
 });
+test('显式producer真实冻结进入digest；续跑不得改变或移除，CLI始终可解析',async()=>{
+ const {spawnSync}=await import('node:child_process');const d={schema_version:1,workflow_key:'douyin_video_discovery',run_tag:'cicd24c9_101_20261023_2013',source_commit:'24c9e6b97b81ae144985474d9e33665bf65a6a8e',profile:'legacy',serial:'ANGYVB4402004137',line:'jinuo',company_id:'ef8e14b0-4018-4e54-bc7a-866e51a0ce0b',tenant_id:'a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61',company_config_version:14,policy_id:'jinoshengyuan-existing-acquisition-rules-v1',snapshot_sha256:'a'.repeat(64),progress_sha256:'b'.repeat(64),video_ids:['7699316353698753663']};
+ const f=fixture();f.routes['/api/brain/workflows'][0].key='douyin_video_processing';Object.assign(f.options,{workflowKey:'douyin_video_processing',producerDescriptor:d,runIdentity:{capability:'test',tag:'consumer',profile:'legacy',serial:d.serial,run_id:'run'},samplingInput:{schema_version:1,workflow_key:'douyin_video_processing',run_tag:'consumer',profile:'legacy',serial:d.serial,line:'jinuo',source_run:d.run_tag,comment_limit:5}});
+ const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key='douyin_video_processing';v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});const s=await freezeDefinition(f.options);assert.deepEqual(s.producer_descriptor,d);assert.equal(s.snapshot_sha256,hash(Object.fromEntries(Object.entries(s).filter(([k])=>k!=='snapshot_sha256'))));
+ await assert.rejects(freezeDefinition({...f.options,producerDescriptor:null}),/PRODUCER_DESCRIPTOR_RESUME/);
+ await assert.rejects(freezeDefinition({...f.options,producerDescriptor:{...d,progress_sha256:'c'.repeat(64)}}),/PRODUCER_DESCRIPTOR_RESUME/);
+ const syntax=spawnSync(process.execPath,['--check',new URL('../runtime-receipts.mjs',import.meta.url).pathname],{encoding:'utf8'});assert.equal(syntax.status,0,syntax.stderr);
+});

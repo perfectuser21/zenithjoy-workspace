@@ -7,6 +7,8 @@ const SCOPE=Object.freeze({scope_version:1,action:'restore_single_quarantined_vi
 const canonical=x=>JSON.stringify(x instanceof Date?x.toJSON():x&&typeof x==='object'?Array.isArray(x)?x.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(x).sort().map(k=>[k,JSON.parse(canonical(x[k]))])):x);
 const hash=x=>createHash('sha256').update(canonical(x)).digest('hex');
 const fail=code=>{throw Error('RECOVERY_'+code);};
+function createRecovery({scope,decision,run,authority:authorityFactory}){
+const SCOPE=scope,DECISION=decision,RECOVERY_RUN=run;
 const scopeHash=hash(SCOPE),hex=/^[a-f0-9]{64}$/;
 function checkAuthority(a,input){
  let s;try{s=JSON.parse(a?.decision?.decision);}catch{fail('DECISION_INVALID');}
@@ -46,7 +48,7 @@ async function consumedSource(pool,row,result){
  return result;
 }
 async function readbackSingleVideo(pool,input,deps){
- validateInput(input);deps=deps||require('./single-video-recovery-authority.js');const a=await deps.readAuthority(input);checkAuthority(a,input);
+ validateInput(input);deps=deps||(authorityFactory?authorityFactory(input):require('./single-video-recovery-authority.js'));const a=await deps.readAuthority(input);checkAuthority(a,input);
  const result=(await pool.query(`SELECT to_jsonb(a) receipt,to_jsonb(v) video FROM zenithjoy.db_audit a
   LEFT JOIN zenithjoy.leadgen_videos v ON v.line_key=$2 AND v.video_id=$3 WHERE a.id=$1`,[DECISION,'jinuo',input.video_id])).rows;
  if(!result.length)return {status:'unknown',decision_id:DECISION,video_id:input.video_id};
@@ -54,7 +56,7 @@ async function readbackSingleVideo(pool,input,deps){
 }
 async function recoverSingleVideo(pool,input,deps){
  validateInput(input);
- deps=deps||require('./single-video-recovery-authority.js');
+ deps=deps||(authorityFactory?authorityFactory(input):require('./single-video-recovery-authority.js'));
  const authority=await deps.readAuthority(input);checkAuthority(authority,input);
  const existing=await readbackSingleVideo(pool,input,deps);if(existing.status!=='unknown')return existing;
  const guard=await deps.acquireGuard(input);let client,commitStarted=false,committed=false,discardConnection=false,failure;
@@ -92,4 +94,7 @@ async function recoverSingleVideo(pool,input,deps){
   failure=error;try{if(client)await client.query('ROLLBACK');}catch{discardConnection=true;error.rollback_code='RECOVERY_ROLLBACK_UNKNOWN';}throw error;
  }finally{client?.release(discardConnection||commitStarted&&!committed?true:undefined);try{await guard.release();}catch{if(failure)failure.cleanup_code='RECOVERY_LOCK_RELEASE_UNKNOWN';else{const e=Error('RECOVERY_LOCK_RELEASE_UNKNOWN_READBACK_REQUIRED');e.code='RECOVERY_LOCK_RELEASE_UNKNOWN';throw e;}}}
 }
-module.exports={recoverSingleVideo,readbackSingleVideo,SCOPE,DECISION,RECOVERY_RUN,hash};
+return {recoverSingleVideo,readbackSingleVideo};
+}
+const legacy=createRecovery({scope:SCOPE,decision:DECISION,run:RECOVERY_RUN});
+module.exports={...legacy,SCOPE,DECISION,RECOVERY_RUN,hash,createRecovery};

@@ -92,3 +92,10 @@ for (const [array, host, destination] of [
     } finally { rmSync(home, {recursive:true, force:true}); }
   });
 }
+test('新widget、producer及0353恢复的实际部署数组覆盖双机和RPC冻结闭包',async()=>{
+ const {RPC_FILES}=await import('../leadgen-client.mjs');const root=new URL('../',import.meta.url).pathname,source=readFileSync(join(root,'deploy.sh'),'utf8');
+ const arrays=source.slice(source.indexOf('MMV_JS_FILES=('),source.indexOf('# 在任何SSH前'));
+ const r=spawnSync('/bin/bash',['-c',arrays+'\nprintf "MMV:%s\\n" "${MMV_RUNTIME_FILES[@]}";printf "DEVICE:%s\\n" "${DEVICE_CTL_FILES[@]}" "${DEVICE_NODE_FILES[@]}";printf "RPC:%s\\n" "${RPC_FILES[@]}"'],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ const lines=r.stdout.trim().split('\n');for(const name of ['producer-descriptor.mjs','single-video-recovery-0353.js','single-video-recovery-0353-authority.js']){for(const group of ['MMV','DEVICE','RPC'])assert.ok(lines.includes(group+':'+name),group+':'+name);assert.ok(RPC_FILES.includes(name));}
+ for(const group of ['MMV','DEVICE'])assert.ok(lines.includes(group+':clipboard-widget-cancel.py'));
+});
