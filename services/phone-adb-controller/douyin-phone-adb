@@ -926,7 +926,7 @@ PY
 # 只读取实际跳转头；取得真实内容ID便停止，不访问与身份解析无关的落地页。
 # 总请求仍最多两次、各10秒；首跳失败可重试，缺ID的受信中间跳转才继续。
 resolve_content_short_url() {
-  local short_url="$1" evidence_id="$2" headers location attempt rc=0 reason=LINK_RESOLVE_NETWORK
+  local short_url="$1" evidence_id="$2" headers location location_count canonical_url attempt rc=0 reason=LINK_RESOLVE_NETWORK
   local next_url="$short_url" response_code
   local err="$EVIDENCE_ROOT/${evidence_id}-resolve.err"
   for attempt in 1 2; do
@@ -937,9 +937,34 @@ resolve_content_short_url() {
       if [[ "$response_code" == 3[0-9][0-9] && -n "$location" ]]; then
         [[ "$location" =~ '^https://([A-Za-z0-9-]+\.)*(douyin\.com|iesdouyin\.com)/' ]] \
           || die "LINK_RESOLVE_UNTRUSTED_REDIRECT"
-        if [[ "$location" =~ '/(video|note)/[0-9]{16,24}([/?#]|$)' ]]; then
-          print -- "$location"; return 0
-        fi
+        location_count="$(print -- "$headers" | /usr/bin/awk 'tolower($0) ~ /^location:/ { n++ } END { print n+0 }')"
+        [[ "$location_count" == 1 ]] || die "LINK_RESOLVE_AMBIGUOUS_REDIRECT"
+        # HEAD and the frozen peer must hand metrics the same canonical identity.
+        # Keep the actual Location privately and immutably; never replace evidence.
+        canonical_url="$("$PYTHON_BIN" - "$location" "$short_url" "$response_code" "$attempt" "$EVIDENCE_ROOT/${evidence_id}-resolve.json" <<'PYHEADIDENTITY'
+import json,os,re,sys
+from urllib.parse import urlsplit
+try:
+    raw,short,status,hop,destination=sys.argv[1:]
+    url=urlsplit(raw)
+    if url.scheme!='https' or url.netloc not in ('v.douyin.com','www.douyin.com','www.iesdouyin.com') or url.username or url.password: raise ValueError('untrusted')
+    match=re.fullmatch(r'/(?:share/)?(video|note)/([0-9]{16,24})/?',url.path)
+    if not match:
+        if re.search(r'/(?:video|note)/',url.path): raise ValueError('content_path')
+        sys.exit(0)
+    if url.hostname=='v.douyin.com': raise ValueError('content_host')
+    kind,identity=match.groups()
+    canonical='https://www.douyin.com/'+kind+'/'+identity
+    record={'version':1,'http_status':int(status),'hop':int(hop),'short_url':short,'redirect_url':raw,'canonical_url':canonical,'content_type':kind,'content_id':identity}
+    fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as target:
+        json.dump(record,target,ensure_ascii=False);target.flush();os.fsync(target.fileno())
+    print(canonical)
+except (ValueError,OSError) as error:
+    print('LINK_RESOLVE_IDENTITY_REJECTED '+type(error).__name__,file=sys.stderr);sys.exit(2)
+PYHEADIDENTITY
+)" || die "LINK_RESOLVE_UNTRUSTED_REDIRECT"
+        if [[ -n "$canonical_url" ]]; then print -r -- "$canonical_url"; return 0; fi
         next_url="$location"; reason=LINK_RESOLVE_CONTENT_ID_MISSING
       fi
     else
