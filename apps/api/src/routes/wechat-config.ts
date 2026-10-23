@@ -274,7 +274,7 @@ const AutoAgentConfigSchema = z
     key_contact_wechat: z.string().optional(),
     daily_limit: z.number().int().min(0).optional(),
     // 播报出站任务归属的 agent（NOT NULL uuid）。thin：单租户由调用方传入。
-    agent_id: z.string().uuid().optional(),
+    agent_id: z.guid().optional(),
   })
   .strict();
 

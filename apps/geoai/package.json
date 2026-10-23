@@ -9,11 +9,11 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.18.1"
+    "astro": "6.4.8"
   },
   "devDependencies": {
-    "@astrojs/mdx": "^4.3.13",
-    "@astrojs/sitemap": "^3.6.0",
+    "@astrojs/mdx": "5.0.6",
+    "@astrojs/sitemap": "3.7.1",
     "@tailwindcss/vite": "^4.1.18",
     "tailwindcss": "^4.1.18",
     "wrangler": "^4.81.0"

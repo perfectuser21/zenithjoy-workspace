@@ -18,7 +18,7 @@ export type SkillStatusItem = z.infer<typeof SkillStatusItem>;
 
 export const HelloPayload = z.object({
   agentId: z.string(),
-  agentUuid: z.string().uuid().optional(), // H-2 Bug 9: 新 Agent 复用 register 时已创的 row UUID
+  agentUuid: z.guid().optional(), // H-2 Bug 9: 新 Agent 复用 register 时已创的 row UUID
   hostname: z.string().optional(),         // 身份统一：让中台按 (tenant_id, hostname) 去重，不再裂行
   version: z.string(),
   capabilities: z.array(z.string()),
@@ -51,7 +51,7 @@ export const CmdResultPayload = z.object({
   ok: z.boolean().optional(),
   errorCode: z.string().optional(),
   foregroundPkg: z.string().nullable().optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 export type CmdResultPayload = z.infer<typeof CmdResultPayload>;
 
@@ -76,7 +76,7 @@ export const PublishRequestPayload = z.object({
   }),
   // H-1 ws3: server 派 task 时填 agent_id (UUID = agents.id) — agent 端验"派给我"
   // optional 兼容老 v1.0 server 不发此字段
-  agent_id: z.string().uuid().optional(),
+  agent_id: z.guid().optional(),
 });
 
 export const TaskCancelPayload = z.object({
