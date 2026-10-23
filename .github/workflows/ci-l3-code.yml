@@ -304,8 +304,31 @@ jobs:
       # 不装就只能让测试 skip，而"在 CI 里从不执行的守卫"等于没有守卫
       # （0916 自查：279 个 smoke 里 55 个是 pipefail 假绿，同一个病）。
       # libxml2-utils 提供 /usr/bin/xmllint：account-current-nickname 守卫要跑真实的抖音号/昵称提取。
-      - name: 装 zsh + xmllint（video-link-restore / account-current-nickname 守卫要直接跑 douyin-phone-adb）
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh libxml2-utils ffmpeg && python3 -m pip install -q Pillow
+      - name: 刷新 OpenClaw OS 软件包索引（有界诊断）
+        id: openclaw-apt-index
+        timeout-minutes: 2
+        run: |
+          echo "PREFLIGHT_START apt-index"
+          timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          echo "PREFLIGHT_DONE apt-index"
+      - name: 安装 zsh、xmllint 和 ffmpeg（有界诊断）
+        id: openclaw-os-packages
+        timeout-minutes: 2
+        run: |
+          echo "PREFLIGHT_START os-packages"
+          timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=20 -y zsh libxml2-utils ffmpeg
+          command -v zsh
+          command -v xmllint
+          command -v ffmpeg
+          echo "PREFLIGHT_DONE os-packages"
+      - name: 安装并核验 Pillow（有界诊断）
+        id: openclaw-pillow
+        timeout-minutes: 2
+        run: |
+          echo "PREFLIGHT_START pillow"
+          timeout 60s python3 -m pip install --disable-pip-version-check --no-input --timeout 20 --retries 0 Pillow
+          python3 -c 'from PIL import Image; print(Image.__version__)'
+          echo "PREFLIGHT_DONE pillow"
       - name: node --test scripts/openclaw + services/phone-adb-controller + deploy-phone-adb-controller workflow 契约测试
         # 正式Pilot会校验陪跑Skill固定版本；合并前同样执行，避免旧正例只在发布时暴露。
         run: node --test --test-shard=${{ matrix.shard }}/2 scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js

@@ -29,6 +29,12 @@ function presence(host,spec){
 }
 const prefix='services/phone-adb-controller/';
 const need=(v,m)=>{if(!v)throw Error('候选准备: '+m);};
+// Measured 2.87 MB over the existing Xian route takes 166s; bound size-based
+// transfer time at 10 KiB/s plus 30s connection overhead, never beyond 5min.
+export function candidateInstallTimeout(bytes){
+ need(Number.isSafeInteger(bytes)&&bytes>0&&bytes<=128*1024*1024,'invalid archive size');
+ return Math.min(300000,Math.max(120000,30000+Math.ceil(bytes/10240)*1000));
+}
 export function candidateRelativeRoot(sha){
  need(/^[a-f0-9]{40}$/.test(sha),'非法版本');
  return `.local/share/zenithjoy/phone-candidates/${sha}/runtime`;
@@ -73,7 +79,7 @@ export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}
    const spec={sha,identity,files:manifest.files,wrapper_sha256:digest(readFileSync(join(temp,host,'run.sh')))};
    if(presence(host,spec)==='absent'){
     const archive=execFileSync('tar',['-C',join(temp,host),'-cf','-','runtime','candidate-identity.json','run.sh'],{maxBuffer:128*1024*1024});
-    ssh(host,'install',remoteCommand('install',spec),{input:archive,stdio:['pipe','pipe','pipe'],timeout:120000});
+    ssh(host,'install',remoteCommand('install',spec),{input:archive,stdio:['pipe','pipe','pipe'],timeout:host==='xian-m4'?candidateInstallTimeout(archive.length):120000});
     need(presence(host,spec)==='present','安装后候选仍不存在');
    }
    const observed=await observeDeployment({host,manifest,releaseId:release.id,environment:`staging:${sha}`,collector:'phone-adb-deployer',attemptKey:`${attemptKey}:candidate`,brainUrl,

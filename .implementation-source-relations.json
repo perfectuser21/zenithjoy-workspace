@@ -171,6 +171,16 @@
       "owner_path": "services/phone-adb-controller/deployment-m4-payload.py",
       "path": "services/phone-adb-controller/__tests__/deployment-m4-payload.test.mjs",
       "role": "verification"
+    },
+    {
+      "owner_path": "services/phone-adb-controller/deployment-candidate.mjs",
+      "path": "services/phone-adb-controller/__tests__/candidate-install-budget.test.mjs",
+      "role": "verification"
+    },
+    {
+      "owner_path": ".github/workflows/ci-l3-code.yml",
+      "path": ".github/workflows/scripts/__tests__/openclaw-ci-dependency-preflight.test.mjs",
+      "role": "verification"
     }
   ]
 }
