@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "fb1d1a34a34c203dc1508c2a39458f83d76e2f9414ee6792f1364bcf53311027",
+      "code_digest": "4be2a6fa2af14ad31ea4d0d806ca22ef77575b9dce7a78e5c7545e7ab16e5152",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "25249ae0d6dd2398e2c2cd8bb449d2acd89892dbe0284e9e3a776fa6b3788afc",
-        "current_code_digest": "fb1d1a34a34c203dc1508c2a39458f83d76e2f9414ee6792f1364bcf53311027"
+        "current_code_digest": "4be2a6fa2af14ad31ea4d0d806ca22ef77575b9dce7a78e5c7545e7ab16e5152"
       }
     },
     "douyin_video_processing.preflight": {
@@ -346,7 +346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7f36e45e7ec512180182fcf14c2102b3a652780199b2a6ec1013746725710238",
+      "code_digest": "5bda7534fd5989af4a2959488e053e5786037bb0c8978bfa0850f8dbdc629037",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "7249883bb3eceada2e76ea1035b83dea419710d3720f44cbfcd86a51cbdf0043",
-        "current_code_digest": "7f36e45e7ec512180182fcf14c2102b3a652780199b2a6ec1013746725710238"
+        "current_code_digest": "5bda7534fd5989af4a2959488e053e5786037bb0c8978bfa0850f8dbdc629037"
       }
     },
     "douyin_video_processing.dedup": {
@@ -616,7 +616,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -822,13 +822,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "fa19ebb6d7730fcddd691fa85e8908cc05db4969e788ad87736e08c1d62b0efb",
+      "code_digest": "f988309f5d4657c01df0ab97529faa8b9d11af8e738dad3b36bd8f44210b91c2",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "e336115357625909d9c4e318df67b1abef3e36e0ee606c4b74a0c2a606fb7e32",
-        "current_code_digest": "fa19ebb6d7730fcddd691fa85e8908cc05db4969e788ad87736e08c1d62b0efb"
+        "current_code_digest": "f988309f5d4657c01df0ab97529faa8b9d11af8e738dad3b36bd8f44210b91c2"
       }
     },
     "douyin_video_processing.qualification": {
@@ -882,7 +882,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -1144,13 +1144,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "1578697b2a6eb42a10722b56daad1c8d8026cdb1887fd1bc72703222decec9e4",
+      "code_digest": "dacfe1807afcf1efa443ad26a74d7d8ce6612f73ab57dd83ea16e3c37aa2d026",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "79680557da2c90042a1ca36e62ba27d214283754b570dcb076b2c2f73ff5c570",
-        "current_code_digest": "1578697b2a6eb42a10722b56daad1c8d8026cdb1887fd1bc72703222decec9e4"
+        "current_code_digest": "dacfe1807afcf1efa443ad26a74d7d8ce6612f73ab57dd83ea16e3c37aa2d026"
       }
     },
     "douyin_video_processing.collection": {
@@ -1211,7 +1211,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -1439,13 +1439,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "ab3341182ea0a25cdc79e5f8a051a9e7b521a9c7f918ac26cda64ca840fd45c3",
+      "code_digest": "cd8fa34fce4b3d66a2008b1af8723ee68abd8fef4df650ecd75e8a6bb6d9a352",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "84765cf5109c74e73e903024b9854a9beb98a86ee6c9e8e41a19ce359ee0ef72",
-        "current_code_digest": "ab3341182ea0a25cdc79e5f8a051a9e7b521a9c7f918ac26cda64ca840fd45c3"
+        "current_code_digest": "cd8fa34fce4b3d66a2008b1af8723ee68abd8fef4df650ecd75e8a6bb6d9a352"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1499,7 +1499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5d12dd04c1335ba1673dc5951a00a54a27cc13f7fe0630b604d75aa93ed58075",
+      "code_digest": "9abb81c989090377a5511b6de2b95210b9acc2b26056b4c6fbf5601f4fd8a639",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "3929d6e6f0c2f608597e6171828508c6e6b5bb37c893a12410a5ece1da297edc",
-        "current_code_digest": "5d12dd04c1335ba1673dc5951a00a54a27cc13f7fe0630b604d75aa93ed58075"
+        "current_code_digest": "9abb81c989090377a5511b6de2b95210b9acc2b26056b4c6fbf5601f4fd8a639"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1768,7 +1768,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -1946,13 +1946,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "9e0b930dbb7e36adf9c4ef5981db8571c22bc5d37d755f12717843cc9f1570aa",
+      "code_digest": "e8091f3e3c47b1dd9e9e46ce1f6ec23f0c6d4d19ae18144341c6b4c88a66a80e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "58a1383ce177f02f82eeb06f3a968314559496d27b7db2de74efe729d2420862",
-        "current_code_digest": "9e0b930dbb7e36adf9c4ef5981db8571c22bc5d37d755f12717843cc9f1570aa"
+        "current_code_digest": "e8091f3e3c47b1dd9e9e46ce1f6ec23f0c6d4d19ae18144341c6b4c88a66a80e"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2013,7 +2013,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "186e1b247a431ca6f605fb891a3d98ae74bee5ea09ca854d785a84abbd5b9b79",
+      "code_digest": "9c86324f21c33d4fddb5dea9c31ade26aa54e7c79bb4a86bda3bf0b983072147",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "96b93da4b1a7fa7ab8159ea51200479ccbfa93f0f488d87ab84ccc677f4fbceb",
-        "current_code_digest": "186e1b247a431ca6f605fb891a3d98ae74bee5ea09ca854d785a84abbd5b9b79"
+        "current_code_digest": "9c86324f21c33d4fddb5dea9c31ade26aa54e7c79bb4a86bda3bf0b983072147"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2300,7 +2300,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "816585c394179c466d7abcceeef012cbaa44b4350e7f0bfb4bdc894d75f8605b",
+      "code_digest": "8b8a1126ba30f8f6dff9771aa1691c77fcc49ac24bd43946a4c3cbcfd4eb0c4c",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "b2512267861b0306b8ae0c3dc2a81503e20642ed33d83d05cb562c2cc6c89628",
-        "current_code_digest": "816585c394179c466d7abcceeef012cbaa44b4350e7f0bfb4bdc894d75f8605b"
+        "current_code_digest": "8b8a1126ba30f8f6dff9771aa1691c77fcc49ac24bd43946a4c3cbcfd4eb0c4c"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2598,7 +2598,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -2811,13 +2811,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "fdee3bbecf657c255e4d45c3448dfa2f0a54dccae4b39b66eec5ce76c25c4de0",
+      "code_digest": "fb0c8724256370b8bf4996c543a4f6de353e06052f8a700709650b2007b272d1",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "f8c26dfb5bcc505142cc0231b306d41353675a0d528f18c6f09e89412a115375",
-        "current_code_digest": "fdee3bbecf657c255e4d45c3448dfa2f0a54dccae4b39b66eec5ce76c25c4de0"
+        "current_code_digest": "fb0c8724256370b8bf4996c543a4f6de353e06052f8a700709650b2007b272d1"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2871,7 +2871,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -3084,13 +3084,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "fdee3bbecf657c255e4d45c3448dfa2f0a54dccae4b39b66eec5ce76c25c4de0",
+      "code_digest": "fb0c8724256370b8bf4996c543a4f6de353e06052f8a700709650b2007b272d1",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "f8c26dfb5bcc505142cc0231b306d41353675a0d528f18c6f09e89412a115375",
-        "current_code_digest": "fdee3bbecf657c255e4d45c3448dfa2f0a54dccae4b39b66eec5ce76c25c4de0"
+        "current_code_digest": "fb0c8724256370b8bf4996c543a4f6de353e06052f8a700709650b2007b272d1"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3144,7 +3144,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "61519aa7cc5a29624f6ffaf1b65d0c79f83e64ab5004a6cd61c38f22b26f8ae8"
+          "sha256": "9ff3d7b5e7bea41aea94b022cbedd817d59cb1acf4c869fd726f77f297cb52a0"
         },
         {
           "kind": "code",
@@ -3360,13 +3360,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bcc6fe362377dbb2fe43e975a3a4a5924255a30483998c41923704be076e49dd",
+      "code_digest": "c577ea99a9716deb1515cfd714563ef5a8654e58fcff0194720bb02fa562c41a",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "公共Activity、Skill正文及其版本合同未变；共享执行依赖仅拆分并新增101原预算内停止与cleanup_only限权清场及固定来源模块；102原scope语义和其他Workflow分支保持，未声明真机或生产验收。",
-        "reviewed_by": "root（2026-10-23独立22文件净diff/31项关键回归PASS_CODE_ONLY）",
+        "reviewed_by": "codex:101-discovery-cleanup-fix（CI依赖补齐待root增量独审，原运行逻辑已审）",
         "previous_code_digest": "28d9cea735e49091611fce6e2871871151779061ef4852f8b22e8b17074eb7e3",
-        "current_code_digest": "bcc6fe362377dbb2fe43e975a3a4a5924255a30483998c41923704be076e49dd"
+        "current_code_digest": "c577ea99a9716deb1515cfd714563ef5a8654e58fcff0194720bb02fa562c41a"
       }
     }
   },
