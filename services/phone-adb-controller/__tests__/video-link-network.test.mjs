@@ -4,8 +4,10 @@ import {readFileSync,mkdtempSync,writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
 const controller=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
-function run({firstFail=false,alwaysFail=false,downstreamTimeout=false,intermediateRedirect=false,externalRedirect=false,rc=28,message='Resolving timed out after 10000 milliseconds'}={}){
+function run({firstFail=false,alwaysFail=false,downstreamTimeout=false,intermediateRedirect=false,externalRedirect=false,redirectUrl='https://www.douyin.com/video/7000000000000000001',rc=28,message='Resolving timed out after 10000 milliseconds'}={}){
  const source=controller.match(/resolve_content_short_url\(\) \{[\s\S]*?\n\}/)?.[0];assert.ok(source,'生产controller须区分DNS/网络错误并有界解析');
  const dir=mkdtempSync(join(tmpdir(),'link-network-')),curl=join(dir,'curl'),calls=join(dir,'calls');
  writeFileSync(curl,`#!/bin/sh
@@ -14,11 +16,11 @@ n=$(wc -l < "$CALLS")
 if [ "$ALWAYS_FAIL" = 1 ] || { [ "$FIRST_FAIL" = 1 ] && [ "$n" -eq 1 ]; };then printf '%s\\n' "$ERROR_MESSAGE" >&2;exit "$ERROR_RC";fi
 if [ "$EXTERNAL_REDIRECT" = 1 ];then printf 'HTTP/1.1 302 Found\\r\\nLocation: https://example.com/video/7000000000000000001\\r\\n\\r\\n';exit 0;fi
 if [ "$INTERMEDIATE_REDIRECT" = 1 ] && [ "$n" -eq 1 ];then printf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.iesdouyin.com/share/redirect/\\r\\n\\r\\n';exit 0;fi
-printf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/7000000000000000001\\r\\n\\r\\n'
+printf 'HTTP/1.1 302 Found\\r\\nLocation: %s\\r\\n\\r\\n' "$REDIRECT_URL"
 if [ "$DOWNSTREAM_TIMEOUT" = 1 ];then case "$*" in *-sSIL*) printf 'Resolving timed out after 5010 milliseconds\\n' >&2;exit 28;; esac;fi
 `,{mode:0o755});
- const result=spawnSync('zsh',['-c',`set -eu; die(){ print -u2 -- "$1";exit 2; }; wait_ms(){ :; }; ${source}; resolve_content_short_url https://v.douyin.com/test/ fixture`],{env:{...process.env,CURL:curl,EVIDENCE_ROOT:dir,CALLS:calls,FIRST_FAIL:firstFail?'1':'0',ALWAYS_FAIL:alwaysFail?'1':'0',DOWNSTREAM_TIMEOUT:downstreamTimeout?'1':'0',INTERMEDIATE_REDIRECT:intermediateRedirect?'1':'0',EXTERNAL_REDIRECT:externalRedirect?'1':'0',ERROR_RC:String(rc),ERROR_MESSAGE:message},encoding:'utf8'});
- return {...result,calls:readFileSync(calls,'utf8').trim().split('\n')};
+ const result=spawnSync('zsh',['-c',`set -eu; die(){ print -u2 -- "$1";exit 2; }; wait_ms(){ :; }; ${source}; resolve_content_short_url https://v.douyin.com/test/ fixture`],{env:{...process.env,PYTHON_BIN:'python3',REDIRECT_URL:redirectUrl,CURL:curl,EVIDENCE_ROOT:dir,CALLS:calls,FIRST_FAIL:firstFail?'1':'0',ALWAYS_FAIL:alwaysFail?'1':'0',DOWNSTREAM_TIMEOUT:downstreamTimeout?'1':'0',INTERMEDIATE_REDIRECT:intermediateRedirect?'1':'0',EXTERNAL_REDIRECT:externalRedirect?'1':'0',ERROR_RC:String(rc),ERROR_MESSAGE:message},encoding:'utf8'});
+ return {...result,evidenceRoot:dir,calls:readFileSync(calls,'utf8').trim().split('\n')};
 }
 test('DNS timeout两次后明确归因，不能变成缺video ID；总网络预算不增长',()=>{
  const r=run({alwaysFail:true});assert.equal(r.status,2);assert.match(r.stderr,/LINK_RESOLVE_DNS_TIMEOUT.*curl_rc=28/);assert.equal(r.calls.length,2);
@@ -34,3 +36,16 @@ test('仅在首跳没有内容ID时追踪实际抖音中间跳转，仍只请求
  const r=run({intermediateRedirect:true});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'https://www.douyin.com/video/7000000000000000001');assert.equal(r.calls.length,2);assert.match(r.calls[1],/https:\/\/www\.iesdouyin\.com\/share\/redirect\//);
 });
 test('站外跳转即使包含相似视频ID也不充当已验证抖音链接',()=>{const r=run({externalRedirect:true});assert.equal(r.status,2);assert.match(r.stderr,/LINK_RESOLVE_UNTRUSTED_REDIRECT/);assert.equal(r.calls.length,1);});
+
+test('Android101真实iesdouyin分享跳转通过严格同视频指标并封存原redirect',()=>{
+ const videoId='7699406826379298531',actual=`https://www.iesdouyin.com/share/video/${videoId}/?region=CN&from=copy`;
+ const r=run({redirectUrl:actual});assert.equal(r.status,0,r.stderr);
+ const {buildObservation}=require('../discovery-metrics.js');
+ const scope={run:'real101',run_id:'douyin_video_discovery-real101__a1',profile:'legacy',source_commit:'a'.repeat(40),line_key:'jinuo',video_id:videoId,video_url:r.stdout.trim(),observed_at:'2026-10-23T04:54:51.365Z',evidence_id:'real101-candidate1-link-t1',xml:'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="未点赞，喜欢183，按钮"/><node package="com.ss.android.ugc.aweme" content-desc="评论8，按钮"/></hierarchy>'};
+ const metrics=buildObservation(scope);
+ assert.equal(metrics.likes.value,183);assert.equal(metrics.comment_total.value,8);
+ assert.equal(scope.video_url,`https://www.douyin.com/video/${videoId}`);
+ const original=JSON.parse(readFileSync(join(r.evidenceRoot,'fixture-resolve.json'),'utf8'));
+ assert.equal(original.redirect_url,actual);assert.equal(original.canonical_url,scope.video_url);assert.equal(original.content_id,videoId);
+ assert.equal(original.http_status,302);assert.equal(r.calls.length,1);
+});
