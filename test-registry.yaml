@@ -7855,3 +7855,27 @@ agent_suite:
   status: active
   product: AI员工
   note: "固定canonical决定和原件、真实adapter官方读取/本人双锁协议与未知拒绝；不做手机动作"
+
+- id: api-zod-collection-bounds
+  path: apps/api/src/schemas/__tests__/zod-collection-bounds.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实array/set上界先拒绝再逐元素解析的永久安全回归，保限内正例"
+
+- id: api-zod-map-bounds
+  path: apps/api/src/schemas/__tests__/zod-map-bounds.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "Zod4 Map上界提前拒绝及限内正例"
+
+- id: api-zod-wire-compatibility
+  path: apps/api/src/schemas/__tests__/zod-wire-compatibility.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "五处record值语义、UUID-like与对象键策略、真实HTTP400外层兼容"
