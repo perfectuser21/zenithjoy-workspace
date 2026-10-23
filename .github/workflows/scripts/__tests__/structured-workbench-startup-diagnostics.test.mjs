@@ -15,10 +15,9 @@ test('fixture_up stdout静默时实际fail仍将失败原因交给CI stderr',()=
 test('真实start_api未就绪错误保留实际启动日志且exit1，健康条件不伪造成功',()=>{
  const directory=mkdtempSync(join(tmpdir(),'wb-startup-diagnostic-'));
  try {
-  const start=source.indexOf('start_api() {'),end=source.indexOf('\nlogin_cookie()',start);
-  assert.ok(start>=0&&end>start);
+  const helper=new URL('../smoke/lib/workbench-api-process.sh',import.meta.url).pathname;
   // 仅隔离依赖：curl永远不就绪，node模拟已退出API进程；执行真实start_api/fail。
-  const script=`${failFunction}\n${source.slice(start,end)}\n`+
+  const script=`${failFunction}\nsource "${helper}"\n`+
    `curl(){ return 1; }\nnode(){ printf '%s\\n' 'fixture startup cause: database unavailable' >&2; }\n`+
    `kill(){ wait "$API_PID"; return 1; }\nfixture_up(){ start_api 5620 "$1"; }\nfixture_up "$1" >/dev/null`;
   const result=spawnSync('bash',['-c',script,'fixture',join(directory,'api.log')],{encoding:'utf8',timeout:5000});

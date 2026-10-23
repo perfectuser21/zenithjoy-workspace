@@ -161,7 +161,7 @@ test('正式caller强制回收忽略TERM的子进程后才返回，重试不会�
   const script = join(root, 'stubborn.sh');
   const pidFile = join(root, 'child.pid');
   writeFileSync(script, `#!/bin/bash\ntrap '' TERM\necho $$ > '${pidFile}'\nwhile :; do sleep 1; done\n`);
-  const definition = caller.match(/run_one\(\) \{[^\n]+}/)?.[0];
+  const definition = caller.match(/run_one\(\) \{[\s\S]*?\n\s*}/)?.[0];
   assert.ok(definition);
   const result = spawnSync('bash', ['-c', `DIR='${root}'; script_timeout() { echo 0.2; }; ${definition}; run_one stubborn.sh`],
     { encoding: 'utf8', timeout: 8000, killSignal: 'SIGKILL' });

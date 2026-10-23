@@ -257,7 +257,16 @@ jobs:
             esac
           }
 
-          run_one() { timeout --kill-after=5s "$(script_timeout "$1")" bash "$DIR/$1"; }
+          run_one() {
+            if [ "$1" = structured-workbench-smoke.sh ]; then
+              timeout --kill-after=5s "$(script_timeout "$1")" bash -c '
+                port="${WORKBENCH_SMOKE_PORT:-$(node "$1/lib/workbench-port.mjs" allocate)}" || exit 1
+                WORKBENCH_SMOKE_PORT="$port" exec bash "$1/$2"
+              ' workbench "$DIR" "$1"
+            else
+              timeout --kill-after=5s "$(script_timeout "$1")" bash "$DIR/$1"
+            fi
+          }
 
           # 每个 worker 拥有独立数据库/API；这里只分完整文件清单，不在共享服务上并发脚本。
           SHARD_INDEX="${SMOKE_SHARD_INDEX:-0}"
