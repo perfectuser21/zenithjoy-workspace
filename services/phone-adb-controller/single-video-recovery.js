@@ -2,6 +2,7 @@
 'use strict';
 const {createHash}=require('node:crypto');
 const DECISION='ab68977b-2670-4a90-9d84-bdd3b25f3e04';
+const RECOVERY_RUN='single_video_recovery_ab68977b_a2';
 const SCOPE=Object.freeze({scope_version:1,action:'restore_single_quarantined_video_to_comment_collection',project_id:'67bd1fc3-3027-4f13-83c8-c656e3408bfc',root_task_id:'93723f83-9474-465a-93ec-bc3782053638',company_id:'ef8e14b0-4018-4e54-bc7a-866e51a0ce0b',tenant_id:'a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61',policy_id:'jinoshengyuan-existing-acquisition-rules-v1',company_config_version:14,video_ids:['7699316353698753663'],original_task_id:'0c764ecc-9260-4a3b-a85e-29c75c8966dc',original_run:'cicd24c9_102_20261023_2052',source_status:'待人工核验:cicd24c9_102_20261023_2052',target_status:'待采评论',requirements:['独立核验旧执行停止','精确匹配公司、政策、原run及原owner','保留原失败及其他待人工记录','恢复写入具备审计及幂等','最多采5条评论','继续限批验收102/103'],max_comments_per_video:5,allow_direct_messages:false,allow_other_video_recovery:false});
 const canonical=x=>JSON.stringify(x instanceof Date?x.toJSON():x&&typeof x==='object'?Array.isArray(x)?x.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(x).sort().map(k=>[k,JSON.parse(canonical(x[k]))])):x);
 const hash=x=>createHash('sha256').update(canonical(x)).digest('hex');
@@ -22,7 +23,7 @@ async function checkGuard(guard,input){
  return s.evidence_sha256;
 }
 function validateInput(input){
- if(input.decision_id!==DECISION||input.video_id!==SCOPE.video_ids[0]||input.line!=='jinuo'||input.run!=='single_video_recovery_ab68977b'
+ if(input.decision_id!==DECISION||input.video_id!==SCOPE.video_ids[0]||input.line!=='jinuo'||input.run!==RECOVERY_RUN
   ||!/^[-a-f0-9]{36}$/.test(input.maintenance_task_id||'')||Object.keys(input).some(k=>!['op','line','run','decision_id','maintenance_task_id','video_id','evidence_root'].includes(k)))fail('SCOPE_INVALID');
 }
 function receiptResult(receipts,row,authority,input){
@@ -91,4 +92,4 @@ async function recoverSingleVideo(pool,input,deps){
   failure=error;try{if(client)await client.query('ROLLBACK');}catch{discardConnection=true;error.rollback_code='RECOVERY_ROLLBACK_UNKNOWN';}throw error;
  }finally{client?.release(discardConnection||commitStarted&&!committed?true:undefined);try{await guard.release();}catch{if(failure)failure.cleanup_code='RECOVERY_LOCK_RELEASE_UNKNOWN';else{const e=Error('RECOVERY_LOCK_RELEASE_UNKNOWN_READBACK_REQUIRED');e.code='RECOVERY_LOCK_RELEASE_UNKNOWN';throw e;}}}
 }
-module.exports={recoverSingleVideo,readbackSingleVideo,SCOPE,DECISION,hash};
+module.exports={recoverSingleVideo,readbackSingleVideo,SCOPE,DECISION,RECOVERY_RUN,hash};

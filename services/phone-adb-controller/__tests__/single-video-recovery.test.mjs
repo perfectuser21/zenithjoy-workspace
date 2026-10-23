@@ -7,7 +7,7 @@ const require=createRequire(import.meta.url),{queueRequest}=require('../leadgen-
 const decisionId='ab68977b-2670-4a90-9d84-bdd3b25f3e04',vid='7699316353698753663',old='cicd24c9_102_20261023_2052';
 const company='ef8e14b0-4018-4e54-bc7a-866e51a0ce0b',tenant='a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61';
 const scope={scope_version:1,action:'restore_single_quarantined_video_to_comment_collection',project_id:'67bd1fc3-3027-4f13-83c8-c656e3408bfc',root_task_id:'93723f83-9474-465a-93ec-bc3782053638',company_id:company,tenant_id:tenant,policy_id:'jinoshengyuan-existing-acquisition-rules-v1',company_config_version:14,video_ids:[vid],original_task_id:'0c764ecc-9260-4a3b-a85e-29c75c8966dc',original_run:old,source_status:'待人工核验:'+old,target_status:'待采评论',requirements:['独立核验旧执行停止','精确匹配公司、政策、原run及原owner','保留原失败及其他待人工记录','恢复写入具备审计及幂等','最多采5条评论','继续限批验收102/103'],max_comments_per_video:5,allow_direct_messages:false,allow_other_video_recovery:false};
-const input={op:'recover_single_video',line:'jinuo',run:'single_video_recovery_ab68977b',decision_id:decisionId,maintenance_task_id:'1cbcc881-c52d-437a-ba11-701d849330a9',video_id:vid};
+const input={op:'recover_single_video',line:'jinuo',run:'single_video_recovery_ab68977b_a2',decision_id:decisionId,maintenance_task_id:'1cbcc881-c52d-437a-ba11-701d849330a9',video_id:vid};
 const canonical=x=>JSON.stringify(x instanceof Date?x.toJSON():x&&typeof x==='object'?Array.isArray(x)?x.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(x).sort().map(k=>[k,JSON.parse(canonical(x[k]))])):x);
 const h=x=>createHash('sha256').update(canonical(x)).digest('hex');
 function authority(){return {decision:{id:decisionId,made_by:'user',status:'active',decision:JSON.stringify(scope)},originalTask:{id:scope.original_task_id,status:'failed'},maintenanceTask:{id:input.maintenance_task_id,project_id:scope.project_id,parent_task_id:scope.root_task_id,status:'in_progress',claimed_by:'codex:single-video-recovery'},actor:'codex:single-video-recovery',evidence_sha256:'a'.repeat(64)};}
@@ -53,3 +53,4 @@ test('真实PG：仅用户批准单VID归位，旁行/旧失败不变，原子�
   assert.ok(released>0);
  }finally{if(!c.released){try{c.release();}catch{}}if(created)await pool.query(`DROP SCHEMA ${schema} CASCADE`);await pool.end();}
 });
+test('已消费旧nonce不进入任何DB或资源调用',async()=>{await assert.rejects(queueRequest({query:()=>{throw Error('must not query');}},{...input,run:'single_video_recovery_ab68977b'},{recovery:{readAuthority:()=>{throw Error('must not read authority');}}}),/RECOVERY_SCOPE_INVALID/);});

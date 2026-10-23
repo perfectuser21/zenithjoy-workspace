@@ -6,7 +6,7 @@ const {execFile}=require('node:child_process');
 const {promisify}=require('node:util');
 const {createHash}=require('node:crypto');
 const {homedir}=require('node:os');
-const {SCOPE,DECISION,hash}=require('./single-video-recovery.js');
+const {SCOPE,DECISION,RECOVERY_RUN,hash}=require('./single-video-recovery.js');
 const exec=promisify(execFile),DEVICE='ANGYVB4402004137',SESSION='agent:work-commander:workflow-1cc217514f7153f5308c722757c05a3d',SESSION_ID='a4e63bbb-1ce2-4feb-af1f-daa1cbd73dff';
 const fail=x=>{throw Error('RECOVERY_'+x);};
 const proofs={
@@ -19,7 +19,7 @@ const proofs={
  'honor24c9-102-central-lock-readback.json':'34312fe718f5412d00a03bf7f4e0b8fab7ec85a83e72bc5a81500b3ac0ff77af',
  'honor24c9-102-local-lock-status.json':'77c2e2922f0ce42e6821c6c0a683a757699e74a0c1a1ab6fe8b555f0a7d88a73'};
 const allowed=new Set(['op','line','run','decision_id','maintenance_task_id','video_id','evidence_root']);
-function request(input){if(!input||Object.keys(input).some(k=>!allowed.has(k)))fail('REQUEST_INVALID');}
+function request(input){if(!input||input.run!==RECOVERY_RUN||Object.keys(input).some(k=>!allowed.has(k)))fail('REQUEST_INVALID');}
 function proofFiles(root){
  const records={};for(const [name,sha]of Object.entries(proofs)){const fd=openSync(join(root,name),constants.O_RDONLY|constants.O_NOFOLLOW);try{const s=fstatSync(fd),raw=readFileSync(fd);if(!s.isFile()||s.nlink!==1||s.size>10*1024*1024||createHash('sha256').update(raw).digest('hex')!==sha)fail('EVIDENCE_INVALID');if(name==='honor24c9-102-local-lock-status.json'){if(raw.toString().trim()!=='lock=free')fail('EVIDENCE_INVALID');}else records[name]=JSON.parse(raw);}finally{closeSync(fd);}}
  const p=records['honor24c9-102-original-split-result.json'];if(p.status!=='failed'||p.run_id!==`douyin_video_processing-${SCOPE.original_run}__a1`||p.source_commit!=='24c9e6b97b81ae144985474d9e33665bf65a6a8e')fail('EVIDENCE_INVALID');
@@ -95,15 +95,34 @@ function createAuthority(io={}){
    if(!['lock-status','lock-acquire-new','lock-release-exact'].includes(command))fail('PHONE_ACTION_FORBIDDEN');
    return run('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=10','xian-m4','zsh "$HOME/'+relative+'" --profile legacy '+command+(owner?' '+owner:'')],30000);
   };
+  const evidenceRoot=io.evidenceRoot||'/private/tmp/openclaw-phone/evidence/legacy';
+  const readLockReceipt=io.readLockReceipt||(async({path})=>{
+   const code='import os,stat,sys;fd=os.open(sys.argv[1],os.O_RDONLY|os.O_NOFOLLOW);s=os.fstat(fd);assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<1048576;print(os.read(fd,1048576).decode())';
+   return JSON.parse(await run('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=10','xian-m4',"python3 -I -c '"+code+"' '"+path+"'"],30000));
+  });
+  const held=value=>new RegExp('^lock=held owner='+input.run+' age=[0-9]+s stale=false reclaimable=false ttl=[0-9]+s\\n?$').test(value);
+  async function verifyReceipt(kind,stdout,started){
+   const acquire=kind==='acquire',eid=input.run+'-lock-'+kind,path=evidenceRoot+'/'+eid+'.json';
+   const receipt=(acquire?'run_claim=recorded owner='+input.run+'\n':'')+'lock='+(acquire?'acquired':'released')+' owner='+input.run;
+   if(stdout!==receipt+'\nlock_evidence_id='+eid+' lock_evidence='+path+' readback_state='+(acquire?'held':'free')+'\n')fail('LOCK_RECEIPT_INVALID');
+   let d;try{d=await readLockReceipt({kind,run:input.run,path});}catch{fail('LOCK_RECEIPT_UNKNOWN');}
+   const e=d?.latest;
+   if(d?.schema!=='lock_receipt_v1'||d.evidence_id!==eid||d.run_id!==input.run||d.kind!==kind||!Array.isArray(d.events)||d.events.length!==1||!e||hash(d.events[0])!==hash(e)
+    ||e?.seq!==1||e.command!==(acquire?'lock-acquire-new':'lock-release-exact')||e.requested_owner!==input.run||e.rc!==0||e.result!=='ok'||e.receipt!==receipt||e.stderr!==''
+    ||e.profile!=='legacy'||e.serial!==DEVICE||e.readback_command!=='lock-status'||e.readback_state!==(acquire?'held':'free')||e.readback_owner!==(acquire?input.run:null)
+    ||!Number.isSafeInteger(e.at_epoch_ms)||e.at_epoch_ms<started-1000||e.at_epoch_ms>Date.now()+1000||Date.parse(e.at)!==e.at_epoch_ms
+    ||(acquire?!held(e.readback):e.readback!=='lock=free'))fail('LOCK_RECEIPT_INVALID');
+   const actual=await phone('lock-status');if(acquire?!held(actual):actual.trim()!=='lock=free')fail('LOCK_LOST');
+  }
   const central=async()=>{const d=await brain('/device-locks');const a=d.locks?.filter(r=>r.device_name===DEVICE);if(d.success!==true||a?.length!==1)fail('LOCK_UNKNOWN');return a[0];};
   const c=await central();if(c.locked_by!==null||(await phone('lock-status')).trim()!=='lock=free')fail('LOCK_BUSY');
   let centralHeld=false,localHeld=false,localAttempted=false;
-  const release=async()=>{if(localHeld){if(!/^lock=released owner=single_video_recovery_ab68977b(?:\n|$)/.test(await phone('lock-release-exact',input.run)))fail('LOCK_RELEASE_UNKNOWN');if((await phone('lock-status')).trim()!=='lock=free')fail('LOCK_RELEASE_UNKNOWN');localHeld=false;}
+  const release=async()=>{if(localHeld){const started=Date.now();await verifyReceipt('release',await phone('lock-release-exact',input.run),started);localHeld=false;}
    if(centralHeld){const r=await brain('/device-locks/release',{device_name:DEVICE,locked_by:input.maintenance_task_id});if(r.success!==true||(await central()).locked_by!==null)fail('LOCK_RELEASE_UNKNOWN');centralHeld=false;}};
   try{
    const a=await brain('/device-locks/acquire',{device_name:DEVICE,locked_by:input.maintenance_task_id,ttl_minutes:5});if(a.acquired!==true||a.lock?.locked_by!==input.maintenance_task_id)fail('LOCK_BUSY');centralHeld=true;
-   localAttempted=true;if(!/^lock=acquired owner=single_video_recovery_ab68977b(?:\n|$)/.test(await phone('lock-acquire-new',input.run)))fail('LOCK_ACQUIRE_UNKNOWN');localHeld=true;
-   return {read:async()=>{const stopHash=await stopped(auth.records);const c=await central(),local=await phone('lock-status');if(c.locked_by!==input.maintenance_task_id||Date.parse(c.expires_at)<Date.now()+30000||!new RegExp('^lock=held owner='+input.run+'(?: |\\n|$)').test(local))fail('LOCK_LOST');return {observed_at:Date.now(),old_session_terminal:true,old_native_stopped:true,pending:0,active:0,guard_held:true,local_owner:input.run,central_owner:input.maintenance_task_id,evidence_sha256:hash({stopHash,central:c,local})};},release};
+   localAttempted=true;const started=Date.now();await verifyReceipt('acquire',await phone('lock-acquire-new',input.run),started);localHeld=true;
+   return {read:async()=>{const stopHash=await stopped(auth.records);const c=await central(),local=await phone('lock-status');if(c.locked_by!==input.maintenance_task_id||Date.parse(c.expires_at)<Date.now()+30000||!held(local))fail('LOCK_LOST');return {observed_at:Date.now(),old_session_terminal:true,old_native_stopped:true,pending:0,active:0,guard_held:true,local_owner:input.run,central_owner:input.maintenance_task_id,evidence_sha256:hash({stopHash,central:c,local})};},release};
   }catch(e){if(localAttempted&&!localHeld){const status=await phone('lock-status');if(new RegExp('^lock=held owner='+input.run+'(?: |\\n|$)').test(status))localHeld=true;else if(status.trim()!=='lock=free')fail('LOCK_ACQUIRE_UNKNOWN');}await release();throw e;}
  }
  return {readAuthority,acquireGuard,inspectStopped:async input=>{const a=await readAuthority(input);return {status:'observed_stopped',evidence_sha256:await stopped(a.records),observed_at:new Date().toISOString(),side_effects:'GET/official RPC/host process reads only; no locks or phone actions'};}};
