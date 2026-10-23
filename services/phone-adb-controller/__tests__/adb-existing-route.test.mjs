@@ -83,6 +83,61 @@ test('真实controller先验证既有socket再用该路由，customclient也不�
  const refresh=await call('refresh',base.EXPECTED_SOCKET);assert.notEqual(refresh.status,0);assert.equal(readFileSync(log,'utf8'),before);
  writeFileSync(adb,readFileSync(adb,'utf8').replace('1.0.41','1.0.40'));const wrongClient=await call('status',base.EXPECTED_SOCKET);assert.notEqual(wrongClient.status,0);assert.match(wrongClient.err,/ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH/);assert.equal(readFileSync(log,'utf8'),before+'version\n');
 });
+// CLI fault injection runs the original __main__ in a real Python process.
+// Only the test loopback endpoint is reachable; no host ADB service is queried.
+async function diagnosticCli(t,{hang=false,client='good',injected='',configured}={}){
+ const endpoint=await server(t,'431\tdevice\n',{hang});
+ const dir=mkdtempSync(join(tmpdir(),'adb-route-cli-diagnostic-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const sentinel='SENSITIVE_ROUTE_DIAGNOSTIC_SENTINEL',calls=join(dir,'client-calls');
+ const executable=join(dir,client==='missing'?sentinel:'client');
+ if(client!=='missing'){
+  const python=spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'});assert.equal(python.status,0,python.stderr);
+  writeFileSync(executable,`#!${python.stdout.trim()}\nimport sys,time,json\nwith open(${JSON.stringify(calls)},'a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nif sys.argv[1:]!=['version']:sys.exit(9)\n${client==='slow'?'time.sleep(3)':'print("Android Debug Bridge version 1.0.41")'}\n`,{mode:0o755});
+ }
+ const runner=join(dir,'invoke.py');
+ writeFileSync(runner,`import sys,socket,runpy\nroute,port,injected=sys.argv[1:4];sys.argv=[route,'431',sys.argv[4]]\noriginal=socket.create_connection\ndef local_only(address,*args,**kwargs):\n if address!=('127.0.0.1',int(port)):raise ConnectionRefusedError()\n if injected:raise type(injected,(RuntimeError,),{})(injected)\n return original(address,*args,**kwargs)\nsocket.create_connection=local_only\nrunpy.run_path(route,run_name='__main__')\n`);
+ const env={...process.env,HOME:dir,ADB_SERVER_SOCKET:configured??`tcp:127.0.0.1:${endpoint.port}`,ADB_PROBE_TEST_SECRET:sentinel};
+ for(const key of ['ZJ_ADB_HOST_CONFIG','WFR_COLLECTION_POLICY_FILE','WFR_COLLECTION_LEAF_SOCKET','WFR_COLLECTION_LEAF_NONCE'])delete env[key];
+ const result=await new Promise(resolve=>{const c=spawn('python3',[runner,helper,String(endpoint.port),injected,executable],{env});let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out,err}));});
+ return {...result,endpoint,sentinel,calls:existsSync(calls)?readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse):[]};
+}
+function diagnostic(result,first,phase,exception){
+ assert.equal(result.status,2,result.err);assert.equal(result.out,'');
+ const lines=result.err.trim().split('\n');assert.equal(lines[0],first);
+ assert.equal(lines.length,2,'CLI failure needs one bounded diagnostic after its unchanged first line');
+ assert.ok(lines[1].startsWith('ADB_ROUTE_DIAGNOSTIC '));
+ const value=JSON.parse(lines[1].slice('ADB_ROUTE_DIAGNOSTIC '.length));
+ assert.deepEqual(Object.keys(value).sort(),['elapsed_ms','exception_type','phase']);
+ assert.equal(value.phase,phase);assert.equal(value.exception_type,exception);
+ assert.ok(Number.isSafeInteger(value.elapsed_ms)&&value.elapsed_ms>=0);
+ assert.ok(!result.err.includes(result.sentinel),'raw exception/argv/environment sentinel must not be printed');
+ return value;
+}
+test('CLI真实socket读取超时保首码并指明route_select阶段',async t=>{
+ const r=await diagnosticCli(t,{hang:true});diagnostic(r,'ADB_ROUTE_PROBE_FAILED','route_select','TimeoutError');
+ assert.deepEqual(r.calls,[]);assert.deepEqual(r.endpoint.requests,['host:version']);
+});
+test('CLI真实version子进程超原2秒时指明client_version阶段',async t=>{
+ const r=await diagnosticCli(t,{client:'slow'}),d=diagnostic(r,'ADB_ROUTE_PROBE_FAILED','client_version','TimeoutExpired');
+ assert.ok(d.elapsed_ms>=1800&&d.elapsed_ms<4000);assert.deepEqual(r.calls,[['version']]);
+ assert.deepEqual(r.endpoint.requests,['host:version','host:devices']);
+});
+test('CLI真实不存在客户端的OSError不泄露含哨兵的argv',async t=>{
+ const r=await diagnosticCli(t,{client:'missing'});diagnostic(r,'ADB_ROUTE_PROBE_FAILED','client_version','FileNotFoundError');
+ assert.deepEqual(r.calls,[]);assert.deepEqual(r.endpoint.requests,['host:version','host:devices']);
+});
+test('CLI未知异常类名与正文必须折叠成固定枚举',async t=>{
+ const r=await diagnosticCli(t,{injected:'SENSITIVE_ROUTE_DIAGNOSTIC_SENTINEL'});diagnostic(r,'ADB_ROUTE_PROBE_FAILED','route_select','OtherError');
+ assert.deepEqual(r.calls,[]);
+});
+test('CLI已有ValueError首码与退出码保持且诊断不输出输入参数',async t=>{
+ const r=await diagnosticCli(t,{configured:'tcp:secret-input.example:5037'});diagnostic(r,'ADB_ROUTE_SOCKET_INVALID','route_select','ValueError');
+ assert.ok(!r.err.includes('secret-input'));assert.deepEqual(r.calls,[]);assert.deepEqual(r.endpoint.requests,[]);
+});
+test('CLI正常仅输出原端口且stderr空，不新增版本调用',async t=>{
+ const r=await diagnosticCli(t);assert.equal(r.status,0,r.err);assert.equal(r.out,`${r.endpoint.port}\n`);assert.equal(r.err,'');
+ assert.deepEqual(r.calls,[['version']]);assert.deepEqual(r.endpoint.requests,['host:version','host:devices']);
+});
 }
 let fixtureRoot, fixture;
 function initializeFixture(){
