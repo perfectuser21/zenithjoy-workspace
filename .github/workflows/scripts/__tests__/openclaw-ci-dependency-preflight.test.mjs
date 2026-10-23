@@ -19,11 +19,11 @@ function validate(w){
  assert.match(setup(w)[2].run,/pip install.*Pillow/);
 }
 test('依赖准备拆成可定位有界三阶段，原10分钟和全量门禁保持',()=>validate(workflow));
-function invoke(t,failed='',present=[],broken=''){
+function invoke(t,failed='',present=[],broken='',expired=false){
  validate(workflow);const top=mkdtempSync(join(tmpdir(),'ci-dependency-preflight-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const trace=join(top,'trace');
  const put=(name,script)=>writeFileSync(join(top,name),'#!/bin/sh\n'+script+'\n',{mode:0o755});
- put('timeout','printf "timeout %s\\n" "$*" >> "$DEPENDENCY_TRACE"; shift; exec "$@"');put('sudo','exec "$@"');
+ put('timeout','printf "timeout %s\\n" "$*" >> "$DEPENDENCY_TRACE"; case "$*" in *" install "*) [ "$DEPENDENCY_EXPIRED" != 1 ] || exit 124;; esac; shift; exec "$@"');put('sudo','exec "$@"');
  put('env','exec /usr/bin/env "$@"');
  put('apt-get',`printf "apt %s\\n" "$*" >> "$DEPENDENCY_TRACE"
  case "$*" in *update*) phase=apt-index;; *) phase=os-packages;; esac
@@ -43,7 +43,7 @@ function invoke(t,failed='',present=[],broken=''){
  for(const name of present)put(name,'printf "tool '+name+' %s\\n" "$*" >> "$DEPENDENCY_TRACE"; [ "$DEPENDENCY_BROKEN" != "'+name+'" ] || exit 44');
  let output='',status=0;
  for(const s of setup()){
-  const r=spawnSync('/bin/bash',['-e','-o','pipefail','-c',s.run],{env:{...process.env,PATH:top,DEPENDENCY_BIN:top,DEPENDENCY_TRACE:trace,DEPENDENCY_FAILED:failed,DEPENDENCY_BROKEN:broken},encoding:'utf8',timeout:5000});
+  const r=spawnSync('/bin/bash',['-e','-o','pipefail','-c',s.run],{env:{...process.env,PATH:top,DEPENDENCY_BIN:top,DEPENDENCY_TRACE:trace,DEPENDENCY_FAILED:failed,DEPENDENCY_BROKEN:broken,DEPENDENCY_EXPIRED:expired?'1':'0'},encoding:'utf8',timeout:5000});
   output+=r.stdout+r.stderr;status=r.status;if(status!==0)break;
  }
  return {status,output,trace:readFileSync(trace,'utf8')};
@@ -60,3 +60,6 @@ test('只有xmllint缺失只安装libxml2-utils，不重新安装其余两种工
 test('install请求超时20秒/失败文件仅重试1次，外层仍90秒不扩大',t=>{const r=invoke(t);assert.equal(r.status,0,r.output);const line=r.trace.split('\n').find(l=>l.startsWith('timeout ')&&l.includes(' install '));assert.match(line,/^timeout 90s /);for(const option of ['Acquire::Retries=1','Acquire::http::Timeout=20','Acquire::https::Timeout=20','DPkg::Lock::Timeout=20'])assert.ok(line.includes(option),option);});
 test('PATH可找到但真实工具不可执行时硬失败，不发OS完成或进Pillow',t=>{const r=invoke(t,'',['zsh','xmllint','ffmpeg'],'ffmpeg');assert.equal(r.status,44,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);});
 test('安装失败前也保留三工具实际已有路径/缺失证据',t=>{const r=invoke(t,'os-packages',['ffmpeg']);assert.equal(r.status,43,r.output);assert.match(r.output,/PREFLIGHT_TOOL ffmpeg existing_path=\S+/);assert.match(r.output,/PREFLIGHT_TOOL zsh existing_path=missing/);assert.match(r.output,/PREFLIGHT_TOOL xmllint existing_path=missing/);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages/);});
+
+test('仅OS安装采用300秒外层与6分钟step，job和其余阶段预算保持',()=>{const steps=setup();assert.equal(steps[1]['timeout-minutes'],6);assert.match(steps[1].run,/timeout 300s /);assert.equal(workflow.jobs['openclaw-scripts-test']['timeout-minutes'],10);assert.equal(steps[0]['timeout-minutes'],2);assert.equal(steps[2]['timeout-minutes'],2);});
+test('实际bash中OS外层300秒耗尽仍硬失败且不执行Pillow/测试',t=>{const r=invoke(t,'',[], '',true);assert.equal(r.status,124,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);assert.match(r.trace,/timeout 300s .*apt-get install/);});
