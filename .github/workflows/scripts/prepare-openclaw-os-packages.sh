@@ -34,6 +34,7 @@ for block in re.split(r'\n\s*\n',text.strip()):
   key,value=line.split(':',1)
   if key in fields:raise SystemExit('APT_SOURCE_UNTRUSTED')
   fields[key]=value.strip()
+ if not fields:continue
  if fields.get('Types')!='deb' or fields.get('Signed-By')!='/usr/share/keyrings/ubuntu-archive-keyring.gpg':raise SystemExit('APT_SOURCE_SIGNATURE_REQUIRED')
  if any(k.lower() in ('trusted','allow-insecure','allow-weak','allow-downgrade-to-insecure') for k in fields):raise SystemExit('APT_SOURCE_UNTRUSTED')
  uris=fields.get('URIs','').split()
