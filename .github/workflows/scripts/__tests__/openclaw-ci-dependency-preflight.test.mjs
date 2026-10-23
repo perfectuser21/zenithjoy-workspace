@@ -15,7 +15,7 @@ function validate(w){
   assert.equal(s['timeout-minutes'],2);assert.equal(s['continue-on-error'],undefined);assert.equal(s.if,undefined);
   assert.match(s.run,/PREFLIGHT_START/);assert.match(s.run,/PREFLIGHT_DONE/);assert.match(s.run,/timeout (90s|60s) /);
  }
- assert.match(setup(w)[0].run,/apt-get.*update/);assert.match(setup(w)[1].run,/apt-get.*install.*zsh libxml2-utils ffmpeg/);
+ assert.match(setup(w)[0].run,/apt-get.*update/);assert.match(setup(w)[1].run,/for pair in zsh:zsh xmllint:libxml2-utils ffmpeg:ffmpeg/);assert.match(setup(w)[1].run,/apt-get install.*"\$\{missing\[@\]\}"/);
  assert.match(setup(w)[2].run,/pip install.*Pillow/);
 }
 test('依赖准备拆成可定位有界三阶段，原10分钟和全量门禁保持',()=>validate(workflow));
@@ -59,3 +59,4 @@ test('三工具已存在不发apt install，但必须真实执行三种版本核
 test('只有xmllint缺失只安装libxml2-utils，不重新安装其余两种工具',t=>{const r=invoke(t,'',['zsh','ffmpeg']);assert.equal(r.status,0,r.output);const install=r.trace.split('\n').find(l=>l.startsWith('apt ')&&l.includes(' install '));assert.match(install,/libxml2-utils/);assert.doesNotMatch(install,/\bzsh\b|\bffmpeg\b/);});
 test('install请求超时20秒/失败文件仅重试1次，外层仍90秒不扩大',t=>{const r=invoke(t);assert.equal(r.status,0,r.output);const line=r.trace.split('\n').find(l=>l.startsWith('timeout ')&&l.includes(' install '));assert.match(line,/^timeout 90s /);for(const option of ['Acquire::Retries=1','Acquire::http::Timeout=20','Acquire::https::Timeout=20','DPkg::Lock::Timeout=20'])assert.ok(line.includes(option),option);});
 test('PATH可找到但真实工具不可执行时硬失败，不发OS完成或进Pillow',t=>{const r=invoke(t,'',['zsh','xmllint','ffmpeg'],'ffmpeg');assert.equal(r.status,44,r.output);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages|PREFLIGHT_START pillow/);assert.doesNotMatch(r.trace,/pip install/);});
+test('安装失败前也保留三工具实际已有路径/缺失证据',t=>{const r=invoke(t,'os-packages',['ffmpeg']);assert.equal(r.status,43,r.output);assert.match(r.output,/PREFLIGHT_TOOL ffmpeg existing_path=\S+/);assert.match(r.output,/PREFLIGHT_TOOL zsh existing_path=missing/);assert.match(r.output,/PREFLIGHT_TOOL xmllint existing_path=missing/);assert.doesNotMatch(r.output,/PREFLIGHT_DONE os-packages/);});
