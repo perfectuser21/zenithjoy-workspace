@@ -5,7 +5,7 @@
  */
 import express from 'express';
 import request from 'supertest';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const { mockGetPersona, mockSavePersona, mockGetBusinessKB, mockSaveBusinessKB, mockGetAutoAgent, mockSaveAutoAgent, mockBroadcast } = vi.hoisted(() => ({
   mockGetPersona: vi.fn(),
@@ -47,10 +47,19 @@ const VALID_PERSONA = {
   few_shot: [{ customer: '在吗', me: '在的' }],
 };
 
+const ENV_KEYS = ['ZENITHJOY_INTERNAL_TOKEN', 'ADMIN_FEISHU_OPENIDS'] as const;
+let previousEnv: Record<string, string | undefined>;
 beforeEach(() => {
+  previousEnv = Object.fromEntries(ENV_KEYS.map(key => [key, process.env[key]]));
   vi.clearAllMocks();
   delete process.env.ZENITHJOY_INTERNAL_TOKEN; // 无 env → superAdminGuard dev 放行
   delete process.env.ADMIN_FEISHU_OPENIDS;
+});
+afterEach(() => {
+  for (const key of ENV_KEYS) {
+    if (previousEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = previousEnv[key];
+  }
 });
 
 describe('wechat-config 路由（mock store）', () => {

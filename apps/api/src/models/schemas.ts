@@ -15,12 +15,12 @@ export const createWorkSchema = z.object({
     caption: z.string().optional(),
     order: z.number()
   })).optional(),
-  platform_links: z.record(z.string()).optional(),
+  platform_links: z.record(z.string(), z.string()).optional(),
   status: z.enum(['draft', 'ready', 'published', 'archived']).optional(),
   account: z.enum(['XXIP', 'XXAI']).optional(),
   is_featured: z.boolean().optional(),
   is_viral: z.boolean().optional(),
-  custom_fields: z.record(z.any()).optional(),
+  custom_fields: z.record(z.string(), z.any()).optional(),
   scheduled_at: z.string().optional(),
 });
 
@@ -38,13 +38,14 @@ export const createFieldSchema = z.object({
 export const updateFieldSchema = createFieldSchema.partial();
 
 // PublishLog schemas
+// 保留原Zod 3的UUID-like输入合同，避免迁移后收紧已有记录标识。
 export const createPublishLogSchema = z.object({
-  work_id: z.string().uuid().optional(),
+  work_id: z.guid().optional(),
   platform: z.enum(['douyin', 'xiaohongshu', 'toutiao', 'kuaishou', 'weibo', 'zhihu', 'channels']),
   platform_post_id: z.string().optional(),
   status: z.enum(['pending', 'publishing', 'published', 'failed']).optional(),
   scheduled_at: z.string().optional(),
-  response: z.record(z.any()).optional(),
+  response: z.record(z.string(), z.any()).optional(),
   error_message: z.string().optional(),
 });
 
@@ -52,7 +53,7 @@ export const updatePublishLogSchema = z.object({
   status: z.enum(['pending', 'publishing', 'published', 'failed']).optional(),
   platform_post_id: z.string().optional(),
   published_at: z.string().optional(),
-  response: z.record(z.any()).optional(),
+  response: z.record(z.string(), z.any()).optional(),
   error_message: z.string().optional(),
   retry_count: z.number().optional(),
 });
