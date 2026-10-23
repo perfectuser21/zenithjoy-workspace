@@ -21,8 +21,11 @@ printf 'HTTP/1.1 302 Found\\r\\nLocation: %s\\r\\n\\r\\n' "$REDIRECT_URL"
 if [ "$DOWNSTREAM_TIMEOUT" = 1 ];then case "$*" in *-sSIL*) printf 'Resolving timed out after 5010 milliseconds\\n' >&2;exit 28;; esac;fi
 `,{mode:0o755});
  if(existingEvidence)writeFileSync(join(dir,'fixture-resolve.json'),'immutable-original',{mode:0o600});
- if(peerReady){mkdirSync(join(dir,'runtime'));writeFileSync(join(dir,'run-definition.json'),'{}');writeFileSync(join(dir,'runtime/leadgen-client.mjs'),'');writeFileSync(join(dir,'node'),'#!/bin/sh\nprintf called > "$WFR_RUN_DIR/peer-called"\n/bin/echo https://www.douyin.com/video/7000000000000000001\n',{mode:0o755});}
- const result=spawnSync('zsh',['-c',`set -eu; die(){ print -u2 -- "$1";exit 2; }; wait_ms(){ :; }; ${source}; resolve_content_short_url https://v.douyin.com/test/ fixture`],{env:{...process.env,PATH:peerReady?dir+':'+process.env.PATH:process.env.PATH,WFR_RUN_DIR:peerReady?dir:'',DUPLICATE_LOCATION:duplicateLocation?'1':'0',PYTHON_BIN:'python3',REDIRECT_URL:redirectUrl,CURL:curl,EVIDENCE_ROOT:dir,CALLS:calls,FIRST_FAIL:firstFail?'1':'0',ALWAYS_FAIL:alwaysFail?'1':'0',DOWNSTREAM_TIMEOUT:downstreamTimeout?'1':'0',INTERMEDIATE_REDIRECT:intermediateRedirect?'1':'0',EXTERNAL_REDIRECT:externalRedirect?'1':'0',ERROR_RC:String(rc),ERROR_MESSAGE:message},encoding:'utf8'});
+ if(peerReady){mkdirSync(join(dir,'runtime'));writeFileSync(join(dir,'run-definition.json'),'{}');writeFileSync(join(dir,'runtime/leadgen-client.mjs'),'');writeFileSync(join(dir,'node'),`#!/bin/sh
+printf called > "$WFR_RUN_DIR/peer-called"
+/bin/echo https://www.douyin.com/video/7000000000000000001
+`,{mode:0o755});}
+ const result=spawnSync('zsh',['-c',`set -eu; [[ -z "$TEST_PEER_BIN" ]] || export PATH="$TEST_PEER_BIN:$PATH"; die(){ print -u2 -- "$1";exit 2; }; wait_ms(){ :; }; ${source}; resolve_content_short_url https://v.douyin.com/test/ fixture`],{env:{...process.env,TEST_PEER_BIN:peerReady?dir:'',PATH:peerReady?dir+':'+process.env.PATH:process.env.PATH,WFR_RUN_DIR:peerReady?dir:'',DUPLICATE_LOCATION:duplicateLocation?'1':'0',PYTHON_BIN:'python3',REDIRECT_URL:redirectUrl,CURL:curl,EVIDENCE_ROOT:dir,CALLS:calls,FIRST_FAIL:firstFail?'1':'0',ALWAYS_FAIL:alwaysFail?'1':'0',DOWNSTREAM_TIMEOUT:downstreamTimeout?'1':'0',INTERMEDIATE_REDIRECT:intermediateRedirect?'1':'0',EXTERNAL_REDIRECT:externalRedirect?'1':'0',ERROR_RC:String(rc),ERROR_MESSAGE:message},encoding:'utf8'});
  return {...result,evidenceRoot:dir,peerCalled:existsSync(join(dir,'peer-called')),calls:readFileSync(calls,'utf8').trim().split('\n')};
 }
 test('DNS timeout两次后明确归因，不能变成缺video ID；总网络预算不增长',()=>{
