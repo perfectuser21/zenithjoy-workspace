@@ -34,6 +34,7 @@ const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Obje
 // JSONB不保留输入键序；先按JSON语义规范化，再递归排序，值/数组顺序仍严格。
 const digest=v=>crypto.createHash('sha256').update(JSON.stringify(canonical(JSON.parse(JSON.stringify(v))))).digest('hex');
 function bridgeMarker(row){return `[103 bridge:${row.id}:${row.payload_sha256}]`;}
+function matchesRequestedSource(row,sourceRun){return sourceRun==null||row.source_run===sourceRun&&row.payload?.source_run===sourceRun&&row.payload?.comment_run===sourceRun;}
 function frozenQualification(p,snapshot){const q=p.qualification;return q?.company_id===snapshot.company_id&&String(q.company_version)===String(snapshot.version)&&typeof q.tenant_id==='string'&&q.tenant_id!==''&&q.tenant_id===snapshot.tenant_id&&typeof q.policy_id==='string'&&q.policy_id!==''&&q.policy_id===(snapshot.policy_id||snapshot.runtime_config?.policy_id);}
 function nativeIntent(row,{companyBinding}={}){
  const p=row.payload;
@@ -58,15 +59,16 @@ function buildOrderFields(row,route,types,options){
 }
 async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,reviewPolicy}={}){
  const deadlineAt=Date.now()+Math.max(1,Math.min(165000,Number(input.remaining_ms)||165000));
- const route=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js');
+ const route=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js'),sourceRun=input.source_run??null;
  return (lock||outreach.withOrderLock)(route.key,async()=>{
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,sourceRun:input.source_run,step:'103'});
   const result={published:0,protected:0,excluded:0,unknown:0,ids:[],verified:true};
   const limit=Math.max(1,Math.min(50,Number(input.limit)||10));
-  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,1000])).rows;
+  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND ($3::text IS NULL OR source_run=$3) AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,1000,sourceRun])).rows;
   let api=client,handled=0;
   for(const row of rows){if(handled>=limit)break;
    if(Date.now()>=deadlineAt){result.verified=false;result.unknown++;break;}
+   if(!matchesRequestedSource(row,sourceRun)){result.unknown++;result.verified=false;continue;}
    if(row.qualification_status!=='passed'){
     const excluded=row.qualification_status==='excluded';await pool.query('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3,updated_at=now() WHERE line_key=$1 AND id=$2',[route.key,row.id,excluded?'excluded':'unknown']);
     result.ids.push(row.id);handled++;result[excluded?'excluded':'unknown']++;continue;
@@ -149,7 +151,7 @@ async function readbackBridge(pool,input){
  const rows=ids.length?(await pool.query('SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND id=ANY($2::uuid[])',[route.key,ids])).rows:[];
  let failures=0;
  for(const id of ids){const found=rows.filter(r=>r.id===id);if(found.length!==1){failures++;continue;}const row=found[0],p=row.payload;
-  if(!p||row.line_key!==route.key||p.line_key!==route.key||digest(p)!==row.payload_sha256||!['confirmed','protected','excluded','unknown'].includes(row.state)||p.qualification?.status!==row.qualification_status){failures++;continue;}
+  if(!matchesRequestedSource(row,input.source_run)||!p||row.line_key!==route.key||p.line_key!==route.key||digest(p)!==row.payload_sha256||!['confirmed','protected','excluded','unknown'].includes(row.state)||p.qualification?.status!==row.qualification_status){failures++;continue;}
   if(row.state==='confirmed'){try{nativeIntent(row,{companyBinding:await collectionBinding(pool,p.line_key,p.comment_run,p.recipient_evidence)});}catch{failures++;continue;}if(!/^rec[A-Za-z0-9]{6,40}$/.test(row.feishu_record_id||'')||!row.fields||digest(row.fields)!==row.fields_sha256){failures++;continue;}}
   if(row.state==='excluded'&&row.qualification_status!=='excluded')failures++;
  }

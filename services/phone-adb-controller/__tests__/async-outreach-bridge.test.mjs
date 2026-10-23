@@ -267,3 +267,49 @@ test('原line锁真实进程崩溃后可在死owner证明下恢复，活owner仍
  let executed=0;await withOrderLock('jinuo',async()=>{executed++;},{directory:d});assert.equal(executed,1);
  }finally{if(child.exitCode===null)child.kill('SIGKILL');rmSync(d,{recursive:true,force:true});}
 });
+
+// 显式批次范围必须先于任何桥接行处置或外部访问；同公司/版本不能替代SOURCE_RUN。
+const sourceScopeDeps={lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'})};
+test('103显式SOURCE_RUN必须进入bridge SQL选择，而非仅line扫描',async()=>{
+ const calls=[],pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:[]};}};
+ await require('../leadgen-outreach-bridge.js').bridgeOutreach(pool,{line:'jinuo',run:'score103-new',source_run:'new102',limit:1},sourceScopeDeps);
+ const selection=calls.find(c=>c.sql.includes('SELECT * FROM zenithjoy.leadgen_bridge_outbox'));
+ assert.ok(selection.args.includes('new102'),'SQL必须绑定请求的实际source_run');
+ assert.match(selection.sql,/source_run\s*=\s*\$[0-9]/,'SQL必须对source_run精确限批');
+});
+for(const qualification of ['excluded','unknown'])test(`103 scoped桥接在${qualification}旧批行UPDATE之前拒绝越批`,async()=>{
+ const old=pendingBridge();old.source_run='source102';old.qualification_status=qualification;
+ const calls=[],pool={query:async(sql,args)=>{calls.push({sql,args});return {rows:sql.includes('SELECT * FROM zenithjoy.leadgen_bridge_outbox')?[old]:[],rowCount:1};}};
+ const result=await require('../leadgen-outreach-bridge.js').bridgeOutreach(pool,{line:'jinuo',run:'score103-new',source_run:'new102',limit:1},sourceScopeDeps);
+ assert.deepEqual(calls.filter(c=>/^UPDATE /.test(c.sql)),[],'越批行不得先修改状态');assert.ok(!result.ids.includes(old.id),'旧行不可消耗本批处置数量');
+});
+test('103 scoped桥接在旧批passed行policy或远端访问前拒绝；同来源仍可核原policy',async()=>{
+ const row=pendingBridge();row.source_run='source102';let policies=0,external=0;
+ const pool={query:async()=>({rows:[row]})};const deps={...sourceScopeDeps,reviewPolicy:async()=>{policies++;return {status:'unknown'};},client:{all:async()=>{external++;return [];},post:async()=>{external++;}}};
+ await require('../leadgen-outreach-bridge.js').bridgeOutreach(pool,{line:'jinuo',run:'score103-new',source_run:'new102',limit:1},deps);
+ assert.equal(policies,0,'越批行在policy/外部动作前拒绝');assert.equal(external,0);
+ await require('../leadgen-outreach-bridge.js').bridgeOutreach(pool,{line:'jinuo',run:'score103-new',source_run:'source102',limit:1},deps);
+ assert.equal(policies,1,'同批仍沿原政策核验，不得全部禁用桥接');assert.equal(external,0);
+});
+for(const field of ['source_run','comment_run'])test(`103显式批次即使row匹配但payload.${field}矛盾也不处置且保unknown`,async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),row=pendingBridge();row.source_run='source102';row.payload[field]='other102';
+ row.qualification_status='excluded';row.payload.qualification.status='excluded';row.payload_sha256=bridge.digest(row.payload);
+ const pool=bridgeStore(row);let external=0,policies=0;
+ const result=await bridge.bridgeOutreach(pool,{line:'jinuo',run:'score103-new',source_run:'source102',limit:1},{...sourceScopeDeps,reviewPolicy:async()=>{policies++;return {status:'pass'};},client:{all:async()=>{external++;return [];},post:async()=>{external++;}}});
+ assert.deepEqual(pool.calls.filter(c=>/^UPDATE /.test(c.sql)),[]);assert.equal(policies,0);assert.equal(external,0);
+ assert.equal(result.verified,false);assert.equal(result.unknown,1);assert.deepEqual(result.ids,[]);
+});
+for(const field of ['source_run','payload.source_run','payload.comment_run'])test(`103独立readback显式批次拒绝错位${field}`,async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),row=pendingBridge();row.source_run='source102';row.state='excluded';row.qualification_status='excluded';row.payload.qualification.status='excluded';
+ if(field==='source_run')row.source_run='other102';else row.payload[field.split('.')[1]]='other102';row.payload_sha256=bridge.digest(row.payload);
+ const result=await bridge.readbackBridge(bridgeStore(row),{line:'jinuo',run:'score103-new',source_run:'source102',ids:[row.id]});
+ assert.equal(result.verified,false);assert.ok(result.failures>0);
+});
+test('103显式同批仍走原durable POST→GET并独立PG读回，无真实外发',async()=>{
+ const row=pendingBridge();row.source_run='source102';const pool=bridgeStore(row),events=[],remote=[];
+ const client={all:async()=>{events.push('get');return remote;},fields:async()=>[{field_name:'采集时间',type:1}],post:async fields=>{events.push('post');assert.equal(row.state,'attempted');remote.push({record_id:'recABC123456',fields:structuredClone(fields)});}};
+ const result=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',source_run:'source102',limit:1},{...sourceScopeDeps,client,reviewPolicy:async()=>({status:'pass'})});
+ assert.deepEqual(events,['get','post','get']);assert.equal(result.published,1);assert.equal(result.verified,true);assert.equal(row.state,'confirmed');
+ const readback=await queueRequest(pool,{op:'bridge_readback',line:'jinuo',run:'score103',source_run:'source102',ids:result.ids});
+ assert.equal(readback.verified,true);assert.deepEqual(readback.ids,[row.id]);
+});
