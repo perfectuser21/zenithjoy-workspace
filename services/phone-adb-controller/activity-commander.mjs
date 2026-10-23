@@ -1,4 +1,5 @@
 import {collectionEvidenceProof} from './collection-phone-scope.mjs';
+import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 import { createRequire } from 'node:module';
 import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -126,10 +127,12 @@ export async function runActivity({ activity, context, execute, commander, recor
     // Parent close after SIGTERM/output truncation does not prove its process group stopped.
     // Do not retry, hand over, or clear resources until an independent stop readback exists.
     const phoneScope=collectionEvidenceProof(evidence,{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:activity.key});
-    if(!phoneScope&&(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||(evidence.execution_stopped!==true&&/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(evidence))))){
+    const cleanupOnly=discoveryCleanupEvidence(evidence,{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:activity.key});
+    if(!phoneScope&&!cleanupOnly&&(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||(evidence.execution_stopped!==true&&/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(evidence))))){
       return {...evidence,status:'failed',execution_stopped:false,commander_status:commanderStatus,decision:{action:'escalate',reason:'原执行者终止未验证，保留资源'}};
     }
     const after = await consult('after', evidence);
+    if(cleanupOnly&&['partial','failed'].includes(evidence.status))return {...evidence,commander_status:commanderStatus,decision:{action:'finish',reason:'封闭手机请求已归还，仅执行原run清场；保留采集失败或部分结果'}};
     if(isCaptureContractFailure(evidence))return {...evidence,commander_status:commanderStatus,decision:{action:'escalate',reason:'音频能力或捕获合同证据缺口，不重试或用UI代修'},failure_class:'capture_contract_blocked'};
     if (evidence.status === 'failed' && evidence.execution_stopped!==true && after.action === 'retry' && attempt < maxAttempts) continue;
     if (recover && ['failed','partial'].includes(evidence.status) && !['finish','escalate'].includes(after.action)) {
@@ -180,7 +183,7 @@ export async function runWorkflow({activities,context,handlers,commander,record,
           result.status='failed';
           // Reuse the original run's restricted handoff. Never replay Code here,
           // reopen an already attempted Skill, or hand off an unknown executor.
-          const mayRecover=completedCode&&recover&&activity.key!=='cleanup'&&!result.code_failure&&!result.skill_error
+          const mayRecover=completedCode&&recover&&activity.key!=='cleanup'&&!discoveryCleanupEvidence(result,{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:activity.key})&&!result.code_failure&&!result.skill_error
             &&result.execution_stopped!==false&&result.result?.execution_stopped!==false
             &&!['finish','escalate'].includes(result.decision?.action);
           if(mayRecover){
@@ -212,7 +215,7 @@ export async function runWorkflow({activities,context,handlers,commander,record,
         ||result.result?.status==='partial'||result.result?.status==='paused'){
         if(status!=='failed')status='partial';stopped=true;
       }
-      if(result.execution_stopped===false){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
+      if(result.execution_stopped===false&&!discoveryCleanupEvidence(result,{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:activity.key})){context={...context,skill_execution_unknown:true};status='failed';stopped=true;}
     }catch(error){
       if(error.executionStopped===false||terminationUnverified())context={...context,skill_execution_unknown:true};
       status='failed';stopped=true;
@@ -225,7 +228,8 @@ export async function runWorkflow({activities,context,handlers,commander,record,
     if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
     await execute(a);
   }}finally{
-    if(stopped&&terminationUnverified())context={...context,skill_execution_unknown:true};
+    const last=results.at(-1),cleanupOnly=last&&discoveryCleanupEvidence(last,{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:last.activity});
+    if(stopped&&terminationUnverified()&&!cleanupOnly)context={...context,skill_execution_unknown:true};
     for(const a of activities.filter(a=>a.key==='cleanup')){
     if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'原执行或Skill子会话终止未知，禁止清场并记录资源隔离'});status='failed';}
     else await execute(a);

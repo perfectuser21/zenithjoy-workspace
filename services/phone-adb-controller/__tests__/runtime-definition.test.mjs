@@ -224,3 +224,13 @@ for(const automatic of [false,true])test(`正式prepare${automatic?'默认模板
  assert.deepEqual(frozen.collection_phone_scope,scope);assert.equal(actual.task_id,null);assert.equal(frozen.collection_phone_scope.task_id,actual.task_id);assert.equal(actual.run_id,scope.run_id);
  if(automatic){writeFileSync(join(f.dir,'config/collection-phone-hosts.json'),JSON.stringify({version:1,hosts:[]}));const resumed=await run(['prepare']);assert.equal(resumed.code,0,resumed.stderr);assert.deepEqual(readFrozen(f.options.runDir).collection_phone_scope,scope);}
 });
+
+test('101独立discovery_phone_scope入冻结摘要，不能变更或借给102',async()=>{
+ const f=fixture(),scope={version:1,source_commit:'a'.repeat(40),target:'xian-m4',profile:'fixture',serial:'NO-DEVICE',policy:{adb_sha256:'1'.repeat(64)}};
+ f.options.workflowKey='douyin_video_discovery';f.routes['/api/brain/workflows'][0].key=f.options.workflowKey;
+ const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key=f.options.workflowKey;v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});
+ const manifest=join(f.dir,'deployment-manifest.json');writeFileSync(manifest,JSON.stringify({...JSON.parse(readFileSync(manifest)),target:'xian-m4'}));
+ const first=await freezeDefinition({...f.options,discoveryPhoneScope:scope});assert.deepEqual(first.discovery_phone_scope,scope);assert.equal(first.collection_phone_scope,undefined);
+ await assert.rejects(freezeDefinition({...f.options,discoveryPhoneScope:{...scope,serial:'OTHER'}}),/discovery phone scope/);
+ const other=fixture();await assert.rejects(freezeDefinition({...other.options,discoveryPhoneScope:scope}),/discovery phone scope部署来源不符/);
+});

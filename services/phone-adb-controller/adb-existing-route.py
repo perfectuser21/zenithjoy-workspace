@@ -207,11 +207,17 @@ def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2
 
 
 if __name__ == '__main__':
+    phase = 'input'
+    phase_started = time.monotonic()
     try:
         if len(sys.argv) != 3:
             raise ValueError('ADB_ROUTE_INPUT_INVALID')
+        phase = 'route_select'
+        phase_started = time.monotonic()
         port = select_route(sys.argv[1], os.environ.get('ADB_SERVER_SOCKET', ''))
         # version只读客户端；协议不符会让adb自身重启server，因此必须先拒绝。
+        phase = 'client_version'
+        phase_started = time.monotonic()
         result = subprocess.run([sys.argv[2], 'version'], capture_output=True, text=True, timeout=2)
         if result.returncode or not re.search(r'^Android Debug Bridge version 1\.0\.41\r?$', result.stdout, re.M):
             raise ValueError('ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH')
@@ -219,4 +225,17 @@ if __name__ == '__main__':
     except Exception as error:
         code = str(error) if isinstance(error, ValueError) and str(error).startswith(('ADB_ROUTE_', 'ADB_HOST_')) else 'ADB_ROUTE_PROBE_FAILED'
         print(code, file=sys.stderr)
+        exception_type = next((name for kind, name in (
+            (subprocess.TimeoutExpired, 'TimeoutExpired'),
+            ((TimeoutError, socket.timeout), 'TimeoutError'),
+            (FileNotFoundError, 'FileNotFoundError'),
+            (PermissionError, 'PermissionError'),
+            (OSError, 'OSError'),
+            (ValueError, 'ValueError'),
+        ) if isinstance(error, kind)), 'OtherError')
+        print('ADB_ROUTE_DIAGNOSTIC ' + json.dumps({
+            'phase': phase,
+            'exception_type': exception_type,
+            'elapsed_ms': int(max(0, (time.monotonic() - phase_started) * 1000)),
+        }), file=sys.stderr)
         sys.exit(2)
