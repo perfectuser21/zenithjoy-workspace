@@ -322,14 +322,9 @@ qv_collect(){
   local -A seen emitted unavailable_avatar
   local sampling=0
   if (( ${+LEADGEN_COMMENT_LIMIT} )); then sampling=1; cap="$LEADGEN_COMMENT_LIMIT"; fi
-  opened="$(qv_ctl --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || {
-    # 无评论是控制器明确识别的正常结果，失败不能伪装成采完。
-    if [[ "$opened" == *reason=no_comments_on_this_video* ]]; then
-      print -- "COLLECTION\t$VID\tno_comments\t0"; return 0
-    fi
-    return 6
-  }
+  opened="$(qv_ctl --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || return 6
   if [[ "$opened" == *reason=no_comments_on_this_video* ]]; then
+    print -r -- "$opened" | node "$QV_DIR/no-comments-evidence.mjs" "$WFR_RUN_DIR" "$TAG" "$VID" "$P" || return 6
     print -- "COLLECTION\t$VID\tno_comments\t0"; return 0
   fi
   [[ "$opened" == *comments_opened=1* ]] || return 6

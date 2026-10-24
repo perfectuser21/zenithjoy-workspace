@@ -238,9 +238,10 @@ function processCommentPanelJudgment(xml,{scoped=true,tag='headerProof'}={}) {
  try {
  const name=scoped?`${tag}-v7674939415818521875-collection-comments-panel.xml`:`${tag}-collection-comments-panel.xml`;
  writeFileSync(join(d,name),xml);
+ writeFileSync(join(d,'comments.tsv'),`COLLECTION\t7674939415818521875\tcollected\t1\n`);
  const all=JSON.parse(readFileSync(PROCESS_SPEC_PATH,'utf8'));
  const step=all.steps.find(s=>s.key==='douyin_video_processing.collection.open_comment_section');
- return judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{tag,evidenceDir:d,metrics:{videos_processed:1}}}).steps[0];
+ return judgeSteps({spec:{steps:[step]},stage:'collection',ctx:{tag,evidenceDir:d,runDir:d,tsvFile:join(d,'comments.tsv'),metrics:{videos_processed:1}}}).steps[0];
  } finally {rmSync(d,{recursive:true,force:true});}
 }
 const POI_COMMENT_FIXTURE=join(HERE,'fixtures','comment-panel','poi-header-861.xml');

@@ -145,6 +145,7 @@ function validateStepDod(ctx, capId, a, s, errors) {
     return;
   }
   if (!rb.expect) errors.push(`${st}: dod readback 缺 expect`);
+  if (rb.zero_comment_alternative !== undefined && (rb.type !== 'evidence' || rb.expect?.ref !== 'metrics.videos_processed')) errors.push(`${st}: 零评论替代仅允许逐视频evidence及videos_processed核验`);
   const need = { evidence: 'glob', log: 'regex', tsv: 'regex', ledger: 'field', metric: 'ref', sql: 'query', http: 'url' }[rb.type];
   if (need && !rb[need]) errors.push(`${st}: dod readback type=${rb.type} 缺 ${need}`);
   if (rb.type === 'sql' && !String(rb.query || '').includes('$RUN_TAG')) errors.push(`${st}: dod sql 读回必须按本批 $RUN_TAG 归属`);

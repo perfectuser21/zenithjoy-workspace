@@ -136,7 +136,7 @@ test('采集成功必须有同视频完成标记；非零返回时即使有LEAD�
   assert.throws(()=>parseCollection({code:0,stdout:row},'7646309328911907195'),/完成标记/);
   const comments=parseCollection({code:0,stdout:row+'\nCOLLECTION\t7646309328911907195\tcollected\t1'},'7646309328911907195');
   assert.equal(comments.length,1);assert.equal(comments[0].commentBody,'想报名');
-  assert.deepEqual(parseCollection({code:0,stdout:'COLLECTION\t7646309328911907195\tno_comments\t0'},'7646309328911907195'),[]);
+  assert.throws(()=>parseCollection({code:0,stdout:'COLLECTION\t7646309328911907195\tno_comments\t0'},'7646309328911907195'),/NO_COMMENTS|path/i);
 });
 
 test('暂停触达的清场标记skipped，保留partial而不伪造手机清场',async()=>{

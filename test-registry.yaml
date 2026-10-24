@@ -7887,3 +7887,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "真实scratchPG双冻结完整policy：0353 owner保留2052资格，preapply/consumed严格来源与隔离负例；不操作真机"
+
+- id: leadgen-no-comments-evidence
+  path: services/phone-adb-controller/__tests__/no-comments-evidence.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "35f真机原XML三态和逐VID零评论证据合同；本地隔离，无手机动作"
+
+- id: leadgen-no-comments-contract-declaration
+  path: services/phone-adb-controller/__tests__/no-comments-contract-declaration.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "正式两Step显式零分支与可点按钮package/enabled反例，不接受exact-key隐藏合同"

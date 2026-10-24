@@ -28,7 +28,7 @@ function baseFixture(t){
 export function transportFixture(t,{payloadBytes=270000}={}){
  const f=baseFixture(t),prefix='services/phone-adb-controller/';
  // 全部部署执行器使用原件；手机业务不会执行。
- for(const name of ['deployment-manifest.mjs','deployment-fixed-source.mjs','runtime-definition.mjs','producer-descriptor.mjs','runtime-host.mjs','runtime-release.mjs']){
+ for(const name of ['deployment-manifest.mjs','deployment-fixed-source.mjs','runtime-definition.mjs','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','runtime-host.mjs','runtime-release.mjs']){
   f.put(f.source,prefix+name,readFileSync(new URL('../'+name,import.meta.url)));
  }
  const commander=['wf-launch.sh','wf-status.sh','wf-agent-run.sh','wf-agent-lib.py','wf-agent-handoff.py','wf-v2.py','wf-v2-io.py','wf-v2-phone.py','wf-v2-shell.py','wf-report.py','workflow-contracts.json','AGENTS.md'];

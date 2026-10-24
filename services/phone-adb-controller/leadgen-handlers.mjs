@@ -1,3 +1,4 @@
+import {verifyNoComments} from './no-comments-evidence.mjs';
 import {verifyProducerDescriptor,verifyProducerCompany} from './producer-descriptor.mjs';
 import {createScoringHandler} from './leadgen-scoring-handler.mjs';
 import {readFileSync,writeFileSync,appendFileSync,chmodSync,renameSync,existsSync,readdirSync,lstatSync,realpathSync,mkdirSync,copyFileSync,constants} from 'node:fs';
@@ -47,6 +48,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
     row.recipientEvidence=evidence;
   }
   if(Number(marker[3])!==comments.length||marker[2]==='no_comments'&&comments.length)throw Error('采集完成数量与评论证据不符');
+  if(marker[2]==='no_comments'){if(lines.filter(s=>s.startsWith(`COLLECTION\t${videoId}\t`)).length!==1)throw Error('NO_COMMENTS_EVIDENCE_UNVERIFIED');verifyNoComments({runDir:recipientScope?.runDir,run:recipientScope?.run,videoId});}
   return comments;
 }
 
