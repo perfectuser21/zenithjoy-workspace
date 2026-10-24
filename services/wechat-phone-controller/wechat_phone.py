@@ -114,10 +114,176 @@ class Phone:
     def shell(self, *args):
         return self.run('shell', *args).decode('utf-8', errors='strict').strip()
 
+    def _default_display_focus(self, raw):
+        """Accept only the default display beside proven idle 1x1 displays.
+
+        Input/screencap operations address display 0. Never select another
+        display merely because its focus is non-null. All new acceptance also
+        requires the independently resumed activity and window/task/session.
+        """
+        def one(pattern, source):
+            # Count field markers as well as valid values: a malformed competing
+            # value is ambiguity, not permission to borrow a later valid field.
+            fields = ('mTopFocusedDisplayId', 'mCurrentFocus', 'mFocusedApp',
+                      'displayId', 'mOwnerUid', 'mSession', 'mDisplayId',
+                      'rootTaskId', 'package', 'ty', 'mHasSurface',
+                      'isOnScreen', 'isVisible', 'mPackageName',
+                      'mPreferredTopFocusableRootTask', 'topResumedActivity',
+                      'topDisplayFocusedRootTask')
+            for name in fields:
+                field_pattern = r'(?<![A-Za-z0-9_])' + name + '='
+                if (re.search(field_pattern, pattern.replace(r'\b', ''))
+                        and len(re.findall(r'\b' + name + r'\s*=', source)) != 1):
+                    raise Refused('foreground_unknown')
+            if 'DisplayFrames' in pattern and len(re.findall(r'^\s*DisplayFrames\b', source, re.M)) != 1:
+                raise Refused('foreground_unknown')
+            if 'isReadyForDisplay' in pattern and len(re.findall(r'\bisReadyForDisplay\(\)\s*=', source)) != 1:
+                raise Refused('foreground_unknown')
+            found = re.findall(pattern, source, re.M)
+            if len(found) != 1:
+                raise Refused('foreground_unknown')
+            return found[0]
+
+        if one(r'^\s*mTopFocusedDisplayId=(\d+)\s*$', raw) != '0':
+            raise Refused('foreground_unknown')
+        contents = one(r'^WINDOW MANAGER DISPLAY CONTENTS[^\n]*\n([\s\S]*?)(?=^WINDOW MANAGER|\Z)', raw)
+        headers = list(re.finditer(r'^  Display: mDisplayId=(\d+) rootTasks=(\d+)\s*$', contents, re.M))
+        if (len(headers) < 2 or len({h[1] for h in headers}) != len(headers)
+                or len(re.findall(r'^\s*Display:', contents, re.M)) != len(headers)):
+            raise Refused('foreground_unknown')
+        selected = None
+        for index, header in enumerate(headers):
+            body = contents[header.end():headers[index + 1].start() if index + 1 < len(headers) else len(contents)]
+            focus = one(r'^\s*mCurrentFocus=([^\n]+)$', body)
+            app = one(r'^\s*mFocusedApp=([^\n]+)$', body)
+            if one(r'^\s*displayId=(\d+)\s*$', body) != header[1]:
+                raise Refused('foreground_unknown')
+            width, height = one(r'^\s*DisplayFrames w=(\d+) h=(\d+) r=\d+\s*$', body)
+            if header[1] == '0':
+                if int(header[2]) < 1 or min(int(width), int(height)) <= 1:
+                    raise Refused('foreground_unknown')
+                selected = (body, focus, app)
+            elif (header[2], width, height, focus, app) != ('0', '1', '1', 'null', 'null'):
+                raise Refused('foreground_unknown')
+        # No unscoped focus lines, duplicate display records or borrowed fields.
+        for key in ('mCurrentFocus', 'mFocusedApp'):
+            if len(re.findall(r'^\s*' + key + r'=', raw, re.M)) != len(headers):
+                raise Refused('foreground_unknown')
+        if selected is None:
+            raise Refused('foreground_unknown')
+        body, focus, app = selected
+        token, user, title = one(r'^Window\{([0-9a-fA-F]+) u(\d+) ([^{}\n]+)\}$', focus)
+
+        def activity(value):
+            identity, activity_user, package, name, task = one(
+                r'^ActivityRecord\{([0-9a-fA-F]+) u(\d+) ([A-Za-z0-9_.]+)/([^\s{}]+) t(\d+)\}$', value)
+            return identity, activity_user, package, package + name if name.startswith('.') else name, task
+        focused = activity(app)
+        activities = self.shell('dumpsys', 'activity', 'activities')
+        activity_task = None
+        if re.search(r'^\s*topResumedActivity\s*=', activities, re.M):
+            resumed = activity(one(r'^\s*topResumedActivity=([^\n]+)$', activities))
+        else:
+            # Android 12 reports mResumedActivity under a Display/RootTask,
+            # followed by a separate Resumed summary. Do not borrow another
+            # display's activity or trust the unscoped summary by itself.
+            activity_displays = list(re.finditer(r'^Display #(\d+) \(activities from top to bottom\):\s*$', activities, re.M))
+            if ({h[1] for h in activity_displays} != {h[1] for h in headers}
+                    or len(activity_displays) != len(headers)
+                    or len(re.findall(r'^Display #', activities, re.M)) != len(activity_displays)
+                    or len(re.findall(r'^\s*mResumedActivity\s*:', activities, re.M)) != 1
+                    or len(re.findall(r'^\s*Resumed\s*:', activities, re.M)) != 1):
+                raise Refused('foreground_unknown')
+            main = next(index for index, header in enumerate(activity_displays) if header[1] == '0')
+            end = activity_displays[main + 1].start() if main + 1 < len(activity_displays) else len(activities)
+            main_activities = activities[activity_displays[main].end():end]
+            main_activities = re.split(r'^ActivityTaskSupervisor state:', main_activities, maxsplit=1, flags=re.M)[0]
+            resumed = activity(one(r'^\s*mResumedActivity: ([^\n]+)$', main_activities))
+            if activity(one(r'^\s*Resumed: ([^\n]+)$', main_activities)) != resumed:
+                raise Refused('foreground_unknown')
+            resume_offset = re.search(r'^\s*mResumedActivity:', main_activities, re.M).start()
+            roots = list(re.finditer(r'^  RootTask #(\d+):[^\n]*$', main_activities, re.M))
+            if len(roots) != len(re.findall(r'^\s*RootTask #', main_activities, re.M)):
+                raise Refused('foreground_unknown')
+            containing = [header for header in roots if header.start() < resume_offset]
+            if not containing or containing[-1][1] != resumed[4]:
+                raise Refused('foreground_unknown')
+            if re.search(r'^\s*ResumedActivity\s*:', activities, re.M):
+                if (len(re.findall(r'^\s*ResumedActivity\s*:', activities, re.M)) != 1
+                        or activity(one(r'^\s*ResumedActivity: ([^\n]+)$', activities)) != resumed):
+                    raise Refused('foreground_unknown')
+            activity_task = one(
+                r'^\s*topDisplayFocusedRootTask=Task\{[0-9a-fA-F]+ #(\d+) type=standard A=(\d+):([A-Za-z0-9_.]+) U=(\d+) visible=(true|false)\b[^\n]*\}', activities)
+        if focused != resumed or focused[1:3] != (user, 'com.tencent.mm'):
+            raise Refused('foreground_unknown')
+        popup = re.fullmatch(r'PopupWindow:[0-9a-fA-F]+', title)
+        component = re.fullmatch(r'com\.tencent\.mm/([^\s{}]+)', title)
+        if popup:
+            if focused[3] != 'com.tencent.mm.ui.LauncherUI':
+                raise Refused('foreground_unknown')
+        elif not component or focused[3] != ('com.tencent.mm' + component[1] if component[1].startswith('.') else component[1]):
+            raise Refused('foreground_unknown')
+
+        def section(pattern, key):
+            matches = []
+            lines = raw.splitlines()
+            seen_tokens = 0
+            for index, line in enumerate(lines):
+                header = re.fullmatch(pattern, line)
+                if not header:
+                    continue
+                seen_tokens += header[1] == key[0]
+                if header.groups() != key:
+                    continue
+                indent = len(line) - len(line.lstrip())
+                children = []
+                for child in lines[index + 1:]:
+                    if child.strip() and len(child) - len(child.lstrip()) <= indent:
+                        break
+                    children.append(child)
+                matches.append('\n'.join(children))
+            if len(matches) != 1 or seen_tokens != 1:
+                raise Refused('foreground_unknown')
+            return matches[0]
+        window = section(r'\s*Window #\d+ Window\{([0-9a-fA-F]+) u(\d+) ([^{}\n]+)\}:', (token, user, title))
+        uid = int(one(r'\bmOwnerUid=(\d+)\b', window))
+        session = one(r'\bmSession=Session\{([0-9a-fA-F]+) (\d+):u(\d+)a(\d+)\}', window)
+        if (uid < 10000 or uid // 100000 != int(user) or session[2] != user
+                or int(session[3]) != uid % 100000):
+            raise Refused('foreground_unknown')
+        if (one(r'\bmDisplayId=(\d+)\b', window) != '0'
+                or one(r'\brootTaskId=(\d+)\b', window) != focused[4]
+                or one(r'\bpackage=([A-Za-z0-9_.]+)', window) != 'com.tencent.mm'
+                or one(r'\bty=([A-Z_]+)', window) != ('APPLICATION_PANEL' if popup else 'BASE_APPLICATION')):
+            raise Refused('foreground_unknown')
+        for flag in (r'\bmHasSurface=(true|false)', r'\bisReadyForDisplay\(\)=(true|false)',
+                     r'^\s*isOnScreen=(true|false)', r'^\s*isVisible=(true|false)'):
+            if one(flag, window) != 'true':
+                raise Refused('foreground_unknown')
+        owner = section(r'\s*Session Session\{([0-9a-fA-F]+) (\d+):u(\d+)a(\d+)\}:', session)
+        if one(r'\bmPackageName=([A-Za-z0-9_.]+)', owner) != 'com.tencent.mm':
+            raise Refused('foreground_unknown')
+        task, task_uid, task_package, task_user, visible = one(
+            r'^\s*mPreferredTopFocusableRootTask=Task\{[0-9a-fA-F]+ #(\d+) type=standard A=(\d+):([A-Za-z0-9_.]+) U=(\d+) visible=(true|false)\b[^\n]*\}', body)
+        if (task, task_uid, task_package, task_user, visible) != (focused[4], str(uid), 'com.tencent.mm', user, 'true'):
+            raise Refused('foreground_unknown')
+        if activity_task is not None and activity_task != (task, task_uid, task_package, task_user, visible):
+            raise Refused('foreground_unknown')
+        # Only remove the proven idle-display null entries. The existing popup
+        # validator below still checks the parent, attachment and full ownership.
+        return re.sub(r'^\s*m(?:CurrentFocus|FocusedApp)=null\n', '', raw, flags=re.M)
+
     def foreground(self):
         # Ordinary activities keep the exact package/component path. Popup focus
         # is accepted only with independent, section-bound ownership proofs.
         raw = self.shell('dumpsys', 'window')
+        top_displays = re.findall(r'^\s*mTopFocusedDisplayId=(\d+)\s*$', raw, re.M)
+        top_markers = re.findall(r'^\s*mTopFocusedDisplayId\s*=', raw, re.M)
+        if top_markers and (len(top_markers) != 1 or top_displays != ['0']):
+            raise Refused('foreground_unknown')
+        if (len(re.findall(r'^\s*mCurrentFocus=', raw, re.M)) > 1
+                or len(re.findall(r'^\s*Display:', raw, re.M)) > 1):
+            raw = self._default_display_focus(raw)
         def one(pattern, source):
             found = re.findall(pattern, source, re.M)
             if len(found) != 1:

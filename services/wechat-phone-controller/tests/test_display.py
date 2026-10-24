@@ -5,6 +5,17 @@ from wechat_phone import Phone, Refused
 from test_popup import POPUP, TOP as POPUP_TOP
 
 TOP = 'topResumedActivity=ActivityRecord{aaa u0 com.tencent.mm/.plugin.account.ui.LoginUI t169}'
+ANDROID12_TOP = '''ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)
+Display #0 (activities from top to bottom):
+  RootTask #169: type=standard mode=fullscreen
+    mResumedActivity: ActivityRecord{aaa u0 com.tencent.mm/.plugin.account.ui.LoginUI t169}
+  Resumed activities in task display areas (from top to bottom):
+    Resumed: ActivityRecord{aaa u0 com.tencent.mm/.plugin.account.ui.LoginUI t169}
+Display #2 (activities from top to bottom):
+  ResumedActivity: ActivityRecord{aaa u0 com.tencent.mm/.plugin.account.ui.LoginUI t169}
+ActivityTaskSupervisor state:
+  topDisplayFocusedRootTask=Task{ddd #169 type=standard A=10088:com.tencent.mm U=0 visible=true mode=fullscreen}
+'''
 DISPLAY = '''WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)
   Display: mDisplayId=2 rootTasks=0
     init=1x1 240dpi cur=1x1 app=1x1 rng=1x1-1x1
@@ -50,6 +61,26 @@ class DisplayTests(unittest.TestCase):
         swapped=DISPLAY[:begin]+DISPLAY[split:end]+DISPLAY[begin:split]+DISPLAY[end:]
         self.assertEqual(self.phone(swapped).foreground()['package'],'com.tencent.mm')
 
+    def test_android12_resumed_activity_is_scoped_to_default_display(self):
+        self.assertEqual(self.phone(top=ANDROID12_TOP).foreground()['activity'],
+                         'com.tencent.mm.plugin.account.ui.LoginUI')
+
+    def test_android12_conflicting_unknown_or_unscoped_resumed_refused(self):
+        for old,new in [
+            ('Display #0','Display #3'),
+            ('RootTask #169:','RootTask #99:'),
+            ('mResumedActivity: ActivityRecord{aaa','mResumedActivity: ActivityRecord{bbb'),
+            ('    Resumed: ActivityRecord{aaa','    Resumed: ActivityRecord{bbb'),
+            ('  ResumedActivity: ActivityRecord{aaa','  ResumedActivity: ActivityRecord{bbb'),
+            ('topDisplayFocusedRootTask=Task{ddd #169','topDisplayFocusedRootTask=Task{ddd #99'),
+            ('A=10088:com.tencent.mm','A=10099:com.tencent.mm'),
+            ('    mResumedActivity:', '    mResumedActivity: unknown\n    mResumedActivity:'),
+            ('Display #2', 'Display #3 (activities from top to bottom):\n    mResumedActivity: ActivityRecord{fff u0 foreign.app/.Main t2}\nDisplay #2'),
+        ]:
+            with self.subTest(old=old),self.assertRaises(Refused):
+                self.phone(top=ANDROID12_TOP.replace(old,new,1)).foreground()
+        with self.assertRaises(Refused):self.phone(top=ANDROID12_TOP+'topResumedActivity=unknown\n').foreground()
+
     def test_ambiguous_nondefault_foreign_or_inconsistent_display_refused(self):
         mutations=[
             ('mTopFocusedDisplayId=0','mTopFocusedDisplayId=2'),
@@ -84,9 +115,18 @@ class DisplayTests(unittest.TestCase):
             with self.subTest(old=old,new=new),self.assertRaisesRegex(Refused,'foreground_unknown'):
                 self.phone(DISPLAY.replace(old,new,1)).foreground()
         for extra in ('mCurrentFocus=null\n','mFocusedApp=null\n',
+                      '  mTopFocusedDisplayId=2 unexpected\n',
                       'mCurrentFocus=Window{bbb u0 com.tencent.mm/com.tencent.mm.plugin.account.ui.LoginUI}\n'):
             with self.subTest(extra=extra),self.assertRaises(Refused):
                 self.phone(DISPLAY+extra).foreground()
+        for raw in (
+            DISPLAY.replace('  Display: mDisplayId=2', '  Display: mDisplayId=3 rootTasks=unknown\n  Display: mDisplayId=2', 1),
+            DISPLAY.replace('    mOwnerUid=10088', '    mOwnerUid=unknown\n    mOwnerUid=10088', 1),
+            DISPLAY.replace('    mDisplayId=0 rootTaskId=169', '    mDisplayId=unknown\n    mDisplayId=0 rootTaskId=169', 1),
+            DISPLAY.replace('    mHasSurface=true', '    mHasSurface=unknown\n    mHasSurface=true', 1),
+            DISPLAY.replace('    mPackageName=com.tencent.mm', '    mPackageName=unknown value\n    mPackageName=com.tencent.mm', 1),
+        ):
+            with self.subTest(raw=raw),self.assertRaises(Refused):self.phone(raw).foreground()
         for top in ('',TOP+'\n'+TOP,TOP.replace('t169','t99'),TOP.replace('u0','u1'),TOP.replace('aaa','fff'),TOP.replace('com.tencent.mm','foreign.app')):
             with self.subTest(top=top),self.assertRaises(Refused):self.phone(top=top).foreground()
 
