@@ -33,3 +33,19 @@ node --test services/phone-adb-controller/__tests__/wechat-display-focus.test.mj
 ```
 
 测试中的窗口文本是根据真实诊断结构手工构造的无私人会话样本，不含完整窗口原件、账号或会话内容。Node 测试入口位于现有 L3 CI 自动运行的测试集合，调用完整 stdlib 回归集；测试与诊断均不连接手机。隔离测试和真实原件只读回放只证明识别机制；实际手机导航与盘点结果由父 workflow 独立记录，不能据此宣称平板登录已跑通。
+
+### 可重复原生二维码入口 CLI
+
+`python3 wechat_pad_login.py status` 仅显示本地工具状态，不调用 ADB/Brain、不占锁。`probe` 自持并释放本次双租约和公共锁，只读核验前台、APK及稳定成对MMKV。`open` 在相同核验后至多打开一次原生二维码页：
+
+```sh
+python3 services/wechat-phone-controller/wechat_pad_login.py open
+```
+
+工具固定当前云手机和实例，加载已发布2fa控制器及现有连接配置；不使用配置中的业务账号字段，不写租户/CRM绑定、微信数据、全局显示或凭据。已登录LauncherUI返回NOOP；已有二维码页只采证，不重复请求；未知前台、版本漂移、锁冲突或校验失败直接停止。二维码图片和回执在`~/.local/state/zenithjoy/wechat-pad-login/<唯一owner>/`，权限私有，释放结果分别读回，清理未确认不报成功。
+
+`Repairer`使用官方MMKV v5元数据实际长度、CRC和追加记录的最后有效值；要求完整的`AssistInTablet_Int=1`与`Inner_Version_Int=1`，不能把字符串或字节搜索当typed int。冷启动时Repairer异步初始化及进程缓存意味着磁盘值不保证运行时`B=true`。原生二维码入口会调用`s7.b(0)`重新计算设备类型，但本工具不读取进程内存/协议流量，因此输出`runtime_wire_type=unobserved`、`requires_user_pad_confirmation=true`。用户须在手机确认页核实Pad设备类型后自行确认；页面显示二维码不代表登录、资格或同时在线已通过。工具不输入账号、不点击认证、不绕过服务器结果，也不改变旧账号绑定。
+
+安装应由审核者将同一固定候选复制至不可变本地release路径并用`~/.local/bin/wechat-pad-login` shim调用，再独立实机验证；工作树测试通过不等于已部署。重复调用每次自建资源，不读取旧诊断state.json或硬编码PID。
+
+前台前提：当前云手机须已在微信已识别登录页或二维码页；桌面、未知弹窗（含更多菜单）会拒绝，先由人恢复正常微信页面。工具不会自动清菜单或模拟返回。二维码过期/获取失败仅报告需人工刷新，不会自动换码。
