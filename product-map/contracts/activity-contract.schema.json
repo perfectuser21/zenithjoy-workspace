@@ -165,6 +165,7 @@
             "type": { "enum": ["metric", "evidence", "log", "tsv", "ledger", "sql", "http", "none"] },
             "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" },
             "glob": { "type": "string", "minLength": 3 },
+            "zero_comment_alternative": { "const": "verified_video_ui_v1" },
             "match": { "type": "string", "minLength": 1 },
             "regex": { "type": "string", "minLength": 1 },
             "stage": { "$ref": "#/$defs/key" },

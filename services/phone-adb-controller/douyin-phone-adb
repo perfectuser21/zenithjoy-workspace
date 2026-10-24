@@ -3495,13 +3495,7 @@ results_controls_from_xml() {
 # 为什么重要：零评论视频点开后，面板直接是「分享你此刻的想法／发送／同时发布为作品」
 # 的发布框——带发送按钮的高危状态。所以点之前就要能判出来，根本不去点。
 comment_count_label_from_xml() {
-  local xml="$1" line label
-  [[ -r "$xml" ]] || return 1
-  line="$(/usr/bin/grep -oE '<node[^>]*content-desc="评论[^"]*"[^>]*clickable="true"[^>]*>' "$xml" | /usr/bin/head -1)"
-  [[ -n "$line" ]] || return 1
-  label="$(print -- "$line" | /usr/bin/sed -E 's/.*content-desc="评论([^"]*)，按钮".*/\1/')"
-  [[ -n "$label" && "$label" != "评论" ]] || return 1
-  print -- "$label"
+  "$PYTHON_BIN" "$PHONE_CONTROLLER_DIR/comment-count-evidence.py" "$1"
 }
 
 # 树是否是一个可用的视频页（右侧竖排图标已渲染出来）。纯逻辑，可单测。
@@ -3982,7 +3976,7 @@ locate_cache_clear() { /bin/rm -f "$LOCATE_CACHE_DIR/${registry_profile}-$1.xy" 
 # 且 clickable=false，取不到真实坐标，只能视觉定位。故本命令＝固化描述＋坐标护栏＋
 # 点击后验证面板真开＋没开就安全 back 恢复（绝不留在已聚焦输入框的状态触发风控）。
 open_comments() {
-  local evidence_id pos cx cy panel_xml tree_xml src count_label i tree_rc
+  local evidence_id pos cx cy panel_xml tree_xml src count_label count_rc i tree_rc
   evidence_id="$1"
   require_evidence_id "$evidence_id"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
@@ -3995,26 +3989,19 @@ open_comments() {
   _ui_evidence_wave "${evidence_id}-before" paused-douyin >/dev/null || tree_rc=$?
   (( tree_rc != 3 )) || die "UNTRUSTED_COMMENT_EVIDENCE: foreground, media or fresh XML validation failed"
   if (( tree_rc == 0 )); then
-    if pos="$(comment_button_center_from_xml "$tree_xml")"; then
-      # 零评论视频不点：点开就是带「发送」的发布框，属风控高危，且本来也没评论可采。
-      if ! count_label="$(comment_count_label_from_xml "$tree_xml")"; then
-        print -- "comments_opened=0"
-        print -- "reason=no_comments_on_this_video"
-        print -- "evidence=$tree_xml"
-        return 0
-      fi
-      read cx cy <<< "$pos"
-      src="tree"
-    elif video_page_ready "$tree_xml"; then
-      # 树已经把右侧竖排渲染出来了（喜欢/点赞在），却没有评论按钮
-      # ⇒ 这条视频关闭了评论。2026-09-09 实测：此时若退到视觉去猜，模型会指到底部
-      # 评论输入框、点开输入法（插入图片/语音评论那套），是风控高危动作。
-      # 所以这里必须干净跳过，绝不猜。
+    count_rc=0
+    count_label="$(comment_count_label_from_xml "$tree_xml")" || count_rc=$?
+    (( count_rc <= 1 )) || die "COMMENT_COUNT_UNKNOWN: refusing an unverified empty result"
+    pos="$(comment_button_center_from_xml "$tree_xml")" || die "COMMENT_COUNT_UNKNOWN: comment button unavailable"
+    # 只有严格已证零占位不点评论入口；未知绝不冒充正常空结果。
+    if (( count_rc == 1 )); then
       print -- "comments_opened=0"
-      print -- "reason=comments_disabled_on_this_video"
+      print -- "reason=no_comments_on_this_video"
       print -- "evidence=$tree_xml"
       return 0
     fi
+    read cx cy <<< "$pos"
+    src="tree"
   fi
   # 兜底：树本身不可用（如结果页 Lynx 渲染）才用视觉定位。
   if [[ -z "$cx" ]]; then

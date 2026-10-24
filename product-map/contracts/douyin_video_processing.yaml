@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.3.0
+  version: 0.3.1
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -1128,7 +1128,7 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.5.0
+    version: 2.5.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1287,7 +1287,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.2.0
+        version: 0.2.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -1449,8 +1449,8 @@ activities:
           - Video.video_url
           - Video.judgment_status
         writes: []
-        check: 本run逐VID工件具有原生评论header和输入面板；旧n条评论与新exact评论
-          n均可见；本Step只证面板，实际VID仍须qv新鲜nonce与identity sidecar核验；可选历史不替代核验
+        check: 本run逐VID有评论时必须原生评论header和输入面板，旧n条评论与新exact评论n均可见；
+          仅已证零评论可用本run同VID的精确零占位before原XML及identity原件哈希证明替代该VID面板，未知/缺按钮不算零；实际VID仍须qv新鲜nonce与identity sidecar核验，可选历史不替代核验
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh
@@ -1461,6 +1461,7 @@ activities:
           readback:
             type: evidence
             glob: "{tag}-v*-collection-comments-panel.xml"
+            zero_comment_alternative: verified_video_ui_v1
             match: '(?=[\s\S]*<node(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/(?:ety|e19|eyi)")(?=[^>]*\bclass="android\.widget\.EditText")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)(?:<node(?=[^>]*\btext="[0-9万.]+条评论")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/title")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>|<node(?=[^>]*\btext="评论
               [0-9万.]+")(?=[^>]*\bresource-id="com\.ss\.android\.ugc\.aweme:id/ez-")(?=[^>]*\bclass="android\.widget\.TextView")(?=[^>]*\bpackage="com\.ss\.android\.ugc\.aweme")[^>]*>)'
             expect:
@@ -1484,7 +1485,7 @@ activities:
           - Comment.harvest_batch
           - Comment.line_key
         check: 逐屏整行去重，连续 2
-          屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过
+          屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过；仅本run同VID的精确零占位before原XML和identity原件hash证明齐全时，可替代该VID逐屏原件；零结果不计采得评论或配额
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh
@@ -1495,6 +1496,7 @@ activities:
           readback:
             type: evidence
             glob: "{tag}*-screen*-comments.xml"
+            zero_comment_alternative: verified_video_ui_v1
             expect:
               op: ">="
               ref: metrics.videos_processed

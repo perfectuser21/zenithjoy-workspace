@@ -58,6 +58,7 @@ function pausedIdle({command='open-video',policy='paused-detail',error='idle',wr
     const patched=source.replace(wait,controlled);assert.equal(patched.replace(controlled,wait),source);
     const runner=join(dir,'controller');writeFileSync(runner,patched,{mode:0o755});
     writeFileSync(join(dir,'adb-existing-route.py'),readFileSync(new URL('../adb-existing-route.py',import.meta.url)));
+    writeFileSync(join(dir,'comment-count-evidence.py'),readFileSync(new URL('../comment-count-evidence.py',import.meta.url)));
     writeFileSync(join(dir,'registry.tsv'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
     writeFileSync(join(dir,'state.json'),JSON.stringify({play:command==='wave'?'paused':'playing',toggled:false,dumps:0,toggles:0,page:shareOverlay?'share':'detail'}));
     const panel='<hierarchy><node package="com.ss.android.ugc.aweme" text="23条评论"/><node package="com.ss.android.ugc.aweme" class="android.widget.EditText" text="发条评论"/></hierarchy>';

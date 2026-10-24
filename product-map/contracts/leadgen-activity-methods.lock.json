@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -157,7 +157,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "95c8c3ecee79926eccfc72d7b2d6166454e55348118a821f1886d0f75e6dd75a",
+      "code_digest": "3c92d9c36ccee849bf255010423e9036ce1b361f3bbfae06aee4baa4c8d41045",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "26c152e0fb31b7a27d81a9c1218f14dbc16f3893dd0838cdbdbd582b60fb9b6a",
-        "current_code_digest": "95c8c3ecee79926eccfc72d7b2d6166454e55348118a821f1886d0f75e6dd75a"
+        "previous_code_digest": "95c8c3ecee79926eccfc72d7b2d6166454e55348118a821f1886d0f75e6dd75a",
+        "current_code_digest": "3c92d9c36ccee849bf255010423e9036ce1b361f3bbfae06aee4baa4c8d41045",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_video_processing.preflight": {
@@ -346,7 +346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -409,7 +409,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -452,7 +452,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -483,7 +483,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3cc4dd7953d069af4a7515f85f86027f343b0221e9307625b987165659c5ff85",
+      "code_digest": "7024bd4bd4e628d3086e4c70a2e16052d7bd6ab0148d4ea633c846a8fbb5ce34",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "686aff8450e8d680718192b6b376806cd2b75aaa3ea0a81fa383b175ff860771",
-        "current_code_digest": "3cc4dd7953d069af4a7515f85f86027f343b0221e9307625b987165659c5ff85"
+        "previous_code_digest": "3cc4dd7953d069af4a7515f85f86027f343b0221e9307625b987165659c5ff85",
+        "current_code_digest": "7024bd4bd4e628d3086e4c70a2e16052d7bd6ab0148d4ea633c846a8fbb5ce34",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_video_processing.dedup": {
@@ -616,7 +616,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -679,7 +679,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -721,7 +721,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -756,7 +756,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -822,13 +822,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "a0e818a63d26a64c3684532839dbd1805464b4e2684cbc90a58bef369973b02d",
+      "code_digest": "517e97ca569d0e7c3e91d2cf1689ed7e0298baed2e107bf2abd2aa0cb90198f9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "715e669f22be90ff58cbda465215494eca5c2065fa315e3d6694c273be258660",
-        "current_code_digest": "a0e818a63d26a64c3684532839dbd1805464b4e2684cbc90a58bef369973b02d"
+        "previous_code_digest": "a0e818a63d26a64c3684532839dbd1805464b4e2684cbc90a58bef369973b02d",
+        "current_code_digest": "517e97ca569d0e7c3e91d2cf1689ed7e0298baed2e107bf2abd2aa0cb90198f9",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_video_processing.qualification": {
@@ -882,7 +882,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -945,7 +945,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -987,7 +987,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -1022,7 +1022,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -1085,7 +1085,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "56daa4ec0c202fa5b01034e9b9160a58796702559e73fb3eacc5e9cfff662e34"
+          "sha256": "ed9c9cb8316fec4b2960fc31a96ab97e3ede175dff7b11c19bf0d6ffb32381a5"
         },
         {
           "kind": "code",
@@ -1144,31 +1144,31 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "df3591f0b13c8ea6857067791e546500adcbba68592a68fb0dbef929a49979d9",
+      "code_digest": "a66c104e4c6d0e183d81601bed041b844cc6f5bfb808d838aaf8f10374b48415",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "75ba0cab19e60297d391422dd37947bece46be257128a57b17c2a2e48eda1f41",
-        "current_code_digest": "df3591f0b13c8ea6857067791e546500adcbba68592a68fb0dbef929a49979d9"
+        "previous_code_digest": "df3591f0b13c8ea6857067791e546500adcbba68592a68fb0dbef929a49979d9",
+        "current_code_digest": "a66c104e4c6d0e183d81601bed041b844cc6f5bfb808d838aaf8f10374b48415",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_video_processing.collection": {
-      "activity_version": "2.5.0",
-      "contract_digest": "2255e101b4d71de10b7f3ae2f2fb8d04ecc4a24412c82259604d5343ee1fa8f3",
-      "method_version": "0.2.0",
+      "activity_version": "2.5.1",
+      "contract_digest": "1091d09e58f540ad4bf92c261d892929c6cdc4003cf76b63d9865486343984c8",
+      "method_version": "0.2.1",
       "skill": {
         "name": "douyin-leadgen-activity-102-collection",
-        "version": "0.2.0",
+        "version": "0.2.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md",
-        "sha256": "c834a1badb211218c653adc99bacf7c0c3877c9e1e54aa7bcd2f31b93389c8b1",
+        "sha256": "fd0e334462b42a77905ee83044680ce5644607f75a7aa3bf036285ced9c23b0d",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "b83e961831af08b93ea59be23793a6328da04462c82c4b91c26506ab08cdebe5"
           }
         ],
-        "content_digest": "ae38fcc2244c73aa0a994286cf1ae669bbc6278db6d0f7eec8494aad2687455a"
+        "content_digest": "0636018bca6b2581e3bd8255e47362d4293130d10d089725697048448ebd32f0"
       },
       "code_bindings": [
         {
@@ -1211,7 +1211,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -1274,7 +1274,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -1338,7 +1338,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -1359,7 +1359,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -1429,7 +1429,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-video-lib.sh",
           "revision": "contract",
-          "sha256": "56daa4ec0c202fa5b01034e9b9160a58796702559e73fb3eacc5e9cfff662e34"
+          "sha256": "ed9c9cb8316fec4b2960fc31a96ab97e3ede175dff7b11c19bf0d6ffb32381a5"
         },
         {
           "kind": "code",
@@ -1439,13 +1439,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "2339bda31a8f5e358e739d332a8f04b99a35e37ebf2262d5d63c8f8d82509b2e",
+      "code_digest": "897863b4455aef8c11ca020a4d6dfdb5dd474b6484ebdfb1f8f5ebca6ddb2ff1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "83432de7a48ef24e22915361c38b89d83041eccfa0cb758e14f192f929cf554e",
-        "current_code_digest": "2339bda31a8f5e358e739d332a8f04b99a35e37ebf2262d5d63c8f8d82509b2e"
+        "previous_code_digest": "2339bda31a8f5e358e739d332a8f04b99a35e37ebf2262d5d63c8f8d82509b2e",
+        "current_code_digest": "897863b4455aef8c11ca020a4d6dfdb5dd474b6484ebdfb1f8f5ebca6ddb2ff1",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1499,7 +1499,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -1562,7 +1562,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -1605,7 +1605,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -1642,7 +1642,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "afdd01fbb9a963c5e40c8cc44be25e7faa5e6806e4c9e0ed9537f0b2da26ca4b",
+      "code_digest": "4dd0bd272d1de40b860952ea73c644a504487833ed25e85dcca6e6f90d5f1b4a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "f0f871b98a5079fac36346513849781a65a5cf38d86f34ebd9ec96911fdcacc2",
-        "current_code_digest": "afdd01fbb9a963c5e40c8cc44be25e7faa5e6806e4c9e0ed9537f0b2da26ca4b"
+        "previous_code_digest": "afdd01fbb9a963c5e40c8cc44be25e7faa5e6806e4c9e0ed9537f0b2da26ca4b",
+        "current_code_digest": "4dd0bd272d1de40b860952ea73c644a504487833ed25e85dcca6e6f90d5f1b4a",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1768,7 +1768,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -1831,7 +1831,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -1880,7 +1880,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -1946,13 +1946,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "5a1e6feba78ab2c0f5fea062e7bb9331f857ac4517d8326b605faf1f2a17f132",
+      "code_digest": "36d7531715da4fa08276e2703042836d7550a639352ca35ef8f64535723e84e8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "09057564e8d9f1c2c59cf666b19d0e008f5470511e6b3a17e47f4afd4efaf40b",
-        "current_code_digest": "5a1e6feba78ab2c0f5fea062e7bb9331f857ac4517d8326b605faf1f2a17f132"
+        "previous_code_digest": "5a1e6feba78ab2c0f5fea062e7bb9331f857ac4517d8326b605faf1f2a17f132",
+        "current_code_digest": "36d7531715da4fa08276e2703042836d7550a639352ca35ef8f64535723e84e8",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2013,7 +2013,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -2076,7 +2076,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -2125,7 +2125,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "26dbbc4e333c58dac866dda457b21edcd208d101a44fe58f2e9430a42c602d5c",
+      "code_digest": "a4888dc3db9cc5054a9d75fdff5a83e8233e1b1b5d46ca9d35a42c0ab47de161",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "20f0d7e1a189a8f787778dfa3da186b7c339665e436279b38d7896c3e3919060",
-        "current_code_digest": "26dbbc4e333c58dac866dda457b21edcd208d101a44fe58f2e9430a42c602d5c"
+        "previous_code_digest": "26dbbc4e333c58dac866dda457b21edcd208d101a44fe58f2e9430a42c602d5c",
+        "current_code_digest": "a4888dc3db9cc5054a9d75fdff5a83e8233e1b1b5d46ca9d35a42c0ab47de161",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2300,7 +2300,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -2363,7 +2363,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -2406,7 +2406,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -2437,7 +2437,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -2451,7 +2451,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "bc3ab54d92a8e26c75b41a5375d230375c95b4e5dc80720c6a4fabf327046d1a",
+      "code_digest": "4034c3f2d4bc0163054f8c6fc5d865623f57d0fb22ca9eacdca3ccd2c74f3699",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "c723e31f75ffdb916c2cf95f75fd3ea026b0dc09a32db80723428e5bcc973dff",
-        "current_code_digest": "bc3ab54d92a8e26c75b41a5375d230375c95b4e5dc80720c6a4fabf327046d1a"
+        "previous_code_digest": "bc3ab54d92a8e26c75b41a5375d230375c95b4e5dc80720c6a4fabf327046d1a",
+        "current_code_digest": "4034c3f2d4bc0163054f8c6fc5d865623f57d0fb22ca9eacdca3ccd2c74f3699",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2598,7 +2598,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -2661,7 +2661,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -2703,7 +2703,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -2738,7 +2738,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -2811,13 +2811,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c8364f96aec572bb17ff8e9e7fc67d8056f9b0664ce0b8e7f473f2fec93a9b12",
+      "code_digest": "1ede7961a9f9d1b665855498a3201c71281a0fe3d85dd5a760c2a185b9e5f43c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "2b6476869380b7e809998e3cc53a9d38b555e8e9c94a383dc1f62589474cc850",
-        "current_code_digest": "c8364f96aec572bb17ff8e9e7fc67d8056f9b0664ce0b8e7f473f2fec93a9b12"
+        "previous_code_digest": "c8364f96aec572bb17ff8e9e7fc67d8056f9b0664ce0b8e7f473f2fec93a9b12",
+        "current_code_digest": "1ede7961a9f9d1b665855498a3201c71281a0fe3d85dd5a760c2a185b9e5f43c",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2871,7 +2871,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -2934,7 +2934,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -2976,7 +2976,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -3011,7 +3011,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -3084,13 +3084,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c8364f96aec572bb17ff8e9e7fc67d8056f9b0664ce0b8e7f473f2fec93a9b12",
+      "code_digest": "1ede7961a9f9d1b665855498a3201c71281a0fe3d85dd5a760c2a185b9e5f43c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "2b6476869380b7e809998e3cc53a9d38b555e8e9c94a383dc1f62589474cc850",
-        "current_code_digest": "c8364f96aec572bb17ff8e9e7fc67d8056f9b0664ce0b8e7f473f2fec93a9b12"
+        "previous_code_digest": "c8364f96aec572bb17ff8e9e7fc67d8056f9b0664ce0b8e7f473f2fec93a9b12",
+        "current_code_digest": "1ede7961a9f9d1b665855498a3201c71281a0fe3d85dd5a760c2a185b9e5f43c",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3144,7 +3144,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "6f016de65b437264ca01c7b427ff4a328eb9cbc3654df251749c739fe19f304b"
+          "sha256": "3b06f670c7d836b9c86688d9d8e45a44e7bc4eea642fce315e873e84418386fc"
         },
         {
           "kind": "code",
@@ -3207,7 +3207,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "496f5a6daaf7bd3683243a14cabddb54a8debb264620c64bd9a94e90e0e72362"
+          "sha256": "d895b2d6af59d81b8ca97a5236326e09ef254818b095eb3d2a2ddf83948d08e3"
         },
         {
           "kind": "code",
@@ -3250,7 +3250,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "1bb71f25782ee873a443f9cf0ab3dda2e195a3148dd2a98a010f98b163ced6d0"
+          "sha256": "4aa4ba86f44177e2aea390dae9ce7922ce93cbc5caa19734f4bf6206951d6347"
         },
         {
           "kind": "code",
@@ -3287,7 +3287,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e69af990d2cc0cef225ad92f39496d744a7e1af87133f608e9cca81ecbcd5547"
+          "sha256": "ddea2062a0067ff9898a7e20f8627ef0b42b28cffe34c28808119e5e3562e975"
         },
         {
           "kind": "code",
@@ -3360,13 +3360,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a2023fe317da29b09fd43e4e09b80a30e0cfc6eb36b1859cc04d59116d36b0e8",
+      "code_digest": "529f6363b3e3d668feb86f719375d0a62da5cbe979056d3e1210bbb8c7dd2dcb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "精确HONOR widget有限取消后全新nonce；显式单VID producer冻结与0353新user授权恢复，默认来源政策拒绝不变",
-        "reviewed_by": "codex:release-continuation:00ac58fd",
-        "previous_code_digest": "45ce876c5f7cb6d7341f509f9db1f40dd5c6796346835d3be2d5a3b896ba8d16",
-        "current_code_digest": "a2023fe317da29b09fd43e4e09b80a30e0cfc6eb36b1859cc04d59116d36b0e8"
+        "previous_code_digest": "a2023fe317da29b09fd43e4e09b80a30e0cfc6eb36b1859cc04d59116d36b0e8",
+        "current_code_digest": "529f6363b3e3d668feb86f719375d0a62da5cbe979056d3e1210bbb8c7dd2dcb",
+        "reason": "正式合同声明逐VID已证零评论替代，同run原XML与identity哈希核验；正数panel/screen及未知拒绝保持，公司政策与外部操作范围不变。",
+        "reviewed_by": "codex:baseline-release-independent-review/7c981106"
       }
     }
   },
@@ -3429,13 +3429,13 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "658b46473bd5143c58872ede4b86cc0d4c3ecf75e024eac00db98493064371dc",
+        "sha256": "85ddad4503f137c698e95d87ed3543e23f23510386015c5c581bc0acafdd72e3",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-            "sha256": "f247beab04017ffa611314360214f91da081ac69640651d636a5f8cfc4fde76c"
+            "sha256": "661f63a4a30db8f66a4d01e6b9d76ef267e9c02d8af4217df3ba4cad4a2bdaef"
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/reuse-map.json",
@@ -3446,19 +3446,19 @@
             "sha256": "1312a4cad23d886976f39c65c46f0c0344d773f0da5ed381800d45b36c59f0d7"
           }
         ],
-        "content_digest": "629e7697f8a14b987a27c3d612cd4e67bf0b2d03959f197344992e60a8d5e64b"
+        "content_digest": "439deedac592805bc6545ae8edafaddf7c025bd12f10f14e19198db1c2a1b87a"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "69a6c7af18d6b48a92f2e48973d69776eb10d953c66c3fa90002162dc4d8048a",
+        "sha256": "02b33e8fac83cf1a04a4473814ca7cddf4e819a7694c5a6ee92d9c607cf86775",
         "support_files": [],
-        "content_digest": "1a5fe7dfb0659b13f1a96f1c15c6898f98fa093e2a6a0aaf52e6ada008ad0bf1"
+        "content_digest": "d3acb71b6010bf400d0184d32ee60cfd7b9f9acc58da388748e01a2d7fe8f4ce"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-        "sha256": "f247beab04017ffa611314360214f91da081ac69640651d636a5f8cfc4fde76c"
+        "sha256": "661f63a4a30db8f66a4d01e6b9d76ef267e9c02d8af4217df3ba4cad4a2bdaef"
       },
       "activities": [
         {
@@ -3482,7 +3482,7 @@
         {
           "activity_ref": "douyin_video_processing.collection",
           "skill_name": "douyin-leadgen-activity-102-collection",
-          "skill_version": "0.2.0",
+          "skill_version": "0.2.1",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md"
         },
         {

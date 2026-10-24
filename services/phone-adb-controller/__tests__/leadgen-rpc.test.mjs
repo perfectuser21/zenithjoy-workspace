@@ -69,4 +69,4 @@ test('Skill transport runtime import closure cannot be omitted or drift outside 
  }
 });
 
-test('新恢复和producer模块均必须经过RPC源码逐字校验，不允许省略未核文件',()=>{const f=fixture();for(const path of ['single-video-recovery-0353.js','single-video-recovery-0353-authority.js','producer-descriptor.mjs'])assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!==path)},f.options),/DEPENDENCY_MISSING/);});
+test('新恢复和producer模块均必须经过RPC源码逐字校验，不允许省略未核文件',()=>{const f=fixture();for(const path of ['single-video-recovery-0353.js','single-video-recovery-0353-authority.js','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py'])assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!==path)},f.options),/DEPENDENCY_MISSING/);});

@@ -10,6 +10,7 @@
 // 结果写进工件 step_dod 与账本 step-dod.jsonl（workflow-result.sh 负责落盘）。mode=checkpoint 只记录；
 // mode=hard 且不过 → hard_failed，workflow-result.sh 把该活动判 fail_stage。读不回（error）→ pass=null，不算通过也不算失败。
 // 零依赖（执行机 CI 同样不装包），永远 exit 0，stdout 恰好一行 JSON {steps, hard_failed}。
+import {collectionEvidenceCount} from './no-comments-evidence.mjs';
 import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -93,7 +94,8 @@ export function judgeSteps({ spec, stage, ctx = {}, remote = [] }) {
       continue;
     }
     try {
-      const observed = readLocal(rb, ctx);
+      if (Object.hasOwn(rb, 'zero_comment_alternative') && (rb.type !== 'evidence' || rb.zero_comment_alternative !== 'verified_video_ui_v1')) throw new Error('ZERO_COMMENT_ALTERNATIVE_INVALID');
+      const observed = rb.zero_comment_alternative === 'verified_video_ui_v1' ? collectionEvidenceCount(rb, ctx) : readLocal(rb, ctx);
       steps.push({ ...base, observed, pass: evaluateExpect(rb.expect, observed, ctx.metrics) });
     } catch (e) {
       steps.push({ ...base, pass: null, error: String((e && e.message) || e).slice(0, 200) });

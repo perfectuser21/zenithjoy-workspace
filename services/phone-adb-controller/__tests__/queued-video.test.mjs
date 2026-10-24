@@ -1,3 +1,4 @@
+import {zeroControllerCode} from './helpers/no-comments-fixture.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync,mkdirSync,chmodSync,symlinkSync,utimesSync} from 'node:fs';
@@ -59,7 +60,7 @@ switch(cmd){
 case 'lock-refresh': console.log('lock=refreshed owner=multi-video-run');break;
 case 'open-video':fs.writeFileSync(p.join(d,'active'),args[0]);fs.writeFileSync(p.join(d,args[1]+'.xml'),args[0]);break;
 case 'current-video-link':fs.writeFileSync(p.join(d,args[0]+'.xml'),active());console.log('content_type=video\\nvideo_id='+active());break;
-case 'open-comments':console.log('reason=no_comments_on_this_video');break;
+case 'open-comments':${zeroControllerCode('args[0]','profile')};break;
 case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}console.log('record_started capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true media_volume=1 playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1'+(${fakeNativeFields.toString()})(args[0],'start'));break;
 case 'record-stop':console.log('record_stopped capture_audio_mode=playback_dup capture_audio_sdk=36 capture_audio_required=true duration_seconds=25.1 mean_volume_db=-35 audio_streams=1 playback_package=com.ss.android.ugc.aweme playback_state=1'+(${fakeNativeFields.toString()})(args[0],'end'));break;
 case 'record-extract-audio':{
@@ -78,7 +79,7 @@ console.log('QUAL_RESULT {"verdict":"matched"}');
 `,{mode:0o755});
   const videos=[vid,'7646309328911907196'];
   for(const id of videos)for(const mode of ['identity','qualification','collection']){
-   const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',id,`https://www.douyin.com/video/${id}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'multi-video-run','金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE:d,DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_QUALIFY_CMD:qualify,HARVEST_KEYWORD_TESTING:'1',WFR_RUN_DIR:path.join(d,'run')},encoding:'utf8',timeout:7000});
+   const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',id,`https://www.douyin.com/video/${id}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'multi-video-run','金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE:d,DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone'),DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_QUALIFY_CMD:qualify,HARVEST_KEYWORD_TESTING:'1',WFR_RUN_DIR:path.join(d,'run')},encoding:'utf8',timeout:7000});
    assert.equal(r.status,0,r.stderr);
   }
   const judgments=readFileSync(path.join(d,'judgments'),'utf8').trim().split('\n').map(JSON.parse);
@@ -106,7 +107,7 @@ case "$3" in
  lock-refresh) [[ -z "$LOCK_FAIL" ]] || exit 3;print 'lock=refreshed owner=cmd100822-new';;
  open-video) if [[ -n "$AFTER_CARD_OPEN_FAIL" && "$5" == *after-card* ]];then exit 4;fi;rm -f "$CARD_STATE"; print 'video_id=${vid}';;
  current-video-link) if [[ "$4" == *recovery* && -n "$CLIPPED_WRONG_VID" ]];then print content_type=video;print video_id=7646309328911907196;exit 0;fi;if [[ "$4" == *after-card* ]];then [[ -z "$AFTER_CARD_LINK_FAIL" ]] || exit 1;[[ -z "$AFTER_CARD_NOTE" ]] || export CONTENT_TYPE=note;fi;if [[ -f "$CARD_STATE" ]];then print -u2 'NOT_ON_VIDEO_DETAIL';exit 1;fi;print "content_type=\${CONTENT_TYPE:-video}";if [[ -n "$DRIFT_AFTER_CARD" && "$(grep -c '^current-video-link$' "$CALLS")" -gt 1 ]]; then print 'video_id=7646309328911907196';else print "video_id=\${OBSERVED_ID:-${vid}}";fi;;
- open-comments) if [[ "$4" == *after-card* && -n "$AFTER_CARD_COMMENTS_FAIL" ]];then exit 6;fi;if [[ -n "$NO_COMMENTS" ]]; then print 'reason=no_comments_on_this_video'; else print 'comments_opened=1'; print "comment_count=\${FIXTURE_COMMENT_COUNT:-1}"; fi;;
+ open-comments) if [[ "$4" == *after-card* && -n "$AFTER_CARD_COMMENTS_FAIL" ]];then exit 6;fi;if [[ -n "$NO_COMMENTS" ]]; then node "${new URL('./helpers/no-comments-fixture.mjs',import.meta.url).pathname}" "$4" "$2" "$DOUYIN_PHONE_TMP_ROOT"; else print 'comments_opened=1'; print "comment_count=\${FIXTURE_COMMENT_COUNT:-1}"; fi;;
  collect-comments) if [[ -n "$ENTITY_EXPECTED_NICK" ]];then print "$ENTITY_EXPECTED_NICK\\t咨询价格\\t今天\\t北京\\treader\\ttap=100 200\\tb64=$ENTITY_NICK_B64";print 'exhausted=1';exit 0;fi;if [[ -n "$CLIPPED_TWO" ]];then for j in 1 2;do print "甲\\t裁切$j\\t今天\\t北京\\treader\\ttap= \\tb64=55Sy";done;for j in {1..5};do print "甲\\t合法$j\\t今天\\t北京\\treader\\ttap=900 $((300+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;if [[ -n "$CLIPPED_FIRST" ]];then
 if [[ "$4" == *rescan* && -n "$CLIPPED_COLLECT_FAIL" ]];then exit 2;fi
 if [[ "$4" == *rescan* && -n "$CLIPPED_NOT_FOUND" ]];then print 'exhausted=0';exit 0;fi
@@ -137,7 +138,7 @@ print 'QUAL_RESULT {"verdict":"pending","kind":"api_error"}'
  function requireHistoryDir(){mkdirSync(evidence,{recursive:true});}
  if(extra.DEREGISTERED_PROOF_EXISTS){mkdirSync(evidence,{recursive:true});writeFileSync(path.join(evidence,'cmd100822-new-v'+vid+'-collection-person1-t1-unavailable.json'),'old-proof',{mode:0o600});}
  const deregRoot=path.join(d,'phone','evidence','jinoshengyuan-work');if(extra.DEREGISTERED_FIRST)mkdirSync(deregRoot,{recursive:true});
- const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new',extra.HISTORY?'jinuo':'金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE_AUDIO:path.join(d,'audio.wav'),DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,DEREGISTERED_ROOT:deregRoot,...extra,...(extra.DEREGISTERED_FIRST?{DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone')}:{ }),...(extra.HISTORY?{LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:historyPath,DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone')}:{})},encoding:'utf8',timeout:extra.FIXTURE_TIMEOUT_MS||7000});
+ const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new',extra.HISTORY?'jinuo':'金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE_AUDIO:path.join(d,'audio.wav'),DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone'),DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,DEREGISTERED_ROOT:deregRoot,...extra,...(extra.DEREGISTERED_FIRST?{DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone')}:{ }),...(extra.HISTORY?{LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:historyPath,DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone')}:{})},encoding:'utf8',timeout:extra.FIXTURE_TIMEOUT_MS||7000});
  const calls=existsSync(log)?readFileSync(log,'utf8').trim().split('\n'):[];
  const coordinates=existsSync(coords)?readFileSync(coords,'utf8').trim().split('\n'):[];
  const receipt=path.join(evidence,`cmd100822-new-identity-${vid}.json`);
