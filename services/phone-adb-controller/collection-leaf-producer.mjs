@@ -39,7 +39,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  mkdirSync(directory,{recursive:true,mode:0o700});
  const socket=join(tmpdir(),'cl-'+randomBytes(12).toString('hex')+'.sock'),nonce=randomBytes(24).toString('hex');
  const ledger=join(directory,'collection-leaves-'+randomBytes(8).toString('hex')+'.jsonl');
- const leaves=[],clients=new Set(),finishedClients=new WeakSet();let active=0,sealed=false,tainted=false,draining;
+ const leaves=[],clients=new Set(),finishedClients=new WeakSet();let active=0,sealed=false,tainted=false,returnUnknown=false,draining;
  const append=entry=>appendFileSync(ledger,JSON.stringify(entry)+'\n',{mode:0o600});
  const dispatch=async request=>{
   if(sealed||Date.now()>=deadlineMs||active)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
@@ -53,27 +53,31 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
   try{
    append({...entry,phase:'intent'});
    const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});});
-   entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;append({...entry,phase:'exit'});
+   entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
+   // This is a lifecycle proof from our nofork child close, not business success.
+   entry.request_returned=[0,1].includes(result.code)&&!result.signal&&!result.tainted&&!/fork_denied=|fork(?:\(\))?: (?:Operation not permitted|Resource temporarily unavailable)/.test(result.stderr.toString());
+   if(!entry.request_returned)returnUnknown=true;append({...entry,phase:'exit'});
    if(result.code!==0||result.signal||result.tainted)tainted=true;
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
-  }catch(error){tainted=true;try{append({...entry,phase:'unknown'});}catch{}throw error;}finally{active--;}
+  }catch(error){tainted=true;returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}throw error;}finally{active--;}
  };
  const server=createServer({allowHalfOpen:true},client=>{
-  clients.add(client);client.once('close',()=>clients.delete(client));client.on('error',()=>{});let bytes='';
-  client.setTimeout(Math.max(1,deadlineMs-Date.now()),()=>client.destroy());
-  client.on('data',b=>{bytes+=b;if(bytes.length>32000){tainted=true;client.destroy();}});
-  client.on('end',async()=>{try{const response=await dispatch(JSON.parse(bytes));finishedClients.add(client);client.end(JSON.stringify(response)+'\n');}catch(error){tainted=true;finishedClients.add(client);client.end(JSON.stringify({ok:false,error:String(error.message)})+'\n');}});
+  clients.add(client);client.once('close',()=>{clients.delete(client);if(!finishedClients.has(client)){tainted=true;returnUnknown=true;}});client.on('error',()=>{});let bytes='';
+  client.setTimeout(Math.max(1,deadlineMs-Date.now()),()=>{tainted=true;returnUnknown=true;client.destroy();});
+  client.on('data',b=>{bytes+=b;if(bytes.length>32000){tainted=true;returnUnknown=true;client.destroy();}});
+  client.on('end',async()=>{try{const response=await dispatch(JSON.parse(bytes));finishedClients.add(client);client.end(JSON.stringify(response)+'\n');}catch(error){tainted=true;returnUnknown=true;finishedClients.add(client);client.end(JSON.stringify({ok:false,error:String(error.message)})+'\n');}});
  });
  await new Promise((yes,no)=>{server.once('error',no);server.listen(socket,yes);});chmodSync(socket,0o600);
  const drain=()=>draining??=(async()=>{
   sealed=true;
-  for(const client of clients){if(!finishedClients.has(client))tainted=true;client.destroy();}
+  for(const client of clients){if(!finishedClients.has(client)){tainted=true;returnUnknown=true;}client.destroy();}
   await new Promise(r=>server.close(r));
   while(active&&Date.now()<deadlineMs+3000)await sleep(10);
   try{unlinkSync(socket);}catch(error){if(error.code!=='ENOENT')throw error;}
-  if(active){tainted=true;throw Error('COLLECTION_LEAF_DRAIN_UNVERIFIED');}
+  if(active){tainted=true;returnUnknown=true;throw Error('COLLECTION_LEAF_DRAIN_UNVERIFIED');}
  })();
- const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,leaves:structuredClone(leaves),ledger});
+ const returned=()=>sealed&&!returnUnknown&&active===0&&leaves.every(x=>x.started_at&&x.ended_at&&x.request_returned===true);
+ const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,requests_returned:returned()&&leaves.length>0,empty_requests_returned:returned()&&leaves.length===0,leaves:structuredClone(leaves),ledger});
  return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},
   seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }

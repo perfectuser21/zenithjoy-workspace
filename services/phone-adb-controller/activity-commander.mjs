@@ -1,4 +1,4 @@
-import {collectionEvidenceProof} from './collection-phone-scope.mjs';
+import {collectionEvidenceProof,collectionReturnedEvidence} from './collection-phone-scope.mjs';
 import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 import { createRequire } from 'node:module';
 import {readFileSync} from 'node:fs';
@@ -228,7 +228,8 @@ export async function runWorkflow({activities,context,handlers,commander,record,
     if(stopped){results.push({activity:a.key,status:'blocked',reason:'前序活动未通过或Commander要求收工'});continue;}
     await execute(a);
   }}finally{
-    const last=results.at(-1),cleanupOnly=last&&discoveryCleanupEvidence(last,{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:last.activity});
+    const last=results.at(-1),cleanupScope=last&&{run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:last.activity};
+    const cleanupOnly=last&&(discoveryCleanupEvidence(last,cleanupScope)||collectionReturnedEvidence(last,cleanupScope));
     if(stopped&&terminationUnverified()&&!cleanupOnly)context={...context,skill_execution_unknown:true};
     for(const a of activities.filter(a=>a.key==='cleanup')){
     if(context.skill_execution_unknown){results.push({activity:a.key,status:'blocked',reason:'原执行或Skill子会话终止未知，禁止清场并记录资源隔离'});status='failed';}

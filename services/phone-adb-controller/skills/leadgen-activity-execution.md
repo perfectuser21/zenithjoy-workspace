@@ -31,6 +31,8 @@ child在MMV通过同源 `leadgen-skill-agent.mjs tool <本次私有handoff目录
 
 旧执行或child终态未知时禁止重试、接手及清场；原进程通过精确owner的lock-quarantine写既有standalone_review_required并读回，已领VID只用同line/run/VID的CAS隔离到待人工核验状态并读回。隔离回执未知必须明确unknown，不宣称保有无限租约；普通设备1800秒/视频15分钟TTL不变，已确认隔离态不得自动陈旧回收或重领。
 
+唯一受限例外：collection Code已经正常返回且原独立verify失败时，原进程可凭本人固定nofork producer的封闭intent/start/exit账、全部请求确定归还、无signal/超时/输出超限/未闭合或受管请求unknown，签发不可序列化、同run/task/source/account/目录与录音身份绑定的一次性能力。此能力仅允许同run一次readback_only Skill及随后本人受管cleanup；每阶段重新持有封闭producer并验证归还。它不证明整个OS进程树已停止，不改变observed_only收据或原业务FAIL，不允许resume、重新领取、重做已提交VID或挪用截止。只读失败仍保失败；child未知、任何新请求终止未知或身份漂移均撤销能力并禁止清场。没有此原进程私有能力的旧冻结运行仍按原未知规则隔离。
+
 音频生产器固定错误（5个名称、6种阶段/退出场景）RECORD_AUDIO_STRATEGY_UNSUPPORTED、RECORD_AUDIO_CAPTURE_UNAVAILABLE、RECORD_AUDIO_TRACK_UNVERIFIED、RECORD_CAPTURE_STRATEGY_UNVERIFIED、RECORD_CAPTURE_SILENT表示能力/策略或捕获证据缺口：不重试同代码，不转成UI/音量修复。保留首错和已有部分成果并升级；mode/SDK/required/实际音轨字段必须来自同Source真实回执，不能拿旧ASR、标题或模型自述补齐。新音频生产器的落地与真机验收另记，不以本分类源码测试冒通过。
 
 
