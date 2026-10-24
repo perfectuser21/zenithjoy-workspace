@@ -7903,3 +7903,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "正式两Step显式零分支与可点按钮package/enabled反例，不接受exact-key隐藏合同"
+
+- id: collection-leaf-returned
+  path: services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实Darwin nofork生命周期归还与业务退出分离"
+
+- id: collection-returned-authority
+  path: services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "35f原后验失败同run只读Skill及受管cleanup，保原FAIL/OSunknown"

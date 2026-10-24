@@ -1,0 +1,43 @@
+{
+  "steps": [
+    {
+      "key": "douyin_video_processing.collection.open_comment_section",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-v*-collection-comments-panel.xml",
+        "match": "(?=[\\s\\S]*<node(?=[^>]*\\bresource-id=\"com\\.ss\\.android\\.ugc\\.aweme:id/(?:ety|e19|eyi)\")(?=[^>]*\\bclass=\"android\\.widget\\.EditText\")(?=[^>]*\\bpackage=\"com\\.ss\\.android\\.ugc\\.aweme\")[^>]*>)(?:<node(?=[^>]*\\btext=\"[0-9万.]+条评论\")(?=[^>]*\\bresource-id=\"com\\.ss\\.android\\.ugc\\.aweme:id/title\")(?=[^>]*\\bclass=\"android\\.widget\\.TextView\")(?=[^>]*\\bpackage=\"com\\.ss\\.android\\.ugc\\.aweme\")[^>]*>|<node(?=[^>]*\\btext=\"评论 [0-9万.]+\")(?=[^>]*\\bresource-id=\"com\\.ss\\.android\\.ugc\\.aweme:id/ez-\")(?=[^>]*\\bclass=\"android\\.widget\\.TextView\")(?=[^>]*\\bpackage=\"com\\.ss\\.android\\.ugc\\.aweme\")[^>]*>)",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.videos_processed"
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_video_processing",
+        "slot_key": "collection",
+        "sequence_no": 4
+      }
+    },
+    {
+      "key": "douyin_video_processing.collection.collect_comments",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}*-screen*-comments.xml",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.videos_processed"
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_video_processing",
+        "slot_key": "collection",
+        "sequence_no": 4
+      }
+    }
+  ]
+}
