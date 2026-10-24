@@ -49,3 +49,53 @@ class Fake:
  def open_qr(self):self.writes.append(pad.QR);self.activity=pad.QR
  def capture(self):return {'qr_image':'private.png','requires_user_scan':True}
 if __name__=='__main__':unittest.main()
+
+class OwnedLockTests(unittest.TestCase):
+ def session(self,busy=None,public_busy=False):
+  from unittest.mock import Mock
+  r=pad.Runtime.__new__(pad.Runtime);r.b={};r.owner='our-unique-owner';r.owned=[];r.attempted=[];r.unknown_acquires=set();r.public=False;r.cleanup=[];r.deadline=0;r.p=Mock();owners={pad.SERIAL:None,pad.INSTANCE:None};released=[]
+  def api(path='',body=None):
+   if path=='/acquire':
+    key=body['device_name']
+    if key==busy:owners[key]='somebody-else';return {'acquired':False}
+    owners[key]=r.owner;return {'acquired':True}
+   if path=='/release':
+    key=body['device_name'];self.assertEqual(owners[key],r.owner);released.append(key);owners[key]=None;return {'released':True}
+   return {'locks':[{'device_name':k,'locked_by':o,'expires_at':(pad.datetime.datetime.now(pad.datetime.timezone.utc)+pad.datetime.timedelta(minutes=5)).isoformat()} for k,o in owners.items()]}
+  def lock(op,*args):return 'lock=busy' if public_busy and op=='lock-status' else 'lock=free'
+  r.api=api;r.lock=lock;return r,owners,released
+ def test_second_lease_busy_releases_only_ours(self):
+  r,owners,released=self.session(pad.INSTANCE)
+  with self.assertRaises(pad.Refused):r.acquire()
+  self.assertTrue(r.close());self.assertEqual(released,[pad.SERIAL]);self.assertEqual(owners[pad.INSTANCE],'somebody-else')
+ def test_public_busy_releases_two_brain_leases(self):
+  r,owners,released=self.session(public_busy=True)
+  with self.assertRaises(pad.Refused):r.acquire()
+  self.assertTrue(r.close());self.assertEqual(set(released),{pad.SERIAL,pad.INSTANCE})
+ def test_cleanup_readback_failure_not_success(self):
+  r,owners,released=self.session();r.acquire();original=r.api
+  def fail(path='',body=None):
+   if path=='/release':raise TimeoutError('release unknown')
+   return original(path,body)
+  r.api=fail;self.assertFalse(r.close());self.assertTrue(r.cleanup)
+ def test_full_cleanup_only_owned_owner(self):
+  r,owners,released=self.session();r.acquire();self.assertTrue(r.close());self.assertTrue(all(v is None for v in owners.values()))
+
+class QRAndUnknownTests(unittest.TestCase):
+ def test_expired_or_failed_qr_never_requests_scan(self):
+  for text in ('二维码已过期','获取二维码失败','未获得体验资格'):
+   xml='<hierarchy><node text="用手机微信扫码登录"/><node class="android.widget.ImageView" package="com.tencent.mm"/><node text="'+text+'"/></hierarchy>'
+   self.assertFalse(pad.qr_state(xml)['requires_user_scan'])
+ def test_current_qr_can_request_user_scan_without_auth_claim(self):
+  xml='<hierarchy><node text="用手机微信扫码登录"/><node class="android.widget.ImageView" package="com.tencent.mm"/></hierarchy>'
+  self.assertTrue(pad.qr_state(xml)['requires_user_scan'])
+ def test_ambiguous_acquire_and_failed_readback_never_reports_clean(self):
+  r,owners,released=OwnedLockTests().session();count=[0]
+  def api(path='',body=None):
+   if path=='/acquire':raise TimeoutError('acquire unknown')
+   count[0]+=1
+   if count[0]==1:raise TimeoutError('readback unavailable')
+   return {'locks':[{'device_name':k,'locked_by':v} for k,v in owners.items()]}
+  r.api=api
+  with self.assertRaises(TimeoutError):r.acquire()
+  self.assertFalse(r.close());self.assertEqual(released,[])
