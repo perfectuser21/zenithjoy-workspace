@@ -48,12 +48,11 @@ class Fake:
   return {'disk_pad_flag':1,'inner_version':1}
  def open_qr(self):self.writes.append(pad.QR);self.activity=pad.QR
  def capture(self):return {'qr_image':'private.png','requires_user_scan':True}
-if __name__=='__main__':unittest.main()
 
 class OwnedLockTests(unittest.TestCase):
  def session(self,busy=None,public_busy=False):
   from unittest.mock import Mock
-  r=pad.Runtime.__new__(pad.Runtime);r.b={};r.owner='our-unique-owner';r.owned=[];r.attempted=[];r.unknown_acquires=set();r.public=False;r.cleanup=[];r.deadline=0;r.p=Mock();owners={pad.SERIAL:None,pad.INSTANCE:None};released=[]
+  r=pad.Runtime.__new__(pad.Runtime);r.b={};r.owner='our-unique-owner';r.owned=[];r.attempted=[];r.unknown_acquires=set();r.public=False;r.public_attempted=False;r.public_unknown=False;r.cleanup=[];r.deadline=0;r.p=Mock();owners={pad.SERIAL:None,pad.INSTANCE:None};released=[]
   def api(path='',body=None):
    if path=='/acquire':
     key=body['device_name']
@@ -99,3 +98,24 @@ class QRAndUnknownTests(unittest.TestCase):
   r.api=api
   with self.assertRaises(TimeoutError):r.acquire()
   self.assertFalse(r.close());self.assertEqual(released,[])
+
+class PublicAmbiguityTests(unittest.TestCase):
+ def test_public_granted_then_timeout_owner_unreadable_not_clean(self):
+  r,owners,released=OwnedLockTests().session();held=[False]
+  def lock(op,*args):
+   if op=='lock-acquire-new':held[0]=True;raise TimeoutError('created but reply lost')
+   return 'lock=free'
+  r.lock=lock;r.p.require_owner.side_effect=OSError('owner unreadable')
+  with self.assertRaises(TimeoutError):r.acquire()
+  self.assertTrue(r.public_unknown);self.assertFalse(r.close());self.assertTrue(held[0]);self.assertTrue(r.cleanup);self.assertEqual(set(released),{pad.SERIAL,pad.INSTANCE})
+ def test_public_unknown_then_exact_owner_recovery_releases(self):
+  r,owners,released=OwnedLockTests().session();held=[False]
+  def lock(op,*args):
+   if op=='lock-acquire-new':held[0]=True;raise TimeoutError('reply lost')
+   if op=='lock-release-exact':self.assertEqual(args,('our-unique-owner',));held[0]=False
+   return 'lock=free'
+  r.lock=lock;r.p.require_owner.side_effect=[OSError('transient'),None]
+  with self.assertRaises(TimeoutError):r.acquire()
+  self.assertTrue(r.close());self.assertFalse(held[0]);self.assertFalse(r.public_unknown)
+
+if __name__=='__main__':unittest.main()

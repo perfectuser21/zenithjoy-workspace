@@ -50,12 +50,12 @@ def perform(phone,mode,renew):
  common={'verification':verified,'runtime_wire_type':'unobserved','requires_user_pad_confirmation':True,'logged_in_verified':False}
  if mode=='probe':return dict(common,status='read_only_probe',foreground=fg,requires_user_scan=False)
  if fg['activity']==QR:return dict(common,status='existing_qr_no_new_request',**phone.capture())
- renew();current=phone.foreground()
+ renew();current=phone.foreground();need(current.get('package')=='com.tencent.mm','foreground_changed')
  if current['activity']=='com.tencent.mm.ui.LauncherUI':return {'status':'already_logged_in_noop','requires_user_scan':False}
  if current.get('package')=='com.tencent.mm' and current['activity']==QR:return dict(common,status='existing_qr_no_new_request',**phone.capture())
  need(current==fg,'foreground_changed');opened=phone.open_qr()  # At most one request; unknown outcome is never retried.
  for _ in range(6):
-  current=phone.foreground()
+  current=phone.foreground();need(current.get('package')=='com.tencent.mm','foreground_changed')
   if current['activity']=='com.tencent.mm.ui.LauncherUI':return {'status':'already_logged_in_noop','requires_user_scan':False}
   if current['activity']==QR:break
   need(current.get('package')=='com.tencent.mm' and current['activity'] in LOGGED_OUT,'navigation_unknown');time.sleep(.2)
@@ -66,7 +66,7 @@ class Runtime:
   need(binding['device_serial']==SERIAL and set(binding['lease_resource_names'])=={SERIAL,INSTANCE},'wrong_device_binding')
   need(sha(SDK.read_bytes())==SDK_SHA,'SDK_changed');sp=importlib.util.spec_from_file_location('frozen_wechat_phone',SDK);m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)
   self.b,self.owner,self.evidence=binding,owner,evidence;self.p=m.Phone(SERIAL,owner,str(evidence),binding['lock_root'],binding['adb_wrapper'],15)
-  self.owned=[];self.attempted=[];self.unknown_acquires=set();self.public=False;self.deadline=0;self.cleanup=[];self.pid=None
+  self.owned=[];self.attempted=[];self.unknown_acquires=set();self.public=False;self.public_attempted=False;self.public_unknown=False;self.deadline=0;self.cleanup=[];self.pid=None
  def api(self,path='',body=None):
   req=urllib.request.Request(BASE+path,data=None if body is None else json.dumps(body).encode(),headers={'Content-Type':'application/json'})
   with urllib.request.urlopen(req,timeout=10) as r:return json.load(r)
@@ -87,9 +87,11 @@ class Runtime:
     raise
    need(r.get('acquired') is True,'lease_busy:'+key);self.owned.append(key)
   need(self.lock('lock-status')=='lock=free','public_lock_busy')
+  self.public_attempted=True
   try:self.lock('lock-acquire-new',self.owner);self.public=True
   except Exception:
-   try:self.p.require_owner();self.public=True
+   self.public_unknown=True
+   try:self.p.require_owner();self.public=True;self.public_unknown=False
    except Exception:pass
    raise
   self.p.require_owner();self.renew()
@@ -102,8 +104,9 @@ class Runtime:
    need((datetime.datetime.fromisoformat(r['expires_at'].replace('Z','+00:00'))-now).total_seconds()>140,'lease_TTL')
   self.deadline=time.monotonic()+120
  def close(self):
-  if self.public:
-   try:self.p.require_owner();self.lock('lock-release-exact',self.owner);need(self.lock('lock-status')=='lock=free','public_release_readback')
+  if self.public or self.public_unknown:
+   try:
+    self.p.require_owner();self.lock('lock-release-exact',self.owner);need(self.lock('lock-status')=='lock=free','public_release_readback');self.public_unknown=False
    except Exception as e:self.cleanup.append('public:'+str(e))
   for key in reversed(self.attempted):
    try:
@@ -139,14 +142,14 @@ class Runtime:
   self.shell('am','start','-W','--user','0','-n','com.tencent.mm/.plugin.login_exdevice.ui.LoginAsExDeviceUI');return True
  def capture(self):
   import xml.etree.ElementTree as ET
-  need(self.foreground()['activity']==QR,'qr_state_changed');png=self.call('exec-out','screencap','-p',raw=True);need(png.startswith(b'\x89PNG\r\n\x1a\n'),'invalid_image')
+  need(self.foreground()=={'package':'com.tencent.mm','activity':QR},'qr_state_changed');png=self.call('exec-out','screencap','-p',raw=True);need(png.startswith(b'\x89PNG\r\n\x1a\n'),'invalid_image')
   target=self.evidence/'qr.png';target.write_bytes(png);target.chmod(0o600)
   remote='/data/local/tmp/wechat-pad-login-'+uuid.uuid4().hex+'.xml';xml=None
   try:self.shell('uiautomator','dump','--compressed',remote);xml=self.call('exec-out','cat',remote,raw=True)
   finally:
    try:self.shell('rm',remote)
    except Exception as e:self.cleanup.append('UI_temp:'+str(e))
-  state=qr_state(xml);need(self.foreground()['activity']==QR,'qr_state_changed')
+  state=qr_state(xml);need(self.foreground()=={'package':'com.tencent.mm','activity':QR},'qr_state_changed')
   return dict(state,qr_image=str(target),qr_visual_verification_required=True)
 
 def main(argv=None):
