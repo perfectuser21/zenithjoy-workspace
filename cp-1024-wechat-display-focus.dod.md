@@ -15,3 +15,5 @@ GP-Anchor: line04/cs_shared_binding keep-green
 Test: node --test services/phone-adb-controller/__tests__/wechat-display-focus.test.mjs
 
 仅手工隔离导航验收；不改微信安装包、数据、显示配置或生产绑定，不上传二维码、UI原件或账号信息。正式代码发布与真实平板登录验收分别记录。
+
+实机后续：用户扫码后报告账号资格提示，登录链路失败/未验收；本修复只通过控制器归属校验与原生扫码页打开验收，不能表述为微信 Pad 登录或同时在线已修复。
