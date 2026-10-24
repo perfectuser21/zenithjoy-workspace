@@ -12,7 +12,8 @@ import {buildPublishRelease} from './deployment-publish-release.mjs';
 const remoteCode=readFileSync(new URL('./deployment-candidate-remote.py',import.meta.url),'utf8');
 const sshOptions=['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none'];
 function ssh(host,phase,command,options){
- try{return execFileSync('ssh',[...sshOptions,host,command],options);}
+ const connect=phase==='presence'?['-o','ConnectTimeout=10']:[];
+ try{return execFileSync('ssh',[...sshOptions,...connect,host,command],options);}
  catch(error){throw Object.assign(Error(`候选 SSH ${host}/${phase}: ${error.code||error.status||'unknown'}`),{cause:error});}
 }
 function remoteCommand(mode,spec){
@@ -20,8 +21,24 @@ function remoteCommand(mode,spec){
  const code=Buffer.from(remoteCode).toString('base64');
  return `python3 -I -c 'import base64;exec(base64.b64decode("${code}"))' ${mode} ${payload}`;
 }
+function presenceOutput(host,spec){
+ const started=performance.now(),deadline=started+30000,command=remoteCommand('presence',spec);
+ for(let attempt=1;attempt<=2;attempt++){
+  const remaining=Math.floor(deadline-performance.now());need(remaining>0,'presence预算耗尽');
+  try{
+   const output=ssh(host,'presence',command,{encoding:'utf8',timeout:remaining,maxBuffer:1024*1024});
+   console.error(JSON.stringify({event:'candidate_presence_attempt',host,attempt,exit_code:0,total_elapsed_ms:Math.ceil(performance.now()-started),stdout_bytes:Buffer.byteLength(output),stdout_digest:digest(output)}));
+   return output;
+  }catch(error){
+   const cause=error.cause,output=cause?.stdout,knownOutput=Buffer.isBuffer(output)||typeof output==='string';
+   console.error(JSON.stringify({event:'candidate_presence_attempt',host,attempt,exit_code:cause?.status??null,error_code:cause?.code??null,signal:cause?.signal??null,total_elapsed_ms:Math.ceil(performance.now()-started),stdout_bytes:knownOutput?Buffer.byteLength(output):null,stdout_digest:knownOutput?digest(output):null}));
+   // presence只读；已返回内容或真实校验拒绝不得被运输恢复覆盖。
+   if(attempt===2||cause?.status!==255||cause.signal!==null||!knownOutput||output.length!==0||performance.now()>=deadline)throw error;
+  }
+ }
+}
 function presence(host,spec){
- const value=JSON.parse(ssh(host,'presence',remoteCommand('presence',spec),{encoding:'utf8',timeout:30000,maxBuffer:1024*1024}));
+ const value=JSON.parse(presenceOutput(host,spec));
  need(value?.protocol==='candidate_presence_v1'&&['present','absent'].includes(value.state),'候选存在状态未知');
  need(digest(Object.keys(value).sort())===digest((value.state==='present'?['protocol','state','identity']:['protocol','state']).sort()),'候选存在协议异常');
  if(value.state==='present')need(digest(value.identity)===digest(spec.identity),'候选身份不符');

@@ -7919,3 +7919,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "35f原后验失败同run只读Skill及受管cleanup，保原FAIL/OSunknown"
+
+- id: candidate-presence-retry
+  path: services/phone-adb-controller/__tests__/candidate-presence-retry.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 原presence总30秒内的真实fakeSSH进程有限重连及失败闭包；不执行真实设备或安装。
