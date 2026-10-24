@@ -20,7 +20,7 @@ test('远端已提交而本地运输失败：同SHA重试不重传，仍真实�
 });
 
 function base(f,host='mmv'){return join(f.top,'remote-'+host,'.local/share/zenithjoy/phone-candidates');}
-function assertPrivateSsh(calls){for(const c of calls)assert.deepEqual(c.args.slice(0,-2),['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none']);}
+function assertPrivateSsh(calls){for(const c of calls){const connect=c.args.at(-1).includes("' presence ")?['-o','ConnectTimeout=10']:[];assert.deepEqual(c.args.slice(0,-2),['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none',...connect]);}}
 test('权威 absent 首次安装原字节，所有SSH原语使用私有连接且完成真实ACK',t=>{
  const f=transportFixture(t),result=f.run('normal');assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(f.calls().filter(c=>c.archive).length,2);assertPrivateSsh(f.calls());
