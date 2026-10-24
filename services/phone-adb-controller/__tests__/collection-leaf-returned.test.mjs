@@ -24,3 +24,10 @@ test('真实nofork code1已返回但旧业务complete仍false',{skip:process.pla
 });
 test('真实code0的requests_returned不是caller布尔',{skip:process.platform!=='darwin'},async t=>{const f=await fixture(t);assert.equal((await f.call('ok')).code,0);const s=await f.p.seal();assert.equal(s.complete,true);assert.equal(s.requests_returned,true);});
 for(const mode of ['slow','signal','fork'])test('真实'+mode+'不能签requests_returned',{skip:process.platform!=='darwin'},async t=>{const f=await fixture(t);const reply=await f.call(mode);assert.notEqual(reply.code,0);if(mode==='fork')assert.equal(reply.code,77,'实际内核拒fork而非fixture未运行');const s=await f.p.seal();if(mode==='slow')assert.ok(s.leaves.some(x=>x.tainted||x.signal),'实际超时/信号必须已发生');assert.equal(s.complete,false);assert.notEqual(s.requests_returned,true);});
+
+for(const mode of ['unclosed','oversize','unknown-nonce'])test('真实socket '+mode+'污染不能签归还',{skip:process.platform!=='darwin'},async t=>{
+ const f=await fixture(t);assert.equal((await f.call('ok')).code,0,'先有真实完整leaf，防空集合掩盖污染');
+ const s=createConnection(f.p.env.WFR_COLLECTION_LEAF_SOCKET);s.on('error',()=>{});await new Promise(r=>s.once('connect',r));
+ if(mode==='unclosed')s.write('{');else s.end(mode==='oversize'?'x'.repeat(33000):JSON.stringify({nonce:'0'.repeat(48),argv:['version']}));
+ await new Promise(r=>setTimeout(r,30));const result=await f.p.seal();assert.equal(result.complete,false);assert.equal(result.requests_returned,false);s.destroy();
+});

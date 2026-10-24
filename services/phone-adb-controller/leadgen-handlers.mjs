@@ -16,7 +16,7 @@ import history from './queued-comment-history.js';
 import {assertCaptureStrategy} from './capture-strategy.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createVideoAction} from './leadgen-video-action.mjs';
-import {startCollectionPhoneScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
+import {startCollectionPhoneScope,startCollectionReturnedScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
 import {startDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
@@ -81,7 +81,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
-        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...discoveryScope?.env,...(collectionScope?.env.DOUYIN_PHONE_TMP_ROOT?{DOUYIN_PHONE_TMP_ROOT:collectionScope.env.DOUYIN_PHONE_TMP_ROOT}:{}),...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
+        env:{...env,DOUYIN_LOCK_PID:String(process.pid),...opts.env,...discoveryScope?.env,...collectionScope?.env,...(unknownFile?{WFR_NATIVE_UNKNOWN_FILE:unknownFile}:{})}});
       collectionScope?.assertEvidence();
       recordDiagnostic(result.stderr||'');
       if(opts.receipt)state.nativeStopUnproven=true;
@@ -94,9 +94,20 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       recordDiagnostic(error.stderr||'');throw error;
     }
   };
-  const checked=async(command,args,opts={})=>{const r=await bounded(command,args,opts);if(r.code!==0)throw nativeFailure(Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`),command,args,opts);return r.stdout;};
+  const checked=async(command,args,opts={})=>{
+    const r=await bounded(command,args,opts);
+    if(r.code!==0){
+      const error=Error(`动作失败 code=${r.code}: ${safeExecutionDiagnostic(r.stderr,env).slice(-500)||command}`);
+      // A known failed readback stays failed. Its live producer must still seal;
+      // only that lifecycle proof, never this exit code, can permit cleanup.
+      if(collectionScope?.purpose==='readback'&&r.code===1)throw error;
+      throw nativeFailure(error,command,args,opts);
+    }
+    return r.stdout;
+  };
   const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
-  const phone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope,checked,nativeReceipt});
+  const phone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope||collectionScope,checked,nativeReceipt});
+  const returnedContext=()=>{const frozen=readFrozen(env.WFR_RUN_DIR),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);return {task_id:taskId??null,run_id:state.run_id,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile,serial,activity:'collection',owner:run,target:frozen.deployment.target,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};};
   const queue=async(op,fields={})=>{if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;};
   const preflight=async()=>{
@@ -298,7 +309,10 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     proof.verified=proof.device.verified&&proof.videos.every(v=>v.verified)&&!proof.claim_receipt_unknown;
     writeFileSync(join(env.WFR_RUN_DIR,'resource-quarantine.json'),JSON.stringify(proof),{mode:0o600});return proof;
   };
-  return {state,preflight,quarantineResources,handoffPhone:async(command,...args)=>{
+  return {state,preflight,quarantineResources,beginCollectionReadback:async evidence=>{
+      collectionScope=await startCollectionReturnedScope({evidence,context:returnedContext(),purpose:'readback'});
+      return async()=>{try{await collectionScope.close();}finally{collectionScope=null;}};
+    },handoffPhone:async(command,...args)=>{
       if(command==='native-audio-evidence'){
         if(args.length||nativeSkillReads>=2)throw Error('SKILL_NATIVE_READBACK_NOT_ALLOWED');
         return phone(command,`${run}-qualification-skill-native${++nativeSkillReads}`);
@@ -460,7 +474,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
       const outcome={sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
         identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};
-      return collectionScope?await collectionScope.finish(outcome):outcome;
+      const finished=collectionScope?await collectionScope.finish(outcome):outcome;
+      if(finished.returned_phone_scope)state.collectionReturnedEvidence=finished;
+      return finished;
       }finally{await collectionScope?.close();collectionScope=null;}},
     scoring:createScoringHandler({env,run,line,state,queue}),
     mark_leads:async()=>{const cursorFile=join(env.WFR_RUN_DIR,`${run}-mark-cursor.json`);
@@ -477,6 +493,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {...r,bridge,mark_leads_readback_failures:readback.failures,bridge_readback_failures:bridgeReadback.failures+(bridge.verified===false?1:0),...(bridge.verified===false||!bridgeReadback.verified?{status:'partial'}:{})};},
     send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
+      if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
       if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence});
       try{
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
@@ -497,7 +514,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {close_app:closed,close_app_attempts:Number(closed),safe_desktop:desktop,safe_desktop_visible:Number(desktop),lock_released:Number(released),no_lock:!locked,failures,
         ...(cleanupProof?{cleanup_readback_verified:Number(desktop),cleanup_readback_digest:cleanupProof.digest}:{}),
         ...(failures.length?{status:'partial'}:{})};
-      }finally{await discoveryScope?.close();discoveryScope=null;}},
+      }finally{try{await discoveryScope?.close();}finally{discoveryScope=null;await collectionScope?.close();collectionScope=null;}}},
   };
 }
 

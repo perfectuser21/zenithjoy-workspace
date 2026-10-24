@@ -6,10 +6,10 @@ import {readFrozen} from './runtime-definition.mjs';
 import {prepareCollectionAcceptanceProbe,validateCollectionAcceptanceProbe,verifiedCollectionPanelFailure,verifyCollectionAcceptanceConsumption} from './collection-acceptance-probe.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
-const proofRecords=new WeakMap(),generations=new WeakMap();
+const proofRecords=new WeakMap(),returnedRecords=new WeakMap(),generations=new WeakMap();
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const required=['process-queued-video.sh','queued-video-lib.sh','wf-limits.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','adb-managed-client.py','adb-existing-route.py','leadgen-handlers.mjs','leadgen-video-action.mjs','leadgen-client.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','queued-comment-history.js','queued-recipient-evidence.js','own-accounts-lib.js','nickname-match-lib.js','line-routes.js','leadgen-db-lib.js','lead-fields-lib.js','config/own-accounts.json','locate-element.py'];
-function failureDigest(result){const {recovery_phone_scope,execution_stopped,...body}=result||{};return sha(JSON.stringify(body));}
+function failureDigest(result){const {recovery_phone_scope,returned_phone_scope,execution_stopped,...body}=result||{};return sha(JSON.stringify(body));}
 const semantic=new Set(['COLLECTION_COMMENT_PANEL_READBACK_FAILED','COLLECTION_VIDEO_IDENTITY_READBACK_FAILED','缺同视频采集完成标记','缺实际重扫计数，不能宣称采集通过','缺实际头像恢复计数，不能宣称采集通过']);
 export const collectionSemanticReason=reason=>semantic.has(reason);
 export function invalidateCollectionPhoneProof(state){generations.set(state,(generations.get(state)||0)+1);}
@@ -58,6 +58,48 @@ export function collectionEvidenceProof(evidence,context){
 export function consumeCollectionPhoneProof(proof,context){
  if(!collectionPhoneProofValid(proof,context))return false;
  proofRecords.get(proof).consumed=true;return true;
+}
+function returnedFresh(r,{active=false}={}){
+ try{
+  if(!r)return false;
+  const i=r.identity,e=r.env,s=r.state,frozen=readFrozen(r.runDir),binding=readBinding(r.runDir,e.WFR_ATTEMPT,frozen);
+  return !s.executionUnknown&&s.account===r.account&&!s.remainingVideoIds?.length
+   &&s.run_id===i.run_id&&s.task_id===i.task_id&&s.source_commit===i.source_commit&&s.run===i.owner&&s.profile===i.profile
+   &&e.WFR_RUN_DIR===r.runDir&&`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT}`===i.run_id&&e.WFR_ATTEMPT===i.attempt&&e.WFR_TAG===i.owner&&e.P===i.profile&&e.SERIAL===i.serial
+   &&binding.id===i.binding_id&&binding.task_id===i.task_id&&binding.run_id===i.run_id
+   &&(active||r.generation===(generations.get(s)||0))&&Date.now()<r.globalDeadline
+   &&frozen.snapshot_sha256===i.snapshot_sha256&&evidenceStillQuiet(r.evidence,r.specification)
+   &&!readdirSync(join(r.runDir,'native-operations')).some(x=>x.endsWith('.unknown'));
+ }catch{return false;}
+}
+// Only the original in-process issuer can supply this capability. Saved JSON is not authority.
+export function collectionReturnedEvidence(evidence,context){
+ const value=evidence?.code_failure??evidence,body=value?.result??value,proof=body?.returned_phone_scope,r=proof&&returnedRecords.get(proof);
+ if(!r||!['available','readback_done'].includes(r.phase)||failureDigest(body)!==r.resultDigest||!context
+  ||!['run_id','task_id','source_commit','activity'].every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!returnedFresh(r))return null;
+ return proof;
+}
+export async function startCollectionReturnedScope({evidence,context,purpose}){
+ const proof=collectionReturnedEvidence(evidence,context),r=proof&&returnedRecords.get(proof);
+ const keys=identityKeys.filter(k=>k!=='deadline_ms');
+ if(!r||!keys.every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!['readback','cleanup'].includes(purpose)
+  ||purpose==='readback'&&r.phase!=='available'||r.state.currentActivity!==(purpose==='cleanup'?'cleanup':'collection'))throw Error('COLLECTION_RETURNED_AUTHORITY_INVALID');
+ const deadline=Math.min(r.state.budgetDeadline,purpose==='readback'?r.identity.deadline_ms:r.globalDeadline);
+ if(!Number.isSafeInteger(deadline)||Date.now()>=deadline)throw Error('COLLECTION_RETURNED_DEADLINE');
+ r.phase=purpose+'_active';
+ const directory=join(r.runDir,'collection-phone-scopes',randomUUID());mkdirSync(directory,{mode:0o700});
+ const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});
+ for(const [name,key]of [['python3','python'],['node','node'],['zsh','zsh']])symlinkSync(pinnedTool(r.specification.executables[key]),join(bin,name));
+ const policyFile=join(directory,'policy.json');writeFileSync(policyFile,JSON.stringify(r.specification.policy),{flag:'wx',mode:0o600});
+ let producer;try{producer=await startCollectionLeafProducer({directory,policy:r.specification.policy,serial:r.identity.serial,deadlineMs:deadline,env:r.env});}catch(error){r.phase='closed';r.state.executionUnknown=true;error.executionStopped=false;throw error;}
+ let closing;
+ return {purpose,zsh:pinnedTool(r.specification.executables.zsh),env:{...r.scopedEnv,...producer.env,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:directory,WFR_COLLECTION_POLICY_FILE:policyFile,WFR_COLLECTION_ACCEPTANCE_INPUT:''},
+  assertEvidence:()=>{if(!returnedFresh(r,{active:true}))throw Error('COLLECTION_RETURNED_SCOPE_CHANGED');},
+  close:()=>closing??=(async()=>{try{
+   const s=await producer.seal();await producer.close();
+   if(!(s.requests_returned||s.empty_requests_returned)||!returnedFresh(r,{active:true}))throw Error('COLLECTION_RETURNED_DRAIN_UNVERIFIED');
+   r.generation=generations.get(r.state)||0;r.phase=purpose==='readback'?'readback_done':'closed';
+  }catch(error){r.phase='closed';r.state.executionUnknown=true;error.executionStopped=false;throw error;}})()};
 }
 function quietRecorders(directory){
  try{
@@ -140,6 +182,16 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
   finish:async result=>{
    const status=await producer.seal();await producer.close();
    const current=readFrozen(env.WFR_RUN_DIR);
+   // A successful Code outcome may still fail independent verification later.
+   // Its returned requests allow only readback and owned cleanup, never replay.
+   if(status.requests_returned&&!state.executionUnknown&&current.snapshot_sha256===frozen.snapshot_sha256&&evidenceStillQuiet(evidence,specification)
+    &&Date.now()<identity.deadline_ms&&!state.remainingVideoIds?.length&&!['partial','failed','paused'].includes(result.status)&&Array.isArray(result.failures)&&result.failures.length===0&&result.videos_processed>0){
+    const originalGlobal=(Number(env.WF_RUN_START_TS)+Number(env.WF_RUN_MAX_SECONDS))*1000;
+    const proof=Object.freeze({protocol:'collection-returned-phone-v1',scope_id:randomUUID()});
+    returnedRecords.set(proof,{identity,state,account:state.account,resultDigest:failureDigest(result),runDir:env.WFR_RUN_DIR,evidence,specification,
+     generation:generations.get(state)||0,phase:'available',globalDeadline:Number.isSafeInteger(originalGlobal)&&originalGlobal>=identity.deadline_ms?originalGlobal:identity.deadline_ms,env,scopedEnv});
+    return {...result,returned_phone_scope:proof};
+   }
    if(!status.complete||state.executionUnknown||current.snapshot_sha256!==frozen.snapshot_sha256||!evidenceStillQuiet(evidence,specification)||Date.now()>=identity.deadline_ms)return result;
    if(result.status!=='partial'||!result.failures?.length||!result.failures.every(x=>collectionSemanticReason(x.reason))||state.remainingVideoIds?.length)return result;
    const proof=Object.freeze({protocol:'collection-phone-scope-v1',scope_id:randomUUID()});

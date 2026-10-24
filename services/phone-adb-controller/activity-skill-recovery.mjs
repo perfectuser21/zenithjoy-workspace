@@ -5,7 +5,7 @@ import {startActivityBroker} from './activity-skill-broker.mjs';
 import {digest as contractDigest} from './runtime-definition.mjs';
 import {safeExecutionDiagnostic,verifiedNativeNotStartedProof} from './leadgen-client.mjs';
 import {isCaptureContractFailure} from './activity-commander.mjs';
-import {collectionEvidenceProof,consumeCollectionPhoneProof} from './collection-phone-scope.mjs';
+import {collectionEvidenceProof,consumeCollectionPhoneProof,collectionReturnedEvidence} from './collection-phone-scope.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const noLaunch=message=>{const e=Error(message);e.executionStopped=true;throw e;};
 // Child prose is diagnostic only. It never satisfies the Activity result contract.
@@ -52,12 +52,15 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
   const phoneProof=collectionEvidenceProof(failure,{run_id:binding.run_id,task_id:binding.task_id??null,source_commit:frozen.deployment.source_commit,activity:activity.key});
   const phoneAuthorized=!!phoneProof&&consumeCollectionPhoneProof(phoneProof,{task_id:binding.task_id??null,run_id:binding.run_id,attempt:env.WFR_ATTEMPT,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,activity:activity.key,owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id});
+  const returned=activity.key==='collection'&&failure.status==='failed'&&failure.verification?.verified===false
+    &&collectionReturnedEvidence(failure,{run_id:binding.run_id,task_id:binding.task_id??null,source_commit:frozen.deployment.source_commit,activity:activity.key});
   const native=handlers.state.nativeStopProof;
   const nativeStopVerified=failure.execution_stopped===true&&failure.external_effect==='unknown'
     &&/\bEXECUTION_START_FAILED\b/.test(failure.error||'')
     &&verifiedNativeNotStartedProof(native,{runDir,operationId:failure.operation_id,runId:binding.run_id,taskId:binding.task_id,profile:env.P,serial:env.SERIAL,owner:env.WFR_TAG,sourceCommit:frozen.deployment.source_commit,activity:activity.key});
-  if(handlers.state.executionUnknown||!phoneAuthorized&&((handlers.state.nativeStopUnproven||native||failure.operation_id)&&!nativeStopVerified||failure.execution_stopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))&&!nativeStopVerified))){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
-  const mode=classifyActivityFailure(activity,failure,{collectionSemantic:phoneAuthorized});
+  if(handlers.state.executionUnknown||!phoneAuthorized&&!returned&&((handlers.state.nativeStopUnproven||native||failure.operation_id)&&!nativeStopVerified||failure.execution_stopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))&&!nativeStopVerified))){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
+  const classified=classifyActivityFailure(activity,failure,{collectionSemantic:phoneAuthorized});
+  const mode=returned&&classified!=='blocked'?'readback_only':classified;
   if(handlers.state.qualificationClaimUnknown)noLaunch('SKILL_HANDOFF_CLAIM_RECEIPT_UNKNOWN');
   if(mode==='blocked')noLaunch(activity.key==='collection'&&failure.status==='partial'?'SKILL_COLLECTION_PARTIAL_READBACK_REQUIRED':'SKILL_HANDOFF_POLICY_BLOCKED');
   const deadline=handlers.state.budgetDeadline;
@@ -70,10 +73,11 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
    ...(policy?{transport_generation:0}:{}),nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,source_commit:frozen.deployment.source_commit,workflow_definition_version_id:frozen.workflow_version.id,
    runtime_snapshot_sha256:frozen.snapshot_sha256,release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,mode,method,broker_host:frozen.deployment.target,broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
    failure:{status:failure.status,attempt:failure.attempt,error:safeExecutionDiagnostic(failure.error||'',env),result_status:failure.result?.status||null,failures:(failure.result?.failures||[]).slice(0,4).map(f=>safeExecutionDiagnostic(JSON.stringify(f),env))}};
-  try{await handlers.handoffHeartbeat?.(activity);}catch(error){noLaunch('SKILL_HANDOFF_RESOURCE_UNVERIFIED: '+error.message);}
+  const closeReadback=returned?await handlers.beginCollectionReadback(failure):undefined;
+  try{await handlers.handoffHeartbeat?.(activity);}catch(error){await closeReadback?.();noLaunch('SKILL_HANDOFF_RESOURCE_UNVERIFIED: '+error.message);}
   let heartbeatError=null,heartbeatBusy=false,heartbeatJob=Promise.resolve();
-  const broker=await startActivityBroker({directory,request,isBlockedError:error=>classifyActivityFailure(activity,{status:'failed',error:String(error.message)})==='blocked',inspect:handlers.handoffContext,resume:execute,phone:handlers.handoffPhone,
-   authorize:async q=> !heartbeatError&&q.transport_generation===request.transport_generation&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:10000})).authorized===true});
+  let broker;try{broker=await startActivityBroker({directory,request,isBlockedError:error=>classifyActivityFailure(activity,{status:'failed',error:String(error.message)})==='blocked',inspect:handlers.handoffContext,resume:execute,phone:handlers.handoffPhone,
+   authorize:async q=> !heartbeatError&&q.transport_generation===request.transport_generation&&(await rpc({kind:'activity_skill_authority',request},{timeoutMs:10000})).authorized===true});}catch(error){await closeReadback?.();throw error;}
   const heartbeat=setInterval(()=>{if(heartbeatBusy||heartbeatError)return;heartbeatBusy=true;heartbeatJob=Promise.resolve().then(()=>handlers.handoffHeartbeat?.(activity)).catch(error=>{heartbeatError=error;}).finally(()=>{heartbeatBusy=false;});},60000);heartbeat.unref();
   let stopped=false,nativeUnknown=false;
   const nativeKnown=()=>{const actual=broker.getResult();nativeUnknown||=!!(handlers.state.executionUnknown||actual.execution_unknown||actual.result?.execution_stopped===false);if(nativeUnknown)stopped=false;return !nativeUnknown;};
@@ -101,6 +105,7 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
    clearInterval(heartbeat);await heartbeatJob;nativeKnown();
    if(!stopped)return {status:'failed',execution_stopped:false,reason:'Skill或原操作终止未知',skill_receipt:receipt};
    if(heartbeatError)return {status:'failed',execution_stopped:true,reason:'Skill执行期间原资源续期未验证',skill_receipt:receipt};
+   if(returned)return {status:'failed',execution_stopped:true,reason:'原独立验收未通过；只读接手不重做已提交业务',recovery_outcome:'verification_readback_only',skill_receipt:receipt};
    if(receipt.status!=='ok'||!actual.reserved||!actual.result||verificationFailed){
     const blocked=skillBlockedDiagnostic(receipt,request,env);
     return {status:'partial',execution_stopped:true,reason:blocked?'Skill接手后阻断: '+blocked.reason:'Skill未交付当前Activity实际执行结果',recovery_outcome:blocked?'skill_blocked':'skill_result_missing',skill_receipt:receipt};
@@ -108,6 +113,6 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
    const result=actual.result;
    return {status:['failed','partial','paused'].includes(result.status)?'partial':'completed',result,execution_stopped:true,skill_receipt:receipt};
   }catch(error){error.executionStopped=stopped&&nativeKnown()&&error.executionStopped!==false;throw error;}
-  finally{clearInterval(heartbeat);await heartbeatJob;await broker.close();}
+  finally{clearInterval(heartbeat);await heartbeatJob;try{await broker.close();}finally{await closeReadback?.();}}
  };
 }
