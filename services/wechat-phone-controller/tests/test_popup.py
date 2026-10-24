@@ -87,3 +87,36 @@ class PopupTests(unittest.TestCase):
             with self.assertRaisesRegex(Refused,'lock_not_held'):p.require_owner()
             owner=Path(d)/'SERIAL.lock'/'owner';owner.parent.mkdir();owner.write_text('other')
             with self.assertRaisesRegex(Refused,'exact_owner_mismatch'):p.require_owner()
+
+class PreservedSafetyTests(unittest.TestCase):
+    def test_bounded_timeout_kills_and_reaps_without_retry(self):
+        import subprocess
+        from unittest.mock import patch
+        from wechat_phone import bounded
+        process=Mock(pid=12345)
+        process.communicate.side_effect=[subprocess.TimeoutExpired(['adb'],1),(b'',b'')]
+        with patch('wechat_phone.subprocess.Popen',return_value=process) as start, patch('wechat_phone.os.killpg') as kill:
+            with self.assertRaises(subprocess.TimeoutExpired):bounded(['adb'],1)
+            start.assert_called_once();kill.assert_called_once()
+            self.assertEqual(process.communicate.call_count,2)
+
+    def test_cli_does_not_add_send_reply_publish_operations(self):
+        import subprocess
+        import sys
+        import wechat_phone
+        for operation in ('send','reply','publish'):
+            result=subprocess.run([sys.executable,wechat_phone.__file__,'--owner','owner','--evidence-dir','/tmp/evidence',operation],capture_output=True)
+            self.assertEqual(result.returncode,2)
+            self.assertIn(b'invalid choice',result.stderr)
+
+    def test_busy_guard_refuses_and_does_not_release_owner(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as d:
+            owner=Path(d)/'SERIAL.lock'/'owner';owner.parent.mkdir();owner.write_text('owner\n')
+            guard=Path(d)/'SERIAL.guard'
+            with guard.open('w') as held:
+                fcntl.flock(held,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                p=Phone('SERIAL','owner',d,d)
+                with self.assertRaisesRegex(Refused,'serial_guard_busy'):
+                    with p.guard():self.fail('guard entered')
+            self.assertEqual(owner.read_text(),'owner\n')
