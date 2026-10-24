@@ -1,0 +1,9 @@
+{
+  "task": "35feba2a-bc38-46a3-bf91-1373cf5cd967",
+  "run": "cicd5db9_102_0353r_20261024085034",
+  "video_id": "7699316353698753663",
+  "source_commit": "5db9df4589b8653fe2f8bd8d6f37f0bc70070a9a",
+  "original_ui_sha256": "83f88615f51a9edaf93ef8f5f69adb063fa8dd6b6333a8e524724b0be8998bdb",
+  "identity_sha256": "9afa58134e96c44daaf693fee8cff0fe2e3e04ec4a5424191b96c8ca7ef6a657",
+  "classification": "真实可点父按钮零评论占位；同desc不可点子节点保留；原run失败和0评论不改变"
+}
