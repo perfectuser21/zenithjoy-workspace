@@ -7935,3 +7935,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 570b真实两VID输入按limit1选定工作集；未领旁VID不得虚partial，领取未知及真实中断仍拒。
+
+- id: discovery-phase-budget
+  path: services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 101真实发现及派发预算同源，续锁后tap尾部复核；不连接设备。

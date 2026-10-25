@@ -1,11 +1,9 @@
-# 修复102已认领工作集边界
-
-Task: 1f48feed-3426-4ae2-90a4-6e5ee1e50275
-
+# 修复101发现阶段预算接缝
+Task: 1ec5bba4-3aea-4b79-a49c-3eb43c11901d
 GP-Anchor: line02/keyword_acquisition keep-green
 
-570b真实接收2个新VID、按授权仅领取1个并按原v14判为rejected，另一未领VID却被记入本run collection未完，制造partial并阻断正常空批次收尾。仅移除未领输入对本run未完的错误贡献；原政策、已领未完成、未知领取、预算中断与OS unknown守卫保持。
+b29f首屏4候选仅处理2后，Activity仍余约616–625秒却被661秒粗门槛拒。原661仅公开动作默认上界之和，漏续锁与额外元数据费用，不能作为完整原子闭包。
 
-永久回归先提交：真实createHandlers/intake/qualification/collection/invokeNativeActivity/runWorkflow，2VID输入+limit1的rejected0=0与唯一matched视频已证零评论完成；真正已领未完、领取unknown和预算错误仍拒。零评论路径不计正向采评论通过。
+仅101 collect将实际执行phase caps与nominal准入同表：cards120s/link300s不变，续锁10s/关键词回读10s/tap30s，sleep cap3s。正常单遍名义合计503s；真实tap续锁后必须fresh核343s尾部。不足仍结果页拒；所有动作继续按原绝对工作截止截短。503不含所有重定位/启动/同步核验/PG费用，不保证整捕获完成。
 
-不包括101预算修复、手机/业务库/新采样、103/DM/生产或新cleanup授权。源码检查点自10:51起20–30分钟。
+保Activity900/global1200/cleanup120/ADB route2秒、身份/锁/unknown/fork及原政策；不手机、不恢复业务数据、不103/DM/生产。本Task源码检查点30分钟，独审后正常PR完整CI和隔离candidate，实机另验。
