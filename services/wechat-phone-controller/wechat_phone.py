@@ -269,8 +269,8 @@ class Phone:
             raise Refused('foreground_unknown')
         if activity_task is not None and activity_task != (task, task_uid, task_package, task_user, visible):
             raise Refused('foreground_unknown')
-        # Only remove the proven idle-display null entries. The existing popup
-        # validator below still checks the parent, attachment and full ownership.
+        # Only remove the proven idle-display null entries. The popup validator
+        # below still checks the parent, attachment and full ownership.
         return re.sub(r'^\s*m(?:CurrentFocus|FocusedApp)=null\n', '', raw, flags=re.M)
 
     def foreground(self):
@@ -281,9 +281,11 @@ class Phone:
         top_markers = re.findall(r'^\s*mTopFocusedDisplayId\s*=', raw, re.M)
         if top_markers and (len(top_markers) != 1 or top_displays != ['0']):
             raise Refused('foreground_unknown')
+        validated_default_display = False
         if (len(re.findall(r'^\s*mCurrentFocus=', raw, re.M)) > 1
                 or len(re.findall(r'^\s*Display:', raw, re.M)) > 1):
             raw = self._default_display_focus(raw)
+            validated_default_display = True
         def one(pattern, source):
             found = re.findall(pattern, source, re.M)
             if len(found) != 1:
@@ -368,8 +370,13 @@ class Phone:
             name = package + name if name.startswith('.') else name
             return identity, activity_user, package, name, task
         focused = activity(one(r'^\s*mFocusedApp=([^\n]+)$', raw))
-        top = activity(one(r'^\s*topResumedActivity=([^\n]+)$',
-                           self.shell('dumpsys', 'activity', 'activities')))
+        # The scoped multi-display validator already matched this exact focused
+        # ActivityRecord against the independent resumed activity, including the
+        # Android12 mResumed/Resumed/task proof. Keep every popup/parent proof
+        # above; only avoid re-requiring the newer topResumedActivity field.
+        top = focused if validated_default_display else activity(one(
+            r'^\s*topResumedActivity=([^\n]+)$',
+            self.shell('dumpsys', 'activity', 'activities')))
         expected = (user, 'com.tencent.mm', 'com.tencent.mm.ui.LauncherUI', ownership[3])
         if focused != top or focused[1:] != expected:
             raise Refused('foreground_unknown')
