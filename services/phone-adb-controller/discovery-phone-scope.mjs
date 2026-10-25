@@ -9,9 +9,12 @@ import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
 const records=new WeakMap(),epochs=new WeakMap();
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const fail=reason=>{throw Error('DISCOVERY_PHONE_'+reason);};
-// 原handler默认120s、取链300s；续锁也是原checked默认120s。只作准入，不增加限时。
-export const discoveryCommandBudgetMs=command=>(command==='current-video-link'?300:command==='search-video-tab'?180:120)*1000;
-export const discoveryCaptureBudgetMs=120000+120000+1000+300000+120000;
+// 仅101 collect实际执行与准入共用；tap30s是新操作cap，不是截图20s的完整上界。
+const discoveryCommandSeconds=Object.freeze({'current-video-link':300,'search-video-tab':180,'lock-refresh':10,'search-kw-matches':10,'tap-evidence':30});
+export const discoveryCommandBudgetMs=command=>(Object.hasOwn(discoveryCommandSeconds,command)?discoveryCommandSeconds[command]:120)*1000;
+export const discoveryTapBudgetMs=discoveryCommandBudgetMs('tap-evidence')+3000+discoveryCommandBudgetMs('lock-refresh')+discoveryCommandBudgetMs('current-video-link');
+// 无重定位正常单遍的名义cap和；额外核验/PG/启动时间仍消费原绝对截止。
+export const discoveryCaptureBudgetMs=4*discoveryCommandBudgetMs('lock-refresh')+discoveryCommandBudgetMs('search-video-cards')+discoveryCommandBudgetMs('search-kw-matches')+discoveryTapBudgetMs-discoveryCommandBudgetMs('lock-refresh');
 const digest=result=>{const {cleanup_phone_scope,execution_stopped,...body}=result||{};return hash(JSON.stringify(body));};
 const required=['leadgen-discovery-action.mjs','leadgen-phone-action.mjs','leadgen-handlers.mjs','leadgen-workflow.mjs','leadgen-discovery.mjs','activity-commander.mjs','discovery-phone-scope.mjs','collection-leaf-producer.mjs','adb-managed-client.py','adb-existing-route.py','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','search-video-tab.py','discovery-cleanup-readback.mjs','discovery-metrics.js'];
 export function defaultDiscoveryPhoneScope({root,env}){

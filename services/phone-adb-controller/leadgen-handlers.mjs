@@ -73,11 +73,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const nativeFailure=(error,command,args,opts)=>applyNativeFailure(error,command,args,opts,state);
   const bounded=async(command,args,opts={})=>{
     invalidateCollectionPhoneProof(state);
+    let dispatchBudgetRejected=false;
     const unknownFile=opts.receipt?join(env.WFR_RUN_DIR,'native-operations',opts.receipt.operationId+'.unknown'):null;
     if(opts.receipt)state.nativeStopProof=null;
     try {
       collectionScope?.assertEvidence();
       discoveryScope?.assert();
+      if(opts.discoveryMinimumRemainingMs&&state.budgetDeadline-Date.now()<opts.discoveryMinimumRemainingMs){dispatchBudgetRejected=true;throw Error('budget_exhausted');}
       const result=await execute(command,args,{...opts,
         timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
           state.budgetDeadline?state.budgetDeadline-Date.now():Number(env.WF_RUN_MAX_SECONDS||1800)*1000)),
@@ -90,6 +92,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(!opts.discoveryLockRelease)discoveryScope?.assert();
       return result;
     } catch(error) {
+      if(dispatchBudgetRejected)throw error; // 尚未调用execute；不伪造停止证明，也不污染原unknown。
       nativeFailure(error,command,args,opts);
       recordDiagnostic(error.stderr||'');throw error;
     }
