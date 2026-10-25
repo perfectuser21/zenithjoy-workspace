@@ -29,6 +29,24 @@ export function assertCommentSampling(snapshot,env){
  if(canonical(requested)!==canonical(fixed))throw Error('评论采样请求与本run冻结输入不符');
  return fixed;
 }
+// 可选101首屏检查配额；它与成功入库数量是两个不同上限。
+export function validateDiscoveryInput(value){
+ const keys=['schema_version','workflow_key','run_tag','profile','serial','line','max_candidates','max_screens','source_kind','sources','source_sha256'];
+ if(!value||Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k))||value.schema_version!==1||value.workflow_key!=='douyin_video_discovery'||!['run_tag','profile','serial','line'].every(k=>/^[A-Za-z0-9_-]+$/.test(value[k]||''))||!Number.isSafeInteger(value.max_candidates)||value.max_candidates<1||value.max_candidates>1000||value.max_screens!==1||value.source_kind!=='keyword'||!Array.isArray(value.sources)||value.sources.length!==1||typeof value.sources[0]!=='string'||!value.sources[0].trim()||/[\r\n]/.test(value.sources[0])||!/^[a-f0-9]{64}$/.test(value.source_sha256||''))throw Error('DISCOVERY_INPUT_INVALID');
+ return value;
+}
+export function discoveryInput(env){
+ if(!Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_CANDIDATES'))return null;
+ if(!/^[1-9][0-9]{0,3}$/.test(String(env.LEADGEN_DISCOVERY_MAX_CANDIDATES))||env.LEADGEN_MAX_SCREENS!=='1'||env.LEADGEN_SOURCE_KIND!=='keyword'||!env.LEADGEN_SOURCES_FILE)throw Error('DISCOVERY_INPUT_INVALID');
+ const bytes=readFileSync(env.LEADGEN_SOURCES_FILE);if(bytes.length>10000)throw Error('DISCOVERY_INPUT_INVALID');
+ return validateDiscoveryInput({schema_version:1,workflow_key:env.WF_BRAIN_WORKFLOW,run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,max_candidates:Number(env.LEADGEN_DISCOVERY_MAX_CANDIDATES),max_screens:1,source_kind:'keyword',sources:bytes.toString('utf8').split('\n').filter(Boolean),source_sha256:digest(bytes)});
+}
+export function assertDiscoveryInput(snapshot,env){
+ const requested=discoveryInput(env),fixed=snapshot.discovery_input||null;
+ if(fixed)validateDiscoveryInput(fixed);
+ if(canonical(requested)!==canonical(fixed))throw Error('DISCOVERY_INPUT_MISMATCH');
+ return fixed;
+}
 export function localPath(root, relative) {
   if (!relative || relative.startsWith('/') || relative.split('/').includes('..')) throw Error('非法部署路径');
   const p=realpathSync(resolve(root,relative)); const base=realpathSync(root);
@@ -74,6 +92,8 @@ export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir
  try{lstatSync(marker);throw Error('整包部署或恢复未完成，拒绝新运行冻结');}catch(error){if(error.code!=='ENOENT')throw error;}
 }
 export async function freezeDefinition(o) {
+  if(o.discoveryInput){const d=validateDiscoveryInput(o.discoveryInput);if(d.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==d[k==='tag'?'run_tag':k]))throw Error('DISCOVERY_INPUT_FREEZE_SCOPE_INVALID');}
+  if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_input||null)!==canonical(o.discoveryInput||null))throw Error('DISCOVERY_INPUT_RESUME_MISMATCH');
   if(o.producerDescriptor){const d=validateProducerDescriptor(o.producerDescriptor);if(o.workflowKey!=='douyin_video_processing'||o.runIdentity?.profile!==d.profile||o.runIdentity?.serial!==d.serial||o.samplingInput?.source_run!==d.run_tag)throw Error('PRODUCER_DESCRIPTOR_FREEZE_SCOPE_INVALID');}
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).producer_descriptor||null)!==canonical(o.producerDescriptor||null))throw Error('PRODUCER_DESCRIPTOR_RESUME_MISMATCH');
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_phone_scope||null)!==canonical(o.discoveryPhoneScope||null))throw Error('discovery phone scope续跑输入与冻结请求不符');
@@ -148,7 +168,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+    ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});
