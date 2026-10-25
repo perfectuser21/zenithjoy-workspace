@@ -1,16 +1,27 @@
-// 原phone闭包的窄拆分；命令、锁、owner及原限时语义保持。
+// 101 collect预算与派发共用；其它流程命令、锁及既有限时保持。
 import {join} from 'node:path';
-import {discoveryCommandBudgetMs} from './discovery-phone-scope.mjs';
+import {discoveryCommandBudgetMs,discoveryTapBudgetMs} from './discovery-phone-scope.mjs';
 export function createPhoneAction({env,state,profile,run,isLocked,isClosed,getScope,checked,nativeReceipt}){
   return async(command,...args)=>{
     const locked=isLocked(),scope=getScope();
     const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
-    if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&state.currentActivity==='collect_videos'){
+    const discoveryCollect=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&state.currentActivity==='collect_videos';
+    if(discoveryCollect){
       if(isClosed())throw Error('DISCOVERY_PHONE_COLLECT_CLOSED');
-      const required=discoveryCommandBudgetMs(command)+(locked&&!['lock-refresh','lock-release'].includes(command)?discoveryCommandBudgetMs('lock-refresh'):0);
+      const required=(command==='tap-evidence'?discoveryTapBudgetMs:discoveryCommandBudgetMs(command))+(locked&&!['lock-refresh','lock-release'].includes(command)?discoveryCommandBudgetMs('lock-refresh'):0);
       if(!Number.isSafeInteger(state.budgetDeadline)||state.budgetDeadline-Date.now()<required)throw Error('budget_exhausted');
     }
-    const control=(argv,opts)=>scope?checked(scope.zsh,['-f',ctl,...argv],opts):checked(ctl,argv,opts);
+    const control=(argv,opts)=>{
+      const action=argv[argv[2]==='--lock-owner'?4:2];
+      if(discoveryCollect){
+        opts={...opts,maxDurationS:discoveryCommandBudgetMs(action)/1000};
+        if(action==='tap-evidence'){
+          if(state.budgetDeadline-Date.now()<discoveryTapBudgetMs)throw Error('budget_exhausted');
+          opts.discoveryMinimumRemainingMs=discoveryTapBudgetMs;
+        }
+      }
+      return scope?checked(scope.zsh,['-f',ctl,...argv],opts):checked(ctl,argv,opts);
+    };
     if(!locked&&!['lock-acquire','preflight'].includes(command))throw Error('设备操作未持本批锁');
     if(locked&&!['lock-refresh','lock-release'].includes(command)){
       const held=await control(['--profile',profile,'lock-refresh',run],{receipt:nativeReceipt()});

@@ -1,11 +1,8 @@
 # 验收
-
-Task: 1f48feed-3426-4ae2-90a4-6e5ee1e50275
-
+Task: 1ec5bba4-3aea-4b79-a49c-3eb43c11901d
 GP-Anchor: line02/keyword_acquisition keep-green
 
-- [ ] 永久RED先提交，真实2VID/claim1/rejected0不因未领VID误partial。
-  Test: manual:node --test services/phone-adb-controller/__tests__/collection-claimed-workset.test.mjs
-- [ ] 唯一matched视频已证零评论完成不受旁未领输入影响；已领未完成/claimunknown/budget/OSunknown反例保持。
-  Test: manual:node --test services/phone-adb-controller/__tests__/collection-claimed-workset.test.mjs
-- [ ] 独审、正式完整CI与正常候选另验，不以本地测试冒业务通过。
+- [ ] 正常剩余616秒可按真实phase执行下一候选；预算定义与checked参数一致。
+  Test: manual:node --test services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs
+- [ ] 续锁/重定位耗时后tap尾部不足不得点击；原未知/真正截止/其它workflow限时保持。
+  Test: manual:node --test services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs services/phone-adb-controller/__tests__/phone-actions-in-lock.test.mjs
