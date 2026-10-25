@@ -337,7 +337,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         if(!Array.isArray(leased))throw Error('资格领取缺合法原租约列表');
         qualificationClaimed=true;state.qualificationClaimUnknown=false;
       }
-      state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
+      // 未领取的输入只作诊断；本run工作集以实际租约为准，不扩大认领上限。
+      state.unclaimedIntakeVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
       const failures=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0,recordingsUnverified=0;
       for(const v of leased){
         if(qualificationProgress.get(v.video_id)?.settled)continue;
@@ -471,7 +472,6 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         else {collected++;leased=leased.filter(p=>p.video_id!==v.video_id);}
         if(!partial)collectionProgress.set(v.video_id,{sampled:quota,counts:counts().map((value,i)=>value-before[i]),rows:[...old.consumed,...rows].map(r=>({...(r.id?{id:r.id}:{}),douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl||v.video_url})),sampleReceipt:sampleInput?sampleReceipts.at(-1):null});
       }catch(error){failures.push({video_id:v.video_id,reason:error.message});if(state.executionUnknown||error.message==='COLLECTION_ACCEPTANCE_PROBE_ABORTED')break;}}
-      if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
       const outcome={sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
         identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};
       const finished=collectionScope?await collectionScope.finish(outcome):outcome;

@@ -7927,3 +7927,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 原presence总30秒内的真实fakeSSH进程有限重连及失败闭包；不执行真实设备或安装。
+
+- id: collection-claimed-workset
+  path: services/phone-adb-controller/__tests__/collection-claimed-workset.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 570b真实两VID输入按limit1选定工作集；未领旁VID不得虚partial，领取未知及真实中断仍拒。

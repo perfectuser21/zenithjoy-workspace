@@ -1,0 +1,84 @@
+{
+  "origin_task": "570ba749-0cdb-41ea-a490-ecf67018d8ed",
+  "origin_evidence": "570b-artifact-index.json / actual two-video intake and single rejected qualification",
+  "source_video_ids": [
+    "7700207675396880586",
+    "7700140623701611674"
+  ],
+  "company": {
+    "company_id": "ef8e14b0-4018-4e54-bc7a-866e51a0ce0b",
+    "tenant_id": "a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61",
+    "version": 14,
+    "policy_id": "jinoshengyuan-existing-acquisition-rules-v1"
+  },
+  "reason": "jev:rejected(confidence=0.98)",
+  "recording": {
+    "version": 2,
+    "run": "cicd2fa_102_newsrc_20261025_103741",
+    "video_id": "7700207675396880586",
+    "evidence_id": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record",
+    "playback_proof_kind": "native_audio",
+    "native_audio": {
+      "start": {
+        "state": "started",
+        "evidence_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record-playback-start.audio.txt",
+        "evidence_sha256": "60c7e24a4cd37359f22d7d578d6d15cc1e4d9053057514af3abe7d1987345137",
+        "package_uid_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record-playback-start.package-uid.txt",
+        "package_uid_sha256": "cb0a1c68d977fa44a975fb294750a4fb4b1c4d3b9e73c5d426d06319e3cd2cd4",
+        "uid_owners_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record-playback-start.uid-owners.txt",
+        "uid_owners_sha256": "cb0a1c68d977fa44a975fb294750a4fb4b1c4d3b9e73c5d426d06319e3cd2cd4",
+        "uid": 10061.0,
+        "pid": 21938.0,
+        "piid": 4711.0,
+        "foreign_started": 0.0,
+        "package_uid_verified": true
+      },
+      "end": {
+        "state": "started",
+        "evidence_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record-playback-end.audio.txt",
+        "evidence_sha256": "50b1712341c09d2cb5ce8c2446ed2d9327f0019e7f8b6d6e7c69763acf6a6310",
+        "package_uid_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record-playback-end.package-uid.txt",
+        "package_uid_sha256": "cb0a1c68d977fa44a975fb294750a4fb4b1c4d3b9e73c5d426d06319e3cd2cd4",
+        "uid_owners_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record-playback-end.uid-owners.txt",
+        "uid_owners_sha256": "cb0a1c68d977fa44a975fb294750a4fb4b1c4d3b9e73c5d426d06319e3cd2cd4",
+        "uid": 10061.0,
+        "pid": 21938.0,
+        "piid": 4711.0,
+        "foreign_started": 0.0,
+        "package_uid_verified": true
+      }
+    },
+    "media_volume": 1,
+    "media_volume_verified": true,
+    "playback_verified": true,
+    "playback_package": "com.ss.android.ugc.aweme",
+    "audio_status": "usable",
+    "mean_volume_db": -10.9,
+    "capture_runtime": {
+      "client_sha256": "952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d",
+      "server_sha256": "8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e",
+      "evidence_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record.capture-runtime.json",
+      "evidence_sha256": "efcddc4f10ee5ba0d837231d660594148064d7ac4c09b00518c9a56fe43f387b"
+    },
+    "capture_runtime_end": {
+      "client_sha256": "952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d",
+      "server_sha256": "8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e",
+      "evidence_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record.capture-runtime.json",
+      "evidence_sha256": "efcddc4f10ee5ba0d837231d660594148064d7ac4c09b00518c9a56fe43f387b"
+    },
+    "capture_audio_mode": "playback_dup",
+    "capture_audio_sdk": 36,
+    "capture_audio_required": true,
+    "capture_audio_sdk_evidence_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record.capture-sdk.txt",
+    "capture_audio_sdk_evidence_sha256": "a4b2c5db15348c29451e18b8307e5ef81625ea638e807935f39ceaa8d9ac7758",
+    "capture_audio_end": {
+      "mode": "playback_dup",
+      "sdk": 36,
+      "required": true,
+      "sdk_evidence_file": "cicd2fa_102_newsrc_20261025_103741-v7700207675396880586-qualification-record.capture-sdk.txt",
+      "sdk_evidence_sha256": "a4b2c5db15348c29451e18b8307e5ef81625ea638e807935f39ceaa8d9ac7758"
+    },
+    "audio_streams": 1,
+    "capture_audio_verified": true
+  }
+}
