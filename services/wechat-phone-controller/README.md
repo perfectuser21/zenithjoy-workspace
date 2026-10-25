@@ -49,3 +49,5 @@ python3 services/wechat-phone-controller/wechat_pad_login.py open
 安装应由审核者将同一固定候选复制至不可变本地release路径并用`~/.local/bin/wechat-pad-login` shim调用，再独立实机验证；工作树测试通过不等于已部署。重复调用每次自建资源，不读取旧诊断state.json或硬编码PID。
 
 前台前提：当前云手机须已在微信已识别登录页或二维码页；桌面、未知弹窗（含更多菜单）会拒绝，先由人恢复正常微信页面。工具不会自动清菜单或模拟返回。二维码过期/获取失败仅报告需人工刷新，不会自动换码。
+
+Android12多屏原生LauncherUI弹窗：默认显示屏校验已独立匹配同一focused ActivityRecord与mResumed/Resumed/RootTask/Supervisor证明时，后续继续验证完整弹窗父窗口和归属，复用该活动证明，不重复要求Android12缺失的topResumedActivity字段。单屏仍执行原有topResumed检查。本修复不扩展未知弹窗或其他activity支持。

@@ -144,3 +144,39 @@ class DisplayTests(unittest.TestCase):
         self.assertEqual(self.phone(raw,POPUP_TOP).foreground()['activity'],'com.tencent.mm.ui.LauncherUI')
         for old,new in [('mParentWindow=Window{ccc','mParentWindow=Window{eee'),('mLayoutAttached=true','mLayoutAttached=false'),('ty=APPLICATION_PANEL','ty=APPLICATION_OVERLAY')]:
             with self.subTest(old=old),self.assertRaises(Refused):self.phone(raw.replace(old,new,1),POPUP_TOP).foreground()
+
+    def test_android12_owned_popup_uses_scoped_resumed_proof_once(self):
+        # Scrubbed native LauncherUI + popup structure; Android12 has no
+        # topResumedActivity but independently scoped mResumed/Resumed/task.
+        display=DISPLAY[:DISPLAY.index('WINDOW MANAGER WINDOWS')]
+        display=display.replace('Window{bbb u0 com.tencent.mm/com.tencent.mm.plugin.account.ui.LoginUI}', 'Window{aaa u0 PopupWindow:bbb}')
+        display=display.replace('ActivityRecord{aaa u0 com.tencent.mm/.plugin.account.ui.LoginUI t169}', 'ActivityRecord{fff u0 com.tencent.mm/.ui.LauncherUI t1653}')
+        display=display.replace('#169 type=standard A=10088:com.tencent.mm','#1653 type=standard A=10322:com.tencent.mm')
+        raw=display+'WINDOW MANAGER WINDOWS (dumpsys window windows)\n'+POPUP[:POPUP.index('  mCurrentFocus=')]+'  mTopFocusedDisplayId=0\n'
+        top=ANDROID12_TOP.replace('ActivityRecord{aaa u0 com.tencent.mm/.plugin.account.ui.LoginUI t169}', 'ActivityRecord{fff u0 com.tencent.mm/.ui.LauncherUI t1653}').replace('RootTask #169:', 'RootTask #1653:').replace('#169 type=standard A=10088:', '#1653 type=standard A=10322:')
+        phone=self.phone(raw,top)
+        self.assertEqual(phone.foreground(), {'package':'com.tencent.mm','activity':'com.tencent.mm.ui.LauncherUI'})
+        self.assertEqual(phone.shell.call_count,2)
+        for old,new in [
+            ('mParentWindow=Window{ccc','mParentWindow=Window{eee'),
+            ('mLayoutAttached=true','mLayoutAttached=false'),
+            ('ty=APPLICATION_PANEL','ty=APPLICATION_OVERLAY'),
+            ('ty=BASE_APPLICATION','ty=APPLICATION_PANEL'),
+            ('mOwnerUid=10322','mOwnerUid=10088'),
+            ('mSession=Session{abc 123:u0a10322}','mSession=Session{eee 123:u0a10322}'),
+            ('rootTaskId=1653','rootTaskId=99'),
+            ('mPackageName=com.tencent.mm','mPackageName=foreign.app'),
+            ('mDisplayId=0 rootTaskId','mDisplayId=2 rootTaskId'),
+        ]:
+            with self.subTest(window=old),self.assertRaises(Refused):
+                self.phone(raw.replace(old,new,1),top).foreground()
+        for old,new in [
+            ('    Resumed: ActivityRecord{fff','    Resumed: ActivityRecord{eee'),
+            ('RootTask #1653:', 'RootTask #99:'),
+            ('A=10322:com.tencent.mm','A=10322:foreign.app'),
+            ('Display #0','Display #3'),
+        ]:
+            with self.subTest(activity=old),self.assertRaises(Refused):
+                self.phone(raw,top.replace(old,new,1)).foreground()
+        # The original single-display fallback still requires topResumedActivity.
+        with self.assertRaises(Refused):self.phone(POPUP,top).foreground()
