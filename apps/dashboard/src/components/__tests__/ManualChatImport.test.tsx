@@ -156,4 +156,102 @@ describe('手动聊天补录', () => {
     expect(screen.queryByRole('button', { name: '确认保存' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('聊天记录')).toHaveValue('新的原文');
   });
+
+  it.each([401, 403])('预览返回%s时明确提示身份或权限，保留原文且不保存', async status => {
+    render(<ManualChatImport {...props} />); form();
+    fetchMock.mockImplementation(async (url: string) => url.endsWith('/preview')
+      ? response({ error: { message: 'denied' } }, status) : response({ records: [] }));
+    fireEvent.click(screen.getByRole('button', { name: '整理并预览' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(status === 401 ? '登录已失效' : '没有此客户的补录权限');
+    expect(screen.getByLabelText('聊天记录')).toHaveValue(text);
+    expect(fetchMock.mock.calls.some(c => c[0].endsWith('/commit'))).toBe(false);
+  });
+
+  it('切换客户后回到原客户，旧请求结束不清除当前请求的等待状态', async () => {
+    let resolveOld!: (v: Response) => void;
+    let resolveNew!: (v: Response) => void;
+    let count = 0;
+    fetchMock.mockImplementation((url: string) => url.endsWith('/preview')
+      ? new Promise<Response>(resolve => { if (count++ === 0) resolveOld = resolve; else resolveNew = resolve; })
+      : Promise.resolve(response({ records: [] })));
+    const { rerender } = render(<ManualChatImport {...props} />); form();
+    fireEvent.click(screen.getByRole('button', { name: '整理并预览' }));
+    rerender(<ManualChatImport {...props} customerId="13" />);
+    rerender(<ManualChatImport {...props} />); form();
+    fireEvent.click(screen.getByRole('button', { name: '整理并预览' }));
+    await act(async () => resolveOld(response(preview())));
+    expect(screen.getByRole('button', { name: '正在整理…' })).toBeDisabled();
+    expect(screen.queryByLabelText('整理摘要')).not.toBeInTheDocument();
+    await act(async () => resolveNew(response(preview())));
+    expect(await screen.findByLabelText('整理摘要')).toHaveValue(analysis.summary);
+  });
+
+  it('A切到B再回A，旧保存成功不清空新预览或解除新保存状态', async () => {
+    let resolveOld!: (v: Response) => void;
+    let resolveNew!: (v: Response) => void;
+    let count = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith('/preview')) return Promise.resolve(response(preview()));
+      if (url.endsWith('/commit')) return new Promise<Response>(resolve => { if (count++ === 0) resolveOld = resolve; else resolveNew = resolve; });
+      return Promise.resolve(response({ records: [] }));
+    });
+    const { rerender } = render(<ManualChatImport {...props} />); form(); await generate();
+    fireEvent.click(screen.getByRole('button', { name: '确认保存' }));
+    rerender(<ManualChatImport {...props} customerId="13" />);
+    rerender(<ManualChatImport {...props} />); form(); await generate();
+    fireEvent.click(screen.getByRole('button', { name: '确认保存' }));
+    await act(async () => resolveOld(response({ record, duplicate: false })));
+    expect(screen.queryByText(/保存成功/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存中…' })).toBeDisabled();
+    expect(screen.getByLabelText('整理摘要')).toBeInTheDocument();
+    await act(async () => resolveNew(response({ record, duplicate: false })));
+    await screen.findByText(/保存成功/);
+  });
+
+  it('A切到B再回A，旧保存结果查询不覆盖新预览', async () => {
+    let resolveLookup!: (v: Response) => void;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.endsWith('/preview')) return Promise.resolve(response(preview()));
+      if (url.endsWith('/commit')) return Promise.reject(new TypeError('response lost'));
+      if (url.includes('/requests/')) return new Promise<Response>(resolve => { resolveLookup = resolve; });
+      return Promise.resolve(response({ records: [] }));
+    });
+    const { rerender } = render(<ManualChatImport {...props} />); form(); await generate();
+    fireEvent.click(screen.getByRole('button', { name: '确认保存' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(c => c[0].includes('/requests/'))).toBe(true));
+    rerender(<ManualChatImport {...props} customerId="13" />);
+    rerender(<ManualChatImport {...props} />); form(); await generate();
+    await act(async () => resolveLookup(response({ record })));
+    expect(screen.queryByText(/保存成功/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('整理摘要')).toHaveValue(analysis.summary);
+    expect(screen.getByRole('button', { name: '确认保存' })).toBeEnabled();
+  });
+
+  it('A切到B再回A，旧详情响应不自行展开旧记录', async () => {
+    let resolveDetail!: (v: Response) => void;
+    fetchMock.mockImplementation((url: string) => url.includes('/import-1?')
+      ? new Promise<Response>(resolve => { resolveDetail = resolve; }) : Promise.resolve(response({ records: [record] })));
+    const { rerender } = render(<ManualChatImport {...props} />);
+    fireEvent.click(await screen.findByRole('button', { name: /查看原文/ }));
+    rerender(<ManualChatImport {...props} customerId="13" />);
+    rerender(<ManualChatImport {...props} />);
+    await act(async () => resolveDetail(response({ record })));
+    expect(screen.queryByTestId('crm-manual-history-record')).not.toBeInTheDocument();
+  });
+
+  it('刷新回读后展示全部已确认建议、原文依据和不确定项', async () => {
+    const detailed = { ...record, analysis: { ...analysis,
+      quotes: [{ text: '报价待确认', evidence: '周五前报价', speaker: '小李', occurred_at: null }],
+      commitments: [{ text: '未确认承诺', evidence: '周五前报价', speaker: null, occurred_at: null }],
+      next_actions: [{ text: '准备报价单', evidence: '周五前报价', speaker: null, occurred_at: null }] } };
+    fetchMock.mockImplementation(async (url: string) => response(url.includes('/import-1?') ? { record: detailed } : { records: [{ ...record, analysis: { summary: analysis.summary } }] }));
+    render(<ManualChatImport {...props} />);
+    fireEvent.click(await screen.findByRole('button', { name: /查看原文/ }));
+    await screen.findByText('100件样品');
+    expect(screen.getByText('需要100件样品')).toBeInTheDocument();
+    expect(screen.getByText('报价待确认')).toBeInTheDocument();
+    expect(screen.getByText('未确认承诺')).toBeInTheDocument();
+    expect(screen.getByText('准备报价单')).toBeInTheDocument();
+    expect(screen.getByText('尚未确认价格')).toBeInTheDocument();
+  });
 });

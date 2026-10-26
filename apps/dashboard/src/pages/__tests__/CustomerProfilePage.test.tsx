@@ -11,7 +11,7 @@
  * 修复后：正确读 contactKey → 加载 profile → 渲染客户名 → PASS。
  */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CustomerProfilePage from '../CustomerProfilePage';
 
 beforeAll(() => {
@@ -38,10 +38,11 @@ vi.mock('../../contexts/AuthContext', () => ({
 }));
 
 // 关键：路由定义的参数名是 contactKey（不是 contact）。用真实参数名 mock。
+const route = vi.hoisted(() => ({ contactKey: '崔华', query: '' }));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
-  useParams: () => ({ contactKey: '崔华' }),
-  useSearchParams: () => [new URLSearchParams(''), vi.fn()],
+  useParams: () => ({ contactKey: route.contactKey }),
+  useSearchParams: () => [new URLSearchParams(route.query), vi.fn()],
 }));
 
 function jsonRes(body: unknown, status = 200) {
@@ -67,6 +68,7 @@ const PROFILE = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  route.contactKey = '崔华'; route.query = '';
   global.fetch = vi.fn().mockImplementation((url: string) => {
     if (url.includes('/profile')) return Promise.resolve(jsonRes({ profile: PROFILE }));
     return Promise.resolve(jsonRes({}));
@@ -93,5 +95,35 @@ describe('CustomerProfilePage [回归：路由参数 contactKey]', () => {
       );
       expect(called).toBe(true);
     });
+  });
+
+  it.each(['success', 'unauthorized', 'failure'])('切换客户后丢弃旧资料请求的%s响应，不将A客户身份带入B补录', async outcome => {
+    let resolveA!: (v: Response) => void;
+    let rejectA!: (e: Error) => void;
+    route.contactKey = '客户A'; route.query = 'cs=cs-a';
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes(encodeURIComponent('客户A') + '/profile')) return new Promise<Response>((resolve, reject) => { resolveA = resolve; rejectA = reject; });
+      if (url.includes('/profile')) return Promise.resolve(jsonRes({ profile: { ...PROFILE, customer_id: '22', name: '客户B', contact: '客户B' } }));
+      if (url.endsWith('/preview')) return Promise.resolve(jsonRes({ error: { message: '只验证目标' } }, 503));
+      return Promise.resolve(jsonRes({ records: [] }));
+    });
+    global.fetch = fetchMock as typeof fetch;
+    const { rerender } = render(<CustomerProfilePage />);
+    route.contactKey = '客户B'; route.query = 'cs=cs-b';
+    rerender(<CustomerProfilePage />);
+    await waitFor(() => expect(screen.getByTestId('crm-profile-name')).toHaveTextContent('客户B'));
+    await act(async () => {
+      if (outcome === 'failure') rejectA(new Error('旧A失败'));
+      else resolveA(outcome === 'unauthorized' ? jsonRes({}, 401) : jsonRes({ profile: { ...PROFILE, customer_id: '11', name: '客户A' } }));
+    });
+    expect(screen.getByTestId('crm-profile-name')).toHaveTextContent('客户B');
+    expect(screen.queryByTestId('crm-profile-auth-expired')).not.toBeInTheDocument();
+    expect(screen.queryByText('错误：旧A失败')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '补录聊天记录' }));
+    fireEvent.change(screen.getByLabelText('聊天记录'), { target: { value: '需要样品' } });
+    fireEvent.click(screen.getByRole('button', { name: '整理并预览' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(c => c[0].endsWith('/preview'))).toBe(true));
+    const call = fetchMock.mock.calls.find(c => c[0].endsWith('/preview')) as unknown as [string, RequestInit];
+    expect(JSON.parse(call[1].body as string)).toMatchObject({ customer_id: '22', cs_wechat_id: 'cs-b' });
   });
 });
