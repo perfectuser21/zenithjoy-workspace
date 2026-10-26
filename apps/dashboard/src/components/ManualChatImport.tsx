@@ -97,7 +97,10 @@ function readFileBytes(file: File): Promise<ArrayBuffer> {
 function materialError(value: string): string | null {
   if (!value.trim()) return '请粘贴聊天文字或上传 TXT';
   if (new TextEncoder().encode(value).byteLength > MAX_BYTES) return '单份内容超过 32 KiB，请分批补录';
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\ufffd]/u.test(value)) return '内容含无法读取的字符，请使用 UTF-8 纯文本';
+  if ([...value].some(character => {
+    const code = character.charCodeAt(0);
+    return (code < 32 && ![9, 10, 13].includes(code)) || code === 127 || code === 65533;
+  })) return '内容含无法读取的字符，请使用 UTF-8 纯文本';
   return null;
 }
 function message(error: unknown): string { return error instanceof Error ? error.message : '操作失败，请重试'; }

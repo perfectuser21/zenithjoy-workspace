@@ -27,7 +27,8 @@ export function validateManualMaterial(input:unknown):ManualMaterial {
  if(typeof value.channel_name!=='string'||!value.channel_name.trim()||value.channel_name.length>300)throw new ManualHistoryError('CHANNEL_REQUIRED');
  if(typeof value.text!=='string'||!value.text.trim())throw new ManualHistoryError('TEXT_REQUIRED');
  if(Buffer.byteLength(value.text,'utf8')>MAX_BYTES())throw new ManualHistoryError('TEXT_TOO_LARGE',413,`聊天文字最多 ${MAX_BYTES()} 字节，请分批补录`);
- if(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\ufffd]/u.test(value.text)||/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(value.text))throw new ManualHistoryError('INVALID_TEXT_ENCODING');
+ const unsupportedCharacter=[...value.text].some(character=>{const code=character.charCodeAt(0);return (code<32&&![9,10,13].includes(code))||code===127||code===65533;});
+ if(unsupportedCharacter||/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(value.text))throw new ManualHistoryError('INVALID_TEXT_ENCODING');
  if(value.source_account!==undefined&&value.source_account!==null&&(typeof value.source_account!=='string'||value.source_account.length>300))throw new ManualHistoryError('INVALID_SOURCE_ACCOUNT');
  return {source_type:value.source_type,channel_name:value.channel_name.trim(),source_account:typeof value.source_account==='string'?value.source_account.trim()||null:null,text:value.text};
 }
@@ -41,7 +42,13 @@ export function materialDigest(value:ManualMaterial):string{return digest(value)
 export function parseManualAnalysis(raw:unknown,text:string):ManualAnalysis {
  let input=raw;
  if(typeof raw==='string'){
-  try{input=JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{throw new ManualHistoryError('INVALID_AI_ANALYSIS',502);}
+  try{
+   let encoded=raw.trim();
+   if(encoded.slice(0,7).toLowerCase()==='```json')encoded=encoded.slice(7).trim();
+   else if(encoded.startsWith('```'))encoded=encoded.slice(3).trim();
+   if(encoded.endsWith('```'))encoded=encoded.slice(0,-3).trim();
+   input=JSON.parse(encoded);
+  }catch{throw new ManualHistoryError('INVALID_AI_ANALYSIS',502);}
  }
  const parsed=analysisSchema.safeParse(input);
  if(!parsed.success)throw new ManualHistoryError('INVALID_AI_ANALYSIS',502);

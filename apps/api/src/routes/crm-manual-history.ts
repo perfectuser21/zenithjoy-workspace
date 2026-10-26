@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type RequestHandler } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import pool from '../db/connection';
 import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from '../auth';
@@ -26,6 +27,10 @@ function sessionAuthentication(db:ManualDb):RequestHandler{
 export function createManualHistoryRouter({db=pool,generate,authenticate,now}:Dependencies={}){
  const router=Router(),service=new ManualHistoryService(db,generate,now);
  router.use(authenticate??sessionAuthentication(db));
+ const rateKey=(req:Request)=>`${req.tenantId??'none'}:${req.feishuUserId??'anonymous'}`;
+ const limitMessage={error:{code:'IMPORT_RATE_LIMIT',message:'操作较频繁，请稍后再试'}};
+ router.use(rateLimit({windowMs:60000,limit:120,keyGenerator:rateKey,message:limitMessage,standardHeaders:'draft-7',legacyHeaders:false}));
+ const previewLimit=rateLimit({windowMs:60000,limit:20,keyGenerator:rateKey,message:limitMessage,standardHeaders:'draft-7',legacyHeaders:false});
  async function scope(req:Request,write=false):Promise<ManualScope>{
   if(!req.tenantId||!req.feishuUserId)throw new ManualHistoryError('UNAUTHORIZED',401,'请登录客户后台后补录');
   if(write&&!['owner','admin'].includes(req.tenantRole??''))throw new ManualHistoryError('NOT_ADMIN',403,'仅管理员可补录聊天记录');
@@ -43,7 +48,7 @@ export function createManualHistoryRouter({db=pool,generate,authenticate,now}:De
    return res.status(500).json({error:{code:'MANUAL_HISTORY_FAILED',message:'补录暂时失败，请保留输入后重试'}});
   });
  };
- router.post('/preview',handle(async(req,res)=>{
+ router.post('/preview',previewLimit,handle(async(req,res)=>{
   const target=await scope(req,true),body=req.body??{};
   if(Object.keys(body).some(k=>!['customer_id','cs_wechat_id','source_type','channel_name','source_account','text'].includes(k)))throw new ManualHistoryError('UNKNOWN_PREVIEW_FIELDS');
   const material={source_type:body.source_type,channel_name:body.channel_name,source_account:body.source_account,text:body.text};

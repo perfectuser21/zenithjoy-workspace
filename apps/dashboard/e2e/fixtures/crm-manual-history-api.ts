@@ -1,4 +1,5 @@
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 import type { Pool } from 'pg';
 import { createManualHistoryRouter } from '../../../api/src/routes/crm-manual-history';
 import runtimePool from '../../../api/src/db/connection';
@@ -18,6 +19,7 @@ export function createFixture(db: Pool) {
     next();
   };
   const app = express();
+  app.use(rateLimit({ windowMs: 60000, limit: 500, standardHeaders: 'draft-7', legacyHeaders: false }));
   app.use(express.json({ limit: '128kb' }));
   app.get('/api/crm/customers/:contact/profile', authenticate, async (req, res) => {
     const r = await db.query('SELECT id,contact FROM zenithjoy.crm_customers WHERE tenant_id=$1 AND contact=$2', [req.tenantId, req.params.contact]);
