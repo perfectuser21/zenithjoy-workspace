@@ -7951,3 +7951,43 @@ agent_suite:
   status: active
   product: AI员工
   note: 真发现循环raw上限、重复与首屏超额、禁重定位及同run不重置；不连接设备。
+
+- id: crm-manual-history-material
+  path: apps/api/src/services/crm/__tests__/manual-history.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: 手动历史原文、证据约束、未知时间及跨操作员精确去重，不伪造微信事件。
+
+- id: crm-manual-history-api
+  path: apps/api/src/routes/__tests__/crm-manual-history.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: 目标客户和账号授权先于模型和读写，回执查询也须授权。
+
+- id: crm-manual-history-session
+  path: apps/api/src/routes/__tests__/crm-manual-history-session.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: 仅真实cookie会话，不信任Feishu身份头或Bearer旁路，提交人由服务端取得。
+
+- id: crm-manual-history-provider-redaction
+  path: apps/api/src/llm/__tests__/openrouter-sensitive-error.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: 补录模型错误显式脱敏且保留其他调用者的既有行为。
+
+- id: crm-manual-history-ui
+  path: apps/dashboard/src/components/__tests__/ManualChatImport.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: 粘贴及UTF8文件、确认保存、响应未知恢复、切换客户竞态与原文和建议回读。

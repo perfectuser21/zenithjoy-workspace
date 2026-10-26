@@ -22,9 +22,11 @@ import {
   requireServiceCredential,
 } from '../middleware/cs-config-guard';
 import { buildCustomerRoster } from '../services/crm/customer-roster';
+import manualHistoryRouter from './crm-manual-history';
 import type { RosterScanRow, TakeoverMode } from '../services/crm/customer-roster';
 
 const router = Router();
+router.use('/manual-history', manualHistoryRouter);
 
 router.post('/analysis/profile',requireServiceCredential,async(req:Request,res:Response)=>{
   const {tenant_id,cs_wechat_id,customer_wechat_id,contact}=req.body??{};
@@ -943,14 +945,14 @@ router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Re
     // 带 cs 时收窄到该客服机那一行（同 contact 跨客服机理论可重，带 cs 更精确）。
     const custParams: unknown[] = csWechatId ? [tenantId, contact, csWechatId] : [tenantId, contact];
     const custRes = await pool.query(
-      `SELECT contact, wechat_id, status, source, last_seen_at, updated_at
+      `SELECT contact, wechat_id, status, source, last_seen_at, updated_at, id
          FROM zenithjoy.crm_customers
         WHERE tenant_id = $1::uuid AND contact = $2${csWechatId ? ' AND cs_wechat_id = $3' : ''}
         ORDER BY updated_at DESC LIMIT 1`,
       custParams,
     );
     const cust = custRes.rows?.[0] as
-      | { wechat_id: string | null; status: string; source?: string; last_seen_at: Date | null; updated_at: Date }
+      | { id: string | number; wechat_id: string | null; status: string; source?: string; last_seen_at: Date | null; updated_at: Date }
       | undefined;
 
     const profileManaged=async()=>{
@@ -963,7 +965,7 @@ router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Re
     // 新安卓已识别稳定客户后只读该租户/账号/客户scope；不混入旧昵称记忆。
     if (csWechatId && cust?.wechat_id) {
       const scoped=await readScopedCrmProfile({tenantId,csWechatId,customerWechatId:cust.wechat_id},contact,msgLimit,cust.source==='android_event');
-      if(scoped)return res.json({profile:{name:contact,contact,wechat_id:cust.wechat_id,
+      if(scoped)return res.json({profile:{name:contact,contact,customer_id:cust.id == null ? null : String(cust.id),wechat_id:cust.wechat_id,
         status:normalizeProfileStatus(cust.status),managed:await profileManaged(),...scoped,timeline:[],dailies:[]}});
     }
     // 长期记忆融合 summary（cs_memory 三表按 tenant_id text × contact 隔离，与 tenant-memory.ts 同模式）
@@ -1035,6 +1037,7 @@ router.get('/customers/:contactKey/profile', requireCsReadAccess, async (req: Re
 
     return res.json({
       profile: {
+        customer_id: cust?.id == null ? null : String(cust.id),
         name: contact,
         contact,
         wechat_id: (cust?.wechat_id as string | null) ?? null,

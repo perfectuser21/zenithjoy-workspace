@@ -6,6 +6,8 @@ const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
 export interface CallOpenRouterArgs {
   /** 有界后台分析；不传保持现有调用行为。 */
   timeoutMs?: number;
+  /** Sensitive imports must not persist provider bodies or error text in the audit. */
+  sanitizedError?: boolean;
   prompt: string;
   purpose: string;
   maxTokens?: number;
@@ -123,7 +125,7 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`LLM ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(args.sanitizedError ? 'LLM_PROVIDER_FAILED' : `LLM ${res.status}: ${text.slice(0, 200)}`);
     }
     const data = (await res.json()) as {
       // reasoning_content：推理模型（如 ToAPI deepseek-v4-flash）把思考放这里，content 才是答案。
@@ -138,7 +140,8 @@ export async function callOpenRouter(args: CallOpenRouterArgs): Promise<CallOpen
     actualModel = data.model || model;
     success = true;
   } catch (e) {
-    errorMessage = (e as Error).message;
+    errorMessage = args.sanitizedError ? 'LLM_PROVIDER_FAILED' : (e as Error).message;
+    if (args.sanitizedError) throw new Error('LLM_PROVIDER_FAILED');
     throw e;
   } finally {
     await writeAudit({

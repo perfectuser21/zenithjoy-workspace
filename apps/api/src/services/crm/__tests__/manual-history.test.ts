@@ -23,3 +23,28 @@ describe('manual history material and grounded analysis',()=>{
   expect(materialDigest({...a,channel_name:'另一个群'})).not.toBe(materialDigest(a));
  });
 });
+
+describe('confirmed materials are shared in their target scope, request receipts remain per operator',()=>{
+ it('returns the first confirmed row for another operator instead of replacing actor or analysis',async()=>{
+  const {vi}=await import('vitest');
+  const {ManualHistoryService}=await import('../manual-history');
+  const {randomUUID}=await import('node:crypto');
+  const previewId=randomUUID(),version=randomUUID();
+  const existing={id:randomUUID(),customer_id:'1',created_by:'first-operator',analysis,created_at:new Date('2026-01-01T00:00:00Z')};
+  const client={query:vi.fn(),release:vi.fn()};
+  client.query.mockResolvedValueOnce({rows:[]}) // BEGIN
+   .mockResolvedValueOnce({rows:[]}) // request lock
+   .mockResolvedValueOnce({rows:[]}) // no request for this actor
+   .mockResolvedValueOnce({rows:[{id:previewId,version,expires_at:new Date(Date.now()+60000),raw_text:text,source_type:'group',channel_name:'业务群',source_account:null,material_hash:'a'.repeat(64)}]})
+   .mockResolvedValueOnce({rows:[]}) // another operator already confirmed same material
+   .mockResolvedValueOnce({rows:[existing]})
+   .mockResolvedValueOnce({rows:[]}) // receipt
+   .mockResolvedValueOnce({rows:[]}); // COMMIT
+  const db={query:vi.fn(),connect:vi.fn().mockResolvedValue(client)};
+  const service=new ManualHistoryService(db as any);
+  const result=await service.commit({tenantId:randomUUID(),csWechatId:'cs-a',customerId:'1',actor:'second-operator'},{preview_id:previewId,preview_version:version,request_id:randomUUID(),confirmed_result:analysis});
+  expect(result.duplicate).toBe(true);expect(result.record.created_by).toBe('first-operator');expect(result.record.analysis).toEqual(analysis);
+  expect(client.query.mock.calls[5][1]).not.toContain('second-operator');
+  expect(client.query.mock.calls[6][1]).toContain('second-operator');
+ });
+});
