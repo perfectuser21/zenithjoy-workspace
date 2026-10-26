@@ -140,7 +140,7 @@ export default function ManualChatImport({ customerId, csWechatId, customerName 
   const enabled = Boolean(customerId && csWechatId);
   // A -> B -> A must create three different scopes, even though the last pair
   // has the same customer/account strings as the first pair.
-  const scopeEpoch = useMemo(() => Symbol('manual-history-scope'), [customerId, csWechatId]);
+  const scopeEpoch = useMemo(() => Symbol(`${customerId ?? ''}:${csWechatId}`), [customerId, csWechatId]);
   const scopeRef = useRef<symbol | null>(scopeEpoch);
   scopeRef.current = scopeEpoch;
   const revision = useRef(0);

@@ -151,7 +151,7 @@ export default function CustomerProfilePage() {
   const csWechatId = searchParams.get('cs') ?? '';
   const nameHint = searchParams.get('name') ?? '';
 
-  const profileScope = useMemo(() => Symbol('customer-profile-scope'), [contact, csWechatId]);
+  const profileScope = useMemo(() => Symbol(`${contact ?? ''}:${csWechatId}`), [contact, csWechatId]);
   const activeScope = useRef<symbol | null>(profileScope);
   activeScope.current = profileScope;
   const activeRequest = useRef<symbol | null>(null);
