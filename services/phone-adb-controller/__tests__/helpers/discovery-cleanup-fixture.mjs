@@ -39,7 +39,7 @@ case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_
  const hash=b=>createHash('sha256').update(b).digest('hex');f.frozen.files={};
  const visit=dir=>{for(const n of readdirSync(dir)){const p=join(dir,n);if(statSync(p).isDirectory())visit(p);else f.frozen.files['runtime/'+p.slice(f.runtime.length+1)]=hash(readFileSync(p));}};visit(f.runtime);
  if(attemptLimit!==undefined){
-  f.env.LEADGEN_MAX_SCREENS='1';f.env.LEADGEN_DISCOVERY_MAX_ATTEMPTS=String(attemptLimit);f.env.LEADGEN_LIMIT='0';
+  f.env.LEADGEN_SOURCE_KIND='keyword';f.env.LEADGEN_MAX_SCREENS='1';f.env.LEADGEN_DISCOVERY_MAX_ATTEMPTS=String(attemptLimit);f.env.LEADGEN_LIMIT='0';
   f.env.LEADGEN_SOURCES_FILE=join(f.d,'keywords.txt');writeFileSync(f.env.LEADGEN_SOURCES_FILE,'AI\n');
   f.frozen.discovery_input={schema_version:2,workflow_key:'douyin_video_discovery',run_tag:f.env.WFR_TAG,profile:f.env.P,serial:f.env.SERIAL,line:f.env.LEADGEN_LINE,max_attempts:attemptLimit,max_screens:1,source_kind:'keyword',sources:['AI'],source_sha256:hash(Buffer.from('AI\n'))};
   const controller=join(f.runtime,'fixture-discovery-controller.cjs');

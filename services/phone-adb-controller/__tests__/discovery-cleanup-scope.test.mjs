@@ -149,6 +149,7 @@ test('v2首屏4仅尝试2条重复VID，真实scope归还后正常cleanup且不�
  const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');
  try{
   const out=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:f.context,handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},commander:async()=>({action:'continue'}),record:async()=>{},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+  t.diagnostic(JSON.stringify({status:out.status,activities:out.results.map(r=>({activity:r.activity,status:r.status,error:r.error,counts:r.result?.counts}))}));
   assert.equal(out.status,'completed');const p=JSON.parse(readFileSync(join(f.d,'discovery-progress.json')));
   assert.equal(p.counts.cards,4);assert.equal(p.counts.attempted,2);assert.equal(p.counts.persisted,1);assert.equal(f.stored.length,2);
   assert.equal(p.stop_reason,'attempt_limit_reached');assert.equal(p.all_results_scanned,false);assert.equal(p.request.max_attempts,2);
