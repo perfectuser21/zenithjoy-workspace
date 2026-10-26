@@ -13,6 +13,12 @@ function app(authenticated=true){
 const body={customer_id:'1',cs_wechat_id:'cs-a',source_type:'group',channel_name:'业务群',text:'客户：需要样品'};
 beforeEach(()=>{vi.clearAllMocks();query.mockResolvedValue({rows:[],rowCount:0});});
 describe('manual history auth must precede model and persistence',()=>{
+ it('bounds authenticated preview requests before target database access',async()=>{
+  const server=app();
+  for(let i=0;i<20;i++)expect((await request(server).post('/api/crm/manual-history/preview').send(body)).status).toBe(404);
+  expect((await request(server).post('/api/crm/manual-history/preview').send(body)).status).toBe(429);
+  expect(query).toHaveBeenCalledTimes(20);expect(generate).not.toHaveBeenCalled();
+ });
  it('rejects absent current user instead of accepting a supplied actor',async()=>{
   const r=await request(app(false)).post('/api/crm/manual-history/preview').send({...body,actor:'user-a'});
   expect(r.status).toBe(401);expect(generate).not.toHaveBeenCalled();expect(query).not.toHaveBeenCalled();

@@ -3,6 +3,10 @@ import { parseManualAnalysis, validateManualMaterial, materialDigest, ManualHist
 const text = '客户甲：预算5000元。\n同事乙：周五提供样品。';
 const analysis = { summary:'预算和样品安排', needs:[],quotes:[{text:'预算5000元',evidence:'预算5000元',speaker:'客户甲',occurred_at:null}],commitments:[],next_actions:[],uncertainties:['日期未知'] };
 describe('manual history material and grounded analysis',()=>{
+ it('accepts JSON code fences without unbounded whitespace regular expressions',()=>{
+  expect(parseManualAnalysis('```json\n'+JSON.stringify(analysis)+'\n```',text)).toEqual(analysis);
+  expect(()=>parseManualAnalysis('```json\n'+'\t'.repeat(10000)+'not-json',text)).toThrow(ManualHistoryError);
+ });
  it('preserves raw text and unknown metadata without inventing event identity',()=>{
   const value=validateManualMaterial({source_type:'group',channel_name:'业务沟通',text});
   expect(value.text).toBe(text);expect(value.source_account).toBeNull();
