@@ -48,10 +48,17 @@ for(const mode of ['wrong-run','wrong-session','foreign-consistent'])test('真�
 });
 test('原失败仅保固定诊断字段不泄漏原stderr/argv，且写入Activity事件',async t=>{
  const r=run(t,'exit');assert.equal(r.error.diagnostic.phase,'after');assert.equal(r.error.diagnostic.run_id,scope.run_id);
- assert.equal(r.error.diagnostic.status,'transport_error');assert.ok(Number.isFinite(r.error.diagnostic.elapsed_ms));assert.equal(r.error.diagnostic.timeout_ms,60000);
- assert.deepEqual(Object.keys(r.error.diagnostic).sort(),['activity','elapsed_ms','phase','run_id','status','timeout_ms']);
+ assert.match(r.error.diagnostic.gateway_run_id,/^[0-9a-f-]{36}$/);assert.equal(r.error.diagnostic.status,'transport_error');assert.ok(Number.isFinite(r.error.diagnostic.elapsed_ms));assert.equal(r.error.diagnostic.timeout_ms,60000);
+ assert.deepEqual(Object.keys(r.error.diagnostic).sort(),['activity','elapsed_ms','gateway_run_id','phase','run_id','status','timeout_ms']);
  const {runActivity}=await import('../activity-commander.mjs');const events=[];
  const e=Error('COMMANDER_UNAVAILABLE');e.executionStopped=false;e.commanderDiagnostic=r.error.diagnostic;
  await assert.rejects(runActivity({activity:{key:'cleanup'},context:scope,commander:async()=>{throw e;},execute:async()=>assert.fail('must not start'),record:async e=>events.push(e)}));
  assert.deepEqual(events[0].commander_diagnostic,r.error.diagnostic);
+});
+
+test('跨RPC通用错误仍在原owner账本留下本次固定诊断旁证，绝不作为returned',t=>{
+ const r=run(t,'exit');assert.equal(r.available,false);assert.equal(r.diagnostics.length,1);
+ const d=r.diagnostics[0];assert.match(d.name,/\\.[0-9a-f-]{36}\\.diagnostic\\.json$/);
+ assert.equal(d.value.protocol,'commander-diagnostic-v1');assert.deepEqual(d.value.scope,scope);
+ assert.deepEqual(d.value.diagnostic,r.error.diagnostic);assert.doesNotMatch(JSON.stringify(d),/sensitive-sentinel|--params|message|environment/);
 });
