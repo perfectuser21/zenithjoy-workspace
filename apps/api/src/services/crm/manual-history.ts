@@ -60,8 +60,9 @@ export function parseManualAnalysis(raw:unknown,text:string):ManualAnalysis {
  return parsed.data;
 }
 const scopeArgs=(scope:ManualScope)=>[scope.tenantId,scope.csWechatId,scope.customerId,scope.actor];
-function publicRow(row:Record<string,any>){return {...row,customer_id:String(row.customer_id),created_at:new Date(row.created_at).toISOString()};}
-function previewRow(row:Record<string,any>){return {id:row.id,version:row.version,expires_at:new Date(row.expires_at).toISOString(),raw_text:row.raw_text,source_type:row.source_type,channel_name:row.channel_name,source_account:row.source_account,analysis:row.analysis};}
+function rowTimestamp(value:unknown):string{return (value instanceof Date?value:new Date(String(value))).toISOString();}
+function publicRow(row:Record<string,unknown>){return {...row,customer_id:String(row.customer_id),created_at:rowTimestamp(row.created_at)};}
+function previewRow(row:Record<string,unknown>){return {id:row.id,version:row.version,expires_at:rowTimestamp(row.expires_at),raw_text:row.raw_text,source_type:row.source_type,channel_name:row.channel_name,source_account:row.source_account,analysis:row.analysis};}
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function requireManualUuid(value:unknown):string{if(typeof value!=='string'||!UUID.test(value))throw new ManualHistoryError('INVALID_REQUEST_ID');return value.toLowerCase();}
 export class ManualHistoryService {

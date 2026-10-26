@@ -1,3 +1,4 @@
+import type { ManualDb } from '../manual-history';
 import { describe, expect, it } from 'vitest';
 import { parseManualAnalysis, validateManualMaterial, materialDigest, ManualHistoryError } from '../manual-history';
 const text = '客户甲：预算5000元。\n同事乙：周五提供样品。';
@@ -45,7 +46,7 @@ describe('confirmed materials are shared in their target scope, request receipts
    .mockResolvedValueOnce({rows:[]}) // receipt
    .mockResolvedValueOnce({rows:[]}); // COMMIT
   const db={query:vi.fn(),connect:vi.fn().mockResolvedValue(client)};
-  const service=new ManualHistoryService(db as any);
+  const service=new ManualHistoryService(db as unknown as ManualDb);
   const result=await service.commit({tenantId:randomUUID(),csWechatId:'cs-a',customerId:'1',actor:'second-operator'},{preview_id:previewId,preview_version:version,request_id:randomUUID(),confirmed_result:analysis});
   expect(result.duplicate).toBe(true);expect(result.record.created_by).toBe('first-operator');expect(result.record.analysis).toEqual(analysis);
   expect(client.query.mock.calls[5][1]).not.toContain('second-operator');

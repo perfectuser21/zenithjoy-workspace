@@ -1,3 +1,4 @@
+import type { ManualDb } from '../../services/crm/manual-history';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
@@ -8,7 +9,7 @@ const query=vi.fn(),generate=vi.fn();
 function app(authenticated=true){
  const app=express();app.use(express.json());
  app.use((_q,r,n)=>{if(authenticated){Object.assign(_q,{tenantId:tenant,feishuUserId:'user-a',tenantRole:'owner'});}n();});
- app.use('/api/crm/manual-history',createManualHistoryRouter({db:{query,connect:vi.fn()} as any,generate,authenticate:(_q,_r,n)=>n()}));return app;
+ app.use('/api/crm/manual-history',createManualHistoryRouter({db:{query,connect:vi.fn()} as unknown as ManualDb,generate,authenticate:(_q,_r,n)=>n()}));return app;
 }
 const body={customer_id:'1',cs_wechat_id:'cs-a',source_type:'group',channel_name:'业务群',text:'客户：需要样品'};
 beforeEach(()=>{vi.clearAllMocks();query.mockResolvedValue({rows:[],rowCount:0});});
