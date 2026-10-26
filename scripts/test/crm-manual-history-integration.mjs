@@ -7,15 +7,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
-import { build } from 'esbuild';
-import { Pool } from 'pg';
-import { chromium } from '@playwright/test';
-import { createServer as createViteServer } from 'vite';
 
 if (process.env.SMOKE_ALLOW_WRITE !== '1') {
   console.log('SKIP: set SMOKE_ALLOW_WRITE=1 to use disposable local data. No requests made.');
   process.exit(0);
 }
+const [{ build }, { Pool }, { chromium }, { createServer: createViteServer }] = await Promise.all([
+  import('esbuild'), import('pg'), import('@playwright/test'), import('vite'),
+]);
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const require = createRequire(import.meta.url);
 const scratch = await mkdtemp(path.join(tmpdir(), 'crm-manual-history-'));
