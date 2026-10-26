@@ -43,6 +43,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'ZENITHJOY_INTERNAL_TOKEN', reason: '内部接口/super-admin 鉴权 token，缺则相应内部接口拒绝访问' },
   { name: 'SMOKE_TOKEN', reason: 'smoke 测试用临时 token，仅冒烟链路读取' },
   { name: 'CRM_RECONCILE_DRYRUN', reason: 'CRM 采集对账干跑开关，缺则默认干跑（只日志不软删，最安全）；仅字面 false 进真删模式' },
+  { name: 'CRM_MANUAL_HISTORY_MAX_BYTES', reason: 'CRM 手动补录原文大小限制，缺省为 32 KiB；配置仅可收紧上限，缺失不影响补录功能' },
   { name: 'GRADING_MODEL', reason: '评论区留言AI意向分档判定的 ToAPIs 模型名，缺则默认 gpt-5.4-mini（原硬编码 deepseek-v4-flash，0823 渠道欠费切 gpt-5.6-terra 又因不稳定改切）；仅覆盖模型时设' },
   { name: 'COMMANDER_MODEL', reason: '视频判定存疑复核官(commander)的 ToAPIs 模型名，缺则默认 gpt-5.4-mini（原 deepseek-v4-flash，0823 渠道欠费切 gpt-5.6-terra 又因不稳定改切）；仅覆盖模型时设' },
   { name: 'TOAPIS_RETRY_BASE_MS', reason: 'ToAPIs 网关类错误(520/502/504等)重试的退避基数毫秒，缺则默认 1000（第二次等 1s、第三次 2s）；单测调成 1 免得白等，生产一般不设。加于 2026-09-21 issue f3b6ba7c：网关对 GHA runner 回 520 打穿判定链' },

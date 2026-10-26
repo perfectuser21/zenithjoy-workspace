@@ -24,9 +24,9 @@
  */
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AgGridReact } from 'ag-grid-react';
+import { AgGridReact, type CustomCellEditorProps } from 'ag-grid-react';
 import type {
   ColDef,
   ColumnState,
@@ -34,43 +34,33 @@ import type {
   ModelUpdatedEvent,
   CellValueChangedEvent,
   ICellRendererParams,
-  ICellEditorParams,
 } from 'ag-grid-community';
 
 // ── 自定义原生 select 单元格编辑器（让 Playwright 可用 selectOption 操作）──
-type NativeSelectEditorParams = ICellEditorParams & { values: string[] };
-interface NativeSelectEditorRef { getValue(): string }
-const NativeSelectCellEditor = forwardRef<NativeSelectEditorRef, NativeSelectEditorParams>(
-  function NativeSelectCellEditor({ value, values, stopEditing }, ref) {
-    // 用 ref 保证 getValue() 在 stopEditing() 调用时拿到最新值（绕过 React 批量更新延迟）
-    const valRef = useRef<string>(value as string);
-    const [val, setVal] = useState<string>(value as string);
-    const selectEl = useRef<HTMLSelectElement>(null);
+type NativeSelectEditorParams = CustomCellEditorProps<unknown, string> & { values: string[] };
+function NativeSelectCellEditor({ value, values, onValueChange, stopEditing }: NativeSelectEditorParams) {
+  const selectEl = useRef<HTMLSelectElement>(null);
+  useEffect(() => { selectEl.current?.focus(); }, []);
 
-    useImperativeHandle(ref, () => ({ getValue: () => valRef.current }), []);
-
-    useEffect(() => { selectEl.current?.focus(); }, []);
-
-    return (
-      <select
-        ref={selectEl}
-        value={val}
-        className="ag-select__native-select"
-        onChange={e => {
-          valRef.current = e.target.value;
-          setVal(e.target.value);
-          stopEditing(); // 选择后立即提交（select 类编辑器不需要二次确认）
-        }}
-        style={{ height: '100%', width: '100%', background: '#14161f',
-          color: '#eef0f6', border: 'none', outline: 'none', padding: '0 4px' }}
-      >
-        {values.map((v) => (
-          <option key={v} value={v}>{v}</option>
-        ))}
-      </select>
-    );
-  }
-);
+  return (
+    <select
+      ref={selectEl}
+      value={value ?? ''}
+      className="ag-select__native-select"
+      onChange={e => {
+        // AG Grid 32 的受控编辑器通过 onValueChange 接收新值。
+        onValueChange(e.target.value);
+        stopEditing();
+      }}
+      style={{ height: '100%', width: '100%', background: '#14161f',
+        color: '#eef0f6', border: 'none', outline: 'none', padding: '0 4px' }}
+    >
+      {values.map((v) => (
+        <option key={v} value={v}>{v}</option>
+      ))}
+    </select>
+  );
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 类型 & 常量

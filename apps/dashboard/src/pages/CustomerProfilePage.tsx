@@ -6,8 +6,9 @@
  * 暗色人物肖像：字母头像 + 状态徽章 + AI 三段论画像 + 时间轴 + 日报 + 聊天记录。
  * 全部 data-testid 保持与旧版一致（per 2026-06-25 Playwright 合同）。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import ManualChatImport from '../components/ManualChatImport';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 工具
@@ -79,6 +80,7 @@ interface ChatMessage {
 }
 
 interface CustomerProfile {
+  customer_id?: string | null;
   name: string;
   contact: string;
   wechat_id?: string | null;
@@ -149,23 +151,39 @@ export default function CustomerProfilePage() {
   const csWechatId = searchParams.get('cs') ?? '';
   const nameHint = searchParams.get('name') ?? '';
 
-  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const profileScope = useMemo(() => Symbol(`${contact ?? ''}:${csWechatId}`), [contact, csWechatId]);
+  const activeScope = useRef<symbol | null>(profileScope);
+  activeScope.current = profileScope;
+  const activeRequest = useRef<symbol | null>(null);
+  const [storedProfile, setProfile] = useState<CustomerProfile | null>(null);
+  const [loadedScope, setLoadedScope] = useState<symbol | null>(null);
+  // Hide a previous customer's persistent ID on the first render of a new route,
+  // before its effect has started loading the replacement profile.
+  const profile = loadedScope === profileScope ? storedProfile : null;
   const [loading, setLoading] = useState(true);
   const [authExpired, setAuthExpired] = useState(false);
   const [error, setError] = useState<string>('');
   const [showChat, setShowChat] = useState(false);
 
-  const loadProfile = useCallback(async () => {
-    if (!contact) return;
+  const loadProfile = useCallback(async (signal: AbortSignal) => {
+    const operation = Symbol('load-profile');
+    activeRequest.current = operation;
+    const current = () => activeScope.current === profileScope && activeRequest.current === operation && !signal.aborted;
+    if (!contact) { if (current()) { setProfile(null); setLoading(false); } return; }
     setLoading(true);
     setError('');
+    setAuthExpired(false);
+    setLoadedScope(null);
+    setProfile(null);
     try {
       const params = new URLSearchParams();
       if (csWechatId) params.set('cs_wechat_id', csWechatId);
       const qs = params.toString();
       const res = await sessionFetch(
         `/api/crm/customers/${encodeURIComponent(contact)}/profile${qs ? `?${qs}` : ''}`,
+        { signal },
       );
+      if (!current()) return;
       if (res.status === 401) {
         setAuthExpired(true);
         setError('登录已失效，请重新登录');
@@ -173,17 +191,27 @@ export default function CustomerProfilePage() {
       }
       if (!res.ok) throw new Error(`加载失败（${res.status}）`);
       const data = (await res.json()) as { profile?: CustomerProfile } | CustomerProfile;
+      if (!current()) return;
       const p = (data as { profile?: CustomerProfile }).profile ?? (data as CustomerProfile);
       setAuthExpired(false);
       setProfile(p);
+      setLoadedScope(profileScope);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败');
+      if (current()) setError(e instanceof Error ? e.message : '加载失败');
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [contact, csWechatId]);
+  }, [contact, csWechatId, profileScope]);
 
-  useEffect(() => { void loadProfile(); }, [loadProfile]);
+  useEffect(() => {
+    const controller = new AbortController();
+    activeScope.current = profileScope;
+    void loadProfile(controller.signal);
+    return () => {
+      controller.abort();
+      if (activeScope.current === profileScope) activeScope.current = null;
+    };
+  }, [loadProfile, profileScope]);
 
   // 全局暗色字体注入（Fraunces + Hanken Grotesk）
   useEffect(() => {
@@ -329,6 +357,8 @@ export default function CustomerProfilePage() {
                 </div>
               </div>
             </div>
+
+            <ManualChatImport customerId={profile.customer_id} csWechatId={csWechatId} customerName={displayName} />
 
             {/* ── 卡片网格 ── */}
             <div style={S.grid}>
