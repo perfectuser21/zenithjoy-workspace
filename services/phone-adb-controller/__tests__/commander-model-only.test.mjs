@@ -43,7 +43,7 @@ for(const mode of ['accepted','timeout','invalid','exit','signal'])test('真实C
  const r=run(t,mode);assert.equal(r.outputs.length,0);assert.equal(r.available,false);assert.equal(r.error.executionStopped,false);assert.equal(r.calls.length,1);
  assert.doesNotMatch(JSON.stringify(r.error),/sensitive-sentinel|raw args environment/);
 });
-for(const mode of ['wrong-run','wrong-session'])test('真实final '+mode+' 身份冲突不能释放owner pending',t=>{
+for(const mode of ['wrong-run','wrong-session','foreign-consistent'])test('真实final '+mode+' 身份冲突不能释放owner pending',t=>{
  const r=run(t,mode);assert.equal(r.outputs.length,0);assert.equal(r.available,false);assert.equal(r.error.executionStopped,false);assert.equal(r.calls.length,1);
 });
 test('原失败仅保固定诊断字段不泄漏原stderr/argv，且写入Activity事件',async t=>{
