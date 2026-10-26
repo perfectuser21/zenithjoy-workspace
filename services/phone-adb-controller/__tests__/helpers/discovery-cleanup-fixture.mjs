@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 export const discoveredId='7681632828384394202';
-export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false}={}){
+export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,attemptLimit}={}){
  const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name)));
  if(slowLeaf){
   const c=join(f.d,'slow-leaf.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
@@ -38,6 +38,14 @@ case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_
  f.env.LEADGEN_EVIDENCE_DIR=scope.evidence_root;f.env.WF_BRAIN_WORKFLOW='douyin_video_discovery';f.env.WFR_RUN_ID='douyin_video_discovery-scope-owner';f.env.LEADGEN_SOURCE_RUN='';f.env.LEADGEN_LOCATION='unlimited';f.env.LEADGEN_LIMIT=stop?'0':'1';f.env.WF_STOP_FILE=join(f.d,'stop');f.env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000));f.env.WF_RUN_MAX_SECONDS='1800';
  const hash=b=>createHash('sha256').update(b).digest('hex');f.frozen.files={};
  const visit=dir=>{for(const n of readdirSync(dir)){const p=join(dir,n);if(statSync(p).isDirectory())visit(p);else f.frozen.files['runtime/'+p.slice(f.runtime.length+1)]=hash(readFileSync(p));}};visit(f.runtime);
+ if(attemptLimit!==undefined){
+  f.env.LEADGEN_MAX_SCREENS='1';f.env.LEADGEN_DISCOVERY_MAX_ATTEMPTS=String(attemptLimit);f.env.LEADGEN_LIMIT='0';
+  f.env.LEADGEN_SOURCES_FILE=join(f.d,'keywords.txt');writeFileSync(f.env.LEADGEN_SOURCES_FILE,'AI\n');
+  f.frozen.discovery_input={schema_version:2,workflow_key:'douyin_video_discovery',run_tag:f.env.WFR_TAG,profile:f.env.P,serial:f.env.SERIAL,line:f.env.LEADGEN_LINE,max_attempts:attemptLimit,max_screens:1,source_kind:'keyword',sources:['AI'],source_sha256:hash(Buffer.from('AI\n'))};
+  const controller=join(f.runtime,'fixture-discovery-controller.cjs');
+  writeFileSync(controller,readFileSync(controller,'utf8').replace('video_tab=1','360\\t560\\t00:20\\t第三目标\\t丙\\n370\\t570\\t00:20\\t第四目标\\t丁\\nvideo_tab=1'));
+  f.frozen.files={};visit(f.runtime);
+ }
  const {digest}=await load('runtime-definition.mjs');delete f.frozen.snapshot_sha256;f.frozen.snapshot_sha256=digest(f.frozen);writeFileSync(join(f.d,'run-definition.json'),JSON.stringify(f.frozen));
  writeFileSync(join(f.d,'run-bindings/a1.request.json'),JSON.stringify({runtime_snapshot_sha256:f.frozen.snapshot_sha256,run_id:scope.run_id,body:{task_id:'scope-task'}}));writeFileSync(join(f.d,'run-bindings/a1.ack.json'),JSON.stringify({binding:{id:'scope-binding',run_id:scope.run_id,task_id:'scope-task'}}));
  const stored=[],rpcCalls=[],{createHandlers}=await load('leadgen-handlers.mjs'),{execInput}=await load('leadgen-client.mjs');
