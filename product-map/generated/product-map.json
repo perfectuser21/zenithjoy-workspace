@@ -429,7 +429,8 @@
         ".github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh",
         ".github/workflows/scripts/smoke/line04-cs-memory-smoke.sh",
         ".github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh",
-        ".github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh"
+        ".github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh",
+        ".github/workflows/scripts/smoke/crm-manual-history-smoke.sh"
       ],
       "steps": [
         {
@@ -633,5 +634,5 @@
       ]
     }
   ],
-  "digest": "92aa1ab95a1d95c0dff0d4c3f3b4f8f50d2e4a97f0fb5eafcd4b5bb9b5a08859"
+  "digest": "71a323dfcb19eb31288d8b8123c90bb4a178448cde1f6d338d8a8ec97212e727"
 }
