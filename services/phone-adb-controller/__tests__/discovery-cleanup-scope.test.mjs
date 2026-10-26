@@ -147,8 +147,17 @@ test('真实scope内route CLI→managed wrapper→父version，不伪称stub覆�
 test('v2首屏4仅尝试2条重复VID，真实scope归还后正常cleanup且不冒全量',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{stop:false,attemptLimit:2});
  const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');
+ const {verifyDiscoveryFilterEvidence}=await f.load('leadgen-discovery.mjs'),{verifyCleanupReadback}=await f.load('discovery-cleanup-readback.mjs');
+ const metrics=(await f.load('discovery-metrics.js')).default;
+ const verify=async(activity,result)=>{
+  const scope={run:f.env.WFR_TAG,run_id:f.context.run_id,profile:f.env.P,source_commit:f.context.source_commit,line_key:'jinuo'};
+  if(activity.key==='cleanup')return {verified:verifyCleanupReadback({runDir:f.d,digest:result.result.cleanup_readback_digest,scope:{...scope,serial:f.env.SERIAL}})};
+  const filters=verifyDiscoveryFilterEvidence({runDir:f.d,runId:f.context.run_id,run:f.env.WFR_TAG,profile:f.env.P,sourceCommit:f.context.source_commit,requested:{sort:'latest',time_layer:'six_months',location:'unlimited'},invocations:result.result.filter_invocations});
+  const archived=await metrics.verifyArchivedObservations({videos:result.result.videos,runDir:f.d,scope,readback:async video=>({metrics_verified:true,metrics_digest:f.stored.findLast(v=>v.videoId===video.videoId).metrics.digest,recovered:true})});
+  return {verified:filters&&archived};
+ };
  try{
-  const out=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:f.context,handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},commander:async()=>({action:'continue'}),record:async()=>{},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+  const out=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:f.context,handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},commander:async()=>({action:'continue'}),record:async()=>{},verify,terminationUnverified:()=>f.h.state.nativeStopUnproven});
   t.diagnostic(JSON.stringify({status:out.status,activities:out.results.map(r=>({activity:r.activity,status:r.status,error:r.error,counts:r.result?.counts}))}));
   assert.equal(out.status,'completed');const p=JSON.parse(readFileSync(join(f.d,'discovery-progress.json')));
   assert.equal(p.counts.cards,4);assert.equal(p.counts.attempted,2);assert.equal(p.counts.persisted,1);assert.equal(f.stored.length,2);

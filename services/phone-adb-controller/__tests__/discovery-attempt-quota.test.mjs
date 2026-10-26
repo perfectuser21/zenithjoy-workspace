@@ -33,7 +33,7 @@ test('explicit attempt input freezes schema2 without conflating displayed candid
 test('first page four cards permits only first two slots, retains true seen count and duplicate cost',()=>temp(async dir=>{
  const {h,calls,writes}=rig(dir);const out=await h.collect_videos();
  assert.equal(out.counts.cards,4);assert.equal(out.counts.attempted,2);assert.equal(writes.length,2);assert.equal(out.counts.persisted,1);
- assert.equal(calls.filter(x=>x.command==='tap-evidence').length,2);assert.equal(out.stop_reason,'attempt_limit_reached');
+ assert.deepEqual(calls.filter(x=>x.command==='tap-evidence').map(x=>x.args[0]),['300','301']);assert.equal(out.stop_reason,'attempt_limit_reached');
  assert.equal(calls.some(x=>x.command==='search-grid-scroll'),false);assert.equal(out.all_results_scanned,false);assert.notEqual(out.status,'partial');
  const p=JSON.parse(readFileSync(join(dir,'discovery-progress.json')));assert.equal(p.request.max_attempts,2);assert.equal(Object.hasOwn(p.request,'max_candidates'),false);assert.equal(p.counts.cards,4);
 }));
