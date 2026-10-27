@@ -80,7 +80,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "7d18aa708cc74a026ae2d7b379321dd51e0afca7fa910fcd8acebe800d071f1e",
+      "code_digest": "165ca9ac4096640878c84d3b4ce10610833be146636ef775aa5cb2ea06dc5f89",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "6751d7871920657b32bb8ad09b11c5c51893b043be9f43f51858fd535e95616b",
-        "current_code_digest": "7d18aa708cc74a026ae2d7b379321dd51e0afca7fa910fcd8acebe800d071f1e"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "7d18aa708cc74a026ae2d7b379321dd51e0afca7fa910fcd8acebe800d071f1e",
+        "current_code_digest": "165ca9ac4096640878c84d3b4ce10610833be146636ef775aa5cb2ea06dc5f89"
       }
     },
     "douyin_video_processing.preflight": {
@@ -374,7 +374,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "77ad493851317924ad0692ebbd33dad9cb6db3a0655b4481cfac2b716ee03def",
+      "code_digest": "c699206d2f3ca211aa5d90ed3e21e8415f0e0ff7dbaddca4f598b5e6ff231223",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "7d8293406174d86a04e233b86b37028083607183f9967f81dbc65a0e0960a247",
-        "current_code_digest": "77ad493851317924ad0692ebbd33dad9cb6db3a0655b4481cfac2b716ee03def"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "77ad493851317924ad0692ebbd33dad9cb6db3a0655b4481cfac2b716ee03def",
+        "current_code_digest": "c699206d2f3ca211aa5d90ed3e21e8415f0e0ff7dbaddca4f598b5e6ff231223"
       }
     },
     "douyin_video_processing.dedup": {
@@ -644,7 +644,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -822,13 +822,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "1c1548b69c4be0f081dcbd3c09cce269866c41ae939fc0f7631281d54ab56f1e",
+      "code_digest": "00391d78e2d78ecc251e637754b43339ede4fe6b8a35a848e354bf8a9bdb871f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "d66b8f2f420c0d262c276d304868b73d6c3b0ae52a8ffcf10cb2ada473952e6e",
-        "current_code_digest": "1c1548b69c4be0f081dcbd3c09cce269866c41ae939fc0f7631281d54ab56f1e"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "1c1548b69c4be0f081dcbd3c09cce269866c41ae939fc0f7631281d54ab56f1e",
+        "current_code_digest": "00391d78e2d78ecc251e637754b43339ede4fe6b8a35a848e354bf8a9bdb871f"
       }
     },
     "douyin_video_processing.qualification": {
@@ -910,7 +910,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -1144,13 +1144,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "a93f756be8d6ff8d8bd4622a1f5c49ac995ac21b9d0c345cba4ec045ea9a3ce1",
+      "code_digest": "162c5288752739fd0bcdfdb4c326153f39c269745d8b847dff7ca6813422a5bc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "d91114640d727929daba84d7401a4407405564bbd3b7ace09c845e93263ca60c",
-        "current_code_digest": "a93f756be8d6ff8d8bd4622a1f5c49ac995ac21b9d0c345cba4ec045ea9a3ce1"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "a93f756be8d6ff8d8bd4622a1f5c49ac995ac21b9d0c345cba4ec045ea9a3ce1",
+        "current_code_digest": "162c5288752739fd0bcdfdb4c326153f39c269745d8b847dff7ca6813422a5bc"
       }
     },
     "douyin_video_processing.collection": {
@@ -1239,7 +1239,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -1439,13 +1439,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "4c62527f89cf70b00435172070ea2413d599401b1966f3da1ff57db3a5873a8d",
+      "code_digest": "6a2b25c09b0b64cad2421fac6faf2683e825a383c2da5eb6c359e785d9be23f1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "01b0d3c2cef41aab003fe80931e64f7a5649cc910c22f8164169046535256935",
-        "current_code_digest": "4c62527f89cf70b00435172070ea2413d599401b1966f3da1ff57db3a5873a8d"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "4c62527f89cf70b00435172070ea2413d599401b1966f3da1ff57db3a5873a8d",
+        "current_code_digest": "6a2b25c09b0b64cad2421fac6faf2683e825a383c2da5eb6c359e785d9be23f1"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1527,7 +1527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "993218c7cd3989179ec7a238496f7d7260a78dd28384db4f3efd5a6cccb0361c",
+      "code_digest": "180a5bdd71a47870129ad03217cb2799e3342d329bb37b29176958742174f81c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "f50e4ad2749d0e7b94a1c99984870a1fc5f07822ddc1bea279188b6f9293d723",
-        "current_code_digest": "993218c7cd3989179ec7a238496f7d7260a78dd28384db4f3efd5a6cccb0361c"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "993218c7cd3989179ec7a238496f7d7260a78dd28384db4f3efd5a6cccb0361c",
+        "current_code_digest": "180a5bdd71a47870129ad03217cb2799e3342d329bb37b29176958742174f81c"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1796,7 +1796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -1946,13 +1946,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "2af3af90290a4507f489372e0dfdcd8befb4c4152fcad9cee684768970f62fd1",
+      "code_digest": "f6f26d8adfedd518784fdb8b02671d7d6f1c9c1bc8ca53d052ef96b142c3580b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
-        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
-        "previous_code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523",
-        "current_code_digest": "2af3af90290a4507f489372e0dfdcd8befb4c4152fcad9cee684768970f62fd1"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "2af3af90290a4507f489372e0dfdcd8befb4c4152fcad9cee684768970f62fd1",
+        "current_code_digest": "f6f26d8adfedd518784fdb8b02671d7d6f1c9c1bc8ca53d052ef96b142c3580b"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2041,7 +2041,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "117218a6dd9d47ec853e9da68acb045d09639e8a1427cdc8583f243fda6731dc",
+      "code_digest": "c1555a0148284af3395ffea8eb292ac1f942a48ec9b5fc8304743289cf932aa8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
-        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
-        "previous_code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf",
-        "current_code_digest": "117218a6dd9d47ec853e9da68acb045d09639e8a1427cdc8583f243fda6731dc"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "117218a6dd9d47ec853e9da68acb045d09639e8a1427cdc8583f243fda6731dc",
+        "current_code_digest": "c1555a0148284af3395ffea8eb292ac1f942a48ec9b5fc8304743289cf932aa8"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2328,7 +2328,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "7e044550696b228bfd0cab080857624a97621120d4cfd3a5984d14b0024beba4",
+      "code_digest": "4858a3d13fafc5a58e8a350a841d21bd198d2149b92990f8e2841d6582f53d06",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "378522330852f0b252424de976d229186049ef1d05413ba1cd2a8134e5983313",
-        "current_code_digest": "7e044550696b228bfd0cab080857624a97621120d4cfd3a5984d14b0024beba4"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "7e044550696b228bfd0cab080857624a97621120d4cfd3a5984d14b0024beba4",
+        "current_code_digest": "4858a3d13fafc5a58e8a350a841d21bd198d2149b92990f8e2841d6582f53d06"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2626,7 +2626,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -2811,13 +2811,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455",
+      "code_digest": "4204e138f5cc79df60fa3052e74afd96b928060defe2356c91252432ec1ac69a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "a68d60ffb6d55396e721736a2d968494f96c105467e6d6cf5b376283891d22c3",
-        "current_code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455",
+        "current_code_digest": "4204e138f5cc79df60fa3052e74afd96b928060defe2356c91252432ec1ac69a"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2899,7 +2899,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -3084,13 +3084,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455",
+      "code_digest": "4204e138f5cc79df60fa3052e74afd96b928060defe2356c91252432ec1ac69a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "a68d60ffb6d55396e721736a2d968494f96c105467e6d6cf5b376283891d22c3",
-        "current_code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455",
+        "current_code_digest": "4204e138f5cc79df60fa3052e74afd96b928060defe2356c91252432ec1ac69a"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3172,7 +3172,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "4005ce986e06804522f6c7983b299fc327663f99e3751755d8ed5c6f99c5324f"
+          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
         },
         {
           "kind": "code",
@@ -3360,13 +3360,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "90ac5302540aecc2244229938262f6ff3be385d37801b3bf596cccc48386690e",
+      "code_digest": "986c09308631a7318c95d0cf51e65da722692dbb70cd769335e272fc9db7a69a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "手机锁权威传输改为完整原JSON字节的应用级压缩；所有任务行与全部字段、原15秒/8秒预算及原完整payload/result匹配、身份与未知守卫不变，解码异常拒绝且无缓存或降级。",
-        "reviewed_by": "codex:baseline-release-independent-review:lock-authority-transfer-20261027",
-        "previous_code_digest": "139ed37d73af2ce87538de4af4c972aaff69a69a4d76c2f0e0efad23ec2f2bb0",
-        "current_code_digest": "90ac5302540aecc2244229938262f6ff3be385d37801b3bf596cccc48386690e"
+        "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
+        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "previous_code_digest": "90ac5302540aecc2244229938262f6ff3be385d37801b3bf596cccc48386690e",
+        "current_code_digest": "986c09308631a7318c95d0cf51e65da722692dbb70cd769335e272fc9db7a69a"
       }
     }
   },

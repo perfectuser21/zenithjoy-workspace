@@ -15,8 +15,8 @@
         "schema_version": 1,
         "host_id": "xian-m4",
         "transport": "usb",
-        "endpoint": "tcp:127.0.0.1:5042",
-        "forbidden_ports": [],
+        "endpoint": "tcp:127.0.0.1:5037",
+        "forbidden_ports": [5041, 5042],
         "adb_bin": "/opt/homebrew/bin/adb",
         "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/36.0.2/platform-tools/adb",
         "adb_sha256": "534893b946847fdf6f9998108af469e646679824d75098247ca438948fa2dffc"
