@@ -7,7 +7,6 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createInterface} from 'node:readline';
 const observer=fileURLToPath(new URL('../qualification-maintenance-host.py',import.meta.url));
-const ctl=fileURLToPath(new URL('../douyin-phone-adb',import.meta.url));
 function fixture(t) {
  const dir=mkdtempSync(join(tmpdir(),'qualification-guard-')),root=join(dir,'phone'),locks=join(root,'locks'),lock=join(locks,'SER1.lock');mkdirSync(lock,{recursive:true});
  const reg=join(dir,'profiles.tsv');writeFileSync(reg,'p1\tSER1\tfixture\t1080\t1920\n');
@@ -15,6 +14,7 @@ function fixture(t) {
  const env={...process.env,DOUYIN_PHONE_TMP_ROOT:root,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_ADB_BIN:'/bin/false'};
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
  return {dir,root,lock,env,guard:join(locks,'SER1.guard')};
+}
 async function holder(f,t) {
  assert.ok(existsSync(observer),'缺少实际serial.guard持有器');
  const p=spawn('python3',['-B','-I',observer],{env:f.env,stdio:['pipe','pipe','pipe']});let err='';p.stderr.on('data',x=>err+=x);
