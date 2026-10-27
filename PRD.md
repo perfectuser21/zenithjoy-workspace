@@ -2,7 +2,7 @@
 
 GP-Anchor: line02/keyword_acquisition keep-green
 
-102在353固定程序的音频上传失败后，原生执行收据仍为observed_only/UNKNOWN，工作流正确隔离设备和视频，但没有正式受限维护入口。新增独立维护inspect/close/readback，范围只从真实OpsTask与原资源owner精确委托读取；开发Task不授予维护权。
+102在353固定程序的音频上传失败后，原生执行收据仍为observed_only/UNKNOWN，工作流正确隔离设备和视频，但没有正式受限维护入口。新增独立维护preflight/close/readback，preflight明确包括有委托的正规租约续期并保存官方回执，readback纯读且不续租；范围只从真实OpsTask与原资源owner精确委托读取；开发Task不授予维护权。
 
 维护epoch不是旧attempt继续，也不把旧UNKNOWN改为全进程停止。原Task可因资源hold仍in_progress；须独立核实际run终态FAIL、外部Task→wx启动记录→固定tag/ACK/null原task_id→完整冻结来源关联。只支持已审353资格路径在judge前的audio_upload_failed分支；原214字节qualification.tsv、native wait5、原生录制/恢复、原producer完整来源和无collection/新评论0均须真实读取。
 

@@ -14,8 +14,8 @@ const module=await import(entry).catch(error=>{
   throw error;
 });
 
-test('正式维护入口在缺真实OpsTask时给结构化拒绝，不取锁或联系手机',()=>{
-  const result=spawnSync(process.execPath,[entry.pathname,'inspect'],{encoding:'utf8',timeout:3000,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
+test('正式维护preflight在缺真实OpsTask时给结构化拒绝，不续租取锁或联系手机',()=>{
+  const result=spawnSync(process.execPath,[entry.pathname,'preflight'],{encoding:'utf8',timeout:3000,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
   assert.equal(result.status,2,'缺正式维护任务必须以明确参数错误拒绝，不能缺入口或启动业务');
   assert.deepEqual(JSON.parse(result.stdout),{ok:false,code:'MAINTENANCE_TASK_REQUIRED'});
 });
