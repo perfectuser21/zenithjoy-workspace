@@ -18,6 +18,7 @@ export function evaluateProcessCensus(census,scope) {
   const covered=new Set(census.observations.map(x=>x.pid));
   if(census.absent.some(x=>x.reason!=='ESRCH'))return blocked('PROCESS_ABSENCE_UNPROVEN');
   for(const x of census.absent)covered.add(x.pid);
+  for(const x of census.final_enumerated)if(x.uid===scope.uid&&x.absence_reason==='ESRCH')covered.add(x.pid);
   if([...census.enumerated,...census.final_enumerated].some(x=>x.uid===scope.uid&&x.pid>1&&!covered.has(x.pid)))return blocked('PROCESS_ENUMERATION_INCOMPLETE');
   for(const row of census.final_enumerated.filter(x=>x.uid===scope.uid&&x.pid>1)) {
     if(row.absence_reason==='ESRCH')continue;
