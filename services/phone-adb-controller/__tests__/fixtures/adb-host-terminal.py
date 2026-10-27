@@ -1,6 +1,7 @@
 """隔离真实宿主子进程；不调用ADB、不枚举USB、不触达手机。"""
 import ctypes
 import errno
+import hashlib
 import importlib.util
 import json
 import os
@@ -57,7 +58,9 @@ def native(mode):
                 else: raise AssertionError('child did not terminate')
                 return original(pid)
             m.process_executable = exit_in_exe
+        start=time.monotonic()
         m.terminate_exact(expected)
+        assert time.monotonic()-start<2, 'must observe requested exit, not wait for five-second TTL'
         # 不以观察器自述证明停：实际wait回收本Popen，禁止吞unknown冒完成。
         child.wait(timeout=1)
         assert child.returncode is not None
@@ -108,6 +111,25 @@ def synthetic(mode):
     if mode in ('gone','zombie'): assert run() is None
     else: reject(run)
 
+def manifest(mode):
+    m=load('adb-host-maintenance')
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp); rows=[]
+        for name in m.REQUIRED_FILES:
+            if name=='adb-process-observation.py' and mode=='missing': continue
+            (root/name).write_bytes((ROOT/name).read_bytes())
+            rows.append({'path':'services/phone-adb-controller/'+name,'deployed_path':name,
+                         'content_sha256':hashlib.sha256((root/name).read_bytes()).hexdigest()})
+        target=root/'adb-process-observation.py'
+        if mode=='hash': target.write_text('modified')
+        if mode=='symlink':
+            target.rename(root/'elsewhere');target.symlink_to(root/'elsewhere')
+        if mode=='path':
+            for row in rows:
+                if row['deployed_path']==target.name:row['deployed_path']='../'+target.name
+        path=root/'manifest.json';path.write_text(json.dumps({'source_repo':m.REPO,'source_commit':'a'*40,'files':rows}))
+        reject(lambda:m.verify_manifest(path,root))
+
 def native_kernel():
     m=load('adb-process-observation')
     child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(5)'])
@@ -125,4 +147,5 @@ elif case.startswith('native:'): native(case.split(':')[1])
 elif case.startswith('kernel:'): kernel(case.split(':')[1])
 elif case.startswith('synthetic:'): synthetic(case.split(':')[1])
 elif case=='native-kernel': native_kernel()
+elif case.startswith('manifest:'): manifest(case.split(':')[1])
 else: raise AssertionError(case)

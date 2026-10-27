@@ -8,7 +8,7 @@ const prefix=deploy.slice(deploy.indexOf('MMV_JS_FILES=('),deploy.indexOf('# 在
 function files(name){return execFileSync('bash',['-c',prefix+`\nprintf '%s\\n' "\${${name}[@]}"`],{encoding:'utf8'}).trim().split('\n');}
 test('正式部署必须在控制器双执行根和MMV包交付统一客户端及管理源码',()=>{
  const control=files('DEVICE_CTL_FILES'),all=files('MMV_RUNTIME_FILES');
- for(const name of ['adb-existing-route.py','adb-managed-client.py','adb-host-service.py','adb-host-maintenance.py','maintenance-task-authority.py']){
+ for(const name of ['adb-existing-route.py','adb-managed-client.py','adb-host-service.py','adb-host-maintenance.py','maintenance-task-authority.py','adb-process-observation.py']){
   assert.ok(control.includes(name),'双执行根缺 '+name);assert.ok(all.includes(name),'MMV正式包缺 '+name);
  }
  assert.ok(files('DEVICE_SH_FILES').includes('install-adb-host-service.sh'));
