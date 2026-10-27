@@ -43,3 +43,21 @@ test('新scope来自规范Task但不能超出原OpsTask唯一VID，不能靠同�
   f.originalTask.result.qualification_maintenance_delegation.contract_sha256=digest(f.scope);
   assert.throws(()=>authorize(f),/MAINTENANCE_SCOPE/);
 });
+
+test('独立维护Task不能由原Task自委托冒充，即使scope与委托hash都匹配',()=>{
+  const f=authorityFixture(),original=f.originalTask;
+  original.result.qualification_maintenance=f.scope;
+  original.result.qualification_maintenance_delegation={
+    ...original.result.qualification_maintenance_delegation,
+    maintenance_task_id:original.id,actor:original.claimed_by,
+  };
+  f.maintenanceTask=original;
+  assert.throws(()=>authorize(f),/MAINTENANCE_AUTHORITY/);
+});
+for(const [key,value]of [
+  ['source_run','unrelated101'],['device_serial','different-device'],
+  ['expected_candidate_sha','d'.repeat(40)],
+])test('原Task显式'+key+'不能被result委托覆盖',()=>{
+  const f=authorityFixture();f.originalTask.payload[key]=value;
+  assert.throws(()=>authorize(f),/MAINTENANCE_SCOPE/);
+});
