@@ -1,6 +1,7 @@
 import {isDeepStrictEqual} from 'node:util';
 import {digest} from './runtime-definition.mjs';
 import {parseQualificationFailure,SUPPORTED_QUALIFICATION_SOURCE} from './qualification-maintenance-evidence.mjs';
+import {validateProducerDescriptor} from './producer-descriptor.mjs';
 const need=value=>{if(!value)throw Error('MAINTENANCE_BEFOREJUDGE_EVIDENCE_INVALID');};
 // 仅交叉检查归档的有限失败分支；调用方仍须从受信观察器核原字节、freeze全文件、
 // launcher/ACK/正式Task关联、fresh host/device/MMV effects。此结果绝不授予停止或写PG能力。
@@ -9,13 +10,14 @@ export function verifyBeforeJudgeEvidence({scope:s,frozen,split,qualification,na
  const {snapshot_sha256,...body}=frozen||{};
  need(snapshot_sha256===s.snapshot_sha256&&digest(body)===snapshot_sha256);
  const d=frozen.deployment,r=frozen.run_identity,q=frozen.sampling_input,p=frozen.producer_descriptor;
+ validateProducerDescriptor(p);
  need(d?.source_repo==='perfectuser21/zenithjoy-workspace'&&d.source_commit===s.consumer_source&&d.target===s.host);
  need(r?.capability==='douyin_video_processing'&&r.tag===s.run_tag&&r.profile===s.profile&&r.serial===s.serial
   &&r.run_id==='douyin_video_processing-'+s.run_tag);
  need(q?.workflow_key==='douyin_video_processing'&&q.run_tag===s.run_tag&&q.profile===s.profile&&q.serial===s.serial
   &&q.line===s.line_key&&q.source_run===s.producer_run&&q.comment_limit===5&&q.collection_budget_s===480);
  need(p?.schema_version===2&&p.company_id===s.company_id&&p.tenant_id===s.tenant_id&&p.company_config_version===s.config_version
-  &&p.policy_id===s.policy_id&&p.run_tag===s.producer_run&&p.profile===s.profile&&p.serial===s.serial&&isDeepStrictEqual(p.video_ids,s.video_ids));
+  &&p.policy_id===s.policy_id&&p.line===s.line_key&&p.run_tag===s.producer_run&&p.profile===s.profile&&p.serial===s.serial&&isDeepStrictEqual(p.video_ids,s.video_ids));
  const slots=['preflight','dedup','qualification','collection','cleanup'];
  need(Array.isArray(frozen.activities)&&isDeepStrictEqual(frozen.activities.map(a=>a.reference?.slot_key),slots)
   &&frozen.activities.every(a=>a.version?.source_commit===s.consumer_source));
