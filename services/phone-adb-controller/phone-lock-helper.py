@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """手机锁互斥及只读在跑任务检查；未知情况不允许回收。"""
 import fcntl
+import base64
+import shlex
+import zlib
 import csv
 import datetime
 import json
@@ -205,6 +208,48 @@ def stop_child():
     send_child(signal.SIGKILL)
 
 
+# Complete MMV bytes compressed before SSH; safe_to_reap still reads all fields.
+TASK_TRANSPORT_MAX_BYTES = 64 * 1024 * 1024
+TASK_TRANSPORT_MAX_ENCODED = 90 * 1024 * 1024
+
+def decode_task_transport(text):
+    if len(text) > TASK_TRANSPORT_MAX_ENCODED + 1024:
+        raise ValueError('task transport envelope too large')
+    wire = json.loads(text)
+    if (not isinstance(wire, dict)
+            or set(wire) != {'version', 'encoding', 'size', 'sha256', 'data'}
+            or type(wire.get('version')) is not int or wire['version'] != 1
+            or wire.get('encoding') != 'gzip-base64'
+            or type(wire.get('size')) is not int or not 0 <= wire['size'] <= TASK_TRANSPORT_MAX_BYTES
+            or not isinstance(wire.get('sha256'), str) or len(wire['sha256']) != 64
+            or any(c not in '0123456789abcdef' for c in wire['sha256'])
+            or not isinstance(wire.get('data'), str) or len(wire['data']) > TASK_TRANSPORT_MAX_ENCODED):
+        raise ValueError('invalid task transport envelope')
+    try:
+        packed = base64.b64decode(wire['data'], validate=True)
+        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        raw = decoder.decompress(packed, TASK_TRANSPORT_MAX_BYTES + 1)
+        if (len(raw) > TASK_TRANSPORT_MAX_BYTES or not decoder.eof
+                or decoder.unused_data or decoder.unconsumed_tail
+                or len(raw) != wire['size']
+                or hashlib.sha256(raw).hexdigest() != wire['sha256']):
+            raise ValueError('invalid task transport payload')
+        return json.loads(raw)
+    except (TypeError, UnicodeError, zlib.error) as error:
+        raise ValueError('invalid task transport payload') from error
+
+def task_transport_command(query):
+    # No pipe: a failed curl must not yield a successful encoder envelope.
+    program = ("import base64,gzip,hashlib,json,subprocess,sys; "
+               "r=subprocess.run(['curl','-fsS','--connect-timeout','3','-m','8',sys.argv[1]],"
+               "check=True,capture_output=True); "
+               "b=r.stdout; "
+               "assert len(b)<=64*1024*1024, 'task response too large'; "
+               "print(json.dumps({'version':1,'encoding':'gzip-base64','size':len(b),"
+               "'sha256':hashlib.sha256(b).hexdigest(),"
+               "'data':base64.b64encode(gzip.compress(b,mtime=0)).decode('ascii')},separators=(',',':')))")
+    return 'python3 -c ' + shlex.quote(program) + ' ' + shlex.quote(query)
+
 def task_list():
     # 当前 Brain /tasks 忽略 offset：逐次扩大 limit；满页继续，超界拒绝回收。
     for limit in (200, 400, 800, 1600, 3200, 6400, 12800):
@@ -212,9 +257,9 @@ def task_list():
         response = subprocess.run(
             [os.environ.get('DOUYIN_LOCK_SSH_BIN', '/usr/bin/ssh'),
              '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', 'mmv',
-             "curl -fsS --connect-timeout 3 -m 8 '" + query + "'"],
+             task_transport_command(query)],
             check=True, capture_output=True, text=True, timeout=15)
-        tasks = json.loads(response.stdout)
+        tasks = decode_task_transport(response.stdout)
         if not isinstance(tasks, list):
             raise ValueError('Brain response is not a task list')
         ids = []
