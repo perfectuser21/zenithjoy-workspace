@@ -31,3 +31,10 @@ for(const patch of [{CURL_FAIL:'1'},{BAD_JSON:'not json'},{WIRE_CORRUPT:'1'}])te
 test('full pages expand limit without filtering rows',t=>{const tasks=Array.from({length:200},(_,i)=>row('row-'+i));const f=setup(t,tasks),r=f.run();assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),tasks);});
 
 test('successful remote command must return explicit transport envelope, never raw fallback',t=>{const f=setup(t,[row()]),r=f.run({WIRE_RAW:'1'});assert.notEqual(r.status,0);});
+
+// Decode the actual transport envelope at its boundary; malformed cases must
+// reject before any task or local-process decision can treat them as authority.
+for(const mode of ['schema','bool-size','base64','size','digest','truncated','concatenated','trailing','oversize'])test('compressed authority decoder fails closed: '+mode,t=>{
+ const f=setup(t,[]),code=`import base64,gzip,hashlib\nraw=b'[]'\nb=gzip.compress(raw,mtime=0)\nw={'version':1,'encoding':'gzip-base64','size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'data':base64.b64encode(b).decode()}\nmode=${JSON.stringify(mode)}\nif mode=='schema':w['extra']='not allowed'\nif mode=='bool-size':w['size']=True\nif mode=='base64':w['data']='not base64!'\nif mode=='size':w['size']+=1\nif mode=='digest':w['sha256']='0'*64\nif mode=='truncated':w['data']=base64.b64encode(b[:-2]).decode()\nif mode=='concatenated':w['data']=base64.b64encode(b+b).decode()\nif mode=='trailing':w['data']=base64.b64encode(b+b'garbage').decode()\nif mode=='oversize':w['size']=64*1024*1024+1\ntry:m.decode_task_transport(json.dumps(w))\nexcept ValueError:sys.exit(0)\nraise AssertionError('invalid envelope accepted')`;
+ const r=f.run({},code);assert.equal(r.status,0,r.stderr);
+});
