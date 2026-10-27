@@ -283,7 +283,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15",
         "current_code_digest": "8ec94f2e30d18f61413b636ec24825887da91ad7521181c0f3befff112b94083"
       }
@@ -560,7 +560,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955",
         "current_code_digest": "aa2ae1cb96f823fe97955ae368d6b41bc1643095d8c15064f242b79e3be0aee2"
       }
@@ -826,7 +826,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959",
         "current_code_digest": "7be2ee12b9e09cce93ac18df657b163176629b3820ecdca7d2d6cb011ef5a408"
       }
@@ -1148,7 +1148,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e",
         "current_code_digest": "99a2926287a1fd978fa02ae0f829d4c5401221a3e2307c1ffcc8b020c77a4fd4"
       }
@@ -1443,7 +1443,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8",
         "current_code_digest": "c8a808949629a9f800062aece02a0091985725e9c20cceb73806180c35d3b45e"
       }
@@ -1712,7 +1712,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b",
         "current_code_digest": "1a332297545afcc71a738dfd5f1fedad9c7dbc30c8d6612b8f4b1b7274462004"
       }
@@ -1950,7 +1950,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389",
         "current_code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523"
       }
@@ -2244,7 +2244,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46",
         "current_code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf"
       }
@@ -2542,7 +2542,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6",
         "current_code_digest": "5664a1028c5e84ad4cd44adcf073e1bca837e0650130fc7f050ad0eb61817502"
       }
@@ -2815,7 +2815,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
         "current_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6"
       }
@@ -3088,7 +3088,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
         "current_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6"
       }
@@ -3364,7 +3364,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "pending-independent-review",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
         "previous_code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b",
         "current_code_digest": "553ac01dc296515e8895f75a389d84f9e928eaeb591a8bed39f3ac87259836ec"
       }
