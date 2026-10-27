@@ -64,5 +64,6 @@ export function authorizeMaintenance({maintenanceTask,originalTask}) {
     &&delegation.contract_sha256===digest(scope)&&delegation.central_owner===scope.central_owner
     &&delegation.local_owner===scope.local_owner&&same(delegation.actions,scope.actions));
   return {scope:structuredClone(scope),contract_sha256:digest(scope),maintenance_task_id:maintenanceTask.id,
-    actor:maintenanceTask.claimed_by,original_actor:originalTask.claimed_by,original_task_id:originalTask.id};
+    actor:maintenanceTask.claimed_by,original_actor:originalTask.claimed_by,original_task_id:originalTask.id,
+    maintenance_claimed_at:maintenanceTask.claimed_at??null,original_claimed_at:originalTask.claimed_at??null};
 }

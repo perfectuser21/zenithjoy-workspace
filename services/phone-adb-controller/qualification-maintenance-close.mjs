@@ -4,7 +4,9 @@ export async function closeMaintenanceEpoch(io) {
  const need=value=>{if(!value)throw Error('MAINTENANCE_CLOSE_UNPROVEN');};
  const record=async(phase,extra={})=>io.append({phase,at_ms:Date.now(),contract_sha256:authority?.contract_sha256,...extra});
  const current=async()=>{
-  const fresh=await io.authority();need(fresh&&fresh.contract_sha256===authority.contract_sha256);
+  const fresh=await io.authority();
+  need(fresh&&['contract_sha256','maintenance_task_id','actor','original_task_id','original_actor','maintenance_claimed_at','original_claimed_at']
+   .every(key=>fresh[key]===authority[key]));
   return fresh;
  };
  try {
