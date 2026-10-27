@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {execInput} from '../leadgen-client.mjs';
 import {receiptPath} from '../native-operation-receipt.mjs';
 const api=await import('../qualification-maintenance-processes.mjs').catch(error=>{
@@ -33,8 +34,22 @@ for(const [name,change]of [
   ['原程序相关活执行者',c=>c.observations[0].classification='active_related'],
   ['未归属脱组执行者',c=>c.observations[0].classification='unknown_detached'],
   ['观察器源码漂移',c=>c.observer_sha256='0'.repeat(64)],
+  ['终态PID出生变化',c=>c.final_enumerated[0].start_identity='reused:new'],
 ])test(name+'不得获得维护effects闭合',()=>{
   needApi();const s=scope(),c=quiet(s);change(c);assert.equal(api.evaluateProcessCensus(c,s).status,'blocked');
+});
+
+for(const [name,argv,old] of [
+  ['普通参数伪装维护actor',['python3','-c','pass','/tmp/qualification-maintenance-processes.py','NO-PHONE'],false],
+  ['早于run的未归属解释器',['python3','-c','pass'],true],
+  ['外目录脚本未证明独立',['python3','/tmp/unrelated.py'],false],
+])test(name+'不能被路径或年龄免检',()=>{
+  const observer=fileURLToPath(new URL('../qualification-maintenance-processes.py',import.meta.url));
+  const code=`import importlib.util,json,sys,os\np=sys.argv[1];s=importlib.util.spec_from_file_location('observer',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nx=json.loads(sys.stdin.read());r={'pid':987654,'ppid':42,'terminal':False,'executable':'/usr/bin/python3','start_ms':x['scope']['run_started_at_ms']+(-1 if x['old'] else 1)}\nprint(m.classify(r,x['argv'],x['scope']))`;
+  const s=scope();argv=argv.map(x=>x==='/tmp/qualification-maintenance-processes.py'?observer:x);
+  const out=spawnSync('python3',['-B','-I','-c',code,observer],{input:JSON.stringify({scope:s,argv,old}),encoding:'utf8'});
+  assert.equal(out.status,0,out.stderr);
+  assert.ok(['active_related','unknown_producer','unknown_detached'].includes(out.stdout.trim()),out.stdout);
 });
 
 test('原tracked名单全停仍须从真实kernel发现未登记doublefork/setsid后台',
