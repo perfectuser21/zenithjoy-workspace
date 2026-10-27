@@ -8103,3 +8103,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 真实doublefork/setsid脱组且旧父退出仍活；穷尽kernel域、权限/清单遗漏/不明producer拒绝，原UNKNOWN不改，不访问手机。
+
+- id: qualification-maintenance-pg
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-pg.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 仅scratch真实PG两字段精确CAS、完整政策来源、旁manual零diff、未知COMMIT只读对账、双连接与trigger漂移。

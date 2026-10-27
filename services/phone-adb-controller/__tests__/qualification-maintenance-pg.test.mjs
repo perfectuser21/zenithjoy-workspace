@@ -53,5 +53,24 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
     assert.equal((await api.restorePendingClaim(uncertain,input)).status,'commit_unknown');const after=await rows();
     assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'db_committed');assert.deepEqual(await rows(),after);assert.equal((await scoped.query('SELECT count(*)::int AS n FROM zenithjoy.db_audit')).rows[0].n,1);
    });
+   await t.test('双连接同意图只提交一次，另一连接不能重复业务写',async()=>{
+    await init();const result=await Promise.allSettled([api.restorePendingClaim(scoped,input),api.restorePendingClaim(scoped,input)]);
+    assert.equal(result.filter(r=>r.status==='fulfilled'&&r.value.status==='db_committed').length,1);
+    assert.equal(result.filter(r=>r.status==='rejected').length,1);
+    assert.equal((await scoped.query('SELECT count(*)::int AS n FROM zenithjoy.db_audit')).rows[0].n,1);
+    assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'db_committed');
+   });
+   await t.test('旧audit或新owner不准凭intent误认已完成',async()=>{
+    await init();await api.restorePendingClaim(scoped,input);
+    await scoped.query("UPDATE zenithjoy.leadgen_videos SET process_status='处理中:newowner' WHERE video_id=$1",[vid]);
+    const before=await rows();assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'blocked');
+    await assert.rejects(api.restorePendingClaim(scoped,input),/READBACK_REQUIRED/);assert.deepEqual(await rows(),before);
+   });
+   await t.test('两业务字段以外被trigger改动必须回滚，包括updated_at',async()=>{
+    await init();await scoped.query(`CREATE FUNCTION ${schema}.unexpected_touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now()+interval '1 second'; RETURN NEW; END $$`);
+    await scoped.query(`CREATE TRIGGER unexpected_touch BEFORE UPDATE ON zenithjoy.leadgen_videos FOR EACH ROW EXECUTE FUNCTION ${schema}.unexpected_touch()`);
+    try{const before=await rows();await assert.rejects(api.restorePendingClaim(scoped,input),/MAINTENANCE_/);assert.deepEqual(await rows(),before);assert.equal((await scoped.query('SELECT count(*)::int AS n FROM zenithjoy.db_audit')).rows[0].n,0);}
+    finally{await scoped.query('DROP TRIGGER unexpected_touch ON zenithjoy.leadgen_videos');}
+   });
   }finally{if(made)await pool.query('DROP SCHEMA '+schema+' CASCADE');await pool.end();}
  });
