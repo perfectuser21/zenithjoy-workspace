@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {authorityFixture} from './helpers/qualification-maintenance-fixture.mjs';
+import {mkdtempSync,mkdirSync,writeFileSync,chmodSync,symlinkSync,unlinkSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 const api=await import('../qualification-maintenance-brain.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 function fake(change={}) {
  const f=authorityFixture(),calls=[];
@@ -38,4 +41,13 @@ for(const kind of ['409','timeout','owner_drift','claim_epoch_drift','central_dr
  };
  await assert.rejects(api.readMaintenanceAuthority(f.maintenanceTask.id,{request,renew:true}));
  if(kind==='no_delegation'||kind==='central_drift')assert.ok(f.calls.every(x=>x.body===undefined));
+});
+test('沿正式workflow的brain.env/BRAIN_INTERNAL_TOKEN真身；拒宽权限、symlink及重复键',t=>{
+ assert.equal(typeof api?.readMaintenanceBrainToken,'function');const dir=mkdtempSync(join(tmpdir(),'maintenance-credential-'));
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));mkdirSync(join(dir,'.credentials'));
+ const file=join(dir,'.credentials','brain.env');writeFileSync(file,'BRAIN_INTERNAL_TOKEN="fixture-not-real-token"\n',{mode:0o600});
+ assert.equal(api.readMaintenanceBrainToken(dir),'fixture-not-real-token');
+ chmodSync(file,0o644);assert.throws(()=>api.readMaintenanceBrainToken(dir),/MAINTENANCE_/);chmodSync(file,0o600);
+ writeFileSync(file,'BRAIN_INTERNAL_TOKEN=first\nBRAIN_INTERNAL_TOKEN=second\n');assert.throws(()=>api.readMaintenanceBrainToken(dir),/MAINTENANCE_/);
+ unlinkSync(file);const target=join(dir,'target');writeFileSync(target,'BRAIN_INTERNAL_TOKEN=other\n',{mode:0o600});symlinkSync(target,file);assert.throws(()=>api.readMaintenanceBrainToken(dir),/MAINTENANCE_/);
 });
