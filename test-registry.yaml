@@ -7951,3 +7951,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 真发现循环raw上限、重复与首屏超额、禁重定位及同run不重置；不连接设备。
+
+- id: discovery-attempt-quota
+  path: services/phone-adb-controller/__tests__/discovery-attempt-quota.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 显式v2尝试配额与首屏显示数解耦，实际loop/prepareCLI/冻结来源及旧v1严格语义回归；不连接设备。
