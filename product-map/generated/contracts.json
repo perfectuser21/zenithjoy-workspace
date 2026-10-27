@@ -49,7 +49,7 @@
       }
     },
     "douyin_video_processing": {
-      "sha256": "e86996e2f4f726c8cb3cb94169d14bf0debdf127addf87a385070345c5897ae1",
+      "sha256": "4fa73607444cbef6ab9505e57a552e8ec9945301f5409174be7f10037f5208ad",
       "activities": {
         "preflight": "f3feeb2b09ae53d6c92ca1a002a0a9d2fe550a0be8f1ff7121662c87ff01dd92",
         "dedup": "f6e6ef3c5a9fceb421a1957241b7a359a12f4782bc11508a257e5567315a8dea",
