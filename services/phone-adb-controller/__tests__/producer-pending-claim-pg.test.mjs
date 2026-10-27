@@ -35,7 +35,8 @@ test('真实PG：v2 pending-only原子领取，不借15分钟租约恢复隔离/
     for(const [name,query,args]of [
       ['消费设备漂移',"UPDATE zenithjoy.company_config_runs SET task_inputs=jsonb_set(task_inputs,'{device_binding,device_serial}','\"other\"') WHERE run_id=$1",[request.run]],
       ['来源行被重新挂批',"UPDATE zenithjoy.company_config_runs SET source_run='foreign101' WHERE run_id=$1",[source]],
-      ['账号停用',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,platform_accounts,0,enabled}','false') WHERE run_id=$1",[request.run]]
+      ['账号停用',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,platform_accounts,0,enabled}','false') WHERE run_id=$1",[request.run]],
+      ['同政策ID正文漂移',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,video_judgment}','{\"rules\":\"foreign\"}') WHERE run_id=$1",[request.run]]
     ])await t.test(name+'拒绝不写',async()=>{await init();await scoped.query(query,args);const before=await read();await assert.rejects(queueRequest(scoped,request,deps),/PRODUCER/);assert.deepEqual(await read(),before);});
     await t.test('pending行已有foreign资格配置不触碰',async()=>{await init();await scoped.query('UPDATE zenithjoy.leadgen_videos SET judgment_config=$1::jsonb WHERE video_id=$2',[JSON.stringify({company_id:'00000000-0000-4000-8000-000000000001'}),vid]);const before=await read();assert.deepEqual(await queueRequest(scoped,request,deps),[]);assert.deepEqual(await read(),before);});
     await t.test('两并发请求只一领取，事务锁不重领',async()=>{await init();const r=await Promise.all([queueRequest(scoped,request,deps),queueRequest(scoped,request,deps)]);assert.deepEqual(r.map(a=>a.length).sort(),[0,1]);assert.equal((await read()).find(v=>v.video_id===other).process_status,'待人工核验:old102');});
