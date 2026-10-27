@@ -6,7 +6,7 @@ function fake(change={}) {
  const f=authorityFixture(),calls=[];
  const request=async(path,body)=>{
   calls.push({path,body});if(change.request)return change.request(path,body,f,calls);
-  if(path.endsWith('/heartbeat'))return {success:true,lease_seconds:14400,lease_until:new Date(Date.now()+14400000).toISOString()};
+  if(path.endsWith('/heartbeat'))return {ok:true,lease_seconds:14400,lease_until:new Date(Date.now()+14400000).toISOString()};
   if(path==='/device-locks')return {success:true,locks:[{device_name:f.scope.serial,locked_by:f.originalTask.id,expires_at:new Date(Date.now()+120000).toISOString()}]};
   return structuredClone(path==='/tasks/'+f.maintenanceTask.id?f.maintenanceTask:f.originalTask);
  };
