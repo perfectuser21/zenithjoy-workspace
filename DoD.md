@@ -1,12 +1,12 @@
-# 联合验收
-Task: 8763450e-3335-4da9-a9bb-352db3d27bf9
+# 非阻塞原生观察验收
+Task: 58d08a78-4119-4117-bc98-12390bd988eb
 GP-Anchor: line02/keyword_acquisition keep-green
 
-- [ ] 正式Gateway无工具判读保同控制owner/low/60秒和外65秒，nonce+真实terminalReceipt先核后returned，错误/accepted/timeout/signal与伪身份保pending。
-  Test: manual:node --test services/phone-adb-controller/__tests__/commander-model-only.test.mjs services/phone-adb-controller/__tests__/commander-model-receipt.test.mjs services/phone-adb-controller/__tests__/commander-owner-reservation.test.mjs
-- [ ] 显式schema2尝试配额与displayed分离，旧schema1严格上限及默认行为保持；正式冻结、CLI、进度和受管cleanup边界永久回归。
-  Test: manual:node --test services/phone-adb-controller/__tests__/discovery-attempt-quota.test.mjs services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs
-- [ ] 真实中央3cd固定源、业务合同与生成物同源，联合方法摘要及五版头相对共同main合法，无手机/业务或生产写。
-  Test: manual:node scripts/product-map/cli.mjs check
+- [ ] 真实controller/managed version、真实execInput/native receipt和Darwin producer/socket在受控慢observer下仍满足原2秒；快对照通过，永久RED先提交并纳正式Darwin CI。
+  Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs
+- [ ] single-flight/每PID去重、停止和信号原截止、晚到结果不可覆盖终态；真正未知、fork逃逸、signal、deadline仍保unknown，不假OS全停。
+  Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-receipt.test.mjs services/phone-adb-controller/__tests__/native-operation-budget.test.mjs services/phone-adb-controller/__tests__/native-operation-coverage.test.mjs services/phone-adb-controller/__tests__/native-operation-identity.test.mjs services/phone-adb-controller/__tests__/native-operation-races.test.mjs
+- [ ] 原leaf归还/业务成功、一次只读能力和完整method来源不变，方法校验12/14、版本及正式CI另验，不手机或业务写。
+  Test: manual:node --test services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs
 
-原09bFAILED保留，876续接；modelRun单次实测为embedded/OpenClaw无工具纯判读，不使用原Codex线程或durable历史，不声明历史timeout底因已修。官方完整CI和候选安装需新联合头另验。
+历史9c5b FAIL与2003ms底因UNKNOWN保留；结构回归为synthetic trigger，不冒历史根因或真机稳定性已修。端点/旧producer消费/新人工恢复权威另有实质边界，不绕guard。

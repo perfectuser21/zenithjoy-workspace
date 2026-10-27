@@ -368,7 +368,7 @@ jobs:
       - name: Require real Darwin kernel tests
         run: |
           node -e "if(process.platform!=='darwin')process.exit(1)"
-          node --test services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs services/phone-adb-controller/__tests__/collection-evidence-layout.test.mjs
+          node --test services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs services/phone-adb-controller/__tests__/native-operation-identity.test.mjs services/phone-adb-controller/__tests__/native-operation-races.test.mjs services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs services/phone-adb-controller/__tests__/collection-evidence-layout.test.mjs
       - name: Preserve failed collection fixture evidence
         if: failure()
         uses: actions/upload-artifact@v4

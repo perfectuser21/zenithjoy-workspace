@@ -1,15 +1,15 @@
-# Commander无工具判读与101尝试配额联合修复
-Task: 8763450e-3335-4da9-a9bb-352db3d27bf9
+# 原生进程观察不得阻塞受管ADB的IPC
+Task: 58d08a78-4119-4117-bc98-12390bd988eb
 GP-Anchor: line02/keyword_acquisition keep-green
 
-原db2239 AFTER请求实际60003ms执行超时，准备提交约2.424s后57.616s未收到最终完成；底层原因未知，pendingStage默认值不证明队列或模型挂死。旧判读口头禁工具但实际compiled59工具，且原101将displayed数量与attempt配额耦合。
+原9c5b已正常领取并确认一条合格视频，collection的client_version在原2秒处超时2003ms并隔离。此次历史超时的具体触发原因仍未知，不以结构测试或后续直接CLI成功代替历史归因。
 
-Commander只用现役正式Gateway agent modelRun=true逐请求收缩工具权限，保work-commander控制owner、输入sessionKey、完整receipt/workflow_progress、thinking low、60s/外层65s和原unknown。先核本次nonce、最终模型回执和决定，再归还reservation；错身份/非终态保持pending。诊断仅固定phase/status/run/elapsed/timeout字段，wx0600旁证不含prompt/argv/环境/原异常，不作执行权证明。
+已证设计风险：原生观察器每25ms同步启动Python观察进程，children单次可阻塞3秒；同一Node事件循环也接收scoped managed client的Unix请求。永久回归使用真实execInput、原生收据、真实Darwin nofork producer、真实controller初始化和managed version。测试只有私有loopback假ADB服务与IPC-FAKE序列号；慢观察为真实子进程的synthetic trigger，不接触手机。
 
-modelRun是单回合模型判读，不追加原负责人聊天历史；正式单次实测使用embedded/OpenClaw runner，不使用原Codex app-server线程。Skill接手保原完整负责人入口，不使用modelRun冒接手权限。本次7.529s成功只是一次实际兼容验证，不宣称历史57秒底因或稳定性已修。
+最窄修改限内部观察：异步有界检查，整批轮询和每PID登记single-flight，不积压重叠。停止及信号仍共享原单调截止，取消或忽略晚到结果，最终收据不被晚到观察改写。公开同步processIdentity契约、32个上限、25ms节拍、精确身份/信号权限保留。错误、超时、坏JSON、漂移仍unknown；observed_only永不变成OS全集合停证。
 
-101显式schema2/max_attempts只约束视频尝试次数，displayed照实记录；旧schema1严格displayed上限语义保持，默认无输入路径保持。新合同与正式中央3cd固定源同步，受限模式的来源/单词/禁reveal及同run进度保护仍生效。不得把尝试上限冒物理可见上限，也不重置已消耗额度。
+不加version的2秒，不省观察、不清未知、不新增cleanup/resume权限。不改手机动作、端点模板、公司政策、旧失败、业务数据或额度。5042模板与实际5041不一致是独立缺口，不混本实现；新源码消费旧producer及人工恢复不能借本PR绕过现行来源/用户权威。
 
-不改手机动作、公司政策、业务DB、原unknown安全边界或生产，不启动搜索/102/103/DM。本PR联合代码与隔离候选交付，真实业务另验。永久RED及两组件独审历史保持；联合方法摘要与版本相对共同main重新计算，不继承单组件签名作联合证明。
+范围：永久RED先提交、最窄实现、必要方法摘要/五版头、独审、完整正式CI及隔离候选。不得把源码/候选通过冒实际评论或103端到端通过；不搜索、不恢复人工、不DM、不生产晋级。
 
-续接说明：原09b9547d租约失效FAILED保持，8763450e接续原审定Commander实现；采样组件来源c1ca6b9b及其中央3cd闭包，原Task职责保持。检查点沿原开工预算记录，不因续接重置为新承诺。
+正式CI首轮CI Config Audit因PR标题未标注工作流配置变更而失败；已补齐[CONFIG]标记，以正常新提交触发完整CI，保留原失败，运行源码与测试字节不变。

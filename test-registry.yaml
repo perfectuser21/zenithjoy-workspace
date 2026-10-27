@@ -8007,3 +8007,27 @@ agent_suite:
   status: active
   product: AI员工
   note: 显式v2尝试配额与首屏显示数解耦，实际loop/prepareCLI/冻结来源及旧v1严格语义回归；不连接设备。
+
+- id: native-operation-ipc
+  path: services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实Darwin producer/controller IPC与受控慢observer，保原2秒；synthetic结构回归不冒历史归因"
+
+- id: native-operation-identity
+  path: services/phone-adb-controller/__tests__/native-operation-identity.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实合成子进程pid/start/uid/pgid漂移拒信号，独立marker核无TERM；不接触手机"
+
+- id: native-operation-races
+  path: services/phone-adb-controller/__tests__/native-operation-races.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实合成observer单飞/晚到/坏JSON/原截止，终态不覆盖、不假OS全集停证"
