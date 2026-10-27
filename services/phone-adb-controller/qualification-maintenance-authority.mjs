@@ -40,20 +40,23 @@ function validateScope(scope) {
     &&same(scope.actions,actions),'SCOPE');
   candidate(scope.maintenance_source);
 }
-function resourceScope(task,scope) {
+function resourceScope(task,scope,source) {
   need(same(task.payload.resources?.devices,[scope.serial])&&same(task.payload.allowed_video_ids,scope.video_ids),'SCOPE');
+  for(const [key,expected]of [['source_run',scope.producer_run],['device_serial',scope.serial],['expected_candidate_sha',source]]) {
+    if(Object.hasOwn(task.payload,key))need(task.payload[key]===expected,'SCOPE');
+  }
   // payload.tenant_id是Brain路由默认，不是业务公司的tenant真身。
 }
 
 // 这里只验证正规Task/委托的绑定；不把授权等同于effects已闭合或允许写PG。
 export function authorizeMaintenance({maintenanceTask,originalTask}) {
-  need(operationalTask(maintenanceTask)&&operationalTask(originalTask));
+  need(operationalTask(maintenanceTask)&&operationalTask(originalTask)&&maintenanceTask.id!==originalTask.id);
   const scope=maintenanceTask.result?.qualification_maintenance;
   validateScope(scope);
   need(scope.original_task_id===originalTask.id&&scope.original_actor===originalTask.claimed_by
     &&uuid.test(maintenanceTask.project_id||'')&&maintenanceTask.project_id===originalTask.project_id
     &&[originalTask.id,originalTask.parent_task_id].includes(maintenanceTask.parent_task_id));
-  resourceScope(maintenanceTask,scope);resourceScope(originalTask,scope);
+  resourceScope(maintenanceTask,scope,scope.maintenance_source.commit);resourceScope(originalTask,scope,scope.consumer_source);
   const delegation=originalTask.result?.qualification_maintenance_delegation;
   need(delegation&&Object.keys(delegation).sort().join(',')==='actions,actor,central_owner,contract_sha256,delegator_actor,local_owner,maintenance_task_id,schema_version'
     &&delegation.schema_version===1&&delegation.maintenance_task_id===maintenanceTask.id
