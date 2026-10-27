@@ -65,6 +65,13 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
      assert.notEqual((await api.readPendingClaimOutcome(scoped,input)).status,'db_committed','不能复用in-doubt连接读取自己的未提交事务');
     }finally{await pool.query('ROLLBACK');await independent.end();}
    });
+   await t.test('ROLLBACK失败同样销毁连接，不复用仍开事务的后端',async()=>{
+    await init();await scoped.query('UPDATE zenithjoy.tenant_company_profiles SET config_version=15');let backend;
+    const uncertain={...scoped,connect:async()=>{const c=await scoped.connect();backend=(await c.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;return {query:async(q,a)=>{if(q==='ROLLBACK')throw Error('fixture rollback transport lost');return c.query(q,a);},release:e=>c.release(e)};}};
+    await assert.rejects(api.restorePendingClaim(uncertain,input),/MAINTENANCE_/);
+    assert.notEqual((await pool.query('SELECT pg_backend_pid() AS pid')).rows[0].pid,backend);
+    assert.equal((await scoped.query('SELECT count(*)::int AS n FROM zenithjoy.db_audit')).rows[0].n,0);
+   });
    await t.test('双连接同意图只提交一次，另一连接不能重复业务写',async()=>{
     await init();const result=await Promise.allSettled([api.restorePendingClaim(scoped,input),api.restorePendingClaim(scoped,input)]);
     assert.equal(result.filter(r=>r.status==='fulfilled'&&r.value.status==='db_committed').length,1);
