@@ -46,8 +46,8 @@ for(const [name,argv,old] of [
 ])test(name+'不能被路径或年龄免检',()=>{
   const observer=fileURLToPath(new URL('../qualification-maintenance-processes.py',import.meta.url));
   const code=`import importlib.util,json,sys,os\np=sys.argv[1];s=importlib.util.spec_from_file_location('observer',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nx=json.loads(sys.stdin.read());r={'pid':987654,'ppid':42,'terminal':False,'executable':'/usr/bin/python3','start_ms':x['scope']['run_started_at_ms']+(-1 if x['old'] else 1)}\nprint(m.classify(r,x['argv'],x['scope']))`;
-  const s=scope();argv=argv.map(x=>x==='/tmp/qualification-maintenance-processes.py'?observer:x);
-  const out=spawnSync('python3',['-B','-I','-c',code,observer],{input:JSON.stringify({scope:s,argv,old}),encoding:'utf8'});
+  const s=scope(),actualArgv=argv.map(x=>x==='/tmp/qualification-maintenance-processes.py'?observer:x);
+  const out=spawnSync('python3',['-B','-I','-c',code,observer],{input:JSON.stringify({scope:s,argv:actualArgv,old}),encoding:'utf8'});
   assert.equal(out.status,0,out.stderr);
   assert.ok(['active_related','unknown_producer','unknown_detached'].includes(out.stdout.trim()),out.stdout);
 });
