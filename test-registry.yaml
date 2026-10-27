@@ -8095,3 +8095,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 真实data/operations字段、原in_progress资源hold与精确委托；开发Task、scope/source/actor/设备/租约权限漂移拒绝。
+
+- id: qualification-maintenance-processes
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-processes.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实doublefork/setsid脱组且旧父退出仍活；穷尽kernel域、权限/清单遗漏/不明producer拒绝，原UNKNOWN不改，不访问手机。
