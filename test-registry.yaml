@@ -8055,3 +8055,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 服务端监听spec独立于客户端endpoint；真实Darwin子进程终态窗口、kernel微秒birth绑定、权限与PID复用拒绝，禁止USB/手机访问。
+
+- id: collection-template-policy
+  path: services/phone-adb-controller/__tests__/collection-template-policy.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 当前模板固定Git字节与真实manifest进入默认101/102 scope对齐单5037；旧5042冻结/pins/显式错端点原guard保持，证据目录元数据为synthetic。

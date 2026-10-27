@@ -46,6 +46,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/drift-check.test.mjs \
  services/phone-adb-controller/__tests__/empty-collection.test.mjs \
  services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs \
+ services/phone-adb-controller/__tests__/collection-template-policy.test.mjs \
  services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs \
  services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs \
  services/phone-adb-controller/__tests__/collection-scope-input.test.mjs \
