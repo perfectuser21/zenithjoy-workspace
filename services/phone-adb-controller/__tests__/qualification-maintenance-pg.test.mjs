@@ -18,7 +18,7 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
   const rows=async()=> (await scoped.query('SELECT to_jsonb(v) AS row FROM zenithjoy.leadgen_videos v ORDER BY video_id')).rows.map(x=>x.row);
   const init=async()=>{
    for(const name of ['db_audit','leadgen_comments','leadgen_videos','company_config_runs','company_config_versions','tenant_company_profiles'])await scoped.query('DELETE FROM zenithjoy.'+name);
-   await scoped.query('INSERT INTO zenithjoy.tenant_company_profiles VALUES($1,$2,14,\'enabled\')',[s.company_id,s.tenant_id]);
+   await scoped.query('INSERT INTO zenithjoy.tenant_company_profiles VALUES($1,$2,14,\'enabled\',$3::jsonb)',[s.company_id,s.tenant_id,JSON.stringify(snapshot.runtime_config)]);
    await scoped.query('INSERT INTO zenithjoy.company_config_versions VALUES($1,$2,14,$3::jsonb)',[s.company_id,s.tenant_id,JSON.stringify(snapshot)]);
    for(const [run,up]of [[s.producer_run,null],[s.run_tag,s.producer_run]])await scoped.query('INSERT INTO zenithjoy.company_config_runs VALUES($1,$2,14,$3,$4::jsonb,$5)',[s.company_id,s.tenant_id,run,JSON.stringify(snapshot),up]);
    for(const [id,status,batch,judgment]of [[vid,'处理中:'+s.run_tag,s.run_tag,'pending'],[other,'待人工核验:old102','old102','matched']])await scoped.query('INSERT INTO zenithjoy.leadgen_videos(line_key,video_id,video_url,harvest_batch,process_status,judgment_status) VALUES($1,$2,$3,$4,$5,$6)',[s.line_key,id,'https://www.douyin.com/video/'+id,batch,status,judgment]);
@@ -30,7 +30,7 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
    const ddl=readFileSync(new URL('../../../apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql',import.meta.url),'utf8').match(/CREATE TABLE IF NOT EXISTS zenithjoy\.leadgen_videos \([\s\S]+?\n\);/)[0];
    await scoped.query(ddl);await scoped.query('ALTER TABLE zenithjoy.leadgen_videos ADD COLUMN judgment_config jsonb');
    await scoped.query('CREATE TABLE zenithjoy.company_config_runs(company_id uuid,tenant_id uuid,version int,run_id text,snapshot jsonb,source_run text)');
-   await scoped.query('CREATE TABLE zenithjoy.tenant_company_profiles(company_id uuid,tenant_id uuid,config_version int,config_status text)');
+   await scoped.query('CREATE TABLE zenithjoy.tenant_company_profiles(company_id uuid,tenant_id uuid,config_version int,config_status text,runtime_config jsonb)');
    await scoped.query('CREATE TABLE zenithjoy.company_config_versions(company_id uuid,tenant_id uuid,version int,snapshot jsonb)');
    await scoped.query('CREATE TABLE zenithjoy.leadgen_comments(id uuid DEFAULT gen_random_uuid(),line_key text,harvest_batch text)');
    const audit=readFileSync(new URL('../../../apps/api/db/migrations/20260820_120000_structured_workbench.sql',import.meta.url),'utf8').match(/CREATE TABLE IF NOT EXISTS zenithjoy\.db_audit \([\s\S]+?\n\);/)[0];await scoped.query(audit);
@@ -48,8 +48,16 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
     ['同run有评论','INSERT INTO zenithjoy.leadgen_comments(line_key,harvest_batch) VALUES($1,$2)',[s.line_key,s.run_tag]],
     ['current版本变','UPDATE zenithjoy.tenant_company_profiles SET config_version=15',[]],
     ['current同版本政策正文变',"UPDATE zenithjoy.company_config_versions SET snapshot=jsonb_set(snapshot,'{runtime_config,video_judgment}','{}')",[]],
+    ['current profile运行政策变',"UPDATE zenithjoy.tenant_company_profiles SET runtime_config=jsonb_set(runtime_config,'{video_judgment}','{}')",[]],
     ['同ID政策正文变',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,video_judgment}','{}') WHERE run_id=$1",[s.run_tag]],
    ])await t.test(name+'事务中拒绝',async()=>{await init();await scoped.query(sql,args);const before=await rows();assert.equal(typeof api?.restorePendingClaim,'function');await assert.rejects(api.restorePendingClaim(scoped,input),/MAINTENANCE_/);assert.deepEqual(await rows(),before);});
+   await t.test('审计保存完整行前后hash；后续reason写入使当前readback阻断',async()=>{
+    await init();const before=(await rows()).find(v=>v.video_id===vid);await api.restorePendingClaim(scoped,input);
+    const after=(await rows()).find(v=>v.video_id===vid),audit=(await scoped.query('SELECT detail FROM zenithjoy.db_audit')).rows[0].detail;
+    assert.equal(audit.before_row_sha256,digest(before));assert.equal(audit.after_row_sha256,digest(after));
+    await scoped.query("UPDATE zenithjoy.leadgen_videos SET judgment_reason='new reason' WHERE video_id=$1",[vid]);
+    assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'blocked');
+   });
    await t.test('COMMIT后连接失联保unknown，独立readback证一条audit而不重写',async()=>{
     await init();assert.equal(typeof api?.readPendingClaimOutcome,'function');
     const uncertain={...scoped,connect:async()=>{const c=await scoped.connect();return {query:async(q,a)=>{const r=await c.query(q,a);if(q==='COMMIT')throw Error('fixture connection lost after commit');return r;},release:e=>c.release(e)};}};
