@@ -21,7 +21,7 @@ function auditMatches(row,input) {
 }
 // 内部事务组件；公开入口必须自行在guard内重验Task、候选、effects，不能接CLI proof JSON。
 export async function restorePendingClaim(pool,input) {
- const {a,s}=context(input),c=await pool.connect();let commitSent=false;
+ const {a,s}=context(input),c=await pool.connect();let commitSent=false,destroyConnection=false;
  try {
   await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
   await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[s.intent_id]);
@@ -30,6 +30,8 @@ export async function restorePendingClaim(pool,input) {
   if(old.length)throw Error('MAINTENANCE_PG_READBACK_REQUIRED');
   const profiles=(await c.query('SELECT * FROM zenithjoy.tenant_company_profiles WHERE company_id=$1 FOR SHARE',[s.company_id])).rows;
   need(profiles.length===1&&profiles[0].tenant_id===s.tenant_id&&profiles[0].config_version===s.config_version&&profiles[0].config_status==='enabled');
+  const versions=(await c.query('SELECT snapshot FROM zenithjoy.company_config_versions WHERE company_id=$1 AND tenant_id=$2 AND version=$3 FOR SHARE',[s.company_id,s.tenant_id,s.config_version])).rows;
+  need(versions.length===1&&isDeepStrictEqual(versions[0].snapshot,input.expected_snapshot));
   const runs=(await c.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=ANY($2::text[]) FOR SHARE',[s.company_id,[s.producer_run,s.run_tag]])).rows;
   for(const run of [s.producer_run,s.run_tag]) {
    const matches=runs.filter(r=>r.run_id===run),r=matches[0];
@@ -54,10 +56,10 @@ export async function restorePendingClaim(pool,input) {
   commitSent=true;await c.query('COMMIT');
   return {status:'db_committed',intent_id:s.intent_id,audit_sha256:digest(detail)};
  }catch(error) {
-  if(commitSent)return {status:'commit_unknown',intent_id:s.intent_id};
-  try{await c.query('ROLLBACK');}catch{}
+  if(commitSent){destroyConnection=true;return {status:'commit_unknown',intent_id:s.intent_id};}
+  try{await c.query('ROLLBACK');}catch{destroyConnection=true;}
   throw error;
- }finally{c.release();}
+ }finally{c.release(destroyConnection);}
 }
 // 提交未知后只读对账，不UPDATE、不再COMMIT、不代清新owner。
 export async function readPendingClaimOutcome(pool,input) {
