@@ -8,7 +8,7 @@ function fixture() {
  const body={deployment:{source_repo:'perfectuser21/zenithjoy-workspace',source_commit:scope.consumer_source,target:'xian-m4'},
   run_identity:{capability:'douyin_video_processing',tag:scope.run_tag,profile:scope.profile,serial:scope.serial,run_id:'douyin_video_processing-'+scope.run_tag},
   sampling_input:{workflow_key:'douyin_video_processing',run_tag:scope.run_tag,profile:scope.profile,serial:scope.serial,line:scope.line_key,source_run:scope.producer_run,comment_limit:5,collection_budget_s:480},
-  producer_descriptor:{schema_version:2,company_id:scope.company_id,tenant_id:scope.tenant_id,company_config_version:scope.config_version,policy_id:scope.policy_id,run_tag:scope.producer_run,video_ids:scope.video_ids,profile:scope.profile,serial:scope.serial},
+  producer_descriptor:{schema_version:2,workflow_key:'douyin_video_discovery',source_commit:'beb37370c047a13013aa0cc997a0fecc09534dde',snapshot_sha256:'fe7da095eb9184ae5eba9c71af78b7c679a6f752509e5e8c5ed1a5a4288fee67',progress_sha256:'fbbee23e36623307ab19ca9abbfb1626e6b94a00e05439dad6f3add8174646bc',line:scope.line_key,company_id:scope.company_id,tenant_id:scope.tenant_id,company_config_version:scope.config_version,policy_id:scope.policy_id,run_tag:scope.producer_run,video_ids:scope.video_ids,profile:scope.profile,serial:scope.serial},
   activities:['preflight','dedup','qualification','collection','cleanup'].map(slot=>({reference:{slot_key:slot},version:{source_commit:scope.consumer_source}}))};
  const frozen={...body,snapshot_sha256:digest(body)};scope.snapshot_sha256=frozen.snapshot_sha256;
  const sampling_input=body.sampling_input;
@@ -38,4 +38,9 @@ for(const [name,mutate]of [
  ['额外stdout行',f=>f.tsv+='QUAL\tother\tmatched\n'],
 ])test(name+'不能声称固定353 beforejudge成立',()=>{
  const f=fixture();mutate(f);assert.equal(typeof api?.verifyBeforeJudgeEvidence,'function');assert.throws(()=>api.verifyBeforeJudgeEvidence(f),/MAINTENANCE_/);
+});
+test('重算自洽snapshot仍不能洗掉原v2 producer完整来源守卫',()=>{
+ const f=fixture();f.frozen.producer_descriptor.progress_sha256='0'.repeat(64);
+ const {snapshot_sha256,...body}=f.frozen;f.frozen.snapshot_sha256=digest(body);f.scope.snapshot_sha256=f.frozen.snapshot_sha256;
+ assert.throws(()=>api.verifyBeforeJudgeEvidence(f),/MAINTENANCE_|PRODUCER/);
 });
