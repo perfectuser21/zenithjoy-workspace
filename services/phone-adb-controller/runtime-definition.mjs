@@ -1,4 +1,4 @@
-import {validateProducerDescriptor} from './producer-descriptor.mjs';
+import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
 import {userInfo} from 'node:os';
 import { assertRuntimeHost } from './runtime-host.mjs';
 import { loadRuntimeRelease } from './runtime-release.mjs';
@@ -97,7 +97,7 @@ export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir
 export async function freezeDefinition(o) {
   if(o.discoveryInput){const d=validateDiscoveryInput(o.discoveryInput);if(d.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==d[k==='tag'?'run_tag':k]))throw Error('DISCOVERY_INPUT_FREEZE_SCOPE_INVALID');}
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_input||null)!==canonical(o.discoveryInput||null))throw Error('DISCOVERY_INPUT_RESUME_MISMATCH');
-  if(o.producerDescriptor){const d=validateProducerDescriptor(o.producerDescriptor);if(o.workflowKey!=='douyin_video_processing'||o.runIdentity?.profile!==d.profile||o.runIdentity?.serial!==d.serial||o.samplingInput?.source_run!==d.run_tag)throw Error('PRODUCER_DESCRIPTOR_FREEZE_SCOPE_INVALID');}
+  if(o.producerDescriptor){const d=validateProducerDescriptor(o.producerDescriptor);assertProducerSampling(d,o.samplingInput);if(o.workflowKey!=='douyin_video_processing'||o.runIdentity?.profile!==d.profile||o.runIdentity?.serial!==d.serial||o.samplingInput?.source_run!==d.run_tag)throw Error('PRODUCER_DESCRIPTOR_FREEZE_SCOPE_INVALID');}
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).producer_descriptor||null)!==canonical(o.producerDescriptor||null))throw Error('PRODUCER_DESCRIPTOR_RESUME_MISMATCH');
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_phone_scope||null)!==canonical(o.discoveryPhoneScope||null))throw Error('discovery phone scope续跑输入与冻结请求不符');
   if(o.samplingInput){

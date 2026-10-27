@@ -15,3 +15,6 @@ GP-Anchor: line02/keyword_acquisition keep-green
 ## 测试策略
 CI：真实原progress压缩fixture和固定哈希/身份验证；shared readFrozen原v1真实正例保持，新v2错误来源阴性；scratch Postgres原子CAS、并发和漂移永久回归。CI不冒v2全281源文件正链。
 本机/候选：以真实原完整run目录执行readFrozen+v2只读正集成，独立记录结果；真实102/103另独立业务任务，不用本代码CI冒业务通过。
+
+## 已验证与未验证边界
+本机核心144/144；扩大426通过、1个无关条件用例未配置而skip。原完整281文件readFrozen只读正集成及生产只读原公司snapshot复制到隔离scratch事务正例均已完成；它们不代表新候选或真实102/103验收。中央方法actual ad28c47cce328d65fbd35283db48e2561ccd1bb3已正式CI合并；业务消费者本PR固定来源和12方法闭包。正式CI/候选状态须以实际结果更新，未知原生评论数保持unknown后续重读。

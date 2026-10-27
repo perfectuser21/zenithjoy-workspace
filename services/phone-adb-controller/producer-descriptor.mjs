@@ -3,7 +3,19 @@ import {openSync,readFileSync,fstatSync,closeSync,constants} from 'node:fs';
 import {createHash} from 'node:crypto';
 const fixed={schema_version:1,workflow_key:'douyin_video_discovery',run_tag:'cicd24c9_101_20261023_2013',source_commit:'24c9e6b97b81ae144985474d9e33665bf65a6a8e',profile:'legacy',serial:'ANGYVB4402004137',line:'jinuo',company_id:'ef8e14b0-4018-4e54-bc7a-866e51a0ce0b',tenant_id:'a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61',company_config_version:14,policy_id:'jinoshengyuan-existing-acquisition-rules-v1'};
 const keys=[...Object.keys(fixed),'snapshot_sha256','progress_sha256','video_ids'].sort(),fail=()=>{throw Error('PRODUCER_DESCRIPTOR_INVALID');};
+const pendingFixed={...fixed,schema_version:2,run_tag:'cicdbeb_101_attempt2_20261027_a2dcb023',source_commit:'beb37370c047a13013aa0cc997a0fecc09534dde',
+ snapshot_sha256:'fe7da095eb9184ae5eba9c71af78b7c679a6f752509e5e8c5ed1a5a4288fee67',progress_sha256:'fbbee23e36623307ab19ca9abbfb1626e6b94a00e05439dad6f3add8174646bc'};
+export function assertProducerSampling(d,s){
+ if(d.schema_version!==2)return;
+ if(!s||s.schema_version!==1||s.workflow_key!=='douyin_video_processing'||s.profile!==d.profile||s.serial!==d.serial||s.line!==d.line||s.source_run!==d.run_tag
+  ||!Number.isSafeInteger(s.comment_limit)||s.comment_limit<1||s.comment_limit>5||(s.collection_budget_s??480)!==480)throw Error('PRODUCER_DESCRIPTOR_SAMPLING_SCOPE_INVALID');
+}
 export function validateProducerDescriptor(d){
+ if(d?.schema_version===2){
+  if(typeof d!=='object'||Array.isArray(d)||JSON.stringify(Object.keys(d).sort())!==JSON.stringify(keys)||Object.entries(pendingFixed).some(([k,v])=>d[k]!==v)
+   ||!Array.isArray(d.video_ids)||d.video_ids.length!==1||d.video_ids[0]!=='7689863996204591985')fail();
+  return structuredClone(d);
+ }
  if(!d||typeof d!=='object'||Array.isArray(d)||JSON.stringify(Object.keys(d).sort())!==JSON.stringify(keys)||Object.entries(fixed).some(([k,v])=>d[k]!==v)
   ||!['snapshot_sha256','progress_sha256'].every(k=>/^[a-f0-9]{64}$/.test(d[k]||''))||!Array.isArray(d.video_ids)||d.video_ids.length!==1||d.video_ids[0]!=='7699316353698753663')fail();
  return structuredClone(d);
