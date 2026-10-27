@@ -77,7 +77,8 @@ def clean_environment(environment):
 
 
 def foreground_command(policy):
-    return [policy['adb_bin'], '-L', policy['endpoint'], 'server', 'nodaemon']
+    # adb服务端listen语法不接受hostname；不加-a时仍仅默认loopback监听。
+    return [policy['adb_bin'], '-L', 'tcp:5037', 'server', 'nodaemon']
 
 
 def check_client(policy, environment, runner=subprocess.run):

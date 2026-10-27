@@ -25,6 +25,7 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/managed-adb-client.test.mjs",
   "services/phone-adb-controller/__tests__/adb-host-service.test.mjs",
   "services/phone-adb-controller/__tests__/adb-host-maintenance.test.mjs",
+  "services/phone-adb-controller/__tests__/adb-host-terminal.test.mjs",
   "services/phone-adb-controller/__tests__/maintenance-task-purpose.test.mjs",
   "services/phone-adb-controller/__tests__/managed-adb-deployment.test.mjs",
   "services/phone-adb-controller/__tests__/async-outreach-bridge.test.mjs",

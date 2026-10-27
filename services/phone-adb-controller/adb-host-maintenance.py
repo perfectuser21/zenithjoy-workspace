@@ -27,7 +27,7 @@ SERIALS = ('ANGYVB4402004137', 'ANGYVB4227006983', 'ANGYVB4311010223', 'e6c7ef34
 PORTS = (5037, 5041, 5042)
 REQUIRED_FILES = ('adb-host-maintenance.py', 'adb-existing-route.py', 'adb-managed-client.py',
                   'adb-host-service.py', 'install-adb-host-service.sh', 'phone-lock-helper.py',
-                  'maintenance-task-authority.py')
+                  'maintenance-task-authority.py', 'adb-process-observation.py')
 LOCK_ROOT = Path('/private/tmp/openclaw-phone/locks')
 SERVICE_LABEL = 'com.zenithjoy.adb-host'
 
@@ -192,20 +192,8 @@ def process_executable(pid, loader=ctypes.CDLL):
     return str(Path(path).resolve())
 
 
-def process_identity(pid):
-    fields = {}
-    for key in ('uid', 'lstart', 'args'):
-        result = command(['/bin/ps', '-ww', '-p', str(pid), '-o', key + '='], check=False)
-        if result.returncode == 1 and not result.stdout.strip():
-            return None
-        need(result.returncode == 0 and result.stdout.strip(), 'PROCESS_INSPECTION')
-        fields[key] = result.stdout.strip()
-    executable = process_executable(pid)
-    after = command(['/bin/ps', '-ww', '-p', str(pid), '-o', 'lstart='], check=False)
-    need(after.returncode == 0 and after.stdout.strip() == fields['lstart'], 'PROCESS_CHANGED')
-    return {'pid': pid, 'uid': int(fields['uid']), 'lstart': fields['lstart'],
-            'executable': executable,
-            'argv_sha256': hashlib.sha256(fields['args'].encode()).hexdigest(), '_argv': fields['args']}
+def process_identity(pid, expected=None):
+    return load_module('adb-process-observation').observe(pid, command, process_executable, expected)
 
 
 def public_identity(value):
@@ -326,7 +314,8 @@ class Journal:
             os.fsync(out.fileno())
 
 
-def terminate_exact(expected, inspect=process_identity, send=os.kill, sleep=time.sleep):
+def terminate_exact(expected, inspect=None, send=os.kill, sleep=time.sleep):
+    inspect = (lambda pid: process_identity(pid, expected)) if inspect is None else inspect
     current = public_identity(inspect(expected['pid']))
     if current is None:
         return
