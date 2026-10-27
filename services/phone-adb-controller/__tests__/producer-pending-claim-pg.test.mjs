@@ -39,6 +39,12 @@ test('真实PG：v2 pending-only原子领取，不借15分钟租约恢复隔离/
       ['同政策ID正文漂移',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,video_judgment}','{\"rules\":\"foreign\"}') WHERE run_id=$1",[request.run]]
     ])await t.test(name+'拒绝不写',async()=>{await init();await scoped.query(query,args);const before=await read();await assert.rejects(queueRequest(scoped,request,deps),/PRODUCER/);assert.deepEqual(await read(),before);});
     await t.test('pending行已有foreign资格配置不触碰',async()=>{await init();await scoped.query('UPDATE zenithjoy.leadgen_videos SET judgment_config=$1::jsonb WHERE video_id=$2',[JSON.stringify({company_id:'00000000-0000-4000-8000-000000000001'}),vid]);const before=await read();assert.deepEqual(await queueRequest(scoped,request,deps),[]);assert.deepEqual(await read(),before);});
+    await t.test('真实M4形状：原snapshot无platform、新consumer task_inputs为空也遵原生账号前置可领取',async()=>{await init();await scoped.query("UPDATE zenithjoy.company_config_runs SET snapshot=snapshot #- '{runtime_config,platform_accounts,0,platform}'");await scoped.query("UPDATE zenithjoy.company_config_runs SET task_inputs='{}'::jsonb WHERE run_id=$1",[request.run]);const rows=await queueRequest(scoped,request,deps);assert.deepEqual(rows.map(v=>v.video_id),[vid]);});
+    for(const [name,query,args]of [
+      ['显式null平台',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,platform_accounts,0,platform}','null')",[]],
+      ['显式foreign平台',"UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,platform_accounts,0,platform}','\"wechat\"')",[]],
+      ['显式null设备绑定',"UPDATE zenithjoy.company_config_runs SET task_inputs=jsonb_set(task_inputs,'{device_binding}','null') WHERE run_id=$1",[request.run]]
+    ])await t.test(name+'不能冒缺省兼容',async()=>{await init();await scoped.query(query,args);const before=await read();await assert.rejects(queueRequest(scoped,request,deps),/PRODUCER/);assert.deepEqual(await read(),before);});
     await t.test('两并发请求只一领取，事务锁不重领',async()=>{await init();const r=await Promise.all([queueRequest(scoped,request,deps),queueRequest(scoped,request,deps)]);assert.deepEqual(r.map(a=>a.length).sort(),[0,1]);assert.equal((await read()).find(v=>v.video_id===other).process_status,'待人工核验:old102');});
   }finally{if(made)await pool.query('DROP SCHEMA '+schema+' CASCADE');await pool.end();}
 });

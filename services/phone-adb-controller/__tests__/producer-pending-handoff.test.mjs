@@ -51,8 +51,15 @@ test('真实qualification handler将已验证v2状态交原claim RPC，取消mat
  try{
   const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'pending102',P:'legacy',SERIAL:pendingDescriptor.serial,LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:pendingDescriptor.run_tag,WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_LIMIT:'1'},rpc:async({request:q})=>{calls.push(q);return {result:[]};}});
   // 此为状态到RPC接缝单测，不冒上游readFrozen或真机资格运行。
-  h.state.companyConfig=company;h.state.intakeVideoIds=[...pendingDescriptor.video_ids];h.state.producerDescriptor=pendingDescriptor;
+  h.state.companyConfig=company;h.state.intakeVideoIds=[...pendingDescriptor.video_ids];h.state.producerDescriptor=pendingDescriptor;h.state.account='44997267357';
   const r=await h.qualification();assert.equal(r.claimed,0);assert.equal(calls.length,1);
   assert.equal(calls[0].op,'claim_videos');assert.equal(calls[0].limit,1);assert.equal(calls[0].prefer_matched,undefined);assert.deepEqual(calls[0].producer_descriptor,pendingDescriptor);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+for(const account of [undefined,'other'])test('v2资格缺失/异号原生account立即拒且不调用claim：'+String(account),async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'pending-account-'));let calls=0;try{
+  const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'pending102',P:'legacy',SERIAL:pendingDescriptor.serial,LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:pendingDescriptor.run_tag,WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_LIMIT:'1'},rpc:async()=>{calls++;return {result:[]};}});
+  Object.assign(h.state,{companyConfig:company,intakeVideoIds:[...pendingDescriptor.video_ids],producerDescriptor:pendingDescriptor,account});
+  await assert.rejects(h.qualification(),/PRODUCER_NATIVE_ACCOUNT_INVALID/);assert.equal(calls,0);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
