@@ -9,7 +9,7 @@ const require=createRequire(import.meta.url);
 const api=await import('../qualification-maintenance-pg.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对账',
  {skip:process.env.ZJ_METRICS_PG_REQUIRED!=='1'},async t=>{
-  const {Pool}=require('pg'),pool=new Pool(),schema='maintenance_'+randomUUID().replaceAll('-','');let made=false;
+  const {Pool}=require('pg'),pool=new Pool({max:1}),schema='maintenance_'+randomUUID().replaceAll('-','');let made=false;
   const rewrite=q=>q.replaceAll('zenithjoy.',schema+'.');
   const scoped={query:(q,a)=>pool.query(rewrite(q),a),connect:async()=>{const c=await pool.connect();return {query:(q,a)=>c.query(rewrite(q),a),release:e=>c.release(e)};}};
   const f=authorityFixture(),authorization=authorizeMaintenance(f),s=f.scope,vid=s.video_ids[0],other='7700112581541257551';
@@ -55,6 +55,15 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
     const uncertain={...scoped,connect:async()=>{const c=await scoped.connect();return {query:async(q,a)=>{const r=await c.query(q,a);if(q==='COMMIT')throw Error('fixture connection lost after commit');return r;},release:e=>c.release(e)};}};
     assert.equal((await api.restorePendingClaim(uncertain,input)).status,'commit_unknown');const after=await rows();
     assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'db_committed');assert.deepEqual(await rows(),after);assert.equal((await scoped.query('SELECT count(*)::int AS n FROM zenithjoy.db_audit')).rows[0].n,1);
+   });
+   await t.test('COMMIT发送前抛错不得把未提交事务回池冒充已提交',async()=>{
+    await init();const independent=new Pool({max:1});
+    const uncertain={...scoped,connect:async()=>{const c=await scoped.connect();return {query:async(q,a)=>{if(q==='COMMIT')throw Error('fixture timeout before COMMIT send');return c.query(q,a);},release:e=>c.release(e)};}};
+    try{
+     assert.equal((await api.restorePendingClaim(uncertain,input)).status,'commit_unknown');
+     assert.equal((await independent.query('SELECT count(*)::int AS n FROM '+schema+'.db_audit')).rows[0].n,0,'独立后端确无已提交audit');
+     assert.notEqual((await api.readPendingClaimOutcome(scoped,input)).status,'db_committed','不能复用in-doubt连接读取自己的未提交事务');
+    }finally{await pool.query('ROLLBACK');await independent.end();}
    });
    await t.test('双连接同意图只提交一次，另一连接不能重复业务写',async()=>{
     await init();const result=await Promise.allSettled([api.restorePendingClaim(scoped,input),api.restorePendingClaim(scoped,input)]);
