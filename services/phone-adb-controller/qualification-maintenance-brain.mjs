@@ -1,7 +1,7 @@
 import {readFileSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
-import {authorizeMaintenance} from './qualification-maintenance-authority.mjs';
+import {authorizeMaintenance,sameMaintenanceAuthorityEpoch} from './qualification-maintenance-authority.mjs';
 const uuid=/^[a-f0-9-]{36}$/i;
 const need=value=>{if(!value)throw Error('MAINTENANCE_BRAIN_AUTHORITY_UNKNOWN');};
 export async function maintenanceBrainRequest(path,body) {
@@ -43,7 +43,7 @@ export async function readMaintenanceAuthority(taskId,{request=maintenanceBrainR
    heartbeat_receipts.push({task_id:id,claimer,...result});
   }
  }
- const final=await read();need(final.contract_sha256===authority.contract_sha256&&final.actor===authority.actor&&final.original_actor===authority.original_actor);
+ const final=await read();need(sameMaintenanceAuthorityEpoch(final,authority));
  const central_lock_state=await lock();
  return {...final,central_lock_state,heartbeat_receipts,lease_evidence:'current_renewal_only_not_prior_continuity'};
 }

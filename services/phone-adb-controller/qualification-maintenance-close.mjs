@@ -1,3 +1,4 @@
+import {sameMaintenanceAuthorityEpoch} from './qualification-maintenance-authority.mjs';
 // 仅编排受信adapter；公开CLI不提供adapter/proof注入，真实适配器必须从现场读取。
 export async function closeMaintenanceEpoch(io) {
  let phase='authority_preflight',authority;
@@ -5,8 +6,7 @@ export async function closeMaintenanceEpoch(io) {
  const record=async(phase,extra={})=>io.append({phase,at_ms:Date.now(),contract_sha256:authority?.contract_sha256,...extra});
  const current=async()=>{
   const fresh=await io.authority();
-  need(fresh&&['contract_sha256','maintenance_task_id','actor','original_task_id','original_actor','maintenance_claimed_at','original_claimed_at']
-   .every(key=>fresh[key]===authority[key]));
+  need(sameMaintenanceAuthorityEpoch(fresh,authority));
   return fresh;
  };
  try {

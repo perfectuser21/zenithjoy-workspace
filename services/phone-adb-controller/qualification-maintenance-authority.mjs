@@ -8,6 +8,10 @@ const scopeKeys=new Set(['schema_version','program','intent_id','original_task_i
   'central_owner','local_owner','maintenance_source','actions','original_evidence','maintenance_deadline_ms']);
 const need=(value,code='AUTHORITY')=>{if(!value)throw Error('MAINTENANCE_'+code);};
 const same=(left,right)=>digest(left)===digest(right);
+export function sameMaintenanceAuthorityEpoch(left,right) {
+  return !!left&&!!right&&['contract_sha256','maintenance_task_id','actor','original_task_id','original_actor','maintenance_claimed_at','original_claimed_at']
+    .every(key=>left[key]===right[key]);
+}
 function operationalTask(task) {
   return task?.task_type==='data'&&task.domain==='operations'&&task.status==='in_progress'
     &&typeof task.claimed_by==='string'&&task.claimed_by.length>0&&uuid.test(task.id||'')
