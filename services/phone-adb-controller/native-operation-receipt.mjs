@@ -60,15 +60,25 @@ export function processIdentity(pid,deadline){
  if(r.status!==0)throw Error('NATIVE_PROCESS_INSPECTION_FAILED');
  return JSON.parse(r.stdout);
 }
-function descendants(pid,deadline){
- const r=spawnSync('python3',['-c',inspector,String(pid),'children'],{encoding:'utf8',timeout:inspectionTimeout(3000,deadline)});
- if(r.status!==0)throw Error('NATIVE_PROCESS_INSPECTION_FAILED');
- return JSON.parse(r.stdout);
-}
-function groupMembers(pgid,deadline){
- const r=spawnSync('python3',['-c',inspector,String(pgid),'group'],{encoding:'utf8',timeout:inspectionTimeout(3000,deadline)});
- if(r.status!==0)throw Error('NATIVE_PROCESS_GROUP_INSPECTION_FAILED');
- return JSON.parse(r.stdout);
+function inspectAsync(pid,mode,deadline,signal){
+ if(!Number.isSafeInteger(pid)||pid<=0)return mode==='identity'?Promise.resolve(null):Promise.reject(Error('NATIVE_PROCESS_INSPECTION_FAILED'));
+ const timeout=inspectionTimeout(mode==='identity'?2000:3000,deadline);
+ return new Promise((resolve,reject)=>{
+  if(signal.aborted){reject(Error('NATIVE_OBSERVATION_CANCELLED'));return;}
+  const child=spawn('python3',['-c',inspector,String(pid),mode],{stdio:['ignore','pipe','pipe']});
+  let stdout='',bytes=0,failure,settled=false;
+  const cancel=()=>{failure??=Error('NATIVE_OBSERVATION_CANCELLED');child.kill('SIGKILL');child.stdout.destroy();child.stderr.destroy();finish(failure);};
+  const timer=setTimeout(()=>{failure??=Error('NATIVE_PROCESS_INSPECTION_FAILED');cancel();},timeout);
+  const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);signal.removeEventListener('abort',cancel);error?reject(error):resolve(value);};
+  signal.addEventListener('abort',cancel,{once:true});
+  child.once('spawn',()=>{if(signal.aborted)cancel();});
+  child.stdout.on('data',chunk=>{bytes+=chunk.length;if(bytes>1024*1024){failure??=Error('NATIVE_PROCESS_INSPECTION_FAILED');cancel();}else stdout+=chunk;});
+  child.stderr.on('data',()=>{});
+  child.once('error',()=>finish(Error('NATIVE_PROCESS_INSPECTION_FAILED')));
+  child.once('close',code=>{if(failure||code!==0){finish(failure||Error('NATIVE_PROCESS_INSPECTION_FAILED'));return;}
+   try{finish(null,JSON.parse(stdout));}catch{finish(Error('NATIVE_PROCESS_INSPECTION_FAILED'));}
+  });
+ });
 }
 function watchExit(pid){
  const child=spawn('python3',['-c',watcher,String(pid)],{stdio:['ignore','pipe','ignore']});
@@ -86,7 +96,16 @@ export function beginNativeOperation(context){
  const path=receiptPath(runDir,operationId);mkdirSync(join(resolve(runDir),'native-operations'),{recursive:true,mode:0o700});
  const value={version:1,operation_id:operationId,run_dir:resolve(runDir),run_id:runId,task_id:taskId,profile,serial,source_commit:sourceCommit,owner,activity,status:'intent',execution_stopped:false,process_coverage:'observed_only',created_at:new Date().toISOString(),processes:[]};
  persist(path,value,true);
- let poller,unknown=false,stopped=false,tailDeadline;
+ let poller,unknown=false,stopped=false,finalized=false,tailDeadline,epoch=0,scanFlight,stopPromise;
+ let observations=new AbortController();
+ const adding=new Map();
+ const current=token=>token===epoch&&!finalized;
+ const nextEpoch=()=>{epoch++;observations.abort();observations=new AbortController();};
+ const inspect=async(pid,mode,token)=>{
+  const result=await inspectAsync(pid,mode,tailDeadline,observations.signal);
+  if(!current(token))throw Error('NATIVE_OBSERVATION_CANCELLED');
+  return result;
+ };
  // TERM, KILL and final readback share one monotonic observation budget.
  // Exhaustion never proves termination or grants another business attempt.
  const startTail=(budget=tailBudgetMs)=>tailDeadline=Math.min(tailDeadline??Infinity,performance.now()+budget);
@@ -96,35 +115,58 @@ export function beginNativeOperation(context){
   return ids.slice(0,maximumObservedProcesses);
  };
  const tracked=new Map();
- const add=async pid=>{
+ const add=(pid,token=epoch)=>{
   if(tracked.has(pid))return;
+  const key=token+':'+pid;if(adding.has(key))return adding.get(key);
+  const work=(async()=>{
+  if(!current(token))return;
   if(tracked.size>=maximumObservedProcesses||(tailDeadline!==undefined&&performance.now()>=tailDeadline)){unknown=true;return;}
-  let identity;try{identity=processIdentity(pid,tailDeadline);}catch{unknown=true;return;}
+  let identity;try{identity=await inspect(pid,'identity',token);}catch{if(current(token))unknown=true;return;}
+  if(!current(token))return;
   if(!identity){unknown=true;return;}
+  if(identity.pid!==pid||!Number.isSafeInteger(identity.uid)||!Number.isSafeInteger(identity.pgid)||typeof identity.start_identity!=='string'){unknown=true;return;}
   if(value.pid&&identity.pgid!==value.pgid)unknown=true;
   const watcher=watchExit(pid);tracked.set(pid,{...identity,watcher});
   const ready=await observedWithin(watcher.ready,1000,tailDeadline);
-  try{if(!ready||processIdentity(pid,tailDeadline)?.start_identity!==identity.start_identity)unknown=true;}catch{unknown=true;}
+  if(!current(token)){watcher.close();return;}
+  try{if(!ready||(await inspect(pid,'identity',token))?.start_identity!==identity.start_identity)unknown=true;}catch{if(current(token))unknown=true;}
+  if(!current(token))return;
   value.processes=[...tracked.values()].map(({watcher,...publicIdentity})=>publicIdentity);
   if(!stopped)persist(path,value);
+  })();
+  adding.set(key,work);const clear=()=>adding.delete(key);void work.then(clear,clear);return work;
+ };
+ const scan=(token=epoch)=>{
+  if(scanFlight?.token===token)return scanFlight.promise;
+  const promise=(async()=>{try{
+   const ids=candidates(await inspect(value.pid,'children',token));
+   for(const child of ids){if(!current(token))return;await add(child,token);}
+  }catch{if(current(token))unknown=true;}})();
+  const entry={token,promise};scanFlight=entry;
+  void promise.finally(()=>{if(scanFlight===entry)scanFlight=undefined;});return promise;
  };
  const started=async pid=>{
+  if(stopped||finalized)return;
+  const token=epoch;
   value.pid=pid;value.pgid=pid;value.status='running';value.started_at=new Date().toISOString();
-  await add(pid);value.start_identity=tracked.get(pid)?.start_identity||null;
+  await add(pid,token);if(!current(token)||stopped)return;
+  value.start_identity=tracked.get(pid)?.start_identity||null;
   persist(path,value);
-  poller=setInterval(()=>{try{for(const child of candidates(descendants(pid,tailDeadline)))void add(child).catch(()=>{unknown=true;});}catch{unknown=true;}},25);
+  poller=setInterval(()=>{if(!stopped&&!scanFlight)void scan();},25);
   poller.unref();
  };
- const stop=async(signal,code,waitSignal)=>{
-  if(stopped)return readNativeOperation(runDir,operationId);
+ const stop=(signal,code,waitSignal)=>{
+  if(stopPromise)return stopPromise;
+  if(finalized)return Promise.resolve(readNativeOperation(runDir,operationId));
   startTail();
-  stopped=true;clearInterval(poller);
-  try{for(const child of candidates(descendants(value.pid,tailDeadline)))await add(child);}catch{unknown=true;}
-  try{if(candidates(groupMembers(value.pgid,tailDeadline)).some(pid=>!tracked.has(pid)))unknown=true;}catch{unknown=true;}
+  stopped=true;clearInterval(poller);if(scanFlight||adding.size)unknown=true;nextEpoch();const token=epoch;
+  stopPromise=(async()=>{
+  await scan(token);
+  try{if(candidates(await inspect(value.pgid,'group',token)).some(pid=>!tracked.has(pid)))unknown=true;}catch{unknown=true;}
   const records=[];
   for(const item of tracked.values()){
-   let current;try{current=processIdentity(item.pid,tailDeadline);}catch{unknown=true;}
-   if(current&&(current.pid!==item.pid||current.start_identity!==item.start_identity||current.uid!==item.uid||current.pgid!==item.pgid||current.ppid!==item.ppid))unknown=true;
+   let actual;try{actual=await inspect(item.pid,'identity',token);}catch{unknown=true;}
+   if(actual&&(actual.pid!==item.pid||actual.start_identity!==item.start_identity||actual.uid!==item.uid||actual.pgid!==item.pgid||actual.ppid!==item.ppid))unknown=true;
    const exited=await observedWithin(item.watcher.exited,200,tailDeadline);
    if(!exited)unknown=true;
    records.push({pid:item.pid,start_identity:item.start_identity,pgid:item.pgid,termination:{confirmed:exited}});
@@ -134,25 +176,28 @@ export function beginNativeOperation(context){
   // Exit events prove only the observed PID set. A fork can escape between
   // scans; neither an empty group nor every observed EXIT proves completeness.
   value.observed_processes_stopped=!unknown&&records.length>0&&records.every(p=>p.termination.confirmed);
-  value.status='unknown';value.execution_stopped=false;value.ended_at=new Date().toISOString();persist(path,value);
+  finalized=true;nextEpoch();value.status='unknown';value.execution_stopped=false;value.ended_at=new Date().toISOString();persist(path,value);
   return value;
+  })();return stopPromise;
  };
- const maySignal=pid=>{
-  const expected=tracked.get(pid);let current;try{current=processIdentity(pid,tailDeadline);}catch{unknown=true;return false;}
-  if(!expected||!current||current.start_identity!==expected.start_identity||current.uid!==expected.uid||current.pgid!==expected.pgid){unknown=true;return false;}
+ const maySignal=async(pid,token)=>{
+  const expected=tracked.get(pid);let actual;try{actual=await inspect(pid,'identity',token);}catch{if(current(token))unknown=true;return false;}
+  if(!current(token)||stopped)return false;
+  if(!expected||!actual||actual.pid!==pid||actual.start_identity!==expected.start_identity||actual.uid!==expected.uid||actual.pgid!==expected.pgid){unknown=true;return false;}
   return true;
  };
- const notStarted=()=>{stopped=true;clearInterval(poller);value.status='not_started';value.execution_stopped=true;value.process_coverage='not_started';value.failure='native_pre_spawn_error';value.ended_at=new Date().toISOString();persist(path,value);return value;};
+ const notStarted=()=>{stopped=true;finalized=true;clearInterval(poller);nextEpoch();value.status='not_started';value.execution_stopped=true;value.process_coverage='not_started';value.failure='native_pre_spawn_error';value.ended_at=new Date().toISOString();persist(path,value);return value;};
  const signalTargets=async signal=>{
-  if(stopped)return 0;
-  startTail(signalBudgetMs);
-  try{for(const child of candidates(descendants(value.pid,tailDeadline)))await add(child);}catch{unknown=true;}
-  try{const root=processIdentity(value.pid,tailDeadline);if(root?.start_identity===value.start_identity){for(const pid of candidates(groupMembers(value.pgid,tailDeadline)))await add(pid);}else unknown=true;}catch{unknown=true;}
+  if(stopped||finalized)return 0;
+  startTail(signalBudgetMs);const token=epoch;
+  await scan(token);
+  try{const root=await inspect(value.pid,'identity',token);if(root?.start_identity===value.start_identity){for(const pid of candidates(await inspect(value.pgid,'group',token)))await add(pid,token);}else unknown=true;}catch{if(current(token))unknown=true;}
+  if(!current(token)||stopped)return 0;
   let sent=0;
-  for(const pid of [...tracked.keys()].reverse())if(maySignal(pid)){
+  for(const pid of [...tracked.keys()].reverse())if(await maySignal(pid,token)){
    try{process.kill(pid,signal);sent++;}catch(error){if(error.code!=='ESRCH')unknown=true;}
   }
-  value.signals??=[];value.signals.push({name:signal,at:new Date().toISOString(),targets:sent});persist(path,value);
+  if(current(token)&&!stopped){value.signals??=[];value.signals.push({name:signal,at:new Date().toISOString(),targets:sent});persist(path,value);}
   return sent;
  };
  return {started,stop,signalTargets,notStarted,markUnknown:()=>{unknown=true;},snapshot:()=>value};

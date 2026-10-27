@@ -59,7 +59,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "8ec94f2e30d18f61413b636ec24825887da91ad7521181c0f3befff112b94083",
+      "code_digest": "6751d7871920657b32bb8ad09b11c5c51893b043be9f43f51858fd535e95616b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15",
-        "current_code_digest": "8ec94f2e30d18f61413b636ec24825887da91ad7521181c0f3befff112b94083"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "8ec94f2e30d18f61413b636ec24825887da91ad7521181c0f3befff112b94083",
+        "current_code_digest": "6751d7871920657b32bb8ad09b11c5c51893b043be9f43f51858fd535e95616b"
       }
     },
     "douyin_video_processing.preflight": {
@@ -353,7 +353,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "aa2ae1cb96f823fe97955ae368d6b41bc1643095d8c15064f242b79e3be0aee2",
+      "code_digest": "7d8293406174d86a04e233b86b37028083607183f9967f81dbc65a0e0960a247",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955",
-        "current_code_digest": "aa2ae1cb96f823fe97955ae368d6b41bc1643095d8c15064f242b79e3be0aee2"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "aa2ae1cb96f823fe97955ae368d6b41bc1643095d8c15064f242b79e3be0aee2",
+        "current_code_digest": "7d8293406174d86a04e233b86b37028083607183f9967f81dbc65a0e0960a247"
       }
     },
     "douyin_video_processing.dedup": {
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -822,13 +822,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "7be2ee12b9e09cce93ac18df657b163176629b3820ecdca7d2d6cb011ef5a408",
+      "code_digest": "d66b8f2f420c0d262c276d304868b73d6c3b0ae52a8ffcf10cb2ada473952e6e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959",
-        "current_code_digest": "7be2ee12b9e09cce93ac18df657b163176629b3820ecdca7d2d6cb011ef5a408"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "7be2ee12b9e09cce93ac18df657b163176629b3820ecdca7d2d6cb011ef5a408",
+        "current_code_digest": "d66b8f2f420c0d262c276d304868b73d6c3b0ae52a8ffcf10cb2ada473952e6e"
       }
     },
     "douyin_video_processing.qualification": {
@@ -889,7 +889,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -1144,13 +1144,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "99a2926287a1fd978fa02ae0f829d4c5401221a3e2307c1ffcc8b020c77a4fd4",
+      "code_digest": "d91114640d727929daba84d7401a4407405564bbd3b7ace09c845e93263ca60c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e",
-        "current_code_digest": "99a2926287a1fd978fa02ae0f829d4c5401221a3e2307c1ffcc8b020c77a4fd4"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "99a2926287a1fd978fa02ae0f829d4c5401221a3e2307c1ffcc8b020c77a4fd4",
+        "current_code_digest": "d91114640d727929daba84d7401a4407405564bbd3b7ace09c845e93263ca60c"
       }
     },
     "douyin_video_processing.collection": {
@@ -1218,7 +1218,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -1439,13 +1439,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "c8a808949629a9f800062aece02a0091985725e9c20cceb73806180c35d3b45e",
+      "code_digest": "01b0d3c2cef41aab003fe80931e64f7a5649cc910c22f8164169046535256935",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8",
-        "current_code_digest": "c8a808949629a9f800062aece02a0091985725e9c20cceb73806180c35d3b45e"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "c8a808949629a9f800062aece02a0091985725e9c20cceb73806180c35d3b45e",
+        "current_code_digest": "01b0d3c2cef41aab003fe80931e64f7a5649cc910c22f8164169046535256935"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1506,7 +1506,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1a332297545afcc71a738dfd5f1fedad9c7dbc30c8d6612b8f4b1b7274462004",
+      "code_digest": "f50e4ad2749d0e7b94a1c99984870a1fc5f07822ddc1bea279188b6f9293d723",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b",
-        "current_code_digest": "1a332297545afcc71a738dfd5f1fedad9c7dbc30c8d6612b8f4b1b7274462004"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "1a332297545afcc71a738dfd5f1fedad9c7dbc30c8d6612b8f4b1b7274462004",
+        "current_code_digest": "f50e4ad2749d0e7b94a1c99984870a1fc5f07822ddc1bea279188b6f9293d723"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1775,7 +1775,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -1946,13 +1946,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523",
+      "code_digest": "2af3af90290a4507f489372e0dfdcd8befb4c4152fcad9cee684768970f62fd1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389",
-        "current_code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523",
+        "current_code_digest": "2af3af90290a4507f489372e0dfdcd8befb4c4152fcad9cee684768970f62fd1"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2020,7 +2020,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf",
+      "code_digest": "117218a6dd9d47ec853e9da68acb045d09639e8a1427cdc8583f243fda6731dc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46",
-        "current_code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf",
+        "current_code_digest": "117218a6dd9d47ec853e9da68acb045d09639e8a1427cdc8583f243fda6731dc"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2307,7 +2307,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "5664a1028c5e84ad4cd44adcf073e1bca837e0650130fc7f050ad0eb61817502",
+      "code_digest": "378522330852f0b252424de976d229186049ef1d05413ba1cd2a8134e5983313",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6",
-        "current_code_digest": "5664a1028c5e84ad4cd44adcf073e1bca837e0650130fc7f050ad0eb61817502"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "5664a1028c5e84ad4cd44adcf073e1bca837e0650130fc7f050ad0eb61817502",
+        "current_code_digest": "378522330852f0b252424de976d229186049ef1d05413ba1cd2a8134e5983313"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2605,7 +2605,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -2811,13 +2811,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6",
+      "code_digest": "a68d60ffb6d55396e721736a2d968494f96c105467e6d6cf5b376283891d22c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
-        "current_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6",
+        "current_code_digest": "a68d60ffb6d55396e721736a2d968494f96c105467e6d6cf5b376283891d22c3"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2878,7 +2878,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -3084,13 +3084,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6",
+      "code_digest": "a68d60ffb6d55396e721736a2d968494f96c105467e6d6cf5b376283891d22c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
-        "current_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6",
+        "current_code_digest": "a68d60ffb6d55396e721736a2d968494f96c105467e6d6cf5b376283891d22c3"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3151,7 +3151,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/native-operation-receipt.mjs",
           "revision": "contract",
-          "sha256": "8273e661714f59d68c6d42d9e0f5ec58f9b8e8999595e361300ffbfc0dbd46f1"
+          "sha256": "8dd51992969fc23a44bf983f5fad870b56aaa349a3fa374eb0a5f667b3a7a688"
         },
         {
           "kind": "code",
@@ -3360,13 +3360,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "553ac01dc296515e8895f75a389d84f9e928eaeb591a8bed39f3ac87259836ec",
+      "code_digest": "139ed37d73af2ce87538de4af4c972aaff69a69a4d76c2f0e0efad23ec2f2bb0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
-        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
-        "previous_code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b",
-        "current_code_digest": "553ac01dc296515e8895f75a389d84f9e928eaeb591a8bed39f3ac87259836ec"
+        "reason": "内部进程观察改为异步单批执行，原身份、截止、未知拒绝及停止权限保持；取消时仅断本方管道并保持未知，不签全子树停止。",
+        "reviewed_by": "codex:baseline-release-independent-review:native-observer-20261027",
+        "previous_code_digest": "553ac01dc296515e8895f75a389d84f9e928eaeb591a8bed39f3ac87259836ec",
+        "current_code_digest": "139ed37d73af2ce87538de4af4c972aaff69a69a4d76c2f0e0efad23ec2f2bb0"
       }
     }
   },
