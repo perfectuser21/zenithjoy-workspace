@@ -124,27 +124,17 @@ def classify(row, argv, scope):
     if executable.startswith('python') and len(argv) >= 3 and argv[1] == '-c':
         if hashlib.sha256(argv[2].encode()).hexdigest() in READONLY_PYTHON:
             return 'read_only_native_observer'
-    # 只承认本维护包明确的三个观察/控制程序，不将整个目录当免检范围。
-    own = [str(HERE), str(HERE.with_name('qualification-maintenance-host.py')),
-           str(HERE.with_name('qualification-maintenance.mjs'))]
-    if any(path in argv for path in own):
-        return 'maintenance_epoch_actor'
     related = any(value and value in full for value in (scope['run_tag'], scope['serial'], scope['run_dir'], scope['runtime_root']))
     if related:
         # Phone-wall固定无副作用截图不能被误当旧UI producer；其余shell命令不泛放。
         if executable == 'adb' and argv[1:] == ['-s', scope['serial'], 'exec-out', 'screencap', '-p']:
             return 'read_only_screenshot'
         return 'active_related'
-    if row['start_ms'] < scope['run_started_at_ms']:
-        return 'preexisting_outside_original_run'
     if not executable.startswith(EFFECTORS):
         return 'outside_supported_program'
     # 孤儿/脱组不因argv未出现tag而消失。标准shell/stdin解释器没有可证明归属就拒绝。
     if row['ppid'] == 1:
         return 'unknown_detached'
-    explicit = [x for x in argv[1:] if x.startswith('/') and Path(x).suffix in ('.js', '.mjs', '.cjs', '.py', '.sh')]
-    if explicit and all(not x.startswith(scope['runtime_root'] + '/') for x in explicit):
-        return 'independent_explicit_program'
     return 'unknown_producer'
 
 
@@ -198,6 +188,19 @@ def collect(scope):
     second = listed()
     inspect(second)
     out['final_enumerated'] = listed()
+    # PID不能作为覆盖身份；最终枚举中的每个同UID进程独立复核kernel出生。
+    for row in out['final_enumerated']:
+        if row['uid'] != scope['uid'] or row['pid'] <= 1:
+            continue
+        try:
+            identity = kernel(row['pid'])
+            if identity is None:
+                row['absence_reason'] = 'ESRCH'
+            else:
+                need(identity['uid'] == scope['uid'], 'PROCESS_IDENTITY_CHANGED')
+                row['start_identity'] = identity['start_identity']
+        except (OSError, ValueError):
+            out['unknown'].append({'pid': row['pid'], 'code': 'PROCESS_FINAL_IDENTITY_UNKNOWN'})
     for expected in scope.get('tracked', []):
         pid = expected['pid']
         need(type(pid) is int and pid > 1 and isinstance(expected['start_identity'], str), 'TRACKED_IDENTITY_INVALID')

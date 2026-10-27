@@ -19,7 +19,7 @@ function scope(){return {host:'xian-m4',uid:process.getuid(),run_started_at_ms:D
   run_tag:'maintenance-kernel-fixture',serial:'NO-PHONE',run_dir:'/tmp/NO-PHONE-RUN',runtime_root:'/tmp/NO-PHONE-RUN/runtime',tracked:[]};}
 function quiet(s){return {protocol:'qualification-process-census-v1',host:s.host,uid:s.uid,platform:process.platform,
   observer_pid:999999,observer_sha256:api?.processObserverDigest,started_at_ms:Date.now(),finished_at_ms:Date.now(),
-  enumerated:[{pid:999999,uid:s.uid}],final_enumerated:[{pid:999999,uid:s.uid}],
+  enumerated:[{pid:999999,uid:s.uid}],final_enumerated:[{pid:999999,uid:s.uid,start_identity:'fixture:observer'}],
   observations:[{pid:999999,uid:s.uid,ppid:1,pgid:999999,start_identity:'fixture:observer',classification:'observer'}],
   absent:[],tracked:[],unknown:[]};}
 

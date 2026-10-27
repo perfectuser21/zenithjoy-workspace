@@ -19,8 +19,12 @@ export function evaluateProcessCensus(census,scope) {
   if(census.absent.some(x=>x.reason!=='ESRCH'))return blocked('PROCESS_ABSENCE_UNPROVEN');
   for(const x of census.absent)covered.add(x.pid);
   if([...census.enumerated,...census.final_enumerated].some(x=>x.uid===scope.uid&&x.pid>1&&!covered.has(x.pid)))return blocked('PROCESS_ENUMERATION_INCOMPLETE');
-  const accepted=new Set(['observer','terminal','read_only_native_observer','read_only_screenshot','maintenance_epoch_actor',
-    'preexisting_outside_original_run','outside_supported_program','independent_explicit_program']);
+  for(const row of census.final_enumerated.filter(x=>x.uid===scope.uid&&x.pid>1)) {
+    if(row.absence_reason==='ESRCH')continue;
+    const observed=census.observations.find(x=>x.pid===row.pid);
+    if(!row.start_identity||!observed||observed.start_identity!==row.start_identity)return blocked('PROCESS_FINAL_IDENTITY_CHANGED');
+  }
+  const accepted=new Set(['observer','terminal','read_only_native_observer','read_only_screenshot','outside_supported_program']);
   for(const row of census.observations)if(!accepted.has(row.classification))blocked_pids.push(row.pid);
   for(const expected of scope.tracked||[]) {
     const found=census.tracked.filter(x=>x.pid===expected.pid&&x.expected_start_identity===expected.start_identity);
@@ -32,7 +36,7 @@ export function evaluateProcessCensus(census,scope) {
     observation_sha256:digest(census),observed_at_ms:census.finished_at_ms,blocked_pids:[]};
 }
 export async function collectProcessCensus(scope) {
-  const result=spawnSync('python3',['-I',observer],{input:JSON.stringify(scope),encoding:'utf8',timeout:30000,maxBuffer:6*1024*1024});
+  const result=spawnSync('python3',['-B','-I',observer],{input:JSON.stringify(scope),encoding:'utf8',timeout:30000,maxBuffer:6*1024*1024});
   let census;try{census=JSON.parse(result.stdout);}catch{throw Error('MAINTENANCE_PROCESS_OBSERVER_UNKNOWN');}
   if(result.status!==0||result.error||result.signal||census.observer_pid!==result.pid||census.observer_sha256!==processObserverDigest)throw Error('MAINTENANCE_PROCESS_OBSERVER_UNKNOWN');
   return census;
