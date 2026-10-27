@@ -8079,3 +8079,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 现有Linux L3 scratch Postgres必跑v2原子pending-only CAS、批次和公司漂移、并发只领一次、旁隔离记录全行不变。
+
+- id: qualification-maintenance-entry
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-entry.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 正式OpsTask受限维护入口的结构化拒绝、固定353真实214字节上传失败分支、原native UNKNOWN原件只读不改；不执行真机或生产恢复。

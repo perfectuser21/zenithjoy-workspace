@@ -1,20 +1,15 @@
-# 单条pending视频的跨版本来源交接
+# 资格失败后的受限维护收口
 
-Task: 8ce977d8-fc05-4310-ac30-23b7bd710b90
 GP-Anchor: line02/keyword_acquisition keep-green
 
-## 问题与范围
-已验证a83/beb原101保存两条真实视频，当前单5037候选不能消费旧source。仅增加显式v2描述符交接仍pending的7689863996204591985；770011隔离记录不恢复。旧v1和无描述符同source路径不变。
+102在353固定程序的音频上传失败后，原生执行收据仍为observed_only/UNKNOWN，工作流正确隔离设备和视频，但没有正式受限维护入口。新增独立维护inspect/close/readback，范围只从真实OpsTask与原资源owner精确委托读取；开发Task不授予维护权。
 
-## 验收
-- 原完整来源run snapshot fe7da095及progress fbbee23e固定；全部2VID/captures不裁剪，新consumer真实source。
-- 公司/租户/v14/原policy/legacy/设备4402及唯一VID严格校验；只允许队列1条、最多5评论，unknown指标后续重读，不当0。
-- 在同一真实PG事务中CAS pending+待判定+原a83harvest_batch；失配/租约/隔离/政策漂移不领取，不换领。
-- 保旧来源、旧失败与UNKNOWN；不新增搜索、手机操作、恢复、私信或业务PG写。
+维护epoch不是旧attempt继续，也不把旧UNKNOWN改为全进程停止。原Task可因资源hold仍in_progress；须独立核实际run终态FAIL、外部Task→wx启动记录→固定tag/ACK/null原task_id→完整冻结来源关联。只支持已审353资格路径在judge前的audio_upload_failed分支；原214字节qualification.tsv、native wait5、原生录制/恢复、原producer完整来源和无collection/新评论0均须真实读取。
 
-## 测试策略
-CI：真实原progress压缩fixture和固定哈希/身份验证；shared readFrozen原v1真实正例保持，新v2错误来源阴性；scratch Postgres原子CAS、并发和漂移永久回归。CI不冒v2全281源文件正链。
-本机/候选：以真实原完整run目录执行readFrozen+v2只读正集成，独立记录结果；真实102/103另独立业务任务，不用本代码CI冒业务通过。
+两机完整kernel出生/路径/cwd/父进程/PGID与目标设备record/server状态须穷尽相关effects；原80名单并不包含脱组capture82964。任何权限、部分清单、不明相关孤儿或活执行者都只能BLOCK。serial.guard和owner-CAS不能替代这份证明，尤其旧open-video/playback-speed没有owner fencing。
 
-## 已验证与未验证边界
-本机核心144/144；扩大426通过、1个无关条件用例未配置而skip。原完整281文件readFrozen只读正集成及生产只读原公司snapshot复制到隔离scratch事务正例均已完成；它们不代表新候选或真实102/103验收。中央方法actual ad28c47cce328d65fbd35283db48e2561ccd1bb3已正式CI合并；业务消费者本PR固定来源和12方法闭包。正式CI/候选状态须以实际结果更新，未知原生评论数保持unknown后续重读。
+在精确授权、完整观察和排他guard成立后，PG仅CAS归还OpsTask明示的一条pending认领到真实原101批次及待判定，并追加唯一db_audit；旧FAIL/UNKNOWN、其他视频和770011人工记录保持。提交结果未知只读回，绝不盲重发。锁只经已有精确owner执行器收口，任何未决保隔离。
+
+不执行judge、重录音、新搜索、评论采集、评分、私信或自动重跑；不提供任意source/VID恢复或force参数。不直接安装、清生产锁或写生产视频；完整正常CI与隔离候选效果验收后再交接。
+
+测试必须先真实RED并永久保留，随后独立challenger/RPA审查；包括真实脱组kernel fixture、PGscratch单行CAS及竞态、故障/权限/guard争用/commit未知和旧原件不变。
