@@ -27,6 +27,11 @@ test('完整受限静默观察只能证明该程序effects域，不改称OS全�
   needApi();const s=scope(),before=structuredClone(s);const result=api.evaluateProcessCensus(quiet(s),s);
   assert.equal(result.status,'verified');assert.equal(result.os_full_stop,false);assert.deepEqual(s,before);
 });
+test('最终枚举瞬时进程须真实ESRCH才可证明缺席，不使观察器自己的ps永久堵塞',()=>{
+  needApi();const s=scope(),c=quiet(s);c.final_enumerated.push({pid:999998,uid:s.uid,absence_reason:'ESRCH'});
+  assert.equal(api.evaluateProcessCensus(c,s).status,'verified');
+  c.final_enumerated.at(-1).absence_reason='not_in_ps';assert.equal(api.evaluateProcessCensus(c,s).status,'blocked');
+});
 for(const [name,change]of [
   ['权限不明',c=>c.unknown.push({pid:17,code:'EPERM'})],
   ['枚举遗漏',c=>c.final_enumerated.push({pid:18,uid:process.getuid()})],
