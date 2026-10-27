@@ -64,3 +64,8 @@ test('同scope授权已交新actor时，旧维护epoch不得沿新Task权利继�
  assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');
  assert.ok(!f.calls.includes('restoreDb'));assert.ok(!f.calls.includes('releaseLocal'));assert.ok(!f.calls.includes('releaseCentral'));
 });
+test('同actor重新claim的新epoch也不能继承旧维护执行',async()=>{
+ need();const f=fixture();f.real.maintenanceTask.claimed_at='2026-10-27T22:00:00Z';let n=0;
+ f.io.authority=async()=>{if(++n>1)f.real.maintenanceTask.claimed_at='2026-10-27T23:00:00Z';return authorizeMaintenance(f.real);};
+ assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');assert.ok(!f.calls.includes('restoreDb'));
+});
