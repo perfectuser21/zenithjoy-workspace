@@ -154,3 +154,24 @@ test('两个runtime摘要同时缺失不能以undefined相等通过完整Skill�
  const f=fullSkillFixture();delete f.binding.runtime_snapshot_sha256;delete f.task.result.workflow_control.envelope.definition.runtime_snapshot_sha256;
  await assert.rejects(verifyBusinessAdmission(f.args),/运行字节身份/);
 });
+
+
+// 使用已由固定中央源安装器核验的真实四份原文，禁止只测自造的合规文本。
+test('真实固定四份业务Skill均可提取完整验收规范，102保留v2范围',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103,douyin_lead_outreach:104})){
+  const bytes=readFileSync(new URL(`../skills/douyin-leadgen-${n}/SKILL.md`,import.meta.url));
+  const d=skillAcceptanceDefinition(key,()=>bytes);
+  assert.equal(d.workflow_key,key);assert.ok(d.checks.length>0);
+  assert.equal(d.skill.sha256,createHash('sha256').update(bytes).digest('hex'));
+  if(n===102)assert.ok(d.checks.some(c=>c.text.includes('7689863996204591985')),'固定v2授权范围必须进入真实验收定义');
+ }
+});
+test('真实102规范块混入子标题仍由严格发布解析器拒绝',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ const original=readFileSync(new URL('../skills/douyin-leadgen-102/SKILL.md',import.meta.url),'utf8');
+ const bad=original.replace('## 冻结来源绑定\n','## 冻结来源绑定\n\n### 未声明子标题\n');
+ assert.notEqual(bad,original);assert.throws(()=>skillAcceptanceDefinition('douyin_video_processing',()=>Buffer.from(bad)),/规范段落为空或结构未知/);
+});
