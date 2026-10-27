@@ -283,7 +283,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "7d18aa708cc74a026ae2d7b379321dd51e0afca7fa910fcd8acebe800d071f1e",
         "current_code_digest": "165ca9ac4096640878c84d3b4ce10610833be146636ef775aa5cb2ea06dc5f89"
       }
@@ -560,7 +560,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "77ad493851317924ad0692ebbd33dad9cb6db3a0655b4481cfac2b716ee03def",
         "current_code_digest": "c699206d2f3ca211aa5d90ed3e21e8415f0e0ff7dbaddca4f598b5e6ff231223"
       }
@@ -826,7 +826,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "1c1548b69c4be0f081dcbd3c09cce269866c41ae939fc0f7631281d54ab56f1e",
         "current_code_digest": "00391d78e2d78ecc251e637754b43339ede4fe6b8a35a848e354bf8a9bdb871f"
       }
@@ -1148,7 +1148,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "a93f756be8d6ff8d8bd4622a1f5c49ac995ac21b9d0c345cba4ec045ea9a3ce1",
         "current_code_digest": "162c5288752739fd0bcdfdb4c326153f39c269745d8b847dff7ca6813422a5bc"
       }
@@ -1443,7 +1443,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "4c62527f89cf70b00435172070ea2413d599401b1966f3da1ff57db3a5873a8d",
         "current_code_digest": "6a2b25c09b0b64cad2421fac6faf2683e825a383c2da5eb6c359e785d9be23f1"
       }
@@ -1712,7 +1712,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "993218c7cd3989179ec7a238496f7d7260a78dd28384db4f3efd5a6cccb0361c",
         "current_code_digest": "180a5bdd71a47870129ad03217cb2799e3342d329bb37b29176958742174f81c"
       }
@@ -1950,7 +1950,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "2af3af90290a4507f489372e0dfdcd8befb4c4152fcad9cee684768970f62fd1",
         "current_code_digest": "f6f26d8adfedd518784fdb8b02671d7d6f1c9c1bc8ca53d052ef96b142c3580b"
       }
@@ -2244,7 +2244,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "117218a6dd9d47ec853e9da68acb045d09639e8a1427cdc8583f243fda6731dc",
         "current_code_digest": "c1555a0148284af3395ffea8eb292ac1f942a48ec9b5fc8304743289cf932aa8"
       }
@@ -2542,7 +2542,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "7e044550696b228bfd0cab080857624a97621120d4cfd3a5984d14b0024beba4",
         "current_code_digest": "4858a3d13fafc5a58e8a350a841d21bd198d2149b92990f8e2841d6582f53d06"
       }
@@ -2815,7 +2815,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455",
         "current_code_digest": "4204e138f5cc79df60fa3052e74afd96b928060defe2356c91252432ec1ac69a"
       }
@@ -3088,7 +3088,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "cdefe89e66ed9d17c20145a619996c96f086b25d174ff9fea987b53a51548455",
         "current_code_digest": "4204e138f5cc79df60fa3052e74afd96b928060defe2356c91252432ec1ac69a"
       }
@@ -3364,7 +3364,7 @@
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "仅对齐既有已批准M4单5037的新run模板endpoint与forbidden_ports；旧冻结5042及身份账号二进制解释器pins、预算、unknown和权限原样保留，不改Activity I/O或中央Skill。",
-        "reviewed_by": "pending:baseline-collection-template-policy-20261027",
+        "reviewed_by": "codex:baseline-release-independent-review:collection-template-policy-20261027",
         "previous_code_digest": "90ac5302540aecc2244229938262f6ff3be385d37801b3bf596cccc48386690e",
         "current_code_digest": "986c09308631a7318c95d0cf51e65da722692dbb70cd769335e272fc9db7a69a"
       }
