@@ -5,7 +5,7 @@ GP-Anchor: line02/keyword_acquisition keep-green
 - [ ] 真实controller/managed version、真实execInput/native receipt和Darwin producer/socket在受控慢observer下仍满足原2秒；快对照通过，永久RED先提交并纳正式Darwin CI。
   Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs
 - [ ] single-flight/每PID去重、停止和信号原截止、晚到结果不可覆盖终态；真正未知、fork逃逸、signal、deadline仍保unknown，不假OS全停。
-  Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-receipt.test.mjs services/phone-adb-controller/__tests__/native-operation-budget.test.mjs services/phone-adb-controller/__tests__/native-operation-coverage.test.mjs
+  Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-receipt.test.mjs services/phone-adb-controller/__tests__/native-operation-budget.test.mjs services/phone-adb-controller/__tests__/native-operation-coverage.test.mjs services/phone-adb-controller/__tests__/native-operation-identity.test.mjs services/phone-adb-controller/__tests__/native-operation-races.test.mjs
 - [ ] 原leaf归还/业务成功、一次只读能力和完整method来源不变，方法校验12/14、版本及正式CI另验，不手机或业务写。
   Test: manual:node --test services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs
 
