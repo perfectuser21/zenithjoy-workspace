@@ -25,13 +25,14 @@ test('显式preflight续两Task原lease，省略lease_seconds并有前后Task GE
  for(const id of [f.maintenanceTask.id,f.originalTask.id])assert.ok(f.calls.filter(x=>x.path==='/tasks/'+id).length>=2);
  assert.ok(!f.calls.some(x=>x.path.includes('/claim')));
 });
-for(const kind of ['409','timeout','owner_drift','central_drift','no_delegation'])test(kind+'不沿旧authority继续',async()=>{
+for(const kind of ['409','timeout','owner_drift','claim_epoch_drift','central_drift','no_delegation'])test(kind+'不沿旧authority继续',async()=>{
  assert.equal(typeof api?.readMaintenanceAuthority,'function');const f=fake();const normal=f.request;
  if(kind==='no_delegation')delete f.originalTask.result.qualification_maintenance_delegation;
  const request=async(path,body)=>{
   if(body&&kind==='409')throw Error('HTTP_409');if(body&&kind==='timeout')throw Error('timeout');
   const out=await normal(path,body);
   if(kind==='owner_drift'&&f.calls.some(x=>x.body)&&path==='/tasks/'+f.originalTask.id)out.claimed_by='other';
+  if(kind==='claim_epoch_drift'&&f.calls.some(x=>x.body)&&path==='/tasks/'+f.maintenanceTask.id)out.claimed_at='2026-10-27T23:00:00Z';
   if(kind==='central_drift'&&path==='/device-locks')out.locks[0].locked_by='other';
   return out;
  };
