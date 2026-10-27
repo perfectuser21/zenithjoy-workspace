@@ -26,7 +26,8 @@ REPO = 'perfectuser21/zenithjoy-workspace'
 SERIALS = ('ANGYVB4402004137', 'ANGYVB4227006983', 'ANGYVB4311010223', 'e6c7ef34')
 PORTS = (5037, 5041, 5042)
 REQUIRED_FILES = ('adb-host-maintenance.py', 'adb-existing-route.py', 'adb-managed-client.py',
-                  'adb-host-service.py', 'install-adb-host-service.sh', 'phone-lock-helper.py')
+                  'adb-host-service.py', 'install-adb-host-service.sh', 'phone-lock-helper.py',
+                  'maintenance-task-authority.py')
 LOCK_ROOT = Path('/private/tmp/openclaw-phone/locks')
 SERVICE_LABEL = 'com.zenithjoy.adb-host'
 
@@ -147,7 +148,7 @@ def read_authority(task, actor, owner):
     helper = load_module('phone-lock-helper')
     previous = os.environ.pop('DOUYIN_LOCK_SSH_BIN', None)
     try:
-        tasks = helper.task_list()
+        tasks = load_module('maintenance-task-authority').task_list()
     finally:
         if previous is not None:
             os.environ['DOUYIN_LOCK_SSH_BIN'] = previous

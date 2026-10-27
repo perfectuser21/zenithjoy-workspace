@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import random
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,8 +17,8 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 FIELDS = ('id', 'status', 'task_type', 'claimed_by', 'claimed_at', 'payload')
 
-def load(name):
-    spec = importlib.util.spec_from_file_location(name.replace('-', '_'), ROOT / (name + '.py'))
+def load(name, root=ROOT):
+    spec = importlib.util.spec_from_file_location(name.replace('-', '_'), root / (name + '.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -68,13 +69,22 @@ def transport(case):
     original_run = subprocess.run
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
+        runtime = d / 'runtime'; runtime.mkdir()
+        for name in m.REQUIRED_FILES:
+            shutil.copyfile(ROOT / name, runtime / name)
+        m = load('adb-host-maintenance', runtime)
         data = rows()
         if case == 'large':
             data[0]['result'] = base64.b64encode(random.Random(917).randbytes(700000)).decode()
         if case == 'malicious':
             data.append({**rows()[0], 'id': 'other-task', 'payload': {'deep': [{'phone_serial': m.SERIALS[0]}]}})
+        if case == 'ambiguous':
+            data.append({**rows()[0], 'id': 'unknown-device', 'task_type': 'device_job', 'payload': {'nested': []}})
         if case == 'owner': data[0]['claimed_by'] = 'other-owner'
         if case == 'duplicate': data.append(copy.deepcopy(data[0]))
+        if case == 'truncated':
+            data = [{**rows()[0], 'id': 'row-' + str(i)} for i in range(12800)]
+        if case == 'missing': del data[0]['payload']
         if case == 'page':
             data = [{**rows()[0], 'id': 'row-' + str(i)} for i in range(200)]
             data[0] = rows()[0]
@@ -88,15 +98,23 @@ def transport(case):
                         "url=sys.argv[-1]\n"
                         "if 'device-locks' in url:sys.stdout.write((p/'central.json').read_text())\n"
                         "else:\n import json\n with (p/'calls').open('a') as f:f.write(url+'\\n')\n"
-                        " sys.stdout.write((p/'tasks.json').read_text())\n")
+                        " data=json.loads((p/'tasks.json').read_text())\n"
+                        + (" data=data[:int(url.split('limit=')[-1])]\n" if case == 'truncated' else '')
+                        + (" sys.exit(22)\n" if case == 'api-fail' else '')
+                        + (" sys.stdout.write('not json')\n" if case == 'bad-json' else " sys.stdout.write(json.dumps(data))\n"))
         curl.chmod(0o700)
         ssh = d / 'ssh'
         ssh.write_text('#!' + sys.executable + '\nimport os,subprocess,sys,time\n'
                        'r=subprocess.run(["/bin/sh","-c",sys.argv[-1]],capture_output=True)\n'
                        'sys.stderr.buffer.write(r.stderr)\n'
                        'if r.returncode:sys.exit(r.returncode)\n'
-                       'if len(r.stdout)>196608:\n sys.stdout.buffer.write(r.stdout[:196608]);sys.stdout.buffer.flush();time.sleep(17)\n'
-                       'else:sys.stdout.buffer.write(r.stdout)\n')
+                       + ('b=r.stdout\n'
+                        + ("import json,base64,gzip,hashlib\nw=json.loads(b);doc=json.loads(gzip.decompress(base64.b64decode(w['data'])))\n"
+                           + ("doc['purpose']='wrong'\n" if case == 'wire-purpose' else "doc['source']['path']='/wrong'\n")
+                           + "raw=json.dumps(doc).encode();w['size']=len(raw);w['sha256']=hashlib.sha256(raw).hexdigest();w['data']=base64.b64encode(gzip.compress(raw)).decode();b=json.dumps(w).encode()\n" if case in ('wire-purpose','wire-source') else '')
+                        + ("b=open(" + repr(str(d/'tasks.json')) + ",'rb').read()\n" if case == 'wire-raw' else '')
+                        + 'if len(b)>196608:\n sys.stdout.buffer.write(b[:196608]);sys.stdout.buffer.flush();time.sleep(17)\n'
+                       'else:sys.stdout.buffer.write(b)\n'))
         ssh.chmod(0o700)
         m.LOCK_ROOT = d / 'locks'
         m.LOCK_ROOT.mkdir(mode=0o700)
@@ -114,7 +132,7 @@ def transport(case):
         start = time.monotonic()
         try:
             run = lambda: m.read_authority('maintenance-task', 'codex:fixture', 'fixture-owner')
-            if case in ('malicious', 'owner', 'duplicate'): rejects(run)
+            if case in ('malicious', 'owner', 'duplicate', 'truncated', 'missing', 'api-fail', 'bad-json', 'wire-purpose', 'wire-source', 'wire-raw', 'ambiguous'): rejects(run)
             else:
                 assert run() == {k: rows()[0][k] for k in ('id', 'claimed_by', 'claimed_at')}
                 if case == 'large': assert time.monotonic() - start < 15
@@ -126,21 +144,45 @@ def transport(case):
             subprocess.run = original_run
             os.environ.clear(); os.environ.update(previous)
 
-def manifest():
+def manifest(mode):
     m = load('adb-host-maintenance')
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp); files = []
         for name in m.REQUIRED_FILES:
-            if name == 'maintenance-task-authority.py': continue
+            if name == 'maintenance-task-authority.py' and mode == 'missing': continue
             (root / name).write_text(name)
             files.append({'path': 'services/phone-adb-controller/' + name, 'deployed_path': name,
                           'content_sha256': hashlib.sha256(name.encode()).hexdigest()})
+        module = root / 'maintenance-task-authority.py'
+        if mode == 'hash': module.write_text('changed')
+        if mode == 'symlink':
+            module.unlink(); (root/'target').write_text(module.name); module.symlink_to(root/'target')
+        if mode == 'path':
+            for row in files:
+                if row['deployed_path'] == module.name: row['deployed_path'] = '../' + module.name
         path = root / 'manifest.json'
         path.write_text(json.dumps({'source_repo': m.REPO, 'source_commit': 'a' * 40, 'files': files}))
         rejects(lambda: m.verify_manifest(path, root))
 
+def differential():
+    m = load('adb-host-maintenance')
+    for payload, task_type in [({}, 'dev'), ({'nested': [{'phone_serial': m.SERIALS[0]}]}, 'dev'),
+                               ({'a': {'deviceSerial': m.SERIALS[3]}}, 'device_job'),
+                               ({}, 'device_job'), ({'serial': 'other-device'}, 'workflow_run'),
+                               (None, 'qiumi_task')]:
+        tasks = rows() + [{**rows()[0], 'id': 'other', 'task_type': task_type, 'payload': payload}]
+        projected = load('maintenance-task-authority').validate_document(document(tasks), 200)
+        def outcome(value):
+            try: return ('accepted', m.check_tasks(value, 'maintenance-task', 'codex:fixture'))
+            except ValueError as error: return ('rejected', str(error))
+        full = outcome(tasks); limited = outcome(projected)
+        assert full[0] == limited[0]
+        if full[0] == 'rejected': assert full == limited
+        else: assert {k: full[1][k] for k in FIELDS} == limited[1]
+
 case = sys.argv[1]
 if case.startswith('validation:'): validation(case.split(':')[1])
 elif case.startswith('transport:'): transport(case.split(':')[1])
-elif case == 'manifest': manifest()
+elif case.startswith('manifest:'): manifest(case.split(':')[1])
+elif case == 'differential': differential()
 else: raise AssertionError(case)

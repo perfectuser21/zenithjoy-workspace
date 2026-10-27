@@ -8039,3 +8039,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 实际task_list与远端解析通过有界慢stdout验证完整JSON压缩传输；保所有行字段、原15秒、解码失败闭锁及result-only设备命中。
+
+- id: maintenance-task-purpose
+  path: services/phone-adb-controller/__tests__/maintenance-task-purpose.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 维护专属实时任务purpose投影保所有行与完整payload；真实子进程慢传输、分页、恶意设备身份和manifest缺件闭锁，通用完整task_list不变。

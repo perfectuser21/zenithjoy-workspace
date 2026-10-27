@@ -13,6 +13,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/managed-adb-client.test.mjs \
  services/phone-adb-controller/__tests__/adb-host-service.test.mjs \
  services/phone-adb-controller/__tests__/adb-host-maintenance.test.mjs \
+ services/phone-adb-controller/__tests__/maintenance-task-purpose.test.mjs \
  services/phone-adb-controller/__tests__/managed-adb-deployment.test.mjs \
  scripts/product-map/__tests__/leadgen-methods.test.js \
  scripts/product-map/__tests__/leadgen-split-contracts.test.js \
