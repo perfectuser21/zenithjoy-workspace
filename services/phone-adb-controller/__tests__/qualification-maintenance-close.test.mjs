@@ -1,16 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {authorityFixture} from './helpers/qualification-maintenance-fixture.mjs';
+import {authorizeMaintenance} from '../qualification-maintenance-authority.mjs';
 const api=await import('../qualification-maintenance-close.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 function fixture(change={}) {
  const calls=[],records=[],state={db:'db_not_committed',local:'original_owner',central:'original_owner'};
+ const real=authorityFixture(),authority=authorizeMaintenance(real);
  const op=(name,fn)=>async(...args)=>{calls.push(name);return fn(...args);};
- const io={authority:op('authority',()=>({contract_sha256:'a'.repeat(64)})),candidate:op('candidate',()=>true),
+ const io={authority:op('authority',()=>structuredClone(authority)),candidate:op('candidate',()=>true),
   withGuard:op('guard',async fn=>fn()),effects:op('effects',()=>({status:'verified',effects_receipt_sha256:'e'.repeat(64)})),
   readDb:op('readDb',()=>({status:state.db})),restoreDb:op('restoreDb',()=>{state.db='db_committed';return {status:'db_committed'};}),
   readLocal:op('readLocal',()=>state.local),releaseLocal:op('releaseLocal',()=>{state.local='free';}),
   readCentral:op('readCentral',()=>state.central),releaseCentral:op('releaseCentral',()=>{state.central='free';}),
   append:op('append',record=>records.push(record)),...change};
- return {calls,records,state,io};
+ return {calls,records,state,io,real};
 }
 const need=()=>assert.equal(typeof api?.closeMaintenanceEpoch,'function','缺少维护独立epoch收口状态机');
 test('完整新epoch：guard内fresh authority/effects后才PG，再本地/中央exact释放',async()=>{
@@ -51,4 +54,13 @@ for(const domain of ['local','central'])test(domain+'新owner漂移绝不清理'
 test('authority二次检查失败不能沿首次结果写PG',async()=>{
  need();const f=fixture();let n=0;f.io.authority=async()=>{if(++n===2)throw Error('lease drift');return {contract_sha256:'a'.repeat(64)};};
  assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');assert.ok(!f.calls.includes('restoreDb'));
+});
+test('同scope授权已交新actor时，旧维护epoch不得沿新Task权利继续',async()=>{
+ need();const f=fixture();let n=0;
+ f.io.authority=async()=>{
+  if(++n>1){f.real.maintenanceTask.claimed_by='codex:new-maintenance-owner';f.real.originalTask.result.qualification_maintenance_delegation.actor='codex:new-maintenance-owner';}
+  return authorizeMaintenance(f.real);
+ };
+ assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');
+ assert.ok(!f.calls.includes('restoreDb'));assert.ok(!f.calls.includes('releaseLocal'));assert.ok(!f.calls.includes('releaseCentral'));
 });
