@@ -38,3 +38,7 @@ for(const mode of ['schema','bool-size','base64','size','digest','truncated','co
  const f=setup(t,[]),code=`import base64,gzip,hashlib\nraw=b'[]'\nb=gzip.compress(raw,mtime=0)\nw={'version':1,'encoding':'gzip-base64','size':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'data':base64.b64encode(b).decode()}\nmode=${JSON.stringify(mode)}\nif mode=='schema':w['extra']='not allowed'\nif mode=='bool-size':w['size']=True\nif mode=='base64':w['data']='not base64!'\nif mode=='size':w['size']+=1\nif mode=='digest':w['sha256']='0'*64\nif mode=='truncated':w['data']=base64.b64encode(b[:-2]).decode()\nif mode=='concatenated':w['data']=base64.b64encode(b+b).decode()\nif mode=='trailing':w['data']=base64.b64encode(b+b'garbage').decode()\nif mode=='oversize':w['size']=64*1024*1024+1\ntry:m.decode_task_transport(json.dumps(w))\nexcept ValueError:sys.exit(0)\nraise AssertionError('invalid envelope accepted')`;
  const r=f.run({},code);assert.equal(r.status,0,r.stderr);
 });
+
+test('actual expanded payload above64MiB is refused even when declared small',t=>{
+ const f=setup(t,[]),r=f.run({},"import gzip,base64,hashlib\nb=b'x'*(64*1024*1024+1)\nw={'version':1,'encoding':'gzip-base64','size':2,'sha256':hashlib.sha256(b'[]').hexdigest(),'data':base64.b64encode(gzip.compress(b,mtime=0)).decode()}\ntry:m.decode_task_transport(json.dumps(w))\nexcept ValueError:sys.exit(0)\nraise AssertionError('expanded bomb accepted')");assert.equal(r.status,0,r.stderr);
+});

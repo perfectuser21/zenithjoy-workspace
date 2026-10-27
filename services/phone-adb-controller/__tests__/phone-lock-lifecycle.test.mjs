@@ -15,9 +15,10 @@ function setup(t) {
   writeFileSync(pgrep,'#!/bin/sh\n[ -f "$TEST_DIR/local-running" ] && exit 0\nexit 1\n',{mode:0o755});
   writeFileSync(reg,'p1\tSER1\tMODEL\t1199\t2663\n');
   writeFileSync(adb,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/adb.log"\ncase "$*" in\n *get-state*) echo device;;\n *'getprop ro.product.model'*) echo MODEL;;\n *'dumpsys window'*) echo 'mCurrentFocus=Window{abc u0 com.android.launcher/.Launcher}';;\n *' pull '*) for last; do :; done; printf fake > "$last";;\nesac\nexit 0\n`,{mode:0o755});
-  writeFileSync(ssh,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/ssh.log"\n[ -f "$TEST_DIR/ssh-fail" ] && exit 255\ncat "$TEST_DIR/tasks.json"\n`,{mode:0o755});
+  writeFileSync(ssh,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/ssh.log"\n[ -f "$TEST_DIR/ssh-fail" ] && exit 255\nfor last; do :; done\nexec /bin/sh -c "$last"\n`,{mode:0o755});
+  writeFileSync(join(dir,'curl'),'#!/bin/sh\ncat "$TEST_DIR/tasks.json"\n',{mode:0o755});
   writeFileSync(join(dir,'tasks.json'),'[]');
-  const env={...process.env,TEST_DIR:dir,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
+  const env={...process.env,PATH:dir+':'+process.env.PATH,TEST_DIR:dir,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
   const lock=join(dir,'tmp','locks','SER1.lock');
   const run=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
   const stale=(owner='probe-btr-budget')=>{mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),owner+'\n');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));};
