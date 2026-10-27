@@ -1,13 +1,15 @@
-# Commander正式无工具证据判读与失败诊断
+# Commander无工具判读与101尝试配额联合修复
 Task: 8763450e-3335-4da9-a9bb-352db3d27bf9
 GP-Anchor: line02/keyword_acquisition keep-green
 
-原db2239 AFTER调用传CLI --timeout60，真实run执行60003ms超时。准备提交约2.424s后，57.616s未收到最终完成；底层原因未知，pendingStage默认值不证明队列或模型挂死。
+原db2239 AFTER请求实际60003ms执行超时，准备提交约2.424s后57.616s未收到最终完成；底层原因未知，pendingStage默认值不证明队列或模型挂死。旧判读口头禁工具但实际compiled59工具，且原101将displayed数量与attempt配额耦合。
 
-旧请求口头禁工具但实际compiled59工具。改用现役Gateway agent modelRun=true的正式per-run disableTools权限收缩，保同work-commander/session/业务scope、thinking low、60s/外层65s、最终回执与原ownerpending。不得改共享agent配置或把timeout/active0当全集停止。受控诊断只固定phase/status/run/elapsed/timeoutkind，禁prompt/argv/环境/原异常泄漏。
+Commander只用现役正式Gateway agent modelRun=true逐请求收缩工具权限，保work-commander控制owner、输入sessionKey、完整receipt/workflow_progress、thinking low、60s/外层65s和原unknown。先核本次nonce、最终模型回执和决定，再归还reservation；错身份/非终态保持pending。诊断仅固定phase/status/run/elapsed/timeout字段，wx0600旁证不含prompt/argv/环境/原异常，不作执行权证明。
 
-modelRun为正式单回合模型判读，不追加原负责人聊天历史；仍固定同owner/sessionKey与完整receipt/workflow_progress。Skill接手保原完整负责人入口，不使用modelRun冒接手权限。错误旁证在原owner目录wx追加固定scope/状态/耗时，不清pending也不作执行权证明。
+modelRun是单回合模型判读，不追加原负责人聊天历史；正式单次实测使用embedded/OpenClaw runner，不使用原Codex app-server线程。Skill接手保原完整负责人入口，不使用modelRun冒接手权限。本次7.529s成功只是一次实际兼容验证，不宣称历史57秒底因或稳定性已修。
 
-不改sampling、手机动作、业务DB、配额、政策、Skill执行许可或生产。权限收缩不宣称修好历史57秒底层。永久真实子进程RED先提交，代码检查点45分钟，完整CI及隔离候选另验。
+101显式schema2/max_attempts只约束视频尝试次数，displayed照实记录；旧schema1严格displayed上限语义保持，默认无输入路径保持。新合同与正式中央3cd固定源同步，受限模式的来源/单词/禁reveal及同run进度保护仍生效。不得把尝试上限冒物理可见上限，也不重置已消耗额度。
 
-续接说明：原09b9547d租约失效FAILED保持，当前8763450e接续同一审定实现；正式单次modelRun实测为embedded/OpenClaw无工具判读，不使用原Codex app-server线程或原durable历史，不据此认定历史超时原因已修。
+不改手机动作、公司政策、业务DB、原unknown安全边界或生产，不启动搜索/102/103/DM。本PR联合代码与隔离候选交付，真实业务另验。永久RED及两组件独审历史保持；联合方法摘要与版本相对共同main重新计算，不继承单组件签名作联合证明。
+
+续接说明：原09b9547d租约失效FAILED保持，8763450e接续原审定Commander实现；采样组件来源c1ca6b9b及其中央3cd闭包，原Task职责保持。检查点沿原开工预算记录，不因续接重置为新承诺。
