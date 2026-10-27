@@ -1,7 +1,8 @@
+import {randomUUID} from 'node:crypto';
 import {collectionEvidenceProof,collectionReturnedEvidence} from './collection-phone-scope.mjs';
 import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 import { createRequire } from 'node:module';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +31,7 @@ export function parseCommanderResponse(raw) {
 // Activity changes do not create a new owner. Source changes cannot adopt an
 // existing owner's context; the run's frozen source is part of the identity.
 export {workflowCommanderSession,reserveWorkflowCommanderTurn,assertWorkflowOwnerAvailable} from './commander-owner-state.mjs';
-import {workflowCommanderSession,reserveWorkflowCommanderTurn} from './commander-owner-state.mjs';
+import {workflowCommanderSession,reserveWorkflowCommanderTurn,ownerPending} from './commander-owner-state.mjs';
 export {reconcileWorkflowCommanderTurn} from './commander-owner-reconcile.mjs';
 
 export function openClawCommander({ agent = 'work-commander', model, timeoutMs = 60000, execute = exec,home=homedir() } = {}) {
@@ -40,28 +41,40 @@ export function openClawCommander({ agent = 'work-commander', model, timeoutMs =
     const prompt = `你是本Workflow唯一的Commander负责人，本轮是节点证据判读，不是新的执行任务。当前判读只分析提供的证据，不调用任何工具、不自行发私信或改网络、账号、代码、定时器。`
       + `只输出JSON {"action":"continue|retry|finish|escalate","reason":"证据与理由"}。`
       + `retry仅建议失败活动重试，finish要求执行器保留产物并清场。读不到必须写读不到，不得编造成功。\n${JSON.stringify(receipt)}`;
-    const args = ['agent', '--agent', agent, '--session-key', key, '--thinking', 'low',
-      '--timeout', String(Math.floor(timeoutMs / 1000)), '--json', '--message', workflowProgressRule+prompt];
-    if (model) args.push('--model', model);
+    const requestId=randomUUID(),params={agentId:agent,sessionKey:key,thinking:'low',timeout:Math.floor(timeoutMs/1000),
+      modelRun:true,idempotencyKey:requestId,message:workflowProgressRule+prompt};
+    if(model)params.model=model;
+    const args=['gateway','call','agent','--expect-final','--json','--timeout',String(timeoutMs+5000),'--params',JSON.stringify(params)];
     const reservation=await reserveWorkflowCommanderTurn(receipt,{home});
-    let modelReceiptFailure;
+    const started=performance.now();let status='transport_error';
     try {
       await reservation.check();
       const { stdout } = await execute('openclaw', args, { timeout: timeoutMs + 5000, maxBuffer: 1024 * 1024 });
-      const decision=parseCommanderResponse(stdout);await reservation.returned(stdout);
+      status='protocol_invalid';const body=JSON.parse(stdout);
+      if(body?.status==='accepted'){status='nonfinal';throw Error('COMMANDER_GATEWAY_FINAL_REQUIRED');}
+      if(body?.status==='timeout'){status='execution_timeout';throw Error('COMMANDER_GATEWAY_TIMEOUT');}
+      if(body?.runId!==requestId){status='identity_conflict';throw Error('COMMANDER_GATEWAY_IDENTITY_INVALID');}
+      const decision=parseCommanderResponse(stdout);
       if(receipt.workflow_key==='douyin_video_discovery'){
-        try{decision.model_receipt=commanderModelReceipt(stdout,receipt);}catch{
-          modelReceiptFailure=Error('COMMANDER_MODEL_RECEIPT_INVALID');modelReceiptFailure.executionStopped=true;throw modelReceiptFailure;
-        }
+        status='identity_conflict';decision.model_receipt=commanderModelReceipt(stdout,receipt);
       }
+      // Only this request's verified final can release the original reservation.
+      await reservation.returned(stdout);
       return decision;
     } catch (error) {
-      if(error===modelReceiptFailure)throw error;
-      // execFile错误通常包含完整prompt/argv；绝不把它原样写进回执。
       const notStarted=executionDidNotStart(error,'openclaw',args);
       if(notStarted)await reservation.notStarted(error,'openclaw',args);
-      const unavailable=Error(`COMMANDER_UNAVAILABLE code=${String(error.code || 'invalid_response')} signal=${String(error.signal || '')}`);
+      if(error.killed||error.code==='ETIMEDOUT')status='transport_timeout';
+      const code=Number.isInteger(error.code)&&error.code>=0&&error.code<=255?String(error.code):['ENOENT','EACCES','ETIMEDOUT'].includes(error.code)?error.code:'invalid_response';
+      const signal=['SIGTERM','SIGKILL','SIGINT'].includes(error.signal)?error.signal:'';
+      const unavailable=Error(error.message==='COMMANDER_MODEL_RECEIPT_INVALID'?'COMMANDER_MODEL_RECEIPT_INVALID':'COMMANDER_UNAVAILABLE code='+code+' signal='+signal);
       unavailable.executionStopped=notStarted;
+      unavailable.commanderDiagnostic={activity:receipt.activity,phase:receipt.phase,run_id:receipt.run_id,gateway_run_id:requestId,status,elapsed_ms:Math.max(0,Math.round(performance.now()-started)),timeout_ms:timeoutMs};
+      try{
+        const {file}=ownerPending(receipt,home),scope=Object.fromEntries(['workflow_key','run_id','binding_id','task_id','source_commit','activity','phase'].map(k=>[k,receipt[k]??null]));
+        writeFileSync(file.replace(/\.pending\.json$/,'.'+requestId+'.diagnostic.json'),JSON.stringify({protocol:'commander-diagnostic-v1',scope,diagnostic:unavailable.commanderDiagnostic})+'\n',{flag:'wx',mode:0o600});
+        unavailable.commanderDiagnosticPersisted=true;
+      }catch{unavailable.commanderDiagnosticPersisted=false;}
       throw unavailable;
     }finally{await reservation.close();}
   };
@@ -105,7 +118,7 @@ export async function runActivity({ activity, context, execute, commander, recor
       return decision;
     } catch (error) {
       commanderStatus = 'unavailable';
-      await record({ ...receipt, commander_status: commanderStatus, error: safeError(error) });
+      await record({ ...receipt, commander_status: commanderStatus, error: safeError(error),...(error.commanderDiagnostic?{commander_diagnostic:error.commanderDiagnostic}:{}) });
       if (!cleanup||error.executionStopped===false) throw error;
       return { action: 'continue', reason: 'Commander不可达，仍必须在持锁状态下清场' };
     }

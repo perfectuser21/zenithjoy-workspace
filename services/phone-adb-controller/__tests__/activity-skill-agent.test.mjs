@@ -1,3 +1,4 @@
+import {gatewayFixture} from './fixtures/commander-gateway-response.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,writeFileSync,mkdirSync,readFileSync} from 'node:fs';
@@ -170,7 +171,7 @@ for(const parentState of ['completed','nonzero','thrown'])test(`官方停止chil
  assert.equal(result.child_execution_stopped,true);assert.equal(result.owner_execution_stopped,parentState==='completed');
  if(parentState==='completed')assert.doesNotThrow(()=>assertWorkflowOwnerAvailable(q,{home}));
  else assert.throws(()=>assertWorkflowOwnerAvailable(q,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
- let consultations=0;const consult=openClawCommander({home,execute:async()=>{consultations++;return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"原run清理"}'}]})};}});
+ let consultations=0;const consult=openClawCommander({home,execute:async(_cmd,args)=>{consultations++;return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{"action":"continue","reason":"原run清理"}'}]},args)};}});
  if(parentState==='completed')await consult({...q,activity:'cleanup',phase:'before'});
  else await assert.rejects(()=>consult({...q,activity:'cleanup',phase:'before'}),/COMMANDER_OWNER_TURN_UNRESOLVED/);
  assert.equal(consultations,parentState==='completed'?1:0);

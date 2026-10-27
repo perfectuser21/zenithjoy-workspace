@@ -1,0 +1,60 @@
+{
+  "provenance": {
+    "source": "/opt/homebrew/lib/node_modules/openclaw/dist/agent-turn-service-DTertIom.mjs",
+    "sha256": "88972f371e7790af0cb86164b6c2313bdf30a862575c0c74eed29723f865ca33",
+    "accepted_lines": "2544-2552",
+    "final_lines": "2998-3007",
+    "meaning": "现役Gateway handler逐字段封套；业务文本仅隔离数据"
+  },
+  "accepted": {
+    "runId": "gateway-run",
+    "sessionKey": "agent:work-commander:fixture",
+    "agentId": "work-commander",
+    "status": "accepted",
+    "acceptedAt": 1
+  },
+  "final": {
+    "runId": "gateway-run",
+    "status": "ok",
+    "summary": "completed",
+    "result": {
+      "payloads": [
+        {
+          "text": "{\"action\": \"finish\", \"reason\": \"隔离证据判读，不执行业务\"}"
+        }
+      ],
+      "meta": {
+        "agentMeta": {
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "sessionId": "gateway-session",
+          "terminalReceipt": {
+            "runId": "gateway-run",
+            "sessionId": "gateway-session",
+            "turnId": "gateway-turn",
+            "effective": {
+              "provider": "openai",
+              "model": "gpt-6.1-sol",
+              "responseModel": "gpt-6.1-sol"
+            }
+          }
+        }
+      }
+    }
+  },
+  "timeout": {
+    "runId": "gateway-run",
+    "status": "timeout",
+    "summary": "aborted",
+    "stopReason": "timeout",
+    "timeoutPhase": "execution",
+    "providerStarted": true,
+    "result": {
+      "payloads": [],
+      "meta": {
+        "stopReason": "timeout",
+        "aborted": true
+      }
+    }
+  }
+}

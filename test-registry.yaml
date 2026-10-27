@@ -7991,3 +7991,19 @@ agent_suite:
   status: active
   product: 私域运营
   note: 粘贴及UTF8文件、确认保存、响应未知恢复、切换客户竞态与原文和建议回读。
+
+- id: commander-model-only
+  path: services/phone-adb-controller/__tests__/commander-model-only.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实隔离CLI验证正式无工具Gateway判读/最终封套/unknown与ownerpending；不是手机或历史超时根因验收"
+
+- id: discovery-attempt-quota
+  path: services/phone-adb-controller/__tests__/discovery-attempt-quota.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 显式v2尝试配额与首屏显示数解耦，实际loop/prepareCLI/冻结来源及旧v1严格语义回归；不连接设备。

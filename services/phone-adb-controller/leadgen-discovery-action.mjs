@@ -6,7 +6,7 @@ import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {startDiscoveryPhoneScope,discoveryCaptureBudgetMs} from './discovery-phone-scope.mjs';
 export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked,isClosed,setClosed,setScope}){
  let discovery,scope;const line=env.LEADGEN_LINE;
- const fixedInput=()=>{const fixed=Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_CANDIDATES')||existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))?assertDiscoveryInput(readFrozen(env.WFR_RUN_DIR),env):null;if(fixed&&existsSync(join(env.WFR_RUN_DIR,'discovery-progress.json')))throw Error('DISCOVERY_INPUT_ALREADY_USED');return fixed;};
+ const fixedInput=()=>{const fixed=Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_CANDIDATES')||Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_ATTEMPTS')||existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))?assertDiscoveryInput(readFrozen(env.WFR_RUN_DIR),env):null;if(fixed&&existsSync(join(env.WFR_RUN_DIR,'discovery-progress.json')))throw Error('DISCOVERY_INPUT_ALREADY_USED');return fixed;};
   const getDiscovery=async()=>{
     if(discovery)return discovery;
     const fixed=fixedInput();

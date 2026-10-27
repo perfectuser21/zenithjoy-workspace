@@ -1,3 +1,4 @@
+import {gatewayFixture,gatewayOwner} from './fixtures/commander-gateway-response.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
@@ -12,7 +13,7 @@ test('同Workflow各节点判断与Skill接手使用同一个work-commander负�
  const calls=[],home=mkdtempSync(join(tmpdir(),'single-commander-'));
  const scope={run_id:'same-workflow__a1',source_commit:'a'.repeat(40),binding_id:'binding-one'};
  const commander=openClawCommander({home,execute:async(command,args)=>{
-  calls.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:JSON.stringify({action:'continue',reason:'监督原Workflow'})}]})};
+  calls.push(args);return {stdout:gatewayFixture({status:'ok',payloads:[{text:JSON.stringify({action:'continue',reason:'监督原Workflow'})}]},args)};
  }});
  try{
   await commander({...scope,activity:'preflight',phase:'before'});
@@ -21,13 +22,13 @@ test('同Workflow各节点判断与Skill接手使用同一个work-commander负�
    broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.0',text:'isolated fixture'}},
    {home,verifyWorkspace:()=>true,execute:async(_command,args)=>{calls.push(args);return {code:1,stdout:'',stderr:'isolated transport has no child'};}});
   assert.equal(calls.length,3);
-  for(const args of calls){assert.equal(args[args.indexOf('--agent')+1],'work-commander');assert.ok(args.includes('--session-key'));}
-  const owners=calls.map(args=>args[args.indexOf('--session-key')+1]);
+  for(const args of calls){if(args[0]==='gateway'){const request=JSON.parse(args[args.indexOf('--params')+1]);assert.equal(request.agentId,'work-commander');assert.equal(request.modelRun,true);}else{assert.equal(args[args.indexOf('--agent')+1],'work-commander');assert.ok(args.includes('--session-key'));}}
+  const owners=calls.map(gatewayOwner);
   assert.equal(new Set(owners).size,1,'Activity与Skill不能另建负责人');
-  const other=[];await openClawCommander({home,execute:async(_cmd,args)=>{other.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"另任务"}'}]})};}})({...scope,run_id:'another-workflow__a1',activity:'preflight'});
-  assert.notEqual(other[0][other[0].indexOf('--session-key')+1],owners[0]);
-  await openClawCommander({home,execute:async(_cmd,args)=>{other.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"另一绑定"}'}]})};}})({...scope,binding_id:'binding-two',activity:'preflight'});
-  assert.notEqual(other[1][other[1].indexOf('--session-key')+1],owners[0],'同名run不同冻结绑定不能共享上下文');
+  const other=[];await openClawCommander({home,execute:async(_cmd,args)=>{other.push(args);return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{"action":"continue","reason":"另任务"}'}]},args)};}})({...scope,run_id:'another-workflow__a1',activity:'preflight'});
+  assert.notEqual(gatewayOwner(other[0]),owners[0]);
+  await openClawCommander({home,execute:async(_cmd,args)=>{other.push(args);return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{"action":"continue","reason":"另一绑定"}'}]},args)};}})({...scope,binding_id:'binding-two',activity:'preflight'});
+  assert.notEqual(gatewayOwner(other[1]),owners[0],'同名run不同冻结绑定不能共享上下文');
  }finally{rmSync(home,{recursive:true,force:true});}
 });
 
@@ -57,7 +58,7 @@ test('正式获客RPC调用同一work-commander且来源不匹配时零派发',a
  for(const directory of ['.openclaw/commander','openclaw-root/workspaces-root/clawd-work-commander'])for(const file of ['AGENTS.md','skills/workflow-commander/SKILL.md']){
   const target=join(home,directory,file);mkdirSync(join(target,'..'),{recursive:true});writeFileSync(target,readFileSync(new URL('../commander/'+file,import.meta.url)));
  }
- const deps={verify:()=>{},commanderHome:home,commanderExecute:async(_cmd,args)=>{calls.push(args);return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{"action":"continue","reason":"原任务"}'}]})};}};
+ const deps={verify:()=>{},commanderHome:home,commanderExecute:async(_cmd,args)=>{calls.push(args);return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{"action":"continue","reason":"原任务"}'}]},args)};}};
  try{
  const ok=await handleRpc({source:{commit:receipt.source_commit},kind:'commander',receipt},deps);
  assert.equal(ok.decision.action,'continue');assert.equal(calls.length,1);

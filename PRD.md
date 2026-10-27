@@ -1,9 +1,15 @@
-# 修复101发现阶段预算接缝
-Task: 1ec5bba4-3aea-4b79-a49c-3eb43c11901d
+# Commander无工具判读与101尝试配额联合修复
+Task: 8763450e-3335-4da9-a9bb-352db3d27bf9
 GP-Anchor: line02/keyword_acquisition keep-green
 
-b29f首屏4候选仅处理2后，Activity仍余约616–625秒却被661秒粗门槛拒。原661仅公开动作默认上界之和，漏续锁与额外元数据费用，不能作为完整原子闭包。
+原db2239 AFTER请求实际60003ms执行超时，准备提交约2.424s后57.616s未收到最终完成；底层原因未知，pendingStage默认值不证明队列或模型挂死。旧判读口头禁工具但实际compiled59工具，且原101将displayed数量与attempt配额耦合。
 
-仅101 collect将实际执行phase caps与nominal准入同表：cards120s/link300s不变，续锁10s/关键词回读10s/tap30s，sleep cap3s。正常单遍名义合计503s；真实tap续锁后必须fresh核343s尾部。不足仍结果页拒；所有动作继续按原绝对工作截止截短。503不含所有重定位/启动/同步核验/PG费用，不保证整捕获完成。
+Commander只用现役正式Gateway agent modelRun=true逐请求收缩工具权限，保work-commander控制owner、输入sessionKey、完整receipt/workflow_progress、thinking low、60s/外层65s和原unknown。先核本次nonce、最终模型回执和决定，再归还reservation；错身份/非终态保持pending。诊断仅固定phase/status/run/elapsed/timeout字段，wx0600旁证不含prompt/argv/环境/原异常，不作执行权证明。
 
-保Activity900/global1200/cleanup120/ADB route2秒、身份/锁/unknown/fork及原政策；不手机、不恢复业务数据、不103/DM/生产。本Task源码检查点30分钟，独审后正常PR完整CI和隔离candidate，实机另验。
+modelRun是单回合模型判读，不追加原负责人聊天历史；正式单次实测使用embedded/OpenClaw runner，不使用原Codex app-server线程。Skill接手保原完整负责人入口，不使用modelRun冒接手权限。本次7.529s成功只是一次实际兼容验证，不宣称历史57秒底因或稳定性已修。
+
+101显式schema2/max_attempts只约束视频尝试次数，displayed照实记录；旧schema1严格displayed上限语义保持，默认无输入路径保持。新合同与正式中央3cd固定源同步，受限模式的来源/单词/禁reveal及同run进度保护仍生效。不得把尝试上限冒物理可见上限，也不重置已消耗额度。
+
+不改手机动作、公司政策、业务DB、原unknown安全边界或生产，不启动搜索/102/103/DM。本PR联合代码与隔离候选交付，真实业务另验。永久RED及两组件独审历史保持；联合方法摘要与版本相对共同main重新计算，不继承单组件签名作联合证明。
+
+续接说明：原09b9547d租约失效FAILED保持，8763450e接续原审定Commander实现；采样组件来源c1ca6b9b及其中央3cd闭包，原Task职责保持。检查点沿原开工预算记录，不因续接重置为新承诺。

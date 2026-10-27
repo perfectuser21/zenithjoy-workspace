@@ -4,19 +4,19 @@
     "douyin_video_discovery.collect_videos": {
       "activity_version": "5.0.0",
       "contract_digest": "c8b9cd19a0a8d4aa081072b0f9f0b49e150d0ce6786dfd468a192eef9e7ca071",
-      "method_version": "0.3.1",
+      "method_version": "0.3.2",
       "skill": {
         "name": "douyin-leadgen-activity-101-collect-videos",
-        "version": "0.3.1",
+        "version": "0.3.2",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md",
-        "sha256": "d11a25670a0479aea5613df3157d1b76d0053df3008af151e2eff5f659fcfcba",
+        "sha256": "e9420bc672dfcabc918cbc63efc484d208e24ad8fde1a138cb5efad7c50cb37a",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "d430c545119ae586d58ad9fb0e5f6498f156aac9db498ee3f0617e7690873dc5"
+        "content_digest": "1675e43a2ed51aa3763b9c31cc6e439d1bc6c4c21c64babaeefbf1476b305237"
       },
       "code_bindings": [
         {
@@ -136,7 +136,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -227,7 +227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -262,7 +262,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-discovery.mjs",
           "revision": "contract",
-          "sha256": "b03720644173f39683f574a9ca3d610cd0c985e94932dd9aa7dbf6e05c1ee153"
+          "sha256": "30bbee32877712e72a618ff65fca3ade81ef3891ffd7c111a1d40fb0f139fc64"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15",
+      "code_digest": "8ec94f2e30d18f61413b636ec24825887da91ad7521181c0f3befff112b94083",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "474df14d450c278b1e64e9131ae60c1e4b56f2653ac1c8b25f486f9ccc672c9b",
-        "current_code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15",
+        "current_code_digest": "8ec94f2e30d18f61413b636ec24825887da91ad7521181c0f3befff112b94083"
       }
     },
     "douyin_video_processing.preflight": {
@@ -430,7 +430,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -532,7 +532,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955",
+      "code_digest": "aa2ae1cb96f823fe97955ae368d6b41bc1643095d8c15064f242b79e3be0aee2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "70e61dfe04685838c44925135beab88c1803e646ee41a7849e4f2f700c514e0f",
-        "current_code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955",
+        "current_code_digest": "aa2ae1cb96f823fe97955ae368d6b41bc1643095d8c15064f242b79e3be0aee2"
       }
     },
     "douyin_video_processing.dedup": {
@@ -700,7 +700,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -784,7 +784,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -822,13 +822,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959",
+      "code_digest": "7be2ee12b9e09cce93ac18df657b163176629b3820ecdca7d2d6cb011ef5a408",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "7e175cd3b89a52676110dd1f22e6e7ce616a4c8e09d0b1bfd28404a1a3b81d09",
-        "current_code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959",
+        "current_code_digest": "7be2ee12b9e09cce93ac18df657b163176629b3820ecdca7d2d6cb011ef5a408"
       }
     },
     "douyin_video_processing.qualification": {
@@ -966,7 +966,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -1050,7 +1050,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1144,13 +1144,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e",
+      "code_digest": "99a2926287a1fd978fa02ae0f829d4c5401221a3e2307c1ffcc8b020c77a4fd4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "49a9485e8fc8bfc001cb8d0bdb1aad6d68c78db171c74ee850f5bc7f0c91f0ec",
-        "current_code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e",
+        "current_code_digest": "99a2926287a1fd978fa02ae0f829d4c5401221a3e2307c1ffcc8b020c77a4fd4"
       }
     },
     "douyin_video_processing.collection": {
@@ -1295,7 +1295,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -1394,7 +1394,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1439,13 +1439,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8",
+      "code_digest": "c8a808949629a9f800062aece02a0091985725e9c20cceb73806180c35d3b45e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "9c60327a8809c38b0c396dd32c08eb7593cb1d4baa8510c866dd197a7bf3cabf",
-        "current_code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8",
+        "current_code_digest": "c8a808949629a9f800062aece02a0091985725e9c20cceb73806180c35d3b45e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1583,7 +1583,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -1684,7 +1684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b",
+      "code_digest": "1a332297545afcc71a738dfd5f1fedad9c7dbc30c8d6612b8f4b1b7274462004",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "4b9e1883d31084c85a31289ccce4488a3281fa6c383fb87ce2fd60251294548e",
-        "current_code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b",
+        "current_code_digest": "1a332297545afcc71a738dfd5f1fedad9c7dbc30c8d6612b8f4b1b7274462004"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1852,7 +1852,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -1908,7 +1908,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1946,13 +1946,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389",
+      "code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "6245105cd05b8cdb529e031e6047be67c437b92df2886b42c5cd1500e09ca2b9",
-        "current_code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389",
+        "current_code_digest": "837badcab18bf658b8ee29f4c9fe8458f152b6aff6d1c5d2c088b33bad022523"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2097,7 +2097,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -2153,7 +2153,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46",
+      "code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "6aad58c74baa47d08796603745d0c7ffda321f8d55dfdc558943c1ae9c7e5a25",
-        "current_code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46",
+        "current_code_digest": "09b73667f7daaf84cd64f02e2ccba9c6668e12039f9e46c86744feeb3dbe9fbf"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2384,7 +2384,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -2500,7 +2500,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6",
+      "code_digest": "5664a1028c5e84ad4cd44adcf073e1bca837e0650130fc7f050ad0eb61817502",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "95aabee0079a2d4c5b13381f0bdf6c5d7769be98c044cdcfbe41f4b8cc95aa7f",
-        "current_code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6",
+        "current_code_digest": "5664a1028c5e84ad4cd44adcf073e1bca837e0650130fc7f050ad0eb61817502"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2682,7 +2682,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -2787,7 +2787,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -2811,13 +2811,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+      "code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "b9683539d35c9e4f0b74054719db127bc0771e79f4755b30fa543e34fe20ef16",
-        "current_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+        "current_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2955,7 +2955,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -3060,7 +3060,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -3084,13 +3084,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+      "code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "b9683539d35c9e4f0b74054719db127bc0771e79f4755b30fa543e34fe20ef16",
-        "current_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+        "current_code_digest": "7be1a0774f3728a121d6a97519e7372e690a4bfbd329137fe6499d0e70d265e6"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3228,7 +3228,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "b7b09adad2f1e2c18b57a99499532e9146a047f3bc51d096270d55990276013b"
+          "sha256": "0572044c15595c24348219d2503f16f2ba21979dd638c6d74023dc87b43b896b"
         },
         {
           "kind": "code",
@@ -3336,7 +3336,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -3360,13 +3360,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b",
+      "code_digest": "553ac01dc296515e8895f75a389d84f9e928eaeb591a8bed39f3ac87259836ec",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "f4bee9a3a23a7d76f9870f27bc43994f598a24f2ba835fbc24fcbde2a1e9cf7d",
-        "current_code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b"
+        "reason": "联合Commander正式modelRun无工具判读与101显式schema2尝试配额；保同owner及unknown，原schema1严格上限与默认路径不变；101方法说明按真实中央3cd版本同步，不新增手机/收尾权限或业务写",
+        "reviewed_by": "codex:baseline-release-independent-review:commander-attempt-joint-20261027",
+        "previous_code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b",
+        "current_code_digest": "553ac01dc296515e8895f75a389d84f9e928eaeb591a8bed39f3ac87259836ec"
       }
     }
   },
@@ -3374,13 +3374,13 @@
     "douyin_video_discovery": {
       "workflow_skill": {
         "name": "douyin-leadgen-101",
-        "version": "0.4.1",
+        "version": "0.4.2",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/SKILL.md",
-        "sha256": "d9f273b884f27daf5dde57e23886d4deca61a7788c01a64fc710244d49dedeb0",
+        "sha256": "3a2864d4c9fffdfe69ccfa4241ce8811acee2d73a58fa6836c31167ab4fe1056",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
-            "sha256": "ff6327edda972d8b00018a4f62fd9e9fe38b5eca7cb69776f3a087b5dbb6fefe"
+            "sha256": "f663590cc8c72b091c6c3175eb488f3cfd246d86ff264e83b5aaeeda0f004009"
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/reuse-map.json",
@@ -3388,22 +3388,22 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/runtime-calls.json",
-            "sha256": "93e7fba8e6a0cfe6a7e7b9d153da4a2e964c8fd554540e3a56df246c01169b03"
+            "sha256": "474775229a7fda9247dbc1f08ec2e252b670b539477036ffb1826b7cbe1b9b8e"
           }
         ],
-        "content_digest": "7a2168de9ee53ca1a377f2945cce2391d46252ad361a594435d57e909d9b07ed"
+        "content_digest": "c1c91c013273104e88a11804db3150b9392d07d9209818e9e7fbd5674dd3a759"
       },
       "commander_skill": {
         "name": "wf-douyin_video_discovery",
-        "version": "0.4.1",
+        "version": "0.4.2",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_discovery/SKILL.md",
-        "sha256": "1c74496292b96592eb1cdd5be0ccf50c99b151020a38082f20a480ea51f9dba4",
+        "sha256": "21de2bc279d186f423f2f215e8920c340d812a5f990bbc8e4f273d3a2a5557d3",
         "support_files": [],
-        "content_digest": "17eb227523f547e51e8cf862bbb7acf38beab3bfca34da328b3a06d030f198d5"
+        "content_digest": "4be3e192ba81d68b0c914af97df577b8c2e4064638eb5e83e5feff6b791aa51c"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-101/references/activity-methods.json",
-        "sha256": "ff6327edda972d8b00018a4f62fd9e9fe38b5eca7cb69776f3a087b5dbb6fefe"
+        "sha256": "f663590cc8c72b091c6c3175eb488f3cfd246d86ff264e83b5aaeeda0f004009"
       },
       "activities": [
         {
@@ -3415,7 +3415,7 @@
         {
           "activity_ref": "douyin_video_discovery.collect_videos",
           "skill_name": "douyin-leadgen-activity-101-collect-videos",
-          "skill_version": "0.3.1",
+          "skill_version": "0.3.2",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md"
         },
         {
