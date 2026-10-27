@@ -29,7 +29,8 @@ export async function restorePendingClaim(pool,input) {
   // 已有意图只能走独立readback；不再执行业务UPDATE。
   if(old.length)throw Error('MAINTENANCE_PG_READBACK_REQUIRED');
   const profiles=(await c.query('SELECT * FROM zenithjoy.tenant_company_profiles WHERE company_id=$1 FOR SHARE',[s.company_id])).rows;
-  need(profiles.length===1&&profiles[0].tenant_id===s.tenant_id&&profiles[0].config_version===s.config_version&&profiles[0].config_status==='enabled');
+  need(profiles.length===1&&profiles[0].tenant_id===s.tenant_id&&profiles[0].config_version===s.config_version&&profiles[0].config_status==='enabled'
+   &&isDeepStrictEqual(profiles[0].runtime_config,input.expected_snapshot.runtime_config));
   const versions=(await c.query('SELECT snapshot FROM zenithjoy.company_config_versions WHERE company_id=$1 AND tenant_id=$2 AND version=$3 FOR SHARE',[s.company_id,s.tenant_id,s.config_version])).rows;
   need(versions.length===1&&isDeepStrictEqual(versions[0].snapshot,input.expected_snapshot));
   const runs=(await c.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=ANY($2::text[]) FOR SHARE',[s.company_id,[s.producer_run,s.run_tag]])).rows;
@@ -39,19 +40,19 @@ export async function restorePendingClaim(pool,input) {
     &&(r.source_run??null)===(run===s.producer_run?null:s.producer_run)
     &&isDeepStrictEqual(r.snapshot,input.expected_snapshot));
   }
-  const videos=(await c.query('SELECT * FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2 FOR UPDATE',[s.line_key,s.video_ids[0]])).rows;
-  const v=videos[0];need(videos.length===1&&v.judgment_status==='pending'&&v.judgment_config===null
+  const videos=(await c.query('SELECT to_jsonb(v) AS row FROM zenithjoy.leadgen_videos v WHERE line_key=$1 AND video_id=$2 FOR UPDATE',[s.line_key,s.video_ids[0]])).rows;
+  const v=videos[0]?.row;need(videos.length===1&&v.judgment_status==='pending'&&v.judgment_config===null
    &&v.transcript===null&&v.judgment_reason===null&&v.process_status==='处理中:'+s.run_tag&&v.harvest_batch===s.run_tag);
   const comments=(await c.query('SELECT count(*)::int AS n FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND harvest_batch=$2',[s.line_key,s.run_tag])).rows[0];need(comments.n===0);
-  const updated=await c.query(`UPDATE zenithjoy.leadgen_videos SET process_status='待判定',harvest_batch=$1
+  const updated=await c.query(`UPDATE zenithjoy.leadgen_videos v SET process_status='待判定',harvest_batch=$1
    WHERE id=$2 AND process_status=$3 AND harvest_batch=$4 AND judgment_status='pending'
-   AND transcript IS NULL AND judgment_config IS NULL AND judgment_reason IS NULL RETURNING *`,[s.producer_run,v.id,'处理中:'+s.run_tag,s.run_tag]);
+   AND transcript IS NULL AND judgment_config IS NULL AND judgment_reason IS NULL RETURNING to_jsonb(v) AS row`,[s.producer_run,v.id,'处理中:'+s.run_tag,s.run_tag]);
   need(updated.rows.length===1);
-  const expected={...v,process_status:'待判定',harvest_batch:s.producer_run};need(isDeepStrictEqual(updated.rows[0],expected));
+  const expected={...v,process_status:'待判定',harvest_batch:s.producer_run};need(isDeepStrictEqual(updated.rows[0].row,expected));
   const detail={contract_sha256:a.contract_sha256,effects_receipt_sha256:input.effects_receipt_sha256,
    company_snapshot_sha256:digest(input.expected_snapshot),video_id:s.video_ids[0],original_task_id:s.original_task_id,
    maintenance_task_id:a.maintenance_task_id,from_process_status:v.process_status,from_batch:v.harvest_batch,
-   to_process_status:'待判定',to_batch:s.producer_run};
+   to_process_status:'待判定',to_batch:s.producer_run,before_row_sha256:digest(v),after_row_sha256:digest(expected)};
   await c.query('INSERT INTO zenithjoy.db_audit(id,org_id,member_id,action,detail) VALUES($1,$2,$3,$4,$5::jsonb)',[s.intent_id,s.tenant_id,a.actor,action,JSON.stringify(detail)]);
   commitSent=true;await c.query('COMMIT');
   return {status:'db_committed',intent_id:s.intent_id,audit_sha256:digest(detail)};
@@ -65,10 +66,12 @@ export async function restorePendingClaim(pool,input) {
 export async function readPendingClaimOutcome(pool,input) {
  const {s}=context(input);
  const audits=(await pool.query('SELECT * FROM zenithjoy.db_audit WHERE id=$1',[s.intent_id])).rows;
- const videos=(await pool.query('SELECT * FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2',[s.line_key,s.video_ids[0]])).rows;
- const v=videos[0];
+ const videos=(await pool.query('SELECT to_jsonb(v) AS row FROM zenithjoy.leadgen_videos v WHERE line_key=$1 AND video_id=$2',[s.line_key,s.video_ids[0]])).rows;
+ const v=videos[0]?.row;
  if(audits.length===1&&auditMatches(audits[0],input)&&videos.length===1&&v.process_status==='待判定'
-  &&v.harvest_batch===s.producer_run&&v.judgment_status==='pending'&&v.transcript===null&&v.judgment_config===null)
+  &&v.harvest_batch===s.producer_run&&v.judgment_status==='pending'&&v.transcript===null&&v.judgment_config===null&&v.judgment_reason===null
+  &&audits[0].detail.after_row_sha256===digest(v)
+  &&audits[0].detail.before_row_sha256===digest({...v,process_status:'处理中:'+s.run_tag,harvest_batch:s.run_tag}))
   return {status:'db_committed',intent_id:s.intent_id,audit_sha256:digest(audits[0].detail)};
  return {status:'blocked',reason:'MAINTENANCE_PG_OUTCOME_UNPROVEN',intent_id:s.intent_id};
 }
