@@ -8063,3 +8063,19 @@ agent_suite:
   status: active
   product: AI员工
   note: 当前模板固定Git字节与真实manifest进入默认101/102 scope对齐单5037；旧5042冻结/pins/显式错端点原guard保持，证据目录元数据为synthetic。
+
+- id: producer-pending-handoff
+  path: services/phone-adb-controller/__tests__/producer-pending-handoff.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: v2固定真实a83完整进度压缩原件哈希及唯一pending范围；旧v1和共享readFrozen保护保持，不冒281文件正链。
+
+- id: producer-pending-claim-pg
+  path: services/phone-adb-controller/__tests__/producer-pending-claim-pg.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 现有Linux L3 scratch Postgres必跑v2原子pending-only CAS、批次和公司漂移、并发只领一次、旁隔离记录全行不变。

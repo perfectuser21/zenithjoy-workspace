@@ -1,15 +1,20 @@
-# 原生进程观察不得阻塞受管ADB的IPC
-Task: 58d08a78-4119-4117-bc98-12390bd988eb
+# 单条pending视频的跨版本来源交接
+
+Task: 8ce977d8-fc05-4310-ac30-23b7bd710b90
 GP-Anchor: line02/keyword_acquisition keep-green
 
-原9c5b已正常领取并确认一条合格视频，collection的client_version在原2秒处超时2003ms并隔离。此次历史超时的具体触发原因仍未知，不以结构测试或后续直接CLI成功代替历史归因。
+## 问题与范围
+已验证a83/beb原101保存两条真实视频，当前单5037候选不能消费旧source。仅增加显式v2描述符交接仍pending的7689863996204591985；770011隔离记录不恢复。旧v1和无描述符同source路径不变。
 
-已证设计风险：原生观察器每25ms同步启动Python观察进程，children单次可阻塞3秒；同一Node事件循环也接收scoped managed client的Unix请求。永久回归使用真实execInput、原生收据、真实Darwin nofork producer、真实controller初始化和managed version。测试只有私有loopback假ADB服务与IPC-FAKE序列号；慢观察为真实子进程的synthetic trigger，不接触手机。
+## 验收
+- 原完整来源run snapshot fe7da095及progress fbbee23e固定；全部2VID/captures不裁剪，新consumer真实source。
+- 公司/租户/v14/原policy/legacy/设备4402及唯一VID严格校验；只允许队列1条、最多5评论，unknown指标后续重读，不当0。
+- 在同一真实PG事务中CAS pending+待判定+原a83harvest_batch；失配/租约/隔离/政策漂移不领取，不换领。
+- 保旧来源、旧失败与UNKNOWN；不新增搜索、手机操作、恢复、私信或业务PG写。
 
-最窄修改限内部观察：异步有界检查，整批轮询和每PID登记single-flight，不积压重叠。停止及信号仍共享原单调截止，取消或忽略晚到结果，最终收据不被晚到观察改写。公开同步processIdentity契约、32个上限、25ms节拍、精确身份/信号权限保留。错误、超时、坏JSON、漂移仍unknown；observed_only永不变成OS全集合停证。
+## 测试策略
+CI：真实原progress压缩fixture和固定哈希/身份验证；shared readFrozen原v1真实正例保持，新v2错误来源阴性；scratch Postgres原子CAS、并发和漂移永久回归。CI不冒v2全281源文件正链。
+本机/候选：以真实原完整run目录执行readFrozen+v2只读正集成，独立记录结果；真实102/103另独立业务任务，不用本代码CI冒业务通过。
 
-不加version的2秒，不省观察、不清未知、不新增cleanup/resume权限。不改手机动作、端点模板、公司政策、旧失败、业务数据或额度。5042模板与实际5041不一致是独立缺口，不混本实现；新源码消费旧producer及人工恢复不能借本PR绕过现行来源/用户权威。
-
-范围：永久RED先提交、最窄实现、必要方法摘要/五版头、独审、完整正式CI及隔离候选。不得把源码/候选通过冒实际评论或103端到端通过；不搜索、不恢复人工、不DM、不生产晋级。
-
-正式CI首轮CI Config Audit因PR标题未标注工作流配置变更而失败；已补齐[CONFIG]标记，以正常新提交触发完整CI，保留原失败，运行源码与测试字节不变。
+## 已验证与未验证边界
+本机核心144/144；扩大426通过、1个无关条件用例未配置而skip。原完整281文件readFrozen只读正集成及生产只读原公司snapshot复制到隔离scratch事务正例均已完成；它们不代表新候选或真实102/103验收。中央方法actual ad28c47cce328d65fbd35283db48e2561ccd1bb3已正式CI合并；业务消费者本PR固定来源和12方法闭包。正式CI/候选状态须以实际结果更新，未知原生评论数保持unknown后续重读。

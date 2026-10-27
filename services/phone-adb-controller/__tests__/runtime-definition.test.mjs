@@ -242,3 +242,11 @@ test('显式producer真实冻结进入digest；续跑不得改变或移除，CLI
  await assert.rejects(freezeDefinition({...f.options,producerDescriptor:{...d,progress_sha256:'c'.repeat(64)}}),/PRODUCER_DESCRIPTOR_RESUME/);
  const syntax=spawnSync(process.execPath,['--check',new URL('../runtime-receipts.mjs',import.meta.url).pathname],{encoding:'utf8'});assert.equal(syntax.status,0,syntax.stderr);
 });
+
+
+test('v2来源交接冻结必须保采样≤5及原480预算，不影响v1',async()=>{
+ const {pendingDescriptor:d}=await import('./fixtures/producer-pending-descriptor.mjs');
+ const options=()=>{const f=fixture();f.routes['/api/brain/workflows'][0].key='douyin_video_processing';Object.assign(f.options,{workflowKey:'douyin_video_processing',producerDescriptor:d,runIdentity:{capability:'test',tag:'pendingconsumer',profile:'legacy',serial:d.serial,run_id:'run'},samplingInput:{schema_version:1,workflow_key:'douyin_video_processing',run_tag:'pendingconsumer',profile:'legacy',serial:d.serial,line:'jinuo',source_run:d.run_tag,comment_limit:5,collection_budget_s:480}});const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key='douyin_video_processing';v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});return f.options;};
+ for(const change of [o=>o.samplingInput=null,o=>o.samplingInput.comment_limit=6,o=>o.samplingInput.collection_budget_s=481,o=>o.samplingInput.line='yuesheng']){const o=options();change(o);await assert.rejects(freezeDefinition(o),/PRODUCER_DESCRIPTOR_SAMPLING_SCOPE_INVALID/);}
+ const o=options(),s=await freezeDefinition(o);assert.deepEqual(s.producer_descriptor,d);assert.equal(s.sampling_input.comment_limit,5);assert.equal(s.deployment.source_commit,'a'.repeat(40));
+});
