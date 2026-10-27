@@ -7,6 +7,7 @@ import {gunzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {validateProducerDescriptor,verifyProducerDescriptor} from '../producer-descriptor.mjs';
 import {readFrozen} from '../runtime-definition.mjs';
+import {createHandlers} from '../leadgen-workflow.mjs';
 
 import {pendingDescriptor} from './fixtures/producer-pending-descriptor.mjs';
 const raw=gunzipSync(readFileSync(new URL('./fixtures/a83-discovery-progress.json.gz',import.meta.url)));
@@ -44,4 +45,14 @@ test('v2冻结digest不符仍由真实readFrozen拒绝，不为了正例放宽�
     writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...input().upstream,files:{}}));
     assert.throws(()=>readFrozen(dir),/运行快照digest不符/);
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('真实qualification handler将已验证v2状态交原claim RPC，取消matched优先且0领取不换旁VID',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'pending-handler-')),calls=[];
+ try{
+  const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'pending102',P:'legacy',SERIAL:pendingDescriptor.serial,LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:pendingDescriptor.run_tag,WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_LIMIT:'1'},rpc:async({request:q})=>{calls.push(q);return {result:[]};}});
+  // 此为状态到RPC接缝单测，不冒上游readFrozen或真机资格运行。
+  h.state.companyConfig=company;h.state.intakeVideoIds=[...pendingDescriptor.video_ids];h.state.producerDescriptor=pendingDescriptor;
+  const r=await h.qualification();assert.equal(r.claimed,0);assert.equal(calls.length,1);
+  assert.equal(calls[0].op,'claim_videos');assert.equal(calls[0].limit,1);assert.equal(calls[0].prefer_matched,undefined);assert.deepEqual(calls[0].producer_descriptor,pendingDescriptor);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });
