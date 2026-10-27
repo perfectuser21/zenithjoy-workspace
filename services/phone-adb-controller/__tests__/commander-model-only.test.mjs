@@ -58,7 +58,7 @@ test('原失败仅保固定诊断字段不泄漏原stderr/argv，且写入Activi
 
 test('跨RPC通用错误仍在原owner账本留下本次固定诊断旁证，绝不作为returned',t=>{
  const r=run(t,'exit');assert.equal(r.available,false);assert.equal(r.diagnostics.length,1);
- const d=r.diagnostics[0];assert.match(d.name,/\\.[0-9a-f-]{36}\\.diagnostic\\.json$/);
+ const d=r.diagnostics[0];assert.match(d.name,/\.[0-9a-f-]{36}\.diagnostic\.json$/);
  assert.equal(d.value.protocol,'commander-diagnostic-v1');assert.deepEqual(d.value.scope,scope);
  assert.deepEqual(d.value.diagnostic,r.error.diagnostic);assert.doesNotMatch(JSON.stringify(d),/sensitive-sentinel|--params|message|environment/);
 });

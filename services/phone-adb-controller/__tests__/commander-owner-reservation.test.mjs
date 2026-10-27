@@ -1,3 +1,4 @@
+import {gatewayFixture} from './fixtures/commander-gateway-response.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync,spawn} from 'node:child_process';
@@ -48,8 +49,9 @@ function pending(home,session){return join(home,'.openclaw/leadgen-owner-turns',
 test('真实并发进程共享reservation时只允许一个未回执的CLI',{timeout:10000},async t=>{
  const home=isolated(t);
  const script=`import {appendFileSync} from 'node:fs';import {openClawCommander} from ${JSON.stringify(modulePath)};
+ const gatewayFixture=(body,args)=>{body.runId=JSON.parse(args[args.indexOf('--params')+1]).idempotencyKey;body.summary='completed';return JSON.stringify(body);};
  const home=process.argv[1];
- try{await openClawCommander({home,execute:async()=>{appendFileSync(home+'/launches','launch\\n');process.send('entered');await new Promise(r=>process.once('message',r));return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{\"action\":\"continue\",\"reason\":\"原run\"}'}]})};}})(${JSON.stringify(scope)});process.send('returned');}
+ try{await openClawCommander({home,execute:async(_cmd,args)=>{appendFileSync(home+'/launches','launch\\n');process.send('entered');await new Promise(r=>process.once('message',r));return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{\"action\":\"continue\",\"reason\":\"原run\"}'}]},args)};}})(${JSON.stringify(scope)});process.send('returned');}
  catch(error){process.stdout.write(error.message);}finally{process.disconnect();}`;
  const first=spawn(process.execPath,['--input-type=module','-e',script,home,'first'],{stdio:['ignore','pipe','pipe','ipc']});
  t.after(()=>{if(first.exitCode===null)first.kill();});
@@ -58,7 +60,7 @@ test('真实并发进程共享reservation时只允许一个未回执的CLI',{tim
  assert.equal(readFileSync(join(home,'launches'),'utf8').trim().split('\n').length,1);
  const ended=once(first,'exit');first.send('release');assert.equal((await ended)[0],0);
  const {openClawCommander}=await reservationApi();let launched=0;
- await openClawCommander({home,execute:async()=>{launched++;return {stdout:JSON.stringify({status:'ok',payloads:[{text:'{\"action\":\"continue\",\"reason\":\"后续节点\"}'}]})};}})(scope);
+ await openClawCommander({home,execute:async(_cmd,args)=>{launched++;return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{\"action\":\"continue\",\"reason\":\"后续节点\"}'}]},args)};}})(scope);
  assert.equal(launched,1,'已读回当前owner才能开始下一turn');
 });
 
@@ -99,7 +101,7 @@ function nativeFailureProcess(home,mode){
  if(mode==='consult-not-started'){
   result=await runWorkflow({context:scope,activities:[{key:'scoring'},{key:'cleanup'}],handlers:{scoring:async()=>{throw Error('must not execute');},cleanup:async()=>{cleaned++;return {};}},commander:openClawCommander({home}),record:async()=>{},quarantine:async()=>{quarantined++;return {verified:true};}});
  }else if(mode==='handoff-not-started'||mode==='forged-start-failure'){
-  result=await runSkillAgent({...scope,protocol:'leadgen-activity-v1',activity_key:'scoring',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.0',text:'fixture'}},{home,verifyWorkspace:()=>true,...(mode==='forged-start-failure'?{execute:async()=>{throw Error('EXECUTION_START_FAILED');}}:{})});
+  result=await runSkillAgent({...scope,protocol:'leadgen-activity-v1',activity_key:'scoring',nonce:'c'.repeat(48),deadline_ms:Date.now()+20000,broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.0',text:'fixture'}},{home,verifyWorkspace:()=>true,...(mode==='forged-start-failure'?{execute:async(_cmd,args)=>{throw Error('EXECUTION_START_FAILED');}}:{})});
  }else{
   const execute=async()=>{await promisify(execFile)(process.execPath,['-e','require("fs").writeFileSync('+JSON.stringify(join(home,'actually-started'))+',"started")']);readFileSync(join(home,'missing-after-process'));};
   try{await openClawCommander({home,execute})(scope);}catch(e){error={execution_stopped:e.executionStopped};}

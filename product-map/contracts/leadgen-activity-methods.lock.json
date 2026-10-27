@@ -227,7 +227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15",
+      "code_digest": "0d5b51ee6d485f2ed32052487f8e170ccdb039fc9d10ea1473eb236252c2bc65",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "474df14d450c278b1e64e9131ae60c1e4b56f2653ac1c8b25f486f9ccc672c9b",
-        "current_code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "507ca31532cc61a6a0e58dde9b76048a9cff11c15d14e028b3bdf53a23aa9a15",
+        "current_code_digest": "0d5b51ee6d485f2ed32052487f8e170ccdb039fc9d10ea1473eb236252c2bc65"
       }
     },
     "douyin_video_processing.preflight": {
@@ -532,7 +532,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955",
+      "code_digest": "6b60cb73761147b1de4ea5a2c80308871690a705a8c8244565451aac02337b2e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "70e61dfe04685838c44925135beab88c1803e646ee41a7849e4f2f700c514e0f",
-        "current_code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "f2f32e01e59308e43d72626d77bde2c7761a0ed3cefc96d3e34b8ff687b63955",
+        "current_code_digest": "6b60cb73761147b1de4ea5a2c80308871690a705a8c8244565451aac02337b2e"
       }
     },
     "douyin_video_processing.dedup": {
@@ -784,7 +784,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -822,13 +822,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959",
+      "code_digest": "987f9dece9aa3c16caee2d77fd7a72d1f67f9bea7cb100e75c3b8c3f936d88ea",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "7e175cd3b89a52676110dd1f22e6e7ce616a4c8e09d0b1bfd28404a1a3b81d09",
-        "current_code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "67c82b47fc2fda6e275cf646393e003b653d37b0474618cb784453a1a3950959",
+        "current_code_digest": "987f9dece9aa3c16caee2d77fd7a72d1f67f9bea7cb100e75c3b8c3f936d88ea"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1050,7 +1050,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1144,13 +1144,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e",
+      "code_digest": "4ef7afbc4b1874ba965b0f973a254e7d60b29b694db6993e02a18e28aab56a0f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "49a9485e8fc8bfc001cb8d0bdb1aad6d68c78db171c74ee850f5bc7f0c91f0ec",
-        "current_code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "f72d8d1bc61f69b7fd7951f300a02feb373e344e8b100784963f305a7e7aaf8e",
+        "current_code_digest": "4ef7afbc4b1874ba965b0f973a254e7d60b29b694db6993e02a18e28aab56a0f"
       }
     },
     "douyin_video_processing.collection": {
@@ -1394,7 +1394,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1439,13 +1439,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8",
+      "code_digest": "9e14e5312974d19ffe61e6129e39d1e004bb8736ea8e6f83c9607cc6ee84955e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "9c60327a8809c38b0c396dd32c08eb7593cb1d4baa8510c866dd197a7bf3cabf",
-        "current_code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "daaaae71a851a31db0550b44b1129be2ded264de21e68debaf36549f04ffe9d8",
+        "current_code_digest": "9e14e5312974d19ffe61e6129e39d1e004bb8736ea8e6f83c9607cc6ee84955e"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1684,7 +1684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1708,13 +1708,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b",
+      "code_digest": "c669b47d1d7a95af21629accbd6137b1f220609eda7123b6e3f58a1925835303",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "4b9e1883d31084c85a31289ccce4488a3281fa6c383fb87ce2fd60251294548e",
-        "current_code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "780801f4688b462ad9f5561e9c43b256cdea6d94f4393865c5663a62c170e89b",
+        "current_code_digest": "c669b47d1d7a95af21629accbd6137b1f220609eda7123b6e3f58a1925835303"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1908,7 +1908,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -1946,13 +1946,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389",
+      "code_digest": "df296be3e6c7c2710d94d26b6e81485eccd2e5c1c8f08c3c88dc8e04aacf4c16",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "6245105cd05b8cdb529e031e6047be67c437b92df2886b42c5cd1500e09ca2b9",
-        "current_code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "c9e7319a628c08703baa017419b7642f9f403bc45b3fb5bfc07b1b5a9bc3c389",
+        "current_code_digest": "df296be3e6c7c2710d94d26b6e81485eccd2e5c1c8f08c3c88dc8e04aacf4c16"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2153,7 +2153,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -2240,13 +2240,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46",
+      "code_digest": "6e8fede898cb8aec4c8c288ca608c9073f0a05b2aa3e628278038a4f6c8e8af1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "6aad58c74baa47d08796603745d0c7ffda321f8d55dfdc558943c1ae9c7e5a25",
-        "current_code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "b5c6c0d7205d122e5898fbc926bbab6007daa921fe77a0634ca631e78453be46",
+        "current_code_digest": "6e8fede898cb8aec4c8c288ca608c9073f0a05b2aa3e628278038a4f6c8e8af1"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2500,7 +2500,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -2538,13 +2538,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6",
+      "code_digest": "8edcf344a64a4211cfc3756dcde3113e1d6ab7882fee637191ef7c1c69a2b1e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "95aabee0079a2d4c5b13381f0bdf6c5d7769be98c044cdcfbe41f4b8cc95aa7f",
-        "current_code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "fff86903c435552c250e2fd955dbb4ae974f1da832d461695941c6db37286ce6",
+        "current_code_digest": "8edcf344a64a4211cfc3756dcde3113e1d6ab7882fee637191ef7c1c69a2b1e0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2787,7 +2787,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -2811,13 +2811,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+      "code_digest": "cdf806c3390859c42662beaf15032025bfe943f60bee9580fe9a8b885068d575",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "b9683539d35c9e4f0b74054719db127bc0771e79f4755b30fa543e34fe20ef16",
-        "current_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+        "current_code_digest": "cdf806c3390859c42662beaf15032025bfe943f60bee9580fe9a8b885068d575"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3060,7 +3060,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -3084,13 +3084,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+      "code_digest": "cdf806c3390859c42662beaf15032025bfe943f60bee9580fe9a8b885068d575",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "b9683539d35c9e4f0b74054719db127bc0771e79f4755b30fa543e34fe20ef16",
-        "current_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "8a161ef8d72ee662e7d6d2db7c0fb067a3ff5e43fc1a4e2867f016ad66f35330",
+        "current_code_digest": "cdf806c3390859c42662beaf15032025bfe943f60bee9580fe9a8b885068d575"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3336,7 +3336,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "0ee06ffbe265761aa7b1368ab9f74572d2b442d6a4c22c956f1615558d2ca6ea"
+          "sha256": "fb4fcb415818e6f828c287707f5fc01ce6edc4aee9bf4b8e96e8cbeee3ac9320"
         },
         {
           "kind": "code",
@@ -3360,13 +3360,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b",
+      "code_digest": "008c0cbe604f0f7c604badd8d0ebcc20ed81133e589215d2f051401662520ffa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅显式101冻结单词单屏raw检查上限及来源一致性；无输入保旧行为，预算/身份/unknown/锁/业务合同和方法保持",
-        "reviewed_by": "codex:baseline_release:discovery-raw-quota-20261025",
-        "previous_code_digest": "f4bee9a3a23a7d76f9870f27bc43994f598a24f2ba835fbc24fcbde2a1e9cf7d",
-        "current_code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b"
+        "reason": "Commander节点证据判读沿现役正式Gateway modelRun收缩工具权限；保同owner/Skill业务合同/原60秒及unknown，仅增加本次nonce终态核验与固定安全诊断，不新增手机或收尾权限",
+        "reviewed_by": "codex:baseline-release-independent-review:model-only-20261027",
+        "previous_code_digest": "be1925d8257bb54493e7f53f6674bcc957c5d8580df814891830903d49a0700b",
+        "current_code_digest": "008c0cbe604f0f7c604badd8d0ebcc20ed81133e589215d2f051401662520ffa"
       }
     }
   },
