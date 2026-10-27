@@ -4,16 +4,20 @@ import {homedir} from 'node:os';
 import {authorizeMaintenance,sameMaintenanceAuthorityEpoch} from './qualification-maintenance-authority.mjs';
 const uuid=/^[a-f0-9-]{36}$/i;
 const need=value=>{if(!value)throw Error('MAINTENANCE_BRAIN_AUTHORITY_UNKNOWN');};
+export function readMaintenanceBrainToken(home=homedir()) {
+ const file=join(home,'.credentials','brain.env'),stat=lstatSync(file);
+ need(stat.isFile()&&!stat.isSymbolicLink()&&(stat.mode&0o777)===0o600&&stat.uid===process.getuid());
+ const matches=[...readFileSync(file,'utf8').matchAll(/^(?:export )?BRAIN_INTERNAL_TOKEN=(.+)$/gm)];need(matches.length===1);
+ const token=matches[0][1].trim().replace(/^(['"])(.*)\1$/,'$2');need(token.length>0&&!/\s/.test(token));
+ return token;
+}
 export async function maintenanceBrainRequest(path,body) {
  need(/^\/(?:tasks\/[a-f0-9-]{36}(?:\/heartbeat)?|device-locks(?:\/release)?)$/i.test(path));
  const base=new URL(process.env.BRAIN_URL||'http://localhost:5221');
  need(base.protocol==='http:'&&['localhost','127.0.0.1','100.79.41.61'].includes(base.hostname)&&base.port==='5221');
- const file=join(homedir(),'.credentials','cecelia-internal.env'),stat=lstatSync(file);
- need(stat.isFile()&&!stat.isSymbolicLink()&&(stat.mode&0o777)===0o600&&stat.uid===process.getuid());
- const matches=[...readFileSync(file,'utf8').matchAll(/^(?:export )?CECELIA_INTERNAL_TOKEN=(.+)$/gm)];need(matches.length===1);
- const token=matches[0][1].trim().replace(/^(['"])(.*)\1$/,'$2');need(token.length>0);
+ const token=readMaintenanceBrainToken();
  const response=await fetch(new URL('/api/brain'+path,base),{method:body===undefined?'GET':'POST',
-  headers:{'X-Internal-Token':token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),
   redirect:'error',signal:AbortSignal.timeout(10000)});
  need(response.ok);return response.json();
 }
