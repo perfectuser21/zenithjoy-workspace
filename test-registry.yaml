@@ -8111,3 +8111,27 @@ agent_suite:
   status: active
   product: AI员工
   note: 仅scratch真实PG两字段精确CAS、完整政策来源、旁manual零diff、未知COMMIT只读对账、双连接与trigger漂移。
+
+- id: qualification-maintenance-close
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-close.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: guard内重验actor和claim epoch；提交未知、部分释放与新owner漂移故障注入，不重放业务。
+
+- id: qualification-maintenance-guard
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-guard.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实flock与原控制器继承FD；锁争用、EOF及owner漂移保原隔离，不调用ADB/UI。
+
+- id: qualification-maintenance-brain
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-brain.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: canonical Task/委托前后读取、显式heartbeat保持原期限；纯readback不续租，claim epoch漂移拒绝。
