@@ -2,18 +2,19 @@ import {isDeepStrictEqual} from 'node:util';
 import {digest} from './runtime-definition.mjs';
 const action='qualification_maintenance_return_pending_claim';
 const need=value=>{if(!value)throw Error('MAINTENANCE_PG_SCOPE_CHANGED');};
-function context(input) {
+function context(input,{requireEffects=true}={}) {
  const a=input?.authorization,s=a?.scope;
  need(a&&s&&a.contract_sha256===digest(s)&&a.original_task_id===s.original_task_id
-  &&Array.isArray(s.video_ids)&&s.video_ids.length===1&&/^[a-f0-9]{64}$/.test(input.effects_receipt_sha256||'')
+  &&Array.isArray(s.video_ids)&&s.video_ids.length===1&&(!requireEffects||/^[a-f0-9]{64}$/.test(input.effects_receipt_sha256||''))
   &&input.expected_snapshot?.company_id===s.company_id&&input.expected_snapshot.tenant_id===s.tenant_id
   &&input.expected_snapshot.version===s.config_version&&input.expected_snapshot.policy_id===s.policy_id);
  return {a,s};
 }
 function auditMatches(row,input) {
- const {a,s}=context(input),d=row?.detail;
+ const {a,s}=context(input,{requireEffects:false}),d=row?.detail;
  return row?.id===s.intent_id&&row.action===action&&row.org_id===s.tenant_id&&row.member_id===a.actor
-  &&d?.contract_sha256===a.contract_sha256&&d.effects_receipt_sha256===input.effects_receipt_sha256
+  &&d?.contract_sha256===a.contract_sha256&&/^[a-f0-9]{64}$/.test(d.effects_receipt_sha256||'')
+  &&(input.effects_receipt_sha256===undefined||d.effects_receipt_sha256===input.effects_receipt_sha256)
   &&d.company_snapshot_sha256===digest(input.expected_snapshot)&&d.video_id===s.video_ids[0]
   &&d.original_task_id===s.original_task_id&&d.maintenance_task_id===a.maintenance_task_id
   &&d.from_process_status==='处理中:'+s.run_tag&&d.from_batch===s.run_tag
@@ -64,7 +65,7 @@ export async function restorePendingClaim(pool,input) {
 }
 // 提交未知后只读对账，不UPDATE、不再COMMIT、不代清新owner。
 export async function readPendingClaimOutcome(pool,input) {
- const {s}=context(input);
+ const {s}=context(input,{requireEffects:false});
  const audits=(await pool.query('SELECT * FROM zenithjoy.db_audit WHERE id=$1',[s.intent_id])).rows;
  const videos=(await pool.query('SELECT to_jsonb(v) AS row FROM zenithjoy.leadgen_videos v WHERE line_key=$1 AND video_id=$2',[s.line_key,s.video_ids[0]])).rows;
  const v=videos[0]?.row;
@@ -77,6 +78,7 @@ export async function readPendingClaimOutcome(pool,input) {
   &&v.harvest_batch===s.producer_run&&v.judgment_status==='pending'&&v.transcript===null&&v.judgment_config===null&&v.judgment_reason===null
   &&audits[0].detail.after_row_sha256===digest(v)
   &&audits[0].detail.before_row_sha256===digest({...v,process_status:'处理中:'+s.run_tag,harvest_batch:s.run_tag}))
-  return {status:'db_committed',intent_id:s.intent_id,audit_sha256:digest(audits[0].detail)};
+  return {status:'db_committed',intent_id:s.intent_id,audit_sha256:digest(audits[0].detail),
+   effects_receipt_sha256:audits[0].detail.effects_receipt_sha256,effects_evidence:'historical_audit_not_fresh_stop'};
  return {status:'blocked',reason:'MAINTENANCE_PG_OUTCOME_UNPROVEN',intent_id:s.intent_id};
 }
