@@ -110,3 +110,9 @@ for(const [name,pid]of[['supervisor',14896],['server',14898]])test(name+' cannot
 test('system binding cannot claim the same PID with different real ProgramArguments',()=>{
  const f=input();f.observation.roles['14896'].launchd.system_argv_sha256='e'.repeat(64);assert.equal(replay(f).status,'blocked');
 });
+
+test('new config metadata is optional for old-age roles; unreadable data becomes None, never a fabricated certificate',()=>{
+ const code="import base64,json,sys,tempfile;from pathlib import Path;ns={};exec(base64.b64decode(sys.argv[1]),ns)\nwith tempfile.TemporaryDirectory() as d:\n assert ns['read_service_policy'](Path(d),True) is None\n assert ns['read_service_policy'](Path(d),False) is None\n print('OPTIONAL_POLICY_UNKNOWN')";
+ const r=awaitImportChildProcess.spawnSync('python3',['-B','-I','-c',code,awaitImportDomain.DOMAIN_COLLECTOR_BASE64],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OPTIONAL_POLICY_UNKNOWN/);
+});
