@@ -1,5 +1,6 @@
 import {digest} from './runtime-definition.mjs';
 import {processObserverDigest} from './qualification-maintenance-processes.mjs';
+import {mmvRpcObserverDigest} from './qualification-maintenance-mmv.mjs';
 import {basename} from 'node:path';
 const OLD='353b910f11ce3852b2ef69c8ead5c37e97850b4a';
 const need=v=>{if(!v)throw Error('DOMAIN_UNPROVEN');};
@@ -113,9 +114,10 @@ export function evaluateOriginalExecutionDomain({original,observation,commander,
   need(c.final_enumerated.every(p=>p.uid!==c.uid||!oldGroups.has(p.pgid)||p.absence_reason==='ESRCH'||rows.get(p.pid)?.classification==='terminal'));
   need(commander?.status==='verified_inactive'&&commander.domain==='exact_original_commander_owner'&&commander.returned_turns===5&&fresh(commander.observed_at_ms));
   const rpc=commander.mmv_rpc;
-  need(rpc?.status==='observed'&&rpc.source_commit===OLD&&rpc.run_tag===s.run_tag&&rpc.run_id==='douyin_video_processing-'+s.run_tag+'__a1'
-   &&/^[a-f0-9]{64}$/.test(rpc.observer_sha256||'')&&fresh(rpc.observed_at_ms)&&Array.isArray(rpc.matches)&&!rpc.matches.length
-   &&Array.isArray(rpc.unknown)&&!rpc.unknown.length&&/^[a-f0-9]{64}$/.test(rpc.enumeration_sha256||'')&&/^[a-f0-9]{64}$/.test(rpc.final_enumeration_sha256||''));
+  need(rpc?.status==='verified_inactive'&&rpc.domain==='fixed353_mmv_rpc'&&rpc.source_commit===OLD&&rpc.run_tag===s.run_tag&&rpc.run_id==='douyin_video_processing-'+s.run_tag+'__a1'
+   &&rpc.observer_sha256===mmvRpcObserverDigest&&rpc.process_observer_sha256===processObserverDigest&&fresh(rpc.observed_at_ms)&&fresh(rpc.completed_at_ms)
+   &&Array.isArray(rpc.matches)&&!rpc.matches.length&&Array.isArray(rpc.unknown)&&!rpc.unknown.length
+   &&/^[a-f0-9]{64}$/.test(rpc.enumerated_sha256||'')&&/^[a-f0-9]{64}$/.test(rpc.final_enumerated_sha256||'')&&/^[a-f0-9]{64}$/.test(rpc.coverage_sha256||''));
   const roles=admittedRoles(c,observation.roles,epoch,original,observation);
   if(roles.blocked.length)return {...blocked('ORIGINAL_EFFECTOR_UNCLASSIFIED'),blocked_pids:roles.blocked};
   return {status:'verified',domain:'fixed_353_original_execution',os_full_stop:false,scope_sha256:digest(s),observation_sha256:digest(observation),
