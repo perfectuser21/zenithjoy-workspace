@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,readdirSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {join,dirname} from 'node:path';
+import {tmpdir} from 'node:os';
+import {spawnSync} from 'node:child_process';
 import {buildWriteSet,parseDeployArrays} from '../deployment-write-set.mjs';
 const root=fileURLToPath(new URL('../../..',import.meta.url));
 const service=fileURLToPath(new URL('..',import.meta.url));
@@ -63,4 +66,12 @@ test('受限维护公开入口及全部同namespace依赖实际进入双机包�
    assert.equal(entry.after.sha256,createHash('sha256').update(actual).digest('hex'));
   }
  }
+});
+test('双机包在无开发树和node_modules的独立目录能冷导入维护runtime全部传递依赖',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'maintenance-runtime-package-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const names=new Set([...groups.DEVICE_SH_FILES,...groups.DEVICE_NODE_FILES,...groups.DEVICE_PLAN_FILES,...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES,...groups.MMV_JS_FILES,...groups.MMV_PROBE_FILES]);
+ for(const name of names){const out=join(dir,name);mkdirSync(dirname(out),{recursive:true});writeFileSync(out,readFileSync(service+'/'+name));}
+ const script="await import(new URL('./qualification-maintenance-runtime.mjs',process.argv[1]));console.log('MAINTENANCE_RUNTIME_COLD_IMPORT_OK');";
+ const child=spawnSync(process.execPath,['--input-type=module','-e',script,new URL('file://'+dir+'/').href],{encoding:'utf8',timeout:15000,cwd:dir,env:{PATH:process.env.PATH}});
+ assert.equal(child.status,0,child.stderr);assert.match(child.stdout,/MAINTENANCE_RUNTIME_COLD_IMPORT_OK/);
 });
