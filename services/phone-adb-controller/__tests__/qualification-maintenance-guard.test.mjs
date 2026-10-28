@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync,copyFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -15,9 +15,9 @@ function fixture(t) {
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
  return {dir,root,lock,env,guard:join(locks,'SER1.guard')};
 }
-async function holder(f,t) {
+async function holder(f,t,path=observer) {
  assert.ok(existsSync(observer),'缺少实际serial.guard持有器');
- const p=spawn('python3',['-B','-I',observer],{env:f.env,stdio:['pipe','pipe','pipe']});let err='';p.stderr.on('data',x=>err+=x);
+ const p=spawn('python3',['-B','-I',path],{env:f.env,stdio:['pipe','pipe','pipe']});let err='';p.stderr.on('data',x=>err+=x);
  const lines=createInterface({input:p.stdout})[Symbol.asyncIterator]();
  const receive=async()=>{const line=await lines.next();assert.ok(!line.done,err);return JSON.parse(line.value);};
  p.stdin.write(JSON.stringify({serial:'SER1',profile:'p1',owner:'original-run',deadline_seconds:20})+'\n');
@@ -64,4 +64,15 @@ test('原件opcode只读固定模块，scope不可换已持有serial/owner或注
 test('domain opcode只执行已安装本地固定literal，不接受请求code/伪guard出生',()=>{
  const code=`import importlib.util,sys,json,os,tempfile,pathlib,base64,hashlib\ns=importlib.util.spec_from_file_location('host',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nassert hasattr(m,'read_domain')\nwith tempfile.TemporaryDirectory() as tmp:\n m.HERE=pathlib.Path(tmp)/('a'*40)/'runtime';m.HERE.mkdir(parents=True)\n literal=b'def collect_domain(scope,context):\\n return {"status":"observed","collector_sha256":__collector_sha256__,"pid":context["guard_pid"]}\\n'\n (m.HERE/'qualification-maintenance-domain.mjs').write_text("export const DOMAIN_COLLECTOR_BASE64='"+base64.b64encode(literal).decode()+"';")\n epoch={'maintenance_task_id':'11111111-1111-4111-8111-111111111111','intent_id':'22222222-2222-4222-8222-222222222222','candidate_sha':'a'*40,'guard_pid':os.getpid(),'guard_start_identity':'123:4','guard_script_path':str(m.HERE/'qualification-maintenance-host.py'),'guard_script_sha256':'b'*64}\n identity={'pid':os.getpid(),'start_identity':'123:4','script_sha256':'b'*64}\n scope={'serial':'SER1','run_tag':'tag','uid':os.getuid()}\n request={'op':'domain','scope':scope,'epoch':epoch}\n result=m.read_domain({'serial':'SER1','owner':'tag'},request,identity)\n assert result['pid']==os.getpid();assert result['collector_sha256']==hashlib.sha256(literal).hexdigest()\n for r in [dict(request,code='arbitrary'),dict(request,epoch=dict(epoch,guard_pid=os.getpid()+1)),dict(request,scope=dict(scope,serial='OTHER'))]:\n  try:m.read_domain({'serial':'SER1','owner':'tag'},r,identity)\n  except ValueError:pass\n  else:raise AssertionError('accepted')\n`;
  const r=spawnSync('python3',['-B','-I','-c',code,observer],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+test('真实private fixture guard握手直接组epoch，固定literal正链不靠人工identity mock',async t=>{
+ const f=fixture(t),sha='a'.repeat(40),root=join(f.dir,sha,'runtime');mkdirSync(root,{recursive:true});
+ for(const name of ['qualification-maintenance-host.py','qualification-maintenance-processes.py','adb-process-observation.py'])copyFileSync(fileURLToPath(new URL('../'+name,import.meta.url)),join(root,name));
+ const literal=Buffer.from('import os\ndef collect_domain(scope,context):\n return {"status":"observed","pid":os.getpid(),"collector_sha256":__collector_sha256__}\n');
+ writeFileSync(join(root,'qualification-maintenance-domain.mjs'),"export const DOMAIN_COLLECTOR_BASE64='"+literal.toString('base64')+"';\n");
+ const path=join(root,'qualification-maintenance-host.py'),h=await holder(f,t,path);
+ const epoch={maintenance_task_id:'11111111-1111-4111-8111-111111111111',intent_id:'22222222-2222-4222-8222-222222222222',candidate_sha:sha,guard_pid:h.ready.pid,guard_start_identity:h.ready.start_identity,guard_script_path:path,guard_script_sha256:h.ready.script_sha256};
+ h.p.stdin.write(JSON.stringify({op:'domain',scope:{serial:'SER1',run_tag:'original-run',uid:h.ready.uid},epoch})+'\n');
+ const r=await h.receive();assert.equal(r.status,'observed');assert.equal(r.pid,h.p.pid);
+ assert.equal((await h.send('status')).local_owner,'original_owner');
 });
