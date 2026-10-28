@@ -41,7 +41,7 @@ def parse_cwds(raw):
 
 def classify_rpc(executable, argv, cwd, scope):
     # 353 createRpc在固定staging根cd后启动；其固定程序不创建改cwd的后台RPC。
-    potential = bool(re.fullmatch(r'node(?:[0-9]+)?|python(?:[0-9]+(?:\.[0-9]+)*)?|(?:ba|z)?sh|ssh|scp|sftp|ffmpeg', Path(executable).name))
+    potential = bool(re.fullmatch(r'node(?:[0-9]+)?|python(?:[0-9]+(?:\.[0-9]+)*)?|(?:ba|z)?sh|ssh|scp|sftp|ffmpeg', Path(executable).name, re.I))
     if potential and (argv is None or cwd is None):
         return 'unknown'
     values = [scope['runtime_root'], scope['run_tag'], scope['run_id'], scope['consumer_source']]
