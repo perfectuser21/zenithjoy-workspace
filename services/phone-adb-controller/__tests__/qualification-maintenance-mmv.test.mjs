@@ -47,7 +47,8 @@ test('真实内核存活解释器原tag输入必被有限域观察捕获，不�
 });
 test('真实只读RPC reader内部依赖可在Linux CI使用现有解释器，公开生产默认不接受请求参数',async()=>{
  const {createMmvRpcReader}=await import('../qualification-maintenance-mmv.mjs');
- assert.equal(typeof createMmvRpcReader,'function');
+ const unavailable=createMmvRpcReader('/definitely-missing-maintenance-python');
+ assert.throws(()=>unavailable({consumer_source:'353b910f11ce3852b2ef69c8ead5c37e97850b4a',run_tag:'fixture',python:'python3'}),/MAINTENANCE_MMV_RPC_UNKNOWN/);
 });
 test('固定平台cwd观察命令使用系统实际路径，未知平台保持拒绝',()=>run(`
 assert m.cwd_command('darwin',501)==['/usr/sbin/lsof','-a','-u','501','-d','cwd','-Fpn']

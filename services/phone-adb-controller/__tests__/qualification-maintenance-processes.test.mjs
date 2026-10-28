@@ -65,6 +65,16 @@ for(const [name,argv,old] of [
   assert.ok(['active_related','unknown_producer','unknown_detached'].includes(out.stdout.trim()),out.stdout);
 });
 
+test('已观测脱组执行者且另有权限未知时，blocked摘要空不能冒充内核未发现',()=>{
+ needApi();const s=scope(),c=quiet(s);
+ const escaped={pid:123456,uid:s.uid,ppid:1,pgid:123456,start_identity:'fixture:escaped',terminal:false,classification:'unknown_detached'};
+ c.enumerated.push({pid:escaped.pid,uid:s.uid});c.final_enumerated.push({...escaped});c.observations.push(escaped);
+ c.unknown.push({pid:234567,code:'EPERM'});
+ const result=api.evaluateProcessCensus(c,s);
+ assert.equal(result.status,'blocked');assert.equal(result.reason,'PROCESS_OBSERVATION_UNKNOWN');
+ assert.deepEqual(result.blocked_pids,[]);assert.equal(c.observations.find(x=>x.pid===escaped.pid),escaped);
+});
+
 test('原tracked名单全停仍须从真实kernel发现未登记doublefork/setsid后台',
   {skip:process.platform==='win32'},async()=>{
     const dir=mkdtempSync(join(tmpdir(),'qualification-maintenance-detached-'));
@@ -77,13 +87,28 @@ test('原tracked名单全停仍须从真实kernel发现未登记doublefork/setsi
       const result=await execInput('python3',[fixture,oracle],{receipt,timeoutMs:3000});assert.equal(result.code,0);
       const escaped=JSON.parse(readFileSync(join(oracle,'identity.json'))),originalPath=receiptPath(runDir,'original');
       const original=JSON.parse(readFileSync(originalPath));assert.notEqual(escaped.pgid,original.pgid);
+      const observer=fileURLToPath(new URL('../qualification-maintenance-processes.py',import.meta.url));
+      // oracle只用于独立核验预期出生，绝不传进正式全量观察scope。
+      const identityRead=spawnSync('python3',['-B','-I','-c',
+        "import importlib.util,json,sys;s=importlib.util.spec_from_file_location('o',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);print(json.dumps(m.kernel(int(sys.argv[2]))))",observer,String(escaped.pid)],{encoding:'utf8',timeout:2000});
+      assert.equal(identityRead.status,0,identityRead.stderr);const expected=JSON.parse(identityRead.stdout);
+      assert.equal(expected.pid,escaped.pid);assert.equal(expected.uid,process.getuid());assert.equal(expected.terminal,false);assert.ok(expected.start_identity);
       assert.equal(escaped.stdio_closed,true);const before=sha(readFileSync(originalPath));
       needApi();assert.equal(typeof api.collectProcessCensus,'function');
       const s={...scope(),run_started_at_ms:started-1000,tracked:[{pid:original.pid,start_identity:original.start_identity}]};
       // 不向正式观察器传oracle PID；初始名单故意仅代表已退出的旧父集合。
       const census=await api.collectProcessCensus(s),verdict=api.evaluateProcessCensus(census,s);
       assert.equal(verdict.status,'blocked');
-      assert.ok(verdict.blocked_pids.includes(escaped.pid),'真实脱组子必须由完整kernel观察发现');
+      const found=census.observations.find(x=>x.pid===escaped.pid);
+      const diagnostic=JSON.stringify({expected_pid:escaped.pid,expected_birth:expected.start_identity,
+        found:found&&{pid:found.pid,uid:found.uid,start_identity:found.start_identity,terminal:found.terminal,classification:found.classification},
+        unknown:census.unknown,verdict_reason:verdict.reason});
+      assert.ok(found,'真实脱组子必须由完整kernel观察发现: '+diagnostic);
+      assert.equal(found.uid,expected.uid,diagnostic);assert.equal(found.start_identity,expected.start_identity,diagnostic);
+      assert.equal(found.terminal,false,diagnostic);
+      assert.ok(['unknown_producer','unknown_detached','active_related'].includes(found.classification),diagnostic);
+      assert.ok(census.enumerated.some(x=>x.pid===escaped.pid&&x.uid===expected.uid),diagnostic);
+      assert.ok(census.final_enumerated.some(x=>x.pid===escaped.pid&&x.start_identity===expected.start_identity),diagnostic);
       assert.equal(sha(readFileSync(originalPath)),before,'不得改旧UNKNOWN收据');
       assert.equal(JSON.parse(readFileSync(originalPath)).execution_stopped,false);
     }finally{
