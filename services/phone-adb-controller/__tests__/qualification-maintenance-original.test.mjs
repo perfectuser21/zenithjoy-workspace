@@ -82,3 +82,9 @@ for(const activity of ['collection','cleanup'])for(const phase of ['before','exe
   assert.throws(()=>api.readMaintenanceOriginal(f.scope,{home:f.home}),/MAINTENANCE_/);
  });
 }
+test('qualification.after成功事件与原upload失败分支矛盾时拒绝',t=>{
+ const f=fixture(t),path=join(f.run,'activity-events.jsonl');
+ const event=JSON.parse(readFileSync(path,'utf8').trim());
+ f.put(path,readFileSync(path,'utf8')+JSON.stringify({...event,phase:'after',evidence:{status:'completed',judgment_status:'matched'}})+'\n');
+ assert.throws(()=>api.readMaintenanceOriginal(f.scope,{home:f.home}),/MAINTENANCE_/);
+});
