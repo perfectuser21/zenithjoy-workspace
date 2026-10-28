@@ -12,7 +12,7 @@ function fixture(change={}) {
   readDb:op('readDb',()=>({status:state.db})),restoreDb:op('restoreDb',()=>{state.db='db_committed';return {status:'db_committed'};}),
   readLocal:op('readLocal',()=>state.local),releaseLocal:op('releaseLocal',()=>{state.local='free';}),
   readCentral:op('readCentral',()=>state.central),releaseCentral:op('releaseCentral',()=>{state.central='free';}),
-  append:op('append',record=>records.push(record)),...change};
+  append:op('append',record=>records.push(record)),readJournal:op('readJournal',()=>structuredClone(records)),...change};
  return {calls,records,state,io,real};
 }
 const need=()=>assert.equal(typeof api?.closeMaintenanceEpoch,'function','缺少维护独立epoch收口状态机');
@@ -32,6 +32,12 @@ test('effects明确BLOCK不能被普通对象或阶段日志变成授权',async(
 });
 test('未知COMMIT只读对账，本次不释放也不自动第二次PG',async()=>{
  need();const f=fixture({restoreDb:async()=>({status:'commit_unknown'})});assert.equal((await api.closeMaintenanceEpoch(f.io)).phase,'commit_unknown');
+ assert.ok(!f.calls.includes('releaseLocal'));assert.ok(!f.calls.includes('releaseCentral'));
+});
+test('未知COMMIT后重入即使观察到原claim，也不在同epoch重做PG',async()=>{
+ need();const f=fixture();let writes=0;f.io.restoreDb=async()=>{writes++;return {status:'commit_unknown'};};
+ assert.equal((await api.closeMaintenanceEpoch(f.io)).phase,'commit_unknown');
+ assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');assert.equal(writes,1);
  assert.ok(!f.calls.includes('releaseLocal'));assert.ok(!f.calls.includes('releaseCentral'));
 });
 test('提交已证+local已free：崩溃重入只续中央收口，不重PG或local释放',async()=>{
