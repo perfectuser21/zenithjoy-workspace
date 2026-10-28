@@ -9,7 +9,7 @@ const scopeKeys=new Set(['schema_version','program','intent_id','original_task_i
 const need=(value,code='AUTHORITY')=>{if(!value)throw Error('MAINTENANCE_'+code);};
 const same=(left,right)=>digest(left)===digest(right);
 export function sameMaintenanceAuthorityEpoch(left,right) {
-  return !!left&&!!right&&['contract_sha256','maintenance_task_id','actor','original_task_id','original_actor','maintenance_claimed_at','original_claimed_at']
+  return !!left&&!!right&&['contract_sha256','maintenance_task_id','actor','original_task_id','original_actor','maintenance_claimed_at','original_claimed_at','project_id','root_task_id']
     .every(key=>left[key]===right[key]);
 }
 function operationalTask(task) {
@@ -42,6 +42,8 @@ function validateScope(scope) {
     &&scope.local_owner===scope.run_tag&&typeof scope.original_actor==='string'&&scope.original_actor.length>0,'SCOPE');
   need(Array.isArray(scope.video_ids)&&scope.video_ids.length===1&&/^\d{16,24}$/.test(scope.video_ids[0])
     &&same(scope.actions,actions),'SCOPE');
+  if(Object.hasOwn(scope.original_evidence||{},'adb_host_recovery_task_id'))
+    need(uuid.test(scope.original_evidence.adb_host_recovery_task_id||''),'SCOPE');
   candidate(scope.maintenance_source);
 }
 function resourceScope(task,scope,source) {
@@ -69,5 +71,6 @@ export function authorizeMaintenance({maintenanceTask,originalTask}) {
     &&delegation.local_owner===scope.local_owner&&same(delegation.actions,scope.actions));
   return {scope:structuredClone(scope),contract_sha256:digest(scope),maintenance_task_id:maintenanceTask.id,
     actor:maintenanceTask.claimed_by,original_actor:originalTask.claimed_by,original_task_id:originalTask.id,
-    maintenance_claimed_at:maintenanceTask.claimed_at??null,original_claimed_at:originalTask.claimed_at??null};
+    maintenance_claimed_at:maintenanceTask.claimed_at??null,original_claimed_at:originalTask.claimed_at??null,
+    project_id:maintenanceTask.project_id,root_task_id:originalTask.parent_task_id};
 }

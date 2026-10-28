@@ -8,6 +8,7 @@ import {verifyMaintenanceCandidate} from './qualification-maintenance-candidate.
 import {collectMaintenanceCandidateRoot} from './qualification-maintenance-bytes.mjs';
 import {candidateRuntimeRoot,collectRemoteMaintenanceCandidate,openMaintenanceGuard,decodeOriginalPacket,readRemoteMaintenanceOriginal,readRemoteMaintenanceLocal} from './qualification-maintenance-transport.mjs';
 import {originalExecutionScope} from './qualification-maintenance-domain.mjs';
+import {readAdbServiceRecovery} from './qualification-maintenance-adb-recovery.mjs';
 import {collectMaintenanceEffects} from './qualification-maintenance-effects.mjs';
 export {verifyRestoredDevice} from './qualification-maintenance-effects.mjs';
 import {readCommanderClosure} from './qualification-maintenance-commander.mjs';
@@ -74,7 +75,7 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
    guard_script_sha256:peer.identity.script_sha256};
   lastEvidence=await collectMaintenanceEffects({scope,epoch,contract_sha256:initial.contract_sha256,candidate:candidateProof,
    readOriginal:currentOriginal,readCommander:()=>readCommanderClosure(scope),readMmv:()=>readMmvRpcClosure(scope),
-   readDevice:()=>peer.request({op:'device'}),
+   readDevice:()=>peer.request({op:'device'}),readAdbRecovery:()=>readAdbServiceRecovery(initial),
    readDomain:o=>peer.request({op:'domain',scope:originalExecutionScope(o,peer.identity.uid),epoch}),retainEvidence,
    readDatabaseIdentities:identities,
    retainReceipt:receipt=>appendEffectReceipt(initial,receipt)});
