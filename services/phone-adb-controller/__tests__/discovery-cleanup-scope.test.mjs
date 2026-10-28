@@ -115,8 +115,11 @@ test('实际ADB叶子在原截止途中超时，tainted不签cleanup_only',{skip
  try{
   f.h.state.budgetDeadline=Date.now()+500;
   scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:'a'.repeat(40),taskId:'scope-task',lockHeld:true});
+  // 复现CI启动/调度已消耗500ms：必须证明确实进入C叶子，不能把空scope拒派当超时。
+  await new Promise(r=>setTimeout(r,600));
   const r=await execInput(scope.env.DOUYIN_PYTHON_BIN,[join(f.runtime,'adb-managed-client.py'),'-s','NO-DEVICE','shell','sleep-probe'],{env:{...f.env,...scope.env},timeoutMs:2000});
   assert.notEqual(r.code,0,'必须真的在原leaf sleep中到期，不是夹具setup错误');
+  assert.equal(existsSync(join(f.d,'slow-leaf-entered')),true,'C叶子必须实际进入sleep；连接拒绝不能冒充叶子超时');
   const result=await scope.finish({status:'partial',stop_reason:'budget_exhausted',persisted:0});assert.equal(result.cleanup_phone_scope,undefined);
   assert.ok(f.scopeLedgers().some(log=>log.includes('"tainted":true')),'父真实intent/start/exit账必须记录超时污染');assert.equal(existsSync(f.ownerFile),true);
  }finally{await scope?.close();rmSync(f.d,{recursive:true,force:true});}
