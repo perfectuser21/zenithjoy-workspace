@@ -15,6 +15,7 @@ test('可能RPC解释器cwd缺失/argv不可读不猜无活动；只输出摘要
 s={'runtime_root':'/fixed/runtime','run_tag':'original_tag','run_id':'workflow-original_tag__a1','consumer_source':'3'*40}
 assert m.classify_rpc('/opt/bin/node',['node','leadgen-rpc.mjs'],None,s)=='unknown'
 assert m.classify_rpc('/opt/bin/node',None,'/tmp',s)=='unknown'
+assert m.classify_rpc('/Library/Frameworks/Python.framework/Resources/Python',[],None,s)=='unknown'
 assert m.classify_rpc('/System/App',['App'],None,s)=='outside_fixed_rpc_domain'
 `));
 test('cwd完整输出按PID解析，不接受没有路径/重复身份的半截',()=>run(`
