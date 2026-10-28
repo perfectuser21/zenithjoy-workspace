@@ -12,13 +12,15 @@ export function readMaintenanceBrainToken(home=homedir()) {
  return token;
 }
 export async function maintenanceBrainRequest(path,body) {
- need(/^\/(?:tasks\/[a-f0-9-]{36}(?:\/heartbeat)?|device-locks(?:\/release)?)$/i.test(path));
+ const readPath=/^\/(?:tasks\/[a-f0-9-]{36}|device-locks|releases\/[a-f0-9-]{36}(?:\/gate|\/observations\/[a-f0-9-]{36})?)$/i;
+ const writePath=/^\/(?:tasks\/[a-f0-9-]{36}\/heartbeat|device-locks\/release)$/i;
+ need((body===undefined?readPath:writePath).test(path));
  const base=new URL(process.env.BRAIN_URL||'http://localhost:5221');
  need(base.protocol==='http:'&&['localhost','127.0.0.1','100.79.41.61'].includes(base.hostname)&&base.port==='5221');
  const token=readMaintenanceBrainToken();
  const response=await fetch(new URL('/api/brain'+path,base),{method:body===undefined?'GET':'POST',
   headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),
-  redirect:'error',signal:AbortSignal.timeout(10000)});
+  redirect:'error',signal:AbortSignal.timeout(path.startsWith('/releases/')?60000:10000)});
  need(response.ok);return response.json();
 }
 export async function readMaintenanceAuthority(taskId,{request=maintenanceBrainRequest,renew=false}={}) {
