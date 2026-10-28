@@ -53,3 +53,7 @@ test('争用中的guard不创建第二维护epoch也不改owner',async t=>{
  const second=spawnSync('python3',['-B','-I',observer],{env:f.env,input:JSON.stringify({serial:'SER1',profile:'p1',owner:'original-run',deadline_seconds:1})+'\n',encoding:'utf8',timeout:3000});
  assert.notEqual(second.status,0);assert.equal(JSON.parse(second.stdout).status,'blocked');assert.equal(readFileSync(join(f.lock,'owner'),'utf8'),'original-run\n');
 });
+test('持guard只读设备opcode不能携带任意命令/另一个serial',()=>{
+ const code=`import importlib.util,sys\ns=importlib.util.spec_from_file_location('host',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nassert hasattr(m,'read_device')\nclass Reader:\n @staticmethod\n def collect_device(serial):return {'serial':serial,'status':'observed'}\nm.load_local=lambda name:Reader\nassert m.read_device({'serial':'SER1'},{'op':'device'})['serial']=='SER1'\nfor r in [{'op':'device','serial':'OTHER'},{'op':'device','command':'input tap 1 2'}]:\n try:m.read_device({'serial':'SER1'},r)\n except ValueError:pass\n else:raise AssertionError('accepted')\n`;
+ const r=spawnSync('python3',['-B','-I','-c',code,observer],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
