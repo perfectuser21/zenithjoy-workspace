@@ -91,3 +91,16 @@ test('Perl将exec实际已核ADB同镜像时保只读功能',()=>{
  const f=wallRoles(fixture());addRole(f,{pid:620,ppid:600,pgid:600,executable:'/usr/bin/perl',program:{kind:'binary'}},{executable:{realpath:'/usr/bin/perl',sha256:'8'.repeat(64),uid:0},shape:{kind:'perl_adb_read',inner_path:'/opt/homebrew/bin/adb'},inner_executable:{realpath:'/opt/homebrew/bin/adb',sha256:'7'.repeat(64),uid:501}});
  assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'verified');
 });
+test('现役Perl managed-client入口仅在脚本依赖和解析器入口均真绑定时排除',()=>{
+ const f=wallRoles(fixture());f.observation.guard_entry_executable={realpath:'/opt/homebrew/bin/python3',sha256:'e'.repeat(64),uid:501};
+ addRole(f,{pid:620,ppid:600,pgid:600,executable:'/usr/bin/perl',program:{kind:'binary'}},{executable:{realpath:'/usr/bin/perl',sha256:'8'.repeat(64),uid:0},shape:{kind:'perl_managed_read',inner_path:'/Users/u/bin-harvest/adb-managed-client.py'},inner_executable:{realpath:'/Users/u/bin-harvest/adb-managed-client.py',sha256:'3'.repeat(64),uid:501},inner_interpreter:{realpath:'/opt/homebrew/bin/python3',sha256:'e'.repeat(64),uid:501}});
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'verified');
+ f.observation.roles[620].inner_interpreter={realpath:'/tmp/python3',sha256:'9'.repeat(64),uid:501};
+ assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');
+});
+test('collector识别现役managed-client只读Perl参数且保inner路径供字节核验',()=>{
+ const code="import base64,json,sys;ns={};exec(base64.b64decode(sys.argv[1]),ns);print(json.dumps(ns['argument_shape'](json.load(sys.stdin))))";
+ const argv=['perl','-e','alarm shift; exec @ARGV','8','/Users/u/bin-harvest/adb-managed-client.py','-s','SERIAL','exec-out','screencap','-p'];
+ const r=spawnSync('python3',['-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify(argv),encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ const shape=JSON.parse(r.stdout);assert.equal(shape.kind,'perl_managed_read');assert.equal(shape.inner_path,'/Users/u/bin-harvest/adb-managed-client.py');
+});
