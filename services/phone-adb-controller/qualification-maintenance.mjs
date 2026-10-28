@@ -4,6 +4,11 @@ import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 export {parseQualificationFailure} from './qualification-maintenance-evidence.mjs';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function maintenanceResultExitCode(verb,result) {
+ if(verb==='close'&&result?.status==='already_closed')return result.read_only===true?0:1;
+ const success={close:['closed'],preflight:['preflight_verified'],readback:['readback_verified']}[verb]||[];
+ return success.includes(result?.status)?0:1;
+}
 
 export async function maintenanceMain(argv) {
   const [verb, flag, taskId, ...extra] = argv;
@@ -14,8 +19,7 @@ export async function maintenanceMain(argv) {
   try {
     const {runMaintenance} = await import('./qualification-maintenance-service.mjs');
     const result=await runMaintenance({verb, taskId});
-    const success={close:['closed'],preflight:['preflight_verified'],readback:['readback_verified']}[verb];
-    return {exit_code:success.includes(result?.status)?0:1,result};
+    return {exit_code:maintenanceResultExitCode(verb,result),result};
   } catch (error) {
     const code = /^MAINTENANCE_[A-Z_]+$/.test(error?.message || '') ? error.message : 'MAINTENANCE_EXECUTION_UNKNOWN';
     return {exit_code: 1, result: {ok: false, code}};
