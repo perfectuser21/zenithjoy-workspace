@@ -44,6 +44,25 @@ def read_device(scope, request):
     return load_local('qualification-maintenance-device.py').collect_device(scope['serial'])
 
 
+def read_original(held, request):
+    need(set(request) == {'op', 'scope'} and request['op'] == 'original')
+    scope = request['scope']
+    need(scope['serial'] == held['serial'] and scope['run_tag'] == held['owner']
+         and scope['consumer_source'] == '353b910f11ce3852b2ef69c8ead5c37e97850b4a')
+    code = """import {readFileSync} from 'node:fs';
+import {gzipSync} from 'node:zlib';import {createHash} from 'node:crypto';
+import {readMaintenanceOriginal} from './qualification-maintenance-original.mjs';
+const value=Buffer.from(JSON.stringify(readMaintenanceOriginal(JSON.parse(readFileSync(0,'utf8')))));
+console.log(JSON.stringify({status:'observed',encoding:'gzip-base64',sha256:createHash('sha256').update(value).digest('hex'),
+bytes:value.length,data:gzipSync(value).toString('base64')}));"""
+    env = {k: v for k, v in os.environ.items() if k not in ('NODE_OPTIONS', 'NODE_PATH')}
+    result = subprocess.run(['/opt/homebrew/bin/node', '--input-type=module', '-e', code],
+                            cwd=HERE, env=env, input=json.dumps(scope), text=True,
+                            capture_output=True, timeout=30)
+    need(result.returncode == 0 and len(result.stdout) <= 8 * 1024 * 1024)
+    return json.loads(result.stdout)
+
+
 def run():
     scope = json.loads(sys.stdin.readline(65537))
     need(set(scope) == {'serial', 'profile', 'owner', 'deadline_seconds'})
@@ -90,6 +109,8 @@ def run():
                 emit({'status': 'guard_held', 'local_owner': local_owner()})
             elif request['op'] == 'device':
                 emit(read_device(scope, request))
+            elif request['op'] == 'original':
+                emit(read_original(scope, request))
             elif request['op'] == 'release_exact':
                 need(set(request) == {'op'})
                 if attempted or local_owner() != 'original_owner':
