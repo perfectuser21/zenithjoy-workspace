@@ -70,7 +70,7 @@ describe('AliVideoProvider — real request contracts at the HTTP boundary', () 
     expect(transport.mock.calls[2][1]).toHaveProperty('dispatcher');
   });
 
-  it('routes a Shanghai OSS source download and the generated result through the private relay',async()=>{
+  it('routes Shanghai results through the relay while keeping an other-region source on its existing path',async()=>{
     const {transport}=fixture(new Response('video-bytes'),new Response(''),json({RequestId:'upscale'}),new Response('result-bytes'));
     const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:'http://127.0.0.1:18241',ALIYUN_VIAPI_OSS_BUCKET:'video-tools-test'},fetch:transport});
     await provider.submitUpscale({videoUrl:'https://source.oss-cn-beijing.aliyuncs.com/video.mp4'});

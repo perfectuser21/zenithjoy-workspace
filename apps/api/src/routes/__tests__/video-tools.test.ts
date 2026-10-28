@@ -15,7 +15,7 @@ describe('video tools API smoke: staff upload, submit, resume and download', () 
   let directory: string;
   let state: 'pending' | 'succeeded' | 'failed';
   let submissions: number;
-  const downloadResult=vi.fn(async (_url:string)=>new Response('completed-video'));
+  const downloadResult=vi.fn<(url:string)=>Promise<Response>>(async()=>new Response('completed-video'));
   const makeApp = () => {
     const provider = {
       getConfiguration: () => ({wan:{configured:true,missing:[]},upscale:{configured:true,missing:[]}}),

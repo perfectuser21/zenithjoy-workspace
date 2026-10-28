@@ -337,7 +337,7 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   router.get('/jobs/:id/download', wrap(async (req, res) => {
     const job = await getJob(req);
     if (job.status !== 'succeeded' || !job.videoUrl) return fail(409, '视频尚未生成成功，暂时无法下载');
-    const upstream = await fetch(publicUrl(job.videoUrl), { signal: AbortSignal.timeout(120000), redirect: 'error' });
+    const upstream = await provider.downloadResult(publicUrl(job.videoUrl));
     if (!upstream.ok || !upstream.body) return fail(410, '结果链接已失效，请联系管理员核对原任务');
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Disposition', `attachment; filename="${job.kind}-${job.id}.mp4"`);
