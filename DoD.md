@@ -1,12 +1,20 @@
-# 非阻塞原生观察验收
-Task: 58d08a78-4119-4117-bc98-12390bd988eb
-GP-Anchor: line02/keyword_acquisition keep-green
+# 验收标准
 
-- [ ] 真实controller/managed version、真实execInput/native receipt和Darwin producer/socket在受控慢observer下仍满足原2秒；快对照通过，永久RED先提交并纳正式Darwin CI。
-  Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs
-- [ ] single-flight/每PID去重、停止和信号原截止、晚到结果不可覆盖终态；真正未知、fork逃逸、signal、deadline仍保unknown，不假OS全停。
-  Test: manual:node --test services/phone-adb-controller/__tests__/native-operation-receipt.test.mjs services/phone-adb-controller/__tests__/native-operation-budget.test.mjs services/phone-adb-controller/__tests__/native-operation-coverage.test.mjs services/phone-adb-controller/__tests__/native-operation-identity.test.mjs services/phone-adb-controller/__tests__/native-operation-races.test.mjs
-- [ ] 原leaf归还/业务成功、一次只读能力和完整method来源不变，方法校验12/14、版本及正式CI另验，不手机或业务写。
-  Test: manual:node --test services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs
+- [ ] [BEHAVIOR] 缺正式OpsTask的维护入口结构化拒绝；真实353资格上传失败字节可解析，其他分支不被冒充。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-entry.test.mjs
+- [ ] [BEHAVIOR] 原native observed_only/UNKNOWN原件只读保持，不因观察到PID缺席转成全停。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-entry.test.mjs
+- [ ] [BEHAVIOR] 维护范围来自独立OpsTask与原owner委托，包含稳定claim epoch；显式资源合同冲突、自委托和身份漂移拒绝。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-authority.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-brain.test.mjs
+- [ ] [BEHAVIOR] 完整冻结文件、ACK、原native/事件、原公司metadata与资格失败分支核实，保留UNKNOWN；不把新JSON或单条日志当证明。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-original.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-beforejudge.test.mjs
+- [ ] [BEHAVIOR] 两机原执行域、脱组/出生变化、设备capture及原恢复音频、Commander无pending/children均受核验；未知不进入业务变更。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-processes.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-domain.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-mmv.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-device.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-commander.test.mjs
+- [ ] [BEHAVIOR] 真实guard继承FD不死锁、生产清除fixture/执行器残留；候选双机实际字节和六GET独立准入，readback不写。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-guard.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-transport.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-candidate.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-bytes.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-runtime.test.mjs
+- [ ] [BEHAVIOR] 正式DB身份绑定同backend；历史政策hash、只改两字段、旁manual整行不变、真实提交前后断连/CAS竞态均验证。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-database.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-pg.test.mjs
+- [ ] [BEHAVIOR] durable intent/receipt/chunks保持未知，提交不重放、部分释放可读回；已sealed分支纯读且出口非假绿。
+  Test: manual:node --test services/phone-adb-controller/__tests__/qualification-maintenance-journal.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-close.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-proof.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-effects.test.mjs services/phone-adb-controller/__tests__/qualification-maintenance-service.test.mjs
 
-历史9c5b FAIL与2003ms底因UNKNOWN保留；结构回归为synthetic trigger，不冒历史根因或真机稳定性已修。端点/旧producer消费/新人工恢复权威另有实质边界，不绕guard。
+PG两组必须在现有L3 required PG scratch环境下真正运行（ZJ_METRICS_PG_REQUIRED=1），不得以未设置环境后的skip计为验收；正式PR需读取真实分片TAP。单测与开发诊断不代替隔离候选准入或真实维护Ops结果。
