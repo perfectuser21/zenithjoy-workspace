@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { ProxyAgent } from 'undici';
 
 export interface WanVideoInput {
   prompt: string;
@@ -58,10 +59,21 @@ function videoUrl(value: unknown): string {
 export class AliVideoProvider {
   private readonly env: NodeJS.ProcessEnv;
   private readonly transport: typeof fetch;
+  private apiProxy?: ProxyAgent;
 
   constructor(options: { env?: NodeJS.ProcessEnv; fetch?: typeof fetch } = {}) {
     this.env = options.env ?? process.env;
     this.transport = options.fetch ?? fetch;
+  }
+
+  private proxyUrl(): string | null | undefined {
+    const value = this.env.ALI_VIDEO_HTTPS_PROXY?.trim();
+    if (!value) return undefined;
+    try {
+      const url = new URL(value);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+      return url.origin;
+    } catch { return null; }
   }
 
   private wanBase(): string | null {
@@ -87,6 +99,7 @@ export class AliVideoProvider {
     if (!this.env.DASHSCOPE_API_KEY?.trim()) wan.push('DASHSCOPE_API_KEY');
     if (!this.wanBase()) wan.push(this.env.DASHSCOPE_BASE_URL ? 'DASHSCOPE_BASE_URL' : 'DASHSCOPE_WORKSPACE_ID');
     const upscale = ['ALIYUN_ACCESS_KEY_ID', 'ALIYUN_ACCESS_KEY_SECRET'].filter(name => !this.env[name]?.trim());
+    if (this.proxyUrl() === null) { wan.push('ALI_VIDEO_HTTPS_PROXY'); upscale.push('ALI_VIDEO_HTTPS_PROXY'); }
     return { wan: { configured: wan.length === 0, missing: wan }, upscale: { configured: upscale.length === 0, missing: upscale } };
   }
 
@@ -99,7 +112,11 @@ export class AliVideoProvider {
   private async request(url: string, init: RequestInit): Promise<JsonObject> {
     let response: Response;
     try {
-      response = await this.transport(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: 'error' });
+      const proxy = this.proxyUrl();
+      if (proxy) this.apiProxy ??= new ProxyAgent(proxy);
+      // Only fixed Alibaba API requests use CONNECT; never change the global dispatcher.
+      const options = { ...init, ...(this.apiProxy ? { dispatcher: this.apiProxy } : {}), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: 'error' as const };
+      response = await this.transport(url, options);
     } catch {
       throw new AliVideoProviderError('PROVIDER_UNREACHABLE', '暂时无法连接阿里服务，请稍后重试');
     }
