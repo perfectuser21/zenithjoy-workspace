@@ -37,6 +37,8 @@ for(const [name,change]of [
  ['截掉原件tracked',f=>f.original.tracked.pop()],
  ['观察太旧',f=>f.observation.census.finished_at_ms=1],
  ['不同collector源码',f=>f.observation.collector_sha256='0'.repeat(64)],
+ ['只写reused却无新birth',f=>{f.observation.census.tracked[0].state='reused';}],
+ ['terminal没有原birth核验',f=>{f.observation.census.tracked[0].state='terminal';}],
 ])test(name+'必须BLOCK',()=>{const f=ready(fixture());change(f);assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');});
 test('collector派生参数形状严格拒额外命令和读取形状伪装，不输出原argv',()=>{
  assert.equal(typeof api?.DOMAIN_COLLECTOR_BASE64,'string');
