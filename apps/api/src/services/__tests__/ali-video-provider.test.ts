@@ -29,6 +29,47 @@ const fixture = (...responses: Response[]) => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('AliVideoProvider — real request contracts at the HTTP boundary', () => {
+  it('uses one optional CONNECT dispatcher for Wan submit/poll and VIAPI RPC, without retrying', async () => {
+    const transport=vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(json({output:{task_id:'wan-proxy'}}))
+      .mockResolvedValueOnce(json({output:{task_status:'RUNNING'}}))
+      .mockResolvedValueOnce(json({Data:{Status:'PROCESSING'}}))
+      .mockRejectedValueOnce(new Error('connection failed'));
+    const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:'http://127.0.0.1:18241'},fetch:transport});
+    await provider.submitWan({prompt:'hello'});
+    await provider.fetchTask('wan','wan-proxy');
+    await provider.fetchTask('upscale','upscale-proxy');
+    const dispatcher=(transport.mock.calls[0][1] as RequestInit & {dispatcher?:unknown}).dispatcher;
+    expect(dispatcher).toBeDefined();
+    expect(transport.mock.calls.slice(0,3).every(([,init])=>(init as RequestInit & {dispatcher?:unknown}).dispatcher===dispatcher)).toBe(true);
+    await expect(provider.submitWan({prompt:'hello'})).rejects.toMatchObject({code:'PROVIDER_UNREACHABLE'});
+    expect(transport).toHaveBeenCalledTimes(4);
+  });
+
+  it('leaves the default fetch route untouched when no proxy is configured', async () => {
+    const {provider,transport}=fixture(json({output:{task_id:'wan-direct'}}));
+    await provider.submitWan({prompt:'hello'});
+    expect(transport.mock.calls[0][1]).not.toHaveProperty('dispatcher');
+  });
+
+  it.each(['socks5://127.0.0.1:1080','http://user:proxy-secret@localhost:18241','https://localhost:18241/private?token=proxy-secret'])('rejects invalid proxy configuration without exposing %s', async proxy=>{
+    const transport=vi.fn<typeof fetch>();
+    const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:proxy},fetch:transport});
+    expect(provider.getConfiguration().wan).toEqual({configured:false,missing:['ALI_VIDEO_HTTPS_PROXY']});
+    expect(provider.getConfiguration().upscale).toEqual({configured:false,missing:['ALI_VIDEO_HTTPS_PROXY']});
+    await expect(provider.submitWan({prompt:'hello'})).rejects.toMatchObject({code:'PROVIDER_NOT_CONFIGURED',message:expect.not.stringMatching(/proxy-secret|localhost/)});
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('does not send source downloads or OSS uploads through the API-only proxy', async()=>{
+    const {transport}=fixture(new Response('video-bytes'),new Response(''),json({RequestId:'upscale'}));
+    const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:'http://127.0.0.1:18241',ALIYUN_VIAPI_OSS_BUCKET:'video-tools-test'},fetch:transport});
+    await provider.submitUpscale({videoUrl:'https://test.cos.accelerate.myqcloud.com/video.mp4'});
+    expect(transport.mock.calls[0][1]).not.toHaveProperty('dispatcher');
+    expect(transport.mock.calls[1][1]).not.toHaveProperty('dispatcher');
+    expect(transport.mock.calls[2][1]).toHaveProperty('dispatcher');
+  });
+
   it('submits Wan text and media as one async job using the configured workspace', async () => {
     const { provider, transport } = fixture(json({ output: { task_id: 'wan-job' } }));
     await expect(provider.submitWan({ prompt: '猫在花园奔跑', media: [{type:'reference_image',url:'https://example.com/cat.png'}], resolution:'720P',duration:5,ratio:'9:16',audio:false })).resolves.toEqual({taskId:'wan-job'});
