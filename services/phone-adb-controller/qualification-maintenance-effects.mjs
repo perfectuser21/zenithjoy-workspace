@@ -9,6 +9,7 @@ export function verifyRestoredDevice(original,o,serial) {
   &&o.observer_sha256===deviceDigest&&r?.package_uid_verified===true&&r.state==='started'
   &&['state','uid','pid','piid'].every(k=>o.audio?.[k]===r[k])&&o.uid===r.uid
   &&o.processes?.capture_pids?.length===0&&o.processes_after?.capture_pids?.length===0
+  &&o.processes?.unknown_capture_pids?.length===0&&o.processes_after?.unknown_capture_pids?.length===0
   &&o.projection?.state==='inactive'&&o.projection_after?.state==='inactive'
   &&Number.isFinite(o.observed_at_ms)&&o.completed_at_ms>=o.observed_at_ms
   &&o.completed_at_ms>Date.now()-15000&&o.completed_at_ms<Date.now()+2000,fail);

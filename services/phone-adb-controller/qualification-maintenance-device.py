@@ -74,7 +74,7 @@ def read_query(serial, key, *, connector=None, uid=None):
 def parse_processes(raw):
     lines = raw.splitlines()
     need(lines and lines[0].split() == ['UID', 'PID', 'PPID', 'NAME'])
-    seen, capture = set(), []
+    seen, capture, unknown_capture = set(), [], []
     for line in lines[1:]:
         fields = line.split(None, 3)
         need(len(fields) == 4 and fields[1].isdigit() and fields[2].isdigit()
@@ -82,8 +82,11 @@ def parse_processes(raw):
         seen.add(int(fields[1]))
         if re.search(r'scrcpy|screenrecord|qualification.*record', fields[3], re.I):
             capture.append(int(fields[1]))
+        elif re.search(r'(?:^|/)app_process(?:32|64)?(?:\s|$)', fields[3]):
+            # Toybox NAME只有argv[0]；未知Java入口不能冒认不是audio-only recorder。
+            unknown_capture.append(int(fields[1]))
     need(seen)
-    return {'process_count': len(seen), 'capture_pids': capture}
+    return {'process_count': len(seen), 'capture_pids': capture, 'unknown_capture_pids': unknown_capture}
 
 
 def parse_projection(raw):
@@ -149,6 +152,7 @@ def _collect_device(serial, values, checkpoint):
     audio = parse_native_audio(values['audio'], uid)
     foreground = re.findall(r'mCurrentFocus=Window\{[^\n]*?\s(com\.ss\.android\.ugc\.aweme)/([^\s}]+)', values['foreground'])
     consistent = (not before['capture_pids'] and not after['capture_pids']
+                and not before['unknown_capture_pids'] and not after['unknown_capture_pids']
                 and projection['state'] == projection_after['state'] == 'inactive'
                 and audio['state'] == 'started')
     # 仅采集器；必须再与正式原件recording的UID/原恢复状态绑定，不能自行授予effects。
