@@ -69,9 +69,11 @@ test('受限维护公开入口及全部同namespace依赖实际进入双机包�
 });
 test('双机包在无开发树和node_modules的独立目录能冷导入维护runtime全部传递依赖',t=>{
  const dir=mkdtempSync(join(tmpdir(),'maintenance-runtime-package-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
- const names=new Set([...groups.DEVICE_SH_FILES,...groups.DEVICE_NODE_FILES,...groups.DEVICE_PLAN_FILES,...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES,...groups.MMV_JS_FILES,...groups.MMV_PROBE_FILES]);
- for(const name of names){const out=join(dir,name);mkdirSync(dirname(out),{recursive:true});writeFileSync(out,readFileSync(service+'/'+name));}
- const script=join(dir,'cold-import.mjs');writeFileSync(script,"await import('./qualification-maintenance-runtime.mjs');console.log('MAINTENANCE_RUNTIME_COLD_IMPORT_OK');");
- const child=spawnSync(process.execPath,[script],{encoding:'utf8',timeout:15000,cwd:dir,env:{PATH:process.env.PATH}});
- assert.equal(child.status,0,child.stderr);assert.match(child.stdout,/MAINTENANCE_RUNTIME_COLD_IMPORT_OK/);
+ for(const target of ['xian-m4','mmv']) {
+  const root=join(dir,target),names=new Set([...groups.DEVICE_SH_FILES,...groups.DEVICE_NODE_FILES,...groups.DEVICE_PLAN_FILES,...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES,...(target==='mmv'?[...groups.MMV_JS_FILES,...groups.MMV_PROBE_FILES]:[])]);
+  for(const name of names){const out=join(root,name);mkdirSync(dirname(out),{recursive:true});writeFileSync(out,readFileSync(service+'/'+name));}
+  const script=join(root,'cold-import.mjs');writeFileSync(script,"await import('./qualification-maintenance-runtime.mjs');console.log('MAINTENANCE_RUNTIME_COLD_IMPORT_OK');");
+  const child=spawnSync(process.execPath,[script],{encoding:'utf8',timeout:15000,cwd:root,env:{PATH:process.env.PATH}});
+  assert.equal(child.status,0,target+': '+child.stderr);assert.match(child.stdout,/MAINTENANCE_RUNTIME_COLD_IMPORT_OK/);
+ }
 });
