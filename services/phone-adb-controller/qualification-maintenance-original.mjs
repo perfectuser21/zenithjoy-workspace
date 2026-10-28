@@ -108,7 +108,8 @@ function readOriginal(s,home) {
   &&e.source_commit===s.consumer_source&&e.profile===s.profile&&e.workflow_key==='douyin_video_processing'
   &&isDeepStrictEqual(e.sampling_input,frozen.sampling_input)
   &&(e.phase==='resource_quarantine'&&e.activity===undefined
-   ||['preflight','dedup','qualification'].includes(e.activity)&&['before','execution','after'].includes(e.phase))));
+   ||['preflight','dedup','qualification'].includes(e.activity)&&['before','execution','after'].includes(e.phase)
+    &&!(e.activity==='qualification'&&e.phase==='after'))));
  const identities=[{pid:launch.pid,pgid:launch.pgid,start_identity:launch.start_identity},...native_records.flatMap(n=>n.processes.map(p=>({pid:p.pid,pgid:p.pgid,start_identity:p.start_identity})))];
  const tracked=[...new Map(identities.map(p=>[p.pid+':'+p.start_identity,p])).values()];
  const pid_only=[{pid:launch.ppid,origin:'launch_parent'},{pid:Number(captureMatches[0][1]),origin:'capture_client'}];
