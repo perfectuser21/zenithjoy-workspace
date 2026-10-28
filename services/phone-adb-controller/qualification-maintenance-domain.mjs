@@ -29,13 +29,13 @@ const externalRoots={
  'com.zenithjoy.adb-host':{name:'adb-host-service.py'},
 };
 // Task367已接受并保留的旧消费者；只用于归属排除，不代表旧Deploy通过。
-function existingWallClosure(d,observation,uid) {
+function existingWallClosure(r,d,observation,uid) {
  const m=observation.consumer_manifest,tuple={
   'phone-wall-push.sh':'e07fce1199ae6f7296fc04e794e784a23cff3f3560e5ba4a7c6de85a48c68bea',
   'wall-lib.sh':'7c1147802aad15612514eb308581f435895885c237772adc44b36f40238ce7b7',
   'adb-managed-client.py':'d1fc8d0dbe33137f7e05f40cb9f4388e53fd84ff8336eaf0d9533d059c7a8995',
   'adb-existing-route.py':'f1cfd000f939c1bdc5729b2862290a7271846c4585dc52db0bbbe394e8a5556e'};
- const root=dirname(d.kernel.program.script.realpath);
+ const root=dirname(r.program.script.realpath);
  return m?.source_commit==='fa68c61c8a90b2414b0f4d74f7223d4dc742a5f7'
   &&m.identity?.sha256==='0a6679e7f27d945997fed693fc1f4f4ad99016f28671c743b0277be21476dd91'
   &&m.identity.uid===uid&&m.identity.realpath===root+'/deployment-manifest.json'
@@ -72,7 +72,7 @@ function admittedRoles(c,roles,epoch,original,observation) {
    &&r.program?.script?.sha256===(policy.sha||expected.get(policy.name))
    &&(d.launchd.argv_sha256===r.argv_sha256||d.launchd.target?.sha256===r.program.script.sha256)) {
    const dependencies=policy.name==='phone-wall-push.sh'?['wall-lib.sh','adb-managed-client.py','adb-existing-route.py']:policy.name==='adb-host-service.py'?['adb-existing-route.py']:[];
-   if(dependencies.every(name=>fileMatch(d,name))||policy.name==='phone-wall-push.sh'&&existingWallClosure(d,observation,c.uid))accepted.set(r.pid,policy.name);
+   if(dependencies.every(name=>fileMatch(d,name))||policy.name==='phone-wall-push.sh'&&existingWallClosure(r,d,observation,c.uid))accepted.set(r.pid,policy.name);
   }
   if(label==='ai.openclaw.node'&&rootBinding(r,d)&&establishedNode(d)&&d.launchd.entry?.script?.sha256==='08abc38cdc39727ed8580697adac8004bbac7ee7647c9d3d3c96a7fe403cf75a'
    &&d.launchd.wrapper_target?.sha256&&/openclaw/.test(d.launchd.wrapper_target.realpath||'')
