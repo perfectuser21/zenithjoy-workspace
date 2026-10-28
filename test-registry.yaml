@@ -8309,3 +8309,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 真实COS SDK验证上传及读取签名使用可达加速域名，未启用时保持地域域名。
+
+- id: video-tools-direct-upload
+  path: apps/api/src/routes/__tests__/video-tools-direct-upload.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 本人直传intent、过期、真实HEAD大小、下载上限、幂等完成及失败重试，不接受客户端URL。
