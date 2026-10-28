@@ -14,11 +14,16 @@ import {collectMaintenanceEffects} from './qualification-maintenance-effects.mjs
 export {verifyRestoredDevice} from './qualification-maintenance-effects.mjs';
 import {readCommanderClosure} from './qualification-maintenance-commander.mjs';
 import {readMmvRpcClosure} from './qualification-maintenance-mmv.mjs';
-import {readHistoricalCompanySnapshot,readPendingClaimOutcome,restorePendingClaim} from './qualification-maintenance-pg.mjs';
+import {readHistoricalCompanySnapshot,readPendingClaimOutcome,restorePendingClaim,readCommittedMaintenanceAudit} from './qualification-maintenance-pg.mjs';
 import {readMaintenanceJournal,appendMaintenanceJournal} from './qualification-maintenance-journal.mjs';
-import {appendEffectReceipt,readHistoricalEffectProof} from './qualification-maintenance-proof.mjs';
+import {appendEffectReceipt,readHistoricalEffectProof,observeSealedMaintenanceEpoch} from './qualification-maintenance-proof.mjs';
+import {closeMaintenanceEpoch} from './qualification-maintenance-close.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const need=(v,code='MAINTENANCE_RUNTIME_UNPROVEN')=>{if(!v)throw Error(code);};
+export async function closeRuntimeMaintenance(authority,{sealed,io}) {
+ const result=await observeSealedMaintenanceEpoch(authority,sealed);
+ return result.status==='not_sealed'?closeMaintenanceEpoch(io):result;
+}
 function productionPool() {
  // 不继承开发会话PGHOST/PGDATABASE；与原正式RPC使用同一私有凭据源。
  const file=join(homedir(),'.credentials/zenithjoy-db.env'),st=lstatSync(file);
@@ -110,7 +115,16 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
    const r=await maintenanceBrainRequest('/device-locks/release',{device_name:scope.serial,locked_by:scope.central_owner});
    need(r.success===true&&r.released?.device_name===scope.serial&&r.released.locked_by===null);
   },append,readJournal:()=>readMaintenanceJournal(initial)};
- return {io,preflight:async()=>{
+ return {io,close:async()=>{
+  try{return await closeRuntimeMaintenance(initial,{io,sealed:{
+   readAuthority:()=>readMaintenanceAuthority(initial.maintenance_task_id,{renew:false}),
+   readJournal:()=>readMaintenanceJournal(initial),readLocal:()=>readRemoteMaintenanceLocal(scope),readCentral,
+   readAudit:async company_receipt=>{
+    const expected_snapshot=await readHistoricalCompanySnapshot(db(),{authorization:initial,company_receipt});
+    return readCommittedMaintenanceAudit(db(),{authorization:initial,expected_snapshot});
+   }
+  }});}finally{if(pool){await pool.end();pool=undefined;}}
+ },preflight:async()=>{
   await authority();await candidate();return withGuard(async()=>{
    await authority();await currentOriginal();await baseline();const e=await effects();if(e.status!=='verified')return e;
    return {status:'preflight_verified',contract_sha256:initial.contract_sha256,effects_receipt_sha256:e.effects_receipt_sha256,

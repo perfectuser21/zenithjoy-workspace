@@ -1,5 +1,4 @@
 import {readMaintenanceAuthority} from './qualification-maintenance-brain.mjs';
-import {closeMaintenanceEpoch} from './qualification-maintenance-close.mjs';
 // 外部入口只有正规Task ID；现场adapter不接受调用方传verified/scope/停止证明。
 export async function runMaintenance({verb,taskId}) {
  let authority;
@@ -10,7 +9,7 @@ export async function runMaintenance({verb,taskId}) {
   const runtime=await createMaintenanceRuntime({authority,verb});
   if(verb==='preflight')return await runtime.preflight();
   if(verb==='readback')return await runtime.readback();
-  if(verb==='close')return await closeMaintenanceEpoch(runtime.io);
+  if(verb==='close')return await runtime.close();
   return {status:'blocked',stage:'command',code:'MAINTENANCE_COMMAND_INVALID'};
  }catch(error){
   const code=/^MAINTENANCE_[A-Z_]+$/.test(error?.message||'')?error.message:'MAINTENANCE_EXECUTION_UNKNOWN';

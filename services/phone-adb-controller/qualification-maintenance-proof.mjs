@@ -1,5 +1,6 @@
 import {digest,canonical} from './runtime-definition.mjs';
 import {readMaintenanceJournal,appendMaintenanceJournal} from './qualification-maintenance-journal.mjs';
+import {sameMaintenanceAuthorityEpoch} from './qualification-maintenance-authority.mjs';
 const need=v=>{if(!v)throw Error('MAINTENANCE_EFFECTS_PROOF_UNPROVEN');};
 export function readHistoricalEffectProof(a,journal,hash) {
  const s=a.scope;need(a.contract_sha256===digest(s)&&Array.isArray(journal)&&/^[a-f0-9]{64}$/.test(hash||''));
@@ -34,4 +35,20 @@ export function appendEffectReceipt(a,receipt,{home}={}) {
  const record={phase:'effects_receipt',at_ms:Date.now(),contract_sha256:a.contract_sha256,effects_receipt_sha256:digest(receipt),receipt};
  readHistoricalEffectProof(a,[...readMaintenanceJournal(a,{home}),record],record.effects_receipt_sha256);
  return appendMaintenanceJournal(a,record,{home});
+}
+export async function observeSealedMaintenanceEpoch(a,io) {
+ try {
+  need(sameMaintenanceAuthorityEpoch(a,await io.readAuthority()));
+  const journal=await io.readJournal();need(Array.isArray(journal));
+  if(!journal.some(r=>r.phase==='closed'&&r.outcome===undefined))return {status:'not_sealed'};
+  const receipts=journal.filter(r=>r.phase==='effects_receipt');need(receipts.length>0);
+  const first=readHistoricalEffectProof(a,journal,receipts[0].effects_receipt_sha256);
+  const audit=await io.readAudit(first.input.company_receipt);need(audit?.status==='audit_committed');
+  const proof=readHistoricalEffectProof(a,journal,audit.effects_receipt_sha256);
+  need(await io.readLocal()==='free'&&await io.readCentral()==='free');
+  need(sameMaintenanceAuthorityEpoch(a,await io.readAuthority()));
+  return {status:'already_closed',read_only:true,contract_sha256:a.contract_sha256,
+   effects_receipt_sha256:digest(proof.receipt),audit_sha256:audit.audit_sha256,
+   journal_sha256:digest(journal),observed_at_ms:Date.now(),os_full_stop:false};
+ }catch{return {status:'blocked',stage:'sealed_readback',code:'MAINTENANCE_SEALED_PROOF_UNPROVEN'};}
 }
