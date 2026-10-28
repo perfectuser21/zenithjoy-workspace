@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
+import {mkdtempSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createHash} from 'node:crypto';
 const api=await import('../qualification-maintenance-transport.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 test('候选路径仅正规40SHA和两固定target，不能经字符串注入SSH',()=>{
  assert.equal(typeof api?.candidateRuntimeRoot,'function');
@@ -21,4 +25,14 @@ test('actor提前退出/无响应均明确unknown，不能返回虚构guard',asy
  const quiet=spawn(process.execPath,['-e','process.stdin.resume()'],{stdio:['pipe','pipe','pipe']});
  await assert.rejects(api.openMaintenancePeer(quiet,{}, {timeoutMs:30}),/MAINTENANCE_HOST_UNKNOWN/);
  assert.equal(quiet.signalCode,null);
+});
+test('远端候选审计执行本人固定reader，只读实际bytes且变更必拒',t=>{
+ assert.equal(typeof api?.CANDIDATE_BYTES_READER,'string');const root=realpathSync(mkdtempSync(join(tmpdir(),'remote-bytes-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const bytes=Buffer.from('fixed code');writeFileSync(join(root,'code.py'),bytes);
+ const manifest={source_repo:'perfectuser21/zenithjoy-workspace',source_commit:'a'.repeat(40),files:[{path:'source/code.py',deployed_path:'code.py',content_sha256:createHash('sha256').update(bytes).digest('hex')}]};
+ const raw=JSON.stringify(manifest);writeFileSync(join(root,'deployment-manifest.json'),raw);
+ const run=()=>spawnSync('python3',['-B','-I','-',root],{input:api.CANDIDATE_BYTES_READER,encoding:'utf8',timeout:5000});
+ const first=run();assert.equal(first.status,0,first.stderr);const measured=JSON.parse(first.stdout);
+ assert.equal(Buffer.from(measured.manifest_raw,'base64').toString(),raw);assert.deepEqual(measured.observed.files,manifest.files);
+ writeFileSync(join(root,'code.py'),'drift');assert.notEqual(run().status,0);
 });
