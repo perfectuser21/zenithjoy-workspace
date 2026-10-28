@@ -21,9 +21,17 @@ async function holder(f,t) {
  const lines=createInterface({input:p.stdout})[Symbol.asyncIterator]();
  const receive=async()=>{const line=await lines.next();assert.ok(!line.done,err);return JSON.parse(line.value);};
  p.stdin.write(JSON.stringify({serial:'SER1',profile:'p1',owner:'original-run',deadline_seconds:20})+'\n');
- t.after(()=>{p.stdin.destroy();});assert.equal((await receive()).status,'guard_held');
- return {p,receive,send:async op=>{p.stdin.write(JSON.stringify({op})+'\n');return receive();}};
+ t.after(()=>{p.stdin.destroy();});const ready=await receive();assert.equal(ready.status,'guard_held');
+ return {p,ready,receive,send:async op=>{p.stdin.write(JSON.stringify({op})+'\n');return receive();}};
 }
+test('guard握手绑定真实内核出生与源码，不能只有可复用PID',async t=>{
+ const f=fixture(t),h=await holder(f,t);
+ const r=spawnSync('python3',['-B','-I','-c','import importlib.util,json,sys; s=importlib.util.spec_from_file_location("p",sys.argv[1]); m=importlib.util.module_from_spec(s);s.loader.exec_module(m); print(json.dumps(m.kernel(int(sys.argv[2]))))',fileURLToPath(new URL('../qualification-maintenance-processes.py',import.meta.url)),String(h.p.pid)],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);const actual=JSON.parse(r.stdout);
+ assert.equal(h.ready.start_identity,actual.start_identity);assert.equal(h.ready.uid,actual.uid);
+ assert.match(h.ready.script_sha256,/^[a-f0-9]{64}$/);
+ const {createHash}=await import('node:crypto');assert.equal(h.ready.script_sha256,createHash('sha256').update(readFileSync(observer)).digest('hex'));
+});
 test('同一guard真实继承给原controller，不重入死锁且不调用ADB',async t=>{
  const f=fixture(t),h=await holder(f,t);assert.equal((await h.send('status')).local_owner,'original_owner');
  const blocked=spawnSync('python3',['-B','-I','-c','import fcntl,sys;f=open(sys.argv[1],"r+");fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)',f.guard]);assert.notEqual(blocked.status,0);
