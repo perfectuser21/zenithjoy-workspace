@@ -4,7 +4,7 @@ import { rateLimit } from 'express-rate-limit';
 import { fromNodeHeaders } from 'better-auth/node';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
-import { resolve, join, extname } from 'node:path';
+import { resolve, join, extname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -53,8 +53,10 @@ async function save(file: string, body: unknown) {
   await writeFile(temp, JSON.stringify(body), { mode: 0o600 });
   await rename(temp, file);
 }
-async function load<T>(file: string): Promise<T | null> {
-  try { return JSON.parse(await readFile(file, 'utf8')) as T; }
+async function load<T>(file: string, root: string): Promise<T | null> {
+  const fullPath = resolve(file);
+  if (!fullPath.startsWith(resolve(root) + sep)) return fail(400, '任务文件地址无效');
+  try { return JSON.parse(await readFile(fullPath, 'utf8')) as T; }
   catch (err) { if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null; throw err; }
 }
 
@@ -147,14 +149,14 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   async function jobs(req: StaffRequest): Promise<Job[]> {
     await mkdir(ownerDir(req), { recursive: true, mode: 0o700 });
     const names = (await readdir(ownerDir(req))).filter(name => uuid.test(name.replace(/\.json$/, '')) && name.endsWith('.json'));
-    const values = await Promise.all(names.map(name => load<Job>(join(ownerDir(req), name))));
+    const values = await Promise.all(names.map(name => load<Job>(join(ownerDir(req), name), directory)));
     return values.filter((j): j is Job => j !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   async function ownedAsset(req: StaffRequest, url: string): Promise<Asset | null> {
     const assetDir = join(ownerDir(req), 'assets');
     let names: string[];
     try { names = await readdir(assetDir); } catch (err) { if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null; throw err; }
-    for (const name of names) { const a = await load<Asset>(join(assetDir, name)); if (a?.url === url) return a; }
+    for (const name of names) { const a = await load<Asset>(join(assetDir, name), directory); if (a?.url === url) return a; }
     return null;
   }
   function validate(body: Record<string, unknown>): Kind {
@@ -235,7 +237,7 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   }));
   async function refreshJob(req: StaffRequest, id: string): Promise<Job> {
     return serialized(`job:${req.videoStaffId}:${id}`, async () => {
-    const job = await load<Job>(jobPath(req, id));
+    const job = await load<Job>(jobPath(req, id), directory);
     if (!job) return fail(404, '任务不存在或无权访问');
     if (['pending', 'running'].includes(job.status)) {
       if (!job.taskId) {
