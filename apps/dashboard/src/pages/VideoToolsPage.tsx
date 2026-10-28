@@ -7,6 +7,7 @@ type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled' | '
 interface Job { id: string; kind: Kind; status: JobStatus; videoUrl?: string; error?: string; createdAt: string }
 interface UploadedMedia { id: string; url: string; kind: 'image' | 'video'; name: string }
 interface Configuration { wan: { configured: boolean }; upscale: { configured: boolean }; uploads: { configured: boolean } }
+interface UploadProgress { phase: 'preparing' | 'uploading' | 'checking'; name: string; index: number; count: number; loaded: number; total: number }
 const BASE = '/api/video-tools';
 const TERMINAL = new Set<JobStatus>(['succeeded', 'failed', 'canceled', 'unknown']);
 const STATUS: Record<JobStatus, string> = { pending: '排队中', running: '处理中', succeeded: '已完成', failed: '处理失败', canceled: '已取消', unknown: '状态未知' };
@@ -15,8 +16,40 @@ const field = 'mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE}${path}`, { ...init, credentials: 'include' });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || (response.status === 401 ? '登录已失效，请重新登录' : '请求失败，请稍后重试'));
+  if (!response.ok) throw Object.assign(new Error(typeof body.error === 'string' ? body.error : body.error?.message || (response.status === 401 ? '登录已失效，请重新登录' : '请求失败，请稍后重试')), { status: response.status });
   return body as T;
+}
+
+function putDirect(uploadUrl: string, file: File, signal: AbortSignal, onProgress: (loaded: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const finish = (error?: Error) => {
+      signal.removeEventListener('abort', abort);
+      xhr.upload.onprogress = null;
+      xhr.onload = xhr.onerror = xhr.ontimeout = xhr.onabort = null;
+      if (error) reject(error); else resolve();
+    };
+    const abort = () => xhr.abort();
+    xhr.upload.onprogress = event => onProgress(Math.min(file.size, event.loaded));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { onProgress(file.size); finish(); return; }
+      // Only expose the short COS error code. Messages/response URLs can contain signatures.
+      const code = xhr.responseText.match(/<Code>\s*([A-Za-z0-9_.-]{1,80})\s*<\/Code>/)?.[1];
+      finish(new Error(`上传失败（HTTP ${xhr.status}${code ? `，${code}` : ''}），请重新选择文件重试`));
+    };
+    xhr.onerror = () => finish(new Error('上传连接失败（HTTP 0），请检查网络或联系管理员检查存储跨域配置'));
+    xhr.ontimeout = () => finish(new Error('上传超时（10 分钟），请检查网络后重新选择文件重试'));
+    xhr.onabort = () => finish(new DOMException('上传已取消', 'AbortError'));
+    if (signal.aborted) { finish(new DOMException('上传已取消', 'AbortError')); return; }
+    signal.addEventListener('abort', abort, { once: true });
+    try {
+      xhr.open('PUT', uploadUrl);
+      xhr.withCredentials = false;
+      xhr.timeout = 10 * 60 * 1000;
+      if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+      xhr.send(file);
+    } catch { finish(new Error('无法启动素材直传，请联系管理员')); }
+  });
 }
 
 export default function VideoToolsPage({ kind }: { kind: Kind }) {
@@ -32,6 +65,7 @@ export default function VideoToolsPage({ kind }: { kind: Kind }) {
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState('');
   const [pollError, setPollError] = useState('');
   const [pollRevision, setPollRevision] = useState(0);
@@ -79,11 +113,11 @@ export default function VideoToolsPage({ kind }: { kind: Kind }) {
   }, [job?.id, pollRevision]);
 
   async function upload(files: FileList | null) {
-    if (!files?.length || uploading || busyRef.current) return;
+    if (!files?.length || uploadOperation.current || busyRef.current || !config?.uploads.configured) return;
     setError('');
     const selected = Array.from(files);
-    const valid = selected.every(file => file.size > 0 && file.size <= 100 * 1024 * 1024 && (file.type.startsWith('video/') || (isWan && file.type.startsWith('image/'))));
-    if (!valid) { setError('请选择不超过 100 MB 的有效' + (isWan ? '图片或视频' : '视频') + '文件'); return; }
+    const valid = selected.every(file => file.size > 0 && ((file.type.startsWith('video/') && file.size <= 100 * 1024 * 1024) || (isWan && file.type.startsWith('image/') && file.size <= 20 * 1024 * 1024)));
+    if (!valid) { setError(isWan ? '请选择有效素材：图片最多 20 MB，视频最多 100 MB' : '请选择不超过 100 MB 的有效视频文件'); return; }
     if (isWan && (media.length + selected.length > 15 || media.filter(item => item.kind === 'image').length + selected.filter(file => file.type.startsWith('image/')).length > 10 || media.filter(item => item.kind === 'video').length + selected.filter(file => file.type.startsWith('video/')).length > 5)) {
       setError('最多上传 10 张参考图片和 5 段参考视频'); return;
     }
@@ -91,15 +125,37 @@ export default function VideoToolsPage({ kind }: { kind: Kind }) {
     uploadOperation.current = controller;
     setUploading(true);
     try {
-      const uploaded: UploadedMedia[] = [];
-      for (const file of (isWan ? selected : selected.slice(0, 1))) {
-        const body = new FormData();
-        body.append('file', file);
-        uploaded.push(await request<UploadedMedia>('/uploads', { method: 'POST', body, signal: controller.signal }));
+      const filesToUpload = isWan ? selected : selected.slice(0, 1);
+      for (const [index, file] of filesToUpload.entries()) {
+        if (controller.signal.aborted) break;
+        const progress: UploadProgress = { phase: 'preparing', name: file.name, index: index + 1, count: filesToUpload.length, loaded: 0, total: file.size };
+        setUploadProgress(progress);
+        const signed = await request<{ id: string; uploadUrl: string }>('/uploads/presign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: file.name, size: file.size }), signal: controller.signal,
+        });
+        if (controller.signal.aborted) break;
+        setUploadProgress({ ...progress, phase: 'uploading' });
+        await putDirect(signed.uploadUrl, file, controller.signal, loaded => {
+          if (!controller.signal.aborted) setUploadProgress({ ...progress, phase: 'uploading', loaded });
+        });
+        if (controller.signal.aborted) break;
+        setUploadProgress({ ...progress, phase: 'checking', loaded: file.size });
+        const uploaded = await request<UploadedMedia>(`/uploads/${encodeURIComponent(signed.id)}/complete`, { method: 'POST', signal: controller.signal });
+        if (controller.signal.aborted) break;
+        // Preserve files already confirmed if a later file in the batch fails.
+        setMedia(previous => isWan ? [...previous, uploaded] : [uploaded]);
       }
-      if (!controller.signal.aborted) setMedia(previous => isWan ? [...previous, ...uploaded] : uploaded);
-    } catch (err) { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : '上传失败，请重试'); }
-    finally { if (mounted.current) setUploading(false); }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        const failure = err as Error & { status?: number };
+        setError((failure.message || '上传失败，请重试') + (failure.status ? `（HTTP ${failure.status}）` : ''));
+      }
+    }
+    finally {
+      if (uploadOperation.current === controller) uploadOperation.current = null;
+      if (mounted.current && !controller.signal.aborted) { setUploading(false); setUploadProgress(null); }
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -144,10 +200,15 @@ export default function VideoToolsPage({ kind }: { kind: Kind }) {
             <p className="mb-2 text-sm font-medium">{isWan ? '参考素材（可选）' : '待超分视频'}</p>
             <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm dark:border-slate-600 dark:bg-slate-900 ${!config?.uploads.configured || uploading || busy || pending ? 'pointer-events-none opacity-50' : 'hover:border-violet-400'}`}>
               {uploading ? <Loader2 className="animate-spin text-violet-500" size={24} /> : <Upload className="text-violet-500" size={24} />}
-              <span>{uploading ? '正在上传素材…' : isWan ? '选择图片或参考视频' : '选择一个视频文件'}</span>
+              <span>{uploading ? uploadProgress?.phase === 'checking' ? '上传完毕，正在检查视频' : uploadProgress?.phase === 'preparing' ? '正在准备上传…' : '正在上传素材…' : isWan ? '选择图片或参考视频' : '选择一个视频文件'}</span>
               <span className="text-xs text-slate-400">{isWan ? '图片最多 20 MB，视频最多 100 MB · 最多 10 张图、5 段视频' : '视频最多 100 MB · MP4 / MOV 等格式'}</span>
               <input aria-label={isWan ? '上传参考素材' : '上传待超分视频'} className="sr-only" type="file" accept={isWan ? 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime' : 'video/*'} multiple={isWan} disabled={!config?.uploads.configured || uploading || busy || pending} onChange={event => { void upload(event.target.files); event.target.value = ''; }} />
             </label>
+            {uploading && uploadProgress && <div role="status" className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mb-2 truncate">{uploadProgress.count > 1 ? `${uploadProgress.index} / ${uploadProgress.count} · ` : ''}{uploadProgress.name}</p>
+              <div role="progressbar" aria-label="上传进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(uploadProgress.loaded / uploadProgress.total * 100)} className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className="h-full bg-violet-500 transition-[width]" style={{ width: `${uploadProgress.loaded / uploadProgress.total * 100}%` }} /></div>
+              <p className="mt-2">{Math.floor(uploadProgress.loaded / uploadProgress.total * 100)}% · {(uploadProgress.loaded / (1024 * 1024)).toFixed(1)} / {(uploadProgress.total / (1024 * 1024)).toFixed(1)} MB</p>
+            </div>}
             {config && !config.uploads.configured && <p className="mt-2 text-xs text-amber-700">素材上传尚未配置，请联系管理员{isWan ? '；仍可使用文字生成视频。' : '。'}</p>}
             <div className="mt-3 space-y-2">{media.map(item => <div key={item.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-900"><Film size={15} className="shrink-0 text-slate-400" /><span className="min-w-0 flex-1 truncate">{item.name}</span><button aria-label={`移除 ${item.name}`} type="button" disabled={busy || pending || uploading} onClick={() => setMedia(previous => previous.filter(entry => entry.id !== item.id))} className="rounded p-1 text-slate-400 hover:text-red-500"><X size={16} /></button></div>)}</div>
           </div>

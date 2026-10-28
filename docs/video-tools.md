@@ -26,6 +26,8 @@ Wan 支持提示词、参考图片/视频、时长、画幅、分辨率和声音
 
 - `GET /api/video-tools/config`：服务配置状态。
 - `POST /api/video-tools/uploads`：multipart `file`，返回素材 URL 与尺寸、时长。
+- `POST /api/video-tools/uploads/presign`：以文件名、大小申请当前员工专属的临时PUT地址。
+- `POST /api/video-tools/uploads/:id/complete`：直传完成后核对实际对象大小、下载检查素材并返回元数据。
 - `POST /api/video-tools/jobs`：创建 Wan 或超分任务。
 - `GET /api/video-tools/jobs`：当前员工的任务历史。
 - `GET /api/video-tools/jobs/:id`：查询任务状态。

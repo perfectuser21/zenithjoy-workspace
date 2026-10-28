@@ -4,11 +4,12 @@ import { rateLimit } from 'express-rate-limit';
 import { fromNodeHeaders } from 'better-auth/node';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import { resolve, join, extname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { auth } from '../auth';
 import { parseFlatDirectory } from '../staff-directory';
@@ -21,12 +22,31 @@ interface Job extends AliVideoTask {
   prompt?: string; lastPolledAt?: number;
 }
 interface Asset { id: string; url: string; kind: 'image' | 'video'; name: string; width: number; height: number; duration: number; size: number; fps: number; createdAt: string }
+interface UploadIntent { id: string; key: string; name: string; size: number; createdAt: string }
 interface StaffRequest extends Request { videoStaffId?: string }
 interface Options { provider?: AliVideoProvider; directory?: string; storage?: MaterialStorage }
 const MAX_BYTES = 100 * 1024 * 1024;
+const UPLOAD_INTENT_TTL_SECONDS = 7200;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function fail(status: number, message: string): never { throw Object.assign(new Error(message), { status }); }
+
+async function inspectAsset(file: string, kind: Asset['kind'], timeout = 15000) {
+  try {
+    const output = await promisify(execFile)('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,codec_name,avg_frame_rate:format=duration,format_name', '-of', 'json', file], { timeout, maxBuffer: 16384 });
+    const info = JSON.parse(output.stdout);
+    const width = Number(info.streams?.[0]?.width), height = Number(info.streams?.[0]?.height), duration = Number(info.format?.duration ?? 0);
+    const rate = String(info.streams?.[0]?.avg_frame_rate ?? '0/1').split('/').map(Number);
+    const fps = rate[1] ? rate[0] / rate[1] : 0;
+    if (kind === 'image' && !['png', 'mjpeg', 'webp'].includes(info.streams?.[0]?.codec_name)) return fail(400, '文件内容与图片类型不符');
+    if (kind === 'video' && !/(mov|mp4|matroska|webm)/.test(info.format?.format_name ?? '')) return fail(400, '请上传有效的 MP4、MOV 或 WebM 视频');
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || (kind === 'video' && (!Number.isFinite(duration) || duration <= 0))) return fail(400, '无法读取素材尺寸或时长，请重新导出后上传');
+    return { width, height, duration, fps };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return fail(503, '视频检查服务尚未配置，请联系管理员');
+    return fail(400, '无法读取素材，请上传有效的图片或视频');
+  }
+}
 
 function publicUrl(value: unknown): string {
   if (typeof value !== 'string' || value.length > 8192) return fail(400, '请提供有效的素材地址');
@@ -105,6 +125,69 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   router.get('/config', (_req, res) => res.json({ ...provider.getConfiguration(), uploads: { configured: uploadsConfigured() } }));
 
   router.use(rateLimit({ windowMs: 60_000, limit: 240, standardHeaders: true, legacyHeaders: false, message: { error: '请求过于频繁，请稍后重试' } }));
+  const assetPath = (req: StaffRequest, id: string) => join(ownerDir(req), 'assets', `${id.replace(/[^a-zA-Z0-9-]/g, '')}.json`);
+  const intentPath = (req: StaffRequest, id: string) => join(ownerDir(req), 'uploads', `${id.replace(/[^a-zA-Z0-9-]/g, '')}.json`);
+  router.post('/uploads/presign', wrap(async (req, res) => {
+    const { name, size } = req.body ?? {};
+    if (typeof name !== 'string' || !name.trim() || name.length > 255 || /[\\/\0]/.test(name) || !/\.(png|jpe?g|webp|mp4|mov|webm)$/i.test(name)) return fail(400, '请选择 PNG、JPG、WebP 图片或 MP4、MOV、WebM 视频');
+    if (!Number.isSafeInteger(size) || size <= 0) return fail(400, '请选择非空的有效文件');
+    if (size > MAX_BYTES) return fail(413, '上传文件不能超过 100 MB');
+    const objectStorage = await getStorage();
+    const id = randomUUID();
+    const intent: UploadIntent = { id, key: `video-tools/${hash(req.videoStaffId!)}/${id}${extname(name).toLowerCase()}`, name, size, createdAt: new Date().toISOString() };
+    const uploadUrl = await objectStorage.presignPut(intent.key, UPLOAD_INTENT_TTL_SECONDS);
+    await save(intentPath(req, id), intent);
+    res.json({ id, uploadUrl });
+  }));
+  router.post('/uploads/:id/complete', wrap(async (req, res) => {
+    if (!uuid.test(req.params.id)) return fail(404, '上传记录不存在或无权访问');
+    await serialized(`upload:${req.videoStaffId}:${req.params.id}`, async () => {
+      const intent = await load<UploadIntent>(intentPath(req, req.params.id), directory);
+      if (!intent) return fail(404, '上传记录不存在或无权访问');
+      const completed = await load<Asset>(assetPath(req, intent.id), directory);
+      if (completed) { res.json(completed); return; }
+      if (Date.now() - Date.parse(intent.createdAt) > UPLOAD_INTENT_TTL_SECONDS * 1000) return fail(410, '本次上传已过期，请重新选择文件上传');
+      const objectStorage = await getStorage();
+      let actual;
+      try { actual = await objectStorage.headObject(intent.key); }
+      catch { return fail(503, '暂时无法确认文件上传状态，请稍后重试'); }
+      if (!actual || !Number.isSafeInteger(actual.sizeBytes) || actual.sizeBytes !== intent.size || actual.sizeBytes > MAX_BYTES) return fail(409, '文件尚未完整上传，请重试上传或稍后确认');
+      // This URL is issued by server-side storage for the persisted intent key; no client URL is accepted.
+      const source = new URL(await objectStorage.getSignedUrl(intent.key));
+      if (source.protocol !== 'https:' || source.username || source.password || source.port || !/^[a-z0-9-]+\.cos\.[a-z0-9-]+\.myqcloud\.com$/.test(source.hostname)) return fail(503, '素材存储地址配置无效，请联系管理员');
+      const temporaryFile = join(tmpdir(), `video-tools-complete-${randomUUID()}`);
+      const deadline = Date.now() + 60000;
+      const signal = AbortSignal.timeout(60000);
+      try {
+        const response = await fetch(source.href, { redirect: 'error', signal });
+        if (!response.ok || !response.body) return fail(409, '暂时无法读取上传文件，请稍后重新确认');
+        const advertised = response.headers.get('content-length');
+        if (advertised && Number(advertised) !== intent.size) {
+          await response.body.cancel();
+          return fail(409, '文件大小与上传记录不符，请重新上传');
+        }
+        let bytes = 0;
+        const limit = new Transform({ transform(chunk: Buffer, _encoding, next) {
+          bytes += chunk.length;
+          next(bytes > MAX_BYTES || bytes > intent.size ? Object.assign(new Error('文件大小与上传记录不符，请重新上传'), { status: 409 }) : null, chunk);
+        } });
+        await pipeline(Readable.fromWeb(response.body as never), limit, createWriteStream(temporaryFile, { mode: 0o600, flags: 'wx' }), { signal });
+        if (bytes !== intent.size) return fail(409, '文件尚未完整上传，请重新上传');
+        const kind = /\.(png|jpe?g|webp)$/i.test(intent.name) ? 'image' : 'video';
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) return fail(504, '文件检查超时，请稍后重新确认，无需重复上传');
+        const metadata = await inspectAsset(temporaryFile, kind, Math.min(15000, remaining));
+        if (signal.aborted) return fail(504, '文件检查超时，请稍后重新确认，无需重复上传');
+        const asset: Asset = { id: intent.id, url: await objectStorage.getSignedUrl(intent.key, 86400), kind, name: intent.name, ...metadata, size: intent.size, createdAt: new Date().toISOString() };
+        await save(assetPath(req, intent.id), asset);
+        res.json(asset);
+      } catch (err) {
+        if (signal.aborted || (err as Error).name === 'TimeoutError') return fail(504, '文件检查超时，请稍后重新确认，无需重复上传');
+        if ((err as { status?: number }).status) throw err;
+        return fail(503, '暂时无法读取上传文件，请稍后重新确认');
+      } finally { await unlink(temporaryFile).catch(() => {}); }
+    });
+  }));
   const temporaryFiles = new WeakMap<Request, string>();
   const upload = multer({ storage: multer.diskStorage({ destination: tmpdir(), filename: (req, _file, cb) => {
     const filename = `video-tools-${randomUUID()}`;
@@ -124,25 +207,12 @@ export function createVideoToolsRouter(options: Options = {}): Router {
       if (!file.size) return fail(400, '不能上传空文件');
       const suffix = extname(file.originalname).toLowerCase();
       const kind = /\.(png|jpe?g|webp)$/.test(suffix) ? 'image' : 'video';
-      let width: number, height: number, duration: number, fps: number;
-      try {
-        const output = await promisify(execFile)('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,codec_name,avg_frame_rate:format=duration,format_name', '-of', 'json', temporaryFile], { timeout: 15_000, maxBuffer: 16384 });
-        const info = JSON.parse(output.stdout);
-        width = Number(info.streams?.[0]?.width); height = Number(info.streams?.[0]?.height); duration = Number(info.format?.duration ?? 0);
-        const rate = String(info.streams?.[0]?.avg_frame_rate ?? '0/1').split('/').map(Number);
-        fps = rate[1] ? rate[0] / rate[1] : 0;
-        if (kind === 'image' && !['png', 'mjpeg', 'webp'].includes(info.streams?.[0]?.codec_name)) return fail(400, '文件内容与图片类型不符');
-        if (kind === 'video' && !/(mov|mp4|matroska|webm)/.test(info.format?.format_name ?? '')) return fail(400, '请上传有效的 MP4、MOV 或 WebM 视频');
-        if (!width || !height || (kind === 'video' && (!duration || !Number.isFinite(duration)))) return fail(400, '无法读取素材尺寸或时长，请重新导出后上传');
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return fail(503, '视频检查服务尚未配置，请联系管理员');
-        return fail(400, '无法读取素材，请上传有效的图片或视频');
-      }
+      const metadata = await inspectAsset(temporaryFile, kind);
       const objectId = randomUUID();
       const key = `video-tools/${hash(req.videoStaffId!)}/${objectId}${suffix}`;
       const objectStorage = await getStorage();
       await objectStorage.putObject({ key, filePath: temporaryFile, contentType: kind === 'video' ? (suffix === '.webm' ? 'video/webm' : suffix === '.mov' ? 'video/quicktime' : 'video/mp4') : suffix === '.png' ? 'image/png' : suffix === '.webp' ? 'image/webp' : 'image/jpeg' });
-      const asset: Asset = { id: objectId, url: await objectStorage.getSignedUrl(key, 86400), kind, name: file.originalname, width, height, duration, fps, size: file.size, createdAt: new Date().toISOString() };
+      const asset: Asset = { id: objectId, url: await objectStorage.getSignedUrl(key, 86400), kind, name: file.originalname, ...metadata, size: file.size, createdAt: new Date().toISOString() };
       await save(join(ownerDir(req), 'assets', `${objectId}.json`), asset);
       res.json(asset);
     } finally { await unlink(temporaryFile).catch(() => {}); temporaryFiles.delete(req); }
