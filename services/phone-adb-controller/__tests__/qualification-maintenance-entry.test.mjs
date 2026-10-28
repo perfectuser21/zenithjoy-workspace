@@ -44,3 +44,9 @@ test('旧observed_only原件不得洗成native全停，读者零改原件',()=>{
     assert.equal(hash(readFileSync(path)),before);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+test('出口仅接受readonly already_closed为幂等成功，所有unknown/BLOCK仍非0',()=>{
+ assert.equal(typeof module?.maintenanceResultExitCode,'function');
+ assert.equal(module.maintenanceResultExitCode('close',{status:'already_closed',read_only:true}),0);
+ for(const result of [{status:'already_closed'},...['blocked','commit_unknown','partial_unknown'].map(status=>({status}))])assert.notEqual(module.maintenanceResultExitCode('close',result),0);
+ assert.equal(module.maintenanceResultExitCode('close',{status:'closed'}),0);
+});
