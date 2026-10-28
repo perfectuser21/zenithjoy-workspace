@@ -17,7 +17,7 @@ const fixture = (...responses: Response[]) => {
   const transport = vi.fn<typeof fetch>();
   transport.mockImplementation(async (_url, init) => {
     if (init?.method === 'PUT' && init.body && Symbol.asyncIterator in Object(init.body)) {
-      for await (const _chunk of init.body as unknown as AsyncIterable<Buffer>) { /* consume the real file stream like HTTP fetch */ }
+      for await (const chunk of init.body as unknown as AsyncIterable<Buffer>) { void chunk; /* consume the real file stream like HTTP fetch */ }
     }
     const response = responses.shift();
     if (!response) throw new Error('Unexpected HTTP request');

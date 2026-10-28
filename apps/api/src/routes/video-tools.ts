@@ -43,7 +43,10 @@ function publicUrl(value: unknown): string {
 }
 
 function view(job: Job) {
-  const { taskId: _taskId, clientRequestId: _key, lastPolledAt: _poll, ...visible } = job;
+  const visible = { ...job };
+  delete visible.taskId;
+  delete visible.clientRequestId;
+  delete visible.lastPolledAt;
   return visible;
 }
 async function save(file: string, body: unknown) {
