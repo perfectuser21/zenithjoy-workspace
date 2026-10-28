@@ -129,7 +129,7 @@ jobs:
       # video-tools-smoke executes Dashboard interaction tests as well as API contracts.
       # Install all three together so npm ci does not remove a previous workspace's dependencies.
       - name: Install apps/api + apps/agent-panel + apps/dashboard deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --workspace=apps/dashboard --include-workspace-root
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root --workspace=apps/dashboard
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
