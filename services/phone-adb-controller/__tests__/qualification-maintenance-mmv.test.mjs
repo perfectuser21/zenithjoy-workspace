@@ -26,6 +26,14 @@ for raw in ['p123\\n','n/tmp\\n','p123\\nn/tmp\\nn/other\\n']:
  except ValueError:pass
  else:raise AssertionError('accepted')
 `));
+test('cwd在lsof前后必须同出生，PID重用不能把旧outside cwd授给新RPC',()=>run(`
+assert hasattr(m,'bind_cwd_identity')
+m.bind_cwd_identity({'pid':123,'start_identity':'1:2'},{'pid':123,'start_identity':'1:2'})
+for before,after in [({'pid':123,'start_identity':'1:2'},{'pid':123,'start_identity':'3:4'}),(None,{'pid':123,'start_identity':'3:4'})]:
+ try:m.bind_cwd_identity(before,after)
+ except ValueError:pass
+ else:raise AssertionError('stale cwd accepted')
+`));
 test('真实内核存活解释器原tag输入必被有限域观察捕获，不输出其argv正文',async()=>{
  const tag='qualification_mmv_scoped_fixture';
  const child=spawn('/opt/homebrew/bin/python3',['-B','-I','-c','import time;time.sleep(3)',tag],{stdio:'ignore'});
