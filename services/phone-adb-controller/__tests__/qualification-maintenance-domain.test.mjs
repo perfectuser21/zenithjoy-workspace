@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {digest} from '../runtime-definition.mjs';
 import {processObserverDigest} from '../qualification-maintenance-processes.mjs';
+import {mmvRpcObserverDigest} from '../qualification-maintenance-mmv.mjs';
 const api=await import('../qualification-maintenance-domain.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 const old='353b910f11ce3852b2ef69c8ead5c37e97850b4a';
 function fixture() {
@@ -15,7 +16,7 @@ function fixture() {
  const self={pid:500,uid:501,ppid:1,pgid:500,start_identity:epoch.guard_start_identity,classification:'observer',executable:'/usr/bin/python3',argv_sha256:'a'.repeat(64),program:{kind:'script',script:{realpath:epoch.guard_script_path,sha256:epoch.guard_script_sha256}}};
  const census={protocol:'qualification-process-census-v1',host:'xian-m4',uid:501,observer_pid:500,observer_sha256:processObserverDigest,finished_at_ms:now,
   enumerated:[self],final_enumerated:[self],observations:[self],absent:[],unknown:[],tracked:original.tracked.map(p=>({pid:p.pid,expected_start_identity:p.start_identity,state:'absent',reason:'ESRCH'})),pid_only:original.pid_only.map(p=>({...p,state:'absent',reason:'ESRCH'}))};
- const commander={status:'verified_inactive',domain:'exact_original_commander_owner',observed_at_ms:now,returned_turns:5,mmv_rpc:{status:'observed',source_commit:old,run_tag:run,run_id:'douyin_video_processing-'+run+'__a1',observer_sha256:'f'.repeat(64),observed_at_ms:now,matches:[],unknown:[],enumeration_sha256:'a'.repeat(64),final_enumeration_sha256:'b'.repeat(64)}};
+ const commander={status:'verified_inactive',domain:'exact_original_commander_owner',observed_at_ms:now,returned_turns:5,mmv_rpc:{status:'verified_inactive',domain:'fixed353_mmv_rpc',source_commit:old,run_tag:run,run_id:'douyin_video_processing-'+run+'__a1',observer_sha256:mmvRpcObserverDigest,process_observer_sha256:processObserverDigest,observed_at_ms:now,completed_at_ms:now,matches:[],unknown:[],enumerated_sha256:'a'.repeat(64),final_enumerated_sha256:'b'.repeat(64),coverage_sha256:'c'.repeat(64)}};
  const observation={protocol:'qualification-original-domain-v1',collector_sha256:api?.DOMAIN_COLLECTOR_SHA256,epoch_sha256:digest(epoch),scope_sha256:null,census,roles:{500:{state:'observed',kernel:self,argv_sha256:self.argv_sha256,executable:{sha256:'e'.repeat(64),uid:501}}},listeners:{exit_code:0,rows:[]},finished_at_ms:now};
  return {original,epoch,commander,observation};
 }
