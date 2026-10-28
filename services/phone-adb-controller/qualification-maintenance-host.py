@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """维护epoch持有真实serial.guard；不发信号，不调用ADB/UI，只精确释放本人旧锁。"""
 import fcntl
+import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -53,7 +55,14 @@ def run():
             owner = lock / 'owner'
             regular(owner)
             return 'original_owner' if owner.read_bytes() == (scope['owner'] + '\n').encode() else 'foreign_owner'
+        spec = importlib.util.spec_from_file_location('maintenance_processes', HERE / 'qualification-maintenance-processes.py')
+        processes = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(processes)
+        identity = processes.kernel(os.getpid())
+        need(identity and identity['uid'] == os.getuid() and not identity['terminal'])
         emit({'status': 'guard_held', 'local_owner': local_owner(), 'pid': os.getpid(),
+              'uid': identity['uid'], 'start_identity': identity['start_identity'],
+              'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'guard_device': actual.st_dev, 'guard_inode': actual.st_ino})
         deadline = time.monotonic() + scope['deadline_seconds']
         attempted = False
