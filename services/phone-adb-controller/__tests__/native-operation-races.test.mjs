@@ -61,6 +61,9 @@ try{
  }else if(scenario==='late-watcher'){
   await waitFor(()=>fs.existsSync(join(dir,'watcher-started')));
   root.kill('SIGKILL');await closed;
+  // Simulate a driver scheduling pause longer than the old 700ms watcher timer.
+  // Late output must be ordered by the terminal receipt, not wall-clock luck.
+  await sleep(900);
   await Promise.all([starting,stopOnce()]);
  }else{
   await starting;
