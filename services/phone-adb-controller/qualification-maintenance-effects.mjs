@@ -18,7 +18,7 @@ export function verifyRestoredDevice(original,o,serial) {
  return {status:'verified',domain:'original_capture_stopped_and_playback_restored',observation_sha256:digest(o)};
 }
 // 内部编排，只由公开runtime传入本人现场reader；CLI不能提交reader/proof JSON。
-export async function collectMaintenanceEffects({scope,epoch,contract_sha256,candidate,readOriginal,readCommander,readMmv,readDevice,readDomain,readDatabaseIdentities,retainEvidence,retainReceipt}) {
+export async function collectMaintenanceEffects({scope,epoch,contract_sha256,candidate,readOriginal,readCommander,readMmv,readDevice,readDomain,readAdbRecovery,readDatabaseIdentities,retainEvidence,retainReceipt}) {
  let stage='original',original,deviceVerdict,domain;
  const partial={epoch,contract_sha256,candidate,scope_sha256:digest(scope)};
  try {
@@ -30,8 +30,9 @@ export async function collectMaintenanceEffects({scope,epoch,contract_sha256,can
   stage='commander';partial.commander=await readCommander();
   stage='mmv_rpc';partial.commander.mmv_rpc=await readMmv();
   stage='device';partial.device=await readDevice();deviceVerdict=verifyRestoredDevice(original,partial.device,scope.serial);
+  if(readAdbRecovery){stage='adb_service_recovery';partial.adb_service_recovery=await readAdbRecovery();}
   stage='domain';partial.observation=await readDomain(original);
-  domain=evaluateOriginalExecutionDomain({original,observation:partial.observation,commander:partial.commander,epoch});partial.domain=domain;
+  domain=evaluateOriginalExecutionDomain({original,observation:partial.observation,commander:partial.commander,epoch,serviceRecovery:partial.adb_service_recovery});partial.domain=domain;
   need(domain.status==='verified','MAINTENANCE_ORIGINAL_DOMAIN_UNPROVEN');
  }catch(error){
   const code=/^MAINTENANCE_[A-Z_]+$/.test(error?.message||'')?error.message:'MAINTENANCE_EFFECTS_OBSERVATION_UNKNOWN';

@@ -14,7 +14,14 @@ const inspector=['identity','children','group'].includes(mode);
 log({event:'start',kind:inspector?'inspector':'watcher'});
 if(!inspector&&scenario==='late-watcher'){
  fs.writeFileSync(p.join(dir,'watcher-started'),'1');process.on('SIGTERM',()=>{});
- setTimeout(()=>{process.stdout.write('READY\nEXIT\n');log({event:'end',kind:'watcher'});},700);
+ const release=setInterval(()=>{
+  const file=p.join(dir,'terminal-release');if(!fs.existsSync(file))return;
+  const endedAt=Date.parse(fs.readFileSync(file,'utf8'));
+  if(!Number.isFinite(endedAt)||Date.now()<=endedAt)return;
+  clearInterval(release);clearTimeout(ttl);
+  process.stdout.write('READY\nEXIT\n');log({event:'end',kind:'watcher'});
+ },5);
+ const ttl=setTimeout(()=>{clearInterval(release);process.exit(0);},5000);
 }else if(inspector){
  if(scenario==='held-pipe'&&mode==='children'){
   cp.spawn(process.execPath,['-e',"setTimeout(()=>process.stdout.write('[]'),1800);setTimeout(()=>process.exit(0),2200)"],{stdio:['ignore','inherit','inherit']});
@@ -50,7 +57,12 @@ const closed=new Promise(r=>root.once('close',r));let rootClosed=false;void clos
 const ready=new Promise((resolve,reject)=>{root.stdout.once('data',resolve);root.once('error',reject);});
 const op=beginNativeOperation({runDir:dir,operationId:'synthetic-race',runId:'synthetic__a1',taskId:'synthetic-only',profile:'synthetic',serial:'NO-DEVICE',sourceCommit:'a'.repeat(40),owner:'synthetic-owner',activity:'preflight'});
 let elapsed,terminalStable=false,startReturned=false,stopReturned=false,proof,maxChildren=0,scanCount=0,terminalBytes,stopElapsed;
-const stopOnce=async()=>{const start=performance.now();const value=await op.stop(null,0,null);stopElapsed=performance.now()-start;proof=value;stopReturned=true;terminalBytes??=fs.readFileSync(receiptPath(dir,'synthetic-race'));return value;};
+const stopOnce=async()=>{const start=performance.now();const value=await op.stop(null,0,null);stopElapsed=performance.now()-start;proof=value;stopReturned=true;terminalBytes??=fs.readFileSync(receiptPath(dir,'synthetic-race'));
+ if(scenario==='late-watcher'){
+  assert.ok(Number.isFinite(Date.parse(value.ended_at)),'release requires the real terminal receipt');
+  fs.writeFileSync(join(dir,'terminal-release'),value.ended_at);
+ }
+ return value;};
 try{
  await ready;
  const startedAt=performance.now();const starting=op.started(root.pid).then(()=>{startReturned=true;});
@@ -61,6 +73,9 @@ try{
  }else if(scenario==='late-watcher'){
   await waitFor(()=>fs.existsSync(join(dir,'watcher-started')));
   root.kill('SIGKILL');await closed;
+  // Simulate a driver scheduling pause longer than the old 700ms watcher timer.
+  // Late output must be ordered by the terminal receipt, not wall-clock luck.
+  await sleep(900);
   await Promise.all([starting,stopOnce()]);
  }else{
   await starting;
@@ -73,7 +88,8 @@ try{
  }
  elapsed=performance.now()-startedAt;
  const file=receiptPath(dir,'synthetic-race'),before=terminalBytes||fs.readFileSync(file);
- await sleep(scenario==='held-pipe'?2400:scenario==='late-watcher'?1000:scenario==='pending-start'?800:200);
+ if(scenario==='late-watcher')await waitFor(()=>events().some(e=>e.kind==='watcher'&&e.event==='end'));
+ else await sleep(scenario==='held-pipe'?2400:scenario==='pending-start'?800:200);
  terminalStable=before.equals(fs.readFileSync(file));
  const marker=Number(fs.existsSync(join(dir,'stop-marker'))?fs.readFileSync(join(dir,'stop-marker'),'utf8'):Infinity);
  const active=new Set();for(const e of events().filter(e=>e.mode==='children'&&e.at<marker)){
