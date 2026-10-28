@@ -20,6 +20,8 @@ sudo systemctl enable --now zenithjoy-video-api-relay.service
 
 在香港 staging 专用 `/opt/zenithjoy/staging-api/.env` 中配置 `ALI_VIDEO_HTTPS_PROXY=http://100.69.180.117:18241`，由固定 SHA 的正常 staging 发布加载，禁止编辑运行中应用代码。其他服务及生产环境不设置此变量。
 
+代理地址仅接受无用户名、密码、查询参数及路径的 HTTP/HTTPS origin；配置无效时视频服务配置检查返回缺失 `ALI_VIDEO_HTTPS_PROXY`，不会携带阿里密钥发起请求。删除变量恢复直连，不以空值拼接代理 URL。
+
 发布前从香港运行 `bash scripts/deploy/verify-video-api-relay.sh`：不携带密钥，不创建收费任务，检查阿里服务响应、域名/端口/普通 HTTP 拒绝。另从非香港的 tailnet 节点请求同一代理，必须 HTTP 403。发布后还需实际提交并轮询一个小视频直到成功；匿名连通检查不能代替业务验收。
 
 工作空间专属域名需在 `hosts.filter` 添加对应的精确 `域名:443`，再重启代理并重新运行验收。不要放开域名通配符。当前出口不覆盖超分上海 OSS 素材传输。
