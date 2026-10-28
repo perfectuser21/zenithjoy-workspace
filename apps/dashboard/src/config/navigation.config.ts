@@ -118,6 +118,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CompanyProfilePage': () => import('../pages/CompanyProfilePage'),
   // Line 07 — AI 爆款视频翻拍
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
+  'WanPlaygroundPage': () => import('../pages/WanPlaygroundPage'),
+  'VideoUpscalePage': () => import('../pages/VideoUpscalePage'),
   // 2026-06-23 — 业务区总览页（短侧栏下钻：区 → 总览卡片 → 子页）
   'AreaHubPage': () => import('../pages/AreaHubPage'),
   // 2026-06-29 — 智能获客 Step-by-Step 向导（替换 AreaHubPage 6 平级磁贴）
@@ -192,6 +194,12 @@ export const autopilotNavGroups: NavGroup[] = [
     ]
   },
 
+  {
+    title: '员工工具',
+    items: [
+      { path: '/area/video-tools', icon: Video, label: '视频工具', featureKey: 'staff-video-tools', requireStaff: true, component: 'AreaHubPage' },
+    ],
+  },
   // ─── 管理后台（Line 00 运营中枢 + Line 10 客户管理，仅 super-admin）─
   {
     title: '管理',
@@ -249,6 +257,8 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },
+  { path: '/wan-playground', component: 'WanPlaygroundPage', requireAuth: true, requireStaff: true },
+  { path: '/video-upscale', component: 'VideoUpscalePage', requireAuth: true, requireStaff: true },
   // 批量混剪（GP f6f96e17）：素材已打标签 → 选模板分配槽位 → 挑候选 → 渲染成片
   { path: '/mashup', component: 'MashupPage', requireAuth: true },
   { path: '/dashboard/agent', component: 'AgentDownloadPage', requireAuth: true },
@@ -344,8 +354,8 @@ export function filterNavGroups(
     .map(group => ({
       ...group,
       items: group.items.filter(item => {
-        // 检查 feature flag（staff-skill-eval 视为恒启用，无需 instanceConfig）
-        if (item.featureKey !== 'staff-skill-eval' && !isFeatureEnabled(item.featureKey)) return false;
+        // 员工内部工具不依赖客户套餐中的 feature flag，仍需通过下方员工权限检查。
+        if (!['staff-skill-eval', 'staff-video-tools'].includes(item.featureKey) && !isFeatureEnabled(item.featureKey)) return false;
         // 检查超级管理员权限
         if (item.requireSuperAdmin && !isSuperAdmin) return false;
         // 检查员工权限
@@ -370,6 +380,7 @@ export function extractRoutesFromNav(groups: NavGroup[]): RouteConfig[] {
         redirect: item.redirect,
         requireAuth: true,
         requireSuperAdmin: item.requireSuperAdmin,
+        requireStaff: item.requireStaff,
       });
     }
   }

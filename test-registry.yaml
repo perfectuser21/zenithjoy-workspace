@@ -8271,3 +8271,27 @@ agent_suite:
   status: active
   product: AI员工
   note: 完整effects receipt原件与分块/journal链一致性、旧audit可读回且未知不改；sealed纯读与partial恢复分流。
+
+- id: video-tools-provider
+  path: apps/api/src/services/__tests__/ali-video-provider.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: Wan异步任务、VIAPI签名和上海OSS转存、失败不可伪装成功。
+
+- id: video-tools-api
+  path: apps/api/src/routes/__tests__/video-tools.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 员工会话、个人任务隔离、持久恢复、并发幂等和输入边界。
+
+- id: video-tools-ui
+  path: apps/dashboard/src/pages/__tests__/VideoToolsPage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: 两个独立工具、上传提交进度、失败无成片、账号切换隔离。
