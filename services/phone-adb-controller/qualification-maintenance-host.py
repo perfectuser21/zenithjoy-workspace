@@ -31,6 +31,19 @@ def regular(path):
     return value
 
 
+def load_local(name):
+    need(name in ('qualification-maintenance-processes.py', 'qualification-maintenance-device.py'))
+    spec = importlib.util.spec_from_file_location('maintenance_local', HERE / name)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def read_device(scope, request):
+    need(request == {'op': 'device'})
+    return load_local('qualification-maintenance-device.py').collect_device(scope['serial'])
+
+
 def run():
     scope = json.loads(sys.stdin.readline(65537))
     need(set(scope) == {'serial', 'profile', 'owner', 'deadline_seconds'})
@@ -55,9 +68,7 @@ def run():
             owner = lock / 'owner'
             regular(owner)
             return 'original_owner' if owner.read_bytes() == (scope['owner'] + '\n').encode() else 'foreign_owner'
-        spec = importlib.util.spec_from_file_location('maintenance_processes', HERE / 'qualification-maintenance-processes.py')
-        processes = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(processes)
+        processes = load_local('qualification-maintenance-processes.py')
         identity = processes.kernel(os.getpid())
         need(identity and identity['uid'] == os.getuid() and not identity['terminal'])
         emit({'status': 'guard_held', 'local_owner': local_owner(), 'pid': os.getpid(),
@@ -74,10 +85,13 @@ def run():
             if not line:
                 return  # 协调者死去只放开guard，不触碰原owner/quarantine。
             request = json.loads(line)
-            need(set(request) == {'op'})
             if request['op'] == 'status':
+                need(set(request) == {'op'})
                 emit({'status': 'guard_held', 'local_owner': local_owner()})
+            elif request['op'] == 'device':
+                emit(read_device(scope, request))
             elif request['op'] == 'release_exact':
+                need(set(request) == {'op'})
                 if attempted or local_owner() != 'original_owner':
                     emit({'status': 'blocked'})
                     continue
