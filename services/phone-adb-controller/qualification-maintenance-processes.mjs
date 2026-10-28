@@ -25,7 +25,8 @@ export function evaluateProcessCensus(census,scope) {
     const observed=census.observations.find(x=>x.pid===row.pid);
     if(!row.start_identity||!observed||observed.start_identity!==row.start_identity)return blocked('PROCESS_FINAL_IDENTITY_CHANGED');
   }
-  const accepted=new Set(['observer','terminal','read_only_native_observer','read_only_screenshot','outside_supported_program']);
+  // 命令外观本身不是被动角色证明；正式effects适配器还须绑定解释器/ADB实际字节与控制链。
+  const accepted=new Set(['observer','terminal','outside_supported_program']);
   for(const row of census.observations)if(!accepted.has(row.classification))blocked_pids.push(row.pid);
   for(const expected of scope.tracked||[]) {
     const found=census.tracked.filter(x=>x.pid===expected.pid&&x.expected_start_identity===expected.start_identity);
