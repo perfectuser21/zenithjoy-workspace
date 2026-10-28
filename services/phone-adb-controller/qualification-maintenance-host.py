@@ -15,6 +15,7 @@ import sys
 import time
 
 HERE = Path(__file__).resolve().parent
+STAGE = 'guard_setup'
 
 
 def need(value):
@@ -67,6 +68,8 @@ bytes:value.length,data:gzipSync(value).toString('base64')}));"""
 
 
 def read_domain(held, request, identity):
+    global STAGE
+    STAGE = 'domain_authority'
     need(set(request) == {'op', 'scope', 'epoch'} and request['op'] == 'domain')
     scope, epoch = request['scope'], request['epoch']
     need(scope['serial'] == held['serial'] and scope['run_tag'] == held['owner'] and scope['uid'] == os.getuid())
@@ -79,6 +82,7 @@ def read_domain(held, request, identity):
          and epoch['guard_script_path'] == str(HERE / 'qualification-maintenance-host.py')
          and epoch['guard_script_sha256'] == identity['script_sha256'])
     file = HERE / 'qualification-maintenance-domain.mjs'
+    STAGE = 'domain_source'
     regular(file)
     source = file.read_text()
     need(len(source) <= 1024 * 1024)
@@ -89,10 +93,12 @@ def read_domain(held, request, identity):
     namespace = {'__collector_sha256__': hashlib.sha256(code).hexdigest()}
     # 仅同一实际候选内经源字节准入的固定literal；请求不能传code/verified。
     exec(compile(code, str(file), 'exec'), namespace)
+    STAGE = 'domain_collect'
     return namespace['collect_domain'](scope, epoch)
 
 
 def run():
+    global STAGE
     scope = json.loads(sys.stdin.readline(65537))
     need(set(scope) == {'serial', 'profile', 'owner', 'deadline_seconds'})
     need(all(isinstance(scope[k], str) and re.fullmatch(r'[A-Za-z0-9_-]{1,120}', scope[k])
@@ -135,15 +141,19 @@ def run():
                 return  # 协调者死去只放开guard，不触碰原owner/quarantine。
             request = json.loads(line)
             if request['op'] == 'status':
+                STAGE = 'status'
                 need(set(request) == {'op'})
                 emit({'status': 'guard_held', 'local_owner': local_owner()})
             elif request['op'] == 'device':
+                STAGE = 'device'
                 emit(read_device(scope, request))
             elif request['op'] == 'original':
+                STAGE = 'original'
                 emit(read_original(scope, request))
             elif request['op'] == 'domain':
                 emit(read_domain(scope, request, identity))
             elif request['op'] == 'release_exact':
+                STAGE = 'release_exact'
                 need(set(request) == {'op'})
                 if attempted or local_owner() != 'original_owner':
                     emit({'status': 'blocked'})
@@ -168,6 +178,19 @@ def run():
 if __name__ == '__main__':
     try:
         run()
-    except Exception:
-        emit({'status': 'blocked', 'code': 'MAINTENANCE_GUARD_UNPROVEN'})
+    except Exception as error:
+        frames, trace = [], error.__traceback__
+        allowed = {'qualification-maintenance-host.py', 'qualification-maintenance-domain.mjs',
+                   'qualification-maintenance-processes.py', 'qualification-maintenance-device.py', 'adb-process-observation.py'}
+        while trace:
+            name = Path(trace.tb_frame.f_code.co_filename).name
+            if name in allowed:
+                frames.append({'file': name, 'line': trace.tb_lineno})
+            trace = trace.tb_next
+        kind = type(error).__name__
+        if kind not in ('ValueError', 'KeyError', 'TypeError', 'OSError', 'PermissionError', 'FileNotFoundError',
+                        'JSONDecodeError', 'UnicodeDecodeError', 'TimeoutExpired', 'CalledProcessError'):
+            kind = 'Exception'
+        emit({'status': 'blocked', 'code': 'MAINTENANCE_GUARD_UNPROVEN', 'stage': STAGE,
+              'exception_type': kind, 'frames': frames[-6:]})
         sys.exit(1)
