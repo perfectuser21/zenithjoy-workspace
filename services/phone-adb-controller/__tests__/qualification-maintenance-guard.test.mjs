@@ -76,3 +76,9 @@ test('真实private fixture guard握手直接组epoch，固定literal正链不�
  const r=await h.receive();assert.equal(r.status,'observed');assert.equal(r.pid,h.p.pid);
  assert.equal((await h.send('status')).local_owner,'original_owner');
 });
+test('失败stage与静态帧可定位但绝不回显异常message/argv/secret',()=>{
+ const r=spawnSync('python3',['-B','-I',observer],{input:JSON.stringify({serial:'SER;DO_NOT_OUTPUT_SECRET',profile:'p1',owner:'tag',deadline_seconds:1})+'\n',encoding:'utf8'});
+ assert.notEqual(r.status,0);const out=JSON.parse(r.stdout);assert.equal(out.status,'blocked');assert.equal(out.stage,'guard_setup');
+ assert.equal(out.exception_type,'ValueError');assert.ok(out.frames.some(f=>f.file==='qualification-maintenance-host.py'&&f.line>0));
+ assert.ok(!JSON.stringify(out).includes('DO_NOT_OUTPUT_SECRET'));assert.equal(out.message,undefined);
+});
