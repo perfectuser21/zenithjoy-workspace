@@ -68,6 +68,11 @@ export async function readPendingClaimOutcome(pool,input) {
  const audits=(await pool.query('SELECT * FROM zenithjoy.db_audit WHERE id=$1',[s.intent_id])).rows;
  const videos=(await pool.query('SELECT to_jsonb(v) AS row FROM zenithjoy.leadgen_videos v WHERE line_key=$1 AND video_id=$2',[s.line_key,s.video_ids[0]])).rows;
  const v=videos[0]?.row;
+ // 只是此刻未见已提交audit且原claim在；不保证没有in-flight COMMIT。
+ // 后续唯一事务仍先持相同intent advisory lock再查audit，绝不凭此读回重发COMMIT。
+ if(audits.length===0&&videos.length===1&&v.process_status==='处理中:'+s.run_tag&&v.harvest_batch===s.run_tag
+  &&v.judgment_status==='pending'&&v.transcript===null&&v.judgment_config===null&&v.judgment_reason===null)
+  return {status:'db_not_committed',intent_id:s.intent_id,observation:'original_claim_present_no_committed_audit_observed'};
  if(audits.length===1&&auditMatches(audits[0],input)&&videos.length===1&&v.process_status==='待判定'
   &&v.harvest_batch===s.producer_run&&v.judgment_status==='pending'&&v.transcript===null&&v.judgment_config===null&&v.judgment_reason===null
   &&audits[0].detail.after_row_sha256===digest(v)
