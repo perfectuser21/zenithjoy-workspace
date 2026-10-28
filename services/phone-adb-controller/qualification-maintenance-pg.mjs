@@ -2,6 +2,21 @@ import {isDeepStrictEqual} from 'node:util';
 import {digest} from './runtime-definition.mjs';
 const action='qualification_maintenance_return_pending_claim';
 const need=value=>{if(!value)throw Error('MAINTENANCE_PG_SCOPE_CHANGED');};
+// 正式历史producer原快照；不是读取current后拿其自身作恢复基线。
+export async function readHistoricalCompanySnapshot(pool,{authorization:a,company_receipt:r}) {
+ const s=a?.scope,hash=s?.original_evidence?.company_snapshot_sha256;
+ need(a&&s&&a.contract_sha256===digest(s)&&a.original_task_id===s.original_task_id&&/^[a-f0-9]{64}$/.test(hash||''));
+ need(r?.company_id===s.company_id&&r.tenant_id===s.tenant_id&&r.version===s.config_version
+  &&r.policy_id===s.policy_id&&r.run_id===s.run_tag);
+ const rows=(await pool.query('SELECT company_id,tenant_id,version,run_id,source_run,snapshot FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[s.company_id,s.producer_run])).rows;
+ const row=rows[0],snapshot=row?.snapshot;
+ need(rows.length===1&&row.company_id===s.company_id&&row.tenant_id===s.tenant_id&&row.version===s.config_version
+  &&row.run_id===s.producer_run&&row.source_run===null&&snapshot?.company_id===s.company_id
+  &&snapshot.tenant_id===s.tenant_id&&snapshot.version===s.config_version&&snapshot.policy_id===s.policy_id
+  &&snapshot.config_status==='enabled'&&snapshot.runtime_config?.routing?.line_key===s.line_key
+  &&digest(snapshot)===hash&&isDeepStrictEqual(snapshot.product_ids,r.product_ids));
+ return structuredClone(snapshot);
+}
 function context(input,{requireEffects=true}={}) {
  const a=input?.authorization,s=a?.scope;
  need(a&&s&&a.contract_sha256===digest(s)&&a.original_task_id===s.original_task_id
