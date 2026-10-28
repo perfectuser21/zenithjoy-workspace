@@ -71,7 +71,7 @@ test('双机包在无开发树和node_modules的独立目录能冷导入维护ru
  const dir=mkdtempSync(join(tmpdir(),'maintenance-runtime-package-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const names=new Set([...groups.DEVICE_SH_FILES,...groups.DEVICE_NODE_FILES,...groups.DEVICE_PLAN_FILES,...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES,...groups.MMV_JS_FILES,...groups.MMV_PROBE_FILES]);
  for(const name of names){const out=join(dir,name);mkdirSync(dirname(out),{recursive:true});writeFileSync(out,readFileSync(service+'/'+name));}
- const script="await import(new URL('./qualification-maintenance-runtime.mjs',process.argv[1]));console.log('MAINTENANCE_RUNTIME_COLD_IMPORT_OK');";
- const child=spawnSync(process.execPath,['--input-type=module','-e',script,new URL('file://'+dir+'/').href],{encoding:'utf8',timeout:15000,cwd:dir,env:{PATH:process.env.PATH}});
+ const script=join(dir,'cold-import.mjs');writeFileSync(script,"await import('./qualification-maintenance-runtime.mjs');console.log('MAINTENANCE_RUNTIME_COLD_IMPORT_OK');");
+ const child=spawnSync(process.execPath,[script],{encoding:'utf8',timeout:15000,cwd:dir,env:{PATH:process.env.PATH}});
  assert.equal(child.status,0,child.stderr);assert.match(child.stdout,/MAINTENANCE_RUNTIME_COLD_IMPORT_OK/);
 });
