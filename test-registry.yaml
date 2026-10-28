@@ -8135,3 +8135,115 @@ agent_suite:
   status: active
   product: AI员工
   note: canonical Task/委托前后读取、显式heartbeat保持原期限；纯readback不续租，claim epoch漂移拒绝。
+
+- id: qualification-maintenance-beforejudge
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-beforejudge.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 冻结完整输入、原始TSV与七native历史分支交叉核；只证judge前上传失败一致，不冒停止证明。
+
+- id: qualification-maintenance-bytes
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-bytes.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 候选部署文件真实FS摘要、权限、符号链接与变动检测；不安装或访问手机。
+
+- id: qualification-maintenance-candidate
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-candidate.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 正常双机六GET与实际文件观测绑定；只验维护候选来源，不冒整条业务已验收。
+
+- id: qualification-maintenance-commander
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-commander.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 精确原owner五returned原件、pending与完整child分页协议；不把Gateway无active当全机无worker。
+
+- id: qualification-maintenance-device
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-device.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实TCPstub覆盖固定5037白名单、短读与原字段解析；只读设备观察、未知格式拒绝，不操作UI。
+
+- id: qualification-maintenance-domain
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-domain.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 固定原运行域、完整birth与无birth ESRCH、实际解释器和依赖字节绑定、严格派生argv及独立MMV域；非全OS停止。
+
+- id: qualification-maintenance-journal
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-journal.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实FS半写和rename/fsync故障、完整epoch、祖先目录durability；组合实际close状态机保未知且不重PG，外部DB和设备用边界fixture。
+
+- id: qualification-maintenance-mmv
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-mmv.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 固定353 RPC的真实kernel与cwd/argv覆盖；活原tag负例及未知/身份漂移拒绝，不回显argv。
+
+- id: qualification-maintenance-original
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-original.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 旧launch与ACK、所有冻结/部署文件、完整native及活动事件原件核验；读回保UNKNOWN，不写旧run或启动业务。
+
+- id: qualification-maintenance-program
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-program.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实脚本位置/inline元数据解析及FIFO边界；参数路径不冒代码身份，源码与凭据不回显。
+
+- id: qualification-maintenance-role-diagnostics
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-role-diagnostics.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 只读代码/cwd/launchd诊断格式和元数据范围；诊断不授予effects或资源释放权限。
+
+- id: qualification-maintenance-runtime
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-runtime.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 公开入口固定候选路径与原录音恢复UID/PID/PIID及实际reader字节匹配，不靠observed标签。
+
+- id: qualification-maintenance-service
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-service.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 公开CLI接真实service的结构化拒绝与非零退出；缺授权不把返回对象当成功，不执行现场维护。
+
+- id: qualification-maintenance-transport
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-transport.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实子进程单请求与流协议、EOF/提前退出/无响应的未知保护；固定xian和候选路径，不发信号或业务动作。
