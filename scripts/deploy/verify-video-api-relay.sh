@@ -11,6 +11,8 @@ probe() {
 probe https://dashscope.aliyuncs.com/api/v1/tasks/video-tools-connectivity-probe 401
 probe https://videoenhan.cn-shanghai.aliyuncs.com/ 400
 probe https://viapiutils.cn-shanghai.aliyuncs.com/ 404
+probe https://viapi-customer-temp.oss-cn-shanghai.aliyuncs.com/ 403
+probe https://vigen-invi.oss-cn-shanghai.aliyuncs.com/ 403
 # CONNECT to an unrelated destination or port must fail at the relay.
 for url in https://example.com/ https://dashscope.aliyuncs.com:8443/; do
   set +e

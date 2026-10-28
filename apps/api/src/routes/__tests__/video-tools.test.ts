@@ -15,12 +15,14 @@ describe('video tools API smoke: staff upload, submit, resume and download', () 
   let directory: string;
   let state: 'pending' | 'succeeded' | 'failed';
   let submissions: number;
+  const downloadResult=vi.fn<(url:string)=>Promise<Response>>(async()=>new Response('completed-video'));
   const makeApp = () => {
     const provider = {
       getConfiguration: () => ({wan:{configured:true,missing:[]},upscale:{configured:true,missing:[]}}),
       submitWan: async () => { submissions++; return {taskId:`task-${submissions}`}; },
       submitUpscale: async () => { submissions++; return {taskId:`upscale-${submissions}`}; },
       fetchTask: async () => ({status:state,...(state==='succeeded'?{videoUrl:'https://media.example.com/result.mp4'}:{}),...(state==='failed'?{error:'生成失败，请检查素材'}:{})}),
+      downloadResult,
     };
     const app = express();
     app.use(express.json());
@@ -30,6 +32,7 @@ describe('video tools API smoke: staff upload, submit, resume and download', () 
   beforeEach(async()=>{
     directory=await mkdtemp(join(tmpdir(),'video-tools-test-'));
     state='pending';submissions=0;
+    downloadResult.mockClear();
     vi.stubEnv('STAFF_EMAILS','alice@example.com,bob@example.com');
   });
   afterEach(async()=>{vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true});});
@@ -39,6 +42,15 @@ describe('video tools API smoke: staff upload, submit, resume and download', () 
     expect((await request(app).post('/api/video-tools/jobs').set('X-User-Email','alice@example.com').send({kind:'wan',prompt:'海边日落'})).status).toBe(401);
     expect((await request(app).post('/api/video-tools/jobs').set('Cookie','user=outsider').send({kind:'wan',prompt:'海边日落'})).status).toBe(403);
     expect(submissions).toBe(0);
+  });
+  it('downloads completed results through the provider transport while retaining account isolation',async()=>{
+    const app=makeApp();const created=await request(app).post('/api/video-tools/jobs').set('Cookie','user=alice').send({kind:'upscale',videoUrl:'https://source.example.com/video.mp4'});state='succeeded';
+    expect((await request(app).get(`/api/video-tools/jobs/${created.body.id}/download`).set('Cookie','user=bob')).status).toBe(404);
+    expect(downloadResult).not.toHaveBeenCalled();
+    const result=await request(app).get(`/api/video-tools/jobs/${created.body.id}/download`).set('Cookie','user=alice');
+    expect(result.status).toBe(200);expect(result.headers['content-type']).toContain('video/mp4');
+    expect(Buffer.from(result.body).toString()).toBe('completed-video');
+    expect(downloadResult).toHaveBeenCalledExactlyOnceWith('https://media.example.com/result.mp4');
   });
   it('submits once and recovers the same task after a server restart without resubmitting',async()=>{
     const body={kind:'wan',prompt:'海边日落',resolution:'480P',duration:2,clientRequestId:'one-click'};

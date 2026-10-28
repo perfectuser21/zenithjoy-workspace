@@ -76,6 +76,26 @@ export class AliVideoProvider {
     } catch { return null; }
   }
 
+  private proxyOptions(enabled = true): { dispatcher?: ProxyAgent } {
+    const proxy = this.proxyUrl();
+    if (proxy === null) throw new AliVideoProviderError('PROVIDER_NOT_CONFIGURED', '视频服务连接配置无效，请联系管理员', 503);
+    if (!enabled || !proxy) return {};
+    this.apiProxy ??= new ProxyAgent(proxy);
+    return { dispatcher: this.apiProxy };
+  }
+
+  private mediaRequest(url: string, init: RequestInit): Promise<Response> {
+    const target = new URL(url);
+    const shanghaiOss = target.protocol === 'https:' && !target.username && !target.password && !target.port && /^[a-z0-9-]+\.oss-cn-shanghai\.aliyuncs\.com$/.test(target.hostname);
+    return this.transport(url, { ...init, ...this.proxyOptions(shanghaiOss) });
+  }
+
+  /** The URL comes from a completed provider task and is validated by the route. */
+  async downloadResult(url: string): Promise<Response> {
+    // Result streaming includes client backpressure; large files can take several minutes.
+    return this.mediaRequest(url, { signal: AbortSignal.timeout(600000), redirect: 'error' });
+  }
+
   private wanBase(): string | null {
     const explicit = this.env.DASHSCOPE_BASE_URL?.trim();
     const workspace = this.env.DASHSCOPE_WORKSPACE_ID?.trim();
@@ -112,10 +132,8 @@ export class AliVideoProvider {
   private async request(url: string, init: RequestInit): Promise<JsonObject> {
     let response: Response;
     try {
-      const proxy = this.proxyUrl();
-      if (proxy) this.apiProxy ??= new ProxyAgent(proxy);
       // Only fixed Alibaba API requests use CONNECT; never change the global dispatcher.
-      const options = { ...init, ...(this.apiProxy ? { dispatcher: this.apiProxy } : {}), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: 'error' as const };
+      const options = { ...init, ...this.proxyOptions(), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: 'error' as const };
       response = await this.transport(url, options);
     } catch {
       throw new AliVideoProviderError('PROVIDER_UNREACHABLE', '暂时无法连接阿里服务，请稍后重试');
@@ -207,7 +225,7 @@ export class AliVideoProvider {
       const url = `https://${bucket}.oss-cn-shanghai.aliyuncs.com/${key}`;
       const stream = createReadStream(path);
       try {
-        const uploaded = await this.transport(url, {
+        const uploaded = await this.mediaRequest(url, {
           method: 'PUT', headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(bytes), Date: date, Authorization: `OSS ${accessId}:${signature}`, ...(securityToken ? { 'x-oss-security-token': securityToken } : {}) },
           body: stream as unknown as RequestInit['body'], duplex: 'half', redirect: 'error', signal: AbortSignal.timeout(120000),
         } as RequestInit);
