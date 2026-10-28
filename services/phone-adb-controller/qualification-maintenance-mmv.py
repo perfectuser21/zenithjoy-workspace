@@ -20,12 +20,16 @@ def need(value):
 
 
 def parse_cwds(raw):
-    result, pid = {}, None
+    result, pid, descriptor = {}, None, False
     for line in raw.splitlines():
         if line.startswith('p') and line[1:].isdigit():
             need(pid is None or pid in result)
             pid = int(line[1:])
             need(pid not in result)
+            descriptor = False
+        elif line == 'fcwd':
+            need(pid is not None and pid not in result and not descriptor)
+            descriptor = True
         elif line.startswith('n'):
             need(pid is not None and pid not in result and line[1:].startswith('/'))
             result[pid] = line[1:]
