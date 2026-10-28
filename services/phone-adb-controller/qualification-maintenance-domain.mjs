@@ -34,6 +34,11 @@ function admittedRoles(c,roles,epoch,original,observation) {
  const fileMatch=(info,name,sha=expected.get(name))=>!!sha&&info.files?.some(f=>basename(f.realpath)===name&&f.sha256===sha&&f.uid===c.uid);
  const sameKernel=(r,d)=>d?.state==='observed'&&d.kernel.pid===r.pid&&d.kernel.start_identity===r.start_identity
   &&d.kernel.ppid===r.ppid&&d.argv_sha256===r.argv_sha256&&d.executable?.sha256;
+ const guardImage=roles[String(epoch.guard_pid)]?.executable;
+ const samePython=d=>d.executable?.sha256===guardImage?.sha256&&d.executable?.realpath===guardImage?.realpath&&d.executable?.uid===guardImage?.uid;
+ const systemShell=d=>d.executable.uid===0&&['/bin/bash','/bin/zsh','/bin/sh'].includes(d.executable.realpath);
+ const establishedNode=d=>d.executable.uid===c.uid&&d.executable.realpath==='/opt/homebrew/Cellar/node/26.0.0/bin/node'
+  &&d.executable.sha256==='73cc3e9b5d2b1753ea3395a5bf39787ef85f20f048a0f0744761860b81b8fbdb';
  const rootBinding=(r,d)=>d.launchd?.pid===r.pid&&d.launchd.plist?.sha256&&[0,c.uid].includes(d.launchd.plist.uid)
   &&r.ppid===1&&r.start_ms<original.launch_result.started_at_ms;
  for(const r of rows.values()) {
@@ -49,18 +54,19 @@ function admittedRoles(c,roles,epoch,original,observation) {
   if(r.classification==='outside_supported_program'&&!potential.test(basename(r.executable||''))){accepted.set(r.pid,'outside_fixed_program');continue;}
   if(!sameKernel(r,d))continue;
   const label=d.launchd?.label,policy=externalRoots[label];
-  if(policy&&rootBinding(r,d)&&fileMatch(d,policy.name,policy.sha||expected.get(policy.name))
+  if(policy&&rootBinding(r,d)&&(policy.name==='adb-host-service.py'?samePython(d):policy.name==='codex-bridge.cjs'?establishedNode(d):systemShell(d))
+   &&fileMatch(d,policy.name,policy.sha||expected.get(policy.name))
    &&r.program?.script?.sha256===(policy.sha||expected.get(policy.name))
    &&(d.launchd.argv_sha256===r.argv_sha256||d.launchd.target?.sha256===r.program.script.sha256)) {
    const dependencies=policy.name==='phone-wall-push.sh'?['wall-lib.sh','adb-managed-client.py','adb-existing-route.py']:policy.name==='adb-host-service.py'?['adb-existing-route.py']:[];
    if(dependencies.every(name=>fileMatch(d,name)))accepted.set(r.pid,policy.name);
   }
-  if(label==='ai.openclaw.node'&&rootBinding(r,d)&&d.launchd.entry?.script?.sha256==='08abc38cdc39727ed8580697adac8004bbac7ee7647c9d3d3c96a7fe403cf75a'
+  if(label==='ai.openclaw.node'&&rootBinding(r,d)&&establishedNode(d)&&d.launchd.entry?.script?.sha256==='08abc38cdc39727ed8580697adac8004bbac7ee7647c9d3d3c96a7fe403cf75a'
    &&d.launchd.wrapper_target?.sha256&&/openclaw/.test(d.launchd.wrapper_target.realpath||'')
    &&d.launchd.wrapper_executable?.sha256===d.executable.sha256&&d.shape?.kind==='node_title')accepted.set(r.pid,'outside_353_node_service');
   if(d.shape?.kind==='ssh_forward'&&d.executable.uid===0&&d.executable.realpath==='/usr/bin/ssh')accepted.set(r.pid,'forward_only_transport');
   if(d.shape?.kind==='sleep'&&d.executable.uid===0&&d.executable.realpath==='/bin/sleep')accepted.set(r.pid,'non_executing_sleep');
-  if(r.classification==='read_only_native_observer'&&r.program?.kind==='inline'
+  if(r.classification==='read_only_native_observer'&&samePython(d)&&r.program?.kind==='inline'
    &&['a6a8fab5ecc72f1f15e21cafeb27744488cf5495a52db735932d17d6d2aeebd2','cecd8eb83bd1696e1f877bcaf43a4fb1659b839531b800f4ea528ca1abfebdcb'].includes(r.program.code_sha256))accepted.set(r.pid,'fixed_readonly_observer');
   if(observation.ancestors?.some(a=>a.pid===r.pid&&a.start_identity===r.start_identity)
    &&d.executable.uid===0&&['/usr/libexec/sshd-session','/usr/sbin/sshd'].includes(d.executable.realpath))accepted.set(r.pid,'current_guard_system_transport');
@@ -81,6 +87,7 @@ function admittedRoles(c,roles,epoch,original,observation) {
    if(parentRole==='phone-wall-push.sh'&&['adb_read','perl_adb_read'].includes(d.shape?.kind)) {
     const server=[...accepted].find(([,role])=>role==='sole_adb_server');
     if(server&&(d.shape.kind==='perl_adb_read'&&d.executable.uid===0&&d.executable.realpath==='/usr/bin/perl'
+      &&d.inner_executable?.sha256===roles[String(server[0])]?.executable.sha256&&d.inner_executable?.realpath===roles[String(server[0])]?.executable.realpath
      ||d.shape.kind==='adb_read'&&d.executable.sha256===roles[String(server[0])]?.executable.sha256)){accepted.set(r.pid,'readonly_wall_adb');changed=true;continue;}
    }
    if(parentRole==='log-stream-push.sh'&&d.shape?.kind==='log_sink'&&d.executable.uid===0&&d.executable.realpath==='/usr/bin/ssh'){accepted.set(r.pid,'append_only_log_transport');changed=true;}
