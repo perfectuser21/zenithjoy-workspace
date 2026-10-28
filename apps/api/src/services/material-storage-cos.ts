@@ -35,6 +35,9 @@ export class CosMaterialStorage implements MaterialStorage {
     this.cos = new COS({
       SecretId: env.COS_SECRET_ID as string,
       SecretKey: env.COS_SECRET_KEY as string,
+      UseAccelerate: env.COS_USE_ACCELERATE === 'true',
+      Timeout: 30000,
+      ChunkRetryTimes: 1,
     });
   }
 
