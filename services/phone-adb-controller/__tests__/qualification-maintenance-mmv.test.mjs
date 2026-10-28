@@ -36,11 +36,23 @@ for before,after in [({'pid':123,'start_identity':'1:2'},{'pid':123,'start_ident
 `));
 test('真实内核存活解释器原tag输入必被有限域观察捕获，不输出其argv正文',async()=>{
  const tag='qualification_mmv_scoped_fixture';
- const child=spawn('/opt/homebrew/bin/python3',['-B','-I','-c','import time;time.sleep(3)',tag],{stdio:'ignore'});
- const exit=new Promise(resolve=>child.once('exit',resolve));await new Promise(resolve=>child.once('spawn',resolve));
- try{const {readMmvRpcClosure}=await import('../qualification-maintenance-mmv.mjs');
+ const child=spawn('python3',['-B','-I','-c','import time;time.sleep(3)',tag],{stdio:'ignore'});
+ const exit=new Promise(resolve=>child.once('exit',resolve));await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
+ try{const {createMmvRpcReader}=await import('../qualification-maintenance-mmv.mjs');
+  const readMmvRpcClosure=createMmvRpcReader('python3');
   const result=readMmvRpcClosure({consumer_source:'353b910f11ce3852b2ef69c8ead5c37e97850b4a',run_tag:tag});
   assert.equal(result.status,'blocked');assert.ok(result.matches.some(x=>x.pid===child.pid));
   assert.ok(!JSON.stringify(result).includes('time.sleep'));assert.match(result.coverage_sha256,/^[a-f0-9]{64}$/);
  }finally{await exit;assert.equal(child.signalCode,null);}
 });
+test('真实只读RPC reader内部依赖可在Linux CI使用现有解释器，公开生产默认不接受请求参数',async()=>{
+ const {createMmvRpcReader}=await import('../qualification-maintenance-mmv.mjs');
+ assert.equal(typeof createMmvRpcReader,'function');
+});
+test('固定平台cwd观察命令使用系统实际路径，未知平台保持拒绝',()=>run(`
+assert m.cwd_command('darwin',501)==['/usr/sbin/lsof','-a','-u','501','-d','cwd','-Fpn']
+assert m.cwd_command('linux',1001)==['/usr/bin/lsof','-a','-u','1001','-d','cwd','-Fpn']
+try:m.cwd_command('other',1001)
+except ValueError:pass
+else:raise AssertionError('unknown platform accepted')
+`));
