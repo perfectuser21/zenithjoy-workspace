@@ -51,6 +51,13 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
     const after=await rows(),expected=structuredClone(before);Object.assign(expected.find(x=>x.video_id===vid),{process_status:'待判定',harvest_batch:s.producer_run});assert.deepEqual(after,expected);
     const audits=(await scoped.query('SELECT * FROM zenithjoy.db_audit')).rows;assert.equal(audits.length,1);assert.equal(audits[0].id,s.intent_id);assert.equal(audits[0].detail.contract_sha256,authorization.contract_sha256);
    });
+   await t.test('sealed重入可只核已提交审计，不把后续合法业务行变化洗回旧状态',async()=>{
+    await init();await api.restorePendingClaim(scoped,input);assert.equal(typeof api?.readCommittedMaintenanceAudit,'function');
+    await scoped.query("UPDATE zenithjoy.leadgen_videos SET process_status='处理中:later-run' WHERE video_id=$1",[vid]);
+    const before=await rows(),r=await api.readCommittedMaintenanceAudit(scoped,input);
+    assert.equal(r.status,'audit_committed');assert.equal(r.effects_receipt_sha256,input.effects_receipt_sha256);
+    assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'blocked');assert.deepEqual(await rows(),before);
+   });
    await t.test('未见已提交audit且原精确claim仍在，只报告可检查前态不冒已提交',async()=>{
     await init();const before=await rows();assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'db_not_committed');assert.deepEqual(await rows(),before);
     await scoped.query("UPDATE zenithjoy.leadgen_videos SET process_status='处理中:foreign' WHERE video_id=$1",[vid]);
