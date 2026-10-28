@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {digest} from '../runtime-definition.mjs';
 import {processObserverDigest} from '../qualification-maintenance-processes.mjs';
 import {mmvRpcObserverDigest} from '../qualification-maintenance-mmv.mjs';
@@ -129,4 +130,40 @@ test('实际collector在枚举已证父UID域外时不追kernel身份，权限�
 });
 test('本UID父身份未知仍然拒绝，不能把祖先越域修复变成一概忽略',()=>{
  const r=ancestorFixture('same');assert.notEqual(r.status,0);assert.match(r.stderr,/PermissionError/);
+});
+test('真实部署plist的受限PATH-export/bare-tilde及Python版本名能派生精确脚本目标',()=>{
+ const code=String.raw`import base64,json,sys,tempfile,plistlib
+from pathlib import Path
+ns={};exec(base64.b64decode(sys.argv[1]),ns)
+with tempfile.TemporaryDirectory(prefix='launch-target-') as root:
+ home=Path(root);(home/'bin-harvest').mkdir()
+ for name in ['phone-wall-push.sh','log-stream-push.sh','host.py']:(home/'bin-harvest'/name).write_text('# source fixture\n')
+ specs=[plistlib.loads(x.encode())['ProgramArguments'] for x in json.load(sys.stdin)]
+ specs.append(['/opt/homebrew/Python',str(home/'bin-harvest/host.py'),'run'])
+ print(json.dumps([Path(x['realpath']).name if x else None for x in [ns['exec_target'](args,home) for args in specs]]))`;
+ const xml=['com.zenithjoy.phonewallpush.plist','com.zenithjoy.logstreampush.plist'].map(name=>readFileSync(new URL('../'+name,import.meta.url),'utf8'));
+ const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify(xml),encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),['phone-wall-push.sh','log-stream-push.sh','host.py']);
+});
+test('Node环境wrapper的$@只含脚本后参数，不能把wrapper自己当将执行的Node',()=>{
+ const code=String.raw`import base64,hashlib,json,os,sys,tempfile,types,plistlib
+from pathlib import Path
+ns={'__collector_sha256__':'fixture'};exec(base64.b64decode(sys.argv[1]),ns)
+with tempfile.TemporaryDirectory(prefix='node-wrapper-') as root:
+ home=Path(root);guard=home/'qualification-maintenance-host.py';guard.write_text('# guard fixture\n');sys.argv[0]=str(guard.resolve());sys.platform='darwin';ns['Path'].home=staticmethod(lambda:home)
+ wrapper=home/'.openclaw/service-env/ai.openclaw.node-env-wrapper.sh';wrapper.parent.mkdir(parents=True);wrapper.write_text('#!/bin/sh\nexec "$@"\n')
+ script=home/'openclaw/dist/index.js';script.parent.mkdir(parents=True);script.write_text('// fixture entry\n')
+ args=['/bin/sh',str(wrapper),sys.executable,str(script),'node','run'];plist=home/'Library/LaunchAgents/ai.openclaw.node.plist';plist.parent.mkdir(parents=True);plist.write_bytes(plistlib.dumps({'ProgramArguments':args}))
+ own={'pid':os.getpid(),'uid':os.getuid(),'ppid':42,'pgid':os.getpid(),'start_identity':'1700000000:1','terminal':False};child={'pid':777,'uid':os.getuid(),'ppid':1,'pgid':777,'start_identity':'1700000000:2','terminal':False,'executable':sys.executable,'program':{'kind':'unclassified'}}
+ def kernel(pid):return own if pid==os.getpid() else child
+ def load(m):
+  m.kernel=kernel;m.args=lambda pid:(sys.executable,[sys.executable] if pid==os.getpid() else ['openclaw-node'])
+  m.collect=lambda scope:{'observations':[child],'enumerated':[{'pid':42,'uid':os.getuid()+1}],'final_enumerated':[]}
+  m.describe_program=lambda *a:{'kind':'script','script':ns['file_info'](wrapper)}
+ ns['importlib'].util.spec_from_file_location=lambda *a:types.SimpleNamespace(loader=types.SimpleNamespace(exec_module=load));ns['importlib'].util.module_from_spec=lambda *a:types.SimpleNamespace()
+ ns['subprocess'].run=lambda a,**kw:types.SimpleNamespace(returncode=0 if a==['/bin/launchctl','list'] else 1,stdout='777 0 ai.openclaw.node\n' if a==['/bin/launchctl','list'] else '')
+ ctx={'guard_pid':os.getpid(),'guard_start_identity':own['start_identity'],'guard_script_path':str(guard.resolve()),'guard_script_sha256':hashlib.sha256(guard.read_bytes()).hexdigest()}
+ scope={'uid':os.getuid(),'run_tag':'old','run_dir':'/old/run','runtime_root':'/old/run/runtime'}
+ d=ns['collect_domain'](scope,ctx)['roles']['777']['launchd'];print(json.dumps({'target':d['wrapper_target']['realpath']==str(script.resolve()),'executable':d['wrapper_executable']['realpath']==str(Path(sys.executable).resolve())}))`;
+ const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{target:true,executable:true});
 });
