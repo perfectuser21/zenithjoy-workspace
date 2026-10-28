@@ -21,7 +21,7 @@ export async function closeMaintenanceEpoch(io) {
     need(['db_not_committed','db_committed'].includes(prior?.status));
     const journal=await io.readJournal();need(Array.isArray(journal));
     if(prior.status==='db_not_committed')need(!journal.some(r=>
-     ['db_intent','commit_unknown','db_committed','local_release_intent','local_release_unknown','local_released','central_release_intent','central_release_unknown','closed'].includes(r.phase)));
+     ['journal_incomplete','db_intent','commit_unknown','db_committed','local_release_intent','local_release_unknown','local_released','central_release_intent','central_release_unknown','closed'].includes(r.phase)));
     // 无已提交审计时任何提前free都不属于本状态机，不能补写或伪补资源身份。
     if(prior.status==='db_not_committed')need(local==='original_owner'&&central==='original_owner');
     if(local==='original_owner')need(central==='original_owner');
