@@ -41,6 +41,7 @@ test('完整ps识别脱离原host名单的设备capture；未知表头不作无�
 base='UID PID PPID NAME\\nu0_a61 13732 1 com.ss.android.ugc.aweme\\nshell 200 1 ps\\n'
 assert m.parse_processes(base)['capture_pids']==[]
 assert m.parse_processes(base+'shell 399 1 com.genymobile.scrcpy.Server\\n')['capture_pids']==[399]
+assert m.parse_processes(base+'shell 400 1 app_process / com.genymobile.scrcpy.Server\\n')['capture_pids']==[400]
 for raw in ['', 'PID NAME\\n399 scrcpy\\n',base+'malformed\\n']:
  try:m.parse_processes(raw)
  except ValueError:pass
