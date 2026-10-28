@@ -80,6 +80,7 @@ export default function DynamicRouter({ children }: DynamicRouterProps) {
           redirect: item.redirect,
           requireAuth: true,
           requireSuperAdmin: item.requireSuperAdmin,
+          requireStaff: item.requireStaff,
         });
       }
     }
