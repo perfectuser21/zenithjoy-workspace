@@ -17,7 +17,7 @@ function input() {
  // Original capture remains immutable in the compressed fixture; this is not a fresh device proof.
  f.observation.service_policy={path:'/Users/jinnuoshengyuan/.config/zenithjoy/adb-service.json',realpath:'/Users/jinnuoshengyuan/.config/zenithjoy/adb-service.json',uid:501,mode:0o600,
   sha256:r.config_sha256['/Users/jinnuoshengyuan/.config/zenithjoy/adb-service.json']};
- Object.assign(f.observation.roles['14896'].launchd,{domain:'system',target_name:'system/com.zenithjoy.adb-host',system_pid:14896});
+ Object.assign(f.observation.roles['14896'].launchd,{domain:'system',target_name:'system/com.zenithjoy.adb-host',system_pid:14896,system_argv_sha256:r.launchd.argv_sha256});
  f.observation.collector_sha256=DOMAIN_COLLECTOR_SHA256;
  return {...f,serviceRecovery:{authorization,task:t}};
 }
@@ -101,4 +101,12 @@ test('the exact collector proves actual system job argv, rejects gui/name/PID lo
  for(const changed of [stdout.replace('system/','gui/501/'),stdout.replace('pid = 14896','pid = 26044'),stdout.replace('\n\t\trun\n','\n\t\tstatus\n')]) {
   const q=spawnSync('python3',['-B','-I','-c',code,m.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify({stdout:changed,argv}),encoding:'utf8'});assert.notEqual(q.status,0);
  }
+});
+
+for(const [name,pid]of[['supervisor',14896],['server',14898]])test(name+' cannot append arguments while retaining the same source target',()=>{
+ const f=input(),r=f.observation.census.observations.find(p=>p.pid===pid);r.argv_sha256='e'.repeat(64);f.observation.roles[String(pid)].argv_sha256=r.argv_sha256;
+ assert.equal(replay(f).status,'blocked');
+});
+test('system binding cannot claim the same PID with different real ProgramArguments',()=>{
+ const f=input();f.observation.roles['14896'].launchd.system_argv_sha256='e'.repeat(64);assert.equal(replay(f).status,'blocked');
 });
