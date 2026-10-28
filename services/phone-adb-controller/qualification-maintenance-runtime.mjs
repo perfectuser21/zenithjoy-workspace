@@ -1,8 +1,6 @@
-import {readFileSync,lstatSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
-import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
-import {createRequire} from 'node:module';
 import {digest,canonical} from './runtime-definition.mjs';
 import {sameMaintenanceAuthorityEpoch} from './qualification-maintenance-authority.mjs';
 import {readMaintenanceAuthority,maintenanceBrainRequest} from './qualification-maintenance-brain.mjs';
@@ -18,36 +16,25 @@ import {readHistoricalCompanySnapshot,readPendingClaimOutcome,restorePendingClai
 import {readMaintenanceJournal,appendMaintenanceJournal} from './qualification-maintenance-journal.mjs';
 import {appendEffectReceipt,readHistoricalEffectProof,observeSealedMaintenanceEpoch} from './qualification-maintenance-proof.mjs';
 import {closeMaintenanceEpoch} from './qualification-maintenance-close.mjs';
+import {openMaintenanceDatabase} from './qualification-maintenance-database.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const need=(v,code='MAINTENANCE_RUNTIME_UNPROVEN')=>{if(!v)throw Error(code);};
 export async function closeRuntimeMaintenance(authority,{sealed,io}) {
  const result=await observeSealedMaintenanceEpoch(authority,sealed);
  return result.status==='not_sealed'?closeMaintenanceEpoch(io):result;
 }
-function productionPool() {
- // 不继承开发会话PGHOST/PGDATABASE；与原正式RPC使用同一私有凭据源。
- const file=join(homedir(),'.credentials/zenithjoy-db.env'),st=lstatSync(file);
- need(st.isFile()&&!st.isSymbolicLink()&&st.uid===process.getuid()&&(st.mode&0o777)===0o600);
- const config={};
- for(const line of readFileSync(file,'utf8').split('\n')){
-  const m=line.match(/^(?:export )?(DATABASE_URL|PGHOST|PGPORT|PGUSER|PGPASSWORD|PGDATABASE)=(.*)$/);
-  if(m){need(!Object.hasOwn(config,m[1]));config[m[1]]=m[2].trim().replace(/^(['"])(.*)\1$/,'$2');}
- }
- let connection;
- if(config.DATABASE_URL){const url=new URL(config.DATABASE_URL);need(['postgres:','postgresql:'].includes(url.protocol)&&url.pathname==='/zenithjoy');connection={connectionString:config.DATABASE_URL};}
- else{need(config.PGHOST&&config.PGUSER&&config.PGPASSWORD&&(!config.PGDATABASE||config.PGDATABASE==='zenithjoy'));connection={host:config.PGHOST,user:config.PGUSER,password:config.PGPASSWORD,port:Number(config.PGPORT||5432),database:'zenithjoy'};}
- let Pool;
- for(const base of [join(homedir(),'.openclaw/leadgen-scripts/package.json'),join(homedir(),'.openclaw/package.json'),import.meta.url]){
-  try{Pool=createRequire(base)('pg').Pool;break;}catch{}
- }
- need(Pool);return new Pool({...connection,max:2,connectionTimeoutMillis:5000,query_timeout:10000,application_name:'qualification-maintenance'});
-}
 export async function createMaintenanceRuntime({authority:initial,verb}) {
  const scope=initial?.scope;
  need(['preflight','close','readback'].includes(verb)&&initial?.contract_sha256===digest(scope));
  need(here===candidateRuntimeRoot('mmv',scope.maintenance_source.commit),'MAINTENANCE_RUNTIME_NOT_INSTALLED');
- let peer,original,snapshot,pool,lastAuthority=initial,lastEvidence,candidateProof;
- const db=()=>pool??=productionPool();
+ let peer,original,snapshot,databasePromise,lastAuthority=initial,lastEvidence,candidateProof,databaseReceipts=[];
+ const db=async()=>{
+  const handle=await(databasePromise??=openMaintenanceDatabase(initial));databaseReceipts=handle.identity_receipts;return handle.pool;
+ };
+ const closeDatabase=async()=>{
+  if(databasePromise){const handle=databasePromise;databasePromise=undefined;await(await handle).close();}
+ };
+ const identities=()=>structuredClone(databaseReceipts);
  const authority=async()=>{
   let a=await readMaintenanceAuthority(initial.maintenance_task_id,{renew:false});
   need(sameMaintenanceAuthorityEpoch(initial,a));
@@ -63,7 +50,7 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
  };
  const baseline=async()=>{
   if(!original)await currentOriginal();
-  snapshot=await readHistoricalCompanySnapshot(db(),{authorization:initial,company_receipt:original.company_receipt});return snapshot;
+  snapshot=await readHistoricalCompanySnapshot(await db(),{authorization:initial,company_receipt:original.company_receipt});return snapshot;
  };
  const dbInput=async()=>({authorization:initial,expected_snapshot:snapshot||await baseline()});
  const readCentral=async()=>{
@@ -89,6 +76,7 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
    readOriginal:currentOriginal,readCommander:()=>readCommanderClosure(scope),readMmv:()=>readMmvRpcClosure(scope),
    readDevice:()=>peer.request({op:'device'}),
    readDomain:o=>peer.request({op:'domain',scope:originalExecutionScope(o,peer.identity.uid),epoch}),retainEvidence,
+   readDatabaseIdentities:identities,
    retainReceipt:receipt=>appendEffectReceipt(initial,receipt)});
   return lastEvidence;
  };
@@ -97,17 +85,18 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
   try{
    need(peer.identity.script_sha256===digest(readFileSync(join(here,'qualification-maintenance-host.py'))));
    return await fn();
-  }finally{try{await peer.close();}finally{peer=undefined;if(pool){await pool.end();pool=undefined;}}}
+  }finally{try{await peer.close();}finally{peer=undefined;await closeDatabase();}}
  };
  const io={authority,candidate,withGuard,effects,
   readDb:async()=>{
-   const r=await readPendingClaimOutcome(db(),await dbInput());
+   const r=await readPendingClaimOutcome(await db(),await dbInput());
    if(r.status==='db_committed')readHistoricalEffectProof(initial,readMaintenanceJournal(initial),r.effects_receipt_sha256);
    return r;
   },
   restoreDb:async e=>{
    readHistoricalEffectProof(initial,readMaintenanceJournal(initial),e.effects_receipt_sha256);
-   return restorePendingClaim(db(),{...await dbInput(),effects_receipt_sha256:e.effects_receipt_sha256});
+   const r=await restorePendingClaim(await db(),{...await dbInput(),effects_receipt_sha256:e.effects_receipt_sha256});
+   append({phase:'database_identity_observation',identity_receipts:identities()});return r;
   },
   readLocal:async()=>{need(peer);const r=await peer.request({op:'status'});need(r.status==='guard_held');return r.local_owner;},
   releaseLocal:async()=>{need(peer);const r=await peer.request({op:'release_exact'});need(r.status==='released');},
@@ -120,22 +109,22 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
    readAuthority:()=>readMaintenanceAuthority(initial.maintenance_task_id,{renew:false}),
    readJournal:()=>readMaintenanceJournal(initial),readLocal:()=>readRemoteMaintenanceLocal(scope),readCentral,
    readAudit:async company_receipt=>{
-    const expected_snapshot=await readHistoricalCompanySnapshot(db(),{authorization:initial,company_receipt});
-    return readCommittedMaintenanceAudit(db(),{authorization:initial,expected_snapshot});
+    const expected_snapshot=await readHistoricalCompanySnapshot(await db(),{authorization:initial,company_receipt});
+    return readCommittedMaintenanceAudit(await db(),{authorization:initial,expected_snapshot});
    }
-  }});}finally{if(pool){await pool.end();pool=undefined;}}
+  }});}finally{await closeDatabase();}
  },preflight:async()=>{
   await authority();await candidate();return withGuard(async()=>{
    await authority();await currentOriginal();await baseline();const e=await effects();if(e.status!=='verified')return e;
    return {status:'preflight_verified',contract_sha256:initial.contract_sha256,effects_receipt_sha256:e.effects_receipt_sha256,
-    heartbeat_receipts:lastAuthority.heartbeat_receipts,lease_evidence:lastAuthority.lease_evidence};
+    heartbeat_receipts:lastAuthority.heartbeat_receipts,lease_evidence:lastAuthority.lease_evidence,database_identity_receipts:identities()};
   });
  },readback:async()=>{
   try{
    await authority();await candidate();await currentOriginal();const outcome=await io.readDb();
    const local=await readRemoteMaintenanceLocal(scope),central=await readCentral(),journal=readMaintenanceJournal(initial);
    return {status:'readback_verified',contract_sha256:initial.contract_sha256,db:outcome,local,central,
-    journal_sha256:digest(journal),journal_phases:journal.map(r=>r.phase),os_full_stop:false};
-  }finally{if(pool){await pool.end();pool=undefined;}}
+    journal_sha256:digest(journal),journal_phases:journal.map(r=>r.phase),database_identity_receipts:identities(),os_full_stop:false};
+  }finally{await closeDatabase();}
  }};
 }

@@ -17,11 +17,12 @@ export function verifyRestoredDevice(original,o,serial) {
  return {status:'verified',domain:'original_capture_stopped_and_playback_restored',observation_sha256:digest(o)};
 }
 // 内部编排，只由公开runtime传入本人现场reader；CLI不能提交reader/proof JSON。
-export async function collectMaintenanceEffects({scope,epoch,contract_sha256,candidate,readOriginal,readCommander,readMmv,readDevice,readDomain,retainEvidence,retainReceipt}) {
+export async function collectMaintenanceEffects({scope,epoch,contract_sha256,candidate,readOriginal,readCommander,readMmv,readDevice,readDomain,readDatabaseIdentities,retainEvidence,retainReceipt}) {
  let stage='original',original,deviceVerdict,domain;
  const partial={epoch,contract_sha256,candidate,scope_sha256:digest(scope)};
  try {
   original=await readOriginal();partial.original_raw_manifest=original.raw_manifest;
+  partial.database_identity_receipts=readDatabaseIdentities?await readDatabaseIdentities():[];
   partial.company_receipt=original.company_receipt;
   partial.original_identity={snapshot_sha256:original.frozen?.snapshot_sha256,binding_id:original.split?.binding_id,
    source_commit:original.frozen?.deployment?.source_commit,run_tag:original.frozen?.run_identity?.tag};
