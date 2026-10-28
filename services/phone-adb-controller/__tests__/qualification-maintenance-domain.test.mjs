@@ -17,7 +17,7 @@ function fixture() {
  const census={protocol:'qualification-process-census-v1',host:'xian-m4',uid:501,observer_pid:500,observer_sha256:processObserverDigest,finished_at_ms:now,
   enumerated:[self],final_enumerated:[self],observations:[self],absent:[],unknown:[],tracked:original.tracked.map(p=>({pid:p.pid,expected_start_identity:p.start_identity,state:'absent',reason:'ESRCH'})),pid_only:original.pid_only.map(p=>({...p,state:'absent',reason:'ESRCH'}))};
  const commander={status:'verified_inactive',domain:'exact_original_commander_owner',observed_at_ms:now,returned_turns:5,mmv_rpc:{status:'verified_inactive',domain:'fixed353_mmv_rpc',source_commit:old,run_tag:run,run_id:'douyin_video_processing-'+run+'__a1',observer_sha256:mmvRpcObserverDigest,process_observer_sha256:processObserverDigest,observed_at_ms:now,completed_at_ms:now,matches:[],unknown:[],enumerated_sha256:'a'.repeat(64),final_enumerated_sha256:'b'.repeat(64),coverage_sha256:'c'.repeat(64)}};
- const observation={protocol:'qualification-original-domain-v1',collector_sha256:api?.DOMAIN_COLLECTOR_SHA256,epoch_sha256:digest(epoch),scope_sha256:null,census,roles:{500:{state:'observed',kernel:self,argv_sha256:self.argv_sha256,executable:{sha256:'e'.repeat(64),uid:501}}},listeners:{exit_code:0,rows:[]},finished_at_ms:now};
+ const observation={protocol:'qualification-original-domain-v1',collector_sha256:api?.DOMAIN_COLLECTOR_SHA256,epoch_sha256:digest(epoch),scope_sha256:null,census,roles:{500:{state:'observed',kernel:self,argv_sha256:self.argv_sha256,executable:{realpath:'/opt/homebrew/bin/python3',sha256:'e'.repeat(64),uid:501}}},listeners:{exit_code:0,rows:[]},finished_at_ms:now};
  return {original,epoch,commander,observation};
 }
 function ready(f) {assert.equal(typeof api?.originalExecutionScope,'function');f.observation.scope_sha256=digest(api.originalExecutionScope(f.original,501));return f;}
@@ -48,4 +48,33 @@ test('collector派生参数形状严格拒额外命令和读取形状伪装，�
  const r=spawnSync('python3',['-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify(argv),encoding:'utf8'});assert.equal(r.status,0,r.stderr);
  const values=JSON.parse(r.stdout);assert.deepEqual(values.map(x=>x.kind),['adb_server','adb_read','unknown','ssh_forward','unknown','sleep','unknown']);
  assert.ok(values.every(v=>!Object.hasOwn(v,'argv')));
+});
+function addRole(f,row,detail) {
+ const r={uid:501,ppid:1,pgid:row.pid,start_identity:'1699990000:'+row.pid,start_ms:1699990000000,argv_sha256:'a'.repeat(64),classification:'unknown_producer',...row};
+ for(const key of ['enumerated','final_enumerated','observations'])f.observation.census[key].push(r);
+ f.observation.roles[r.pid]={state:'observed',kernel:r,argv_sha256:r.argv_sha256,...detail};return r;
+}
+function wallRoles(f) {
+ const hashes={'phone-wall-push.sh':'1','wall-lib.sh':'2','adb-managed-client.py':'3','adb-existing-route.py':'4','adb-host-service.py':'5'};
+ f.original.frozen.deployment.files=Object.entries(hashes).map(([deployed_path,x])=>({deployed_path,content_sha256:x.repeat(64)}));
+ const files=names=>names.map(name=>({realpath:'/Users/u/bin-harvest/'+name,sha256:hashes[name].repeat(64),uid:501}));
+ addRole(f,{pid:600,executable:'/bin/bash',program:{kind:'script',script:files(['phone-wall-push.sh'])[0]}},{executable:{realpath:'/bin/bash',sha256:'b'.repeat(64),uid:0},files:files(['phone-wall-push.sh','wall-lib.sh','adb-managed-client.py','adb-existing-route.py']),launchd:{pid:600,label:'com.zenithjoy.phonewallpush',plist:{sha256:'c'.repeat(64),uid:501},argv_sha256:'a'.repeat(64)}});
+ addRole(f,{pid:610,executable:'/opt/homebrew/bin/python3',program:{kind:'script',script:files(['adb-host-service.py'])[0]}},{executable:{realpath:'/opt/homebrew/bin/python3',sha256:'e'.repeat(64),uid:501},files:files(['adb-host-service.py','adb-existing-route.py']),launchd:{pid:610,label:'com.zenithjoy.adb-host',plist:{sha256:'c'.repeat(64),uid:0},argv_sha256:'a'.repeat(64)}});
+ addRole(f,{pid:611,ppid:610,pgid:610,executable:'/opt/homebrew/bin/adb',program:{kind:'binary'}},{executable:{realpath:'/opt/homebrew/bin/adb',sha256:'7'.repeat(64),uid:501},shape:{kind:'adb_server'}});
+ f.observation.listeners={exit_code:0,rows:[{pid:611,address:'127.0.0.1:5037'}]};return f;
+}
+test('launchd/source完整绑定的wall与唯一ADB可在原run域之外继续工作',()=>{
+ const f=ready(wallRoles(fixture()));assert.equal(api.evaluateOriginalExecutionDomain(f).status,'verified');
+});
+test('已知只读inline也不能使用未绑定的恶意Python执行器',()=>{
+ const f=fixture();addRole(f,{pid:700,executable:'/Users/u/bin/python-malicious',classification:'read_only_native_observer',program:{kind:'inline',code_sha256:'a6a8fab5ecc72f1f15e21cafeb27744488cf5495a52db735932d17d6d2aeebd2'}},{executable:{realpath:'/Users/u/bin/python-malicious',sha256:'9'.repeat(64),uid:501}});
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'blocked');
+});
+test('正确wall脚本不能把自定义恶意shell当系统bash排除',()=>{
+ const f=wallRoles(fixture());f.observation.roles[600].executable={realpath:'/Users/u/bin/bash',sha256:'9'.repeat(64),uid:501};
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'blocked');
+});
+test('Perl只读包装若未核inner执行器字节仍须BLOCK',()=>{
+ const f=wallRoles(fixture());addRole(f,{pid:620,ppid:600,pgid:600,executable:'/usr/bin/perl',program:{kind:'binary'}},{executable:{realpath:'/usr/bin/perl',sha256:'8'.repeat(64),uid:0},shape:{kind:'perl_adb_read',inner_path:'/tmp/adb'},inner_executable:{realpath:'/tmp/adb',sha256:'9'.repeat(64),uid:501}});
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'blocked');
 });
