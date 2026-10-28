@@ -8301,3 +8301,11 @@ agent_suite:
   type: integration
   ci: L3
   note: actual attempt4归档与正式恢复Task重放；仅匹配699服务恢复新epoch，配置/系统job/原owner/覆盖不明保持拒绝。
+
+- id: material-storage-connectivity
+  path: apps/api/src/services/__tests__/material-storage-connectivity.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: 真实COS SDK验证上传及读取签名使用可达加速域名，未启用时保持地域域名。
