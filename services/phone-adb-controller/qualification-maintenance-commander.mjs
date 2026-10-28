@@ -20,7 +20,7 @@ export async function readCommanderClosure(scope,{home=homedir(),get=gatewayRead
  noPending();
  const names=()=>readdirSync(directory).filter(n=>n.startsWith(prefix)).sort();
  const first=names(),returned=first.filter(n=>/\.returned\.json$/.test(n));need(returned.length===5);
- const expected=new Set([prefix+'.guard']);const archives=[];
+ const expected=new Set([prefix+'.guard']);const archives=[],consumed=[];
  const raw=name=>{
   const path=join(directory,name),fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);
   try{const a=fstatSync(fd);need(a.isFile()&&a.uid===process.getuid()&&(a.mode&0o077)===0&&a.nlink===1&&a.size<=16384);
@@ -30,6 +30,7 @@ export async function readCommanderClosure(scope,{home=homedir(),get=gatewayRead
  for(const name of returned) {
   const originalName=name.replace(/\.returned\.json$/,'.returned.original.json');expected.add(name);expected.add(originalName);
   const originalRaw=raw(originalName),receiptRaw=raw(name),original=JSON.parse(originalRaw),receipt=JSON.parse(receiptRaw);
+  consumed.push([originalName,digest(originalRaw)],[name,digest(receiptRaw)]);
   need(original.protocol==='commander-owner-turn-v1'&&original.status==='reserved'&&receipt.status==='returned'
    &&receipt.original_sha256===digest(originalRaw)&&/^[a-f0-9]{64}$/.test(receipt.response_sha256||''));
   for(const [key,value]of Object.entries({...identity,session}))need(original[key]===value&&receipt[key]===value);
@@ -47,6 +48,7 @@ export async function readCommanderClosure(scope,{home=homedir(),get=gatewayRead
   &&history.pendingInputs?.total===0&&Array.isArray(history.pendingInputs.items)&&history.pendingInputs.items.length===0&&!history.inFlightRun);
  need(children?.count===0&&children.totalCount===0&&children.hasMore===false&&children.nextOffset===null&&Array.isArray(children.sessions)&&children.sessions.length===0);
  noPending();need(digest(first)===digest(names()));
+ for(const [name,sha256]of consumed)need(digest(raw(name))===sha256);
  return {status:'verified_inactive',domain:'exact_original_commander_owner',os_full_stop:false,session,returned_turns:5,
   archives_sha256:digest(archives),official_sha256:digest({describe,history,children}),observed_at_ms:Date.now()};
 }
