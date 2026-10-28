@@ -6,6 +6,12 @@ import {gunzipSync} from 'node:zlib';
 import {digest} from './runtime-definition.mjs';
 const error=()=>Error('MAINTENANCE_HOST_UNKNOWN');
 const need=x=>{if(!x)throw error();};
+export const GUARD_BOOTSTRAP=String.raw`import os,sys
+for key in list(os.environ):
+ if key.startswith(('DOUYIN_','LEADGEN_','WF_','WFR_')) or key in ('NODE_OPTIONS','NODE_PATH','PYTHONPATH','PYTHONHOME'):
+  os.environ.pop(key,None)
+os.execv(sys.executable,[sys.executable,'-B','-I',sys.argv[1]])
+`;
 export function decodeOriginalPacket(packet) {
  try{
   need(packet?.status==='observed'&&packet.encoding==='gzip-base64'&&Number.isSafeInteger(packet.bytes)
@@ -109,7 +115,8 @@ export async function openMaintenancePeer(child,init,{timeoutMs=30000}={}) {
 export function openMaintenanceGuard(scope) {
  const root=candidateRuntimeRoot('xian-m4',scope.maintenance_source.commit);
  // 字符串只含上面固定home和验证过的SHA；shell不插入scope或任意路径。
- const command='exec /opt/homebrew/bin/python3 -B -I '+root+'/qualification-maintenance-host.py';
+ const quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
+ const command=['exec','/opt/homebrew/bin/python3','-B','-I','-c',quote(GUARD_BOOTSTRAP),root+'/qualification-maintenance-host.py'].join(' ');
  const child=spawn('/usr/bin/ssh',['-T','-o','BatchMode=yes','-o','ConnectTimeout=10','xian-m4',command],{stdio:['pipe','pipe','pipe']});
  return openMaintenancePeer(child,{serial:scope.serial,profile:scope.profile,owner:scope.local_owner,deadline_seconds:300});
 }
