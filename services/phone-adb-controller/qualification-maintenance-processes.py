@@ -13,7 +13,7 @@ import stat
 import sys
 import time
 
-EFFECTORS = ('python', 'node', 'adb', 'scrcpy', 'zsh', 'bash', 'sh', 'sleep', 'ssh', 'scp', 'sftp', 'ffmpeg', 'ffprobe', 'curl')
+EFFECTORS = re.compile(r'(?:python(?:[0-9]+(?:\.[0-9]+)*)?|node(?:js|[0-9]+)?|adb|scrcpy|zsh|bash|sh|sleep|ssh|sshd(?:-session)?|scp|sftp|ffmpeg|ffprobe|curl|perl|ruby|osascript)')
 READONLY_PYTHON = {
     'a6a8fab5ecc72f1f15e21cafeb27744488cf5495a52db735932d17d6d2aeebd2',
     'cecd8eb83bd1696e1f877bcaf43a4fb1659b839531b800f4ea528ca1abfebdcb',
@@ -167,7 +167,7 @@ def classify(row, argv, scope):
         if executable == 'adb' and argv[1:] == ['-s', scope['serial'], 'exec-out', 'screencap', '-p']:
             return 'read_only_screenshot'
         return 'active_related'
-    if not executable.startswith(EFFECTORS):
+    if not EFFECTORS.fullmatch(executable) and not executable.startswith(('python-', 'python_', 'node-', 'node_')):
         return 'outside_supported_program'
     # 孤儿/脱组不因argv未出现tag而消失。标准shell/stdin解释器没有可证明归属就拒绝。
     if row['ppid'] == 1:
