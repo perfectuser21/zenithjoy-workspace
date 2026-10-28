@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync,copyFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync,copyFileSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -70,7 +70,7 @@ test('真实private fixture guard握手直接组epoch，固定literal正链不�
  for(const name of ['qualification-maintenance-host.py','qualification-maintenance-processes.py','adb-process-observation.py'])copyFileSync(fileURLToPath(new URL('../'+name,import.meta.url)),join(root,name));
  const literal=Buffer.from('import os\ndef collect_domain(scope,context):\n return {"status":"observed","pid":os.getpid(),"collector_sha256":__collector_sha256__}\n');
  writeFileSync(join(root,'qualification-maintenance-domain.mjs'),"export const DOMAIN_COLLECTOR_BASE64='"+literal.toString('base64')+"';\n");
- const path=join(root,'qualification-maintenance-host.py'),h=await holder(f,t,path);
+ const path=realpathSync(join(root,'qualification-maintenance-host.py')),h=await holder(f,t,path);
  const epoch={maintenance_task_id:'11111111-1111-4111-8111-111111111111',intent_id:'22222222-2222-4222-8222-222222222222',candidate_sha:sha,guard_pid:h.ready.pid,guard_start_identity:h.ready.start_identity,guard_script_path:path,guard_script_sha256:h.ready.script_sha256};
  h.p.stdin.write(JSON.stringify({op:'domain',scope:{serial:'SER1',run_tag:'original-run',uid:h.ready.uid},epoch})+'\n');
  const r=await h.receive();assert.equal(r.status,'observed');assert.equal(r.pid,h.p.pid);
