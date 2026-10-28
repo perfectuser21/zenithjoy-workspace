@@ -151,9 +151,9 @@ from pathlib import Path
 ns={'__collector_sha256__':'fixture'};exec(base64.b64decode(sys.argv[1]),ns)
 with tempfile.TemporaryDirectory(prefix='node-wrapper-') as root:
  home=Path(root);guard=home/'qualification-maintenance-host.py';guard.write_text('# guard fixture\n');sys.argv[0]=str(guard.resolve());sys.platform='darwin';ns['Path'].home=staticmethod(lambda:home)
- wrapper=home/'.openclaw/service-env/ai.openclaw.node-env-wrapper.sh';wrapper.parent.mkdir(parents=True);wrapper.write_text('#!/bin/sh\nexec "$@"\n')
+ wrapper=home/'.openclaw/service-env/ai.openclaw.node-env-wrapper.sh';wrapper.parent.mkdir(parents=True);wrapper.write_bytes(base64.b64decode('IyEvYmluL3NoCnNldCAtZXUKZW52X2ZpbGU9IiQxIgpzaGlmdAppZiBbIC1mICIkZW52X2ZpbGUiIF07IHRoZW4KICAuICIkZW52X2ZpbGUiCmZpCmV4ZWMgIiRAIgo='));environment=wrapper.parent/'ai.openclaw.node.env';environment.write_text('FIXTURE_ONLY=value\n')
  script=home/'openclaw/dist/index.js';script.parent.mkdir(parents=True);script.write_text('// fixture entry\n')
- args=['/bin/sh',str(wrapper),sys.executable,str(script),'node','run'];plist=home/'Library/LaunchAgents/ai.openclaw.node.plist';plist.parent.mkdir(parents=True);plist.write_bytes(plistlib.dumps({'ProgramArguments':args}))
+ args=['/bin/sh',str(wrapper),str(environment),sys.executable,str(script),'node','run'];plist=home/'Library/LaunchAgents/ai.openclaw.node.plist';plist.parent.mkdir(parents=True);plist.write_bytes(plistlib.dumps({'ProgramArguments':args}))
  own={'pid':os.getpid(),'uid':os.getuid(),'ppid':42,'pgid':os.getpid(),'start_identity':'1700000000:1','terminal':False};child={'pid':777,'uid':os.getuid(),'ppid':1,'pgid':777,'start_identity':'1700000000:2','terminal':False,'executable':sys.executable,'program':{'kind':'unclassified'}}
  def kernel(pid):return own if pid==os.getpid() else child
  def load(m):
