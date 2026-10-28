@@ -26,7 +26,6 @@ interface Options { provider?: AliVideoProvider; directory?: string; storage?: M
 const MAX_BYTES = 100 * 1024 * 1024;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const run = promisify(execFile);
 function fail(status: number, message: string): never { throw Object.assign(new Error(message), { status }); }
 
 function publicUrl(value: unknown): string {
@@ -124,7 +123,7 @@ export function createVideoToolsRouter(options: Options = {}): Router {
       const kind = /\.(png|jpe?g|webp)$/.test(suffix) ? 'image' : 'video';
       let width: number, height: number, duration: number, fps: number;
       try {
-        const output = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,codec_name,avg_frame_rate:format=duration,format_name', '-of', 'json', temporaryFile], { timeout: 15_000, maxBuffer: 16384 });
+        const output = await promisify(execFile)('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,codec_name,avg_frame_rate:format=duration,format_name', '-of', 'json', temporaryFile], { timeout: 15_000, maxBuffer: 16384 });
         const info = JSON.parse(output.stdout);
         width = Number(info.streams?.[0]?.width); height = Number(info.streams?.[0]?.height); duration = Number(info.format?.duration ?? 0);
         const rate = String(info.streams?.[0]?.avg_frame_rate ?? '0/1').split('/').map(Number);
