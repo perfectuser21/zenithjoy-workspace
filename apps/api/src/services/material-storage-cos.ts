@@ -37,7 +37,7 @@ export class CosMaterialStorage implements MaterialStorage {
       SecretKey: env.COS_SECRET_KEY as string,
       UseAccelerate: env.COS_USE_ACCELERATE === 'true',
       Timeout: 30000,
-      MaxRetries: 1,
+      ChunkRetryTimes: 1,
     });
   }
 

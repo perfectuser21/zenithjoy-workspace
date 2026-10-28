@@ -15,7 +15,7 @@ Wan 支持提示词、参考图片/视频、时长、画幅、分辨率和声音
 - `ALIYUN_ACCESS_KEY_ID`、`ALIYUN_ACCESS_KEY_SECRET`：已授权 VIAPI 超分的 RAM 账号。
 - `ALIYUN_VIAPI_OSS_BUCKET`：可选自有上海 OSS bucket。内部试用默认使用官方临时 bucket，素材一天后过期；长期使用应配置自有 bucket 并授权 PutObject。
 - `COS_SECRET_ID`、`COS_SECRET_KEY`、`COS_BUCKET`、`COS_REGION`：现有私有素材存储，用于网页上传。
-- `COS_USE_ACCELERATE=true`：海外服务器无法访问地域端点时使用腾讯云全球加速；须先在素材桶启用加速。上传与签名 URL 同时使用加速域名，SDK 请求超时为 30 秒、最多重试一次。
+- `COS_USE_ACCELERATE=true`：海外服务器无法访问地域端点时使用腾讯云全球加速；须先在素材桶启用加速。上传与签名 URL 同时使用加速域名，SDK 请求超时为 30 秒，分片重试一次。
 - `VIDEO_TOOLS_DATA_DIR`：任务与素材元数据持久化目录。生产与 staging 必须使用独立挂载。
 - `STAFF_EMAILS` / `STAFF_FEISHU_OPENIDS`：现有员工白名单。
 
