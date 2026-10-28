@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """维护epoch持有真实serial.guard；不发信号，不调用ADB/UI，只精确释放本人旧锁。"""
 import fcntl
+import base64
 import hashlib
 import importlib.util
 import json
@@ -63,6 +64,32 @@ bytes:value.length,data:gzipSync(value).toString('base64')}));"""
     return json.loads(result.stdout)
 
 
+def read_domain(held, request, identity):
+    need(set(request) == {'op', 'scope', 'epoch'} and request['op'] == 'domain')
+    scope, epoch = request['scope'], request['epoch']
+    need(scope['serial'] == held['serial'] and scope['run_tag'] == held['owner'] and scope['uid'] == os.getuid())
+    need(set(epoch) == {'maintenance_task_id', 'intent_id', 'candidate_sha', 'guard_pid',
+                        'guard_start_identity', 'guard_script_path', 'guard_script_sha256'})
+    need(all(re.fullmatch(r'[a-f0-9-]{36}', epoch[k]) for k in ('maintenance_task_id', 'intent_id')))
+    need(re.fullmatch(r'[a-f0-9]{40}', epoch['candidate_sha']) and epoch['candidate_sha'] == HERE.parent.name
+         and epoch['guard_pid'] == identity['pid'] == os.getpid()
+         and epoch['guard_start_identity'] == identity['start_identity']
+         and epoch['guard_script_path'] == str(HERE / 'qualification-maintenance-host.py')
+         and epoch['guard_script_sha256'] == identity['script_sha256'])
+    file = HERE / 'qualification-maintenance-domain.mjs'
+    regular(file)
+    source = file.read_text()
+    need(len(source) <= 1024 * 1024)
+    matches = re.findall(r"^export const DOMAIN_COLLECTOR_BASE64='([A-Za-z0-9+/=]+)';$", source, re.M)
+    need(len(matches) == 1)
+    code = base64.b64decode(matches[0], validate=True)
+    need(len(code) <= 65536)
+    namespace = {'__collector_sha256__': hashlib.sha256(code).hexdigest()}
+    # 仅同一实际候选内经源字节准入的固定literal；请求不能传code/verified。
+    exec(compile(code, str(file), 'exec'), namespace)
+    return namespace['collect_domain'](scope, epoch)
+
+
 def run():
     scope = json.loads(sys.stdin.readline(65537))
     need(set(scope) == {'serial', 'profile', 'owner', 'deadline_seconds'})
@@ -90,9 +117,10 @@ def run():
         processes = load_local('qualification-maintenance-processes.py')
         identity = processes.kernel(os.getpid())
         need(identity and identity['uid'] == os.getuid() and not identity['terminal'])
+        identity['script_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         emit({'status': 'guard_held', 'local_owner': local_owner(), 'pid': os.getpid(),
               'uid': identity['uid'], 'start_identity': identity['start_identity'],
-              'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+              'script_sha256': identity['script_sha256'],
               'guard_device': actual.st_dev, 'guard_inode': actual.st_ino})
         deadline = time.monotonic() + scope['deadline_seconds']
         attempted = False
@@ -111,6 +139,8 @@ def run():
                 emit(read_device(scope, request))
             elif request['op'] == 'original':
                 emit(read_original(scope, request))
+            elif request['op'] == 'domain':
+                emit(read_domain(scope, request, identity))
             elif request['op'] == 'release_exact':
                 need(set(request) == {'op'})
                 if attempted or local_owner() != 'original_owner':
