@@ -13,7 +13,9 @@ export async function maintenanceMain(argv) {
   }
   try {
     const {runMaintenance} = await import('./qualification-maintenance-service.mjs');
-    return {exit_code: 0, result: await runMaintenance({verb, taskId})};
+    const result=await runMaintenance({verb, taskId});
+    const success={close:['closed'],preflight:['preflight_verified'],readback:['readback_verified']}[verb];
+    return {exit_code:success.includes(result?.status)?0:1,result};
   } catch (error) {
     const code = /^MAINTENANCE_[A-Z_]+$/.test(error?.message || '') ? error.message : 'MAINTENANCE_EXECUTION_UNKNOWN';
     return {exit_code: 1, result: {ok: false, code}};
