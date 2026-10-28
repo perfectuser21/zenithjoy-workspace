@@ -33,6 +33,10 @@ export function evaluateProcessCensus(census,scope) {
     if(found.length!==1||!['absent','terminal','reused'].includes(found[0].state)
       ||found[0].state==='absent'&&found[0].reason!=='ESRCH')blocked_pids.push(expected.pid);
   }
+  for(const expected of scope.pid_only||[]) {
+    const found=census.pid_only?.filter(x=>x.pid===expected.pid&&x.origin===expected.origin);
+    if(found?.length!==1||found[0].state!=='absent'||found[0].reason!=='ESRCH')blocked_pids.push(expected.pid);
+  }
   if(blocked_pids.length)return blocked('PROCESS_EFFECTOR_ACTIVE_OR_UNCLASSIFIED');
   return {status:'verified',domain:'fixed_353_qualification_effects',os_full_stop:false,
     observation_sha256:digest(census),observed_at_ms:census.finished_at_ms,blocked_pids:[]};

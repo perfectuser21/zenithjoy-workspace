@@ -205,7 +205,7 @@ def collect(scope):
     need(all(isinstance(scope[k], str) and scope[k] for k in ('run_tag', 'serial', 'run_dir', 'runtime_root', 'host')), 'PROCESS_SCOPE')
     out = {'protocol': 'qualification-process-census-v1', 'host': scope['host'], 'uid': os.getuid(),
            'platform': sys.platform, 'observer_pid': os.getpid(), 'observer_sha256': hashlib.sha256(HERE.read_bytes()).hexdigest(),
-           'started_at_ms': time.time() * 1000, 'enumerated': listed(), 'observations': [], 'absent': [], 'tracked': [], 'unknown': []}
+           'started_at_ms': time.time() * 1000, 'enumerated': listed(), 'observations': [], 'absent': [], 'tracked': [], 'pid_only': [], 'unknown': []}
     visited = set()
     def inspect(rows):
         for listed_row in rows:
@@ -250,6 +250,15 @@ def collect(scope):
                                    'actual_start_identity': current['start_identity'] if current else None})
         except (OSError, ValueError):
             out['tracked'].append({'pid': pid, 'expected_start_identity': expected['start_identity'], 'state': 'unknown'})
+    for expected in scope.get('pid_only', []):
+        pid = expected['pid']
+        need(type(pid) is int and pid > 1 and expected.get('origin') in ('launch_parent', 'capture_client'), 'PID_ONLY_INVALID')
+        try:
+            current = kernel(pid)
+            out['pid_only'].append({**expected, 'state': 'absent' if current is None else 'alive',
+                                    'reason': 'ESRCH' if current is None else 'KERNEL'})
+        except (OSError, ValueError):
+            out['pid_only'].append({**expected, 'state': 'unknown'})
     out['finished_at_ms'] = time.time() * 1000
     return out
 
