@@ -1,4 +1,6 @@
 import test from 'node:test';
+import * as awaitImportChildProcess from 'node:child_process';
+import * as awaitImportDomain from '../qualification-maintenance-domain.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {gunzipSync} from 'node:zlib';
@@ -68,3 +70,35 @@ for(const[name,change]of[
  ['native coverage missing',f=>f.observation.census.observations=f.observation.census.observations.filter(p=>p.pid!==14898)],
  ['other late root',f=>{const p=f.observation.census.observations.find(p=>p.pid===26142);p.start_ms=f.original.launch_result.started_at_ms+1;}],
 ])test(name+' is still BLOCK',()=>{assert.equal(replay((f=>{change(f);return f;})(input())).status,'blocked');});
+
+test('the real effects orchestrator consumes the official recovery record instead of ignoring it',async()=>{
+ const {collectMaintenanceEffects}=await import('../qualification-maintenance-effects.mjs');
+ const f=input(),saved=[];let reads=0;
+ const now=Date.now;Date.now=()=>f.observation.finished_at_ms;
+ try {
+  const r=await collectMaintenanceEffects({scope:{serial:f.original.frozen.run_identity.serial},epoch:f.epoch,contract_sha256:'a'.repeat(64),candidate:{},
+   readOriginal:async()=>f.original,readCommander:async()=>structuredClone(f.commander),readMmv:async()=>f.commander.mmv_rpc,
+   readDevice:async()=>f.device,readAdbRecovery:async()=>{reads++;return f.serviceRecovery;},readDomain:async()=>f.observation,
+   retainEvidence:x=>{saved.push(x);return digest(x);},retainReceipt:()=>{}});
+  assert.equal(r.status,'verified',JSON.stringify(r));assert.equal(reads,1);
+  assert.equal(saved[0].adb_service_recovery.task.id,f.recovery_task.id);
+ }finally{Date.now=now;}
+});
+test('recovery reader binding carries the real authority Project and root into the runtime',async()=>{
+ const {authorityFixture}=await import('./helpers/qualification-maintenance-fixture.mjs');
+ const {authorizeMaintenance}=await import('../qualification-maintenance-authority.mjs');const f=authorityFixture();
+ const a=authorizeMaintenance(f);assert.equal(a.project_id,f.maintenanceTask.project_id);assert.equal(a.root_task_id,f.originalTask.parent_task_id);
+});
+test('the exact collector proves actual system job argv, rejects gui/name/PID lookalikes, and exposes safe config mode',()=>{
+ const {spawnSync}=awaitImportChildProcess;
+ const m=awaitImportDomain;
+ const f=input(),a=f.system_binding_metadata;
+ const argv=['/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/bin/python3.14',f.recovery_task.result.adb_service_recovery.launchd.target.path,'run','--config',f.observation.service_policy.path];
+ const stdout='system/com.zenithjoy.adb-host = {\n\tpid = 14896\n\targuments = {\n'+argv.map(v=>'\t\t'+v).join('\n')+'\n\t}\n}\n';
+ const code="import base64,json,sys;ns={};exec(base64.b64decode(sys.argv[1]),ns);from types import SimpleNamespace\na=json.load(sys.stdin);valid=ns['system_service_binding'](SimpleNamespace(returncode=0,stdout=a['stdout']),a['argv'],14896);print(json.dumps(valid))";
+ const r=spawnSync('python3',['-B','-I','-c',code,m.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify({stdout,argv}),encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{domain:'system',target_name:'system/com.zenithjoy.adb-host',system_pid:14896,system_argv_sha256:a.system_job.arguments_sha256});
+ for(const changed of [stdout.replace('system/','gui/501/'),stdout.replace('pid = 14896','pid = 26044'),stdout.replace('\n\t\trun\n','\n\t\tstatus\n')]) {
+  const q=spawnSync('python3',['-B','-I','-c',code,m.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify({stdout:changed,argv}),encoding:'utf8'});assert.notEqual(q.status,0);
+ }
+});
