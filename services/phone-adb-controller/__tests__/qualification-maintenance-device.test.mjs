@@ -42,6 +42,8 @@ base='UID PID PPID NAME\\nu0_a61 13732 1 com.ss.android.ugc.aweme\\nshell 200 1 
 assert m.parse_processes(base)['capture_pids']==[]
 assert m.parse_processes(base+'shell 399 1 com.genymobile.scrcpy.Server\\n')['capture_pids']==[399]
 assert m.parse_processes(base+'shell 400 1 app_process / com.genymobile.scrcpy.Server\\n')['capture_pids']==[400]
+for name in ['app_process','app_process32','/system/bin/app_process64']:
+ assert m.parse_processes(base+'shell 401 1 '+name+'\\n')['unknown_capture_pids']==[401]
 for raw in ['', 'PID NAME\\n399 scrcpy\\n',base+'malformed\\n']:
  try:m.parse_processes(raw)
  except ValueError:pass
