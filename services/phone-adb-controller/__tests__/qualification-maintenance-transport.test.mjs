@@ -43,3 +43,9 @@ test('原件压缩通道按实际解压bytes/hash核验，不把observed标签�
  assert.deepEqual(api.decodeOriginalPacket(packet),{frozen:{test:true}});
  for(const altered of [{...packet,bytes:raw.length+1},{...packet,sha256:'a'.repeat(64)},{...packet,data:'not_base64'},{...packet,bytes:17*1024*1024}])assert.throws(()=>api.decodeOriginalPacket(altered),/MAINTENANCE_HOST_UNKNOWN/);
 });
+test('生产guard启动清除测试根/registry/执行器残留，exec保持同PID，不影响primitive私有fixture',t=>{
+ assert.equal(typeof api?.GUARD_BOOTSTRAP,'string');const root=mkdtempSync(join(tmpdir(),'guard-bootstrap-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const script=join(root,'host.py');writeFileSync(script,'import os,json\nprint(json.dumps({"pid":os.getpid(),"keys":[k for k in os.environ if k.startswith(("DOUYIN_","LEADGEN_","WF_","WFR_"))],"node_options":os.environ.get("NODE_OPTIONS")}))\n');
+ const r=spawnSync('python3',['-B','-I','-c',api.GUARD_BOOTSTRAP,script],{env:{...process.env,DOUYIN_PHONE_TMP_ROOT:'/wrong',DOUYIN_PHONE_REGISTRY:'/wrong',DOUYIN_PYTHON_BIN:'/wrong',LEADGEN_MODE:'wrong',WF_HOME:'/wrong',WFR_HOME:'/wrong',NODE_OPTIONS:'--no-warnings'},encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);const value=JSON.parse(r.stdout);assert.equal(value.pid,r.pid);assert.deepEqual(value.keys,[]);assert.equal(value.node_options,null);
+});
