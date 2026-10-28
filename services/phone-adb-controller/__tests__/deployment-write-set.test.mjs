@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
 import {buildWriteSet,parseDeployArrays} from '../deployment-write-set.mjs';
 const root=fileURLToPath(new URL('../../..',import.meta.url));
 const service=fileURLToPath(new URL('..',import.meta.url));
@@ -48,4 +49,18 @@ test('write set matches the actual dynamic MMV union including JS-only runtime f
   ...groups.DEVICE_RPC_PROBE_FILES,...groups.DEVICE_CTL_FILES,...groups.MMV_JS_FILES,...groups.MMV_PROBE_FILES]);
  for(const file of runtime)for(const root of ['bin-harvest','.openclaw/leadgen-scripts'])
   assert.ok(result.mmv.some(entry=>entry.path===root+'/'+file),root+'/'+file);
+});
+test('受限维护公开入口及全部同namespace依赖实际进入双机包，不只存在开发树',()=>{
+ const result=build();
+ const files=readdirSync(service).filter(p=>/^qualification-maintenance(?:-[a-z-]+)?\.(?:mjs|py)$/.test(p));
+ assert.ok(files.includes('qualification-maintenance.mjs'));
+ for(const name of files) {
+  const actual=readFileSync(service+'/'+name);
+  for(const [host,root]of [['xian-m4','bin-harvest'],['mmv','bin-harvest'],['mmv','.openclaw/leadgen-scripts']]) {
+   const entry=result[host].find(e=>e.path===root+'/'+name);
+   assert.ok(entry,'部署包缺维护依赖 '+host+':'+name);
+   assert.equal(entry.after.kind,'file');
+   assert.equal(entry.after.sha256,createHash('sha256').update(actual).digest('hex'));
+  }
+ }
 });
