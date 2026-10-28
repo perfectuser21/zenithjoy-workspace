@@ -35,6 +35,16 @@ function auditMatches(row,input) {
   &&d.from_process_status==='处理中:'+s.run_tag&&d.from_batch===s.run_tag
   &&d.to_process_status==='待判定'&&d.to_batch===s.producer_run;
 }
+// 仅供已有完整closed日志的历史核验；不能代替未封口时的当前行CAS/恢复读回。
+export async function readCommittedMaintenanceAudit(pool,input) {
+ const {s}=context(input,{requireEffects:false});
+ const rows=(await pool.query('SELECT * FROM zenithjoy.db_audit WHERE id=$1',[s.intent_id])).rows;
+ if(rows.length!==1||!auditMatches(rows[0],input)
+  ||!['before_row_sha256','after_row_sha256'].every(k=>/^[a-f0-9]{64}$/.test(rows[0].detail[k]||'')))
+  return {status:'blocked',reason:'MAINTENANCE_AUDIT_UNPROVEN'};
+ return {status:'audit_committed',intent_id:s.intent_id,audit_sha256:digest(rows[0].detail),
+  effects_receipt_sha256:rows[0].detail.effects_receipt_sha256,historical:true};
+}
 // 内部事务组件；公开入口必须自行在guard内重验Task、候选、effects，不能接CLI proof JSON。
 export async function restorePendingClaim(pool,input) {
  const {a,s}=context(input),c=await pool.connect();let commitSent=false,destroyConnection=false;
