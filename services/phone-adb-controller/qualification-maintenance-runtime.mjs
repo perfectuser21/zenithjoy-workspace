@@ -16,6 +16,7 @@ import {readCommanderClosure} from './qualification-maintenance-commander.mjs';
 import {readMmvRpcClosure} from './qualification-maintenance-mmv.mjs';
 import {readHistoricalCompanySnapshot,readPendingClaimOutcome,restorePendingClaim} from './qualification-maintenance-pg.mjs';
 import {readMaintenanceJournal,appendMaintenanceJournal} from './qualification-maintenance-journal.mjs';
+import {appendEffectReceipt,readHistoricalEffectProof} from './qualification-maintenance-proof.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const need=(v,code='MAINTENANCE_RUNTIME_UNPROVEN')=>{if(!v)throw Error(code);};
 function productionPool() {
@@ -40,7 +41,7 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
  const scope=initial?.scope;
  need(['preflight','close','readback'].includes(verb)&&initial?.contract_sha256===digest(scope));
  need(here===candidateRuntimeRoot('mmv',scope.maintenance_source.commit),'MAINTENANCE_RUNTIME_NOT_INSTALLED');
- let peer,original,snapshot,pool,lastAuthority=initial,lastEvidence;
+ let peer,original,snapshot,pool,lastAuthority=initial,lastEvidence,candidateProof;
  const db=()=>pool??=productionPool();
  const authority=async()=>{
   let a=await readMaintenanceAuthority(initial.maintenance_task_id,{renew:false});
@@ -49,7 +50,7 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
   if(verb!=='readback'&&a.central_lock_state==='original_owner')a=await readMaintenanceAuthority(initial.maintenance_task_id,{renew:true});
   need(sameMaintenanceAuthorityEpoch(initial,a));lastAuthority=a;return a;
  };
- const candidate=()=>verifyMaintenanceCandidate(initial,{request:maintenanceBrainRequest,collect:target=>target==='mmv'
+ const candidate=async()=>candidateProof=await verifyMaintenanceCandidate(initial,{request:maintenanceBrainRequest,collect:target=>target==='mmv'
   ?collectMaintenanceCandidateRoot(here):collectRemoteMaintenanceCandidate(scope.maintenance_source.commit)});
  const currentOriginal=async()=>{
   original=peer?decodeOriginalPacket(await peer.request({op:'original',scope})):await readRemoteMaintenanceOriginal(scope);
@@ -79,10 +80,11 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
    guard_pid:peer.identity.pid,guard_start_identity:peer.identity.start_identity,
    guard_script_path:candidateRuntimeRoot('xian-m4',scope.maintenance_source.commit)+'/qualification-maintenance-host.py',
    guard_script_sha256:peer.identity.script_sha256};
-  lastEvidence=await collectMaintenanceEffects({scope,epoch,contract_sha256:initial.contract_sha256,
+  lastEvidence=await collectMaintenanceEffects({scope,epoch,contract_sha256:initial.contract_sha256,candidate:candidateProof,
    readOriginal:currentOriginal,readCommander:()=>readCommanderClosure(scope),readMmv:()=>readMmvRpcClosure(scope),
    readDevice:()=>peer.request({op:'device'}),
-   readDomain:o=>peer.request({op:'domain',scope:originalExecutionScope(o,peer.identity.uid),epoch}),retainEvidence});
+   readDomain:o=>peer.request({op:'domain',scope:originalExecutionScope(o,peer.identity.uid),epoch}),retainEvidence,
+   retainReceipt:receipt=>appendEffectReceipt(initial,receipt)});
   return lastEvidence;
  };
  const withGuard=async fn=>{
@@ -93,8 +95,15 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
   }finally{try{await peer.close();}finally{peer=undefined;if(pool){await pool.end();pool=undefined;}}}
  };
  const io={authority,candidate,withGuard,effects,
-  readDb:async()=>readPendingClaimOutcome(db(),await dbInput()),
-  restoreDb:async e=>restorePendingClaim(db(),{...await dbInput(),effects_receipt_sha256:e.effects_receipt_sha256}),
+  readDb:async()=>{
+   const r=await readPendingClaimOutcome(db(),await dbInput());
+   if(r.status==='db_committed')readHistoricalEffectProof(initial,readMaintenanceJournal(initial),r.effects_receipt_sha256);
+   return r;
+  },
+  restoreDb:async e=>{
+   readHistoricalEffectProof(initial,readMaintenanceJournal(initial),e.effects_receipt_sha256);
+   return restorePendingClaim(db(),{...await dbInput(),effects_receipt_sha256:e.effects_receipt_sha256});
+  },
   readLocal:async()=>{need(peer);const r=await peer.request({op:'status'});need(r.status==='guard_held');return r.local_owner;},
   releaseLocal:async()=>{need(peer);const r=await peer.request({op:'release_exact'});need(r.status==='released');},
   readCentral,releaseCentral:async()=>{
