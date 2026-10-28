@@ -51,3 +51,15 @@ test('沿正式workflow的brain.env/BRAIN_INTERNAL_TOKEN真身；拒宽权限、
  writeFileSync(file,'BRAIN_INTERNAL_TOKEN=first\nBRAIN_INTERNAL_TOKEN=second\n');assert.throws(()=>api.readMaintenanceBrainToken(dir),/MAINTENANCE_/);
  unlinkSync(file);const target=join(dir,'target');writeFileSync(target,'BRAIN_INTERNAL_TOKEN=other\n',{mode:0o600});symlinkSync(target,file);assert.throws(()=>api.readMaintenanceBrainToken(dir),/MAINTENANCE_/);
 });
+test('真实HTTP适配只给候选六GET开放release读取，不授予release写入',async t=>{
+ const home=mkdtempSync(join(tmpdir(),'maintenance-http-'));mkdirSync(join(home,'.credentials'));
+ writeFileSync(join(home,'.credentials','brain.env'),'BRAIN_INTERNAL_TOKEN=fixture-not-real-token\n',{mode:0o600});
+ const saved={home:process.env.HOME,url:process.env.BRAIN_URL,fetch:globalThis.fetch};
+ t.after(()=>{process.env.HOME=saved.home;if(saved.url===undefined)delete process.env.BRAIN_URL;else process.env.BRAIN_URL=saved.url;globalThis.fetch=saved.fetch;rmSync(home,{recursive:true,force:true});});
+ process.env.HOME=home;process.env.BRAIN_URL='http://localhost:5221';const calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push({url:String(url),method:options.method});return new Response(JSON.stringify({release:{id:'fixture'}}),{status:200,headers:{'Content-Type':'application/json'}});};
+ const path='/releases/33333333-3333-4333-8333-333333333333';
+ for(const suffix of ['','/gate','/observations/55555555-5555-4555-8555-555555555555'])await api.maintenanceBrainRequest(path+suffix);
+ assert.equal(calls.length,3);assert.ok(calls.every(x=>x.method==='GET'));
+ await assert.rejects(api.maintenanceBrainRequest(path,{}),/MAINTENANCE_/);assert.equal(calls.length,3);
+});
