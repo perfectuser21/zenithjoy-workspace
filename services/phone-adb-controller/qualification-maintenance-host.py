@@ -42,7 +42,9 @@ def load_local(name):
 
 def read_device(scope, request):
     need(request == {'op': 'device'})
-    return load_local('qualification-maintenance-device.py').collect_device(scope['serial'])
+    value = load_local('qualification-maintenance-device.py').collect_device(scope['serial'])
+    value['observer_sha256'] = hashlib.sha256((HERE / 'qualification-maintenance-device.py').read_bytes()).hexdigest()
+    return value
 
 
 def read_original(held, request):
