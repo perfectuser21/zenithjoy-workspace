@@ -10,12 +10,28 @@ import {
   autopilotNavGroups,
   autopilotPageComponents,
   additionalRoutes,
+  filterNavGroups,
+  extractRoutesFromNav,
 } from '../navigation.config';
 import { AREA_HUBS } from '../../pages/AreaHubPage';
 
 const navItems = () => autopilotNavGroups.flatMap((g) => g.items);
 const navPaths = () => navItems().map((i) => i.path);
 const routePaths = () => additionalRoutes.map((r) => r.path);
+
+describe('员工视频工具导航', () => {
+  it('员工能看到内部视频工具，不受客户套餐开关影响；客户看不到', () => {
+    const staffPaths = filterNavGroups(autopilotNavGroups, () => false, false, true).flatMap(group => group.items).map(item => item.path);
+    expect(staffPaths).toContain('/area/video-tools');
+    const customerPaths = filterNavGroups(autopilotNavGroups, () => true, false, false).flatMap(group => group.items).map(item => item.path);
+    expect(customerPaths).not.toContain('/area/video-tools');
+  });
+
+  it('从导航生成员工工具路由时保留员工权限要求', () => {
+    const route = extractRoutesFromNav(autopilotNavGroups).find(item => item.path === '/area/video-tools');
+    expect(route).toMatchObject({ requireAuth: true, requireStaff: true });
+  });
+});
 
 describe('config/navigation — 短侧栏 + 区下钻', () => {
   it('侧栏"区"入口指向区组件（多数 AreaHubPage；私域客服 = CsAreaEntryPage；智能获客 = AcquisitionHubPage），标签不暴露 Line', () => {
