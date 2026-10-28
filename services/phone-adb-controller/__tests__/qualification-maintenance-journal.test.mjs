@@ -78,3 +78,12 @@ test('删除序号、改旧原字节或塞未知文件不允许静默跳过',t=>
  fs.writeFileSync(a.path,original);const reserve=fs.readdirSync(f.path).find(n=>n.startsWith('00000001')&&n.endsWith('.reserve'));fs.unlinkSync(join(f.path,reserve));
  assert.throws(()=>api.readMaintenanceJournal(f.authority,{home:f.home}),/MAINTENANCE_JOURNAL_/);
 });
+test('新namespace所有父目录也fsync后才承诺durable，不能只刷叶目录',t=>{
+ const f=fixture(t),observed=new Set();
+ const receipt=fault('fsyncSync',original=>fd=>{const st=fs.fstatSync(fd);if(st.isDirectory())observed.add(String(st.ino));return original(fd);},()=>api.appendMaintenanceJournal(f.authority,f.record('db_intent'),{home:f.home}));
+ assert.equal(receipt.durable,true);
+ let path=f.home;assert.ok(observed.has(String(fs.statSync(path).ino)),'home parent entry not durable');
+ for(const part of ['.local','share','zenithjoy','qualification-maintenance',f.authority.maintenance_task_id,f.authority.scope.intent_id]) {
+  path=join(path,part);assert.ok(observed.has(String(fs.statSync(path).ino)),'namespace ancestor not durable: '+part);
+ }
+});
