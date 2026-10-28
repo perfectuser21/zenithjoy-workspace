@@ -113,6 +113,35 @@ def args(pid):
     return executable, [x.decode('utf-8') for x in argv]
 
 
+def describe_program(executable, argv):
+    """诊断代码身份，不作角色授权；不输出argv、inline正文或凭据。"""
+    name = Path(executable).name.lower()
+    interpreter = re.fullmatch(r'python(?:[0-9]+(?:\.[0-9]+)*)?|node(?:[0-9]+)?|bash|zsh|sh', name)
+    if not interpreter or len(argv) < 2:
+        return {'kind': 'binary'}
+    pos = 1
+    while pos < len(argv) and argv[pos] in ('-B', '-I', '-u', '-s', '-S', '-E'):
+        pos += 1
+    if pos >= len(argv):
+        return {'kind': 'unclassified'}
+    if argv[pos] in ('-c', '-e', '--eval') and pos + 1 < len(argv):
+        return {'kind': 'inline', 'code_sha256': hashlib.sha256(argv[pos + 1].encode()).hexdigest()}
+    if argv[pos].startswith('-') or not Path(argv[pos]).is_absolute():
+        return {'kind': 'unclassified'}
+    file = Path(argv[pos])
+    try:
+        before = file.stat()
+        need(before.st_size <= 8 * 1024 * 1024, 'PROGRAM_INPUT_LIMIT')
+        raw = file.read_bytes()
+        after = file.stat()
+        need((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) ==
+             (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns), 'PROGRAM_INPUT_CHANGED')
+        return {'kind': 'script', 'script': {'path': str(file), 'realpath': str(file.resolve()),
+                'sha256': hashlib.sha256(raw).hexdigest(), 'uid': after.st_uid}}
+    except (OSError, ValueError):
+        return {'kind': 'unclassified'}
+
+
 def classify(row, argv, scope):
     if row['pid'] == os.getpid():
         return 'observer'
@@ -155,6 +184,7 @@ def observe(pid, scope):
         return None
     need(all(before[k] == after[k] for k in ('pid', 'uid', 'start_identity')), 'PROCESS_IDENTITY_CHANGED')
     row = {**after, 'executable': executable}
+    row['program'] = describe_program(executable, argv)
     row['classification'] = classify(row, argv, scope)
     # argv可能含凭据；只在本进程内分类，绝不打印或持久化正文。
     row['argv_sha256'] = hashlib.sha256(json.dumps(argv, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
