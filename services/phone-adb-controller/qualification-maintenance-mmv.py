@@ -57,6 +57,12 @@ def bind_cwd_identity(before, after):
          and before['start_identity'] == after['start_identity'])
 
 
+def cwd_command(platform, uid):
+    need(platform in ('darwin', 'linux'))
+    binary = '/usr/sbin/lsof' if platform == 'darwin' else '/usr/bin/lsof'
+    return [binary, '-a', '-u', str(uid), '-d', 'cwd', '-Fpn']
+
+
 def collect_mmv(scope):
     need(scope.get('consumer_source') == SUPPORTED and re.fullmatch(r'[A-Za-z0-9_-]{1,120}', scope.get('run_tag', '')))
     root = str(Path.home() / '.local/share/zenithjoy/phone-candidates' / SUPPORTED / 'runtime')
@@ -72,7 +78,7 @@ def collect_mmv(scope):
             before_cwd[row['pid']] = processes.kernel(row['pid'])
         except Exception:
             before_cwd[row['pid']] = None
-    p = subprocess.run(['/usr/sbin/lsof', '-a', '-u', str(os.getuid()), '-d', 'cwd', '-Fpn'],
+    p = subprocess.run(cwd_command(sys.platform, os.getuid()),
                        capture_output=True, text=True, timeout=5)
     need(p.returncode == 0 and 0 < len(p.stdout.encode()) < 4 * 1024 * 1024)
     cwds = parse_cwds(p.stdout)
