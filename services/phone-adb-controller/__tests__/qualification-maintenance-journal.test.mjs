@@ -7,6 +7,7 @@ import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {authorizeMaintenance} from '../qualification-maintenance-authority.mjs';
 import {authorityFixture} from './helpers/qualification-maintenance-fixture.mjs';
+import {closeMaintenanceEpoch} from '../qualification-maintenance-close.mjs';
 const api=await import('../qualification-maintenance-journal.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 const sha=b=>createHash('sha256').update(b).digest('hex');
 function fixture(t) {
@@ -20,6 +21,10 @@ function fixture(t) {
 function fault(name,replacement,body) {
  const original=fs[name];fs[name]=replacement(original);syncBuiltinESMExports();
  try{return body();}finally{fs[name]=original;syncBuiltinESMExports();}
+}
+async function faultAsync(name,replacement,body) {
+ const original=fs[name];fs[name]=replacement(original);syncBuiltinESMExports();
+ try{return await body();}finally{fs[name]=original;syncBuiltinESMExports();}
 }
 test('新read纯读不创建目录；完成回执原件持久且不覆盖',t=>{
  const f=fixture(t);assert.deepEqual(api.readMaintenanceJournal(f.authority,{home:f.home}),[]);assert.equal(fs.existsSync(join(f.home,'.local')),false);
@@ -86,4 +91,38 @@ test('新namespace所有父目录也fsync后才承诺durable，不能只刷叶�
  for(const part of ['.local','share','zenithjoy','qualification-maintenance',f.authority.maintenance_task_id,f.authority.scope.intent_id]) {
   path=join(path,part);assert.ok(observed.has(String(fs.statSync(path).ino)),'namespace ancestor not durable: '+part);
  }
+});
+function closeIo(f) {
+ const state={db:false,db_writes:0,local:'original_owner',central:'original_owner'};
+ const io={authority:async()=>f.authority,candidate:async()=>true,withGuard:async fn=>fn(),
+  readLocal:async()=>state.local,readCentral:async()=>state.central,
+  readDb:async()=>({status:state.db?'db_committed':'db_not_committed'}),
+  readJournal:async()=>api.readMaintenanceJournal(f.authority,{home:f.home}),
+  append:async r=>api.appendMaintenanceJournal(f.authority,r,{home:f.home}),
+  effects:async()=>({status:'verified',effects_receipt_sha256:'e'.repeat(64)}),
+  restoreDb:async()=>{state.db=true;state.db_writes++;return {status:'db_committed'};},
+  releaseLocal:async()=>{state.local='free';},releaseCentral:async()=>{state.central='free';}};
+ return {io,state};
+}
+test('真实close状态机与FS组合：db_intent落盘未知后不能重写DB或释放资源',async t=>{
+ const f=fixture(t),{io,state}=closeIo(f);
+ const first=await faultAsync('renameSync',()=>()=>{throw Error('DB intent durable result unknown');},()=>closeMaintenanceEpoch(io));
+ assert.equal(first.status,'blocked');
+ const second=await closeMaintenanceEpoch(io);assert.equal(second.status,'blocked');assert.equal(second.phase,'db_readback');
+ assert.deepEqual(state,{db:false,db_writes:0,local:'original_owner',central:'original_owner'});
+ assert.ok(api.readMaintenanceJournal(f.authority,{home:f.home}).some(r=>r.phase==='journal_incomplete'));
+});
+test('真实close状态机与FS组合：DB已提交、回执pending后仅观察收口，绝不重PG',async t=>{
+ const f=fixture(t),{io,state}=closeIo(f);let injected=false;
+ const original=fs.renameSync;fs.renameSync=(from,to)=>{
+  if(!injected&&JSON.parse(fs.readFileSync(from)).record.phase==='db_committed'){injected=true;throw Error('after DB commit');}
+  return original(from,to);
+ };syncBuiltinESMExports();let first;
+ try{first=await closeMaintenanceEpoch(io);}finally{fs.renameSync=original;syncBuiltinESMExports();}
+ assert.equal(first.status,'blocked');assert.equal(state.db_writes,1);assert.equal(state.local,'original_owner');
+ const unknown=api.readMaintenanceJournal(f.authority,{home:f.home}).find(r=>r.phase==='journal_incomplete');assert.ok(unknown);
+ const second=await closeMaintenanceEpoch(io);assert.equal(second.status,'closed');
+ assert.deepEqual(state,{db:true,db_writes:1,local:'free',central:'free'});
+ const after=api.readMaintenanceJournal(f.authority,{home:f.home});assert.deepEqual(after.find(r=>r.phase==='journal_incomplete'),unknown);
+ assert.equal(after.at(-1).phase,'closed');
 });
