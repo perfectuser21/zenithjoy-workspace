@@ -88,7 +88,7 @@ def parse_processes(raw):
 
 def parse_projection(raw):
     # 只认完整明确的无投影格式；缺服务/未解析内容一律unknown。
-    inactive = re.fullmatch(r'MEDIA PROJECTION MANAGER \(dumpsys media_projection\)\n[ \t]*Media Projection:[ \t]*\(null\)[ \t]*\n?', raw)
+    inactive = re.fullmatch(r'MEDIA PROJECTION MANAGER \(dumpsys media_projection\)\n[ \t]*Media Projection:[ \t]*(?:\(null\)|\nnull)[ \t]*\n?', raw)
     return {'state': 'inactive' if inactive else 'unknown'}
 
 
@@ -122,18 +122,27 @@ def parse_native_audio(raw, uid):
     return unknown
 
 
-def collect_device(serial):
+def _collect_device(serial, values, checkpoint):
     started = int(time.time() * 1000)
-    values = {key: read_query(serial, key) for key in QUERIES}
+    for key in QUERIES:
+        checkpoint['stage'] = 'query_' + key
+        values[key] = read_query(serial, key)
+    checkpoint['stage'] = 'parse_package'
     need(values['sdk'].strip() == '36')
     matches = re.findall(r'(?m)^package:' + re.escape(PACKAGE) + r' uid:([0-9]+)$', values['package'])
     need(len(matches) == 1 and int(matches[0]) > 0)
     uid = int(matches[0])
+    checkpoint['stage'] = 'query_owners'
     values['owners'] = read_query(serial, 'owners', uid=uid)
+    checkpoint['stage'] = 'parse_owners'
     need(values['owners'].strip() == 'package:%s uid:%d' % (PACKAGE, uid))
+    checkpoint['stage'] = 'parse_processes'
     before = parse_processes(values['processes'])
+    checkpoint['stage'] = 'query_processes_after'
     values['processes_after'] = read_query(serial, 'processes')
+    checkpoint['stage'] = 'query_projection_after'
     values['projection_after'] = read_query(serial, 'projection')
+    checkpoint['stage'] = 'parse_after'
     after = parse_processes(values['processes_after'])
     projection = parse_projection(values['projection'])
     projection_after = parse_projection(values['projection_after'])
@@ -150,3 +159,20 @@ def collect_device(serial):
             'projection_after': projection_after, 'foreground_verified': len(foreground) == 1,
             'observed_at_ms': started, 'completed_at_ms': int(time.time() * 1000),
             'normalized_text_sha256': {key: hashlib.sha256(value.encode()).hexdigest() for key, value in values.items()}}
+
+
+def collect_device(serial):
+    values, checkpoint = {}, {'stage': 'start'}
+    try:
+        return _collect_device(serial, values, checkpoint)
+    except Exception:
+        lines = values.get('processes', '').splitlines()
+        header = lines[0] if lines and re.fullmatch(r'[A-Z ,:]{1,120}', lines[0]) else 'unrecognized'
+        owners = values.get('owners', '').splitlines()
+        return {'status': 'blocked', 'stage': checkpoint['stage'],
+                'code': 'MAINTENANCE_DEVICE_OBSERVATION_UNKNOWN',
+                'normalized_text_sha256': {key: hashlib.sha256(value.encode()).hexdigest() for key, value in values.items()},
+                'diagnostics': {'process_header': header, 'process_line_count': len(lines),
+                                'process_row_widths': sorted(set(len(line.split()) for line in lines[1:])),
+                                'owner_line_count': len(owners),
+                                'owner_shapes': [bool(re.fullmatch(r'package:[A-Za-z0-9_.]+ uid:[0-9]+', line.strip())) for line in owners]}}
