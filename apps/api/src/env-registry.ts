@@ -64,6 +64,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'HAPPYHORSE_API_KEY', reason: '批量混剪 S2 补拍(Happy Horse)凭据，缺则 assignSlots 必填槽位缺素材时落 reshoot_skipped(reshoot_service_not_configured)，不阻断（Gate0 实测=B，决策 98d1fab1）' },
   { name: 'OPENAI_API_KEY', reason: 'OpenAI 凭据，缺则不走 OpenAI 路径' },
   { name: 'DASHSCOPE_API_KEY', reason: '阿里灵积凭据，缺则不走 dashscope 路径' },
+  { name: 'COS_USE_ACCELERATE', reason: '素材桶已开启全球加速时设 true；海外服务上传和签名URL使用可达的加速端点' },
   { name: 'DASHSCOPE_WORKSPACE_ID', reason: '可选 Wan 业务空间ID；配置后使用北京地域 maas endpoint' },
   { name: 'DASHSCOPE_BASE_URL', reason: '可选 Wan 官方服务地址；未指定空间时默认已实测的 DashScope 标准 endpoint' },
   { name: 'ALIYUN_ACCESS_KEY_ID', reason: 'VIAPI 视频超分 RAM AccessKey ID；缺失则独立超分工具不可用' },
