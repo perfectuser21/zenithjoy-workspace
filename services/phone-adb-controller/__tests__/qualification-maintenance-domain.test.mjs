@@ -78,3 +78,16 @@ test('Perl只读包装若未核inner执行器字节仍须BLOCK',()=>{
  const f=wallRoles(fixture());addRole(f,{pid:620,ppid:600,pgid:600,executable:'/usr/bin/perl',program:{kind:'binary'}},{executable:{realpath:'/usr/bin/perl',sha256:'8'.repeat(64),uid:0},shape:{kind:'perl_adb_read',inner_path:'/tmp/adb'},inner_executable:{realpath:'/tmp/adb',sha256:'9'.repeat(64),uid:501}});
  assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'blocked');
 });
+test('已知bridge脚本也不能把未知Node镜像当旧常驻域排除',()=>{
+ const f=fixture(),script={realpath:'/Users/u/repos/cecelia/codex-bridge.cjs',sha256:'77bd6c9b1bb396299d1447a48319dfc16ee0f22545f5e42b7944321ca8d9aa24',uid:501};
+ addRole(f,{pid:650,executable:'/Users/u/bin/node',program:{kind:'script',script}},{executable:{realpath:'/Users/u/bin/node',uid:501,sha256:'9'.repeat(64)},files:[script],launchd:{pid:650,label:'com.perfect21.codex-bridge',plist:{sha256:'c'.repeat(64),uid:501},argv_sha256:'a'.repeat(64)}});
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'blocked');
+});
+test('与可信guard相同Python镜像的固定只读observer仍可排除',()=>{
+ const f=fixture();addRole(f,{pid:700,executable:'/opt/homebrew/bin/python3',classification:'read_only_native_observer',program:{kind:'inline',code_sha256:'a6a8fab5ecc72f1f15e21cafeb27744488cf5495a52db735932d17d6d2aeebd2'}},{executable:{realpath:'/opt/homebrew/bin/python3',sha256:'e'.repeat(64),uid:501}});
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'verified');
+});
+test('Perl将exec实际已核ADB同镜像时保只读功能',()=>{
+ const f=wallRoles(fixture());addRole(f,{pid:620,ppid:600,pgid:600,executable:'/usr/bin/perl',program:{kind:'binary'}},{executable:{realpath:'/usr/bin/perl',sha256:'8'.repeat(64),uid:0},shape:{kind:'perl_adb_read',inner_path:'/opt/homebrew/bin/adb'},inner_executable:{realpath:'/opt/homebrew/bin/adb',sha256:'7'.repeat(64),uid:501}});
+ assert.equal(api.evaluateOriginalExecutionDomain(ready(f)).status,'verified');
+});
