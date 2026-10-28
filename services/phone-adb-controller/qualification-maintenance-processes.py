@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import stat
 import sys
 import time
 
@@ -130,10 +131,17 @@ def describe_program(executable, argv):
         return {'kind': 'unclassified'}
     file = Path(argv[pos])
     try:
-        before = file.stat()
-        need(before.st_size <= 8 * 1024 * 1024, 'PROGRAM_INPUT_LIMIT')
-        raw = file.read_bytes()
-        after = file.stat()
+        target = file.resolve(strict=True)
+        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            before = os.fstat(fd)
+            need(stat.S_ISREG(before.st_mode) and before.st_size <= 8 * 1024 * 1024, 'PROGRAM_INPUT_LIMIT')
+            with os.fdopen(os.dup(fd), 'rb') as source:
+                raw = source.read(8 * 1024 * 1024 + 1)
+            need(len(raw) <= 8 * 1024 * 1024, 'PROGRAM_INPUT_LIMIT')
+            after = os.fstat(fd)
+        finally:
+            os.close(fd)
         need((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) ==
              (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns), 'PROGRAM_INPUT_CHANGED')
         return {'kind': 'script', 'script': {'path': str(file), 'realpath': str(file.resolve()),
