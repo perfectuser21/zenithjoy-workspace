@@ -177,3 +177,10 @@ print(json.dumps(ns['exec_target'](['/bin/bash','-lc','exec /trusted/phone-wall-
  const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64,suffix],{encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout),null);
 });
+
+test('真实无远端命令SSH的SOCKS和压缩转发参数可识别，命令与未知选项仍拒绝',()=>{
+ const code="import base64,json,sys;ns={};exec(base64.b64decode(sys.argv[1]),ns);print(json.dumps([ns['argument_shape'](a) for a in json.load(sys.stdin)]))";
+ const argv=[['/usr/bin/ssh','-D','127.0.0.1:1080','-N','relay'],['/usr/bin/ssh','-C','-N','-T','-L','5221:localhost:5221','relay'],['ssh','-N','-D','1080','relay','touch /tmp/unexpected'],['ssh','-N','-D','$(unexpected)','relay'],['ssh','-N','-o','LocalCommand=unexpected','-D','1080','relay'],['ssh','-N','-o','ProxyCommand=unexpected','-L','5221:localhost:5221','relay']];
+ const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify(argv),encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout).map(x=>x.kind),['ssh_forward','ssh_forward','unknown','unknown','unknown','unknown']);
+});
