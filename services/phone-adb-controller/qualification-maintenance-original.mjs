@@ -49,6 +49,15 @@ function readOriginal(s,home) {
  need(new RegExp('^\\.local/share/zenithjoy/phone-candidate-runs/[a-f0-9]{40}/ledger/douyin_video_processing-'+s.run_tag+'$').test(runRel)
   &&launch_result.expected_run_dir===join(home,runRel));
  const runDir=path(runRel),frozenRaw=json(runRel+'/run-definition.json');
+ const companyRaw=raw(runRel+'/company-config-receipts.jsonl').toString('utf8');
+ need(companyRaw.endsWith('\n')&&companyRaw.trimEnd().split('\n').length===1);
+ const company_receipt=JSON.parse(companyRaw);
+ need(Object.keys(company_receipt).sort().join(',')==='company_id,policy_id,product_ids,run_id,tenant_id,version'
+  &&company_receipt.company_id===s.company_id&&company_receipt.tenant_id===s.tenant_id
+  &&company_receipt.version===s.config_version&&company_receipt.policy_id===s.policy_id&&company_receipt.run_id===s.run_tag
+  &&Array.isArray(company_receipt.product_ids)&&company_receipt.product_ids.length>0&&company_receipt.product_ids.length<=100
+  &&new Set(company_receipt.product_ids).size===company_receipt.product_ids.length
+  &&company_receipt.product_ids.every(id=>typeof id==='string'&&id.length>0&&id.length<=200));
  need(frozenRaw.snapshot_sha256===s.snapshot_sha256&&frozenRaw.files&&typeof frozenRaw.files==='object'
   &&Object.keys(frozenRaw.files).length>0&&Object.keys(frozenRaw.files).length<=1024);
  for(const [file,hash]of Object.entries(frozenRaw.files))need(safeRelative(file)&&digest(raw(runRel+'/'+file))===hash);
@@ -117,5 +126,5 @@ function readOriginal(s,home) {
  // 第二遍核全部已读原字节，禁止把读到一半变化的现场拼成一个“完整”包。
  for(const [rel,data]of reads)need(data.equals(readFileSync(path(rel))));
  const raw_manifest=[...reads].map(([path,data])=>({path,bytes:data.length,sha256:digest(data)}));
- return {frozen,split,qualification,native_records,progress,tsv,launch_intent,launch_result,recording,intake,activity_events,raw_manifest,tracked,pid_only};
+ return {frozen,split,qualification,native_records,progress,tsv,launch_intent,launch_result,recording,intake,activity_events,company_receipt,raw_manifest,tracked,pid_only};
 }
