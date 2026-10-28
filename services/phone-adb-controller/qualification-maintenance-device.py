@@ -149,4 +149,4 @@ def collect_device(serial):
             'processes': before, 'processes_after': after, 'projection': projection,
             'projection_after': projection_after, 'foreground_verified': len(foreground) == 1,
             'observed_at_ms': started, 'completed_at_ms': int(time.time() * 1000),
-            'raw_sha256': {key: hashlib.sha256(value.encode()).hexdigest() for key, value in values.items()}}
+            'normalized_text_sha256': {key: hashlib.sha256(value.encode()).hexdigest() for key, value in values.items()}}
