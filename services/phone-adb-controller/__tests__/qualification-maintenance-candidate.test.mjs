@@ -12,7 +12,7 @@ function fixture(){
  const keys=['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach','workflow_report.internal','workflow_commander.internal','douyin_video_publish.android'];
  const releases={},observations={},gates={},physical={};
  for(const [target,count]of [['mmv',7],['xian-m4',4]]){
-  const refs=source.releases[target],activities=keys.slice(0,count).map((key,i)=>row(100+i,{activity_id:id(200+i),implementation_bindings:[{kind:'code',status:'verified',repo,revision:sha,path,digest:'sha256:'+digest(bytes)}]}));
+  const refs=source.releases[target],activities=keys.slice(0,count).map((key,i)=>row(100+i,{activity_id:id(200+i),implementation_bindings:[{kind:'code',scope:'activity',status:'verified',repo,revision:sha,path,digest:'sha256:'+digest(bytes)}]}));
   const workflows=keys.slice(0,count).map((key,i)=>row(300+i,{workflow_id:i<4?`b1000000-0000-4000-8000-${String(101+i).padStart(12,'0')}`:id(400+i),key,activities:[{activity_id:activities[i].payload.activity_id,activity_version_id:activities[i].id}]}));
   workflows.forEach(w=>w.workflow_id=w.payload.workflow_id);activities.forEach(a=>a.activity_id=a.payload.activity_id);
   const payload={workflows,activities,verification:{status:'verified'}};payload.components=bindingComponents(payload,sha);
