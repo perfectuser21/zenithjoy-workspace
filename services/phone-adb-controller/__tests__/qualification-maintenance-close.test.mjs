@@ -40,6 +40,10 @@ test('未知COMMIT后重入即使观察到原claim，也不在同epoch重做PG',
  assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');assert.equal(writes,1);
  assert.ok(!f.calls.includes('releaseLocal'));assert.ok(!f.calls.includes('releaseCentral'));
 });
+test('仅持久化db_intent便崩溃，不能据缺unknown回执而重放DB',async()=>{
+ need();const f=fixture();f.records.push({phase:'db_intent'});assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'blocked');
+ assert.ok(!f.calls.includes('restoreDb'));assert.ok(!f.calls.includes('releaseLocal'));
+});
 test('提交已证+local已free：崩溃重入只续中央收口，不重PG或local释放',async()=>{
  need();const f=fixture();f.state.db='db_committed';f.state.local='free';assert.equal((await api.closeMaintenanceEpoch(f.io)).status,'closed');
  assert.ok(!f.calls.includes('restoreDb'));assert.ok(!f.calls.includes('releaseLocal'));assert.equal(f.calls.filter(x=>x==='releaseCentral').length,1);
