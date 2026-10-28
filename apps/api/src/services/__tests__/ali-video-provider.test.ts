@@ -61,13 +61,31 @@ describe('AliVideoProvider — real request contracts at the HTTP boundary', () 
     expect(transport).not.toHaveBeenCalled();
   });
 
-  it('does not send source downloads or OSS uploads through the API-only proxy', async()=>{
+  it('keeps COS direct while routing the Shanghai OSS transfer and RPC through CONNECT', async()=>{
     const {transport}=fixture(new Response('video-bytes'),new Response(''),json({RequestId:'upscale'}));
     const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:'http://127.0.0.1:18241',ALIYUN_VIAPI_OSS_BUCKET:'video-tools-test'},fetch:transport});
     await provider.submitUpscale({videoUrl:'https://test.cos.accelerate.myqcloud.com/video.mp4'});
     expect(transport.mock.calls[0][1]).not.toHaveProperty('dispatcher');
-    expect(transport.mock.calls[1][1]).not.toHaveProperty('dispatcher');
+    expect(transport.mock.calls[1][1]).toHaveProperty('dispatcher');
     expect(transport.mock.calls[2][1]).toHaveProperty('dispatcher');
+  });
+
+  it('routes a Shanghai OSS source download and the generated result through the private relay',async()=>{
+    const {transport}=fixture(new Response('video-bytes'),new Response(''),json({RequestId:'upscale'}),new Response('result-bytes'));
+    const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:'http://127.0.0.1:18241',ALIYUN_VIAPI_OSS_BUCKET:'video-tools-test'},fetch:transport});
+    await provider.submitUpscale({videoUrl:'https://source.oss-cn-beijing.aliyuncs.com/video.mp4'});
+    // Other regions keep their current direct path; the relay only accepts explicitly approved Shanghai buckets.
+    expect(transport.mock.calls[0][1]).not.toHaveProperty('dispatcher');
+    const response=await provider.downloadResult('https://vigen-invi.oss-cn-shanghai.aliyuncs.com/result.mp4?Signature=signed-result');
+    expect(await response.text()).toBe('result-bytes');
+    expect(transport.mock.calls[3][1]).toMatchObject({dispatcher:expect.anything(),redirect:'error',signal:expect.any(AbortSignal)});
+  });
+
+  it('does not proxy Wan accelerated result downloads through the Shanghai-only path',async()=>{
+    const {transport}=fixture(new Response('wan-result'));
+    const provider=new AliVideoProvider({env:{...env,ALI_VIDEO_HTTPS_PROXY:'http://127.0.0.1:18241'},fetch:transport});
+    await provider.downloadResult('https://dashscope-test.oss-accelerate.aliyuncs.com/result.mp4');
+    expect(transport.mock.calls[0][1]).not.toHaveProperty('dispatcher');
   });
 
   it('submits Wan text and media as one async job using the configured workspace', async () => {
