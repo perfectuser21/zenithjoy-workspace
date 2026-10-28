@@ -113,15 +113,30 @@ test('原生guard unknown污染时没有cleanup能力、没有清场或恢复',{
 test('实际ADB叶子在原截止途中超时，tainted不签cleanup_only',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{slowLeaf:true}),{startDiscoveryPhoneScope}=await f.load('discovery-phone-scope.mjs'),{execInput}=await f.load('leadgen-client.mjs');let scope;
  try{
-  f.h.state.budgetDeadline=Date.now()+500;
+  // 仅测试预算：给启动边界留余量，真实C叶子sleep30s必须被原10s截止终止。
+  f.h.state.budgetDeadline=Date.now()+10000;
   scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:'a'.repeat(40),taskId:'scope-task',lockHeld:true});
   // 复现CI启动/调度已消耗500ms：必须证明确实进入C叶子，不能把空scope拒派当超时。
   await new Promise(r=>setTimeout(r,600));
-  const r=await execInput(scope.env.DOUYIN_PYTHON_BIN,[join(f.runtime,'adb-managed-client.py'),'-s','NO-DEVICE','shell','sleep-probe'],{env:{...f.env,...scope.env},timeoutMs:2000});
+  const r=await execInput(scope.env.DOUYIN_PYTHON_BIN,[join(f.runtime,'adb-managed-client.py'),'-s','NO-DEVICE','shell','sleep-probe'],{env:{...f.env,...scope.env},timeoutMs:15000});
   assert.notEqual(r.code,0,'必须真的在原leaf sleep中到期，不是夹具setup错误');
   assert.equal(existsSync(join(f.d,'slow-leaf-entered')),true,'C叶子必须实际进入sleep；连接拒绝不能冒充叶子超时');
   const result=await scope.finish({status:'partial',stop_reason:'budget_exhausted',persisted:0});assert.equal(result.cleanup_phone_scope,undefined);
   assert.ok(f.scopeLedgers().some(log=>log.includes('"tainted":true')),'父真实intent/start/exit账必须记录超时污染');assert.equal(existsSync(f.ownerFile),true);
+ }finally{await scope?.close();rmSync(f.d,{recursive:true,force:true});}
+});
+
+test('原截止在派发前已过时空scope可仅清理，不能冒称真实叶子超时',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{slowLeaf:true}),{startDiscoveryPhoneScope,discoveryCleanupEvidence}=await f.load('discovery-phone-scope.mjs'),{execInput}=await f.load('leadgen-client.mjs');let scope;
+ try{
+  f.h.state.budgetDeadline=Date.now()+1000;
+  scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:'a'.repeat(40),taskId:'scope-task',lockHeld:true});
+  await new Promise(r=>setTimeout(r,Math.max(1,f.h.state.budgetDeadline-Date.now()+150)));
+  const r=await execInput(scope.env.DOUYIN_PYTHON_BIN,[join(f.runtime,'adb-managed-client.py'),'-s','NO-DEVICE','shell','sleep-probe'],{env:{...f.env,...scope.env},timeoutMs:2000});
+  assert.notEqual(r.code,0);assert.equal(existsSync(join(f.d,'slow-leaf-entered')),false);
+  assert.deepEqual(f.scopeLedgers(),[],'空拒派没有任何真实叶子intent/start/exit');
+  const result=await scope.finish({status:'partial',stop_reason:'budget_exhausted',persisted:0});
+  assert.ok(discoveryCleanupEvidence(result,f.context));assert.equal(existsSync(f.ownerFile),true);
  }finally{await scope?.close();rmSync(f.d,{recursive:true,force:true});}
 });
 
