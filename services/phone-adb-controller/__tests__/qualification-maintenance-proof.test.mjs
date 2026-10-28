@@ -31,3 +31,21 @@ for(const [name,mutate]of [['receipt丢失',r=>r.filter(x=>x.phase!=='effects_re
  assert.equal(typeof api?.appendEffectReceipt,'function');const f=fixture(t);api.appendEffectReceipt(f.a,f.receipt,{home:f.home});
  assert.throws(()=>api.readHistoricalEffectProof(f.a,mutate(readMaintenanceJournal(f.a,{home:f.home})),f.hash),/MAINTENANCE_EFFECTS_PROOF_UNPROVEN/);
 });
+function sealedIo(f){const calls=[];return {calls,readAuthority:async()=>{calls.push('authority');return f.a;},readJournal:()=>readMaintenanceJournal(f.a,{home:f.home}),
+ readAudit:async metadata=>{calls.push('audit');assert.equal(metadata.run_id,f.a.scope.run_tag);return {status:'audit_committed',effects_receipt_sha256:f.hash};},
+ readLocal:async()=>{calls.push('local_read');return 'free';},readCentral:async()=>{calls.push('central_read');return 'free';}};}
+test('实际runtime sealed分流使用真FS proof，仅纯读不触guard/HB/手机/PG恢复或释放',async t=>{
+ const f=fixture(t);api.appendEffectReceipt(f.a,f.receipt,{home:f.home});appendMaintenanceJournal(f.a,{phase:'closed',at_ms:Date.now(),contract_sha256:f.a.contract_sha256},{home:f.home});
+ const {closeRuntimeMaintenance}=await import('../qualification-maintenance-runtime.mjs');assert.equal(typeof closeRuntimeMaintenance,'function');
+ const sealed=sealedIo(f);const forbidden=new Proxy({},{get(){throw Error('mutating close adapter reached');}});
+ const before=readMaintenanceJournal(f.a,{home:f.home}),r=await closeRuntimeMaintenance(f.a,{sealed,io:forbidden});
+ assert.equal(r.status,'already_closed');assert.equal(r.read_only,true);assert.deepEqual(readMaintenanceJournal(f.a,{home:f.home}),before);
+ assert.deepEqual(sealed.calls,['authority','audit','local_read','central_read','authority']);
+});
+test('没有closed不能装alreadyclosed；有closed但资源新owner/epoch漂移必须BLOCK',async t=>{
+ assert.equal(typeof api?.observeSealedMaintenanceEpoch,'function');const f=fixture(t);api.appendEffectReceipt(f.a,f.receipt,{home:f.home});
+ assert.equal((await api.observeSealedMaintenanceEpoch(f.a,sealedIo(f))).status,'not_sealed');
+ appendMaintenanceJournal(f.a,{phase:'closed',at_ms:Date.now(),contract_sha256:f.a.contract_sha256},{home:f.home});
+ let io=sealedIo(f);io.readCentral=async()=> 'foreign_owner';assert.equal((await api.observeSealedMaintenanceEpoch(f.a,io)).status,'blocked');
+ io=sealedIo(f);io.readAuthority=async()=>({...f.a,actor:'new-owner'});assert.equal((await api.observeSealedMaintenanceEpoch(f.a,io)).status,'blocked');
+});
