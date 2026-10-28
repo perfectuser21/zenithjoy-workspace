@@ -8247,3 +8247,11 @@ agent_suite:
   status: active
   product: AI员工
   note: 真实子进程单请求与流协议、EOF/提前退出/无响应的未知保护；固定xian和候选路径，不发信号或业务动作。
+
+- id: qualification-maintenance-effects
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-effects.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 采集任一阶段未知时保已取partial和安全stage；不继续后续探针或PG，证据存储失败只尝试一次且仍拒绝。
