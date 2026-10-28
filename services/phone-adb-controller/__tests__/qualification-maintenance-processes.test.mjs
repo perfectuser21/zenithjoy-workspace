@@ -32,6 +32,12 @@ test('最终枚举瞬时进程须真实ESRCH才可证明缺席，不使观察器
   assert.equal(api.evaluateProcessCensus(c,s).status,'verified');
   c.final_enumerated.at(-1).absence_reason='not_in_ps';assert.equal(api.evaluateProcessCensus(c,s).status,'blocked');
 });
+test('legacy launch父或capture无出生记录时，必须另有fresh ESRCH，不能从80名单推全停',()=>{
+ needApi();const s={...scope(),pid_only:[{pid:98765,origin:'launch_parent'}]},c=quiet(s);
+ c.pid_only=[{pid:98765,origin:'launch_parent',state:'alive',reason:'KERNEL'}];assert.equal(api.evaluateProcessCensus(c,s).status,'blocked');
+ c.pid_only[0]={pid:98765,origin:'launch_parent',state:'absent',reason:'not_in_ps'};assert.equal(api.evaluateProcessCensus(c,s).status,'blocked');
+ c.pid_only[0].reason='ESRCH';assert.equal(api.evaluateProcessCensus(c,s).status,'verified');
+});
 for(const [name,change]of [
   ['权限不明',c=>c.unknown.push({pid:17,code:'EPERM'})],
   ['枚举遗漏',c=>c.final_enumerated.push({pid:18,uid:process.getuid()})],
