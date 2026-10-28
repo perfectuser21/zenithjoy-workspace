@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import multer from 'multer';
+import { rateLimit } from 'express-rate-limit';
 import { fromNodeHeaders } from 'better-auth/node';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
@@ -74,7 +75,7 @@ export function createVideoToolsRouter(options: Options = {}): Router {
     finally { release(); if (locks.get(key) === queued) locks.delete(key); }
   }
   const ownerDir = (req: StaffRequest) => join(directory, hash(req.videoStaffId!));
-  const jobPath = (req: StaffRequest, id: string) => join(ownerDir(req), `${id}.json`);
+  const jobPath = (req: StaffRequest, id: string) => join(ownerDir(req), `${id.replace(/[^a-zA-Z0-9-]/g, '')}.json`);
   let storage = options.storage;
   const uploadsConfigured = () => Boolean(storage) || isCosConfigured();
   async function getStorage() {
@@ -99,7 +100,13 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   }));
   router.get('/config', (_req, res) => res.json({ ...provider.getConfiguration(), uploads: { configured: uploadsConfigured() } }));
 
-  const upload = multer({ dest: tmpdir(), limits: { fileSize: MAX_BYTES, files: 1 }, fileFilter: (_req, file, cb) => {
+  router.use(rateLimit({ windowMs: 60_000, limit: 240, standardHeaders: true, legacyHeaders: false, message: { error: '请求过于频繁，请稍后重试' } }));
+  const temporaryFiles = new WeakMap<Request, string>();
+  const upload = multer({ storage: multer.diskStorage({ destination: tmpdir(), filename: (req, _file, cb) => {
+    const filename = `video-tools-${randomUUID()}`;
+    temporaryFiles.set(req, join(tmpdir(), filename));
+    cb(null, filename);
+  } }), limits: { fileSize: MAX_BYTES, files: 1 }, fileFilter: (_req, file, cb) => {
     const valid = /\.(png|jpe?g|webp|mp4|mov|webm)$/i.test(file.originalname);
     if (valid) cb(null, true);
     else cb(Object.assign(new Error('请选择 PNG、JPG、WebP 图片或 MP4、MOV、WebM 视频'), { status: 400 }));
@@ -107,13 +114,15 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   router.post('/uploads', upload.single('file'), wrap(async (req, res) => {
     const file = req.file;
     if (!file) return fail(400, '请选择需要上传的文件');
+    const temporaryFile = temporaryFiles.get(req);
+    if (!temporaryFile) return fail(500, '上传状态无效，请重试');
     try {
       if (!file.size) return fail(400, '不能上传空文件');
       const suffix = extname(file.originalname).toLowerCase();
       const kind = /\.(png|jpe?g|webp)$/.test(suffix) ? 'image' : 'video';
       let width: number, height: number, duration: number, fps: number;
       try {
-        const output = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,codec_name,avg_frame_rate:format=duration,format_name', '-of', 'json', file.path], { timeout: 15_000, maxBuffer: 16384 });
+        const output = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,codec_name,avg_frame_rate:format=duration,format_name', '-of', 'json', temporaryFile], { timeout: 15_000, maxBuffer: 16384 });
         const info = JSON.parse(output.stdout);
         width = Number(info.streams?.[0]?.width); height = Number(info.streams?.[0]?.height); duration = Number(info.format?.duration ?? 0);
         const rate = String(info.streams?.[0]?.avg_frame_rate ?? '0/1').split('/').map(Number);
@@ -128,11 +137,11 @@ export function createVideoToolsRouter(options: Options = {}): Router {
       const objectId = randomUUID();
       const key = `video-tools/${hash(req.videoStaffId!)}/${objectId}${suffix}`;
       const objectStorage = await getStorage();
-      await objectStorage.putObject({ key, filePath: file.path, contentType: kind === 'video' ? (suffix === '.webm' ? 'video/webm' : suffix === '.mov' ? 'video/quicktime' : 'video/mp4') : suffix === '.png' ? 'image/png' : suffix === '.webp' ? 'image/webp' : 'image/jpeg' });
+      await objectStorage.putObject({ key, filePath: temporaryFile, contentType: kind === 'video' ? (suffix === '.webm' ? 'video/webm' : suffix === '.mov' ? 'video/quicktime' : 'video/mp4') : suffix === '.png' ? 'image/png' : suffix === '.webp' ? 'image/webp' : 'image/jpeg' });
       const asset: Asset = { id: objectId, url: await objectStorage.getSignedUrl(key, 86400), kind, name: file.originalname, width, height, duration, fps, size: file.size, createdAt: new Date().toISOString() };
       await save(join(ownerDir(req), 'assets', `${objectId}.json`), asset);
       res.json(asset);
-    } finally { await unlink(file.path).catch(() => {}); }
+    } finally { await unlink(temporaryFile).catch(() => {}); temporaryFiles.delete(req); }
   }));
 
   async function jobs(req: StaffRequest): Promise<Job[]> {

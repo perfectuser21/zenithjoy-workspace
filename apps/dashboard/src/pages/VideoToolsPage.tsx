@@ -145,7 +145,7 @@ export default function VideoToolsPage({ kind }: { kind: Kind }) {
             <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm dark:border-slate-600 dark:bg-slate-900 ${!config?.uploads.configured || uploading || busy || pending ? 'pointer-events-none opacity-50' : 'hover:border-violet-400'}`}>
               {uploading ? <Loader2 className="animate-spin text-violet-500" size={24} /> : <Upload className="text-violet-500" size={24} />}
               <span>{uploading ? '正在上传素材…' : isWan ? '选择图片或参考视频' : '选择一个视频文件'}</span>
-              <span className="text-xs text-slate-400">每个文件最多 100 MB{isWan ? ' · 最多 10 张图、5 段视频' : ' · MP4 / MOV 等格式'}</span>
+              <span className="text-xs text-slate-400">{isWan ? '图片最多 20 MB，视频最多 100 MB · 最多 10 张图、5 段视频' : '视频最多 100 MB · MP4 / MOV 等格式'}</span>
               <input aria-label={isWan ? '上传参考素材' : '上传待超分视频'} className="sr-only" type="file" accept={isWan ? 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime' : 'video/*'} multiple={isWan} disabled={!config?.uploads.configured || uploading || busy || pending} onChange={event => { void upload(event.target.files); event.target.value = ''; }} />
             </label>
             {config && !config.uploads.configured && <p className="mt-2 text-xs text-amber-700">素材上传尚未配置，请联系管理员{isWan ? '；仍可使用文字生成视频。' : '。'}</p>}
