@@ -211,3 +211,9 @@ test('系统root入站broker派生的sshd-session本体在固定353外，子命�
 for(const [name,change]of [['同UID父',f=>{for(const k of ['enumerated','final_enumerated'])f.observation.census[k].find(p=>p.pid===690).uid=501;}],['非系统镜像',f=>f.observation.roles[700].executable.realpath='/tmp/sshd-session'],['只有一轮root父证据',f=>f.observation.census.final_enumerated=f.observation.census.final_enumerated.filter(p=>p.pid!==690)]])test('system broker '+name+'仍拒绝',()=>{
  const f=ready(systemSession(fixture()));change(f);assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');
 });
+
+test('旧wall必须使用真实kernel元数据形状，program只在census行不在kernel',()=>{
+ const f=ready(existingWall(fixture())),d=f.observation.roles[600];
+ d.kernel={pid:d.kernel.pid,uid:d.kernel.uid,ppid:d.kernel.ppid,pgid:d.kernel.pgid,start_identity:d.kernel.start_identity};
+ assert.equal(api.evaluateOriginalExecutionDomain(f).status,'verified');
+});
