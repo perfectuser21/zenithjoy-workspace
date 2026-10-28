@@ -20,3 +20,7 @@ test('inline源码或凭据绝不回显，只输出摘要，未知flags不猜脚
 test('argv中的设备文件不是可读取脚本，不读FIFO或无限数据源',()=>{
  assert.equal(describe('/usr/bin/python3',['python3','/dev/null']).kind,'unclassified');
 });
+test('固定执行体按完整basename匹配，不把sharingd等sh前缀系统服务扩成原RPA生产者',()=>{
+ const code=`import importlib.util,json,sys,os\ns=importlib.util.spec_from_file_location('p',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nscope={'run_tag':'fixed_run','serial':'SER1','run_dir':'/old/run','runtime_root':'/old/runtime'}\ndef classify(name):return m.classify({'pid':os.getpid()+100000,'terminal':False,'executable':'/bin/'+name,'ppid':1},[name],scope)\nfor name in ['sharingd','sharedfilelistd','shazamd','ShortcutsViewService','ssh-agent','shasum']:\n assert classify(name)=='outside_supported_program',name\nfor name in ['sh','bash','zsh','python3.14','Python','node','ssh','sshd-session','scp','sftp','adb','scrcpy','ffmpeg','ffprobe','curl','python-unreviewed']:\n assert classify(name)=='unknown_detached',name\n`;
+ const r=spawnSync('python3',['-B','-I','-c',code,path],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
