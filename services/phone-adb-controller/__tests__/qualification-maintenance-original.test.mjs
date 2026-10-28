@@ -74,3 +74,11 @@ for(const [name,mutate]of [
  ['不明native附件',f=>f.put(join(f.run,'native-operations','untracked.txt'),'unknown')],
  ['额外stdout资格结论',f=>f.put(join(f.run,'qualification.tsv'),'QUAL\tother\tmatched\n')],
 ])test(name+'拒绝原件适配',t=>{const f=fixture(t);mutate(f);assert.equal(typeof api?.readMaintenanceOriginal,'function');assert.throws(()=>api.readMaintenanceOriginal(f.scope,{home:f.home}),/MAINTENANCE_/);});
+for(const activity of ['collection','cleanup'])for(const phase of ['before','execution']) {
+ test(`${activity}.${phase}同scope事件也不能被blocked split覆盖`,t=>{
+  const f=fixture(t),path=join(f.run,'activity-events.jsonl');
+  const event=JSON.parse(readFileSync(path,'utf8').trim());
+  f.put(path,readFileSync(path,'utf8')+JSON.stringify({...event,activity,phase})+'\n');
+  assert.throws(()=>api.readMaintenanceOriginal(f.scope,{home:f.home}),/MAINTENANCE_/);
+ });
+}
