@@ -12,6 +12,7 @@ Wan 支持提示词、参考图片/视频、时长、画幅、分辨率和声音
 - `DASHSCOPE_API_KEY`：百炼密钥。
 - `DASHSCOPE_BASE_URL`：可指定官方服务地址，例如 `https://dashscope.aliyuncs.com/api/v1`。
 - `DASHSCOPE_WORKSPACE_ID`：使用业务空间地域地址时配置；密钥、业务空间和地域须对应。
+- `ALI_VIDEO_HTTPS_PROXY`：可选的私网 HTTP CONNECT 地址，仅用于阿里生成/查询/RPC 请求；不改变网站或 COS 的出口，也不会自动重试生成提交。香港到阿里国内地址不通时，使用 `http://100.69.180.117:18241`。部署见 [私网视频接口出口](../deploy/video-api-relay/README.md)。此配置不代理超分素材的 OSS 转存，应单独验收超分链路。
 - `ALIYUN_ACCESS_KEY_ID`、`ALIYUN_ACCESS_KEY_SECRET`：已授权 VIAPI 超分的 RAM 账号。
 - `ALIYUN_VIAPI_OSS_BUCKET`：可选自有上海 OSS bucket。内部试用默认使用官方临时 bucket，素材一天后过期；长期使用应配置自有 bucket 并授权 PutObject。
 - `COS_SECRET_ID`、`COS_SECRET_KEY`、`COS_BUCKET`、`COS_REGION`：现有私有素材存储，用于网页上传。

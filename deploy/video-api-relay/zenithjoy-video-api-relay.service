@@ -1,0 +1,20 @@
+[Unit]
+Description=Private Alibaba video API CONNECT relay
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+ExecStart=/opt/zenithjoy/video-api-relay/runtime/usr/bin/tinyproxy -d -c /opt/zenithjoy/video-api-relay/tinyproxy.conf
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
