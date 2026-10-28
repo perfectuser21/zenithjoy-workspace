@@ -52,7 +52,13 @@ p=m.parse_native_audio(audio,10061);assert p['state']=='started';assert p['pid']
 assert m.parse_native_audio('unrecognized',10061)['state']=='unknown'
 assert m.parse_projection('arbitrary missing service text')['state']=='unknown'
 assert m.parse_projection('MEDIA PROJECTION MANAGER (dumpsys media_projection)\\nMedia Projection: (null)\\n')['state']=='inactive'
+assert m.parse_projection('MEDIA PROJECTION MANAGER (dumpsys media_projection)\\nMedia Projection: \\nnull\\n')['state']=='inactive'
 assert m.parse_projection('MEDIA PROJECTION MANAGER (dumpsys media_projection)\\nMedia Projection: grant active\\n')['state']=='unknown'
+`));
+test('真实query已完成但ps/owners解析拒绝时保明确阶段和非秘密形状，不假成功',()=>run(`
+values={'sdk':'36\\n','processes':'BAD HEADER\\nshell 200 1 ps\\n','projection':'unknown\\n','audio':'unknown\\n','package':'package:com.ss.android.ugc.aweme uid:10061\\n','foreground':'unknown\\n','owners':'package:com.ss.android.ugc.aweme uid:10061\\n'}
+m.read_query=lambda serial,key,**kw:values[key]
+r=m.collect_device('SER1');assert r['status']=='blocked';assert r['stage']=='parse_processes';assert r['diagnostics']['process_header']=='BAD HEADER';assert r['normalized_text_sha256']['owners']
 `));
 test('文本协议CRLF归一摘要明确标normalized，不冒原wire字节摘要',()=>run(`
 values={'sdk':'36\\n','processes':'UID PID PPID NAME\\nshell 200 1 ps\\n','projection':'unknown\\n','audio':'unknown\\n','package':'package:com.ss.android.ugc.aweme uid:10061\\n','foreground':'unknown\\n','owners':'package:com.ss.android.ugc.aweme uid:10061\\n'}
