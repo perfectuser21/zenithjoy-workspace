@@ -5,6 +5,7 @@ import {mkdtempSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
+import {gzipSync} from 'node:zlib';
 const api=await import('../qualification-maintenance-transport.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return null;throw e;});
 test('候选路径仅正规40SHA和两固定target，不能经字符串注入SSH',()=>{
  assert.equal(typeof api?.candidateRuntimeRoot,'function');
@@ -35,4 +36,10 @@ test('远端候选审计执行本人固定reader，只读实际bytes且变更必
  const first=run();assert.equal(first.status,0,first.stderr);const measured=JSON.parse(first.stdout);
  assert.equal(Buffer.from(measured.manifest_raw,'base64').toString(),raw);assert.deepEqual(measured.observed.files,manifest.files);
  writeFileSync(join(root,'code.py'),'drift');assert.notEqual(run().status,0);
+});
+test('原件压缩通道按实际解压bytes/hash核验，不把observed标签当证明',()=>{
+ assert.equal(typeof api?.decodeOriginalPacket,'function');const raw=Buffer.from(JSON.stringify({frozen:{test:true}}));
+ const packet={status:'observed',encoding:'gzip-base64',bytes:raw.length,sha256:createHash('sha256').update(raw).digest('hex'),data:gzipSync(raw).toString('base64')};
+ assert.deepEqual(api.decodeOriginalPacket(packet),{frozen:{test:true}});
+ for(const altered of [{...packet,bytes:raw.length+1},{...packet,sha256:'a'.repeat(64)},{...packet,data:'not_base64'},{...packet,bytes:17*1024*1024}])assert.throws(()=>api.decodeOriginalPacket(altered),/MAINTENANCE_HOST_UNKNOWN/);
 });
