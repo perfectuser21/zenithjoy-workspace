@@ -9,28 +9,15 @@ import {readMaintenanceAuthority,maintenanceBrainRequest} from './qualification-
 import {verifyMaintenanceCandidate} from './qualification-maintenance-candidate.mjs';
 import {collectMaintenanceCandidateRoot} from './qualification-maintenance-bytes.mjs';
 import {candidateRuntimeRoot,collectRemoteMaintenanceCandidate,openMaintenanceGuard,decodeOriginalPacket,readRemoteMaintenanceOriginal,readRemoteMaintenanceLocal} from './qualification-maintenance-transport.mjs';
-import {originalExecutionScope,evaluateOriginalExecutionDomain} from './qualification-maintenance-domain.mjs';
+import {originalExecutionScope} from './qualification-maintenance-domain.mjs';
+import {collectMaintenanceEffects} from './qualification-maintenance-effects.mjs';
+export {verifyRestoredDevice} from './qualification-maintenance-effects.mjs';
 import {readCommanderClosure} from './qualification-maintenance-commander.mjs';
 import {readMmvRpcClosure} from './qualification-maintenance-mmv.mjs';
 import {readHistoricalCompanySnapshot,readPendingClaimOutcome,restorePendingClaim} from './qualification-maintenance-pg.mjs';
 import {readMaintenanceJournal,appendMaintenanceJournal} from './qualification-maintenance-journal.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 const need=(v,code='MAINTENANCE_RUNTIME_UNPROVEN')=>{if(!v)throw Error(code);};
-const deviceDigest=digest(readFileSync(join(here,'qualification-maintenance-device.py')));
-export function verifyRestoredDevice(original,o,serial) {
- const r=original.recording?.native_audio_restored;
- const fail='MAINTENANCE_DEVICE_UNPROVEN';
- need(o?.status==='observed'&&o.serial===serial&&o.sdk===36&&original.recording.capture_audio_sdk===36
-  &&o.observer_sha256===deviceDigest&&r?.package_uid_verified===true&&r.state==='started'
-  &&['state','uid','pid','piid'].every(k=>o.audio?.[k]===r[k])&&o.uid===r.uid
-  &&o.processes?.capture_pids?.length===0&&o.processes_after?.capture_pids?.length===0
-  &&o.projection?.state==='inactive'&&o.projection_after?.state==='inactive'
-  &&Number.isFinite(o.observed_at_ms)&&o.completed_at_ms>=o.observed_at_ms
-  &&o.completed_at_ms>Date.now()-15000&&o.completed_at_ms<Date.now()+2000,fail);
- for(const key of ['sdk','processes','projection','audio','package','foreground','owners','processes_after','projection_after'])
-  need(/^[a-f0-9]{64}$/.test(o.normalized_text_sha256?.[key]||''),fail);
- return {status:'verified',domain:'original_capture_stopped_and_playback_restored',observation_sha256:digest(o)};
-}
 function productionPool() {
  // 不继承开发会话PGHOST/PGDATABASE；与原正式RPC使用同一私有凭据源。
  const file=join(homedir(),'.credentials/zenithjoy-db.env'),st=lstatSync(file);
@@ -92,13 +79,11 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
    guard_pid:peer.identity.pid,guard_start_identity:peer.identity.start_identity,
    guard_script_path:candidateRuntimeRoot('xian-m4',scope.maintenance_source.commit)+'/qualification-maintenance-host.py',
    guard_script_sha256:peer.identity.script_sha256};
-  const commander=await readCommanderClosure(scope);commander.mmv_rpc=readMmvRpcClosure(scope);
-  const device=await peer.request({op:'device'}),deviceVerdict=verifyRestoredDevice(original,device,scope.serial);
-  const observation=await peer.request({op:'domain',scope:originalExecutionScope(original,peer.identity.uid),epoch});
-  const domain=evaluateOriginalExecutionDomain({original,observation,commander,epoch});
-  const inputHash=retainEvidence({epoch,original_raw_manifest:original.raw_manifest,commander,device,observation,domain});
-  need(domain.status==='verified');lastEvidence={contract_sha256:initial.contract_sha256,effects_input_sha256:inputHash,domain,device:deviceVerdict,at_ms:Date.now()};
-  return {status:'verified',effects_receipt_sha256:digest(lastEvidence),...lastEvidence};
+  lastEvidence=await collectMaintenanceEffects({scope,epoch,contract_sha256:initial.contract_sha256,
+   readOriginal:currentOriginal,readCommander:()=>readCommanderClosure(scope),readMmv:()=>readMmvRpcClosure(scope),
+   readDevice:()=>peer.request({op:'device'}),
+   readDomain:o=>peer.request({op:'domain',scope:originalExecutionScope(o,peer.identity.uid),epoch}),retainEvidence});
+  return lastEvidence;
  };
  const withGuard=async fn=>{
   need(!peer);peer=await openMaintenanceGuard(scope);
@@ -118,7 +103,7 @@ export async function createMaintenanceRuntime({authority:initial,verb}) {
   },append,readJournal:()=>readMaintenanceJournal(initial)};
  return {io,preflight:async()=>{
   await authority();await candidate();return withGuard(async()=>{
-   await authority();await currentOriginal();await baseline();const e=await effects();
+   await authority();await currentOriginal();await baseline();const e=await effects();if(e.status!=='verified')return e;
    return {status:'preflight_verified',contract_sha256:initial.contract_sha256,effects_receipt_sha256:e.effects_receipt_sha256,
     heartbeat_receipts:lastAuthority.heartbeat_receipts,lease_evidence:lastAuthority.lease_evidence};
   });
