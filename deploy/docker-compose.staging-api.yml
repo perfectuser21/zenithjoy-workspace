@@ -35,7 +35,9 @@ services:
     environment:
       TZ: Asia/Shanghai
       PORT: "5200"              # 容器内固定 5200（Dockerfile EXPOSE/HEALTHCHECK 对齐），覆盖 .env 里的旧值
+      VIDEO_TOOLS_DATA_DIR: /data/video-tools
     volumes:
+      - /opt/zenithjoy/staging-api/video-tools:/data/video-tools
       - /opt/zenithjoy/staging-api/content-output:/data/content-output
       - /opt/zenithjoy/staging-api/install-pack:/data/install-pack:ro
       # Task 11：积分充值支付凭据（微信/支付宝私钥+证书）。PEM 绝不进 .env 变量本体，

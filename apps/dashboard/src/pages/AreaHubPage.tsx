@@ -29,6 +29,14 @@ interface AreaHub {
 
 // 各区配置：title = 客户看到的人话名（无 Line）；cards = 下钻入口（复用现有子页路由）
 export const AREA_HUBS: Record<string, AreaHub> = {
+  'video-tools': {
+    title: '视频工具',
+    subtitle: '从创意生成到清晰成片，选择一个工具开始。',
+    cards: [
+      { label: 'Wan Playground', desc: '使用 Wan 3.0，根据文字和参考素材生成视频', to: '/wan-playground', Icon: Sparkles, color: 'text-violet-500' },
+      { label: '视频超分', desc: '上传已有视频，两倍放大并增强画面细节', to: '/video-upscale', Icon: Video, color: 'text-blue-500' },
+    ],
+  },
   publish: {
     title: '智能发布',
     subtitle: '一处管好多平台内容发布：绑号、出内容、发布、看数据。',
