@@ -52,6 +52,11 @@ def classify_rpc(executable, argv, cwd, scope):
     return 'outside_fixed_rpc_domain'
 
 
+def bind_cwd_identity(before, after):
+    need(before is not None and after is not None and before['pid'] == after['pid']
+         and before['start_identity'] == after['start_identity'])
+
+
 def collect_mmv(scope):
     need(scope.get('consumer_source') == SUPPORTED and re.fullmatch(r'[A-Za-z0-9_-]{1,120}', scope.get('run_tag', '')))
     root = str(Path.home() / '.local/share/zenithjoy/phone-candidates' / SUPPORTED / 'runtime')
@@ -61,6 +66,12 @@ def collect_mmv(scope):
     spec.loader.exec_module(processes)
     started = int(time.time() * 1000)
     first = [row for row in processes.listed() if row['uid'] == os.getuid() and row['pid'] > 1]
+    before_cwd = {}
+    for row in first:
+        try:
+            before_cwd[row['pid']] = processes.kernel(row['pid'])
+        except Exception:
+            before_cwd[row['pid']] = None
     p = subprocess.run(['/usr/sbin/lsof', '-a', '-u', str(os.getuid()), '-d', 'cwd', '-Fpn'],
                        capture_output=True, text=True, timeout=5)
     need(p.returncode == 0 and 0 < len(p.stdout.encode()) < 4 * 1024 * 1024)
@@ -82,6 +93,7 @@ def collect_mmv(scope):
             if before['terminal']:
                 covered[pid] = before['start_identity']
                 return
+            bind_cwd_identity(before_cwd.get(pid), before)
             executable, argv = processes.args(pid)
             after = processes.kernel(pid)
             if after is None:
