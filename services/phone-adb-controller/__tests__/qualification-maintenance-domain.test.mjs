@@ -184,3 +184,17 @@ test('真实无远端命令SSH的SOCKS和压缩转发参数可识别，命令与
  const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify(argv),encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout).map(x=>x.kind),['ssh_forward','ssh_forward','unknown','unknown','unknown','unknown']);
 });
+
+function existingWall(f) {
+ const tuple={'phone-wall-push.sh':'e07fce1199ae6f7296fc04e794e784a23cff3f3560e5ba4a7c6de85a48c68bea','wall-lib.sh':'7c1147802aad15612514eb308581f435895885c237772adc44b36f40238ce7b7','adb-managed-client.py':'d1fc8d0dbe33137f7e05f40cb9f4388e53fd84ff8336eaf0d9533d059c7a8995','adb-existing-route.py':'f1cfd000f939c1bdc5729b2862290a7271846c4585dc52db0bbbe394e8a5556e'};
+ wallRoles(f);for(const name of ['phone-wall-push.sh','wall-lib.sh'])f.original.frozen.deployment.files.find(x=>x.deployed_path===name).content_sha256=tuple[name];
+ const d=f.observation.roles[600];d.files=Object.entries(tuple).map(([name,sha256])=>({realpath:'/Users/u/bin-harvest/'+name,sha256,uid:501}));d.kernel.program.script=d.files[0];
+ f.observation.consumer_manifest={source_commit:'fa68c61c8a90b2414b0f4d74f7223d4dc742a5f7',identity:{realpath:'/Users/u/bin-harvest/deployment-manifest.json',sha256:'0a6679e7f27d945997fed693fc1f4f4ad99016f28671c743b0277be21476dd91',uid:501}};
+ return f;
+}
+test('已接受旧wall完整四件tuple与实际installed-manifest绑定，不错用原353的新依赖',()=>{
+ const f=ready(existingWall(fixture()));assert.equal(api.evaluateOriginalExecutionDomain(f).status,'verified');
+});
+for(const [name,change] of [['缺installedmanifest',f=>delete f.observation.consumer_manifest],['manifest字节不同',f=>f.observation.consumer_manifest.identity.sha256='0'.repeat(64)],['部署source不同',f=>f.observation.consumer_manifest.source_commit=old],['新旧依赖混配',f=>f.observation.roles[600].files[3].sha256='4'.repeat(64)]])test('旧wall '+name+'仍BLOCK',()=>{
+ const f=ready(existingWall(fixture()));change(f);assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');
+});
