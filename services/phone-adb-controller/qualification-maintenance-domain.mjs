@@ -81,6 +81,9 @@ function admittedRoles(c,roles,epoch,original,observation) {
   if(d.shape?.kind==='sleep'&&d.executable.uid===0&&d.executable.realpath==='/bin/sleep')accepted.set(r.pid,'non_executing_sleep');
   if(r.classification==='read_only_native_observer'&&samePython(d)&&r.program?.kind==='inline'
    &&['a6a8fab5ecc72f1f15e21cafeb27744488cf5495a52db735932d17d6d2aeebd2','cecd8eb83bd1696e1f877bcaf43a4fb1659b839531b800f4ea528ca1abfebdcb'].includes(r.program.code_sha256))accepted.set(r.pid,'fixed_readonly_observer');
+  // 固定353仅向MMV出站SSH/SCP；root入站monitor创建的系统broker不等于其会话子命令。
+  if(d.executable.uid===0&&d.executable.realpath==='/usr/libexec/sshd-session'&&r.program?.kind==='binary'
+   &&[c.enumerated,c.final_enumerated].every(list=>list.some(p=>p.pid===r.ppid&&p.uid===0&&p.ppid===1)))accepted.set(r.pid,'outside_353_system_session_broker');
   if(observation.ancestors?.some(a=>a.pid===r.pid&&a.start_identity===r.start_identity)
    &&d.executable.uid===0&&['/usr/libexec/sshd-session','/usr/sbin/sshd'].includes(d.executable.realpath))accepted.set(r.pid,'current_guard_system_transport');
  }
