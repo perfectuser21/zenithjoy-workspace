@@ -76,7 +76,7 @@ def parse_processes(raw):
     need(lines and lines[0].split() == ['UID', 'PID', 'PPID', 'NAME'])
     seen, capture = set(), []
     for line in lines[1:]:
-        fields = line.split()
+        fields = line.split(None, 3)
         need(len(fields) == 4 and fields[1].isdigit() and fields[2].isdigit()
              and int(fields[1]) > 0 and int(fields[1]) not in seen)
         seen.add(int(fields[1]))
