@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readdirSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -22,10 +22,10 @@ function fixture(t) {
 test('五个returned原件逐对核SHA与scope+official当前无活跃/排队/children，不写旧owner',async t=>{
  const f=fixture(t);assert.equal(typeof api?.readCommanderClosure,'function');const out=await api.readCommanderClosure(f.scope,{home:f.home,get:f.get});assert.equal(out.status,'verified_inactive');assert.equal(out.os_full_stop,false);assert.equal(out.returned_turns,5);
 });
-for(const kind of ['pending','archive_mismatch','active','queued','child','truncated'])test(kind+'不得当原Commander已收口',async t=>{
+for(const kind of ['pending','archive_mismatch','archive_changes_during_official_read','active','queued','child','truncated'])test(kind+'不得当原Commander已收口',async t=>{
  const f=fixture(t);assert.equal(typeof api?.readCommanderClosure,'function');
  if(kind==='pending')writeFileSync(join(f.dir,f.prefix),'{}',{mode:0o600});
  if(kind==='archive_mismatch'){const name=(await import('node:fs')).readdirSync(f.dir).find(n=>n.endsWith('.returned.original.json'));writeFileSync(join(f.dir,name),'{}');}
- const get=async(method,params)=>{const r=await f.get(method,params);if(method==='chat.history'&&kind==='active')r.sessionInfo.hasActiveRun=true;if(method==='chat.history'&&kind==='queued')r.pendingInputs={items:[{id:'queued'}],total:1};if(method==='sessions.list'&&kind==='child'){r.sessions=[{key:'child'}];r.count=1;}if(method==='sessions.list'&&kind==='truncated')r.hasMore=true;return r;};
+ const get=async(method,params)=>{const r=await f.get(method,params);if(method==='chat.history'&&kind==='active')r.sessionInfo.hasActiveRun=true;if(method==='chat.history'&&kind==='queued')r.pendingInputs={items:[{id:'queued'}],total:1};if(method==='sessions.list'&&kind==='child'){r.sessions=[{key:'child'}];r.count=1;}if(method==='sessions.list'&&kind==='truncated')r.hasMore=true;if(method==='sessions.list'&&kind==='archive_changes_during_official_read'){const name=readdirSync(f.dir).find(n=>n.endsWith('.returned.json'));writeFileSync(join(f.dir,name),'{}');}return r;};
  await assert.rejects(api.readCommanderClosure(f.scope,{home:f.home,get}),/MAINTENANCE_/);
 });
