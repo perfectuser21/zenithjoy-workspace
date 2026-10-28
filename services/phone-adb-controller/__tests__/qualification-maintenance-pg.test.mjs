@@ -45,6 +45,12 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
     await scoped.query("UPDATE zenithjoy.leadgen_videos SET process_status='处理中:foreign' WHERE video_id=$1",[vid]);
     assert.equal((await api.readPendingClaimOutcome(scoped,input)).status,'blocked');
    });
+   await t.test('重入纯读不要求伪造新的effects hash，旧audit hash只标历史证据',async()=>{
+    await init();await api.restorePendingClaim(scoped,input);
+    const out=await api.readPendingClaimOutcome(scoped,{authorization,expected_snapshot:snapshot});
+    assert.equal(out.status,'db_committed');assert.equal(out.effects_receipt_sha256,input.effects_receipt_sha256);assert.equal(out.effects_evidence,'historical_audit_not_fresh_stop');
+    assert.equal((await api.readPendingClaimOutcome(scoped,{...input,effects_receipt_sha256:'f'.repeat(64)})).status,'blocked');
+   });
    for(const [name,sql]of [
     ['新owner',"process_status='处理中:another'"],['批次漂移',"harvest_batch='another'"],['已有判断',"judgment_status='matched'"],
     ['已有正文',"transcript='not empty'"],['已有判断配置',"judgment_config='{}'::jsonb"],['旁manual冒领',"process_status='待人工核验:old'"],
