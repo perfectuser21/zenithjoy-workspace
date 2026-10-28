@@ -17,13 +17,14 @@ function context(authority,home,create=false) {
  const epoch=Object.fromEntries(epochKeys.map(k=>[k,authority[k]]));epoch.intent_id=authority.scope.intent_id;
  home=resolve(home);need(home===realpathSync(home));
  const parts=['.local','share','zenithjoy','qualification-maintenance',authority.maintenance_task_id,authority.scope.intent_id];
- let path=home;checkDir(path,false);
+ let path=home;checkDir(path,false);const dirs=[home];
  for(const [i,part]of parts.entries()) {
   path=join(path,part);
   if(create){try{mkdirSync(path,{mode:0o700});}catch(e){if(e.code!=='EEXIST')throw e;}}
   try{checkDir(path,i>=3);}catch(e){if(!create&&e.code==='ENOENT')return {path,epoch,missing:true};throw e;}
+  dirs.push(path);
  }
- return {path,epoch,missing:false};
+ return {path,epoch,missing:false,dirs};
 }
 function checkDir(path,privateDir) {
  const s=lstatSync(path);need(s.isDirectory()&&!s.isSymbolicLink()&&s.uid===process.getuid()
@@ -100,7 +101,11 @@ export function appendMaintenanceJournal(authority,record,{home=homedir()}={}) {
   exclusive(pending,body);
   try{lstatSync(final);throw Error('MAINTENANCE_JOURNAL_FINAL_EXISTS');}catch(e){if(e.code!=='ENOENT')throw e;}
   renameSync(pending,final);
-  const dir=openSync(ctx.path,constants.O_RDONLY);try{fsyncSync(dir);}finally{closeSync(dir);}
+  // 新目录的父目录项也必须持久化，否则掉电可能丢整个已确认intent。
+  for(const path of [...ctx.dirs].reverse()) {
+   checkDir(path,path===ctx.path);const dir=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);
+   try{fsyncSync(dir);}finally{closeSync(dir);}
+  }
   need(fileBytes(final).equals(Buffer.from(body)));
   return {path:final,sha256:digest(body),durable:true};
  }catch{throw Error('MAINTENANCE_JOURNAL_UNPROVEN');}
