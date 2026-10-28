@@ -13,7 +13,7 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
   const rewrite=q=>q.replaceAll('zenithjoy.',schema+'.');
   const scoped={query:(q,a)=>pool.query(rewrite(q),a),connect:async()=>{const c=await pool.connect();return {query:(q,a)=>c.query(rewrite(q),a),release:e=>c.release(e)};}};
   const f=authorityFixture(),authorization=authorizeMaintenance(f),s=f.scope,vid=s.video_ids[0],other='7700112581541257551';
-  const snapshot={company_id:s.company_id,tenant_id:s.tenant_id,version:s.config_version,policy_id:s.policy_id,config_status:'enabled',runtime_config:{routing:{line_key:s.line_key},video_judgment:{rules:['original']},comment_scoring:{rules:['original']}}};
+  const snapshot={company_id:s.company_id,tenant_id:s.tenant_id,version:s.config_version,policy_id:s.policy_id,product_ids:['fixture-product'],config_status:'enabled',runtime_config:{routing:{line_key:s.line_key},video_judgment:{rules:['original']},comment_scoring:{rules:['original']}}};
   const input={authorization,expected_snapshot:snapshot,effects_receipt_sha256:'e'.repeat(64)};
   const rows=async()=> (await scoped.query('SELECT to_jsonb(v) AS row FROM zenithjoy.leadgen_videos v ORDER BY video_id')).rows.map(x=>x.row);
   const init=async()=>{
@@ -34,6 +34,17 @@ test('维护事务真实PG：两字段CAS、独立audit与未知提交只读对�
    await scoped.query('CREATE TABLE zenithjoy.company_config_versions(company_id uuid,tenant_id uuid,version int,snapshot jsonb)');
    await scoped.query('CREATE TABLE zenithjoy.leadgen_comments(id uuid DEFAULT gen_random_uuid(),line_key text,harvest_batch text)');
    const audit=readFileSync(new URL('../../../apps/api/db/migrations/20260820_120000_structured_workbench.sql',import.meta.url),'utf8').match(/CREATE TABLE IF NOT EXISTS zenithjoy\.db_audit \([\s\S]+?\n\);/)[0];await scoped.query(audit);
+   await t.test('正式原producer历史snapshot全文按维护Task固定hash读取，非current自比',async()=>{
+    await init();assert.equal(typeof api?.readHistoricalCompanySnapshot,'function');
+    const f=authorityFixture();f.scope.original_evidence={company_snapshot_sha256:digest(snapshot)};
+    f.originalTask.result.qualification_maintenance_delegation.contract_sha256=digest(f.scope);
+    const a=authorizeMaintenance(f),receipt={company_id:s.company_id,tenant_id:s.tenant_id,version:s.config_version,policy_id:s.policy_id,run_id:s.run_tag,product_ids:snapshot.product_ids};
+    const read=(authorization=a,company_receipt=receipt)=>api.readHistoricalCompanySnapshot(scoped,{authorization,company_receipt});
+    const before=await rows();assert.deepEqual(await read(),snapshot);assert.deepEqual(await rows(),before);
+    await assert.rejects(read(a,{...receipt,product_ids:['wrong']}),/MAINTENANCE_/);
+    await scoped.query("UPDATE zenithjoy.company_config_runs SET snapshot=jsonb_set(snapshot,'{runtime_config,video_judgment}','{}') WHERE run_id=$1",[s.producer_run]);
+    await assert.rejects(read(),/MAINTENANCE_/);assert.deepEqual(await rows(),before);
+   });
    await t.test('合法只还原两业务字段，旁manual整行与updated_at不变，一条审计',async()=>{
     await init();assert.equal(typeof api?.restorePendingClaim,'function');const before=await rows();
     const out=await api.restorePendingClaim(scoped,input);assert.equal(out.status,'db_committed');
