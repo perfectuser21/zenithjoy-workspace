@@ -198,3 +198,16 @@ test('已接受旧wall完整四件tuple与实际installed-manifest绑定，不�
 for(const [name,change] of [['缺installedmanifest',f=>delete f.observation.consumer_manifest],['manifest字节不同',f=>f.observation.consumer_manifest.identity.sha256='0'.repeat(64)],['部署source不同',f=>f.observation.consumer_manifest.source_commit=old],['新旧依赖混配',f=>f.observation.roles[600].files[3].sha256='4'.repeat(64)]])test('旧wall '+name+'仍BLOCK',()=>{
  const f=ready(existingWall(fixture()));change(f);assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');
 });
+
+function systemSession(f) {
+ const p={pid:690,uid:0,ppid:1,pgid:690};for(const k of ['enumerated','final_enumerated'])f.observation.census[k].push(p);
+ addRole(f,{pid:700,ppid:690,pgid:690,executable:'/usr/libexec/sshd-session',program:{kind:'binary'}},{executable:{realpath:'/usr/libexec/sshd-session',sha256:'6'.repeat(64),uid:0},shape:{kind:'unknown'}});return f;
+}
+test('系统root入站broker派生的sshd-session本体在固定353外，子命令仍逐一核验',()=>{
+ const f=ready(systemSession(fixture()));assert.equal(api.evaluateOriginalExecutionDomain(f).status,'verified');
+ addRole(f,{pid:701,ppid:700,pgid:690,executable:'/bin/bash',program:{kind:'unclassified'}},{executable:{realpath:'/bin/bash',sha256:'b'.repeat(64),uid:0},shape:{kind:'unknown'}});
+ assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');
+});
+for(const [name,change]of [['同UID父',f=>{for(const k of ['enumerated','final_enumerated'])f.observation.census[k].find(p=>p.pid===690).uid=501;}],['非系统镜像',f=>f.observation.roles[700].executable.realpath='/tmp/sshd-session'],['只有一轮root父证据',f=>f.observation.census.final_enumerated=f.observation.census.final_enumerated.filter(p=>p.pid!==690)]])test('system broker '+name+'仍拒绝',()=>{
+ const f=ready(systemSession(fixture()));change(f);assert.equal(api.evaluateOriginalExecutionDomain(f).status,'blocked');
+});
