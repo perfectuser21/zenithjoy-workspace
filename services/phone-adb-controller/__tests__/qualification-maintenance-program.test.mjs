@@ -17,3 +17,6 @@ test('inline源码或凭据绝不回显，只输出摘要，未知flags不猜脚
  const result=describe('/usr/bin/python3',['python3','-c','SECRET_DO_NOT_OUTPUT=123']);assert.equal(result.kind,'inline');assert.ok(!JSON.stringify(result).includes('SECRET_DO_NOT_OUTPUT'));
  assert.equal(describe('/usr/bin/python3',['python3','--unreviewed-option','/tmp/whatever.py']).kind,'unclassified');
 });
+test('argv中的设备文件不是可读取脚本，不读FIFO或无限数据源',()=>{
+ assert.equal(describe('/usr/bin/python3',['python3','/dev/null']).kind,'unclassified');
+});
