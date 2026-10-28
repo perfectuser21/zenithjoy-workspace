@@ -104,3 +104,23 @@ test('collector识别现役managed-client只读Perl参数且保inner路径供字
  const r=spawnSync('python3',['-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{input:JSON.stringify(argv),encoding:'utf8'});assert.equal(r.status,0,r.stderr);
  const shape=JSON.parse(r.stdout);assert.equal(shape.kind,'perl_managed_read');assert.equal(shape.inner_path,'/Users/u/bin-harvest/adb-managed-client.py');
 });
+test('实际collector在枚举已证父UID域外时不追kernel身份，权限不足不能扩成全OS要求',()=>{
+ const code=String.raw`import base64,hashlib,json,os,sys,tempfile,types
+from pathlib import Path
+ns={'__collector_sha256__':'fixture'};exec(base64.b64decode(sys.argv[1]),ns)
+with tempfile.TemporaryDirectory(prefix='domain-boundary-') as root:
+ guard=Path(root)/'qualification-maintenance-host.py';guard.write_text('# fixture guard source\n');sys.argv[0]=str(guard.resolve());sys.platform='darwin'
+ own={'pid':os.getpid(),'uid':os.getuid(),'ppid':42,'pgid':os.getpid(),'start_identity':'1700000000:1','terminal':False}
+ def kernel(pid):
+  if pid==os.getpid():return own
+  raise PermissionError('foreign UID kernel is unreadable')
+ def load(module):
+  module.kernel=kernel;module.args=lambda pid:(sys.executable,[sys.executable]);module.collect=lambda scope:{'observations':[],'enumerated':[{'pid':42,'uid':os.getuid()+1,'ppid':1,'pgid':42}],'final_enumerated':[]}
+ ns['importlib'].util.spec_from_file_location=lambda *a:types.SimpleNamespace(loader=types.SimpleNamespace(exec_module=load))
+ ns['importlib'].util.module_from_spec=lambda *a:types.SimpleNamespace()
+ ns['subprocess'].run=lambda args,**kw:types.SimpleNamespace(returncode=1 if 'print' in args or args[0].endswith('lsof') else 0,stdout='')
+ context={'guard_pid':os.getpid(),'guard_start_identity':own['start_identity'],'guard_script_path':str(guard.resolve()),'guard_script_sha256':hashlib.sha256(guard.read_bytes()).hexdigest()}
+ result=ns['collect_domain']({'uid':os.getuid()},context);print(json.dumps({'protocol':result['protocol'],'ancestors':result['ancestors']}))`;
+ const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{protocol:'qualification-original-domain-v1',ancestors:[]});
+});
