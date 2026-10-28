@@ -167,3 +167,13 @@ with tempfile.TemporaryDirectory(prefix='node-wrapper-') as root:
  d=ns['collect_domain'](scope,ctx)['roles']['777']['launchd'];print(json.dumps({'target':d['wrapper_target']['realpath']==str(script.resolve()),'executable':d['wrapper_executable']['realpath']==str(Path(sys.executable).resolve())}))`;
  const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{target:true,executable:true});
 });
+
+for (const suffix of [' >> /tmp/output',' `touch /tmp/unexpected`',' $(touch /tmp/unexpected)',' 2>/tmp/output']) test('受限launcher拒绝额外shell动作 '+suffix,()=>{
+ const code=String.raw`import base64,json,sys
+from pathlib import Path
+ns={};exec(base64.b64decode(sys.argv[1]),ns)
+ns['file_info']=lambda p:{'realpath':p}
+print(json.dumps(ns['exec_target'](['/bin/bash','-lc','exec /trusted/phone-wall-push.sh'+sys.argv[2]],Path('/Users/u'))))`;
+ const r=spawnSync('python3',['-B','-I','-c',code,api.DOMAIN_COLLECTOR_BASE64,suffix],{encoding:'utf8'});
+ assert.equal(r.status,0,r.stderr);assert.equal(JSON.parse(r.stdout),null);
+});
