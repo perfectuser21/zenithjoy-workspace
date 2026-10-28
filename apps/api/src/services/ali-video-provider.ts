@@ -92,7 +92,8 @@ export class AliVideoProvider {
 
   /** The URL comes from a completed provider task and is validated by the route. */
   async downloadResult(url: string): Promise<Response> {
-    return this.mediaRequest(url, { signal: AbortSignal.timeout(120000), redirect: 'error' });
+    // Result streaming includes client backpressure; large files can take several minutes.
+    return this.mediaRequest(url, { signal: AbortSignal.timeout(600000), redirect: 'error' });
   }
 
   private wanBase(): string | null {
