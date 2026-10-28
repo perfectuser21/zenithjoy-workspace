@@ -143,6 +143,7 @@ DEVICE_NODE_FILES=(discovery-cleanup-readback.mjs capture-strategy.mjs activity-
   qualification-maintenance-authority.mjs qualification-maintenance-beforejudge.mjs qualification-maintenance-brain.mjs qualification-maintenance-bytes.mjs qualification-maintenance-candidate.mjs qualification-maintenance-close.mjs qualification-maintenance-commander.mjs qualification-maintenance-device.py qualification-maintenance-domain.mjs qualification-maintenance-evidence.mjs qualification-maintenance-host.py qualification-maintenance-journal.mjs qualification-maintenance-mmv.mjs qualification-maintenance-mmv.py qualification-maintenance-original.mjs qualification-maintenance-pg.mjs qualification-maintenance-processes.mjs qualification-maintenance-processes.py qualification-maintenance-role-diagnostics.py qualification-maintenance-service.mjs qualification-maintenance-transport.mjs qualification-maintenance.mjs
   qualification-maintenance-runtime.mjs deployment-targets.mjs deployment-preflight.mjs deployment-business-admission.mjs deployment-skill-acceptance.mjs company-config-readiness.mjs
   qualification-maintenance-effects.mjs
+  qualification-maintenance-database.mjs qualification-maintenance-proof.mjs
 )
 # 探针与配套Skill同属需保留嵌套路径的发布文件；设备/MMV均采集实际字节。
 DEVICE_RPC_PROBE_FILES=(

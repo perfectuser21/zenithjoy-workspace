@@ -8255,3 +8255,19 @@ agent_suite:
   status: active
   product: AI员工
   note: 采集任一阶段未知时保已取partial和安全stage；不继续后续探针或PG，证据存储失败只尝试一次且仍拒绝。
+
+- id: qualification-maintenance-database
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-database.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 标准私有凭据完整解析与每checkout同backend真实身份核验；真实scratch SET ROLE漂移/aborted ROLLBACK/release(true)，公开入口不接任意连接。
+
+- id: qualification-maintenance-proof
+  path: services/phone-adb-controller/__tests__/qualification-maintenance-proof.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 完整effects receipt原件与分块/journal链一致性、旧audit可读回且未知不改；sealed纯读与partial恢复分流。
