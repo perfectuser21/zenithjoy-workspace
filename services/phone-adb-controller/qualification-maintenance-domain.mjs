@@ -98,7 +98,9 @@ export function evaluateOriginalExecutionDomain({original,observation,commander,
   need(c.protocol==='qualification-process-census-v1'&&c.host===s.host&&c.observer_sha256===processObserverDigest&&fresh(c.finished_at_ms)
    &&Array.isArray(c.unknown)&&c.unknown.length===0&&Array.isArray(c.observations)&&Array.isArray(c.absent));
   need(setEqual(c.tracked.map(p=>p.pid+':'+p.expected_start_identity),s.tracked.map(key))&&c.tracked.length===s.tracked.length
-   &&c.tracked.every(p=>['absent','reused','terminal'].includes(p.state)&&(p.state!=='absent'||p.reason==='ESRCH')));
+   &&c.tracked.every(p=>p.state==='absent'&&p.reason==='ESRCH'
+    ||p.state==='reused'&&p.reason==='KERNEL'&&/^\d+:\d{1,6}$/.test(p.actual_start_identity||'')&&p.actual_start_identity!==p.expected_start_identity
+    ||p.state==='terminal'&&p.reason==='KERNEL'&&p.actual_start_identity===p.expected_start_identity));
   need(c.pid_only.length===s.pid_only.length&&s.pid_only.every(p=>c.pid_only.some(q=>q.pid===p.pid&&q.origin===p.origin&&q.state==='absent'&&q.reason==='ESRCH')));
   const rows=new Map(c.observations.map(p=>[p.pid,p]));need(rows.size===c.observations.length);
   const covered=new Set([...rows.keys(),...c.absent.filter(p=>p.reason==='ESRCH').map(p=>p.pid)]);
