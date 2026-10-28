@@ -37,6 +37,8 @@ for(const [name,change]of [
   ['枚举遗漏',c=>c.final_enumerated.push({pid:18,uid:process.getuid()})],
   ['假定缺席',c=>{c.enumerated.push({pid:19,uid:process.getuid()});c.absent.push({pid:19,reason:'not_in_ps'});}],
   ['原程序相关活执行者',c=>c.observations[0].classification='active_related'],
+  ['截图命令未绑定ADB字节和父链',c=>c.observations[0].classification='read_only_screenshot'],
+  ['只读inline未绑定真实解释器',c=>c.observations[0].classification='read_only_native_observer'],
   ['未归属脱组执行者',c=>c.observations[0].classification='unknown_detached'],
   ['观察器源码漂移',c=>c.observer_sha256='0'.repeat(64)],
   ['终态PID出生变化',c=>c.final_enumerated[0].start_identity='reused:new'],
