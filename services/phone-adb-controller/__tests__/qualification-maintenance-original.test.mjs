@@ -45,7 +45,7 @@ function fixture(t) {
  put(join(run,'qualification.tsv'),`AUDIO\\t${scope.video_ids[0]}\\t/private/tmp/openclaw-phone/evidence/${scope.profile}/${scope.run_tag}-v${scope.video_ids[0]}-qualification-record.16k.wav\nQUAL\t${scope.video_ids[0]}\tpending\taudio_upload_failed\n`);
  put(join(run,scope.run_tag+'-recording-'+scope.video_ids[0]+'.json'),{run:scope.run_tag,video_id:scope.video_ids[0],record_started_stdout:'record_started pid=82964 path=/private/tmp/record.rec.mkv',native_audio_restored:{state:'started',uid:10061}});
  put(join(run,scope.run_tag+'-intake-readback.json'),{verified:true,source_run:scope.producer_run,source_commit:producer.source_commit,consumer_source_commit:scope.consumer_source,producer_descriptor:producer,video_ids:['7700112581541257551',...scope.video_ids],eligible_video_ids:scope.video_ids,rows:[{video_id:scope.video_ids[0]},{video_id:'7700112581541257551'}],skipped:[{video_id:'7700112581541257551',reason:'producer_scope'}]});
- put(join(run,'activity-events.jsonl'),JSON.stringify({...common,binding_id:scope.binding_id,workflow_key:'douyin_video_processing',sampling_input:body.sampling_input,activity:'qualification',phase:'failed'})+'\n');
+ put(join(run,'activity-events.jsonl'),JSON.stringify({...common,binding_id:scope.binding_id,workflow_key:'douyin_video_processing',sampling_input:body.sampling_input,activity:'qualification',phase:'execution'})+'\n');
  const change=(path,fn)=>{const x=JSON.parse(readFileSync(path));fn(x);put(path,x);};
  return {home,scope,run,privateDir,put,change};
 }
