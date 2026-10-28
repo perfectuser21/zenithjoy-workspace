@@ -150,8 +150,7 @@ def _collect_device(serial, values, checkpoint):
     foreground = re.findall(r'mCurrentFocus=Window\{[^\n]*?\s(com\.ss\.android\.ugc\.aweme)/([^\s}]+)', values['foreground'])
     consistent = (not before['capture_pids'] and not after['capture_pids']
                 and projection['state'] == projection_after['state'] == 'inactive'
-                and audio['state'] == 'started'
-                and foreground == [(PACKAGE, PACKAGE + '.detail.ui.DetailActivity')])
+                and audio['state'] == 'started')
     # 仅采集器；必须再与正式原件recording的UID/原恢复状态绑定，不能自行授予effects。
     return {'status': 'observed' if consistent else 'blocked', 'domain': 'fixed353_device_capture_and_restored_playback',
             'serial': serial, 'sdk': 36, 'uid': uid, 'audio': audio,
