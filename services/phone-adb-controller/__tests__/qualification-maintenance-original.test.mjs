@@ -46,6 +46,7 @@ function fixture(t) {
  put(join(run,scope.run_tag+'-recording-'+scope.video_ids[0]+'.json'),{run:scope.run_tag,video_id:scope.video_ids[0],record_started_stdout:'record_started pid=82964 path=/private/tmp/record.rec.mkv',native_audio_restored:{state:'started',uid:10061}});
  put(join(run,scope.run_tag+'-intake-readback.json'),{verified:true,source_run:scope.producer_run,source_commit:producer.source_commit,consumer_source_commit:scope.consumer_source,producer_descriptor:producer,video_ids:['7700112581541257551',...scope.video_ids],eligible_video_ids:scope.video_ids,rows:[{video_id:scope.video_ids[0]},{video_id:'7700112581541257551'}],skipped:[{video_id:'7700112581541257551',reason:'producer_scope'}]});
  put(join(run,'activity-events.jsonl'),JSON.stringify({...common,binding_id:scope.binding_id,workflow_key:'douyin_video_processing',sampling_input:body.sampling_input,activity:'qualification',phase:'execution'})+'\n');
+ put(join(run,'company-config-receipts.jsonl'),JSON.stringify({company_id:scope.company_id,tenant_id:scope.tenant_id,version:scope.config_version,product_ids:['fixture-product'],policy_id:scope.policy_id,run_id:scope.run_tag})+'\n');
  const change=(path,fn)=>{const x=JSON.parse(readFileSync(path));fn(x);put(path,x);};
  return {home,scope,run,privateDir,put,change};
 }
@@ -59,6 +60,12 @@ test('读取完整旧文件和ACK但不洗掉UNKNOWN或冒认PID无birth已停�
  assert.deepEqual(r.pid_only.map(p=>p.pid).sort((a,b)=>a-b),[63503,82964]);
  assert.ok(r.raw_manifest.some(p=>p.path.endsWith('runtime/worker.mjs')&&p.sha256===hash('original source bytes\r\n')));
  assert.deepEqual(readFileSync(join(f.run,'qualification.tsv')),before);
+ assert.equal(r.company_receipt.company_id,f.scope.company_id);assert.deepEqual(r.company_receipt.product_ids,['fixture-product']);
+ assert.ok(r.raw_manifest.some(p=>p.path.endsWith('company-config-receipts.jsonl')));
+});
+for(const [field,value]of [['company_id','other'],['tenant_id','other'],['version',15],['policy_id','other'],['run_id','other'],['product_ids',[]]])test('原公司metadata漂移拒绝：'+field,t=>{
+ const f=fixture(t),file=join(f.run,'company-config-receipts.jsonl'),x=JSON.parse(readFileSync(file));x[field]=value;f.put(file,JSON.stringify(x)+'\n');
+ assert.throws(()=>api.readMaintenanceOriginal(f.scope,{home:f.home}),/MAINTENANCE_ORIGINAL_UNPROVEN/);
 });
 for(const [name,mutate]of [
  ['启动Task错',f=>f.change(join(f.privateDir,'launch-result.json'),x=>x.task_id='other')],
