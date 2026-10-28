@@ -2,8 +2,50 @@ import {spawn} from 'node:child_process';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {createInterface} from 'node:readline';
+import {gunzipSync} from 'node:zlib';
+import {digest} from './runtime-definition.mjs';
 const error=()=>Error('MAINTENANCE_HOST_UNKNOWN');
 const need=x=>{if(!x)throw error();};
+export function decodeOriginalPacket(packet) {
+ try{
+  need(packet?.status==='observed'&&packet.encoding==='gzip-base64'&&Number.isSafeInteger(packet.bytes)
+   &&packet.bytes>0&&packet.bytes<=16*1024*1024&&typeof packet.data==='string'&&packet.data.length<=8*1024*1024);
+  const compressed=Buffer.from(packet.data,'base64');need(compressed.toString('base64')===packet.data);
+  const raw=gunzipSync(compressed,{maxOutputLength:16*1024*1024});need(raw.length===packet.bytes&&digest(raw)===packet.sha256);
+  return JSON.parse(raw);
+ }catch{throw error();}
+}
+async function remoteRead(program,args,input) {
+ const quote=x=>"'"+x.replaceAll("'","'\\''")+"'";
+ const child=spawn('/usr/bin/ssh',['-T','-o','BatchMode=yes','-o','ConnectTimeout=10','xian-m4',
+  ['/opt/homebrew/bin/python3','-B','-I','-c',program,...args].map(quote).join(' ')],{stdio:['pipe','pipe','pipe']});
+ return new Promise((resolve,reject)=>{
+  let raw='',bytes=0;const timer=setTimeout(()=>{child.stdin.destroy();child.stdout.destroy();reject(error());},40000);
+  child.stdout.on('data',b=>{bytes+=b.length;if(bytes>24*1024*1024){child.stdout.destroy();reject(error());}else raw+=b;});
+  child.stderr.resume();child.on('error',()=>{clearTimeout(timer);reject(error());});
+  child.on('close',code=>{clearTimeout(timer);try{need(code===0);resolve(JSON.parse(raw));}catch{reject(error());}});
+  child.stdin.end(JSON.stringify(input));
+ });
+}
+export async function readRemoteMaintenanceOriginal(scope) {
+ const root=candidateRuntimeRoot('xian-m4',scope.maintenance_source.commit);
+ const program="import importlib.util,json,sys;s=importlib.util.spec_from_file_location('h',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);scope=json.loads(sys.stdin.read(65537));print(json.dumps(m.read_original({'serial':scope['serial'],'owner':scope['local_owner']},{'op':'original','scope':scope})))";
+ return decodeOriginalPacket(await remoteRead(program,[root+'/qualification-maintenance-host.py'],scope));
+}
+export async function readRemoteMaintenanceLocal(scope) {
+ need(/^[A-Za-z0-9_-]{1,120}$/.test(scope.serial)&&/^[A-Za-z0-9_-]{1,120}$/.test(scope.local_owner));
+ const program=String.raw`import os,pathlib,stat,sys,json
+s=json.loads(sys.stdin.read(65537));root=pathlib.Path('/private/tmp/openclaw-phone/locks');p=root/(s['serial']+'.lock')
+assert root.is_dir() and not root.is_symlink()
+if not os.path.lexists(p):print(json.dumps({'state':'free'}))
+else:
+ a=p.lstat();assert stat.S_ISDIR(a.st_mode) and a.st_uid==os.getuid()
+ f=p/'owner';b=f.lstat();assert stat.S_ISREG(b.st_mode) and b.st_uid==os.getuid()
+ value=f.read_bytes();print(json.dumps({'state':'original_owner' if value==(s['local_owner']+'\n').encode() else 'foreign_owner'}))
+`;
+ const result=await remoteRead(program,[],{serial:scope.serial,local_owner:scope.local_owner});
+ need(['free','original_owner','foreign_owner'].includes(result.state));return result.state;
+}
 export const CANDIDATE_BYTES_READER=String.raw`import base64,hashlib,json,os,pathlib,socket,stat,sys
 root=pathlib.Path(sys.argv[1]);assert root.is_absolute() and root.resolve(strict=True)==root
 total=0
