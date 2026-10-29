@@ -83,12 +83,16 @@ export function discoveryFiniteStopEvidence(evidence,context){
   ||result.pending_capture!==null||result.manifest_verified!==1||result.video_manifest_readback_failures!==0
   ||!Array.isArray(result.failures)||result.failures.length||!Array.isArray(result.videos)||!Array.isArray(result.captures)
   ||!Number.isSafeInteger(result.counts?.persisted)||result.counts.persisted!==result.videos.length
-  ||!Number.isSafeInteger(result.counts?.screens)||result.counts.screens<1)return null;
+  ||!Number.isSafeInteger(result.counts?.screens)||result.counts.screens<1||result.all_results_scanned!==false)return null;
  try{
-  const path=join(records.get(proof).env.WFR_RUN_DIR,'discovery-progress.json'),st=lstatSync(path);
+  const issuer=records.get(proof),path=join(issuer.env.WFR_RUN_DIR,'discovery-progress.json'),st=lstatSync(path);
   if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||st.size>10*1024*1024)return null;
   const progress=JSON.parse(readFileSync(path,'utf8'));
-  if(progress.run!==records.get(proof).identity.owner||progress.profile!==records.get(proof).identity.profile
+  const maxScreens=Number(issuer.originalEnv.LEADGEN_MAX_SCREENS||100);
+  const bounded=result.stop_reason==='screen_limit'?Number.isSafeInteger(maxScreens)&&maxScreens>=1&&result.counts.screens>=maxScreens
+   :result.stop_reason==='candidate_limit_reached'?Number.isSafeInteger(progress.request?.max_candidates)&&result.counts.attempted>=progress.request.max_candidates
+   :result.counts.persisted===1000;
+  if(!bounded||progress.run!==issuer.identity.owner||progress.profile!==issuer.identity.profile
    ||['counts','videos','captures','failures','known_gaps','pending_capture','stop_reason','all_results_scanned'].some(k=>JSON.stringify(progress[k])!==JSON.stringify(result[k])))return null;
   return proof;
  }catch{return null;}
