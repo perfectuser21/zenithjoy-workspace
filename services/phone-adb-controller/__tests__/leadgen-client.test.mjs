@@ -55,8 +55,29 @@ test('Commander丢失SSH回执时保持停止未知且不再次发起原操作',
  const calls=[];const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
   calls.push(JSON.parse(opts.input).kind);return calls.length===1?{code:255,stdout:'',stderr:'transport closed'}:{code:1,stdout:JSON.stringify({ok:false,error:'RPC_OPERATION_FAILED'}),stderr:''};
  }});
- await assert.rejects(rpc({kind:'commander',receipt:{workflow_key:'douyin_video_discovery'}},{timeoutMs:1000}),/RPC_OPERATION_FAILED/);
+ await assert.rejects(rpc({kind:'commander',receipt:{workflow_key:'douyin_video_discovery'}},{timeoutMs:1000}),error=>{
+  assert.match(error.message,/RPC_OPERATION_FAILED/);
+  assert.equal(error.executionStopped,false);
+  assert.equal(error.receiptMissing,true);
+  return true;
+ });
  assert.deepEqual(calls,['commander','commander_readback']);
+});
+test('Commander只读读回自身再断线也保留终止未知，不重发原操作',async()=>{
+ const kinds=[];const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{kinds.push(JSON.parse(opts.input).kind);return {code:255,stdout:'',stderr:'Connection closed'};}});
+ await assert.rejects(rpc({kind:'commander',receipt:{workflow_key:'douyin_video_discovery'}},{timeoutMs:1000}),error=>{
+  assert.equal(error.executionStopped,false);assert.equal(error.receiptMissing,true);return true;
+ });
+ assert.deepEqual(kinds,['commander','commander_readback']);
+});
+test('Commander读回缺模型原始证明时仍是终止未知',async()=>{
+ const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>JSON.parse(opts.input).kind==='commander'
+  ?{code:255,stdout:'',stderr:''}
+  :{code:0,stdout:JSON.stringify({ok:true,decision:{action:'continue',reason:'伪回执'}}),stderr:''}});
+ await assert.rejects(rpc({kind:'commander',receipt:{workflow_key:'douyin_video_discovery'}},{timeoutMs:1000}),error=>{
+  assert.match(error.message,/COMMANDER_RETURNED_READBACK_INVALID/);
+  assert.equal(error.executionStopped,false);assert.equal(error.receiptMissing,true);return true;
+ });
 });
 test('RPC 固定停止未知错误即使伪报已停也不能放行',async()=>{
  const rpc=createRpc({frozen,execute:async()=>({code:1,stdout:JSON.stringify({ok:false,error:'RPC_EXECUTION_STOP_UNKNOWN',execution_stopped:true}),stderr:''})});

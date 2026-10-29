@@ -1,7 +1,9 @@
 import { spawn,execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { readFrozen } from './runtime-definition.mjs';
+import {verifyCommanderModelReceipt} from './commander-model-receipt.mjs';
 import {beginNativeOperation,nativeOperationIdentityMatches} from './native-operation-receipt.mjs';
 
 export const RPC_FILES = ['capture-strategy.mjs','outreach-order-lock.py','queued-recipient-evidence.js','judge-recipient.js','leadgen-outreach-bridge.js','lead-fields-lib.js','nickname-match-lib.js','queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js','producer-pending-claim.js','single-video-recovery.js','single-video-recovery-authority.js','single-video-recovery-0353.js','single-video-recovery-0353-authority.js','leadgen-policy-review.js','leadgen-scoring-handler.mjs', 'commander-model-receipt.mjs','activity-commander.mjs','commander-owner-state.mjs','commander-owner-lock.mjs','commander-owner-reconcile.mjs','commander/AGENTS.md','commander/skills/workflow-commander/SKILL.md','leadgen-client.mjs','native-operation-receipt.mjs','leadgen-discovery-action.mjs','leadgen-discovery.mjs','leadgen-phone-action.mjs','discovery-phone-scope.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-definition.mjs','producer-descriptor.mjs','no-comments-evidence.mjs','comment-count-evidence.py','runtime-host.mjs','runtime-release.mjs','skills/leadgen-activity-execution.md','skills/douyin-leadgen-activity-101-collect-videos/SKILL.md','skills/douyin-leadgen-activity-102-preflight/SKILL.md','skills/douyin-leadgen-activity-102-dedup/SKILL.md','skills/douyin-leadgen-activity-102-qualification/SKILL.md','skills/douyin-leadgen-activity-102-collection/SKILL.md','skills/douyin-leadgen-activity-102-cleanup/SKILL.md','skills/douyin-leadgen-activity-103-scoring/SKILL.md','skills/douyin-leadgen-activity-103-mark-leads/SKILL.md','skills/douyin-leadgen-activity-104-preflight/SKILL.md','skills/douyin-leadgen-activity-104-send-dm/SKILL.md','skills/douyin-leadgen-activity-104-write-back/SKILL.md','skills/douyin-leadgen-activity-104-cleanup/SKILL.md','activity-skill-recovery.mjs','activity-skill-broker.mjs','activity-skill-tool.mjs','leadgen-skill-agent.mjs','commander/wf-agent-handoff.py','commander/wf-agent-lib.py',
@@ -206,11 +208,22 @@ export function createRpc({ frozen, execute = execInput, local = false, runConte
       }
     }
     if(body.kind==='commander'){
-      try{return await send(body);}catch(error){
+      const request=body.receipt?.workflow_key==='douyin_video_discovery'
+        ?{...body,receipt:{...body.receipt,rpc_readback_nonce:randomUUID()}}:body;
+      try{return await send(request);}catch(error){
         if(!error.receiptMissing||body.receipt?.workflow_key!=='douyin_video_discovery'||Date.now()+250>=deadline)throw error;
         // The only follow-up is a read of the already archived final response.
         // A missing or mismatched archive keeps the original turn unresolved.
-        return send({kind:'commander_readback',receipt:body.receipt});
+        try{
+          const recovered=await send({kind:'commander_readback',receipt:request.receipt});
+          if(!verifyCommanderModelReceipt(recovered.decision?.model_receipt,request.receipt)
+            ||!['continue','retry','finish','escalate'].includes(recovered.decision?.action))throw Error('COMMANDER_RETURNED_READBACK_INVALID');
+          return recovered;
+        }catch(readbackError){
+          readbackError.receiptMissing=true;
+          readbackError.executionStopped=false;
+          throw readbackError;
+        }
       }
     }
     const attempts=body.kind==='resolve_share_link'?2:1;

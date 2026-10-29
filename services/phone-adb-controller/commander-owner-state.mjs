@@ -29,7 +29,7 @@ export function assertWorkflowOwnerAvailable(scope,{home=homedir()}={}){
 // that business succeeded, a child stopped, or resources may be released.
 export async function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
   const {file,session}=ownerPending(scope,home),nonce=randomUUID(),release=await acquireOwnerLock(file);
-  const record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
+  const record={protocol:'commander-owner-turn-v1',session,run_id:scope.run_id,binding_id:scope.binding_id,source_commit:scope.source_commit,task_id:scope.task_id??null,rpc_readback_nonce:scope.rpc_readback_nonce??null,transport_nonce:nonce,status:'reserved',started_at:new Date().toISOString()};
   const raw=JSON.stringify(record);let reservation;
   try{reservation=await release.command('reserve',{raw});}catch{await release();throw unresolved();}
   const archive=async(status,details)=>{
@@ -53,9 +53,10 @@ export async function reserveWorkflowCommanderTurn(scope,{home=homedir()}={}){
 
 // A lost SSH stdout can be recovered only from the original, completed owner
 // archive. This reader never reserves a turn or invokes OpenClaw.
-export async function readReturnedCommanderTurn(scope,{home=homedir()}={}){
+export async function readReturnedCommanderTurn(scope,{home=homedir(),requireNonce=false}={}){
   const invalid=()=>{throw Error('COMMANDER_RETURNED_READBACK_INVALID');};
   if(scope?.workflow_key!=='douyin_video_discovery')invalid();
+  if(requireNonce&&!/^[a-f0-9-]{36}$/.test(scope.rpc_readback_nonce||''))invalid();
   const hash=raw=>createHash('sha256').update(raw).digest('hex');
   const session=workflowCommanderSession(scope);
   const dir=resolve(home,'.openclaw','leadgen-owner-turns');
@@ -84,7 +85,7 @@ export async function readReturnedCommanderTurn(scope,{home=homedir()}={}){
     const returnedRaw=snapshot(resolve(dir,name));
     const originalRaw=snapshot(resolve(dir,name.replace(/\.returned\.json$/,'.returned.original.json')));
     const returned=JSON.parse(returnedRaw),original=JSON.parse(originalRaw);
-    const keys=['session','run_id','binding_id','source_commit','task_id','transport_nonce'];
+    const keys=['session','run_id','binding_id','source_commit','task_id','rpc_readback_nonce','transport_nonce'];
     if(returned.protocol!=='commander-owner-turn-v1'||returned.status!=='returned'
       ||original.protocol!=='commander-owner-turn-v1'||original.status!=='reserved'
       ||keys.some(key=>returned[key]!==original[key])||original.session!==session
@@ -92,7 +93,7 @@ export async function readReturnedCommanderTurn(scope,{home=homedir()}={}){
       ||!Number.isFinite(Date.parse(original.started_at))||!Number.isFinite(Date.parse(returned.returned_at))
       ||Date.parse(returned.returned_at)<Date.parse(original.started_at)
       ||typeof returned.raw_response!=='string'||returned.response_sha256!==hash(returned.raw_response))invalid();
-    if(['run_id','binding_id','source_commit','task_id'].some(key=>returned[key] !== (scope[key]??null))
+    if(['run_id','binding_id','source_commit','task_id','rpc_readback_nonce'].some(key=>(returned[key]??null) !== (scope[key]??null))
       ||returned.workflow_key!==scope.workflow_key||returned.activity!==scope.activity||returned.phase!==scope.phase)continue;
     const {parseCommanderResponse}=await import('./activity-commander.mjs');
     const decision=parseCommanderResponse(returned.raw_response);

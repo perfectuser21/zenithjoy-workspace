@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -241,14 +241,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "355ba7a554d55df57cd5c87fda5a2554c5ef2ecfc86478890fae9081b155b187",
+      "code_digest": "34f7a798ceb8816783d4ad1b0bfd4f54af727fef73be3fc6622e5e979d1ddc95",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "05f22f4cd5d27f04b9b78cb328938bbf6dce282fa668a1cc54f072f2d0f4a033",
-        "current_code_digest": "355ba7a554d55df57cd5c87fda5a2554c5ef2ecfc86478890fae9081b155b187"
+        "current_code_digest": "34f7a798ceb8816783d4ad1b0bfd4f54af727fef73be3fc6622e5e979d1ddc95"
       }
     },
     "douyin_video_processing.preflight": {
@@ -346,7 +346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -409,7 +409,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -539,14 +539,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5576c6b5eecfd9d11cf409c76100707098b79d6cfb1f4c7b46d07156c50ff7b4",
+      "code_digest": "865ab99ec088797c87a82584b816c5c94dc7f590ba15aabbfa34dd95529f4bb4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "7a6cfcde9331761ad03bd18d1c9c1ccc0b2992ffac862935d1e5ae53632354b7",
-        "current_code_digest": "5576c6b5eecfd9d11cf409c76100707098b79d6cfb1f4c7b46d07156c50ff7b4"
+        "current_code_digest": "865ab99ec088797c87a82584b816c5c94dc7f590ba15aabbfa34dd95529f4bb4"
       }
     },
     "douyin_video_processing.dedup": {
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -686,7 +686,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -798,14 +798,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "b4c46e42dd4707cc8ceb1f6dc40dcbab80c1066e34e80300c31aa9018cd39714",
+      "code_digest": "52e30f285a903c157a84b3a474432cf882558421046e73165080abe68cdb7703",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "7122876a55ead618c97aaccf68249a69c5dba3de6897ff4657cc4d55ca7c2e98",
-        "current_code_digest": "b4c46e42dd4707cc8ceb1f6dc40dcbab80c1066e34e80300c31aa9018cd39714"
+        "current_code_digest": "52e30f285a903c157a84b3a474432cf882558421046e73165080abe68cdb7703"
       }
     },
     "douyin_video_processing.qualification": {
@@ -910,7 +910,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -973,7 +973,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -1085,14 +1085,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "ca92eb4c5dda38524fa88ec2888dded611674c8fb22d93a5018c63a69a65f9b4",
+      "code_digest": "f0638c25b4b72185add2e8bda4e049a09556d71eba5d2351650edf8c7882028b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "188c8bf46e995f5822643b9b620542af327eff9d375115a215186024202d839a",
-        "current_code_digest": "ca92eb4c5dda38524fa88ec2888dded611674c8fb22d93a5018c63a69a65f9b4"
+        "current_code_digest": "f0638c25b4b72185add2e8bda4e049a09556d71eba5d2351650edf8c7882028b"
       }
     },
     "douyin_video_processing.collection": {
@@ -1239,7 +1239,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -1302,7 +1302,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -1429,14 +1429,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "182b90af9e4245895e4a8287c7d32efab6c6b7164628211a64a97db9a929c6c6",
+      "code_digest": "8aaf3ef1de4dcb5aeae1b4f7526af8f6854f28ac9e8657e697f680146baeb555",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "183e943805f25efbdf8905b8c43a56111711f8c0d200e5eccd5253b9a05b45e7",
-        "current_code_digest": "182b90af9e4245895e4a8287c7d32efab6c6b7164628211a64a97db9a929c6c6"
+        "current_code_digest": "8aaf3ef1de4dcb5aeae1b4f7526af8f6854f28ac9e8657e697f680146baeb555"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1527,7 +1527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -1590,7 +1590,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -1719,14 +1719,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eda3c36fea17e5a47c9e63290a39c1050c8679bfc606e9699d38bb97982d6b98",
+      "code_digest": "6b8bff951196bcfb6f1c5f5a6dd933883d94fbd0485a0508e96d71c2e84dc02a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "96132b6de3851b66c9934d3024bbfe5a7bfaa037474ad305df0d95c9a1421207",
-        "current_code_digest": "eda3c36fea17e5a47c9e63290a39c1050c8679bfc606e9699d38bb97982d6b98"
+        "current_code_digest": "6b8bff951196bcfb6f1c5f5a6dd933883d94fbd0485a0508e96d71c2e84dc02a"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1796,7 +1796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -1859,7 +1859,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -1943,14 +1943,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "501ce661e1e4801299dd40d9a8845e6d1768d5af1c4f77efc5ce2dc8a96b5b2c",
+      "code_digest": "3573607cfaeb0e9dd1349bf6e0f555914e6fecd2db7180ef2426cba0d7b73d48",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "a98f8d3d4bc9e1fd744f6373891fae07766e00ae4ccdd706397169fc1c934011",
-        "current_code_digest": "501ce661e1e4801299dd40d9a8845e6d1768d5af1c4f77efc5ce2dc8a96b5b2c"
+        "current_code_digest": "3573607cfaeb0e9dd1349bf6e0f555914e6fecd2db7180ef2426cba0d7b73d48"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2041,7 +2041,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -2104,7 +2104,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -2188,14 +2188,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e29a56a4183daa05e29988e061da36cc29be46ab7969a76c4cbe41dfe95e7584",
+      "code_digest": "08eef4c38c2cd47da0c710319d9033e98681e834dca22617607c2c6db7b2b5eb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "0d844882cee230dbc6cc9092ec27f70f43a49eaa1196d82e12a7e6fbd627cf3b",
-        "current_code_digest": "e29a56a4183daa05e29988e061da36cc29be46ab7969a76c4cbe41dfe95e7584"
+        "current_code_digest": "08eef4c38c2cd47da0c710319d9033e98681e834dca22617607c2c6db7b2b5eb"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2328,7 +2328,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -2391,7 +2391,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -2535,14 +2535,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "19e08bf4ed29c947660f5fb3bd23d33bda91ae81d5e58f23ebaf6232db9218ed",
+      "code_digest": "55f9051765bb8aeba50a0811d639723b992a2f3a8d89594f8859af214ca62663",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "1516488dc73043f9d2d4f3ca695739bb3e7f8ce13ddc8bb6de91679760d1beab",
-        "current_code_digest": "19e08bf4ed29c947660f5fb3bd23d33bda91ae81d5e58f23ebaf6232db9218ed"
+        "current_code_digest": "55f9051765bb8aeba50a0811d639723b992a2f3a8d89594f8859af214ca62663"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2626,7 +2626,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -2689,7 +2689,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -2822,14 +2822,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580",
+      "code_digest": "7d971767ff546fa9c206afe3c4f1bfad77dda5167994ab703e1da003e6ffd5e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
-        "current_code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580"
+        "current_code_digest": "7d971767ff546fa9c206afe3c4f1bfad77dda5167994ab703e1da003e6ffd5e0"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2899,7 +2899,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -2962,7 +2962,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -3095,14 +3095,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580",
+      "code_digest": "7d971767ff546fa9c206afe3c4f1bfad77dda5167994ab703e1da003e6ffd5e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
-        "current_code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580"
+        "current_code_digest": "7d971767ff546fa9c206afe3c4f1bfad77dda5167994ab703e1da003e6ffd5e0"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3172,7 +3172,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
+          "sha256": "7da3006847dec4391ea26d57ff779de7a1aedf8e75275766e6be947ab9a9dc7f"
         },
         {
           "kind": "code",
@@ -3235,7 +3235,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
+          "sha256": "7726ceca24aabf37e62c7069aba698acc78a238cc6a2a2227522be6143e64e20"
         },
         {
           "kind": "code",
@@ -3371,14 +3371,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
+          "sha256": "068c3453bdd08c74c1d964054355a47572c79ce112e17ec232c512828c219bf2"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-lock.mjs",
           "revision": "contract",
-          "sha256": "209611b552046996658235fb71b3eac18a54e9ac1940bc101bb9d4338e294599"
+          "sha256": "737044d0bcd4658af3110150c080e9df61f5ddb1d537f2ac48989bb8f8ab122e"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9d74e07366e7a66e0f994cd4f5913545a7cbf77f28f3fa19cf3dcbcf2ed1dd6c",
+      "code_digest": "1becd9b6c13844905f2163765281419dab7c0df02333ce2bccb6445dd660b072",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知失败语义，业务合同不变",
         "reviewed_by": "interactive-dev-skill",
         "previous_code_digest": "04eba1618ebbd31f18a2537b461445fe91f0b54ac2c0a47858431b61dedadd54",
-        "current_code_digest": "9d74e07366e7a66e0f994cd4f5913545a7cbf77f28f3fa19cf3dcbcf2ed1dd6c"
+        "current_code_digest": "1becd9b6c13844905f2163765281419dab7c0df02333ce2bccb6445dd660b072"
       }
     }
   },

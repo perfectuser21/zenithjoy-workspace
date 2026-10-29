@@ -24,23 +24,30 @@ function fixture(t){
  const path=file+'.'+nonce+'.returned.json';
  writeFileSync(file+'.'+nonce+'.returned.original.json',JSON.stringify(original),{mode:0o600});
  writeFileSync(path,JSON.stringify(returned),{mode:0o600});
- return {path,returned,home,file};
+ return {path,returned,original,home,file};
 }
 test('SSH 空回执后只读恢复同 run/SHA/binding/activity/phase 的原始 returned，绝不重发 Commander',async t=>{
- const {home}=fixture(t),calls=[];
+ const {home,path,returned,original}=fixture(t),calls=[];
  const frozen={deployment:{source_commit:sha},files:Object.fromEntries(RPC_FILES.map(p=>['runtime/'+p,'b'.repeat(64)]))};
  const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
   const body=JSON.parse(opts.input);calls.push(body);
+  if(calls.length===1){
+   const pinned={...original,rpc_readback_nonce:body.receipt.rpc_readback_nonce};
+   writeFileSync(path.replace(/\.returned\.json$/,'.returned.original.json'),JSON.stringify(pinned),{mode:0o600});
+   writeFileSync(path,JSON.stringify({...returned,rpc_readback_nonce:body.receipt.rpc_readback_nonce,original_sha256:hash(JSON.stringify(pinned))}),{mode:0o600});
+  }
   return calls.length===1?{code:255,stdout:'',stderr:'Connection closed'}:{code:0,stdout:JSON.stringify(await handleRpc(body,{verify:()=>{},commanderHome:home,commanderExecute:async()=>{throw Error('MUST_NOT_LAUNCH_COMMANDER')}})),stderr:''};
  }});
  const result=await rpc({kind:'commander',receipt:scope},{timeoutMs:3000});
  assert.equal(result.decision.action,'continue');
  assert.deepEqual(calls.map(c=>c.kind),['commander','commander_readback']);
- assert.deepEqual(calls[1].receipt,scope);
+ assert.deepEqual(calls[1].receipt,calls[0].receipt);
+ assert.match(calls[1].receipt.rpc_readback_nonce,/^[a-f0-9-]{36}$/);
 });
 test('只读回执拒绝不匹配、损坏或多份归档，不能误报成功',async t=>{
  const {path,returned,home,file}=fixture(t);
  assert.equal((await owner.readReturnedCommanderTurn(scope,{home})).action,'continue');
+ await assert.rejects(owner.readReturnedCommanderTurn(scope,{home,requireNonce:true}),'旧归档不能充当新请求的回执');
  for(const key of ['run_id','source_commit','binding_id','activity','phase']){
   const wrong={...scope,[key]:key==='source_commit'?'a'.repeat(40):'different'};
   await assert.rejects(owner.readReturnedCommanderTurn(wrong,{home}));
@@ -58,4 +65,13 @@ test('只读回执拒绝不匹配、损坏或多份归档，不能误报成功',
  assert.notEqual(oldNonce,newNonce);
  writeFileSync(file,JSON.stringify({...original,transport_nonce:oldNonce}),{mode:0o600});
  await assert.rejects(owner.readReturnedCommanderTurn(scope,{home}),'活跃 pending 不能借旧归档放行');
+});
+test('同 scope 的旧归档也必须匹配本次 RPC nonce',async t=>{
+ const {path,original,returned,home}=fixture(t);
+ const nonce='808aa458-35b0-4de2-84d5-06cf3a07469b';
+ const pinned={...original,rpc_readback_nonce:nonce};
+ writeFileSync(path.replace(/\.returned\.json$/,'.returned.original.json'),JSON.stringify(pinned),{mode:0o600});
+ writeFileSync(path,JSON.stringify({...returned,rpc_readback_nonce:nonce,original_sha256:hash(JSON.stringify(pinned))}),{mode:0o600});
+ assert.equal((await owner.readReturnedCommanderTurn({...scope,rpc_readback_nonce:nonce},{home,requireNonce:true})).action,'continue');
+ await assert.rejects(owner.readReturnedCommanderTurn({...scope,rpc_readback_nonce:'808aa458-35b0-4de2-84d5-06cf3a07469c'},{home,requireNonce:true}));
 });

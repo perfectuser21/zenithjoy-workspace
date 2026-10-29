@@ -74,7 +74,7 @@ export async function handleRpc(input, deps = {}) {
     if (input.kind === 'commander_readback') {
       if(input.receipt?.source_commit!==input.source.commit)throw Error('RPC_COMMANDER_SOURCE_MISMATCH');
       const {readReturnedCommanderTurn}=await import('./commander-owner-state.mjs');
-      return {ok:true,decision:await readReturnedCommanderTurn(input.receipt,{home:deps.commanderHome})};
+      return {ok:true,decision:await readReturnedCommanderTurn(input.receipt,{home:deps.commanderHome,requireNonce:true})};
     }
     if (input.kind === 'commander') {
       if(input.receipt?.source_commit!==input.source.commit)throw Error('COMMANDER_SOURCE_MISMATCH');
