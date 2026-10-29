@@ -4,6 +4,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
+import { createRequire } from 'node:module';
+import { runProbes } from '../../../services/phone-adb-controller/verify-step.mjs';
+
+const require = createRequire(import.meta.url);
+const { loadChecks } = require('../../../services/phone-adb-controller/checks/probes-lib.js');
 
 const root = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
 const workflows = [
@@ -52,7 +57,7 @@ test('共享预检的定时闸不误写成手动活动条件', () => {
   assert.ok(preflight.preconditions.some(condition => condition.includes('手动或 Brain 派发')));
 });
 
-test('104 订单生命周期与发送验收缺口如实入合同', () => {
+test('104 订单生命周期与真实发送结果探针入合同', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_lead_outreach.yaml'), 'utf8'));
   const activity = Object.fromEntries(doc.activities.filter(a => a.key).map(a => [a.key, a]));
   assert.ok(!activity.preflight.outputs.some(output => output.type === 'OutreachOrder'));
@@ -65,7 +70,23 @@ test('104 订单生命周期与发送验收缺口如实入合同', () => {
   assert.equal(activity.write_back.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
   assert.equal(activity.write_back.version, '4.0.0');
   assert.equal(activity.write_back.compatibility, 'breaking');
-  assert.ok(activity.send_dm.known_gaps.some(gap => gap.gap.includes('硬性 Activity probe')));
+  assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_delivery_result_verified'));
+  assert.ok(!activity.send_dm.known_gaps?.some(gap => gap.gap.includes('硬性 Activity probe')));
+});
+
+test('104 send_dm 缺真实发送回执时硬探针 fail closed', async () => {
+  const { doc, errors } = loadChecks(
+    resolve(root, 'services/phone-adb-controller/checks/douyin-lead-outreach.yaml'),
+    resolve(root, 'services/phone-adb-controller/checks/schema.json'),
+  );
+  assert.deepEqual(errors, []);
+  const check = async metrics => {
+    const result = await runProbes({ doc, stage: 'send_dm', params: { metrics }, deps: { now: () => '2026-10-30T00:00:00Z' } });
+    return result.probes.find(probe => probe.key === 'out_delivery_result_verified');
+  };
+  assert.equal((await check({ commander_verified: 1, messages_sent_while_paused: 0 }))?.pass, null);
+  assert.equal((await check({ commander_verified: 1, messages_sent_while_paused: 0, delivery_result_verified: 0 }))?.pass, false);
+  assert.equal((await check({ commander_verified: 1, messages_sent_while_paused: 0, delivery_result_verified: 1 }))?.pass, true);
 });
 
 test('103 评分与线索交付分段验收', () => {
