@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 export const discoveredId='7681632828384394202';
-export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,codeOneLeaf=false,attemptLimit,screenLimit=false,rpcFailure=false}={}){
+export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,codeOneLeaf=false,unknownAfterLink=false,attemptLimit,screenLimit=false,rpcFailure=false}={}){
  const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name)));
  if(slowLeaf){
   const c=join(f.d,'slow-leaf.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
@@ -14,9 +14,9 @@ export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=fal
   const r=spawnSync('cc',[c,'-o',client],{encoding:'utf8'});if(r.status)throw Error(r.stderr);
   f.frozen.collection_phone_scope.policy.adb_sha256=createHash('sha256').update(readFileSync(client)).digest('hex');writeFileSync(f.env.ZJ_ADB_HOST_CONFIG,JSON.stringify(f.frozen.collection_phone_scope.policy),{mode:0o600});
  }
- if(codeOneLeaf){
+ if(codeOneLeaf||unknownAfterLink){
   const c=join(f.d,'client.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
-  writeFileSync(c,readFileSync(c,'utf8').replace('else puts("device");','else if(!strcmp(a[n-1],"probe-one"))return 1;else puts("device");'));
+  writeFileSync(c,readFileSync(c,'utf8').replace('else puts("device");',`else if(!strcmp(a[n-1],"${unknownAfterLink?'probe-unknown':'probe-one'}"))return ${unknownAfterLink?137:1};else puts("device");`));
   const r=spawnSync('cc',[c,'-o',client],{encoding:'utf8'});if(r.status)throw Error(r.stderr);
   f.frozen.collection_phone_scope.policy.adb_sha256=createHash('sha256').update(readFileSync(client)).digest('hex');writeFileSync(f.env.ZJ_ADB_HOST_CONFIG,JSON.stringify(f.frozen.collection_phone_scope.policy),{mode:0o600});
  }
@@ -39,6 +39,10 @@ case 'search-video-cards':{const file=p.join(evidence,'grid.xml');fs.writeFileSy
 case 'search-kw-matches':console.log('kw_matches=1');break;
 case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_NATIVE_UNKNOWN_FILE,'guard_exception');process.stderr.write('NATIVE_INNER_EXECUTION_TERMINATION_UNKNOWN\\n');process.exit(7);}const id='${discoveredId}',eid=args[0]+'-t1',file=p.join(evidence,eid+'-share.xml');fs.writeFileSync(file,'<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="未点赞，喜欢67，按钮"/><node package="com.ss.android.ugc.aweme" content-desc="评论4，按钮"/></hierarchy>');console.log('video_id='+id+'\\nshort_url=https://v.douyin.com/fixture/\\nresolved_url=https://www.douyin.com/video/'+id+'\\ncontent_type=video\\nreturn_mode=results\\nmetrics_evidence='+file+'\\nmetrics_evidence_id='+eid);break;}}
 `);
+ if(unknownAfterLink){
+  const controller=join(f.runtime,'fixture-discovery-controller.cjs');
+  writeFileSync(controller,readFileSync(controller,'utf8').replace(`const id='${discoveredId}',eid=`,`const unknown=cp.spawnSync(process.env.DOUYIN_PYTHON_BIN||'python3',[p.join(__dirname,'adb-managed-client.py'),'-s','NO-DEVICE','shell','probe-unknown'],{encoding:'utf8',env:process.env});if(unknown.status!==137)process.exit(8);const id='${discoveredId}',eid=`));
+ }
  const scope={...f.frozen.collection_phone_scope,run_id:'douyin_video_discovery-scope-owner__a1',expected_account:'fixture-account'};
  delete f.frozen.collection_phone_scope;f.frozen.discovery_phone_scope=scope;f.frozen.workflow_version.payload.key='douyin_video_discovery';
  f.env.LEADGEN_EVIDENCE_DIR=scope.evidence_root;f.env.WF_BRAIN_WORKFLOW='douyin_video_discovery';f.env.WFR_RUN_ID='douyin_video_discovery-scope-owner';f.env.LEADGEN_SOURCE_RUN='';f.env.LEADGEN_LOCATION='unlimited';f.env.LEADGEN_LIMIT=screenLimit?'10':stop?'0':'1';f.env.WF_STOP_FILE=join(f.d,'stop');f.env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000));f.env.WF_RUN_MAX_SECONDS='1800';

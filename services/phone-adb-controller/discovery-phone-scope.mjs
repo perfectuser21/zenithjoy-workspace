@@ -130,7 +130,7 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  // A nonzero ADB business probe may still have a verified nofork child close.
  // 101 cleanup needs every native request returned, never a success exit code.
  const returned=s=>s.requests_returned||s.empty_requests_returned;
- return {env:scopedEnv,zsh,assert:()=>{if(!unchanged(r))fail('SCOPE_CHANGED');},seal:async()=>{const s=await seal();if(!returned(s)||!unchanged(r))fail('DRAIN_UNVERIFIED');return s;},close:async()=>{clearTimeout(timer);await producer.close();},finish:async result=>{
+ return {env:scopedEnv,zsh,assert:()=>{if(producer.isReturnUnknown())fail('LEAF_RETURN_UNKNOWN');if(!unchanged(r))fail('SCOPE_CHANGED');},seal:async()=>{const s=await seal();if(!returned(s)||!unchanged(r))fail('DRAIN_UNVERIFIED');return s;},close:async()=>{clearTimeout(timer);await producer.close();},finish:async result=>{
   try{const s=await seal();if(!returned(s)||!unchanged(r))return result;
    const proof=Object.freeze({protocol:'discovery-cleanup-only-v1',purpose:'cleanup_only',scope_id:randomUUID()});r.resultDigest=digest(result);records.set(proof,r);return {...result,cleanup_phone_scope:proof};
   }finally{clearTimeout(timer);await producer.close();}
