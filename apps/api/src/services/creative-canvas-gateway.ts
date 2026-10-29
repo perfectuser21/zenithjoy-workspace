@@ -47,6 +47,14 @@ export function createCanvasGateway(options: Options) {
       const upstream = request(req, target);
       upstream.on('response', incoming => {
         delete incoming.headers['set-cookie'];
+        // Only immutable build-fingerprinted frontend files are shareable by a
+        // browser. Never cache API responses, user media, errors or templates.
+        const pathname = (req.url || '').split('?', 1)[0];
+        if ((req.method === 'GET' || req.method === 'HEAD') && incoming.statusCode === 200 && /^\/api\/creative-canvas\/assets\/[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:js|css|woff2)$/.test(pathname)) {
+          incoming.headers['cache-control'] = 'private, max-age=604800, immutable';
+          const vary = incoming.headers.vary;
+          incoming.headers.vary = vary ? `${vary}, Cookie` : 'Cookie';
+        }
         res.writeHead(incoming.statusCode || 502, incoming.headers); incoming.pipe(res);
       });
       upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });

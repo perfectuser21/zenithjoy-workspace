@@ -9,6 +9,7 @@ export default function CreativeCanvasPage() {
   const [attempt, setAttempt] = useState(0);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [opening, setOpening] = useState(false);
+  const [frameState, setFrameState] = useState<'loading' | 'ready' | 'slow'>('loading');
   const [workflowError, setWorkflowError] = useState('');
   const openWorkflow = useCallback(async (kind: 'upload' | 'generate') => {
     setWorkflowError(''); setOpening(true);
@@ -34,6 +35,26 @@ export default function CreativeCanvasPage() {
     } finally { setOpening(false); }
   }, []);
   const retry = useCallback(() => { setStatus('checking'); setAttempt(value => value + 1); }, []);
+
+  useEffect(() => {
+    if (status !== 'available') return;
+    setFrameState('loading');
+    const started = Date.now();
+    const check = () => {
+      try {
+        const frame = frameRef.current;
+        const child = frame?.contentWindow as (Window & {app?: {graph?: unknown; loadGraphData?: unknown}}) | null;
+        if (child?.location.origin === window.location.origin && child.app?.graph && typeof child.app.loadGraphData === 'function' && !frame?.contentDocument?.getElementById('splash-loader')) {
+          setFrameState('ready');
+          return;
+        }
+      } catch { /* Frame may be navigating; wait for its same-origin document. */ }
+      setFrameState(Date.now() - started >= 120000 ? 'slow' : 'loading');
+    };
+    const timer = window.setInterval(check, 500);
+    check();
+    return () => window.clearInterval(timer);
+  }, [status, attempt]);
 
   useEffect(() => {
     // Dropping a file on the surrounding dashboard otherwise navigates away
@@ -74,8 +95,11 @@ export default function CreativeCanvasPage() {
       </div>}
       {status === 'available' && <>
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-          <button type="button" disabled={opening} onClick={() => void openWorkflow('upload')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开上传图片工作流</button>
-          <button type="button" disabled={opening} onClick={() => void openWorkflow('generate')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开图片生成工作流</button>
+          <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('upload')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开上传图片工作流</button>
+          <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('generate')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开图片生成工作流</button>
+          {frameState === 'loading' && <span role="status">画布正在加载，请稍候…</span>}
+          {frameState === 'slow' && <span role="alert">画布加载时间过长，请重新连接或联系管理员。</span>}
+          {frameState === 'slow' && <button type="button" onClick={retry} className="rounded-lg border border-amber-500 px-3 py-1.5">重新连接</button>}
           {opening && <span role="status">正在打开工作流…</span>}
           {workflowError && <span role="alert">{workflowError}</span>}
         </div>

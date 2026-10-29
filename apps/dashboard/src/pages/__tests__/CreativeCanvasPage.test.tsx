@@ -34,18 +34,40 @@ describe('创作画布', () => {
     render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
     const iframe = await screen.findByTitle('视频创作画布') as HTMLIFrameElement;
     const loadGraphData = vi.fn().mockResolvedValue({});
-    Object.defineProperty(iframe.contentWindow!, 'app', {value:{loadGraphData}, configurable:true});
+    Object.defineProperty(iframe.contentWindow!, 'app', {value:{graph:{},loadGraphData}, configurable:true});
+    fireEvent.load(iframe);
+    await vi.waitFor(()=>expect(screen.getByRole('button',{name:'打开上传图片工作流'})).toBeEnabled());
     fireEvent.click(screen.getByRole('button',{name:'打开上传图片工作流'}));
     await vi.waitFor(()=>expect(loadGraphData).toHaveBeenCalled());
     expect(loadGraphData).toHaveBeenCalledWith(graph,true,true,expect.stringMatching(/^上传图片工作流/));
     expect(fetchMock).toHaveBeenCalledWith('/api/creative-canvas/extensions/zenithjoy/upload-image-wan.json',expect.objectContaining({credentials:'include'}));
   });
-  it('画布未准备好时显示可重试提示', async () => {
+  it('画布尚在加载时禁用工作流按钮，并在启动完成后启用', async () => {
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({available:true}),{status:200})));
+    render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    const iframe = await screen.findByTitle('视频创作画布') as HTMLIFrameElement;
+    const button = screen.getByRole('button',{name:'打开上传图片工作流'});
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/画布正在加载/)).toBeInTheDocument();
+    const splash = iframe.contentDocument!.createElement('div');
+    const findSplash = vi.spyOn(iframe.contentDocument!, 'getElementById').mockReturnValue(splash);
+    Object.defineProperty(iframe.contentWindow!, 'app', {value:{graph:{},loadGraphData:vi.fn()}, configurable:true});
+    fireEvent.load(iframe);
+    expect(button).toBeDisabled();
+    findSplash.mockReturnValue(null);
+    await vi.waitFor(()=>expect(button).toBeEnabled());
+  });
+  it('画布长时间未完成初始化时提供重新连接', async () => {
+    const clock = vi.spyOn(Date, 'now');
+    clock.mockReturnValue(1000);
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({available:true}),{status:200})));
     render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
     await screen.findByTitle('视频创作画布');
-    fireEvent.click(screen.getByRole('button',{name:'打开上传图片工作流'}));
-    expect(await screen.findByRole('alert')).toHaveTextContent('工作流打开失败');
+    clock.mockReturnValue(122000);
+    expect(await screen.findByText(/画布加载时间过长/)).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'打开图片生成工作流'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'重新连接'})).toBeEnabled();
+    clock.mockRestore();
   });
   it('未配置或服务不可用时显示提示而不是空白画布', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ available: false }), { status: 200 })));

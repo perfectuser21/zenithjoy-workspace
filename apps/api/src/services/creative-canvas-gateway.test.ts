@@ -24,6 +24,25 @@ describe('creative canvas gateway', () => {
     const ws = `ws://127.0.0.1:${port}/api/creative-canvas/ws`;
     expect(await openWs(ws)).toBe('401'); expect(await openWs(ws,'session=alice')).toBe('alice'); expect(await openWs(ws,'session=bob')).toBe('bob'); expect(await openWs(ws,'session=alice','https://evil.example')).toBe('403');
   });
+  it('仅缓存已认证画布的指纹静态文件，不缓存用户数据或错误响应', async () => {
+    const upstream = await listen(http.createServer((req,res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.statusCode = req.url?.includes('missing-') ? 404 : 200;
+      res.end('data');
+    }));
+    const gateway = createCanvasGateway({authenticate: async req => req.headers.cookie ? 'alice' : null, instances:{alice:`http://127.0.0.1:${upstream}`}, allowedOrigins:[]});
+    const port = await listen(http.createServer(gateway.handleHttp));
+    const base = `http://127.0.0.1:${port}/api/creative-canvas/`;
+    const get = (path:string, auth=true) => fetch(base+path,{headers:auth?{cookie:'ok'}:{}});
+    const asset = await get('assets/index-CqDKM-zt.js');
+    expect(asset.headers.get('cache-control')).toBe('private, max-age=604800, immutable');
+    expect(asset.headers.get('vary')).toContain('Cookie');
+    expect((await get('assets/file.js')).headers.get('cache-control')).toBe('no-store');
+    expect((await get('api/userdata/workflows/test-CqDKM-zt.js')).headers.get('cache-control')).toBe('no-store');
+    expect((await get('api/userdata/workflows/test.json')).headers.get('cache-control')).toBe('no-store');
+    expect((await get('assets/missing-CqDKM-zt.js')).headers.get('cache-control')).toBe('no-store');
+    expect((await get('assets/index-CqDKM-zt.js',false)).status).toBe(401);
+  });
   it('reports an unprovisioned staff canvas as unavailable', async () => {
     const gateway = createCanvasGateway({ authenticate: async () => 'alice', instances: {}, allowedOrigins: [] });
     const server = http.createServer(gateway.handleHttp); gateway.attachWebSocket(server); const port = await listen(server);
