@@ -55,7 +55,10 @@ async function start(f,kind,extra={}) {
       source.slice(source.indexOf('source_for() {'),source.indexOf('\noverride() {'))+
       '\nsource_for "$DEPLOY_SHA"\ncp "$RELEASES/$DEPLOY_SHA/source/candidate" "$TEST_OUTPUT"\n';
   } else if(kind==='api-staging') {
-    script=(await readFile(resolve('scripts/deploy/hk-api-staging.sh'),'utf8')).split('# Read the existing compose project')[0]+
+    const source=await readFile(resolve('scripts/deploy/hk-api-staging.sh'),'utf8');
+    // Exercise the real fetch/archive block only; image admission has dedicated tests.
+    script='set -euo pipefail\nREPO="$ZJ_HK_REPO"\nRELEASES="$ZJ_STAGING_RELEASES"\nSHA="$DEPLOY_SHA"\nmkdir -p "$RELEASES"\n'+
+      source.slice(source.indexOf('SOURCE="$RELEASES/$SHA/source"'),source.indexOf('# Read the existing compose project'))+
       '\ncp "$SOURCE/candidate" "$TEST_OUTPUT"\n';
   } else {
     const w=JSON.parse(execFileSync('python3',['-c','import json,sys,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))',
