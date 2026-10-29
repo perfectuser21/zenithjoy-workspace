@@ -8373,3 +8373,27 @@ agent_suite:
   status: active
   product: AI视频
   note: 在 Comfy CPU 镜像运行，验证上传选图、解码前像素限制及节点幂等。
+
+- id: hk-api-release-regression
+  path: scripts/deploy/__tests__/hk-api-release.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: CI治理
+  note: 香港 API 候选发布、迁移失败与回滚，含 staging 磁盘保护及只读迁移源码隔离。
+
+- id: hk-api-staging-build-info
+  path: scripts/deploy/__tests__/staging-build-info.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: CI治理
+  note: 候选 SHA 写入构建信息，依赖安装层不受候选 SHA 影响。
+
+- id: hk-api-staging-archive-measure
+  path: scripts/deploy/__tests__/staging-measure-archive.test.mjs
+  type: unit
+  ci: L1
+  status: active
+  product: CI治理
+  note: 验证镜像归档展开体积与异常归档检测。
