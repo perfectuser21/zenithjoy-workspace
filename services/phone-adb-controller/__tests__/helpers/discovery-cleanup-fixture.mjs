@@ -6,11 +6,17 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 export const discoveredId='7681632828384394202';
-export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,attemptLimit,screenLimit=false,rpcFailure=false}={}){
+export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,codeOneLeaf=false,attemptLimit,screenLimit=false,rpcFailure=false}={}){
  const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name)));
  if(slowLeaf){
   const c=join(f.d,'slow-leaf.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
   writeFileSync(c,'#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\nint main(int n,char**a){if(n==2&&!strcmp(a[1],"version"))puts("Android Debug Bridge version 1.0.41");else if(!strcmp(a[n-1],"sleep-probe")){char p[4096];snprintf(p,sizeof p,"%s/slow-leaf-entered",getenv("COLLECTION_FIXTURE_DIR"));FILE*f=fopen(p,"w");if(!f)return 4;fputs("entered",f);fclose(f);sleep(30);}else if(!strcmp(a[n-1],"telephony.registry"))puts("mCallState=0");else puts("device");return 0;}\n');
+  const r=spawnSync('cc',[c,'-o',client],{encoding:'utf8'});if(r.status)throw Error(r.stderr);
+  f.frozen.collection_phone_scope.policy.adb_sha256=createHash('sha256').update(readFileSync(client)).digest('hex');writeFileSync(f.env.ZJ_ADB_HOST_CONFIG,JSON.stringify(f.frozen.collection_phone_scope.policy),{mode:0o600});
+ }
+ if(codeOneLeaf){
+  const c=join(f.d,'client.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
+  writeFileSync(c,readFileSync(c,'utf8').replace('else puts("device");','else if(!strcmp(a[n-1],"probe-one"))return 1;else puts("device");'));
   const r=spawnSync('cc',[c,'-o',client],{encoding:'utf8'});if(r.status)throw Error(r.stderr);
   f.frozen.collection_phone_scope.policy.adb_sha256=createHash('sha256').update(readFileSync(client)).digest('hex');writeFileSync(f.env.ZJ_ADB_HOST_CONFIG,JSON.stringify(f.frozen.collection_phone_scope.policy),{mode:0o600});
  }

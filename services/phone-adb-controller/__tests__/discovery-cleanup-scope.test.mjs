@@ -182,6 +182,27 @@ test('原生guard unknown污染时没有cleanup能力、没有清场或恢复',{
   assert.equal(out.results[0].result?.cleanup_phone_scope,undefined);assert.ok(readdirSync(join(f.d,'native-operations')).some(n=>n.endsWith('.unknown')));
  }finally{rmSync(f.d,{recursive:true,force:true});}
 });
+test('101 completed 若原生 scope 未归还，仍须隔离且不得清场',async()=>{
+ const state={nativeStopUnproven:true,currentActivity:'collect_videos',run_id:'douyin_video_discovery-missing__a1',task_id:null,source_commit:'a'.repeat(40)};
+ const {invokeNativeActivity,runWorkflow}=await import('../leadgen-workflow.mjs');let cleaned=0,verified=0;
+ const out=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:{run_id:state.run_id,task_id:null,source_commit:state.source_commit},
+  handlers:{collect_videos:()=>invokeNativeActivity(async()=>({status:'completed',persisted:4}),state),cleanup:async()=>{cleaned++;return {};}},
+  commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>{verified++;return {verified:true};},terminationUnverified:()=>state.nativeStopUnproven});
+ assert.equal(out.status,'failed');assert.equal(out.results[0].execution_stopped,false);assert.equal(cleaned,0);assert.equal(verified,0);assert.equal(state.executionUnknown,true);
+});
+test('101 code1 原生叶子已退出归还请求，保留业务失败却可签原 run 清场 scope',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{codeOneLeaf:true}),{startDiscoveryPhoneScope,discoveryCleanupEvidence}=await f.load('discovery-phone-scope.mjs'),{execInput}=await f.load('leadgen-client.mjs');let scope;
+ try{
+  scope=await startDiscoveryPhoneScope({root:f.runtime,env:f.env,state:f.h.state,sourceCommit:'a'.repeat(40),taskId:'scope-task',lockHeld:true});
+  const leaf=await execInput(scope.env.DOUYIN_PYTHON_BIN,[join(f.runtime,'adb-managed-client.py'),'-s','NO-DEVICE','shell','probe-one'],{env:{...f.env,...scope.env},timeoutMs:5000});
+  assert.equal(leaf.code,1);
+  const outcome=await scope.finish({status:'completed',persisted:4});
+  assert.ok(discoveryCleanupEvidence(outcome,f.context),'code1 不是原生存活；必须由活父进程的请求归还账签发能力');
+  assert.ok(f.scopeLedgers().some(log=>log.includes('"code":1')&&log.includes('"request_returned":true')));
+  f.h.state.discoveryCleanupEvidence=outcome;f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;
+  const cleanup=await f.h.cleanup();assert.equal(cleanup.cleanup_readback_verified,1);assert.equal(cleanup.lock_released,1);assert.equal(existsSync(f.ownerFile),false);
+ }finally{await scope?.close();rmSync(f.d,{recursive:true,force:true});}
+});
 
 test('实际ADB叶子在原截止途中超时，tainted不签cleanup_only',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{slowLeaf:true}),{startDiscoveryPhoneScope}=await f.load('discovery-phone-scope.mjs'),{execInput}=await f.load('leadgen-client.mjs');let scope;

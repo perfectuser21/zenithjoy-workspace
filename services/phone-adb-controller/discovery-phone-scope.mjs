@@ -127,8 +127,11 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  let sealing;const seal=()=>sealing??=producer.seal();const timer=setTimeout(()=>{seal().catch(()=>{});},Math.max(1,deadline-Date.now()));
  const r={identity:{...identity,epoch:epochs.get(state)},epoch:epochs.get(state),state,env,originalEnv:{...env},root,spec,frozen,layout:paths,ownerFile,ownerIdentity:owner,consumed:false};
  const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_TMP_ROOT:paths.phoneRoot,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
- return {env:scopedEnv,zsh,assert:()=>{if(!unchanged(r))fail('SCOPE_CHANGED');},seal:async()=>{const s=await seal();if(!(s.complete||s.empty_complete)||!unchanged(r))fail('DRAIN_UNVERIFIED');return s;},close:async()=>{clearTimeout(timer);await producer.close();},finish:async result=>{
-  try{const s=await seal();if(!(s.complete||s.empty_complete)||!unchanged(r))return result;
+ // A nonzero ADB business probe may still have a verified nofork child close.
+ // 101 cleanup needs every native request returned, never a success exit code.
+ const returned=s=>s.requests_returned||s.empty_requests_returned;
+ return {env:scopedEnv,zsh,assert:()=>{if(!unchanged(r))fail('SCOPE_CHANGED');},seal:async()=>{const s=await seal();if(!returned(s)||!unchanged(r))fail('DRAIN_UNVERIFIED');return s;},close:async()=>{clearTimeout(timer);await producer.close();},finish:async result=>{
+  try{const s=await seal();if(!returned(s)||!unchanged(r))return result;
    const proof=Object.freeze({protocol:'discovery-cleanup-only-v1',purpose:'cleanup_only',scope_id:randomUUID()});r.resultDigest=digest(result);records.set(proof,r);return {...result,cleanup_phone_scope:proof};
   }finally{clearTimeout(timer);await producer.close();}
  }};
