@@ -41,18 +41,23 @@ function hydrateValue(type: unknown, value: unknown): unknown {
 }
 
 function hydrateModel(Model: ModelClass, values: unknown): unknown {
+  if (!isModelClass(Model)) throw new Error("Unknown SDK model");
   if (!values || typeof values !== "object" || Array.isArray(values))
     throw new Error("Expected object");
   const names = Model.names();
-  const types = Model.types();
+  const types = new Map(Object.entries(Model.types()));
   const input = values as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !Object.prototype.hasOwnProperty.call(names, key)))
+  if (
+    Object.keys(input).some(
+      (key) => !Object.prototype.hasOwnProperty.call(names, key),
+    )
+  )
     throw new Error("Unknown model field");
   return new Model(
     Object.fromEntries(
       Object.entries(input).map(([key, value]) => [
         key,
-        hydrateValue(types[key], value),
+        hydrateValue(types.get(key), value),
       ]),
     ),
   );

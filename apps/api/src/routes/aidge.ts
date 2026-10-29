@@ -13,9 +13,10 @@ import { aidgeOperationById, aidgeOperations } from "../services/aidge-catalog";
 import { runAidgeOperation } from "../services/aidge-gateway";
 import { createHash, randomUUID } from "node:crypto";
 import { open, unlink } from "node:fs/promises";
-import { extname } from "node:path";
+import { basename, extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import multer from "multer";
+import { rateLimit } from "express-rate-limit";
 import {
   isCosConfigured,
   type MaterialStorage,
@@ -91,6 +92,15 @@ export function createAidgeRouter(options: Options = {}): Router {
   const translate = options.translate ?? translateAidgeText;
   const execute = options.execute ?? runAidgeOperation;
 
+  router.use(
+    rateLimit({
+      windowMs: 60_000,
+      limit: 60,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: "请求过于频繁，请稍后重试" },
+    }),
+  );
   router.use(async (req, res, next) => {
     try {
       const origin = req.get("origin");
@@ -126,15 +136,7 @@ export function createAidgeRouter(options: Options = {}): Router {
     }),
   );
 
-  const upload = multer({
-    storage: multer.diskStorage({
-      destination: tmpdir(),
-      filename: (_req, _file, callback) =>
-        callback(null, `aidge-${randomUUID()}`),
-    }),
-    limits: { fileSize: 200_000_000, files: 1 },
-  });
-  router.post("/upload", upload.single("file"), async (req, res) => {
+  async function processUpload(req: Request, res: Response, filePath: string) {
     const file = req.file;
     if (!file) return void res.status(400).json({ error: "请选择素材文件" });
     try {
@@ -144,7 +146,7 @@ export function createAidgeRouter(options: Options = {}): Router {
         return void res.status(400).json({
           error: "请选择有效的图片、PDF、Word 或视频文件，并检查大小限制",
         });
-      const handle = await open(file.path, "r");
+      const handle = await open(filePath, "r");
       const header = Buffer.alloc(16);
       try {
         await handle.read(header, 0, header.length, 0);
@@ -165,7 +167,7 @@ export function createAidgeRouter(options: Options = {}): Router {
       const key = `aidge/${createHash("sha256").update(req.aidgeStaffId!).digest("hex")}/${randomUUID()}${ext}`;
       await storage.putObject({
         key,
-        filePath: file.path,
+        filePath,
         contentType: spec.mime,
       });
       const url = await storage.getSignedUrl(key, 86400);
@@ -175,8 +177,27 @@ export function createAidgeRouter(options: Options = {}): Router {
     } catch {
       res.status(503).json({ error: "素材上传失败，请稍后重试" });
     } finally {
-      await unlink(file.path).catch(() => {});
+      await unlink(filePath).catch(() => {});
     }
+  }
+
+  router.post("/upload", (req, res) => {
+    const filePath = join(tmpdir(), `aidge-${randomUUID()}`);
+    const upload = multer({
+      storage: multer.diskStorage({
+        destination: tmpdir(),
+        filename: (_req, _file, callback) => callback(null, basename(filePath)),
+      }),
+      limits: { fileSize: 200_000_000, files: 1 },
+    }).single("file");
+    upload(req, res, (error) => {
+      if (error) {
+        void unlink(filePath).catch(() => {});
+        res.status(400).json({ error: "素材文件无效或超过大小限制" });
+        return;
+      }
+      void processUpload(req, res, filePath);
+    });
   });
 
   router.get("/catalog", (_req, res) => {
