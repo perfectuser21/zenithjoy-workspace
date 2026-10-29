@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "4cb186f1b494ab0c662cfef3014d1cda0af474b518f6870c835a0ff102df6e6a",
+      "code_digest": "5dbbb7d9890e523b1daaddabd4772bdfb47226423a414eb439785057f598ff2f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 有限 screen_limit 保持 partial，只在同批封闭原生叶子与进度/清单读回证据齐全时核验并原 run 清场；缺 scope 在业务前拒绝。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "d4a3dc3ef5e40bd03a57e8b09776edb3594e42569525e705b2e2f7f46fd56f52",
-        "current_code_digest": "4cb186f1b494ab0c662cfef3014d1cda0af474b518f6870c835a0ff102df6e6a"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "4cb186f1b494ab0c662cfef3014d1cda0af474b518f6870c835a0ff102df6e6a",
+        "current_code_digest": "5dbbb7d9890e523b1daaddabd4772bdfb47226423a414eb439785057f598ff2f"
       }
     },
     "douyin_video_processing.preflight": {
@@ -346,7 +346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "988b146ae803175daf6fcdd4b11b6d250fb7d40086c93a52a778bc164f5d4b2c",
+      "code_digest": "b0ef6e54ac691b1ac8d22eb4eb5b6a7e30c0a2499b0ea3efc8b3fe4d5405825d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "8f0f9bcf11388dd27559755bfd25f60dfea51388e13012ea537d734a041aa827",
-        "current_code_digest": "988b146ae803175daf6fcdd4b11b6d250fb7d40086c93a52a778bc164f5d4b2c"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "988b146ae803175daf6fcdd4b11b6d250fb7d40086c93a52a778bc164f5d4b2c",
+        "current_code_digest": "b0ef6e54ac691b1ac8d22eb4eb5b6a7e30c0a2499b0ea3efc8b3fe4d5405825d"
       }
     },
     "douyin_video_processing.dedup": {
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -763,7 +763,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "bce23a70e01c559b973c6567872387c2d9bf3f5e95d15114456c71c2f437daac",
+      "code_digest": "9fba66973bd94222399710346307fa3a40971cd458340db28d45e6dbd698aceb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "4f3e054b5f72d48273248c05f644427b8fbb34529d79b4c6ec1ed0f67a745211",
-        "current_code_digest": "bce23a70e01c559b973c6567872387c2d9bf3f5e95d15114456c71c2f437daac"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "bce23a70e01c559b973c6567872387c2d9bf3f5e95d15114456c71c2f437daac",
+        "current_code_digest": "9fba66973bd94222399710346307fa3a40971cd458340db28d45e6dbd698aceb"
       }
     },
     "douyin_video_processing.qualification": {
@@ -910,7 +910,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -1050,7 +1050,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "d72fa3c8ffcc02894accbd06adce2824c8307b5f6bcebb52bfd68e3a8bdcde43",
+      "code_digest": "36ee7d7d136ed34912df06f3c20eb055fe1b1435bb7b41cee551fe309f73c0fe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "5b61829e0b46cb004b2a27afac248bcf20b76deacae8a60a79ca9a248447b4a6",
-        "current_code_digest": "d72fa3c8ffcc02894accbd06adce2824c8307b5f6bcebb52bfd68e3a8bdcde43"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "d72fa3c8ffcc02894accbd06adce2824c8307b5f6bcebb52bfd68e3a8bdcde43",
+        "current_code_digest": "36ee7d7d136ed34912df06f3c20eb055fe1b1435bb7b41cee551fe309f73c0fe"
       }
     },
     "douyin_video_processing.collection": {
@@ -1239,7 +1239,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -1387,7 +1387,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "58b87801729a8839346fb929a3b290f123e7c889d24db9d59c177b1e92eec9c3",
+      "code_digest": "48ecfb8d83e256d80850a52d532f731b425fb66e12af3f296cf1733c11708540",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "f812d1908475eaec568d8f6fd810bf2b73e26cfa4cc7853aa00f9d680b08ade6",
-        "current_code_digest": "58b87801729a8839346fb929a3b290f123e7c889d24db9d59c177b1e92eec9c3"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "58b87801729a8839346fb929a3b290f123e7c889d24db9d59c177b1e92eec9c3",
+        "current_code_digest": "48ecfb8d83e256d80850a52d532f731b425fb66e12af3f296cf1733c11708540"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1527,7 +1527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -1670,7 +1670,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "029aaac68dc5729d05c6e6cf3581b2c116248146675ca1e87e39a24647d5c35a",
+      "code_digest": "88c83ecc6e7ba97eff19aba1f3c1af05718ac6188264fcc8995b6af0748620d8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "32bffd484d6284f9379cc6b9ec149e85c12a73ed9efc396ae482a8f778a99d0a",
-        "current_code_digest": "029aaac68dc5729d05c6e6cf3581b2c116248146675ca1e87e39a24647d5c35a"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "029aaac68dc5729d05c6e6cf3581b2c116248146675ca1e87e39a24647d5c35a",
+        "current_code_digest": "88c83ecc6e7ba97eff19aba1f3c1af05718ac6188264fcc8995b6af0748620d8"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1796,7 +1796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -1908,7 +1908,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "f5f0211ab080cce9288ac5b219c911d21af0f27992f9f500627ea226ea985547",
+      "code_digest": "fc16f683558e7275a874959c0f8cf2e4b8f03c137b28c1e5380e4032fd4a8f9e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；103 活动合同、输入输出和原有停止判定语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "e8d3809bf751c232b2c5bc93c97d2efa84f66be292a91494445560ade403e3f4",
-        "current_code_digest": "f5f0211ab080cce9288ac5b219c911d21af0f27992f9f500627ea226ea985547"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "f5f0211ab080cce9288ac5b219c911d21af0f27992f9f500627ea226ea985547",
+        "current_code_digest": "fc16f683558e7275a874959c0f8cf2e4b8f03c137b28c1e5380e4032fd4a8f9e"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2041,7 +2041,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -2153,7 +2153,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "64454ad7ef01b686d69598322f2494d66a8fd9771f5e6db5ec19d5aa6aaad8e2",
+      "code_digest": "074ffe15c11fb3cb2e79840919cf1ad62264faa51f388a2ce36bc335aed7c493",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；103 活动合同、输入输出和原有停止判定语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "245c872d69b763f26c2d96b31c530c433338e1e1fddca2b43d4f09c8c74cd661",
-        "current_code_digest": "64454ad7ef01b686d69598322f2494d66a8fd9771f5e6db5ec19d5aa6aaad8e2"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "64454ad7ef01b686d69598322f2494d66a8fd9771f5e6db5ec19d5aa6aaad8e2",
+        "current_code_digest": "074ffe15c11fb3cb2e79840919cf1ad62264faa51f388a2ce36bc335aed7c493"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2328,7 +2328,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -2479,7 +2479,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "b67df16aaacc14352e3835d7c6993ccfd4f9e21fd8e37d5a24cd47507a7a77bf",
+      "code_digest": "a43741e701b50855cd3a1d97b95bf6a9986ba9b64ee5b41b61ad71bb78a02ff0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "4bf8f6f6b3189508dba93444a47b848c9d113c5fef6eb33a9fa22a864dd65b27",
-        "current_code_digest": "b67df16aaacc14352e3835d7c6993ccfd4f9e21fd8e37d5a24cd47507a7a77bf"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "b67df16aaacc14352e3835d7c6993ccfd4f9e21fd8e37d5a24cd47507a7a77bf",
+        "current_code_digest": "a43741e701b50855cd3a1d97b95bf6a9986ba9b64ee5b41b61ad71bb78a02ff0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2626,7 +2626,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -2766,7 +2766,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
+      "code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831",
-        "current_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
+        "current_code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2899,7 +2899,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -3039,7 +3039,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
+      "code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831",
-        "current_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
+        "current_code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3172,7 +3172,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "d2ac3522d3fef062947afd64b9bf7353ef408bdfeb78536b4091c7d0357124d5"
+          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
         },
         {
           "kind": "code",
@@ -3315,7 +3315,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "504e998ba3f5977170c85185e9e795e3256a66d838612760ce55a2a47da75bcf"
+          "sha256": "41c3ed19f7508792da887113017f8368756379fdb64c95ec08d5b6fb5ff54acd"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f172e05775ab8fe3d85a06b86c0e4cb5b240ceec2b4115f97f2f82a481608e21",
+      "code_digest": "1e764f52b0e37433c2b9ccfadeccd366b674cc6ba0cef7e578ed2edb22f87ce7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
-        "reviewed_by": "Codex /dev task 73c23229",
-        "previous_code_digest": "bcd80d7c795b9e621cc88353d32b22f5ddf592bed3b61e00d885f8de84a7d373",
-        "current_code_digest": "f172e05775ab8fe3d85a06b86c0e4cb5b240ceec2b4115f97f2f82a481608e21"
+        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "f172e05775ab8fe3d85a06b86c0e4cb5b240ceec2b4115f97f2f82a481608e21",
+        "current_code_digest": "1e764f52b0e37433c2b9ccfadeccd366b674cc6ba0cef7e578ed2edb22f87ce7"
       }
     }
   },

@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 export const discoveredId='7681632828384394202';
-export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,attemptLimit,screenLimit=false}={}){
+export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,attemptLimit,screenLimit=false,rpcFailure=false}={}){
  const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name)));
  if(slowLeaf){
   const c=join(f.d,'slow-leaf.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
@@ -53,14 +53,14 @@ case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_
  }
  const {digest}=await load('runtime-definition.mjs');delete f.frozen.snapshot_sha256;f.frozen.snapshot_sha256=digest(f.frozen);writeFileSync(join(f.d,'run-definition.json'),JSON.stringify(f.frozen));
  writeFileSync(join(f.d,'run-bindings/a1.request.json'),JSON.stringify({runtime_snapshot_sha256:f.frozen.snapshot_sha256,run_id:scope.run_id,body:{task_id:'scope-task'}}));writeFileSync(join(f.d,'run-bindings/a1.ack.json'),JSON.stringify({binding:{id:'scope-binding',run_id:scope.run_id,task_id:'scope-task'}}));
- const stored=[],rpcCalls=[],{createHandlers}=await load('leadgen-handlers.mjs'),{execInput}=await load('leadgen-client.mjs');
- const h=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',execute:(command,args,opts)=>command==='/bin/sleep'?Promise.resolve({code:0,stdout:'',stderr:''}):execInput(command,args,opts),rpc:async body=>{
-  rpcCalls.push(body);if(body.kind==='keywords')return {result:['AI']};const q=body.request;
-  if(q?.op==='discover'){stored.push(q.video);if(stop)writeFileSync(f.env.WF_STOP_FILE,'stop');return {result:{status:'pending',inserted:true,metrics_verified:true,metrics_digest:q.video.metrics.digest}};}
-  if(q?.op==='inspect_videos')return {result:q.video_ids.map(video_id=>({video_id,line_key:'jinuo'}))};return {result:{}};
+ const stored=[],rpcCalls=[],rpcOptions=[],{createHandlers}=await load('leadgen-handlers.mjs'),{execInput}=await load('leadgen-client.mjs');
+ const h=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',execute:(command,args,opts)=>command==='/bin/sleep'?Promise.resolve({code:0,stdout:'',stderr:''}):execInput(command,args,opts),rpc:async(body,options)=>{
+  rpcCalls.push(body);rpcOptions.push(options);if(body.kind==='keywords')return {result:['AI']};const q=body.request;
+  if(q?.op==='discover'){if(rpcFailure&&stored.length===1)throw Error('EXECUTION_DEADLINE');stored.push(q.video);if(stop)writeFileSync(f.env.WF_STOP_FILE,'stop');return {result:{status:'pending',inserted:true,metrics_verified:true,metrics_digest:q.video.metrics.digest}};}
+  if(q?.op==='inspect_videos'){if(rpcFailure)throw Error('RPC_RECEIPT_MISSING');return {result:q.video_ids.map(video_id=>({video_id,line_key:'jinuo'}))};}return {result:{}};
  }});
  h.state.currentActivity='preflight';await h.preflight();
  h.state.currentActivity='collect_videos';h.state.budgetDeadline=Date.now()+(empty?30000:1200000);
  const context={run_id:scope.run_id,task_id:'scope-task',source_commit:'a'.repeat(40),activity:'collect_videos'};
- return {...f,h,context,load,stored,rpcCalls,workDeadline:h.state.budgetDeadline,ownerFile:join(scope.evidence_root,'..','..','locks','NO-DEVICE.lock','owner'),scopeLedgers:()=>{const dir=join(f.d,'discovery-phone-scopes','collect');return existsSync(dir)?readdirSync(dir).filter(n=>n.endsWith('.jsonl')).map(n=>readFileSync(join(dir,n),'utf8')):[];}};
+ return {...f,h,context,load,stored,rpcCalls,rpcOptions,workDeadline:h.state.budgetDeadline,ownerFile:join(scope.evidence_root,'..','..','locks','NO-DEVICE.lock','owner'),scopeLedgers:()=>{const dir=join(f.d,'discovery-phone-scopes','collect');return existsSync(dir)?readdirSync(dir).filter(n=>n.endsWith('.jsonl')).map(n=>readFileSync(join(dir,n),'utf8')):[];}};
 }
