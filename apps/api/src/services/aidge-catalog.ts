@@ -126,11 +126,17 @@ type ModelClass = ModelConstructor & {
   types(): Record<string, string | { type: string }>;
 };
 const models = AidgeModels as unknown as Record<string, ModelClass>;
+const requestClasses = new Map<string, ModelClass>(
+  groups.flatMap(([, entries]) =>
+    entries.map(([id]) => [
+      id,
+      models[`${id[0].toUpperCase()}${id.slice(1)}Request`],
+    ]),
+  ),
+);
 
 export function getAidgeRequestClass(id: string): ModelClass | null {
-  if (!groups.some(([, entries]) => entries.some(([entry]) => entry === id)))
-    return null;
-  return models[`${id[0].toUpperCase()}${id.slice(1)}Request`] ?? null;
+  return requestClasses.get(id) ?? null;
 }
 
 export const aidgeOperations: AidgeOperation[] = groups.flatMap(
