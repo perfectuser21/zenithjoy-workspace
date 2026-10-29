@@ -4,10 +4,11 @@ set -euo pipefail
 umask 077
 SHA=${1:-}
 DIGEST=${2:-}
-EXPECTED_IMAGE=${3:-}
+EXPECTED_CONFIG=${3:-}
 ARCHIVE_BYTES=${4:-}
 UNPACKED_BYTES=${5:-}
-[[ "$DIGEST" =~ ^[0-9a-f]{64}$ && "$EXPECTED_IMAGE" =~ ^sha256:[0-9a-f]{64}$ && "$ARCHIVE_BYTES" =~ ^[0-9]{1,12}$ && "$UNPACKED_BYTES" =~ ^[0-9]{1,12}$ ]] || { echo 'Invalid streamed image metadata' >&2; exit 1; }
+EXPECTED_LAYERS_HASH=${6:-}
+[[ "$DIGEST" =~ ^[0-9a-f]{64}$ && "$EXPECTED_CONFIG" =~ ^sha256:[0-9a-f]{64}$ && "$EXPECTED_LAYERS_HASH" =~ ^[0-9a-f]{64}$ && "$ARCHIVE_BYTES" =~ ^[0-9]{1,12}$ && "$UNPACKED_BYTES" =~ ^[0-9]{1,12}$ ]] || { echo 'Invalid streamed image metadata' >&2; exit 1; }
 (( ARCHIVE_BYTES > 0 && UNPACKED_BYTES > 0 )) || { echo 'Image sizes must be positive' >&2; exit 1; }
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Full staging candidate SHA required' >&2; exit 1; }
 REPO=${ZJ_HK_REPO:-/opt/zenithjoy/repo}
@@ -48,7 +49,7 @@ compose() {
     -f "$RELEASES/$SHA/image.json" "$@"
 }
 # CI sends a gzip-compressed docker-save stream. Only its SHA digest is stored;
-# a mismatch, wrong image ID or wrong architecture aborts before migration.
+# a mismatch, wrong config or wrong architecture aborts before migration.
 PREVIOUS_IMAGE=$(docker inspect "$SERVICE" --format '{{.Image}}')
 [[ "$PREVIOUS_IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Cannot identify current staging image' >&2; exit 1; }
 docker image inspect "$PREVIOUS_IMAGE" >/dev/null
@@ -66,7 +67,17 @@ trap 'rm -f "$CHECKSUM" "$ROLLBACK_OVERRIDE"' EXIT
 gzip -dc | tee >(sha256sum | awk '{print $1}' > "$CHECKSUM") | docker load
 for _ in $(seq 1 20); do [[ -s "$CHECKSUM" ]] && break; sleep 1; done
 [[ $(cat "$CHECKSUM") == "$DIGEST" ]] || { echo 'Image stream checksum mismatch' >&2; exit 1; }
-[[ $(docker image inspect "$IMAGE" --format '{{.Id}}') == "$EXPECTED_IMAGE" ]] || { echo 'Image ID mismatch' >&2; exit 1; }
+# Docker backends can expose different .Id values for identical content. Compare
+# the config bytes and ordered uncompressed layer identities instead, streaming
+# a second docker save directly to Python without an archive on the host.
+IDENTITY=$(docker save "$IMAGE" | python3 "$SOURCE/scripts/deploy/staging-image-identity.py" "$IMAGE")
+ACTUAL_CONFIG=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["config"])' "$IDENTITY")
+ACTUAL_LAYERS_HASH=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["layers_hash"])' "$IDENTITY")
+[[ "$ACTUAL_CONFIG" == "$EXPECTED_CONFIG" && "$ACTUAL_LAYERS_HASH" == "$EXPECTED_LAYERS_HASH" ]] || { echo 'Image content identity mismatch' >&2; exit 1; }
+LOADED_IMAGE=$(docker image inspect "$IMAGE" --format '{{.Id}}')
+[[ "$LOADED_IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Loaded image identifier invalid' >&2; exit 1; }
+INSPECT_LAYERS_HASH=$(docker image inspect "$IMAGE" --format '{{json .RootFS.Layers}}' | python3 -c 'import hashlib,json,sys; print(hashlib.sha256(json.dumps(json.load(sys.stdin),separators=(",",":")).encode()).hexdigest())')
+[[ "$INSPECT_LAYERS_HASH" == "$EXPECTED_LAYERS_HASH" ]] || { echo 'Loaded image layers mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || { echo 'Image platform mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$SHA" ]] || { echo 'Image SHA label mismatch' >&2; exit 1; }
 AVAILABLE_KB=$(df -Pk "$RELEASES" | awk 'NR==2 {print $4}')
@@ -121,7 +132,7 @@ for ((i=0; i<${ZJ_HEALTH_ATTEMPTS:-30}; i++)); do
   GOT_SHA=$(curl --max-time 10 -fsS http://127.0.0.1:5201/health 2>/dev/null | \
     python3 -c "import json,sys; print(json.load(sys.stdin).get('build',{}).get('sha',''))" 2>/dev/null || true)
   CURRENT_IMAGE=$(docker inspect "$SERVICE" --format '{{.Image}}' 2>/dev/null || true)
-  if [[ "$STATUS" == healthy && "$GOT_SHA" == "$SHA" && "$CURRENT_IMAGE" == "$EXPECTED_IMAGE" ]]; then
+  if [[ "$STATUS" == healthy && "$GOT_SHA" == "$SHA" && "$CURRENT_IMAGE" == "$LOADED_IMAGE" ]]; then
     printf '{"target":"api","environment":"staging","sha":"%s","health":"healthy"}\n' "$SHA"
     exit 0
   fi
