@@ -1,3 +1,4 @@
+import { creativeCanvasGateway } from './services/creative-canvas-configured';
 import express from 'express';
 import cors from 'cors';
 import { toNodeHandler } from 'better-auth/node';
@@ -124,6 +125,11 @@ app.use(
 // payload 约 870-880KB（20秒16kHz单声道16bit PCM base64后），默认100KB早期就被拒
 // (PayloadTooLargeError)。1mb 是 hk-vps nginx 反代 /api/ 通用路径未覆盖 client_max_body_size
 // 时的默认上限——设更大在 nginx 那层就先被截断，1mb 是不碰生产nginx配置前提下的安全上限。
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/creative-canvas/')) return void creativeCanvasGateway.handleHttp(req, res);
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 // 截图静态服务（Sprint E2E 截图托管）
