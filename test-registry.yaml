@@ -8397,3 +8397,11 @@ agent_suite:
   status: active
   product: CI治理
   note: 验证镜像归档展开体积与异常归档检测。
+
+- id: hk-api-staging-image-identity
+  path: scripts/deploy/__tests__/staging-image-identity.test.mjs
+  type: unit
+  ci: L1
+  status: active
+  product: CI治理
+  note: 流式验证 Docker 镜像配置摘要与层身份，拒绝篡改。
