@@ -186,8 +186,8 @@ test('101 completed 若原生 scope 未归还，仍须隔离且不得清场',asy
  const state={nativeStopUnproven:true,currentActivity:'collect_videos',run_id:'douyin_video_discovery-missing__a1',task_id:null,source_commit:'a'.repeat(40)};
  const {invokeNativeActivity,runWorkflow}=await import('../leadgen-workflow.mjs');let cleaned=0,verified=0;
  const out=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:{run_id:state.run_id,task_id:null,source_commit:state.source_commit},
-  handlers:{collect_videos:()=>invokeNativeActivity(async()=>({status:'completed',persisted:4}),state),cleanup:async()=>{cleaned++;return {};}}
-  ,commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>{verified++;return {verified:true};},terminationUnverified:()=>state.nativeStopUnproven});
+  handlers:{collect_videos:()=>invokeNativeActivity(async()=>({status:'completed',persisted:4}),state),cleanup:async()=>{cleaned++;return {};}},
+  commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>{verified++;return {verified:true};},terminationUnverified:()=>state.nativeStopUnproven});
  assert.equal(out.status,'failed');assert.equal(out.results[0].execution_stopped,false);assert.equal(cleaned,0);assert.equal(verified,0);assert.equal(state.executionUnknown,true);
 });
 test('101 code1 原生叶子已退出归还请求，保留业务失败却可签原 run 清场 scope',{skip:process.platform!=='darwin'},async t=>{

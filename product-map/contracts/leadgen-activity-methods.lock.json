@@ -185,7 +185,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "5dbbb7d9890e523b1daaddabd4772bdfb47226423a414eb439785057f598ff2f",
+      "code_digest": "7fe712a0e8aa019349d24b18c7ae561d0f6d59ed3f5f70770464c8e88467f280",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "4cb186f1b494ab0c662cfef3014d1cda0af474b518f6870c835a0ff102df6e6a",
-        "current_code_digest": "5dbbb7d9890e523b1daaddabd4772bdfb47226423a414eb439785057f598ff2f"
+        "previous_code_digest": "5dbbb7d9890e523b1daaddabd4772bdfb47226423a414eb439785057f598ff2f",
+        "current_code_digest": "7fe712a0e8aa019349d24b18c7ae561d0f6d59ed3f5f70770464c8e88467f280"
       }
     },
     "douyin_video_processing.preflight": {
@@ -490,7 +490,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b0ef6e54ac691b1ac8d22eb4eb5b6a7e30c0a2499b0ea3efc8b3fe4d5405825d",
+      "code_digest": "06be4b9a297ae96865e886844e79ad2ef0e52e3e0b4c7e3881a545d65203af5b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "988b146ae803175daf6fcdd4b11b6d250fb7d40086c93a52a778bc164f5d4b2c",
-        "current_code_digest": "b0ef6e54ac691b1ac8d22eb4eb5b6a7e30c0a2499b0ea3efc8b3fe4d5405825d"
+        "previous_code_digest": "b0ef6e54ac691b1ac8d22eb4eb5b6a7e30c0a2499b0ea3efc8b3fe4d5405825d",
+        "current_code_digest": "06be4b9a297ae96865e886844e79ad2ef0e52e3e0b4c7e3881a545d65203af5b"
       }
     },
     "douyin_video_processing.dedup": {
@@ -756,7 +756,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "9fba66973bd94222399710346307fa3a40971cd458340db28d45e6dbd698aceb",
+      "code_digest": "f65a45db8e2b916ff0b55e94378673888da9c1d79b8cb981ce6bd7eb68b303fe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "bce23a70e01c559b973c6567872387c2d9bf3f5e95d15114456c71c2f437daac",
-        "current_code_digest": "9fba66973bd94222399710346307fa3a40971cd458340db28d45e6dbd698aceb"
+        "previous_code_digest": "9fba66973bd94222399710346307fa3a40971cd458340db28d45e6dbd698aceb",
+        "current_code_digest": "f65a45db8e2b916ff0b55e94378673888da9c1d79b8cb981ce6bd7eb68b303fe"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1043,7 +1043,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "36ee7d7d136ed34912df06f3c20eb055fe1b1435bb7b41cee551fe309f73c0fe",
+      "code_digest": "43cbee3f14b16d1a3d1faf5bae48cb9b4d403f597c0172cf831056e999b44a47",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "d72fa3c8ffcc02894accbd06adce2824c8307b5f6bcebb52bfd68e3a8bdcde43",
-        "current_code_digest": "36ee7d7d136ed34912df06f3c20eb055fe1b1435bb7b41cee551fe309f73c0fe"
+        "previous_code_digest": "36ee7d7d136ed34912df06f3c20eb055fe1b1435bb7b41cee551fe309f73c0fe",
+        "current_code_digest": "43cbee3f14b16d1a3d1faf5bae48cb9b4d403f597c0172cf831056e999b44a47"
       }
     },
     "douyin_video_processing.collection": {
@@ -1380,7 +1380,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "48ecfb8d83e256d80850a52d532f731b425fb66e12af3f296cf1733c11708540",
+      "code_digest": "23e52de0a3832d0f4f514ce211169867383e4414135f86ca76f33d7c89fe22f5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "58b87801729a8839346fb929a3b290f123e7c889d24db9d59c177b1e92eec9c3",
-        "current_code_digest": "48ecfb8d83e256d80850a52d532f731b425fb66e12af3f296cf1733c11708540"
+        "previous_code_digest": "48ecfb8d83e256d80850a52d532f731b425fb66e12af3f296cf1733c11708540",
+        "current_code_digest": "23e52de0a3832d0f4f514ce211169867383e4414135f86ca76f33d7c89fe22f5"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1663,7 +1663,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -1677,7 +1677,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/discovery-cleanup-readback.mjs",
           "revision": "contract",
-          "sha256": "bb7b4c27ad29d6b46d5c2b03d4b34f1646bacd68d3d7f81c678cbf9e5516183b"
+          "sha256": "ae377711ec7036bfbb9e8593aa0122fbf3fa45a0dce40e90dd89239c66a0a79f"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "88c83ecc6e7ba97eff19aba1f3c1af05718ac6188264fcc8995b6af0748620d8",
+      "code_digest": "bbbb47c6e11bddcc01945462ad73aedbf3c04ea6f0a61ddf594ea5fa4d4234df",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "029aaac68dc5729d05c6e6cf3581b2c116248146675ca1e87e39a24647d5c35a",
-        "current_code_digest": "88c83ecc6e7ba97eff19aba1f3c1af05718ac6188264fcc8995b6af0748620d8"
+        "previous_code_digest": "88c83ecc6e7ba97eff19aba1f3c1af05718ac6188264fcc8995b6af0748620d8",
+        "current_code_digest": "bbbb47c6e11bddcc01945462ad73aedbf3c04ea6f0a61ddf594ea5fa4d4234df"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1901,7 +1901,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "fc16f683558e7275a874959c0f8cf2e4b8f03c137b28c1e5380e4032fd4a8f9e",
+      "code_digest": "9550f4d949674f522c41ec7f8da750efeee201fefd3a16f5a58102b0daf5ff31",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "f5f0211ab080cce9288ac5b219c911d21af0f27992f9f500627ea226ea985547",
-        "current_code_digest": "fc16f683558e7275a874959c0f8cf2e4b8f03c137b28c1e5380e4032fd4a8f9e"
+        "previous_code_digest": "fc16f683558e7275a874959c0f8cf2e4b8f03c137b28c1e5380e4032fd4a8f9e",
+        "current_code_digest": "9550f4d949674f522c41ec7f8da750efeee201fefd3a16f5a58102b0daf5ff31"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2146,7 +2146,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "074ffe15c11fb3cb2e79840919cf1ad62264faa51f388a2ce36bc335aed7c493",
+      "code_digest": "c895ee2ba18912cd946aba6dc58912d0d9766306317dc25fade107a3d2c1c9f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "64454ad7ef01b686d69598322f2494d66a8fd9771f5e6db5ec19d5aa6aaad8e2",
-        "current_code_digest": "074ffe15c11fb3cb2e79840919cf1ad62264faa51f388a2ce36bc335aed7c493"
+        "previous_code_digest": "074ffe15c11fb3cb2e79840919cf1ad62264faa51f388a2ce36bc335aed7c493",
+        "current_code_digest": "c895ee2ba18912cd946aba6dc58912d0d9766306317dc25fade107a3d2c1c9f3"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2472,7 +2472,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a43741e701b50855cd3a1d97b95bf6a9986ba9b64ee5b41b61ad71bb78a02ff0",
+      "code_digest": "255af2958d61edaabd723ed91515b48ab7cd3c546ea844a0a66f805c76223641",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "b67df16aaacc14352e3835d7c6993ccfd4f9e21fd8e37d5a24cd47507a7a77bf",
-        "current_code_digest": "a43741e701b50855cd3a1d97b95bf6a9986ba9b64ee5b41b61ad71bb78a02ff0"
+        "previous_code_digest": "a43741e701b50855cd3a1d97b95bf6a9986ba9b64ee5b41b61ad71bb78a02ff0",
+        "current_code_digest": "255af2958d61edaabd723ed91515b48ab7cd3c546ea844a0a66f805c76223641"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2759,7 +2759,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41",
+      "code_digest": "dfd465800d4218e4beb94e5fca11ae8cd40049b384a757d73db1706445841e77",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
-        "current_code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41"
+        "previous_code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41",
+        "current_code_digest": "dfd465800d4218e4beb94e5fca11ae8cd40049b384a757d73db1706445841e77"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3032,7 +3032,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41",
+      "code_digest": "dfd465800d4218e4beb94e5fca11ae8cd40049b384a757d73db1706445841e77",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
-        "current_code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41"
+        "previous_code_digest": "f2ed9a2c6d6a6d65081217742f424bb4d497a4945b42c40e8dd318e9a5fced41",
+        "current_code_digest": "dfd465800d4218e4beb94e5fca11ae8cd40049b384a757d73db1706445841e77"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3308,7 +3308,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "4ee77d3e53223a0d31ba92d72fe3252fa4566154f125fb433db6a980e816ff81"
+          "sha256": "a51e14b0c3f48f4fd0a961ec216bf3ab1424671299b82f77bbc3ae28d7e802e0"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1e764f52b0e37433c2b9ccfadeccd366b674cc6ba0cef7e578ed2edb22f87ce7",
+      "code_digest": "df64da2c66ee386ce072b1700cdebe333a14696802355fa7f3889f86251802ef",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 发现写入仅放宽有界 RPC 子预算，PG 清单失败保留 partial 并要求同进程原生 scope 签收后才清场；其他活动的写入和终止判定不变。",
+        "reason": "101 Honor Launcher 只准其 health 桌面组件；发现原生叶子 code1 已归还时仅签原 run cleanup，completed 亦须 scope 证明。其他流程和业务成功判据不变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "f172e05775ab8fe3d85a06b86c0e4cb5b240ceec2b4115f97f2f82a481608e21",
-        "current_code_digest": "1e764f52b0e37433c2b9ccfadeccd366b674cc6ba0cef7e578ed2edb22f87ce7"
+        "previous_code_digest": "1e764f52b0e37433c2b9ccfadeccd366b674cc6ba0cef7e578ed2edb22f87ce7",
+        "current_code_digest": "df64da2c66ee386ce072b1700cdebe333a14696802355fa7f3889f86251802ef"
       }
     }
   },

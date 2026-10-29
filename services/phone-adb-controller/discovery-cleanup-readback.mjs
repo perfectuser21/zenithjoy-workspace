@@ -20,7 +20,7 @@ function checkNative(close_stdout,desktop_stdout,xml,png){
  if(!xml.length||/<!DOCTYPE|<!ENTITY/i.test(xml))invalid();
  const p=spawnSync('python3',['-c',`import sys,json,xml.etree.ElementTree as E\nr=E.fromstring(sys.stdin.read())\nassert r.tag=='hierarchy'\nprint(json.dumps(sorted(set(n.get('package','') for n in r.iter('node')))))`],{input:xml,encoding:'utf8',timeout:2000,maxBuffer:1024*1024});
  if(p.status!==0)invalid();const packages=JSON.parse(p.stdout);
- const allowed=['android','com.android.systemui',launcher,...(launcher==='com.hihonor.android.launcher'?['com.hihonor.android.totemweather','com.hihonor.assistant']:[])];
+ const allowed=['android','com.android.systemui',launcher,...(launcher==='com.hihonor.android.launcher'?['com.hihonor.android.totemweather','com.hihonor.assistant','com.hihonor.health']:[])];
  if(!packages.includes(launcher)||packages.some(p=>p&&!allowed.includes(p)))invalid();
  return launcher;
 }

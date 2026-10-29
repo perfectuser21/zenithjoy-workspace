@@ -10,7 +10,7 @@ import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 export async function invokeNativeActivity(execute,state){
   try{
     const result=await execute();
-    if(state.nativeStopUnproven&&['partial','failed'].includes(result?.status)){
+    if(state.nativeStopUnproven&&(state.currentActivity==='collect_videos'||['partial','failed'].includes(result?.status))){
       const scope={run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,activity:state.currentActivity};
       const proof=collectionEvidenceProof(result,scope)||discoveryCleanupEvidence(result,scope);
       if(!proof)state.executionUnknown=true;
