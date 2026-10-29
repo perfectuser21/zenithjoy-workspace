@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const target=fileURLToPath(new URL('../native-operation-receipt.mjs',import.meta.url));
+const syntheticTarget="const fs=require('fs');process.on('SIGTERM',()=>fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/signalled','TERM'));fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/target-ready','ready');setTimeout(()=>process.exit(0),5000);setInterval(()=>{},1000)";
 
 // Each case gets a fresh OS process, PATH and actual child. No process.kill mock.
 for(const field of ['pid','start_identity','uid','pgid'])test('真实合成子进程身份漂移必须拒TERM：'+field,{timeout:15000},async()=>{
@@ -27,7 +28,7 @@ const c=cp.spawn('/usr/bin/python3',a,{stdio:'inherit'});process.on('SIGTERM',()
  writeFileSync(join(bin,'python3'),shim,{mode:0o755});
  const fixture=join(dir,'fixture.mjs');
  writeFileSync(fixture,`import {spawn} from 'node:child_process';import fs from 'node:fs';import {beginNativeOperation} from ${JSON.stringify(pathToFileURL(target).href)};
-const child=spawn(process.execPath,['-e',${JSON.stringify("const fs=require('fs');process.on('SIGTERM',()=>fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/signalled','TERM'));fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/target-ready','ready');setTimeout(()=>process.exit(0),5000);setInterval(()=>{},1000)")}],{detached:true,stdio:'ignore'});process.env.NATIVE_ROOT_PID=String(child.pid);
+const child=spawn(process.execPath,['-e',${JSON.stringify(syntheticTarget)}],{detached:true,stdio:'ignore'});process.env.NATIVE_ROOT_PID=String(child.pid);
 const closed=new Promise(r=>child.once('close',r));const readyDeadline=Date.now()+1500;while(!fs.existsSync(${JSON.stringify(join(dir,'target-ready'))})){if(Date.now()>readyDeadline)throw Error('FIXTURE_TARGET_NOT_READY');await new Promise(r=>setTimeout(r,5));}
 try{const op=beginNativeOperation({runDir:${JSON.stringify(dir)},operationId:'synthetic-drift',runId:'synthetic__a1',taskId:'synthetic-task',profile:'synthetic',serial:'NO-DEVICE',sourceCommit:'a'.repeat(40),owner:'synthetic-owner',activity:'preflight'});await op.started(child.pid);const sent=await op.signalTargets('SIGTERM');await new Promise(r=>setTimeout(r,100));const signalled=fs.existsSync(${JSON.stringify(join(dir,'signalled'))});const alive_before_cleanup=child.exitCode===null&&child.signalCode===null;child.kill('SIGKILL');await closed;const proof=await op.stop(null,0,null);console.log(JSON.stringify({sent,signalled,alive_before_cleanup,status:proof.status,execution_stopped:proof.execution_stopped}));}finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await closed;}
 `);
@@ -38,4 +39,14 @@ try{const op=beginNativeOperation({runDir:${JSON.stringify(dir)},operationId:'sy
   });
   assert.equal(output.alive_before_cleanup,true,'actual target must still be live; TTL/setup failure cannot pass');assert.equal(output.sent,0);assert.equal(output.signalled,false);assert.equal(output.status,'unknown');assert.equal(output.execution_stopped,false);
  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('并发观察耗时超过 5 秒时合成目标仍须存活，不能由夹具 TTL 提前放行',{timeout:12000},async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'native-observer-delay-'));
+ const child=spawn(process.execPath,['-e',syntheticTarget],{env:{...process.env,NATIVE_CASE_DIR:dir},stdio:'ignore'});
+ const closed=new Promise(resolve=>child.once('close',resolve));
+ try{
+  const deadline=Date.now()+1500;while(true){try{readFileSync(join(dir,'target-ready'));break;}catch{if(Date.now()>deadline)throw Error('FIXTURE_TARGET_NOT_READY');await new Promise(r=>setTimeout(r,5));}}
+  await new Promise(r=>setTimeout(r,6500));
+  assert.equal(child.exitCode,null,'合成目标应覆盖最慢的身份观察；否则拒TERM断言可被自然退出伪造');
+ }finally{child.kill('SIGKILL');await closed;rmSync(dir,{recursive:true,force:true});}
 });
