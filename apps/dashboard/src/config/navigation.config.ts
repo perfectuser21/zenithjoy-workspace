@@ -18,7 +18,7 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
-  Monitor, ImageIcon, FileText, Coins, ListChecks,} from 'lucide-react';
+  Monitor, ImageIcon, FileText, Coins, ListChecks, Sparkles,} from 'lucide-react';
 
 // ============ 类型定义 ============
 
@@ -119,6 +119,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // Line 07 — AI 爆款视频翻拍
   'VideoRemakePipelinePage': () => import('../pages/VideoRemakePipelinePage'),
   'CreativeCanvasPage': () => import('../pages/CreativeCanvasPage'),
+  'AidgeWorkspacePage': () => import('../pages/AidgeWorkspacePage'),
   'WanPlaygroundPage': () => import('../pages/WanPlaygroundPage'),
   'VideoUpscalePage': () => import('../pages/VideoUpscalePage'),
   // 2026-06-23 — 业务区总览页（短侧栏下钻：区 → 总览卡片 → 子页）
@@ -198,6 +199,7 @@ export const autopilotNavGroups: NavGroup[] = [
   {
     title: '员工工具',
     items: [
+      { path: '/aidge', icon: Sparkles, label: 'Aidge', featureKey: 'staff-aidge', requireStaff: true, component: 'AidgeWorkspacePage' },
       { path: '/area/video-tools', icon: Video, label: '视频工具', featureKey: 'staff-video-tools', requireStaff: true, component: 'AreaHubPage' },
     ],
   },
@@ -357,7 +359,7 @@ export function filterNavGroups(
       ...group,
       items: group.items.filter(item => {
         // 员工内部工具不依赖客户套餐中的 feature flag，仍需通过下方员工权限检查。
-        if (!['staff-skill-eval', 'staff-video-tools'].includes(item.featureKey) && !isFeatureEnabled(item.featureKey)) return false;
+        if (!['staff-skill-eval', 'staff-video-tools', 'staff-aidge'].includes(item.featureKey) && !isFeatureEnabled(item.featureKey)) return false;
         // 检查超级管理员权限
         if (item.requireSuperAdmin && !isSuperAdmin) return false;
         // 检查员工权限
