@@ -1,3 +1,4 @@
+/* global window, document, fetch, URL */
 /* Staging bootstrap diagnostics: only fixed error categories, asset basenames,
    and readiness flags are reported; never send error text or page data. */
 (function () {
@@ -9,7 +10,7 @@
       fetch('/api/creative-canvas/__diag/' + kind + '/' + detail, {
         method: 'POST', credentials: 'same-origin', keepalive: true
       }).catch(function () {});
-    } catch (_) {}
+    } catch { /* Diagnostics must not interrupt the canvas. */ }
   }
   function assetName(value) {
     try {
@@ -17,7 +18,7 @@
       var prefix = '/api/creative-canvas/assets/';
       var name = url.pathname.slice(prefix.length);
       if (url.origin === window.location.origin && url.pathname.indexOf(prefix) === 0 && /^(?=.{1,100}$)[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.js$/.test(name)) return name;
-    } catch (_) {}
+    } catch { /* Diagnostics must not interrupt the canvas. */ }
     return 'other';
   }
   function classify(message) {
