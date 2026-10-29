@@ -132,7 +132,12 @@ export async function runActivity({ activity, context, execute, commander, recor
     let evidence;
     try {
       const result=await execute();
-      const status=result?.status==='paused'?'partial':['partial','failed','skipped'].includes(result?.status)?result.status:'completed';
+      // A handler may omit status on success, but an explicit non-success state
+      // must never be promoted to completed by an unfamiliar status spelling.
+      const reported=result?.status;
+      const status=reported===undefined||reported==='completed'?'completed'
+        :['paused','partial','blocked','needs_review','pending'].includes(reported)?'partial'
+        :reported==='skipped'?'skipped':'failed';
       evidence = { status, attempt, result };
     }
     catch (error) { evidence = { status: 'failed', attempt, error: safeError(error),...(typeof error.executionStopped==='boolean'?{execution_stopped:error.executionStopped}:{}) ,...(error.externalEffect==='unknown'?{external_effect:'unknown'}:{}),...(error.operationId?{operation_id:error.operationId}:{}) }; }
