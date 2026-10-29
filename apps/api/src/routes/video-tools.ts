@@ -73,12 +73,6 @@ function view(job: Job) {
   delete visible.referenceHash;
   return visible;
 }
-async function save(file: string, body: unknown) {
-  await mkdir(resolve(file, '..'), { recursive: true, mode: 0o700 });
-  const temp = `${file}.${randomUUID()}.tmp`;
-  await writeFile(temp, JSON.stringify(body), { mode: 0o600 });
-  await rename(temp, file);
-}
 async function load<T>(file: string, root: string): Promise<T | null> {
   const fullPath = resolve(file);
   if (!fullPath.startsWith(resolve(root) + sep)) return fail(400, '任务文件地址无效');
@@ -93,6 +87,14 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   const imageProvider = options.imageProvider ?? new ToApisImageProvider();
   const imageFetch = options.imageFetch ?? fetch;
   const directory = options.directory ?? process.env.VIDEO_TOOLS_DATA_DIR ?? resolve(process.cwd(), 'data/video-tools');
+  async function save(file: string, body: unknown) {
+    const fullPath = resolve(file);
+    if (!fullPath.startsWith(resolve(directory) + sep)) return fail(400, '任务文件地址无效');
+    await mkdir(resolve(fullPath, '..'), { recursive: true, mode: 0o700 });
+    const temp = `${fullPath}.${randomUUID()}.tmp`;
+    await writeFile(temp, JSON.stringify(body), { mode: 0o600 });
+    await rename(temp, fullPath);
+  }
   const locks = new Map<string, Promise<unknown>>();
   async function serialized<T>(key: string, operation: () => Promise<T>): Promise<T> {
     const previous = locks.get(key) ?? Promise.resolve();
