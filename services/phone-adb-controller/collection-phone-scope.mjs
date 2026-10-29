@@ -129,7 +129,7 @@ export function readCollectionPhoneScopeInput(path){
  }catch(error){if(error.code==='ELOOP')throw Error('COLLECTION_SCOPE_FILE_NOT_PRIVATE');throw error;}finally{if(fd!==undefined)closeSync(fd);}
 }
 // 模板是发布清单内已批准的只读输入；续跑永远取原快照，不追当前模板。
-export function defaultCollectionPhoneScope({root,env}){
+export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_WORKFLOW}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_processing')return undefined;
  if(existsSync(join(env.WFR_RUN_DIR,'run-definition.json')))return readFrozen(env.WFR_RUN_DIR).collection_phone_scope;
  const manifest=JSON.parse(readFileSync(env.WF_DEPLOYMENT_MANIFEST||join(root,'deployment-manifest.json'),'utf8'));
@@ -137,7 +137,8 @@ export function defaultCollectionPhoneScope({root,env}){
  if(!entry)return undefined;
  const bytes=readFileSync(join(root,relative));if(sha(bytes)!==entry.content_sha256||entry.path!=='services/phone-adb-controller/'+relative)throw Error('COLLECTION_DEFAULT_TEMPLATE_SOURCE_INVALID');
  const template=JSON.parse(bytes);if(template.version!==1||!Array.isArray(template.hosts))throw Error('COLLECTION_DEFAULT_TEMPLATE_INVALID');
- const matches=template.hosts.filter(x=>x.target===manifest.target&&x.profile===env.P&&x.serial===env.SERIAL);
+ const matches=template.hosts.filter(x=>x.target===manifest.target&&x.profile===env.P&&x.serial===env.SERIAL
+  &&(!x.workflow_keys||Array.isArray(x.workflow_keys)&&x.workflow_keys.includes(workflowKey)));
  if(!matches.length)return undefined;if(matches[0].acceptance_probe)throw Error('COLLECTION_ACCEPTANCE_PROBE_EXPLICIT_INPUT_REQUIRED');
  if(matches.length!==1||!matches[0].expected_account)throw Error('COLLECTION_DEFAULT_TEMPLATE_INVALID');
  const specification={...structuredClone(matches[0]),version:1,task_id:null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};

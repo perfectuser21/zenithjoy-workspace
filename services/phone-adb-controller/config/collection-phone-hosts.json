@@ -35,6 +35,45 @@
           "sha256": "3fbc7a357f2cc9ee90b975f76c27744c19a051a5922fe59c5c8a3ac7a981ffc5"
         }
       }
+    },
+    {
+      "target": "xian-m4",
+      "profile": "jinoshengyuan-work",
+      "serial": "ANGYVB4227006983",
+      "expected_account": "langzi63485",
+      "workflow_keys": ["douyin_video_discovery"],
+      "evidence_root": "/private/tmp/openclaw-phone/evidence/jinoshengyuan-work",
+      "evidence_alias": {
+        "path": "/private/tmp/openclaw-phone",
+        "target": "/Users/jinnuoshengyuan/Library/Application Support/ZenithJoy/phone-runtime-20261011"
+      },
+      "policy": {
+        "schema_version": 1,
+        "host_id": "xian-m4",
+        "transport": "usb",
+        "endpoint": "tcp:127.0.0.1:5037",
+        "forbidden_ports": [
+          5041,
+          5042
+        ],
+        "adb_bin": "/opt/homebrew/bin/adb",
+        "adb_realpath": "/opt/homebrew/Caskroom/android-platform-tools/36.0.2/platform-tools/adb",
+        "adb_sha256": "534893b946847fdf6f9998108af469e646679824d75098247ca438948fa2dffc"
+      },
+      "executables": {
+        "python": {
+          "path": "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "695fc18cdb9a699c6b1ea88ce4027854782ed704eb34cc3200e6f8380155b6a8"
+        },
+        "node": {
+          "path": "/opt/homebrew/Cellar/node/26.0.0/bin/node",
+          "sha256": "73cc3e9b5d2b1753ea3395a5bf39787ef85f20f048a0f0744761860b81b8fbdb"
+        },
+        "zsh": {
+          "path": "/bin/zsh",
+          "sha256": "3fbc7a357f2cc9ee90b975f76c27744c19a051a5922fe59c5c8a3ac7a981ffc5"
+        }
+      }
     }
   ]
 }

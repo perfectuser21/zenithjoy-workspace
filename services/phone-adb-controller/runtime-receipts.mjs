@@ -69,6 +69,7 @@ export async function run(args){
     if(e.WF_MMV_SSH_ROUTE&&!['tailscale','public'].includes(e.WF_MMV_SSH_ROUTE))throw Error('WF_MMV_SSH_ROUTE仅允许tailscale或public');
     const collectionPhoneScope=rest.length?readCollectionPhoneScopeInput(rest[1]):(e.WF_DEPLOYMENT_ROOT||e.WF_HOME?defaultCollectionPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e}):undefined);
     const discoveryPhoneScope=e.WF_DEPLOYMENT_ROOT||e.WF_HOME?defaultDiscoveryPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e}):undefined;
+    if(e.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!discoveryPhoneScope)throw Error('DISCOVERY_PHONE_SCOPE_REQUIRED');
     if(collectionPhoneScope&&(e.WF_BRAIN_WORKFLOW!=='douyin_video_processing'||collectionPhoneScope.profile!==e.P||collectionPhoneScope.serial!==e.SERIAL||collectionPhoneScope.run_id!==`${e.WFR_RUN_ID}__${collectionPhoneScope.attempt}`))throw Error('COLLECTION_SCOPE_INPUT_IDENTITY_INVALID');
     const samplingInput=commentSamplingInput(e),fixedDiscoveryInput=discoveryInput(e);
     const producerDescriptor=e.LEADGEN_PRODUCER_DESCRIPTOR_FILE?readProducerDescriptor(e.LEADGEN_PRODUCER_DESCRIPTOR_FILE):undefined;

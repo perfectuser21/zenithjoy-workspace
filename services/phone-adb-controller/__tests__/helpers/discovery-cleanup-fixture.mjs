@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 export const discoveredId='7681632828384394202';
-export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,attemptLimit}={}){
+export async function discoveryFixture(t,{empty=false,stop=true,guardUnknown=false,slowLeaf=false,attemptLimit,screenLimit=false}={}){
  const f=await collectionFixture(t),load=name=>import(pathToFileURL(join(f.runtime,name)));
  if(slowLeaf){
   const c=join(f.d,'slow-leaf.c'),client=f.frozen.collection_phone_scope.policy.adb_bin;
@@ -35,7 +35,12 @@ case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_
 `);
  const scope={...f.frozen.collection_phone_scope,run_id:'douyin_video_discovery-scope-owner__a1',expected_account:'fixture-account'};
  delete f.frozen.collection_phone_scope;f.frozen.discovery_phone_scope=scope;f.frozen.workflow_version.payload.key='douyin_video_discovery';
- f.env.LEADGEN_EVIDENCE_DIR=scope.evidence_root;f.env.WF_BRAIN_WORKFLOW='douyin_video_discovery';f.env.WFR_RUN_ID='douyin_video_discovery-scope-owner';f.env.LEADGEN_SOURCE_RUN='';f.env.LEADGEN_LOCATION='unlimited';f.env.LEADGEN_LIMIT=stop?'0':'1';f.env.WF_STOP_FILE=join(f.d,'stop');f.env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000));f.env.WF_RUN_MAX_SECONDS='1800';
+ f.env.LEADGEN_EVIDENCE_DIR=scope.evidence_root;f.env.WF_BRAIN_WORKFLOW='douyin_video_discovery';f.env.WFR_RUN_ID='douyin_video_discovery-scope-owner';f.env.LEADGEN_SOURCE_RUN='';f.env.LEADGEN_LOCATION='unlimited';f.env.LEADGEN_LIMIT=screenLimit?'10':stop?'0':'1';f.env.WF_STOP_FILE=join(f.d,'stop');f.env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000));f.env.WF_RUN_MAX_SECONDS='1800';
+ if(screenLimit){
+  f.env.LEADGEN_MAX_SCREENS='1';
+  const controller=join(f.runtime,'fixture-discovery-controller.cjs');
+  writeFileSync(controller,readFileSync(controller,'utf8').replace('end_of_results=1','end_of_results=0'));
+ }
  const hash=b=>createHash('sha256').update(b).digest('hex');f.frozen.files={};
  const visit=dir=>{for(const n of readdirSync(dir)){const p=join(dir,n);if(statSync(p).isDirectory())visit(p);else f.frozen.files['runtime/'+p.slice(f.runtime.length+1)]=hash(readFileSync(p));}};visit(f.runtime);
  if(attemptLimit!==undefined){

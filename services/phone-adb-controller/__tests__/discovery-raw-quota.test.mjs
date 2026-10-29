@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
 import * as runtime from '../runtime-definition.mjs';
 import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
+import {addDiscoveryCliScopeTemplate} from './helpers/discovery-cli-scope-fixture.mjs';
 const card=i=>`${300+i}\t540\t00:20\t目标${i}\t作者${i}`;
 function input(dir,max=2){const file=join(dir,'keywords.txt');writeFileSync(file,'AI考证\n');return {env:{WF_BRAIN_WORKFLOW:'douyin_video_discovery',WFR_TAG:'rawquota',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_KIND:'keyword',LEADGEN_SOURCES_FILE:file,LEADGEN_MAX_SCREENS:'1',LEADGEN_DISCOVERY_MAX_CANDIDATES:String(max)},fixed:{schema_version:1,workflow_key:'douyin_video_discovery',run_tag:'rawquota',profile:'legacy',serial:'SERIAL',line:'jinuo',max_candidates:max,max_screens:1,source_kind:'keyword',sources:['AI考证'],source_sha256:createHash('sha256').update('AI考证\n').digest('hex')}};}
 function rig(dir,{cards=2,max=2,missing=false,reveal=false,restricted=true}={}){
@@ -95,7 +96,7 @@ test('真实prepare CLI将raw输入写正式快照，漂移后CLI拒续跑',{tim
  const f=freezeRig(dir),target=deploymentTarget(hostname());
  const release={id:'raw-cli-release',environment:'scratch',target,payload:{schema_version:1,workflows:[f.routes['/api/brain/workflows/w/versions/wv'].version],activities:[f.routes['/api/brain/activities/a/versions/av'].version]}};
  release.manifest_sha256=runtime.digest({environment:release.environment,target,payload:release.payload});
- const manifest=join(f.options.deploymentRoot,'deployment-manifest.json');writeFileSync(manifest,JSON.stringify({...JSON.parse(readFileSync(manifest)),release_id:release.id,observation_id:'raw-cli-obs',environment:'scratch',target}));
+ const manifest=join(f.options.deploymentRoot,'deployment-manifest.json');writeFileSync(manifest,JSON.stringify(addDiscoveryCliScopeTemplate(f.options.deploymentRoot,{...JSON.parse(readFileSync(manifest)),release_id:release.id,observation_id:'raw-cli-obs',environment:'scratch',target},{target,profile:'legacy',serial:'SERIAL'})));
  const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines')res.end(JSON.stringify([{id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}]));else if(req.url==='/api/brain/releases/raw-cli-release')res.end(JSON.stringify({release}));else{res.statusCode=404;res.end('{}');}});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  try{

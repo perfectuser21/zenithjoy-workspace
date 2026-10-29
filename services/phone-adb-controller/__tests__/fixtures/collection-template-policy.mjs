@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 const source=fileURLToPath(new URL('../../',import.meta.url)),relative='config/collection-phone-hosts.json';
 const bytes=fs.readFileSync(join(source,relative)),oldBytes=fs.readFileSync(new URL('./collection-phone-hosts-699515a5.json',import.meta.url));
-const template=JSON.parse(bytes),old=JSON.parse(oldBytes),host=template.hosts[0];
+const mode=process.argv[2],template=JSON.parse(bytes),old=JSON.parse(oldBytes),host=template.hosts[['101-work','102-work'].includes(mode)?1:0];
 const original={lstatSync:fs.lstatSync,readlinkSync:fs.readlinkSync,realpathSync:fs.realpathSync};
 const alias=host.evidence_alias,canonical=join(alias.target,'evidence',host.profile),paths=new Set();
 for(const root of [alias.path,canonical])for(let p=root;;p=resolve(p,'..')){paths.add(p);if(p==='/')break;}
@@ -36,15 +36,21 @@ function fixture(raw=bytes){
  return {root,runtime,manifest,env};
 }
 function scope(f,key){const env={...f.env,WF_BRAIN_WORKFLOW:key};return (key==='douyin_video_discovery'?defaultDiscoveryPhoneScope:defaultCollectionPhoneScope)({root:f.runtime,env});}
-const mode=process.argv[2];
 try{
- if(mode==='101'||mode==='102'){
-  const f=fixture(),key=mode==='101'?'douyin_video_discovery':'douyin_video_processing',value=scope(f,key);
+ if(['101','101-work','102'].includes(mode)){
+  const f=fixture(),key=mode==='102'?'douyin_video_processing':'douyin_video_discovery',value=scope(f,key);
   const r=spawnSync('python3',['-c',"import importlib.util,json,sys;s=importlib.util.spec_from_file_location('service',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);print(json.dumps(m.POLICY))",join(source,'adb-host-service.py')],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);const policy=JSON.parse(r.stdout);
   assert.deepEqual(Object.fromEntries(Object.keys(policy).map(k=>[k,value.policy[k]])),policy,'new default must match approved single5037 service policy');
   assert.equal(value.source_commit,f.manifest.source_commit);assert.equal(value.profile,host.profile);assert.equal(value.serial,host.serial);assert.equal(value.expected_account,host.expected_account);assert.deepEqual(value.executables,host.executables);
+ }else if(mode==='102-work'){
+  const f=fixture();assert.equal(scope(f,'douyin_video_processing'),undefined,'101 精确新模板不能扩大 102 执行范围');
  }else if(mode==='pins'){
-  const strip=t=>{t=structuredClone(t);delete t.hosts[0].policy.endpoint;delete t.hosts[0].policy.forbidden_ports;return t;};assert.deepEqual(strip(template),strip(old));assert.equal(template.hosts.length,1);
+  const strip=t=>{t=structuredClone(t);delete t.hosts[0].policy.endpoint;delete t.hosts[0].policy.forbidden_ports;return t;};
+  assert.deepEqual(strip({hosts:[template.hosts[0]]}),strip({hosts:[old.hosts[0]]}));assert.equal(template.hosts.length,2);
+  const work=template.hosts[1],legacy=template.hosts[0];
+  assert.deepEqual({target:work.target,profile:work.profile,serial:work.serial,expected_account:work.expected_account,evidence_root:work.evidence_root,workflow_keys:work.workflow_keys},
+   {target:'xian-m4',profile:'jinoshengyuan-work',serial:'ANGYVB4227006983',expected_account:'langzi63485',evidence_root:'/private/tmp/openclaw-phone/evidence/jinoshengyuan-work',workflow_keys:['douyin_video_discovery']});
+  assert.deepEqual(work.policy,legacy.policy);assert.deepEqual(work.executables,legacy.executables);assert.deepEqual(work.evidence_alias,legacy.evidence_alias);
  }else if(mode==='manifest'){
   const f=fixture();fs.appendFileSync(join(f.runtime,relative),' ');assert.throws(()=>scope(f,'douyin_video_processing'),/COLLECTION_DEFAULT_TEMPLATE_SOURCE_INVALID/);
  }else if(mode==='unknown-binding'){

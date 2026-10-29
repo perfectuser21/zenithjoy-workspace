@@ -65,6 +65,57 @@ test('真实guard根143但live PG仍在：unknown标记保留且不能清场/重
 });
 
 import {discoveryFixture,discoveredId} from './helpers/discovery-cleanup-fixture.mjs';
+test('101 冻结包缺原生闭包能力时在业务动作前拒绝，不靠 screen_limit 清场',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{stop:false,screenLimit:true});
+ try{
+  delete f.frozen.discovery_phone_scope;
+  const {digest}=await f.load('runtime-definition.mjs');delete f.frozen.snapshot_sha256;f.frozen.snapshot_sha256=digest(f.frozen);
+  writeFileSync(join(f.d,'run-definition.json'),JSON.stringify(f.frozen));
+  await assert.rejects(f.h.collect_videos(),/DISCOVERY_PHONE_SCOPE_REQUIRED/);
+  assert.deepEqual(f.stored,[]);assert.equal(existsSync(join(f.d,'discovery-progress.json')),false);
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
+test('101 首屏有限停止且原生叶子已封闭：保留 partial、进入真实 verify 和 cleanup',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{stop:false,screenLimit:true});
+ const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');let verified=0,cleaned=0,recovered=0;
+ try{
+  const out=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:f.context,
+   handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{cleaned++;f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},
+   commander:async()=>({action:'continue'}),record:async()=>{},verify:async(a,e)=>{if(a.key==='collect_videos'){verified++;assert.equal(e.result.stop_reason,'screen_limit');assert.equal(e.result.counts.persisted,1);assert.equal(JSON.parse(readFileSync(join(f.d,'discovery-progress.json'))).request.target_count,10);assert.deepEqual(e.result.failures,[]);}return {verified:true};},
+   recover:async()=>{recovered++;throw Error('不得重新采集');},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+  assert.equal(out.status,'partial','有限首屏不冒称全量完成');assert.equal(out.results[0].status,'partial');
+  assert.equal(verified,1,'已持久化的部分结果必须经过原验收');assert.equal(cleaned,1);assert.equal(recovered,0);
+  assert.equal(out.results.at(-1).result.cleanup_readback_verified,1);assert.equal(out.results.at(-1).result.lock_released,1);
+  assert.equal(f.h.state.executionUnknown,undefined);assert.equal(existsSync(f.ownerFile),false);
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
+test('101 有限停止不能由停止词、假进度或复制的原生能力伪造',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{stop:false,screenLimit:true});
+ const {invokeNativeActivity}=await f.load('leadgen-workflow.mjs'),{discoveryFiniteStopEvidence}=await f.load('discovery-phone-scope.mjs');
+ try{
+  const result=await invokeNativeActivity(()=>f.h.collect_videos(),f.h.state);
+  assert.equal(result.status,'partial');assert.equal(result.stop_reason,'screen_limit');
+  assert.ok(discoveryFiniteStopEvidence(result,f.context));
+  for(const changed of [{...result,stop_reason:'screen_limit',cleanup_phone_scope:structuredClone(result.cleanup_phone_scope)},
+   {...result,manifest_verified:0},{...result,stop_reason:'budget_exhausted'},{...result,pending_capture:{videoId:'pending'}}])
+   assert.equal(discoveryFiniteStopEvidence(changed,f.context),null);
+  const path=join(f.d,'discovery-progress.json'),progress=JSON.parse(readFileSync(path));progress.counts.persisted=99;writeFileSync(path,JSON.stringify(progress));
+  assert.equal(discoveryFiniteStopEvidence(result,f.context),null,'落盘进度漂移不能继续验证');
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
+test('101 有限停止的业务验收失败仍如实失败，并仅归位原设备',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{stop:false,screenLimit:true});
+ const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');let verified=0,cleaned=0,recovered=0;
+ try{
+  const out=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:f.context,
+   handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{cleaned++;f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},
+   commander:async()=>({action:'continue'}),record:async()=>{},verify:async(a)=>{if(a.key==='collect_videos'){verified++;return {verified:false};}return {verified:true};},
+   recover:async()=>{recovered++;throw Error('不得重跑');},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+  assert.equal(out.status,'failed');assert.equal(verified,1);assert.equal(cleaned,1);assert.equal(recovered,0);
+  assert.equal(out.results.at(-1).result.cleanup_readback_verified,1);assert.equal(out.results.at(-1).result.lock_released,1);
+  assert.equal(existsSync(f.ownerFile),false);
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
 for(const mode of ['partial','normal','empty'])test('真实101封闭leaf→'+mode+'→仅原cleanup，不恢复采集',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{empty:mode==='empty',stop:mode!=='normal'});
  const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');let recoveries=0;

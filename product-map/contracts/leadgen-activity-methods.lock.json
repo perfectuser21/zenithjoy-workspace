@@ -66,7 +66,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -80,7 +80,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -227,7 +227,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "d4a3dc3ef5e40bd03a57e8b09776edb3594e42569525e705b2e2f7f46fd56f52",
+      "code_digest": "4cb186f1b494ab0c662cfef3014d1cda0af474b518f6870c835a0ff102df6e6a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "05f22f4cd5d27f04b9b78cb328938bbf6dce282fa668a1cc54f072f2d0f4a033",
-        "current_code_digest": "d4a3dc3ef5e40bd03a57e8b09776edb3594e42569525e705b2e2f7f46fd56f52"
+        "reason": "101 有限 screen_limit 保持 partial，只在同批封闭原生叶子与进度/清单读回证据齐全时核验并原 run 清场；缺 scope 在业务前拒绝。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "d4a3dc3ef5e40bd03a57e8b09776edb3594e42569525e705b2e2f7f46fd56f52",
+        "current_code_digest": "4cb186f1b494ab0c662cfef3014d1cda0af474b518f6870c835a0ff102df6e6a"
       }
     },
     "douyin_video_processing.preflight": {
@@ -360,7 +360,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -374,7 +374,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -532,7 +532,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8f0f9bcf11388dd27559755bfd25f60dfea51388e13012ea537d734a041aa827",
+      "code_digest": "988b146ae803175daf6fcdd4b11b6d250fb7d40086c93a52a778bc164f5d4b2c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "7a6cfcde9331761ad03bd18d1c9c1ccc0b2992ffac862935d1e5ae53632354b7",
-        "current_code_digest": "8f0f9bcf11388dd27559755bfd25f60dfea51388e13012ea537d734a041aa827"
+        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "8f0f9bcf11388dd27559755bfd25f60dfea51388e13012ea537d734a041aa827",
+        "current_code_digest": "988b146ae803175daf6fcdd4b11b6d250fb7d40086c93a52a778bc164f5d4b2c"
       }
     },
     "douyin_video_processing.dedup": {
@@ -637,7 +637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -651,7 +651,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -791,7 +791,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "4f3e054b5f72d48273248c05f644427b8fbb34529d79b4c6ec1ed0f67a745211",
+      "code_digest": "bce23a70e01c559b973c6567872387c2d9bf3f5e95d15114456c71c2f437daac",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "7122876a55ead618c97aaccf68249a69c5dba3de6897ff4657cc4d55ca7c2e98",
-        "current_code_digest": "4f3e054b5f72d48273248c05f644427b8fbb34529d79b4c6ec1ed0f67a745211"
+        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "4f3e054b5f72d48273248c05f644427b8fbb34529d79b4c6ec1ed0f67a745211",
+        "current_code_digest": "bce23a70e01c559b973c6567872387c2d9bf3f5e95d15114456c71c2f437daac"
       }
     },
     "douyin_video_processing.qualification": {
@@ -924,7 +924,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -938,7 +938,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -1078,7 +1078,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "5b61829e0b46cb004b2a27afac248bcf20b76deacae8a60a79ca9a248447b4a6",
+      "code_digest": "d72fa3c8ffcc02894accbd06adce2824c8307b5f6bcebb52bfd68e3a8bdcde43",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "188c8bf46e995f5822643b9b620542af327eff9d375115a215186024202d839a",
-        "current_code_digest": "5b61829e0b46cb004b2a27afac248bcf20b76deacae8a60a79ca9a248447b4a6"
+        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "5b61829e0b46cb004b2a27afac248bcf20b76deacae8a60a79ca9a248447b4a6",
+        "current_code_digest": "d72fa3c8ffcc02894accbd06adce2824c8307b5f6bcebb52bfd68e3a8bdcde43"
       }
     },
     "douyin_video_processing.collection": {
@@ -1253,7 +1253,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -1267,7 +1267,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -1422,7 +1422,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "f812d1908475eaec568d8f6fd810bf2b73e26cfa4cc7853aa00f9d680b08ade6",
+      "code_digest": "58b87801729a8839346fb929a3b290f123e7c889d24db9d59c177b1e92eec9c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "183e943805f25efbdf8905b8c43a56111711f8c0d200e5eccd5253b9a05b45e7",
-        "current_code_digest": "f812d1908475eaec568d8f6fd810bf2b73e26cfa4cc7853aa00f9d680b08ade6"
+        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "f812d1908475eaec568d8f6fd810bf2b73e26cfa4cc7853aa00f9d680b08ade6",
+        "current_code_digest": "58b87801729a8839346fb929a3b290f123e7c889d24db9d59c177b1e92eec9c3"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1541,7 +1541,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -1555,7 +1555,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -1712,7 +1712,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "32bffd484d6284f9379cc6b9ec149e85c12a73ed9efc396ae482a8f778a99d0a",
+      "code_digest": "029aaac68dc5729d05c6e6cf3581b2c116248146675ca1e87e39a24647d5c35a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "96132b6de3851b66c9934d3024bbfe5a7bfaa037474ad305df0d95c9a1421207",
-        "current_code_digest": "32bffd484d6284f9379cc6b9ec149e85c12a73ed9efc396ae482a8f778a99d0a"
+        "reason": "共享 Runner 增加 101 精确分支；新金诺模板限定 workflow_key=101，102 默认授权范围、合同与未知终止隔离语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "32bffd484d6284f9379cc6b9ec149e85c12a73ed9efc396ae482a8f778a99d0a",
+        "current_code_digest": "029aaac68dc5729d05c6e6cf3581b2c116248146675ca1e87e39a24647d5c35a"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1810,7 +1810,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -1824,7 +1824,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -1936,7 +1936,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "e8d3809bf751c232b2c5bc93c97d2efa84f66be292a91494445560ade403e3f4",
+      "code_digest": "f5f0211ab080cce9288ac5b219c911d21af0f27992f9f500627ea226ea985547",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "a98f8d3d4bc9e1fd744f6373891fae07766e00ae4ccdd706397169fc1c934011",
-        "current_code_digest": "e8d3809bf751c232b2c5bc93c97d2efa84f66be292a91494445560ade403e3f4"
+        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；103 活动合同、输入输出和原有停止判定语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "e8d3809bf751c232b2c5bc93c97d2efa84f66be292a91494445560ade403e3f4",
+        "current_code_digest": "f5f0211ab080cce9288ac5b219c911d21af0f27992f9f500627ea226ea985547"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2055,7 +2055,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -2069,7 +2069,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -2181,7 +2181,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "245c872d69b763f26c2d96b31c530c433338e1e1fddca2b43d4f09c8c74cd661",
+      "code_digest": "64454ad7ef01b686d69598322f2494d66a8fd9771f5e6db5ec19d5aa6aaad8e2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "0d844882cee230dbc6cc9092ec27f70f43a49eaa1196d82e12a7e6fbd627cf3b",
-        "current_code_digest": "245c872d69b763f26c2d96b31c530c433338e1e1fddca2b43d4f09c8c74cd661"
+        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；103 活动合同、输入输出和原有停止判定语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "245c872d69b763f26c2d96b31c530c433338e1e1fddca2b43d4f09c8c74cd661",
+        "current_code_digest": "64454ad7ef01b686d69598322f2494d66a8fd9771f5e6db5ec19d5aa6aaad8e2"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2342,7 +2342,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -2356,7 +2356,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -2528,7 +2528,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "4bf8f6f6b3189508dba93444a47b848c9d113c5fef6eb33a9fa22a864dd65b27",
+      "code_digest": "b67df16aaacc14352e3835d7c6993ccfd4f9e21fd8e37d5a24cd47507a7a77bf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "1516488dc73043f9d2d4f3ca695739bb3e7f8ce13ddc8bb6de91679760d1beab",
-        "current_code_digest": "4bf8f6f6b3189508dba93444a47b848c9d113c5fef6eb33a9fa22a864dd65b27"
+        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "4bf8f6f6b3189508dba93444a47b848c9d113c5fef6eb33a9fa22a864dd65b27",
+        "current_code_digest": "b67df16aaacc14352e3835d7c6993ccfd4f9e21fd8e37d5a24cd47507a7a77bf"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2640,7 +2640,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -2654,7 +2654,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -2815,7 +2815,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831",
+      "code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
-        "current_code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831"
+        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831",
+        "current_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2913,7 +2913,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -2927,7 +2927,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -3088,7 +3088,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831",
+      "code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
-        "current_code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831"
+        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "b821132eaa840743d0cc7ff8e2c56e79c04e485454a4fd35a06e705fbb0eb831",
+        "current_code_digest": "ed13e62c1c6f1c408bc0d5055b2d46c7e867fb048e0f533dd350ce3e43bcd8da"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3186,7 +3186,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "fcf9c8bed5c7f441e676d075a0491b24d5bb8864a08b191d70acecffe915664c"
+          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
         },
         {
           "kind": "code",
@@ -3200,7 +3200,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "93e47cddb9c70bff1a744760af35eb5aee00624a388bd1f09090732c2a5e086f"
+          "sha256": "9150a43b3753a9b5317cd707b5e8c7b218bd24774f83281b6d0994081f57a73b"
         },
         {
           "kind": "code",
@@ -3364,7 +3364,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-commander.mjs",
           "revision": "contract",
-          "sha256": "efc8e153383b7539732b4d6cb1d7ea6df372b45d8f9ecaa3e6f7672530c7b65a"
+          "sha256": "0632d758346eb6c1350a730aa53cf5e1b213f8a6b2fbb355af94e6f6243f8eaf"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bcd80d7c795b9e621cc88353d32b22f5ddf592bed3b61e00d885f8de84a7d373",
+      "code_digest": "f172e05775ab8fe3d85a06b86c0e4cb5b240ceec2b4115f97f2f82a481608e21",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Commander SSH 回程缺回执仅以本次 nonce 精确只读核验已完成归档，保持终止未知与有限恢复事件记录，业务合同不变",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "04eba1618ebbd31f18a2537b461445fe91f0b54ac2c0a47858431b61dedadd54",
-        "current_code_digest": "bcd80d7c795b9e621cc88353d32b22f5ddf592bed3b61e00d885f8de84a7d373"
+        "reason": "共享 Runner 只增加 101 collect_videos 精确分支；104 活动合同、输入输出和原有停止判定语义不变。",
+        "reviewed_by": "Codex /dev task 73c23229",
+        "previous_code_digest": "bcd80d7c795b9e621cc88353d32b22f5ddf592bed3b61e00d885f8de84a7d373",
+        "current_code_digest": "f172e05775ab8fe3d85a06b86c0e4cb5b240ceec2b4115f97f2f82a481608e21"
       }
     }
   },

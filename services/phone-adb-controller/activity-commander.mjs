@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {collectionEvidenceProof,collectionReturnedEvidence} from './collection-phone-scope.mjs';
-import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
+import {discoveryCleanupEvidence,discoveryFiniteStopEvidence} from './discovery-phone-scope.mjs';
 import { createRequire } from 'node:module';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -193,8 +193,10 @@ export async function runWorkflow({activities,context,handlers,commander,record,
         recover:recover?failure=>recover({activity,failure,context:activityContext,execute:handlers[activity.key]}):undefined});
       if(['paused','partial'].includes(result.result?.status))result.status='partial';
       if(result.result?.status==='skipped')result.status='skipped';
+      const scope={run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:activity.key};
       const verifySamplePartial=activity.key==='collection'&&result.status==='partial'&&result.result?.sampling_receipts?.length>0;
-      if((result.status==='completed'||verifySamplePartial)&&verify){
+      const verifyFiniteDiscovery=activity.key==='collect_videos'&&result.status==='partial'&&discoveryFiniteStopEvidence(result,scope);
+      if((result.status==='completed'||verifySamplePartial||verifyFiniteDiscovery)&&verify){
         const completedCode=result.status==='completed';
         result.verification=await verify(activity,result);
         if(result.verification.verified!==true){
