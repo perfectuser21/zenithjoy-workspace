@@ -51,7 +51,7 @@ def commit(q):
   archive=pending+'.'+nonce+'.'+attempt+'.reconciled_inactive'; os.mkdir(archive,0o700)
   original=os.path.join(archive,'original.pending.json'); target=os.path.join(archive,'receipt.json')
  else:
-  if any(body.get(k)!=record.get(k) for k in ('session','run_id','binding_id','source_commit','task_id','transport_nonce')): raise RuntimeError('receipt scope changed')
+  if any(body.get(k)!=record.get(k) for k in ('session','run_id','binding_id','source_commit','task_id','rpc_readback_nonce','transport_nonce')): raise RuntimeError('receipt scope changed')
   target=pending+'.'+nonce+'.'+op+'.json'; original=pending+'.'+nonce+'.'+op+'.original.json'
   if os.path.lexists(original): raise RuntimeError('original archive exists')
  write_new(target,receipt)

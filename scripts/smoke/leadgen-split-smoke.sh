@@ -51,6 +51,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs \
  services/phone-adb-controller/__tests__/collection-scope-input.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-client.test.mjs \
+ services/phone-adb-controller/__tests__/commander-returned-readback.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-adb-route.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-queue.test.mjs \

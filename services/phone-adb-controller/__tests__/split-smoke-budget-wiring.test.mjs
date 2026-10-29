@@ -33,6 +33,7 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/card-bottom-reveal.test.mjs",
   "services/phone-adb-controller/__tests__/clipboard-nonce.test.mjs",
   "services/phone-adb-controller/__tests__/commander-workflow-progress.test.mjs",
+  "services/phone-adb-controller/__tests__/commander-returned-readback.test.mjs",
   "services/phone-adb-controller/__tests__/continuous-identity.test.mjs",
   "services/phone-adb-controller/__tests__/continuous-recording-boundary.test.mjs",
   "services/phone-adb-controller/__tests__/copied-share-link.test.mjs",
