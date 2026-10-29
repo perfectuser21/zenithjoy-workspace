@@ -20,7 +20,7 @@ const required=['leadgen-discovery-action.mjs','leadgen-phone-action.mjs','leadg
 export function defaultDiscoveryPhoneScope({root,env}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_discovery')return undefined;
  try{return readFrozen(env.WFR_RUN_DIR).discovery_phone_scope;}catch(error){if(error.code!=='ENOENT')throw error;}
- return defaultCollectionPhoneScope({root,env:{...env,WF_BRAIN_WORKFLOW:'douyin_video_processing'}});
+ return defaultCollectionPhoneScope({root,env:{...env,WF_BRAIN_WORKFLOW:'douyin_video_processing'},workflowKey:'douyin_video_discovery'});
 }
 function pinned(tool){
  if(!isAbsolute(tool?.path||'')||!/^[a-f0-9]{64}$/.test(tool?.sha256||''))fail('TOOL_PIN_REQUIRED');
@@ -75,9 +75,27 @@ export function discoveryCleanupEvidence(evidence,context){
  if(!r||r.consumed||digest(result)!==r.resultDigest||!context||!['run_id','task_id','source_commit','activity'].every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||Object.entries(context).some(([k,v])=>Object.hasOwn(r.identity,k)&&v!==r.identity[k])||!unchanged(r))return null;
  return proof;
 }
+// 有限搜索停止只说明本轮已安全收束且清单可核验；覆盖范围仍是 partial。
+// parent 的不可克隆 cleanup 能力先证明所有原生叶子封闭，再核本 run 的落盘进度。
+export function discoveryFiniteStopEvidence(evidence,context){
+ const result=evidence?.result??evidence,proof=discoveryCleanupEvidence(result,context);
+ if(!proof||result.status!=='partial'||!['screen_limit','candidate_limit_reached','manifest_limit'].includes(result.stop_reason)
+  ||result.pending_capture!==null||result.manifest_verified!==1||result.video_manifest_readback_failures!==0
+  ||!Array.isArray(result.failures)||result.failures.length||!Array.isArray(result.videos)||!Array.isArray(result.captures)
+  ||!Number.isSafeInteger(result.counts?.persisted)||result.counts.persisted!==result.videos.length
+  ||!Number.isSafeInteger(result.counts?.screens)||result.counts.screens<1)return null;
+ try{
+  const path=join(records.get(proof).env.WFR_RUN_DIR,'discovery-progress.json'),st=lstatSync(path);
+  if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||(st.mode&0o077)||st.size>10*1024*1024)return null;
+  const progress=JSON.parse(readFileSync(path,'utf8'));
+  if(progress.run!==records.get(proof).identity.owner||progress.profile!==records.get(proof).identity.profile
+   ||['counts','videos','captures','failures','known_gaps','pending_capture','stop_reason','all_results_scanned'].some(k=>JSON.stringify(progress[k])!==JSON.stringify(result[k])))return null;
+  return proof;
+ }catch{return null;}
+}
 export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld,purpose='collect',evidence}){
  const frozen=readFrozen(env.WFR_RUN_DIR),spec=frozen.discovery_phone_scope;
- if(!spec)return null;
+ if(!spec)fail('SCOPE_REQUIRED');
  if(!['collect','cleanup'].includes(purpose))fail('PURPOSE_INVALID');
  const binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen),globalDeadline=(Number(env.WF_RUN_START_TS)+Number(env.WF_RUN_MAX_SECONDS))*1000;
  const identity={purpose:'cleanup_only',task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collect_videos',owner:env.WFR_TAG,target:frozen.deployment.target,account:state.account,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id,work_deadline_ms:state.discoveryWorkDeadline??state.budgetDeadline,global_deadline_ms:globalDeadline,route:spec.policy?.endpoint,client_sha256:spec.policy?.adb_sha256};
