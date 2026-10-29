@@ -26,7 +26,7 @@ CREATIVE_CANVAS_ALLOWED_ORIGINS=https://员工staging网站域名:端口
 
 镜像采用只读根目录、uid 10001、独立数据卷和丢弃 Linux capabilities。卷首次创建时从镜像的 `/data` 初始化，确保 `input`、`output`、`temp`、`user` 可被 uid 10001 写入。工作流持久保存在实例卷里；删除卷会删除对应员工数据。
 
-当前复用 `zenithjoy-net` 连接 staging API。该网络供其他业务组件使用，并非独立网络；应仅允许可信容器加入。节点读取生成图片需要访问素材存储。画布服务不能绕过认证网关向公网开放。
+画布实例使用专用的 `zenithjoy-canvas-staging-net` 连接 staging API；staging API 同时保留原业务网络。该画布网络只能包含 staging API 和对应画布实例，不要将其他服务接入。节点读取生成图片需要访问素材存储。画布服务不能绕过认证网关向公网开放。
 
 Compose 尚未接入现有 CI/CD。候选提交、镜像构建与 staging 发布需按仓库现行流程处理，不能仅凭配置文件判断已经部署。部署前检查 staging 主机的磁盘、内存和 CPU 架构。部署之后需要逐项验证：
 

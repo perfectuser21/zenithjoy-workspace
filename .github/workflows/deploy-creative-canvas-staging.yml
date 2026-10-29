@@ -22,6 +22,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   canvas-staging:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    # Configure this environment to permit main only, and keep these two
+    # dedicated credentials exclusively as environment secrets.
+    environment: creative-canvas-staging
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -32,11 +36,11 @@ jobs:
       - name: 接入 Tailscale
         uses: tailscale/github-action@v3
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          authkey: ${{ secrets.CREATIVE_CANVAS_TAILSCALE_AUTHKEY }}
           version: latest
       - name: Deploy or restore exact staging release
         env:
-          SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+          SSH_KEY: ${{ secrets.CREATIVE_CANVAS_HK_SSH_KEY }}
           SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
           ACTION: ${{ inputs.action }}
           WORKFLOW_SHA: ${{ github.sha }}

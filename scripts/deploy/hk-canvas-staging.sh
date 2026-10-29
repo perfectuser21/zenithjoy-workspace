@@ -21,6 +21,9 @@ flock -n 9 || { echo 'Another canvas staging deployment holds the lock' >&2; exi
 unset ZENITHJOY_CANVAS_TOKEN
 ENV_HASH=$(sha256sum "$ENVFILE" | cut -d ' ' -f 1)
 SOURCE="$RELEASES/$SHA/source"
+# The canvas must never be reachable from the shared application network.
+# Require the staging API and allow only this one canvas on the private bridge.
+docker network inspect zenithjoy-canvas-staging-net --format '{{json .Containers}}' | python3 -c 'import json,sys; v=json.load(sys.stdin) or {}; names={c["Name"] for c in v.values()}; assert "zenithjoy-api-staging" in names and names <= {"zenithjoy-api-staging","zenithjoy-creative-canvas-staging-1"}, "Unexpected private network membership"'
 if [[ "$ACTION" == deploy ]]; then
   # Only deploy commits already present on remote main, including older pinned
   # candidates. Unmerged PR refs cannot reach this staging entry point.
@@ -79,6 +82,10 @@ assert json.load(open(sys.argv[1]))['image_id']==sys.argv[2], 'Previous image id
 PY
 fi
 compose up -d --no-build --pull never "$SERVICE"
+# Fail if an override or stale container accidentally exposes the canvas.
+docker inspect "$CONTAINER" --format '{{json .NetworkSettings.Networks}}' | python3 -c 'import json,sys; v=json.load(sys.stdin) or {}; assert set(v)=={"zenithjoy-canvas-staging-net"}, "Canvas is attached to an unexpected network"'
+docker inspect "$CONTAINER" --format '{{json .HostConfig.PortBindings}}' | python3 -c 'import json,sys; assert not json.load(sys.stdin), "Canvas has published host ports"'
+docker network inspect zenithjoy-canvas-staging-net --format '{{json .Containers}}' | python3 -c 'import json,sys; v=json.load(sys.stdin) or {}; names={c["Name"] for c in v.values()}; assert names == {"zenithjoy-api-staging","zenithjoy-creative-canvas-staging-1"}, "Unexpected private network membership"'
 for ((i=0; i<36; i++)); do
   STATUS=$(docker inspect "$CONTAINER" --format '{{.State.Health.Status}}' 2>/dev/null || true)
   CURRENT_IMAGE=$(docker inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true)

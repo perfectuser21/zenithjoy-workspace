@@ -10,7 +10,7 @@ services:
     image: zenithjoy-creative-canvas-staging:local
     restart: unless-stopped
     networks:
-      - zenithjoy-net
+      - canvas-staging-net
     environment:
       ZENITHJOY_CANVAS_API: http://zenithjoy-api-staging:5200
       ZENITHJOY_CANVAS_TOKEN: ${ZENITHJOY_CANVAS_TOKEN:?Set a unique private token for this employee instance}
@@ -34,6 +34,6 @@ volumes:
   creative-canvas-staging-data:
     name: zenithjoy-creative-canvas-staging-1-data
 networks:
-  zenithjoy-net:
-    name: zenithjoy-net
+  canvas-staging-net:
+    name: zenithjoy-canvas-staging-net
     external: true
