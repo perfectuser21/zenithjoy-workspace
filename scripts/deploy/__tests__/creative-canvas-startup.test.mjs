@@ -3,23 +3,47 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
-test('startup diagnostics report bounded categories without messages, URLs or user data', () => {
+test('resource errors do not suppress timed status and probes are bounded and sanitized', async () => {
   const source=readFileSync('apps/dashboard/public/canvas-startup-diagnostic.js','utf8');
   const listeners={}, sent=[], timers=[];
-  const window={addEventListener:(name,fn)=>{listeners[name]=fn},setTimeout:(fn,ms)=>{timers.push([ms,fn])}, location:{origin:'https://test.invalid'}};
+  const window={addEventListener:(name,fn)=>{listeners[name]=fn},setTimeout:(fn,ms)=>{timers.push([ms,fn])},location:{origin:'https://test.invalid'}};
   const document={getElementById:()=>({}),querySelectorAll:()=>[],readyState:'loading'};
-  const fetch=(url,opts)=>{sent.push([url,opts]);return Promise.resolve()};
+  const fetch=(url,opts)=>{sent.push([url,opts]);return Promise.resolve(opts.method==='GET'?{status:401}:{});};
   vm.runInNewContext(source,{window,document,fetch,URL});
-  listeners.error({message:'secret token unexpected token',filename:'https://test.invalid/api/creative-canvas/assets/index-ABCdef12.js?secret=1'});
-  listeners.unhandledrejection({reason:{message:'https://private.example/user.jpg?token=secret'}});
-  timers.find(x=>x[0]===10000)[1]();
-  assert.equal(sent.length,4);assert.match(sent[0][0],/start\/ok/);
-  for(const [url,opts] of sent){assert.match(url,/^\/api\/creative-canvas\/__diag\/[a-z0-9_-]+\/[a-zA-Z0-9_.-]+$/);assert.doesNotMatch(url,/secret|private|token|jpg/);assert.equal(opts.method,'POST');assert.equal(opts.credentials,'same-origin');}
-  assert.match(sent[1][0],/syntax/);assert.match(sent[1][0],/index-ABCdef12.js/);
-  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/vendor-ABCdef12.js'}});
-  assert.match(sent.at(-1)[0],/resource\/vendor-ABCdef12.js/);
-  for(let i=0;i<20;i++) listeners.error({message:'private',filename:'https://test.invalid/api/creative-canvas/assets/private-data.js'});
-  assert.equal(sent.length,12);assert.doesNotMatch(sent.at(-1)[0],/private/);
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/vendor-ABCdef12.js?secret=token'}});
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/vendor-ABCdef12.js?other=private'}});
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/main-ABCdef12.js?secret=1'}});
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/third-ABCdef12.js'}});
+  listeners.error({target:{href:'https://evil.invalid/api/creative-canvas/assets/other-ABCdef12.js?secret=1'}});
+  for(let i=0;i<20;i++)listeners.error({message:'private',filename:'https://test.invalid/api/creative-canvas/assets/private-data.js'});
+  for(const [,fn] of timers)fn();
+  await new Promise(resolve=>setImmediate(resolve));
+  const probes=sent.filter(([,o])=>o.method==='GET');
+  assert.equal(probes.length,2);
+  assert.deepEqual(probes.map(([u])=>u),['/api/creative-canvas/assets/vendor-ABCdef12.js','/api/creative-canvas/assets/main-ABCdef12.js']);
+  for(const [,o] of probes){assert.equal(o.cache,'no-store');assert.equal(o.credentials,'same-origin');assert.equal(o.redirect,'manual');}
+  const reports=sent.filter(([,o])=>o.method==='POST').map(([u])=>u);
+  for(const t of ['t10','t60','t120']) assert.ok(reports.some(u=>u.includes('/'+t+'/')),t+' was suppressed');
+  assert.equal(reports.filter(u=>u.includes('/probe401/')).length,2);
+  assert.ok(reports.length<=18);
+  for(const url of reports)assert.doesNotMatch(url,/secret|private|token|evil/);
+});
+
+test('probes distinguish failed requests from HTML or Javascript responses without logging text', async () => {
+  const source=readFileSync('apps/dashboard/public/canvas-startup-diagnostic.js','utf8');
+  const listeners={}, sent=[];let n=0;
+  const window={addEventListener:(name,fn)=>{listeners[name]=fn},setTimeout:()=>{},location:{origin:'https://test.invalid'}};
+  const document={getElementById:()=>null,querySelectorAll:()=>[]};
+  const fetch=(url,opts)=>{sent.push([url,opts]);if(opts.method==='POST')return Promise.resolve({});
+    return ++n===1?Promise.resolve({status:200,headers:{get:()=> 'text/html; charset=utf-8'}}):Promise.reject(new Error('secret network text'));};
+  vm.runInNewContext(source,{window,document,fetch,URL});
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/first-ABCdef12.js'}});
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/second-ABCdef12.js'}});
+  await new Promise(resolve=>setImmediate(resolve));
+  const reports=sent.filter(([,o])=>o.method==='POST').map(([u])=>u);
+  assert.ok(reports.some(u=>u.includes('/probe2xxhtml/')));
+  assert.ok(reports.some(u=>u.includes('/probenetwork/')));
+  for(const u of reports)assert.doesNotMatch(u,/secret|network text/);
 });
 
 test('nginx injects diagnostics only into the authenticated canvas document', async t => {
