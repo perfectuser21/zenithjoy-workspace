@@ -75,6 +75,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 import videoRemakeRouter from './routes/video-remake';
 import { createVideoToolsRouter } from './routes/video-tools';
+import { createAidgeRouter } from './routes/aidge';
 import staffRouter from './routes/staff';
 // Line11 员工知识中枢 路① — 经验录入/最近沉淀/投影只读（挂 knowledgeAuthGuard，只信会话）
 import { knowledgeRouter } from './routes/knowledge';
@@ -293,6 +294,7 @@ app.use('/api/brain', brainSprintStateRouter);
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 app.use('/api/video-remake', videoRemakeRouter);
 app.use('/api/video-tools', createVideoToolsRouter());
+app.use('/api/aidge', createAidgeRouter());
 app.use('/api/staff/skill-drafts', skillDraftsRouter);
 // 内部回调端点（子进程完成后通知终态，不挂员工身份头闸，无公网暴露）
 app.use('/internal/skill-drafts', skillDraftsInternalRouter);

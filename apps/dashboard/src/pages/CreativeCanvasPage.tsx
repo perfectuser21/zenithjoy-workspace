@@ -113,7 +113,10 @@ export default function CreativeCanvasPage() {
   return (
     <div className="flex min-h-[calc(100vh-7rem)] flex-col gap-4">
       <div>
-        <Link to="/area/video-tools" className="mb-4 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-violet-600"><ArrowLeft size={16} />视频工具</Link>
+        <div className="mb-4 flex items-center gap-4 text-sm">
+          <Link to="/area/video-tools" className="inline-flex items-center gap-2 text-slate-500 hover:text-violet-600"><ArrowLeft size={16} />视频工具</Link>
+          <Link to="/aidge" className="text-violet-700 hover:underline dark:text-violet-300">Aidge 能力中心</Link>
+        </div>
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">视频创作画布</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">连接素材和创作步骤，预览结果后继续下一步。</p>
       </div>
