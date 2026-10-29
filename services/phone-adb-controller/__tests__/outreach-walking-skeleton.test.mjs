@@ -4,7 +4,11 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
 import {createHandlers,runWorkflow} from '../leadgen-workflow.mjs';
+import {runProbes} from '../verify-step.mjs';
+
+const {loadChecks}=createRequire(import.meta.url)('../checks/probes-lib.js');
 
 // 全部账号、订单、模板和发送XML为明示fake，测试不访问手机/网络/生产库。
 function fixture(){
@@ -59,6 +63,43 @@ test('104授权新流程通过预检、永久预留、唯一一次真sender调�
  assert.ok(f.events.findIndex(e=>e.request?.op==='prepare_outreach')<f.events.findIndex(e=>e.args?.includes('private-message-send')));
  assert.ok(ops.includes('write_outreach')&&ops.includes('outreach_readback'));
  assert.equal(receipts.filter(r=>r.phase==='after').length,4);
+ }finally{f.clean();}
+});
+test('104授权空队列保持send_dm skipped且零发送，不要求伪造发送结果指标',async()=>{
+ const f=fixture();try{
+  const h=createHandlers({root:f.dir,...f,rpc:async body=>body.request?.op==='claim_outreach'?{result:[]}:f.rpc(body)});
+  const verified=[];
+  const out=await runWorkflow({activities:['preflight','send_dm','write_back','cleanup'].map(key=>({key})),context:{},handlers:h,
+   commander:async()=>({action:'continue',reason:'fake证据'}),record:async()=>{},verify:async activity=>{verified.push(activity.key);return {verified:true};}});
+  const send=out.results.find(result=>result.activity==='send_dm');
+  assert.equal(send.status,'skipped');
+  assert.equal(send.result.sent,0);
+  assert.equal(send.result.messages_sent_while_paused,0);
+  assert.equal(send.result.delivery_result_verified,undefined);
+  assert.ok(!verified.includes('send_dm'));
+  assert.equal(f.events.filter(event=>event.args?.includes('private-message-send')).length,0);
+  assert.ok(!f.events.some(event=>event.request?.op==='prepare_outreach'));
+ }finally{f.clean();}
+});
+test('104已尝试发送却缺独立结果指标时Activity失败，禁止后续写回或重发',async()=>{
+ const f=fixture();try{
+  const h=createHandlers({root:f.dir,...f});
+  const original=h.send_dm;
+  h.send_dm=async()=>{const result=await original();delete result.delivery_result_verified;return result;};
+  const {doc,errors}=loadChecks(new URL('../checks/douyin-lead-outreach.yaml',import.meta.url).pathname,new URL('../checks/schema.json',import.meta.url).pathname);
+  assert.deepEqual(errors,[]);
+  const out=await runWorkflow({activities:['preflight','send_dm','write_back','cleanup'].map(key=>({key})),context:{},handlers:h,
+   commander:async()=>({action:'continue',reason:'fake证据'}),record:async()=>{},verify:async(activity,result)=>{
+    if(activity.key!=='send_dm')return {verified:true};
+    const metrics={...result.result,commander_verified:1};
+    const probes=await runProbes({doc,stage:'send_dm',params:{metrics}});
+    return {verified:probes.probes.every(probe=>probe.pass===true),probes:probes.probes};
+   }});
+  assert.equal(out.status,'failed');
+  assert.equal(out.results.find(result=>result.activity==='send_dm').status,'failed');
+  assert.equal(out.results.find(result=>result.activity==='write_back').status,'blocked');
+  assert.equal(f.events.filter(event=>event.args?.includes('private-message-send')).length,1);
+  assert.ok(!f.events.some(event=>event.request?.op==='write_outreach'));
  }finally{f.clean();}
 });
 test('104准备提交回执丢失必须不发，清场不得把可能prepared订单重新排队',async()=>{
