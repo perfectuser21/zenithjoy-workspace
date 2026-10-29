@@ -7,7 +7,8 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const target=fileURLToPath(new URL('../native-operation-receipt.mjs',import.meta.url));
-const syntheticTarget="const fs=require('fs');process.on('SIGTERM',()=>fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/signalled','TERM'));fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/target-ready','ready');setTimeout(()=>process.exit(0),5000);setInterval(()=>{},1000)";
+// The outer fixture watchdog fires at 12s; natural target exit must stay later.
+const syntheticTarget="const fs=require('fs');process.on('SIGTERM',()=>fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/signalled','TERM'));fs.writeFileSync(process.env.NATIVE_CASE_DIR+'/target-ready','ready');setTimeout(()=>process.exit(0),20000);setInterval(()=>{},1000)";
 
 // Each case gets a fresh OS process, PATH and actual child. No process.kill mock.
 for(const field of ['pid','start_identity','uid','pgid'])test('真实合成子进程身份漂移必须拒TERM：'+field,{timeout:15000},async()=>{
