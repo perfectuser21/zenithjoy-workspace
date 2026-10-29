@@ -216,9 +216,16 @@ export function createRpc({ frozen, execute = execInput, local = false, runConte
         // A missing or mismatched archive keeps the original turn unresolved.
         try{
           const recovered=await send({kind:'commander_readback',receipt:request.receipt});
-          if(!verifyCommanderModelReceipt(recovered.decision?.model_receipt,request.receipt)
-            ||!['continue','retry','finish','escalate'].includes(recovered.decision?.action))throw Error('COMMANDER_RETURNED_READBACK_INVALID');
-          return recovered;
+          if(!verifyCommanderModelReceipt(recovered.decision?.model_receipt,request.receipt))throw Error('COMMANDER_RETURNED_READBACK_INVALID');
+          const {parseCommanderResponse}=await import('./activity-commander.mjs');
+          const originalDecision=parseCommanderResponse(recovered.decision.model_receipt.raw_response);
+          if(recovered.decision?.action!==originalDecision.action
+            ||recovered.decision?.reason!==originalDecision.reason)throw Error('COMMANDER_RETURNED_READBACK_INVALID');
+          const transport=String(error.message).match(/transport=(timeout|authentication|connection_refused|name_resolution|connection_closed|invalid_receipt|empty_stdout)/)?.[1]
+            ??(error.message==='EXECUTION_DEADLINE'?'deadline':'unknown');
+          const exit=Number(String(error.message).match(/exit=(\d{1,3})/)?.[1]);
+          return {...recovered,decision:{...recovered.decision,transport_recovered:true,
+            transport_recovery:{kind:'commander_returned_archive',original_transport:transport,original_exit:Number.isSafeInteger(exit)&&exit<=255?exit:null}}};
         }catch(readbackError){
           readbackError.receiptMissing=true;
           readbackError.executionStopped=false;

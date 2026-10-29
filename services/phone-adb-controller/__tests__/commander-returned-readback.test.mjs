@@ -8,6 +8,7 @@ import {createRpc,RPC_FILES} from '../leadgen-client.mjs';
 import {workflowCommanderSession} from '../commander-owner-state.mjs';
 import * as owner from '../commander-owner-state.mjs';
 import {handleRpc} from '../leadgen-rpc.mjs';
+import {commanderModelReceipt} from '../commander-model-receipt.mjs';
 
 const sha='6ca1596321e5939a53a7ef020ac2609b890cc7f5';
 const scope={workflow_key:'douyin_video_discovery',run_id:'douyin_video_discovery-accept6ca_jinuo101_20261029t2002__a1',binding_id:'f9231bee-ae73-4ab5-bcb7-e4491682ebdf',source_commit:sha,task_id:null,activity:'collect_videos',phase:'after'};
@@ -40,6 +41,8 @@ test('SSH 空回执后只读恢复同 run/SHA/binding/activity/phase 的原始 r
  }});
  const result=await rpc({kind:'commander',receipt:scope},{timeoutMs:3000});
  assert.equal(result.decision.action,'continue');
+ assert.equal(result.decision.transport_recovered,true);
+ assert.deepEqual(result.decision.transport_recovery,{kind:'commander_returned_archive',original_transport:'connection_closed',original_exit:255});
  assert.deepEqual(calls.map(c=>c.kind),['commander','commander_readback']);
  assert.deepEqual(calls[1].receipt,calls[0].receipt);
  assert.match(calls[1].receipt.rpc_readback_nonce,/^[a-f0-9-]{36}$/);
@@ -74,4 +77,16 @@ test('同 scope 的旧归档也必须匹配本次 RPC nonce',async t=>{
  writeFileSync(path,JSON.stringify({...returned,rpc_readback_nonce:nonce,original_sha256:hash(JSON.stringify(pinned))}),{mode:0o600});
  assert.equal((await owner.readReturnedCommanderTurn({...scope,rpc_readback_nonce:nonce},{home,requireNonce:true})).action,'continue');
  await assert.rejects(owner.readReturnedCommanderTurn({...scope,rpc_readback_nonce:'808aa458-35b0-4de2-84d5-06cf3a07469c'},{home,requireNonce:true}));
+});
+test('客户端拒绝模型原文与读回决策动作不一致',async t=>{
+ const {returned}=fixture(t),frozen={deployment:{source_commit:sha},files:Object.fromEntries(RPC_FILES.map(p=>['runtime/'+p,'b'.repeat(64)]))};
+ const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
+  const body=JSON.parse(opts.input);
+  if(body.kind==='commander')return {code:255,stdout:'',stderr:''};
+  const model_receipt=commanderModelReceipt(returned.raw_response,body.receipt);
+  return {code:0,stdout:JSON.stringify({ok:true,decision:{action:'finish',reason:'伪造完成',model_receipt}}),stderr:''};
+ }});
+ await assert.rejects(rpc({kind:'commander',receipt:scope},{timeoutMs:3000}),error=>{
+  assert.equal(error.executionStopped,false);assert.equal(error.receiptMissing,true);return true;
+ });
 });
