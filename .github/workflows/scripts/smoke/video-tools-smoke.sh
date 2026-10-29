@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$repo_root/apps/api"
-npx vitest run src/routes/__tests__/video-tools.test.ts src/routes/__tests__/video-tools-direct-upload.test.ts src/routes/__tests__/video-tools-image-generation.test.ts src/services/__tests__/ali-video-provider.test.ts src/services/__tests__/creative-image-provider.test.ts src/services/creative-canvas-gateway.test.ts
+npx vitest run src/routes/__tests__/video-tools.test.ts src/routes/__tests__/video-tools-direct-upload.test.ts src/routes/__tests__/video-tools-image-generation.test.ts src/routes/__tests__/video-tools-canvas-image-upload.test.ts src/services/__tests__/ali-video-provider.test.ts src/services/__tests__/creative-image-provider.test.ts src/services/creative-canvas-gateway.test.ts
 cd "$repo_root/apps/dashboard"
 npx vitest run src/pages/__tests__/VideoToolsPage.test.tsx src/pages/__tests__/CreativeCanvasPage.test.tsx src/config/__tests__/navigation.config.test.ts
 # Validate the checked-in starter graph before it is distributed by the canvas.
@@ -14,6 +14,11 @@ const types = graph.nodes.map(node => node.type);
 for (const type of ['ZenithJoyImage2', 'ZenithJoyChooseAsset', 'ZenithJoyWan', 'SaveVideo']) assert.ok(types.includes(type), `missing ${type}`);
 for (const node of graph.nodes.filter(node => ['ZenithJoyImage2', 'ZenithJoyWan'].includes(node.type))) assert.equal(node.widgets_values_named.request_id, '', 'starter graph must not reuse a request ID');
 assert.ok(graph.links.some(link => link[5] === 'ZENITHJOY_ASSET'), 'starter graph must connect owned assets');
+const uploaded = require('./infrastructure/comfyui/workflows/upload-image-wan.json');
+for (const type of ['LoadImage', 'ZenithJoyUploadImage', 'ZenithJoyChooseAsset', 'ZenithJoyWan', 'SaveVideo']) assert.ok(uploaded.nodes.some(n => n.type === type), `missing uploaded graph node ${type}`);
+const wan = uploaded.nodes.find(n => n.type === 'ZenithJoyWan');
+assert.equal(wan.widgets_values_named.request_id, '', 'uploaded starter graph must use a new request ID');
+assert.ok(uploaded.links.some(link => link[5] === 'ZENITHJOY_ASSET'), 'uploaded graph must connect owned assets');
 NODE
 cd "$repo_root/apps/api"
 npx vitest run src/services/creative-canvas-configured.test.ts
