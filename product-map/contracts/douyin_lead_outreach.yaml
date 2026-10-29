@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.3.1
+  version: 0.5.0
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -19,12 +19,23 @@ trigger_inputs:
   - Account
   - Device
   - RecipientQualification
-known_gaps: []
+  - OutreachOrder
+known_gaps:
+  - gap: Workflow 的 on_status/always_run 路由尚未在本合同及 Runner 中形成可验证接线；Activity 字段齐全不代表端到端自动编排验收通过。
+    task: bdd9fb75
 activities:
   - key: preflight
     name: 预检
+    promise: 核对本轮触达授权、公司账号、设备、原政策及批准话术；本段不领取或创建订单
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_lead_outreach
+      activity_key: preflight
+      owner_labeled: false
+      current_skill_verified: false
     order: 1
-    version: 4.1.0
+    version: 5.0.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -33,12 +44,14 @@ activities:
       agent: 获客采收员
     inputs:
       - type: Device
+        source: 设备台账及本轮原生设备锁
         cardinality: one
         fields:
           - serial
           - host
           - lock_holder
       - type: Account
+        source: 该公司已启用的发送账号配置
         cardinality: one
         fields:
           - platform
@@ -46,28 +59,9 @@ activities:
           - sender_id
           - dm_paused
           - daily_cap
-      - type: Lead
-        cardinality: many
-        fields:
-          - douyin_id
-          - profile_url
-          - intent_grade
-          - repeat_hits
-          - status
-      - type: RecipientQualification
-        cardinality: many
-        fields:
-          - line_key
-          - comment_id
-          - status
-          - company_id
-          - company_version
-          - native_profile_sha256
-          - reason
-          - tenant_id
-          - policy_id
     outputs:
       - type: Device
+        destination: 本轮触达设备锁及运行上下文
         cardinality: one
         effect: update
         fields:
@@ -75,39 +69,36 @@ activities:
           - call_state
           - lock_holder
       - type: Account
+        destination: 本轮已核发送账号上下文
         cardinality: one
         effect: update
         fields:
           - logged_in
       - type: Run
+        destination: 本轮触达运行账本
         cardinality: one
         effect: create
         fields:
           - run_tag
           - profile
           - serial
-      - type: OutreachOrder
-        cardinality: one
-        effect: create
-        fields:
-          - sender_id
     preconditions:
       - 显式LEADGEN_SEND=1授权本批触达；账号风险flag及当日日上限仍生效，无授权零发送
       - 真实读取限额与发送账号，不符合时禁止取单发送
-      - 只读PG confirmed桥与passed资格、本run冻结公司版本、真实nativeUID/全文/VID和Feishu
-        marker/UID/全payload读回通过才领单；旧personal/A/B或缺证据unknown不ready，不修改旧protected/已发单
+      - 本段核冻结公司版本、发送账号、原政策与批准话术；原订单与收件人资格由下一段领取时校验，不修改旧 protected/已发单
     postconditions:
       - probe: pf_device_verified
-        asserts: 保留原后置条件：pf_device_verified
+        asserts: 本轮设备 serial 的原生在线与身份核验结果 metrics.device_verified 等于 1
       - probe: pf_account_verified
-        asserts: 保留原后置条件：pf_account_verified
+        asserts: 手机原生登录账号与本轮冻结 profile 相符，metrics.account_verified 等于 1
       - probe: pf_call_idle
-        asserts: 保留原后置条件：pf_call_idle
+        asserts: 手机不在通话中，metrics.call_state_idle 等于 1
       - probe: pf_lock_acquired
-        asserts: 保留原后置条件：pf_lock_acquired
+        asserts: 本轮执行者实际持有设备锁，metrics.lock_acquired 等于 1
       - probe: preflight_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
+      primary_kind: code
       location: phone
       via: leadgen-workflow.mjs → preflight独立活动 → 持久化队列读回
     budget:
@@ -148,7 +139,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 0.2.1
+        version: 1.0.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -466,8 +457,7 @@ activities:
         order: 8
         reads:
           - Account.sender_id
-        writes:
-          - OutreachOrder.sender_id
+        writes: []
         check: 我页抖音号 == sender_id，不符一次即熔断
         implementation:
           status: implemented
@@ -485,8 +475,16 @@ activities:
       entry: activity-commander.mjs
   - key: send_dm
     name: 发私信
+    promise: 仅对已授权合格目标发送该公司批准话术，交出一次可核验的发送或未发送结果
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_lead_outreach
+      activity_key: send_dm
+      owner_labeled: false
+      current_skill_verified: false
     order: 2
-    version: 3.1.0
+    version: 4.0.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -495,6 +493,7 @@ activities:
       agent: 私信触达员
     inputs:
       - type: Lead
+        source: 该公司已交付且资格合格的待触达线索
         cardinality: many
         fields:
           - douyin_id
@@ -503,6 +502,7 @@ activities:
           - repeat_hits
           - status
       - type: Account
+        source: 预检通过的发送账号及限额
         cardinality: one
         fields:
           - profile
@@ -510,14 +510,14 @@ activities:
           - dm_paused
           - daily_cap
       - type: Device
+        source: 触达预检取得的本轮设备锁
         cardinality: one
         fields:
           - serial
           - lock_holder
-    outputs:
       - type: OutreachOrder
+        source: 该公司 canonical 队列中已存在的合格未发送订单；本段领取并永久预留
         cardinality: one
-        effect: create
         fields:
           - lead_record_id
           - douyin_id
@@ -525,15 +525,25 @@ activities:
           - script_id
           - message
           - result
-      - type: Lead
+      - type: RecipientQualification
+        source: 原订单关联的该公司已通过原生身份核验的资格快照
+        cardinality: one
+        fields:
+          - company_id
+          - policy_id
+          - native_profile_sha256
+    outputs:
+      - type: OutreachOrder
+        destination: 该公司已有 canonical 订单的永久预留及本次发送回执
         cardinality: one
         effect: update
         fields:
-          - status
-          - send_status
-          - script_id
+          - lead_record_id
+          - douyin_id
           - sender_id
-          - reached_at
+          - script_id
+          - message
+          - result
     preconditions:
       - 发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until
         未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 <
@@ -541,12 +551,17 @@ activities:
       - 触达等级 ∈ 该业务线 outreachGrades（选单时过滤，决策 67762358；老数据无等级前缀放行）
       - 线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）
       - 话术库有可用话术
+      - 从该公司 canonical 队列领取已有订单，并校对发送账号、目标、原资格及批准话术快照；先永久预留，后执行一次手机发送
     postconditions:
       - probe: out_zero_send_while_paused
         asserts: 暂停时零发送；未发送阶段只记skipped
       - probe: send_dm_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    known_gaps:
+      - gap: 当前 checks YAML 仅验暂停零发送与 Commander；真实 UI 发送结果及原始 XML 独立核验已在执行代码内，但尚未接成 send_dm 的硬性 Activity probe。不能仅凭 workflow pass 宣称已发送。
+        task: bdd9fb75
     execution:
+      primary_kind: code
       location: phone
       via: leadgen-workflow.mjs → send_dm独立活动 → 持久化队列读回
     budget:
@@ -600,7 +615,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-send-dm
-        version: 0.2.1
+        version: 1.0.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -753,7 +768,6 @@ activities:
           - OutreachOrder.lead_record_id
           - OutreachOrder.douyin_id
           - OutreachOrder.script_id
-          - Lead.status
         check: 预写触达中后回读，状态/分发号/话术ID 三项一致，否则 CLAIM_FAILED 不发
         implementation:
           status: implemented
@@ -816,8 +830,16 @@ activities:
       entry: activity-commander.mjs
   - key: write_back
     name: 回填
+    promise: 按真实发送结果回写原订单与线索并独立读回，未知发送结果保留待决
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_lead_outreach
+      activity_key: write_back
+      owner_labeled: false
+      current_skill_verified: false
     order: 3
-    version: 3.1.0
+    version: 4.0.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -826,6 +848,7 @@ activities:
       agent: 私信触达员
     inputs:
       - type: Lead
+        source: 本轮触达所认领的线索
         cardinality: many
         fields:
           - douyin_id
@@ -834,6 +857,7 @@ activities:
           - repeat_hits
           - status
       - type: Account
+        source: 本轮已核发送账号
         cardinality: one
         fields:
           - profile
@@ -841,19 +865,22 @@ activities:
           - dm_paused
           - daily_cap
       - type: Device
+        source: 本轮触达设备及锁
         cardinality: one
         fields:
           - serial
           - lock_holder
       - type: OutreachOrder
+        source: 本轮原订单及发私信 Activity 的真实结果
         cardinality: one
         fields:
           - lead_record_id
           - result
     outputs:
       - type: OutreachOrder
+        destination: 该公司 canonical 触达订单终态及读回
         cardinality: one
-        effect: create
+        effect: update
         fields:
           - lead_record_id
           - douyin_id
@@ -862,6 +889,7 @@ activities:
           - message
           - result
       - type: Lead
+        destination: 该公司原 PostgreSQL 线索触达状态
         cardinality: one
         effect: update
         fields:
@@ -883,6 +911,7 @@ activities:
       - probe: write_back_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
+      primary_kind: code
       location: phone
       via: leadgen-workflow.mjs → write_back独立活动 → 持久化队列读回
     budget:
@@ -936,7 +965,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-write-back
-        version: 0.2.1
+        version: 1.0.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -1108,31 +1137,43 @@ activities:
       entry: activity-commander.mjs
   - key: cleanup
     name: 收尾
+    promise: 触达后归位设备及订单锁，保护未决发送并记录收尾状态
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_lead_outreach
+      activity_key: cleanup
+      owner_labeled: false
+      current_skill_verified: false
     order: 4
-    version: 3.1.0
+    version: 3.2.0
     agent_recovery:
       max_additional_turns: 1
-    compatibility: breaking
+    compatibility: backward
     owner:
       department: line02 智能获客
       agent: 获客采收员
     inputs:
       - type: Device
+        source: 本轮触达预检取得的设备与锁
         cardinality: one
         fields:
           - serial
           - lock_holder
       - type: Run
+        source: 本轮触达运行账本及发送结果
         cardinality: one
         fields:
           - run_tag
     outputs:
       - type: Device
+        destination: 设备锁台账与原生释放回执
         cardinality: one
         effect: update
         fields:
           - lock_holder
       - type: Run
+        destination: 本轮触达运行账本终态
         cardinality: one
         effect: update
         fields:
@@ -1141,12 +1182,13 @@ activities:
       - 本 run 各阶段已写工件或已判失败
     postconditions:
       - probe: cl_app_closed
-        asserts: 保留原后置条件：cl_app_closed
+        asserts: 收尾真实调用关闭抖音且 metrics.close_app_attempts 不少于 1
       - probe: cl_lock_released
-        asserts: 保留原后置条件：cl_lock_released
+        asserts: 本轮设备锁已实际释放，metrics.lock_released 等于 1
       - probe: cl_safe_desktop_visible
-        asserts: 保留原后置条件：cl_safe_desktop_visible
+        asserts: 收尾后原生核验手机在安全桌面，metrics.safe_desktop_visible 等于 1
     execution:
+      primary_kind: code
       location: phone
       via: leadgen-workflow.mjs → cleanup独立活动 → 持久化队列读回
     budget:
@@ -1184,7 +1226,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.2.1
+        version: 0.3.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

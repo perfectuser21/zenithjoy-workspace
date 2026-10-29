@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.4.2
+  version: 0.5.0
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -22,35 +22,49 @@ trigger_inputs:
 known_gaps:
   - gap: 对标主页网格当前不提供标题与作者，缺稳定身份时拒绝取链；旧对标流程退役后不得回退。
     task: dffd5885
+  - gap: Workflow 的 on_status/always_run 路由尚未在本合同及 Runner 中形成可验证接线；Activity 字段齐全不代表端到端自动编排验收通过。
+    task: bdd9fb75
 activities:
   - ref: douyin_video_processing.preflight
   - key: collect_videos
     name: 搜索采集视频
+    promise: 按本轮关键词和筛选条件交出带原生身份、真实互动指标及持久化读回的视频集合
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_video_discovery
+      activity_key: collect_videos
+      owner_labeled: false
+      current_skill_verified: false
     order: 2
-    version: 5.0.0
+    version: 5.1.0
     agent_recovery:
       max_additional_turns: 1
-    compatibility: breaking
+    compatibility: backward
     owner:
       department: line02 智能获客
       agent: 获客采收员
     inputs:
       - type: Keyword
+        source: 本次任务输入或该公司已启用关键词配置
         cardinality: many
         fields:
           - line_key
           - word
       - type: Device
+        source: 本轮采集预检已核设备及锁
         cardinality: one
         fields:
           - serial
           - lock_holder
       - type: Run
+        source: 本次冻结运行定义
         cardinality: one
         fields:
           - run_tag
       - &id001
         type: SearchRequest
+        source: 本次任务冻结的搜索请求与筛选范围
         cardinality: one
         fields:
           - keywords
@@ -61,6 +75,7 @@ activities:
           - max_duration_s
     outputs: &id002
       - type: Video
+        destination: zenithjoy.leadgen_videos，供抖音视频处理领取
         cardinality: many
         effect: create
         fields:
@@ -74,6 +89,7 @@ activities:
           - harvest_batch
           - author
       - type: Run
+        destination: 本轮运行账本与停止原因
         cardinality: one
         effect: update
         fields:
@@ -91,12 +107,13 @@ activities:
       - probe: collect_videos_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
       - probe: disc_candidates_persisted
-        asserts: 保留原后置条件：disc_candidates_persisted
+        asserts: 本批候选视频在 zenithjoy.leadgen_videos 独立读回条数不少于 metrics.persisted
       - probe: videos_readback
-        asserts: 保留原后置条件：videos_readback
+        asserts: 本批新推送视频在 zenithjoy.leadgen_videos 独立读回条数不少于 metrics.videos_pushed
       - probe: line_key_not_null
-        asserts: 保留原后置条件：line_key_not_null
+        asserts: 本批已持久化视频的 line_key 全部非空
     execution:
+      primary_kind: code
       location: phone
       via: leadgen-workflow.mjs → collect_videos：搜索筛选、逐屏取链、逐条落表及独立PG读回
     budget:
@@ -145,7 +162,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.3.2
+        version: 0.4.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
