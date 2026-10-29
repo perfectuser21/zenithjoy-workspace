@@ -195,16 +195,19 @@ export function createRpc({ frozen, execute = execInput, local = false, runConte
       return response;
     };
     if(body.kind==='queue'&&body.request?.op==='discover'){
-      try{return await send(body,20000);}catch(error){
+      // One slow SSH return must fit inside the 101 activity budget. Keep the
+      // original write, its readback, and at most one identical retry bounded.
+      const attemptMs=75000;
+      try{return await send(body,attemptMs);}catch(error){
         if(!error.receiptMissing||Date.now()+250>=deadline)throw error;
-        const readback=await send({...body,request:{...body.request,op:'discover_readback'}},20000);
+        const readback=await send({...body,request:{...body.request,op:'discover_readback'}},attemptMs);
         if(readback.result!==null){
           if(!['pending','matched','rejected'].includes(readback.result?.status)||readback.result.inserted!==false||readback.result.recovered!==true)throw Error('发现恢复读回无效');
           if(body.request.video?.metrics&&(readback.result.metrics_verified!==true||readback.result.metrics_digest!==body.request.video.metrics.digest))throw Error('发现指标恢复读回无效');
           return readback;
         }
         // discover以(line_key,video_id)唯一键upsert，相同输入补写一次；不恢复评论/评分等其他写操作。
-        return send(body,20000);
+        return send(body,attemptMs);
       }
     }
     if(body.kind==='commander'){

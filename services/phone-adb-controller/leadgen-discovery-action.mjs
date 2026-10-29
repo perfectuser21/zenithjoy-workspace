@@ -24,8 +24,14 @@ export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,
       fixedInput();
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')scope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:isLocked()});setScope(scope);
       try{const discovery=await getDiscovery();const result=scope&&state.budgetDeadline-Date.now()<discoveryCaptureBudgetMs?discovery.stopForBudget():await discovery.collect_videos();
-      const readback=await queue('inspect_videos',{video_ids:result.videos.map(v=>v.videoId)});
-      const readbackFailures=result.videos.filter(v=>!readback.some(r=>r.video_id===v.videoId&&r.line_key)).length;
+      // A PG manifest readback can fail after every native leaf has returned.
+      // Keep the business evidence unverified, then seal the live phone scope
+      // so only its original cleanup may run. A failed scope seal still throws.
+      let readbackFailures;
+      try{
+        const readback=await queue('inspect_videos',{video_ids:result.videos.map(v=>v.videoId)});
+        readbackFailures=Array.isArray(readback)?result.videos.filter(v=>!readback.some(r=>r.video_id===v.videoId&&r.line_key)).length:Math.max(1,result.videos.length);
+      }catch{readbackFailures=Math.max(1,result.videos.length);}
       const outcome={...result,persisted:result.counts.created,candidates:result.videos.length,videos_pushed:result.counts.created,
         video_manifest_readback_failures:readbackFailures,manifest_verified:Number(readbackFailures===0),
         ...(readbackFailures?{status:'partial'}:{}),

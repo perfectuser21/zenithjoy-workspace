@@ -95,7 +95,7 @@ test('101 discover 回执与最终 PG 清单读回失败：业务保持 partial�
  try{
   const out=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:f.context,
    handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{cleaned++;f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},
-   commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>{verified++;return {verified:true};},recover:async()=>{recovered++;throw Error('不得重采');},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+   commander:async()=>({action:'continue'}),record:async()=>{},verify:async activity=>{if(activity.key==='collect_videos')verified++;return {verified:true};},recover:async()=>{recovered++;throw Error('不得重采');},terminationUnverified:()=>f.h.state.nativeStopUnproven});
   assert.equal(out.status,'partial');assert.equal(out.results[0].status,'partial');
   assert.equal(out.results[0].result.stop_reason,'persistence_failed');
   assert.equal(out.results[0].result.manifest_verified,0,'PG读回失败不能冒称业务通过');
