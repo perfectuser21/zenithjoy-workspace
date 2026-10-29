@@ -7196,7 +7196,7 @@ agent_suite:
 - id: leadgen-activity-contract-evidence
   path: scripts/product-map/__tests__/leadgen-contract-completeness.test.js
   type: unit
-  ci: L3
+  ci: L2
   status: active
   product: AI员工
   note: "101–104 Activity 合同来源、去向、共享预检作用域与104订单纠错守卫；历史证据仅候选，不代替真机验收"
