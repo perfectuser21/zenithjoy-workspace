@@ -8317,3 +8317,43 @@ agent_suite:
   status: active
   product: AI员工
   note: 本人直传intent、过期、真实HEAD大小、下载上限、幂等完成及失败重试，不接受客户端URL。
+
+- id: creative-canvas-image-jobs
+  path: apps/api/src/routes/__tests__/video-tools-image-generation.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI视频
+  note: 图片生成任务、所有权和防重复计费。
+
+- id: creative-canvas-image-provider
+  path: apps/api/src/services/__tests__/creative-image-provider.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: 图片生成供应商协议与任务状态。
+
+- id: creative-canvas-gateway
+  path: apps/api/src/services/creative-canvas-gateway.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI视频
+  note: 画布网关 HTTP 和 WebSocket 身份隔离。
+
+- id: creative-canvas-configured
+  path: apps/api/src/services/creative-canvas-configured.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI视频
+  note: 真实配置网关的员工身份与未配置实例。
+
+- id: creative-canvas-dashboard
+  path: apps/dashboard/src/pages/__tests__/CreativeCanvasPage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: 创作画布入口、服务状态与重试。
