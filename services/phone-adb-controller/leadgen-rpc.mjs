@@ -71,6 +71,11 @@ export async function handleRpc(input, deps = {}) {
       await verifySkillRequest(input.request);
       return input.kind==='activity_skill_authority'?{ok:true,authorized:skillAuthority(input.request)}:{ok:true,result:await runSkillAgent(input.request)};
     }
+    if (input.kind === 'commander_readback') {
+      if(input.receipt?.source_commit!==input.source.commit)throw Error('RPC_COMMANDER_SOURCE_MISMATCH');
+      const {readReturnedCommanderTurn}=await import('./commander-owner-state.mjs');
+      return {ok:true,decision:await readReturnedCommanderTurn(input.receipt,{home:deps.commanderHome})};
+    }
     if (input.kind === 'commander') {
       if(input.receipt?.source_commit!==input.source.commit)throw Error('COMMANDER_SOURCE_MISMATCH');
       const {verifyCommanderWorkspace}=await import('./leadgen-skill-agent.mjs');

@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -241,7 +241,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "05f22f4cd5d27f04b9b78cb328938bbf6dce282fa668a1cc54f072f2d0f4a033",
+      "code_digest": "355ba7a554d55df57cd5c87fda5a2554c5ef2ecfc86478890fae9081b155b187",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "2573dbed8dbb69fc1d64b2e68320f0c5c64aae3c918d6075ad47f9caa2ef87ab",
-        "current_code_digest": "05f22f4cd5d27f04b9b78cb328938bbf6dce282fa668a1cc54f072f2d0f4a033"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "05f22f4cd5d27f04b9b78cb328938bbf6dce282fa668a1cc54f072f2d0f4a033",
+        "current_code_digest": "355ba7a554d55df57cd5c87fda5a2554c5ef2ecfc86478890fae9081b155b187"
       }
     },
     "douyin_video_processing.preflight": {
@@ -346,7 +346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -409,7 +409,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -539,7 +539,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7a6cfcde9331761ad03bd18d1c9c1ccc0b2992ffac862935d1e5ae53632354b7",
+      "code_digest": "5576c6b5eecfd9d11cf409c76100707098b79d6cfb1f4c7b46d07156c50ff7b4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "784c06d520ed04f545c4c4ff662e6d187c66ddec4b0eeba42facd66f78dccd0f",
-        "current_code_digest": "7a6cfcde9331761ad03bd18d1c9c1ccc0b2992ffac862935d1e5ae53632354b7"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "7a6cfcde9331761ad03bd18d1c9c1ccc0b2992ffac862935d1e5ae53632354b7",
+        "current_code_digest": "5576c6b5eecfd9d11cf409c76100707098b79d6cfb1f4c7b46d07156c50ff7b4"
       }
     },
     "douyin_video_processing.dedup": {
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -686,7 +686,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -798,7 +798,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "7122876a55ead618c97aaccf68249a69c5dba3de6897ff4657cc4d55ca7c2e98",
+      "code_digest": "b4c46e42dd4707cc8ceb1f6dc40dcbab80c1066e34e80300c31aa9018cd39714",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "eeaf01a9cedd74139bf06c415d92fff5d228c5357dcc2bbbff1619789ae593d7",
-        "current_code_digest": "7122876a55ead618c97aaccf68249a69c5dba3de6897ff4657cc4d55ca7c2e98"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "7122876a55ead618c97aaccf68249a69c5dba3de6897ff4657cc4d55ca7c2e98",
+        "current_code_digest": "b4c46e42dd4707cc8ceb1f6dc40dcbab80c1066e34e80300c31aa9018cd39714"
       }
     },
     "douyin_video_processing.qualification": {
@@ -910,7 +910,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -973,7 +973,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -1085,7 +1085,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "188c8bf46e995f5822643b9b620542af327eff9d375115a215186024202d839a",
+      "code_digest": "ca92eb4c5dda38524fa88ec2888dded611674c8fb22d93a5018c63a69a65f9b4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "5178ea592e5eb1cefc372641eb743740a6b3bcb7b10f3449f74fd42664610e90",
-        "current_code_digest": "188c8bf46e995f5822643b9b620542af327eff9d375115a215186024202d839a"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "188c8bf46e995f5822643b9b620542af327eff9d375115a215186024202d839a",
+        "current_code_digest": "ca92eb4c5dda38524fa88ec2888dded611674c8fb22d93a5018c63a69a65f9b4"
       }
     },
     "douyin_video_processing.collection": {
@@ -1239,7 +1239,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -1302,7 +1302,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -1429,7 +1429,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "183e943805f25efbdf8905b8c43a56111711f8c0d200e5eccd5253b9a05b45e7",
+      "code_digest": "182b90af9e4245895e4a8287c7d32efab6c6b7164628211a64a97db9a929c6c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "547ee85c9511bdb89e83a9f3ffd0307089ea8da66d23b70095c02c17fc223f02",
-        "current_code_digest": "183e943805f25efbdf8905b8c43a56111711f8c0d200e5eccd5253b9a05b45e7"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "183e943805f25efbdf8905b8c43a56111711f8c0d200e5eccd5253b9a05b45e7",
+        "current_code_digest": "182b90af9e4245895e4a8287c7d32efab6c6b7164628211a64a97db9a929c6c6"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1527,7 +1527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -1590,7 +1590,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -1719,7 +1719,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "96132b6de3851b66c9934d3024bbfe5a7bfaa037474ad305df0d95c9a1421207",
+      "code_digest": "eda3c36fea17e5a47c9e63290a39c1050c8679bfc606e9699d38bb97982d6b98",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "9f557042d2ff98eef73157fb4057cfa809786f76e9e1f728ec7c298e4bd9bcba",
-        "current_code_digest": "96132b6de3851b66c9934d3024bbfe5a7bfaa037474ad305df0d95c9a1421207"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "96132b6de3851b66c9934d3024bbfe5a7bfaa037474ad305df0d95c9a1421207",
+        "current_code_digest": "eda3c36fea17e5a47c9e63290a39c1050c8679bfc606e9699d38bb97982d6b98"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1796,7 +1796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -1859,7 +1859,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -1943,7 +1943,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "a98f8d3d4bc9e1fd744f6373891fae07766e00ae4ccdd706397169fc1c934011",
+      "code_digest": "501ce661e1e4801299dd40d9a8845e6d1768d5af1c4f77efc5ce2dc8a96b5b2c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "9ab3e4ce03f837b927885d9d3263cc295179b1f349facf8b8ad578f327cb3402",
-        "current_code_digest": "a98f8d3d4bc9e1fd744f6373891fae07766e00ae4ccdd706397169fc1c934011"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "a98f8d3d4bc9e1fd744f6373891fae07766e00ae4ccdd706397169fc1c934011",
+        "current_code_digest": "501ce661e1e4801299dd40d9a8845e6d1768d5af1c4f77efc5ce2dc8a96b5b2c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2041,7 +2041,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -2104,7 +2104,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -2188,7 +2188,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "0d844882cee230dbc6cc9092ec27f70f43a49eaa1196d82e12a7e6fbd627cf3b",
+      "code_digest": "e29a56a4183daa05e29988e061da36cc29be46ab7969a76c4cbe41dfe95e7584",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "fafd73d6c2c568d055697f5375584126bfa9020a55ed8cb0018708fe115a299d",
-        "current_code_digest": "0d844882cee230dbc6cc9092ec27f70f43a49eaa1196d82e12a7e6fbd627cf3b"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "0d844882cee230dbc6cc9092ec27f70f43a49eaa1196d82e12a7e6fbd627cf3b",
+        "current_code_digest": "e29a56a4183daa05e29988e061da36cc29be46ab7969a76c4cbe41dfe95e7584"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2328,7 +2328,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -2391,7 +2391,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -2535,7 +2535,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "1516488dc73043f9d2d4f3ca695739bb3e7f8ce13ddc8bb6de91679760d1beab",
+      "code_digest": "19e08bf4ed29c947660f5fb3bd23d33bda91ae81d5e58f23ebaf6232db9218ed",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "c488a2d01ad8606bb74eca9a15e7834d05f756e225af6f69848ec5eff835f286",
-        "current_code_digest": "1516488dc73043f9d2d4f3ca695739bb3e7f8ce13ddc8bb6de91679760d1beab"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "1516488dc73043f9d2d4f3ca695739bb3e7f8ce13ddc8bb6de91679760d1beab",
+        "current_code_digest": "19e08bf4ed29c947660f5fb3bd23d33bda91ae81d5e58f23ebaf6232db9218ed"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2626,7 +2626,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -2689,7 +2689,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -2822,7 +2822,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
+      "code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "c8c7da0eb94ad5445234d8d34c8a104560516df2028ecb007469a8442703d4d1",
-        "current_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
+        "current_code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2899,7 +2899,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -2962,7 +2962,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -3095,7 +3095,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
+      "code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "c8c7da0eb94ad5445234d8d34c8a104560516df2028ecb007469a8442703d4d1",
-        "current_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "bd1be96ff121186409c43879177dfe5c2e6e34bae0847070ff92958dcd15302d",
+        "current_code_digest": "8b337a17ad5093497b67c41b86ce88f00854392aa85bcf1292ac980eda9e3580"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3172,7 +3172,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "a79c03dcff95d518d4d755c9d80ee11b807b314c6bd45d1ee2ee864ee5b7db01"
+          "sha256": "fd5fc41cb872bef3814ea23440733af6c5dedf677e6513644af4263831f19054"
         },
         {
           "kind": "code",
@@ -3235,7 +3235,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "6a6c31223def0cb0d37e0dd530bfda6dd840fbc68bc71e560f61560702e95f1a"
+          "sha256": "8a1323a0ac38315f2ddf341738a8f281b9f8a163691e2ce922c2a433eb078757"
         },
         {
           "kind": "code",
@@ -3371,7 +3371,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/commander-owner-state.mjs",
           "revision": "contract",
-          "sha256": "1eda701fea6c64c7466b6bb3f1d6920763900363c11836109a1428130a6e7059"
+          "sha256": "9b031f334bd70823de965f8cfb1ee21c3d27b520bea1dda419d8e2427929cb26"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "04eba1618ebbd31f18a2537b461445fe91f0b54ac2c0a47858431b61dedadd54",
+      "code_digest": "9d74e07366e7a66e0f994cd4f5913545a7cbf77f28f3fa19cf3dcbcf2ed1dd6c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Shared Runner changes only explicit non-success status handling to fail closed; Activity inputs, outputs, Skill method, and entrypoint stay identical. Regression proves downstream activity is blocked.",
-        "reviewed_by": "codex-interactive-tdd-2026-10-29",
-        "previous_code_digest": "dcffffe4207941f58c864542218415ca241d6f1e53adf6f1913c2f4870b23efd",
-        "current_code_digest": "04eba1618ebbd31f18a2537b461445fe91f0b54ac2c0a47858431b61dedadd54"
+        "reason": "Commander SSH 回程缺回执时仅精确只读核验已完成归档，业务输入输出及 Activity 合同不变",
+        "reviewed_by": "interactive-dev-skill",
+        "previous_code_digest": "04eba1618ebbd31f18a2537b461445fe91f0b54ac2c0a47858431b61dedadd54",
+        "current_code_digest": "9d74e07366e7a66e0f994cd4f5913545a7cbf77f28f3fa19cf3dcbcf2ed1dd6c"
       }
     }
   },

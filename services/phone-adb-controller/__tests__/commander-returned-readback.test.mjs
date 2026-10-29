@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createRpc,RPC_FILES} from '../leadgen-client.mjs';
 import {workflowCommanderSession} from '../commander-owner-state.mjs';
 import * as owner from '../commander-owner-state.mjs';
+import {handleRpc} from '../leadgen-rpc.mjs';
 
 const sha='6ca1596321e5939a53a7ef020ac2609b890cc7f5';
 const scope={workflow_key:'douyin_video_discovery',run_id:'douyin_video_discovery-accept6ca_jinuo101_20261029t2002__a1',binding_id:'f9231bee-ae73-4ab5-bcb7-e4491682ebdf',source_commit:sha,task_id:null,activity:'collect_videos',phase:'after'};
@@ -23,27 +24,38 @@ function fixture(t){
  const path=file+'.'+nonce+'.returned.json';
  writeFileSync(file+'.'+nonce+'.returned.original.json',JSON.stringify(original),{mode:0o600});
  writeFileSync(path,JSON.stringify(returned),{mode:0o600});
- return {path,returned};
+ return {path,returned,home,file};
 }
 test('SSH 空回执后只读恢复同 run/SHA/binding/activity/phase 的原始 returned，绝不重发 Commander',async t=>{
- const {path}=fixture(t),calls=[];
+ const {home}=fixture(t),calls=[];
  const frozen={deployment:{source_commit:sha},files:Object.fromEntries(RPC_FILES.map(p=>['runtime/'+p,'b'.repeat(64)]))};
  const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
   const body=JSON.parse(opts.input);calls.push(body);
-  return calls.length===1?{code:255,stdout:'',stderr:'Connection closed'}:{code:0,stdout:JSON.stringify({ok:true,decision:owner.readReturnedCommanderTurn(body.receipt,{home:path.split('/.openclaw/')[0]})}),stderr:''};
+  return calls.length===1?{code:255,stdout:'',stderr:'Connection closed'}:{code:0,stdout:JSON.stringify(await handleRpc(body,{verify:()=>{},commanderHome:home,commanderExecute:async()=>{throw Error('MUST_NOT_LAUNCH_COMMANDER')}})),stderr:''};
  }});
  const result=await rpc({kind:'commander',receipt:scope},{timeoutMs:3000});
  assert.equal(result.decision.action,'continue');
  assert.deepEqual(calls.map(c=>c.kind),['commander','commander_readback']);
  assert.deepEqual(calls[1].receipt,scope);
 });
-test('只读回执拒绝不匹配、损坏或多份归档，不能误报成功',t=>{
- const {path,returned}=fixture(t),home=path.split('/.openclaw/')[0];
- assert.equal(owner.readReturnedCommanderTurn(scope,{home}).action,'continue');
+test('只读回执拒绝不匹配、损坏或多份归档，不能误报成功',async t=>{
+ const {path,returned,home,file}=fixture(t);
+ assert.equal((await owner.readReturnedCommanderTurn(scope,{home})).action,'continue');
  for(const key of ['run_id','source_commit','binding_id','activity','phase']){
   const wrong={...scope,[key]:key==='source_commit'?'a'.repeat(40):'different'};
-  assert.throws(()=>owner.readReturnedCommanderTurn(wrong,{home}));
+  await assert.rejects(owner.readReturnedCommanderTurn(wrong,{home}));
  }
  writeFileSync(path,JSON.stringify({...returned,response_sha256:'0'.repeat(64)}),{mode:0o600});
- assert.throws(()=>owner.readReturnedCommanderTurn(scope,{home}));
+ await assert.rejects(owner.readReturnedCommanderTurn(scope,{home}));
+ writeFileSync(path,JSON.stringify(returned),{mode:0o600});
+ const oldNonce=returned.transport_nonce,newNonce='68b014c5-1f6d-481e-b8a7-0038ed575296';
+ const originalPath=path.replace(/\.returned\.json$/,'.returned.original.json');
+ const original=JSON.parse(readFileSync(originalPath));original.transport_nonce=newNonce;
+ const duplicate={...returned,transport_nonce:newNonce,original_sha256:hash(JSON.stringify(original))};
+ writeFileSync(file+'.'+newNonce+'.returned.original.json',JSON.stringify(original),{mode:0o600});
+ writeFileSync(file+'.'+newNonce+'.returned.json',JSON.stringify(duplicate),{mode:0o600});
+ await assert.rejects(owner.readReturnedCommanderTurn(scope,{home}));
+ assert.notEqual(oldNonce,newNonce);
+ writeFileSync(file,JSON.stringify({...original,transport_nonce:oldNonce}),{mode:0o600});
+ await assert.rejects(owner.readReturnedCommanderTurn(scope,{home}),'活跃 pending 不能借旧归档放行');
 });

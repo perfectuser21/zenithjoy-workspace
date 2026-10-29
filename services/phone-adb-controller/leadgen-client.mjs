@@ -176,7 +176,7 @@ export function createRpc({ frozen, execute = execInput, local = false, runConte
         response=JSON.parse(result.stdout.trim());
         if(!response||typeof response.ok!=='boolean')throw Error('INVALID_RECEIPT');
       }catch{
-        const kind=['queue','commander','keywords','verify','qualify','outreach','outreach_policy','resolve_share_link','activity_skill','activity_skill_authority'].includes(payload.kind)?payload.kind:'unknown';
+        const kind=['queue','commander','commander_readback','keywords','verify','qualify','outreach','outreach_policy','resolve_share_link','activity_skill','activity_skill_authority'].includes(payload.kind)?payload.kind:'unknown';
         const stderr=String(result.stderr??'');
         const transport=/timed? out|timeout/i.test(stderr)?'timeout'
           :/permission denied|authentication failed/i.test(stderr)?'authentication'
@@ -203,6 +203,14 @@ export function createRpc({ frozen, execute = execInput, local = false, runConte
         }
         // discover以(line_key,video_id)唯一键upsert，相同输入补写一次；不恢复评论/评分等其他写操作。
         return send(body,20000);
+      }
+    }
+    if(body.kind==='commander'){
+      try{return await send(body);}catch(error){
+        if(!error.receiptMissing||body.receipt?.workflow_key!=='douyin_video_discovery'||Date.now()+250>=deadline)throw error;
+        // The only follow-up is a read of the already archived final response.
+        // A missing or mismatched archive keeps the original turn unresolved.
+        return send({kind:'commander_readback',receipt:body.receipt});
       }
     }
     const attempts=body.kind==='resolve_share_link'?2:1;
