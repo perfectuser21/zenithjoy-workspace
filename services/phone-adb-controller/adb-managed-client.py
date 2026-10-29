@@ -90,18 +90,22 @@ def parent_leaf(argv):
         raise ValueError('ADB_MANAGED_COLLECTION_PARENT_UNAVAILABLE') from error
 
 
-def client_version(binary):
+def client_version(binary, *, recheck=None):
     if 'WFR_COLLECTION_LEAF_SOCKET' in os.environ:
         code, stdout, _ = parent_leaf(['version'])
         text = stdout.decode('utf8')
         if code or re.findall(r'^Android Debug Bridge version 1\.0\.([0-9]+)\r?$', text, re.M) != ['41']:
             raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH')
         return text
-    result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2)
-    matches = re.findall(r'^Android Debug Bridge version 1\.0\.([0-9]+)\r?$', result.stdout, re.M)
-    if result.returncode or matches != ['41']:
-        raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH')
-    return result.stdout
+    try:
+        output, retried = route_module().verified_client_version(binary)
+    except ValueError as error:
+        if str(error) == 'ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH':
+            raise ValueError('ADB_MANAGED_CLIENT_PROTOCOL_MISMATCH') from error
+        raise
+    if retried and recheck is not None:
+        recheck()
+    return output
 
 
 def main(argv):
@@ -141,7 +145,7 @@ def main(argv):
             route.select_route(serial, policy['endpoint'])
     else:
         route.select_route(serial, policy['endpoint'])
-    client_version(binary)
+    client_version(binary, recheck=lambda: route.select_route(serial, policy['endpoint']))
     env = dict(os.environ, ADB_SERVER_SOCKET=policy['endpoint'])
     for name in ('ANDROID_ADB_SERVER_PORT', 'ANDROID_ADB_SERVER_ADDRESS', 'ANDROID_SERIAL',
                  'ADB_VENDOR_KEYS', 'ADB_LIBUSB', 'ADB_LOCAL_TRANSPORT_MAX_PORT'):
