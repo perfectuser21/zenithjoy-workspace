@@ -8366,6 +8366,30 @@ agent_suite:
   product: AI视频
   note: 创作画布入口、服务状态与重试。
 
+- id: aidge-api
+  path: apps/api/src/routes/aidge.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI视频
+  note: Aidge 全能力目录、员工鉴权、参数校验、素材上传与嵌套模型。
+
+- id: aidge-dashboard
+  path: apps/dashboard/src/pages/__tests__/AidgeWorkspacePage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: Aidge 一级入口、栏目与接口操作界面。
+
+- id: aidge-capability-center-smoke
+  path: .github/workflows/scripts/smoke/aidge-capability-center-smoke.sh
+  type: smoke
+  ci: L3
+  status: active
+  product: AI视频
+  note: 执行 API 与 Dashboard 的 Aidge 主路径冒烟。
+
 - id: creative-canvas-upload-image-api
   path: apps/api/src/routes/__tests__/video-tools-canvas-image-upload.test.ts
   type: integration
