@@ -8374,6 +8374,30 @@ agent_suite:
   product: AI视频
   note: Aidge 全能力目录、员工鉴权、参数校验、素材上传与嵌套模型。
 
+- id: aidge-catalog
+  path: apps/api/src/services/aidge-catalog.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: 固定 SDK 的全部接口、字段映射和删除标记。
+
+- id: aidge-gateway
+  path: apps/api/src/services/aidge-gateway.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: 嵌套模型与数组参数正确序列化，拒绝未知字段。
+
+- id: aidge-translation
+  path: apps/api/src/services/aidge-translation.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: 翻译请求、密钥缺失与 RAM 权限错误映射。
+
 - id: aidge-dashboard
   path: apps/dashboard/src/pages/__tests__/AidgeWorkspacePage.test.tsx
   type: unit
