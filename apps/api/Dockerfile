@@ -13,10 +13,6 @@
 FROM node:20-bookworm-slim AS builder
 WORKDIR /repo
 
-# build-info：容器 build 无 .git，sha 必须由 build arg 注入（deploy-staging-hk.yml 传入）
-ARG BUILD_SHA=unknown
-ENV BUILD_SHA=${BUILD_SHA}
-
 # Monorepo root tsconfig (extended by apps/api/tsconfig.json)
 COPY tsconfig.base.json ./
 
@@ -38,6 +34,10 @@ COPY apps/realtime-voice-mvp/package.json ./apps/realtime-voice-mvp/
 COPY apps/staff-hub/package.json ./apps/staff-hub/
 
 RUN npm ci --workspace=apps/api
+
+# Keep dependency layers reusable across revisions; SHA only affects build info.
+ARG BUILD_SHA=unknown
+ENV BUILD_SHA=${BUILD_SHA}
 
 COPY apps/api/tsconfig.json ./apps/api/
 COPY apps/api/src/ ./apps/api/src/

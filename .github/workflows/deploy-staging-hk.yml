@@ -28,34 +28,70 @@ concurrency:
 jobs:
   deploy-staging-hk:
     name: 部署候选到 HK 常驻 staging :5201（不碰生产 :5200）
+    if: github.ref == 'refs/heads/main'
+    environment: creative-canvas-staging
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: 接入 Tailscale（走内网）
         uses: tailscale/github-action@v3
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          authkey: ${{ secrets.CREATIVE_CANVAS_TAILSCALE_AUTHKEY }}
           version: latest
 
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Deploy fixed candidate via SSH（独立源码及实际版本核验）
+      - name: Build and measure fixed candidate on CI
         env:
-          SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
-          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
           DEPLOY_SHA: ${{ github.sha }}
-        timeout-minutes: 25
         run: |
           set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          docker build --platform linux/amd64 --build-arg "BUILD_SHA=$DEPLOY_SHA" \
+            --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
+            -f apps/api/Dockerfile -t "zenithjoy-api-staging:$DEPLOY_SHA" .
+          docker save -o "$RUNNER_TEMP/staging-image.tar" "zenithjoy-api-staging:$DEPLOY_SHA"
+          sha256sum "$RUNNER_TEMP/staging-image.tar" | awk '{print $1}' > "$RUNNER_TEMP/staging-image.sha256"
+          docker image inspect "zenithjoy-api-staging:$DEPLOY_SHA" --format '{{.Id}}' > "$RUNNER_TEMP/staging-image.id"
+          python3 scripts/deploy/staging-measure-archive.py "$RUNNER_TEMP/staging-image.tar" > "$RUNNER_TEMP/staging-image-sizes.json"
+
+      - name: Test candidate migrations on isolated PostgreSQL
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+        run: bash scripts/deploy/staging-ci-migration-proof.sh "$DEPLOY_SHA"
+
+      - name: Stream candidate to HK staging and run migrations
+        env:
+          SSH_KEY: ${{ secrets.CREATIVE_CANVAS_HK_SSH_KEY }}
+          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
+          DEPLOY_SHA: ${{ github.sha }}
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]
+          REMOTE_SCRIPT=
           KEY_FILE=$(mktemp)
-          trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \
-            -i "$KEY_FILE" "root@${SSH_HOST}" bash -s -- "$DEPLOY_SHA" \
-            < scripts/deploy/hk-api-staging.sh
+          SSH_OPTS=(-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -i "$KEY_FILE")
+          cleanup() { if [[ -n "$REMOTE_SCRIPT" ]]; then ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" rm -f "$REMOTE_SCRIPT" || true; fi; rm -f "$KEY_FILE"; }
+          trap cleanup EXIT
+          REMOTE_SCRIPT=$(ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" 'umask 077; mktemp /tmp/zj-staging.XXXXXXXX')
+          [[ "$REMOTE_SCRIPT" =~ ^/tmp/zj-staging[.][a-zA-Z0-9]+$ ]]
+          scp "${SSH_OPTS[@]}" scripts/deploy/hk-api-staging.sh "root@${SSH_HOST}:$REMOTE_SCRIPT"
+          DIGEST=$(cat "$RUNNER_TEMP/staging-image.sha256")
+          IMAGE_ID=$(cat "$RUNNER_TEMP/staging-image.id")
+          ARCHIVE_BYTES=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["archive"])' "$RUNNER_TEMP/staging-image-sizes.json")
+          UNPACKED_BYTES=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["unpacked"])' "$RUNNER_TEMP/staging-image-sizes.json")
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ && "$DIGEST" =~ ^[0-9a-f]{64}$ && "$IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$ARCHIVE_BYTES" =~ ^[0-9]+$ && "$UNPACKED_BYTES" =~ ^[0-9]+$ ]]
+          printf -v REMOTE_CMD '%q ' bash "$REMOTE_SCRIPT" "$DEPLOY_SHA" "$DIGEST" "$IMAGE_ID" "$ARCHIVE_BYTES" "$UNPACKED_BYTES"
+          # Values are format-validated and shell-quoted locally by printf %q.
+          # shellcheck disable=SC2029
+          gzip -c "$RUNNER_TEMP/staging-image.tar" | ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" "$REMOTE_CMD"
 
       # 从 GHA runner 公网出口验证部署后的支付回调端点——上面 [4/4] 那步是容器起来了没
       # （SSH 进 HK 内网 curl 127.0.0.1），这步验的是完全不同的另一件事：公网域名/nginx

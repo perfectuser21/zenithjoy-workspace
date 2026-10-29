@@ -4,13 +4,15 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 
 const script = resolve('scripts/deploy/hk-api-release.sh');
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'hk-release-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const repo = join(root, 'repo'), bin = join(root, 'bin'), state = join(root, 'docker.json');
-  mkdirSync(repo); mkdirSync(bin); mkdirSync(join(repo, 'deploy'));
+  mkdirSync(repo); mkdirSync(bin); mkdirSync(join(repo, 'deploy')); mkdirSync(join(repo,'apps/api/db/migrations'),{recursive:true}); writeFileSync(join(repo,'apps/api/db/migrations/run-migration.ts'),'// fixture'); writeFileSync(join(repo,'apps/api/tsconfig.json'),'{}'); writeFileSync(join(repo,'tsconfig.base.json'),'{}');
   const git = (...args) => {
     const r = spawnSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', repo, ...args], { encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr); return r.stdout.trim();
@@ -24,7 +26,7 @@ function fixture(t) {
   writeFileSync(state, JSON.stringify({ active: 'sha256:old-image', images: { 'sha256:old-image': old }, builds: 0, ups: [] }));
   const boundary = `#!${process.execPath} --
 const fs=require('node:fs'); const path=require('node:path');
-const args=process.argv.slice(2); const service=process.env.FAKE_SERVICE||'zenithjoy-api-prod'; const s=JSON.parse(fs.readFileSync(process.env.FAKE_DOCKER));
+const args=process.argv.slice(2); if(path.basename(process.argv[1])==='df'){ console.log('Filesystem 1024-blocks Used Available Capacity Mounted'); const state=JSON.parse(fs.readFileSync(process.env.FAKE_DOCKER)); const free=(state.builds>0 && process.env.FAKE_AFTER_BUILD_FREE_KB)||process.env.FAKE_FREE_KB||'9999999'; console.log('fixture 99999999 1 '+free+' 1% /'); process.exit(0); } const service=process.env.FAKE_SERVICE||'zenithjoy-api-prod'; const s=JSON.parse(fs.readFileSync(process.env.FAKE_DOCKER));
 function save(){ fs.writeFileSync(process.env.FAKE_DOCKER,JSON.stringify(s)); }
 if(path.basename(process.argv[1])==='curl'){
  let sha=s.images[s.active]; if(process.env.FAIL_MODE==='sha'&&sha===process.env.CANDIDATE)sha='0'.repeat(40);
@@ -46,8 +48,8 @@ if(args[0]==='tag'){ s.images[args[2]]=s.images[args[1]]; save(); process.exit(0
 if(args[0]==='run'){
  const expected=service==='zenithjoy-api-staging'?'/opt/zenithjoy/staging-api/.env':'/opt/zenithjoy/prod-api/.env';
  if(args[args.indexOf('--env-file')+1]!==expected)throw Error('wrong database environment');
- if(!args.at(-1).includes('--include=dev'))throw Error('migration runner must retain locked ts-node dev dependency under NODE_ENV=production');
- if(process.env.FAIL_MODE==='migration')process.exit(8); process.exit(0);
+ if(service==='zenithjoy-api-staging'){ const mount=args.find(x=>x.endsWith(":/source:ro")); if(mount && fs.existsSync(path.join(mount.slice(0,-11),'apps/api/db/migrations/node_modules'))) throw Error('poisoned migration archive'); if(!args.some(x=>x.endsWith(":/source:ro") && x.includes("migration-source.")) || !args.includes("NODE_PATH=/repo/node_modules") || args.includes('node:20-bookworm-slim') || !args.includes(process.env.CANDIDATE && 'zenithjoy-api-staging:'+process.env.CANDIDATE) || args.at(-1)!=='/source/apps/api/db/migrations/run-migration.ts')throw Error('staging migration must reuse candidate image'); } else if(!args.at(-1).includes('--include=dev')) throw Error('production migration must retain locked ts-node dev dependency under NODE_ENV=production');
+ s.migrations=(s.migrations||0)+1;save();if(process.env.FAIL_MODE==='migration')process.exit(8); process.exit(0);
 }
 if(args[0]==='compose'){
  const files=args.flatMap((a,i)=>a==='-f'?[args[i+1]]:[]);
@@ -56,12 +58,13 @@ if(args[0]==='compose'){
  const source=path.dirname(path.dirname(files[0]));
  if(!fs.existsSync(path.join(source,'candidate')))throw Error('build did not use candidate source');
  if(source===process.env.ZJ_HK_REPO)throw Error('build uses mutable shared checkout');
- s.images[image]=process.env.BUILD_SHA;s.builds++;save();process.exit(0);}
+ if(process.env.POISON_SOURCE){const target=path.join(source,'apps/api/db/migrations/node_modules');fs.mkdirSync(target,{recursive:true});fs.writeFileSync(path.join(target,'injected.js'),'bad');}
+ s.images[image]=process.env.RELEASE_SHA||process.env.BUILD_SHA;s.builds++;save();process.exit(0);}
  if(args.includes('up')){s.active=image;s.ups.push(image);save();if(process.env.FAIL_MODE==='kill-after-remove'&&s.images[image]===process.env.CANDIDATE){s.active=null;save();process.kill(process.ppid,'SIGKILL');process.exit(0);}if(process.env.FAIL_MODE==='kill-after-up'&&s.images[image]===process.env.CANDIDATE){process.kill(process.ppid,'SIGKILL');process.exit(0);}if(process.env.FAIL_MODE==='up'&&s.images[image]===process.env.CANDIDATE)process.exit(9);process.exit(0);}
 }
 throw Error('unexpected docker '+args.join(' '));
 `;
-  for (const command of ['docker', 'curl']) writeFileSync(join(bin, command), boundary, { mode: 0o755 });
+  for (const command of ['docker', 'curl', 'df']) writeFileSync(join(bin, command), boundary, { mode: 0o755 });
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, ZJ_HK_REPO: repo,
     ZJ_HK_RELEASES: join(root, 'releases'), ZJ_HK_LOCK: join(root, 'release.lock'),
     ZJ_HEALTH_ATTEMPTS: '1', ZJ_HEALTH_INTERVAL: '0', FAKE_DOCKER: state, CANDIDATE: next };
@@ -139,21 +142,42 @@ test('已经验证过的留存版本不能被再次构建覆盖', t => {
 
 const stagingScript = resolve('scripts/deploy/hk-api-staging.sh');
 function stage(f, extra = {}) {
-  return spawnSync('bash', [stagingScript, f.next], { env: { ...f.env,
-    ZJ_STAGING_RELEASES: join(f.root, 'staging'), ZJ_STAGING_LOCK: join(f.root, 'staging.lock'),
-    FAKE_SERVICE: 'zenithjoy-api-staging', ...extra }, encoding: 'utf8' });
+  const stageBin=join(f.root,'stage-bin'); mkdirSync(stageBin,{recursive:true});
+  const oldId='sha256:'+'a'.repeat(64), candidateId='sha256:'+'b'.repeat(64);
+  const config=join(f.root,'previous-compose.yml'); writeFileSync(config,'services: {}\n');
+  writeFileSync(join(f.root,'docker.json'),JSON.stringify({active:oldId,images:{[oldId]:f.old},builds:0,ups:[]}));
+  const fake=String.raw`#!${process.execPath} --
+const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2),name=path.basename(process.argv[1]),state=JSON.parse(fs.readFileSync(process.env.FAKE_DOCKER));
+const save=()=>fs.writeFileSync(process.env.FAKE_DOCKER,JSON.stringify(state));
+const old=process.env.OLD_ID,next=process.env.NEW_ID,tag='zenithjoy-api-staging:'+process.env.CANDIDATE;
+if(name==='df'){const free=state.builds>0&&process.env.FAKE_AFTER_BUILD_FREE_KB||process.env.FAKE_FREE_KB||'9999999';console.log('Filesystem 1024-blocks Used Available Capacity Mounted\nfixture 99999999 1 '+free+' 1% /');process.exit(0)}
+if(name==='curl'){let sha=state.images[state.active];if(process.env.FAIL_MODE==='sha'&&sha===process.env.CANDIDATE)sha='0'.repeat(40);console.log(JSON.stringify({build:{sha}}));process.exit(0)}
+if(args[0]==='info'){console.log('/fake/docker');process.exit(0)}
+if(args[0]==='inspect'){let fmt=args[args.indexOf('--format')+1];if(fmt.includes('config_files'))console.log(process.env.PREVIOUS_CONFIG);else if(fmt.includes('project'))console.log('repo');else if(fmt.includes('Health'))console.log(process.env.FAIL_MODE==='health'&&state.active===next?'unhealthy':'healthy');else if(fmt.includes('.Image'))console.log(state.active);else throw Error('bad inspect '+fmt);process.exit(0)}
+if(args[0]==='image'&&args[1]==='inspect'){const image=args[2];if(image!==old&&image!==tag)process.exit(1);let fmt=args[args.indexOf('--format')+1]||'';if(fmt.includes('.Os'))console.log(process.env.FAIL_MODE==='platform'?'linux/arm64':'linux/amd64');else if(fmt.includes('revision'))console.log(process.env.FAIL_MODE==='label'?'0'.repeat(40):process.env.CANDIDATE);else if(fmt.includes('.Id'))console.log(image===old?old:(process.env.FAIL_MODE==='image'?'sha256:'+'c'.repeat(64):next));process.exit(0)}
+if(args[0]==='tag')process.exit(0);
+if(args[0]==='load'){fs.readFileSync(0);state.images[next]=process.env.CANDIDATE;state.builds++;save();process.exit(0)}
+if(args[0]==='run'){if(args.includes('-e')&&args.includes('NODE_PATH=/repo/node_modules')&&args.includes('-e')&&args.includes('node')&&args.includes('-e')&&args.includes('/repo/apps/api')){state.dbChecks=(state.dbChecks||0)+1;save();if(process.env.FAIL_MODE==='db')process.exit(8);process.exit(0)}const mount=args.find(x=>x.endsWith(':/source:ro'));if(!mount||!mount.includes('migration-source.')||!args.includes(tag)||args.at(-1)!=='/source/apps/api/db/migrations/run-migration.ts')throw Error('bad migration');if(fs.existsSync(path.join(mount.slice(0,-11),'apps/api/db/migrations/node_modules')))throw Error('poisoned archive');state.migrations=(state.migrations||0)+1;save();if(process.env.FAIL_MODE==='migration')process.exit(8);process.exit(0)}
+if(args[0]==='compose'&&args.includes('up')){const files=args.flatMap((a,i)=>a==='-f'?[args[i+1]]:[]),image=JSON.parse(fs.readFileSync(files.at(-1))).services['zenithjoy-api-staging'].image;state.active=image===old?old:next;state.ups.push(state.active);save();if(process.env.FAIL_MODE==='up'&&state.active===next)process.exit(9);process.exit(0)}
+throw Error('unexpected '+args.join(' '));
+`;
+  for(const cmd of ['docker','curl','df'])writeFileSync(join(stageBin,cmd),fake,{mode:0o755});
+  if(extra.POISON_SOURCE){
+    const source=join(f.root,'staging',f.next,'source');mkdirSync(source,{recursive:true});
+    const archive=spawnSync('git',['-C',f.env.ZJ_HK_REPO,'archive',f.next],{encoding:null});assert.equal(archive.status,0);
+    const extracted=spawnSync('tar',['-x','-C',source],{input:archive.stdout});assert.equal(extracted.status,0);
+    mkdirSync(join(source,'apps/api/db/migrations/node_modules'),{recursive:true});
+    writeFileSync(join(source,'apps/api/db/migrations/node_modules/injected.js'),'bad');
+  }
+  const raw=Buffer.from('isolated deterministic docker archive fixture'),input=gzipSync(raw),digest=createHash('sha256').update(raw).digest('hex');
+  return spawnSync('bash',[stagingScript,f.next,extra.FAIL_MODE==='digest'?'0'.repeat(64):digest,candidateId,String(input.length),'1000'],{input,env:{...f.env,PATH:`${stageBin}:${process.env.PATH}`,ZJ_STAGING_RELEASES:join(f.root,'staging'),ZJ_STAGING_LOCK:join(f.root,'staging.lock'),FAKE_SERVICE:'zenithjoy-api-staging',OLD_ID:oldId,NEW_ID:candidateId,PREVIOUS_CONFIG:config,...extra},encoding:'utf8'});
 }
-test('staging构建固定候选且不改共享HEAD，健康后回读同SHA', t => {
-  const f = fixture(t); f.git('checkout', f.old);
-  const result = stage(f); assert.equal(result.status, 0, result.stderr);
-  assert.equal(f.git('rev-parse', 'HEAD'), f.old);
-  assert.equal(f.state().images[f.state().active], f.next);
-});
-for (const mode of ['sha', 'health']) test(`staging ${mode}不符不能产出成功运行`, t => {
-  const f = fixture(t); const result = stage(f, { FAIL_MODE: mode });
-  assert.notEqual(result.status, 0);
-  assert.equal(f.state().builds, 1, result.stderr);
-});
+test('staging 加载固定候选并核实镜像后迁移和切换', t => {const f=fixture(t);f.git('checkout',f.old);const result=stage(f);assert.equal(result.status,0,result.stderr);assert.equal(f.git('rev-parse','HEAD'),f.old);assert.equal(f.state().images[f.state().active],f.next);assert.equal(f.state().dbChecks,1);assert.equal(f.state().migrations,1);});
+for(const mode of ['digest','image','platform','label','db','migration']) test(`staging ${mode}失败不能切换`,t=>{const f=fixture(t),result=stage(f,{FAIL_MODE:mode});assert.notEqual(result.status,0);assert.deepEqual(f.state().ups,[]);assert.equal(f.state().builds,1);if(mode!=='migration')assert.equal(f.state().migrations||0,0);if(mode==='db'||mode==='migration')assert.equal(f.state().dbChecks,1);if(mode==='migration')assert.equal(f.state().migrations,1);});
+test('迁移使用干净源码归档，排除旧目录的陈旧依赖',t=>{const f=fixture(t),result=stage(f,{POISON_SOURCE:'1'});assert.equal(result.status,0,result.stderr);assert.equal(f.state().migrations,1);});
+test('staging 磁盘不足时不加载镜像',t=>{const f=fixture(t),result=stage(f,{FAKE_FREE_KB:'1024'});assert.notEqual(result.status,0);assert.match(result.stderr,/disk space/i);assert.equal(f.state().builds,0);assert.deepEqual(f.state().ups,[]);});
+test('staging 加载后磁盘不足时不迁移或切换',t=>{const f=fixture(t),result=stage(f,{FAKE_AFTER_BUILD_FREE_KB:'1024'});assert.notEqual(result.status,0);assert.match(result.stderr,/disk space/i);assert.equal(f.state().builds,1);assert.equal(f.state().migrations||0,0);assert.deepEqual(f.state().ups,[]);});
+for(const mode of ['sha','health','up'])test(`staging ${mode}失败恢复旧镜像`,t=>{const f=fixture(t),result=stage(f,{FAIL_MODE:mode});assert.notEqual(result.status,0);assert.equal(f.state().active,'sha256:'+'a'.repeat(64));assert.deepEqual(f.state().ups,['sha256:'+'b'.repeat(64),'sha256:'+'a'.repeat(64)]);});
 test('回退到当前已运行镜像不改写previous历史',t=>{
  const f=fixture(t);assert.equal(f.run(['promote',f.next]).status,0);
  const noop=f.run(['rollback',f.next]);assert.equal(noop.status,0,noop.stderr);
