@@ -61,12 +61,7 @@ async function start(f,kind,extra={}) {
       source.slice(source.indexOf('SOURCE="$RELEASES/$SHA/source"'),source.indexOf('# Read the existing compose project'))+
       '\ncp "$SOURCE/candidate" "$TEST_OUTPUT"\n';
   } else {
-    const w=JSON.parse(execFileSync('python3',['-c','import json,sys,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))',
-      resolve('.github/workflows/deploy-dashboard-staging.yml')],{encoding:'utf8'}));
-    script=w.jobs['deploy-staging-dashboard'].steps.find(s=>s.with?.script).with.script.split('echo "=== [2/5]')[0]
-      .replaceAll('/opt/zenithjoy/repo',f.repo)
-      .replaceAll('/opt/zenithjoy/dashboard-staging-build.XXXXXX',join(f.root,'dashboard.XXXXXX'))+
-      '\ncp "$REPO/candidate" "$TEST_OUTPUT"\n';
+    throw new Error(`Unknown source deployment: ${kind}`);
   }
   const child=spawn('bash',['-c',script,'bash',f.sha],{env:{...f.env,
     ZJ_STAGING_RELEASES:releases,ZJ_STAGING_LOCK:join(f.root,'staging.lock'),
@@ -76,7 +71,7 @@ async function start(f,kind,extra={}) {
   const done=new Promise(resolve=>child.on('close',code=>resolve({code,stderr,output})));
   return {child,done};
 }
-for(const pair of [['api-staging','dashboard'],['production','dashboard'],['production','api-staging']]) {
+for(const pair of [['production','api-staging']]) {
   test(`共享HK源码fetch互斥：${pair.join(' + ')}同时获取同SHA均成功且不重置HEAD`,async t=>{
     const f=await fixture(t), a=await start(f,pair[0]);
     t.after(()=>a.child.kill());
@@ -93,7 +88,7 @@ for(const pair of [['api-staging','dashboard'],['production','dashboard'],['prod
     assert.equal(f.run(f.repo,'rev-parse','origin/main'),f.sha);
   });
 }
-for(const kind of ['api-staging','dashboard','production']) {
+for(const kind of ['api-staging','production']) {
   test(`${kind}的fetch失败必须中止，且释放源码锁后可重试`,async t=>{
     const f=await fixture(t);
     const failed=await start(f,kind,{FAIL_FETCH:'1'});
@@ -107,3 +102,17 @@ for(const kind of ['api-staging','dashboard','production']) {
     assert.equal(await readFile(recovered.output,'utf8'),'candidate source');
   });
 }
+
+// Dashboard releases are built on the runner and streamed to HK; they no longer
+// fetch or mutate the shared server checkout, so they need no fetch-lock test.
+test('dashboard staging 从 CI 构建并传送固定版本，不操作 HK 共享源码', async () => {
+  const w=JSON.parse(execFileSync('python3',['-c','import json,sys,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))',
+    resolve('.github/workflows/deploy-dashboard-staging.yml')],{encoding:'utf8'}));
+  const steps=w.jobs['deploy-staging-dashboard'].steps;
+  const build=steps.find(s=>s.name==='Build exact candidate on runner').run;
+  const deploy=steps.find(s=>s.name==='Install staging candidate').run;
+  assert.match(build,/git rev-parse HEAD/);
+  assert.match(build,/npm run build --workspace=apps\/dashboard/);
+  assert.match(deploy,/dashboard-staging\.tar\.gz/);
+  assert.doesNotMatch(deploy,/git fetch|\/opt\/zenithjoy\/repo/);
+});

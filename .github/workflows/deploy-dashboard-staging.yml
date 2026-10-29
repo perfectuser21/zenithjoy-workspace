@@ -1,23 +1,5 @@
 name: Deploy Dashboard to STAGING (staging-autopilot, API :5201)
 
-# ───────────────────────────────────────────────────────────────────────────
-# Dashboard STAGING 实例（PrepPRD 2026-06-25）
-#   背景：API 已有蓝绿常驻 staging :5201（deploy-us-vps.yml 把 main 候选发 :5201 连
-#         zenithjoy_staging 库）。dashboard 现也走 staging 优先：合 main → 本 workflow 上 staging；
-#         生产 autopilot 由用户手点 promote-dashboard-prod.yml 放行（不再合 main 就上生产）。
-#
-#   做什么：把 dashboard 用 STAGING build env build 出来，发到 HK 上独立的
-#           autopilot-staging 容器（host :521）。该容器用 nginx.staging.conf——
-#           所有 /api/ → 常驻 staging API :5201（不碰生产 :5200）。
-#           对外地址：https://staging-autopilot.zenjoymedia.media（Cloudflare tunnel）。
-#
-#   死规矩：AI 只发到 staging；生产 autopilot 由用户手点 promote-dashboard-prod.yml 放行。
-#           本 workflow 绝不碰生产 autopilot-dashboard 容器 / nginx.conf。
-#
-#   触发：① push main 命中 dashboard / staging nginx 路径（自动给用户铺好候选）
-#         ② workflow_dispatch（手动重发）
-# ───────────────────────────────────────────────────────────────────────────
-
 on:
   push:
     branches: [main]
@@ -25,114 +7,83 @@ on:
       - 'apps/dashboard/**'
       - 'deploy/nginx.staging.conf'
       - 'deploy/docker-compose.staging.yml'
+      - 'scripts/deploy/hk-dashboard-staging.sh'
+      - '.github/workflows/deploy-dashboard-staging.yml'
   workflow_dispatch: {}
-
+permissions:
+  contents: read
 concurrency:
   group: deploy-dashboard-staging
   cancel-in-progress: false
-
 jobs:
   deploy-staging-dashboard:
-    name: Build + Deploy STAGING Dashboard (autopilot-staging :521 / API :5201)
+    if: github.ref == 'refs/heads/main'
+    environment: creative-canvas-staging
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     env:
       DEPLOY_SHA: ${{ github.sha }}
     steps:
-      - name: Deploy via SSH（build staging dist + 起 autopilot-staging 容器）
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HK_VPS_HOST }}
-          username: ${{ secrets.HK_VPS_USER }}
-          key: ${{ secrets.HK_VPS_SSH_KEY }}
-          port: ${{ secrets.HK_VPS_PORT }}
-          envs: DEPLOY_SHA
-          script_stop: true
-          command_timeout: 20m
-          script: |
-            set -euo pipefail
-            [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
-            SOURCE=/opt/zenithjoy/repo
-            STAGING_DIR=/opt/zenithjoy/autopilot-staging
-            # Same host source lock as API staging and production release helpers.
-            flock "$SOURCE/.git/hk-source-fetch.lock" git -C "$SOURCE" fetch --force origin main
-            git -C "$SOURCE" cat-file -e "$DEPLOY_SHA^{commit}"
-            git -C "$SOURCE" merge-base --is-ancestor "$DEPLOY_SHA" origin/main
-            REPO="$(mktemp -d /opt/zenithjoy/dashboard-staging-build.XXXXXX)"
-            trap 'rm -rf "$REPO"' EXIT
-            git -C "$SOURCE" archive "$DEPLOY_SHA" | tar -xf - -C "$REPO"
-
-            echo "=== [2/5] build dashboard（STAGING build env）==="
-            cd "$REPO"
-            npm ci --silent --workspace=apps/dashboard
-            # VITE_* build env 在 workflow 里显式注入（.env.* 被 gitignore，不进 repo / CI）。
-            # staging 与生产唯一区别：API 走 staging nginx → :5201；其余 super-admin 等一致。
-            export VITE_FEISHU_APP_ID='cli_a937a808ca395bd6'
-            export VITE_SKIP_AUTH='false'
-            export VITE_SUPER_ADMIN_EMAILS='xuxiao21xx@icloud.com,alexperfectapi01@gmail.com'
-            export VITE_STAFF_EMAILS='408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
-            # 环境角标：staging build 注入 staging → 前端右上角显橙色 STAGING 旗（生产 promote 注入 production，不显示）。
-            export VITE_DEPLOY_ENV='staging'
-            # D2 FR-4：注入 git SHA，前端可读供验收版本戳核对
-            export VITE_BUILD_SHA="$DEPLOY_SHA"
-            npm run build --workspace=apps/dashboard
-            printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/dashboard/dist/release-sha.json
-
-            echo "=== [3/5] 落 staging dist + staging nginx.conf（绝不碰生产 autopilot-dashboard）==="
-            mkdir -p "$STAGING_DIR/dist"
-            rm -rf "$STAGING_DIR/dist"/*
-            cp -r "$REPO/apps/dashboard/dist/." "$STAGING_DIR/dist/"
-            cp "$REPO/deploy/nginx.staging.conf" "$STAGING_DIR/nginx.conf"
-
-            echo "=== [4/5] 起 / 重建 autopilot-staging 容器（compose 幂等）==="
-            cd "$REPO/deploy"
-            # zenithjoy-net 由生产 compose 创建（external），这里只起 staging 容器。
-            # 先幂等清掉可能存在的同名容器（手动起过 / compose project 名不一致都会留下孤儿同名容器，
-            # 否则 compose up 会报 "container name already in use" 冲突）。
-            # ⚠️ 绝不用 --remove-orphans：生产 autopilot-dashboard 会被 compose 当 orphan 删掉，等于杀生产。
-            docker rm -f autopilot-staging 2>/dev/null || true
-            docker compose -p zenithjoy-dashboard-staging -f docker-compose.staging.yml up -d --force-recreate autopilot-staging
-            sleep 3
-
-            echo "=== [5/5] 验证：本地容器健康 ==="
-            LOCAL=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://localhost:521/ || echo "000")
-            echo "本地 :521 = $LOCAL"
-            if [ "$LOCAL" != "200" ]; then
-              echo "❌ staging 容器本地未起 (期望 200，实际 $LOCAL)"
-              echo "容器状态: $(docker inspect autopilot-staging --format '{{.State.Status}}' 2>/dev/null || echo missing)"
-              docker logs --tail 30 autopilot-staging 2>&1 || true
-              exit 1
-            fi
-            curl -fsS --max-time 15 "http://localhost:521/release-sha.json?candidate=$DEPLOY_SHA" \
-              | jq -e --arg sha "$DEPLOY_SHA" '.sha == $sha'
-            echo "[done] STAGING dashboard 已读回候选 SHA=$DEPLOY_SHA"
-            exit 0
-
-      - name: Checkout (smoke script)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-
-      - name: Staging smoke
-        run: |
-          bash .github/workflows/scripts/smoke/staging-smoke.sh \
-            https://staging-autopilot.zenjoymedia.media
-
-  notify-failure:
-    name: Notify Brain on failure
-    runs-on: ubuntu-latest
-    needs: [deploy-staging-dashboard]
-    if: failure()
-    steps:
-      - name: Post alert to Brain
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Build exact candidate on runner
         env:
-          BRAIN_URL: ${{ secrets.BRAIN_URL }}
+          VITE_FEISHU_APP_ID: cli_a937a808ca395bd6
+          VITE_SKIP_AUTH: 'false'
+          VITE_SUPER_ADMIN_EMAILS: xuxiao21xx@icloud.com,alexperfectapi01@gmail.com
+          VITE_STAFF_EMAILS: 408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com
+          VITE_DEPLOY_ENV: staging
+          VITE_BUILD_SHA: ${{ github.sha }}
         run: |
-          curl -sf -X POST "$BRAIN_URL/api/brain/tasks" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "title": "ZenithJoy STAGING Dashboard 部署失败",
-              "priority": "P1",
-              "task_type": "dev",
-              "description": "deploy-dashboard-staging.yml 失败（不影响生产），请排查"
-            }' || echo "Brain API 不可达，跳过告警"
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          npm ci --workspace=apps/dashboard
+          npm run build --workspace=apps/dashboard
+          printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/dashboard/dist/release-sha.json
+          mkdir -p "$RUNNER_TEMP/dashboard-bundle"
+          cp -r apps/dashboard/dist "$RUNNER_TEMP/dashboard-bundle/dist"
+          cp deploy/nginx.staging.conf "$RUNNER_TEMP/dashboard-bundle/nginx.conf"
+          tar -czf "$RUNNER_TEMP/dashboard-staging.tar.gz" -C "$RUNNER_TEMP/dashboard-bundle" dist nginx.conf
+          sha256sum "$RUNNER_TEMP/dashboard-staging.tar.gz" | awk '{print $1}' > "$RUNNER_TEMP/dashboard-staging.sha256"
+      - name: 接入 Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.CREATIVE_CANVAS_TAILSCALE_AUTHKEY }}
+          version: latest
+      - name: Install staging candidate
+        env:
+          SSH_KEY: ${{ secrets.CREATIVE_CANVAS_HK_SSH_KEY }}
+          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
+        run: |
+          set -euo pipefail
+          KEY_FILE=$(mktemp)
+          REMOTE_SCRIPT=
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          SSH_OPTS=(-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -i "$KEY_FILE")
+          # shellcheck disable=SC2029
+          cleanup() { if [[ -n "$REMOTE_SCRIPT" ]]; then ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" rm -f "$REMOTE_SCRIPT" || true; fi; rm -f "$KEY_FILE"; }
+          trap cleanup EXIT
+          REMOTE_SCRIPT=$(ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" 'umask 077; mktemp /tmp/zj-dashboard-staging.XXXXXXXX')
+          [[ "$REMOTE_SCRIPT" =~ ^/tmp/zj-dashboard-staging[.][a-zA-Z0-9]+$ ]]
+          scp "${SSH_OPTS[@]}" scripts/deploy/hk-dashboard-staging.sh "root@${SSH_HOST}:$REMOTE_SCRIPT"
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]
+          DEPLOY_RUN_ID="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          HASH=$(cat "$RUNNER_TEMP/dashboard-staging.sha256")
+          [[ "$HASH" =~ ^[0-9a-f]{64}$ ]]
+          printf -v REMOTE_CMD '%q ' bash "$REMOTE_SCRIPT" "$DEPLOY_SHA" "$HASH" "$DEPLOY_RUN_ID"
+          # shellcheck disable=SC2029
+          ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" "$REMOTE_CMD" < "$RUNNER_TEMP/dashboard-staging.tar.gz"
+          if ! bash .github/workflows/scripts/smoke/staging-smoke.sh https://staging-autopilot.zenjoymedia.media; then
+            printf -v ROLLBACK_CMD '%q ' bash "$REMOTE_SCRIPT" "$DEPLOY_SHA" rollback "$DEPLOY_RUN_ID"
+            # shellcheck disable=SC2029
+            ssh "${SSH_OPTS[@]}" "root@${SSH_HOST}" "$ROLLBACK_CMD" || echo 'Dashboard rollback could not be verified' >&2
+            exit 1
+          fi

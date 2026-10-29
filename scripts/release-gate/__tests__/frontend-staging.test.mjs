@@ -5,35 +5,32 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFile,execFileSync} from 'node:child_process';
 import {promisify} from 'node:util';
-import {createServer} from 'node:http';
 const exec=promisify(execFile);
 const load = file => JSON.parse(execFileSync('python3',['-c',
  'import json,sys,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))',file],{encoding:'utf8'}));
 
-test('dashboard staging deploys requested commit even after main advances and leaves shared HEAD untouched',async()=>{
+test('dashboard staging builds the requested commit even after main advances',async()=>{
  const root=await mkdtemp(join(tmpdir(),'staging-fixed-sha-'));
- const source=join(root,'source'), stage=join(root,'staging'), bin=join(root,'bin');
- await Promise.all([source,stage,bin].map(p=>mkdir(p,{recursive:true})));
- const git=(...args)=>execFileSync('git',args,{cwd:source,encoding:'utf8',env:{...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'}}).trim();
- git('init','-b','main');git('config','user.name','Test');git('config','user.email','test@example.invalid');
- await mkdir(join(source,'deploy'));await writeFile(join(source,'deploy','nginx.staging.conf'),'test nginx');
- await writeFile(join(source,'deploy','docker-compose.staging.yml'),'test compose');
- await writeFile(join(source,'source.txt'),'candidate A');git('add','.');git('commit','-m','candidate A');const candidate=git('rev-parse','HEAD');
- await writeFile(join(source,'source.txt'),'main B');git('commit','-am','main B');const latest=git('rev-parse','HEAD');
- git('remote','add','origin',source);
- await writeFile(join(bin,'npm'),'#!/bin/sh\nif [ "$1" = run ]; then mkdir -p apps/dashboard/dist; cp source.txt apps/dashboard/dist/index.html; fi\n',{mode:0o755});
- for(const name of ['docker','sleep'])await writeFile(join(bin,name),'#!/bin/sh\nexit 0\n',{mode:0o755});
- const server=createServer(async(req,res)=>{try{res.end(await readFile(join(stage,'dist',req.url.startsWith('/release-sha.json')?'release-sha.json':'index.html')));}catch{res.statusCode=404;res.end();}});
- await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const workflow=load(process.env.DASHBOARD_STAGING_WORKFLOW||resolve('.github/workflows/deploy-dashboard-staging.yml'));
- let script=workflow.jobs['deploy-staging-dashboard'].steps.find(s=>s.with?.script).with.script;
- script=script.replaceAll('/opt/zenithjoy/repo',source).replaceAll('/opt/zenithjoy/autopilot-staging',stage)
-  .replaceAll('/opt/zenithjoy/dashboard-staging-build.XXXXXX',join(root,'build.XXXXXX'))
-  .replaceAll('http://localhost:521',`http://127.0.0.1:${server.address().port}`).replaceAll('${{ github.sha }}',candidate);
  try {
-  const result=await exec('bash',['-e','-c',script],{env:{...process.env,DEPLOY_SHA:candidate,PATH:`${bin}:${process.env.PATH}`,LC_ALL:'C'}});
-  assert.equal(await readFile(join(stage,'dist','index.html'),'utf8'),'candidate A',result.stdout);
-  assert.equal(JSON.parse(await readFile(join(stage,'dist','release-sha.json'),'utf8')).sha,candidate);
-  assert.equal(git('rev-parse','HEAD'),latest);
- } finally {await new Promise(r=>server.close(r));await rm(root,{recursive:true,force:true});}
+  const source=join(root,'source'), runner=join(root,'runner'), bin=join(root,'bin'), temp=join(root,'temp');
+  await Promise.all([source,bin,temp].map(p=>mkdir(p,{recursive:true})));
+  const env={...process.env,GIT_CONFIG_GLOBAL:'/dev/null',GIT_CONFIG_NOSYSTEM:'1'};
+  const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8',env}).trim();
+  git(source,'init','-b','main');git(source,'config','user.name','Test');git(source,'config','user.email','test@example.invalid');
+  await mkdir(join(source,'deploy'));await writeFile(join(source,'deploy','nginx.staging.conf'),'test nginx');
+  await writeFile(join(source,'source.txt'),'candidate A');git(source,'add','.');git(source,'commit','-m','candidate A');const candidate=git(source,'rev-parse','HEAD');
+  await writeFile(join(source,'source.txt'),'main B');git(source,'commit','-am','main B');const latest=git(source,'rev-parse','HEAD');
+  execFileSync('git',['clone','--quiet',source,runner],{env});git(runner,'checkout','--quiet',candidate);
+  await writeFile(join(bin,'npm'),'#!/bin/sh\nif [ "$1" = run ]; then mkdir -p apps/dashboard/dist; cp source.txt apps/dashboard/dist/index.html; fi\n',{mode:0o755});
+  const workflow=load(resolve('.github/workflows/deploy-dashboard-staging.yml'));
+  const job=workflow.jobs['deploy-staging-dashboard'];
+  assert.equal(job.steps.find(s=>s.uses?.startsWith('actions/checkout@')).with.ref,'${{ github.sha }}');
+  const script=job.steps.find(s=>s.name==='Build exact candidate on runner').run;
+  await exec('bash',['-e','-c',script],{cwd:runner,env:{...env,DEPLOY_SHA:candidate,RUNNER_TEMP:temp,PATH:`${bin}:${env.PATH}`}});
+  assert.equal(await readFile(join(temp,'dashboard-bundle','dist','index.html'),'utf8'),'candidate A');
+  assert.equal(JSON.parse(await readFile(join(temp,'dashboard-bundle','dist','release-sha.json'),'utf8')).sha,candidate);
+  assert.equal(git(source,'rev-parse','HEAD'),latest);
+  assert.ok((await readFile(join(temp,'dashboard-staging.tar.gz'))).length>0);
+  await assert.rejects(exec('bash',['-e','-c',script],{cwd:runner,env:{...env,DEPLOY_SHA:latest,RUNNER_TEMP:temp,PATH:`${bin}:${env.PATH}`}}));
+ } finally {await rm(root,{recursive:true,force:true});}
 });

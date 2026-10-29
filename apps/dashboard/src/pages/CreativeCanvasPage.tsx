@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
@@ -7,6 +7,32 @@ type CanvasStatus = 'checking' | 'available' | 'unavailable';
 export default function CreativeCanvasPage() {
   const [status, setStatus] = useState<CanvasStatus>('checking');
   const [attempt, setAttempt] = useState(0);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [opening, setOpening] = useState(false);
+  const [workflowError, setWorkflowError] = useState('');
+  const openWorkflow = useCallback(async (kind: 'upload' | 'generate') => {
+    setWorkflowError(''); setOpening(true);
+    try {
+      const frame = frameRef.current;
+      const child = frame?.contentWindow;
+      if (!frame || frame.getAttribute('src') !== '/api/creative-canvas/' || !child || child.location.origin !== window.location.origin) throw new Error('画布尚未准备好');
+      const app = (child as Window & { app?: { loadGraphData?: (graph: unknown, clear: boolean, restoreView: boolean, name: string) => Promise<unknown> } }).app;
+      if (typeof app?.loadGraphData !== 'function') throw new Error('画布尚未准备好');
+      const name = kind === 'upload' ? '上传图片工作流' : '图片生成工作流';
+      const filename = kind === 'upload' ? 'upload-image-wan.json' : 'image2-select-wan.json';
+      const response = await fetch(`/api/creative-canvas/extensions/zenithjoy/${filename}`, {credentials:'include'});
+      if (!response.ok) throw new Error('模板暂时不可用');
+      const graph: unknown = await response.json();
+      if (!graph || typeof graph !== 'object' || !Array.isArray((graph as {nodes?: unknown}).nodes) || !Array.isArray((graph as {links?: unknown}).links)) throw new Error('模板格式无效');
+      if (frameRef.current !== frame || frame.contentWindow !== child || child.location.origin !== window.location.origin || (child as Window & {app?: unknown}).app !== app) throw new Error('画布已重新加载');
+      const random = new Uint8Array(8); window.crypto.getRandomValues(random);
+      const suffix = Array.from(random, value => value.toString(16).padStart(2, '0')).join('');
+      const opened = await app.loadGraphData(graph,true,true,`${name}-${suffix}`);
+      if (opened === false) throw new Error('画布未能加载模板');
+    } catch {
+      setWorkflowError('工作流打开失败，请稍后重试。当前画布仍可使用。');
+    } finally { setOpening(false); }
+  }, []);
   const retry = useCallback(() => { setStatus('checking'); setAttempt(value => value + 1); }, []);
 
   useEffect(() => {
@@ -48,11 +74,12 @@ export default function CreativeCanvasPage() {
       </div>}
       {status === 'available' && <>
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-          <a href="/api/creative-canvas/extensions/zenithjoy/image2-select-wan.json" download="图片转视频工作流.json" className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 dark:text-violet-300">下载图片转视频工作流</a>
-          <a href="/api/creative-canvas/extensions/zenithjoy/upload-image-wan.json" download="上传图片工作流.json" className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 dark:text-violet-300">下载上传图片工作流</a>
-          <span>下载后，将文件拖入画布即可开始。</span>
+          <button type="button" disabled={opening} onClick={() => void openWorkflow('upload')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开上传图片工作流</button>
+          <button type="button" disabled={opening} onClick={() => void openWorkflow('generate')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开图片生成工作流</button>
+          {opening && <span role="status">正在打开工作流…</span>}
+          {workflowError && <span role="alert">{workflowError}</span>}
         </div>
-        <iframe title="视频创作画布" src="/api/creative-canvas/" className="min-h-[70vh] w-full flex-1 rounded-xl border border-slate-200 bg-white dark:border-slate-700" allow="clipboard-read; clipboard-write" />
+        <iframe ref={frameRef} title="视频创作画布" src="/api/creative-canvas/" className="min-h-[70vh] w-full flex-1 rounded-xl border border-slate-200 bg-white dark:border-slate-700" allow="clipboard-read; clipboard-write" />
       </>}
     </div>
   );
