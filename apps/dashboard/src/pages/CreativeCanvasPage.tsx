@@ -10,6 +10,20 @@ export default function CreativeCanvasPage() {
   const retry = useCallback(() => { setStatus('checking'); setAttempt(value => value + 1); }, []);
 
   useEffect(() => {
+    // Dropping a file on the surrounding dashboard otherwise navigates away
+    // from the editor. Drops inside the iframe remain handled by ComfyUI.
+    const preventFileNavigation = (event: DragEvent) => {
+      if (Array.from(event.dataTransfer?.types ?? []).includes('Files')) event.preventDefault();
+    };
+    window.addEventListener('dragover', preventFileNavigation);
+    window.addEventListener('drop', preventFileNavigation);
+    return () => {
+      window.removeEventListener('dragover', preventFileNavigation);
+      window.removeEventListener('drop', preventFileNavigation);
+    };
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
     const timeout = window.setTimeout(() => controller.abort(), 10000);
@@ -35,6 +49,7 @@ export default function CreativeCanvasPage() {
       {status === 'available' && <>
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
           <a href="/api/creative-canvas/extensions/zenithjoy/image2-select-wan.json" download="图片转视频工作流.json" className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 dark:text-violet-300">下载图片转视频工作流</a>
+          <a href="/api/creative-canvas/extensions/zenithjoy/upload-image-wan.json" download="上传图片工作流.json" className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 dark:text-violet-300">下载上传图片工作流</a>
           <span>下载后，将文件拖入画布即可开始。</span>
         </div>
         <iframe title="视频创作画布" src="/api/creative-canvas/" className="min-h-[70vh] w-full flex-1 rounded-xl border border-slate-200 bg-white dark:border-slate-700" allow="clipboard-read; clipboard-write" />

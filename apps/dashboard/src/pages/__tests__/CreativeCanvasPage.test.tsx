@@ -8,12 +8,23 @@ import { additionalRoutes } from '../../config/navigation.config';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('创作画布', () => {
+  it('图片拖到画布外时阻止浏览器打开文件并离开页面', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ available: true }), { status: 200 })));
+    render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    await screen.findByTitle('视频创作画布');
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { types: ['Files'] } });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(screen.getByTitle('视频创作画布')).toBeInTheDocument();
+  });
   it('服务可用时加载站内画布', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ available: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
     expect(await screen.findByTitle('视频创作画布')).toHaveAttribute('src', '/api/creative-canvas/');
     expect(screen.getByRole('link', {name:'下载图片转视频工作流'})).toHaveAttribute('href','/api/creative-canvas/extensions/zenithjoy/image2-select-wan.json');
+    expect(screen.getByRole('link', {name:'下载上传图片工作流'})).toHaveAttribute('href','/api/creative-canvas/extensions/zenithjoy/upload-image-wan.json');
     expect(fetchMock).toHaveBeenCalledWith('/api/creative-canvas/status', expect.objectContaining({ credentials: 'include' }));
   });
   it('未配置或服务不可用时显示提示而不是空白画布', async () => {

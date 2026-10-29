@@ -8357,3 +8357,19 @@ agent_suite:
   status: active
   product: AI视频
   note: 创作画布入口、服务状态与重试。
+
+- id: creative-canvas-upload-image-api
+  path: apps/api/src/routes/__tests__/video-tools-canvas-image-upload.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI视频
+  note: 员工素材上传与隔离、尺寸像素限制、签名续期、Wan 幂等。
+
+- id: creative-canvas-upload-image-nodes
+  path: infrastructure/comfyui/tests/test_zenithjoy_nodes.py
+  type: unit
+  ci: L4
+  status: active
+  product: AI视频
+  note: 在 Comfy CPU 镜像运行，验证上传选图、解码前像素限制及节点幂等。

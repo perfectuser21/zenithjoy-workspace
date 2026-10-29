@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/wh
  && rm /tmp/requirements-cpu.lock
 COPY infrastructure/comfyui/custom_nodes/zenithjoy /opt/comfyui/custom_nodes/zenithjoy
 COPY infrastructure/comfyui/workflows/image2-select-wan.json /opt/comfyui/custom_nodes/zenithjoy/web/image2-select-wan.json
+COPY infrastructure/comfyui/workflows/upload-image-wan.json /opt/comfyui/custom_nodes/zenithjoy/web/upload-image-wan.json
 RUN useradd --system --uid 10001 --home /data --no-create-home canvas \
  && mkdir -p /data/input /data/output /data/temp /data/user \
  && chown -R 10001:10001 /data
