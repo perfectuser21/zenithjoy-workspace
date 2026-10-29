@@ -33,6 +33,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     title: '视频工具',
     subtitle: '从创意生成到清晰成片，选择一个工具开始。',
     cards: [
+      { label: '视频创作画布', desc: '连接素材与创作步骤，预览结果后继续创作', to: '/creative-canvas', Icon: Layers, color: 'text-purple-500' },
       { label: 'Wan Playground', desc: '使用 Wan 3.0，根据文字和参考素材生成视频', to: '/wan-playground', Icon: Sparkles, color: 'text-violet-500' },
       { label: '视频超分', desc: '上传已有视频，两倍放大并增强画面细节', to: '/video-upscale', Icon: Video, color: 'text-blue-500' },
     ],

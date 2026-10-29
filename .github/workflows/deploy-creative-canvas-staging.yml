@@ -1,0 +1,61 @@
+name: Deploy creative canvas to HK staging
+
+# Manual candidate staging only. The workflow must first exist on the default
+# branch for GitHub to allow dispatch. Production is never touched.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Deploy this workflow ref or restore a previously verified release'
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+        required: true
+      rollback_sha:
+        description: 'Full previously verified SHA (required only for rollback)'
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: deploy-creative-canvas-staging
+  cancel-in-progress: false
+jobs:
+  canvas-staging:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    # Configure this environment to permit main only, and keep these two
+    # dedicated credentials exclusively as environment secrets.
+    environment: creative-canvas-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 接入 Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.CREATIVE_CANVAS_TAILSCALE_AUTHKEY }}
+          version: latest
+      - name: Deploy or restore exact staging release
+        env:
+          SSH_KEY: ${{ secrets.CREATIVE_CANVAS_HK_SSH_KEY }}
+          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
+          ACTION: ${{ inputs.action }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+        run: |
+          set -euo pipefail
+          TARGET_SHA="$WORKFLOW_SHA"
+          if [[ "$ACTION" == rollback ]]; then TARGET_SHA="$ROLLBACK_SHA"; fi
+          [[ "$ACTION" == deploy || "$ACTION" == rollback ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \
+            -i "$KEY_FILE" "root@${SSH_HOST}" bash -s -- "$ACTION" "$TARGET_SHA" \
+            < scripts/deploy/hk-canvas-staging.sh

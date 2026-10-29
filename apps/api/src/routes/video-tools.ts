@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import multer from 'multer';
 import { rateLimit } from 'express-rate-limit';
 import { fromNodeHeaders } from 'better-auth/node';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { resolve, join, extname, sep } from 'node:path';
@@ -15,16 +15,18 @@ import { auth } from '../auth';
 import { parseFlatDirectory } from '../staff-directory';
 import { AliVideoProvider, AliVideoProviderError, type AliVideoTask, type WanVideoInput } from '../services/ali-video-provider';
 import { isCosConfigured, type MaterialStorage } from '../services/material-storage';
+import { ToApisImageProvider, type CreativeImageProvider } from '../services/creative-image-provider';
 
 type Kind = 'wan' | 'upscale';
 interface Job extends AliVideoTask {
   id: string; kind: Kind; createdAt: string; taskId?: string; clientRequestId?: string;
-  prompt?: string; lastPolledAt?: number;
+  prompt?: string; lastPolledAt?: number; requestHash?: string;
 }
 interface Asset { id: string; url: string; kind: 'image' | 'video'; name: string; width: number; height: number; duration: number; size: number; fps: number; createdAt: string }
 interface UploadIntent { id: string; key: string; name: string; size: number; createdAt: string }
 interface StaffRequest extends Request { videoStaffId?: string }
-interface Options { provider?: AliVideoProvider; directory?: string; storage?: MaterialStorage }
+interface Options { provider?: AliVideoProvider; directory?: string; storage?: MaterialStorage; imageProvider?: CreativeImageProvider; imageFetch?: typeof fetch }
+interface ImageJob { id: string; status: 'pending'|'succeeded'|'failed'|'unknown'; createdAt: string; clientRequestId?: string; taskId?: string; asset?: Asset; error?: string; requestHash?: string }
 const MAX_BYTES = 100 * 1024 * 1024;
 const UPLOAD_INTENT_TTL_SECONDS = 7200;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -67,6 +69,7 @@ function view(job: Job) {
   delete visible.taskId;
   delete visible.clientRequestId;
   delete visible.lastPolledAt;
+  delete visible.requestHash;
   return visible;
 }
 async function save(file: string, body: unknown) {
@@ -86,6 +89,8 @@ async function load<T>(file: string, root: string): Promise<T | null> {
 export function createVideoToolsRouter(options: Options = {}): Router {
   const router = Router();
   const provider = options.provider ?? new AliVideoProvider();
+  const imageProvider = options.imageProvider ?? new ToApisImageProvider();
+  const imageFetch = options.imageFetch ?? fetch;
   const directory = options.directory ?? process.env.VIDEO_TOOLS_DATA_DIR ?? resolve(process.cwd(), 'data/video-tools');
   const locks = new Map<string, Promise<unknown>>();
   async function serialized<T>(key: string, operation: () => Promise<T>): Promise<T> {
@@ -109,6 +114,22 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   }
   const wrap = (handler: (req: StaffRequest, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => { void handler(req, res, next).catch(next); };
   router.use(wrap(async (req, res, next) => {
+    const instanceToken=req.get('X-Creative-Instance-Token');
+    if (instanceToken) {
+      let tokens:Record<string,unknown>={};let instances:Record<string,unknown>={};
+      try {tokens=JSON.parse(process.env.CREATIVE_CANVAS_SERVICE_TOKENS || '{}');instances=JSON.parse(process.env.CREATIVE_CANVAS_INSTANCES || '{}');} catch {return void res.status(401).json({error:'画布身份无效'});}
+      if (!tokens || Array.isArray(tokens) || typeof tokens!=='object' || !instances || Array.isArray(instances) || typeof instances!=='object') return void res.status(401).json({error:'画布身份无效'});
+      const entries=Object.entries(tokens);
+      const values=entries.map(([,value])=>value);
+      if (entries.length>1000 || values.some(value=>typeof value!=='string' || value.length<32 || value.length>512) || new Set(values).size!==values.length || instanceToken.length>512) return void res.status(401).json({error:'画布身份无效'});
+      const digest=(value:string)=>createHash('sha256').update(value).digest();
+      let staffId:string|undefined;
+      for (const [id,value] of entries) if (timingSafeEqual(digest(instanceToken),digest(value as string)) && typeof instances[id]==='string') staffId=id;
+      if (!staffId) return void res.status(401).json({error:'画布身份无效'});
+      const permitted=(req.method==='POST' && (req.path==='/image-jobs' || (req.path==='/jobs' && req.body?.kind==='wan'))) || (req.method==='GET' && (/^\/image-jobs\/[a-f0-9-]+$/i.test(req.path) || /^\/jobs\/[a-f0-9-]+(?:\/download)?$/i.test(req.path)));
+      if (!permitted) return void res.status(403).json({error:'画布操作无权访问'});
+      req.videoStaffId=staffId;next();return;
+    }
     const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
     if (!session?.user?.id) return void res.status(401).json({ error: '登录已失效，请重新登录' });
     const staff = parseFlatDirectory(process.env);
@@ -218,6 +239,86 @@ export function createVideoToolsRouter(options: Options = {}): Router {
     } finally { await unlink(temporaryFile).catch(() => {}); temporaryFiles.delete(req); }
   }));
 
+  const imageJobPath = (req: StaffRequest, id: string) => join(ownerDir(req), 'image-jobs', `${id}.json`);
+  const imageView = (job: ImageJob) => ({ id:job.id, status:job.status, createdAt:job.createdAt, ...(job.asset ? {asset:job.asset} : {}), ...(job.error ? {error:job.error} : {}) });
+  router.post('/image-jobs', wrap(async (req,res) => {
+    const {prompt,clientRequestId}=req.body ?? {};
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 10000) return fail(400,'请填写图片提示词');
+    if (clientRequestId !== undefined && (typeof clientRequestId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(clientRequestId))) return fail(400,'提交标识无效');
+    const requestHash=hash(JSON.stringify({prompt:prompt.trim()}));
+    await serialized(`image-submit:${req.videoStaffId}`,async()=>{
+      const folder=join(ownerDir(req),'image-jobs'); await mkdir(folder,{recursive:true,mode:0o700});
+      const pending:ImageJob[]=[];
+      for (const name of await readdir(folder)) {
+        if (!name.endsWith('.json')) continue;
+        const old=await load<ImageJob>(join(folder,name),directory);
+        if (old && clientRequestId && old.clientRequestId===clientRequestId) {if (old.requestHash && old.requestHash!==requestHash) return fail(409,'参数已变化，请点击生成新版本');res.status(202).json(imageView(old.status==='succeeded' ? await refreshImageJob(req,old.id) : old));return;}
+        if (old?.status==='pending') pending.push(old);
+      }
+      if (pending.length >= 2) {
+        let active=0;
+        for (const old of pending) if ((await refreshImageJob(req,old.id)).status==='pending') active++;
+        if (active >= 2) return fail(429,'已有两个图片任务处理中，请等待完成');
+      }
+      if (!imageProvider.configured() || !uploadsConfigured()) return fail(503,'图片生成或素材存储尚未配置');
+      const job:ImageJob={id:randomUUID(),status:'pending',createdAt:new Date().toISOString(),clientRequestId,requestHash};
+      await save(imageJobPath(req,job.id),job);
+      try {job.taskId=await imageProvider.submit(prompt.trim());}
+      catch {job.status='unknown';job.error='图片提交状态无法确认，请联系管理员核对，避免重复计费';}
+      await save(imageJobPath(req,job.id),job);res.status(202).json(imageView(job));
+    });
+  }));
+  async function refreshImageJob(req:StaffRequest,id:string): Promise<ImageJob> {
+    return serialized(`image-job:${req.videoStaffId}:${id}`,async()=>{
+      const job=await load<ImageJob>(imageJobPath(req,id),directory);
+      if (!job) return fail(404,'任务不存在或无权访问');
+      if (job.status === 'succeeded' && job.asset && Date.now() - Date.parse(job.asset.createdAt) > 22 * 3600_000) {
+        const match=/^generated\.(png|jpg|webp)$/.exec(job.asset.name);
+        if (!match) return fail(502,'素材记录无效');
+        const key=`video-tools/${hash(req.videoStaffId!)}/${job.id}.${match[1]}`;
+        const objectStorage=await getStorage();
+        job.asset.url=await objectStorage.getSignedUrl(key,86400);
+        job.asset.createdAt=new Date().toISOString();
+        await save(assetPath(req,job.id),job.asset);await save(imageJobPath(req,job.id),job);
+      }
+      if (job.status !== 'pending') return job;
+      if (!job.taskId) {job.status='unknown';job.error='图片提交状态无法确认，请联系管理员核对';await save(imageJobPath(req,job.id),job);return job;}
+      const result=await imageProvider.poll(job.taskId);
+      if (result.status==='pending') return job;
+      if (result.status==='failed') {job.status='failed';job.error='图片生成失败，请检查提示词后重试';await save(imageJobPath(req,job.id),job);return job;}
+      let source:URL; try {source=new URL(result.url!);} catch {return fail(502,'图片结果地址无效');}
+      if (source.protocol!=='https:' || !['files.toapis.com','files.toapis.xyz'].includes(source.hostname) || source.username || source.password || source.port) return fail(502,'图片结果地址无效');
+      const file=join(tmpdir(),`creative-image-${randomUUID()}`);const signal=AbortSignal.timeout(60000);
+      try {
+        const response=await imageFetch(source.href,{redirect:'error',signal});
+        if (!response.ok || !response.body) return fail(502,'图片结果下载失败，请稍后重试');
+        const max=20*1024*1024; let size=0;
+        const limit=new Transform({transform(chunk:Buffer,_encoding,next){size+=chunk.length;next(size>max?Object.assign(new Error('图片过大'),{status:502}):null,chunk);}});
+        await pipeline(Readable.fromWeb(response.body as never),limit,createWriteStream(file,{mode:0o600,flags:'wx'}),{signal});
+        if (!size) return fail(502,'图片结果为空');
+        const metadata=await inspectAsset(file,'image');
+        const signature=(await readFile(file)).subarray(0,12);
+        const ext=signature.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'png':signature[0]===0xff && signature[1]===0xd8 && signature[2]===0xff?'jpg':signature.subarray(0,4).toString()==='RIFF' && signature.subarray(8,12).toString()==='WEBP'?'webp':null;
+        if (!ext) return fail(502,'图片结果格式无效');
+        const id=job.id;const key=`video-tools/${hash(req.videoStaffId!)}/${id}.${ext}`;const objectStorage=await getStorage();
+        await objectStorage.putObject({key,filePath:file,contentType:ext==='jpg'?'image/jpeg':`image/${ext}`});
+        job.asset={id,url:await objectStorage.getSignedUrl(key,86400),kind:'image',name:`generated.${ext}`,...metadata,size,createdAt:new Date().toISOString()};
+        await save(assetPath(req,id),job.asset);job.status='succeeded';await save(imageJobPath(req,id),job);return job;
+      } finally {await unlink(file).catch(()=>{});}
+    });
+  }
+  router.get('/image-jobs',wrap(async(req,res)=>{
+    await locks.get(`image-submit:${req.videoStaffId}`);
+    const folder=join(ownerDir(req),'image-jobs');await mkdir(folder,{recursive:true,mode:0o700});
+    const items=await Promise.all((await readdir(folder)).filter(name=>name.endsWith('.json') && uuid.test(name.slice(0,-5))).map(name=>load<ImageJob>(join(folder,name),directory)));
+    res.json({jobs:items.filter((item):item is ImageJob=>item!==null).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,100).map(imageView)});
+  }));
+  router.get('/image-jobs/:id',wrap(async(req,res)=>{
+    if (!uuid.test(req.params.id)) return fail(404,'任务不存在或无权访问');
+    await locks.get(`image-submit:${req.videoStaffId}`);
+    res.json(imageView(await refreshImageJob(req,req.params.id)));
+  }));
+
   async function jobs(req: StaffRequest): Promise<Job[]> {
     await mkdir(ownerDir(req), { recursive: true, mode: 0o700 });
     const names = (await readdir(ownerDir(req))).filter(name => uuid.test(name.replace(/\.json$/, '')) && name.endsWith('.json'));
@@ -257,12 +358,13 @@ export function createVideoToolsRouter(options: Options = {}): Router {
   router.post('/jobs', wrap(async (req, res) => {
     const body = req.body ?? {};
     const kind = validate(body);
+    const requestHash=hash(JSON.stringify({kind,prompt:body.prompt,media:body.media,duration:body.duration,resolution:body.resolution,ratio:body.ratio,audio:body.audio,videoUrl:body.videoUrl,bitRate:body.bitRate}));
     // Serialize per staff account: concurrent duplicate clicks share one provider submission.
     const owner = req.videoStaffId!;
     await serialized(`submit:${owner}`, async () => {
       const history = await jobs(req);
       const duplicate = body.clientRequestId && history.find(j => j.clientRequestId === body.clientRequestId);
-      if (duplicate) { res.status(202).json(view(duplicate)); return; }
+      if (duplicate) { if (duplicate.requestHash && duplicate.requestHash!==requestHash) return fail(409,'参数已变化，请点击生成新版本'); res.status(202).json(view(duplicate)); return; }
       if (!provider.getConfiguration()[kind].configured) return fail(503, '服务尚未配置，请联系管理员');
       const active = history.filter(j => ['pending', 'running'].includes(j.status));
       const refreshed = await Promise.all(active.map(job => refreshJob(req, job.id)));
@@ -286,7 +388,7 @@ export function createVideoToolsRouter(options: Options = {}): Router {
         // Public URLs are also accepted for existing company media; uploaded files get metadata validation.
         if (asset && (asset.kind !== 'video' || asset.width <= 360 || asset.height <= 360 || Math.max(asset.width,asset.height) >= 1920 || Math.min(asset.width,asset.height) >= 1080)) return fail(400, '超分视频尺寸须大于 360×360，且小于 1920×1080');
       }
-      const job: Job = { id: randomUUID(), kind, status: 'pending', createdAt: new Date().toISOString(), clientRequestId: body.clientRequestId, ...(kind === 'wan' ? { prompt: body.prompt.trim() } : {}) };
+      const job: Job = { id: randomUUID(), kind, status: 'pending', createdAt: new Date().toISOString(), clientRequestId: body.clientRequestId, requestHash, ...(kind === 'wan' ? { prompt: body.prompt.trim() } : {}) };
       await save(jobPath(req, job.id), job);
       try {
         const submitted = kind === 'wan'

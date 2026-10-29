@@ -1,0 +1,431 @@
+{
+  "id": "5ad3a350-9d0f-4f97-a2e5-31dc0593ac84",
+  "revision": 0,
+  "last_node_id": 6,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "ZenithJoyImage2",
+      "pos": [
+        50,
+        170
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "request_id",
+          "name": "request_id",
+          "type": "STRING",
+          "widget": {
+            "name": "request_id"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "图片预览",
+          "name": "图片预览",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "生成的素材",
+          "name": "生成的素材",
+          "type": "ZENITHJOY_ASSET",
+          "links": [
+            1
+          ]
+        },
+        {
+          "localized_name": "素材任务ID",
+          "name": "素材任务ID",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyImage2"
+      },
+      "widgets_values": [
+        "",
+        "",
+        null
+      ],
+      "widgets_values_named": {
+        "prompt": "蓝色杯子，白色背景",
+        "request_id": "",
+        "生成新版本": null
+      }
+    },
+    {
+      "id": 2,
+      "type": "ZenithJoyChooseAsset",
+      "pos": [
+        530,
+        170
+      ],
+      "size": [
+        270,
+        118
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "素材1",
+          "name": "素材1",
+          "type": "ZENITHJOY_ASSET",
+          "link": 1
+        },
+        {
+          "localized_name": "素材2",
+          "name": "素材2",
+          "shape": 7,
+          "type": "ZENITHJOY_ASSET",
+          "link": null
+        },
+        {
+          "localized_name": "素材3",
+          "name": "素材3",
+          "shape": 7,
+          "type": "ZENITHJOY_ASSET",
+          "link": null
+        },
+        {
+          "localized_name": "素材4",
+          "name": "素材4",
+          "shape": 7,
+          "type": "ZENITHJOY_ASSET",
+          "link": null
+        },
+        {
+          "localized_name": "选择第几张",
+          "name": "选择第几张",
+          "type": "INT",
+          "widget": {
+            "name": "选择第几张"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "选中图片",
+          "name": "选中图片",
+          "type": "IMAGE",
+          "links": [
+            2
+          ]
+        },
+        {
+          "localized_name": "选中素材",
+          "name": "选中素材",
+          "type": "ZENITHJOY_ASSET",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyChooseAsset"
+      },
+      "widgets_values": [
+        1
+      ],
+      "widgets_values_named": {
+        "选择第几张": 1
+      }
+    },
+    {
+      "id": 3,
+      "type": "PreviewImage",
+      "pos": [
+        850,
+        100
+      ],
+      "size": [
+        140,
+        26
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 4,
+      "type": "ZenithJoyWan",
+      "pos": [
+        850,
+        500
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 2,
+      "inputs": [
+        {
+          "localized_name": "素材",
+          "name": "素材",
+          "type": "ZENITHJOY_ASSET",
+          "link": 3
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "INT",
+          "widget": {
+            "name": "duration"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "确认生成",
+          "name": "确认生成",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "确认生成"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "request_id",
+          "name": "request_id",
+          "type": "STRING",
+          "widget": {
+            "name": "request_id"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "视频",
+          "name": "视频",
+          "type": "VIDEO",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZenithJoyWan"
+      },
+      "widgets_values": [
+        "",
+        5,
+        false,
+        "",
+        null
+      ],
+      "widgets_values_named": {
+        "prompt": "镜头缓缓靠近",
+        "duration": 5,
+        "确认生成": false,
+        "request_id": "",
+        "生成新版本": null
+      }
+    },
+    {
+      "id": 5,
+      "type": "SaveVideo",
+      "pos": [
+        1300,
+        500
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 2,
+      "inputs": [
+        {
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
+          "link": 4
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "codec",
+          "name": "format.codec",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format.codec"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "format",
+          "name": "format",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "codec",
+          "name": "codec",
+          "shape": 7,
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "codec"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        "video/ComfyUI",
+        "auto",
+        "auto",
+        "auto"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "video/ComfyUI",
+        "format": "auto",
+        "format.codec": "auto",
+        "codec": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "Note",
+      "pos": [
+        50,
+        20
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "第一步：填写图片提示词，运行工作流并查看图片。第二步：选图后启用 Wan 和保存视频节点，打开“确认生成”并再次运行。要重新生成，请点击对应节点的“生成新版本”。"
+      ],
+      "widgets_values_named": {
+        "text": "第一步：填写图片提示词，运行工作流并查看图片。第二步：选图后启用 Wan 和保存视频节点，打开“确认生成”并再次运行。要重新生成，请点击对应节点的“生成新版本”。"
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      1,
+      2,
+      0,
+      "ZENITHJOY_ASSET"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      3,
+      2,
+      1,
+      4,
+      0,
+      "ZENITHJOY_ASSET"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [
+        416,
+        110
+      ]
+    }
+  },
+  "version": 0.4
+}

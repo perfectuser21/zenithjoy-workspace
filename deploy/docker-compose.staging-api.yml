@@ -13,6 +13,8 @@ networks:
   zenithjoy-net:
     name: zenithjoy-net
     external: true
+  canvas-staging-net:
+    name: zenithjoy-canvas-staging-net
 
 services:
   zenithjoy-api-staging:
@@ -26,6 +28,7 @@ services:
     restart: unless-stopped
     networks:
       - zenithjoy-net
+      - canvas-staging-net
     ports:
       - "127.0.0.1:5201:5200"   # 宿主 5201 仅本机调试用；域名流量走 nginx→容器名:5200
     extra_hosts:

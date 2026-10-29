@@ -1,3 +1,4 @@
+import { creativeCanvasGateway } from './services/creative-canvas-configured';
 import { startCrmAnalysisWorker } from './services/wechat/crm-analysis';
 import dotenv from 'dotenv';
 import http from 'http';
@@ -58,6 +59,7 @@ const PORT = process.env.PORT || 3000;
 
 const server = http.createServer(app);
 attachAgentWS(server);
+creativeCanvasGateway.attachWebSocket(server);
 // 路② 协同笔记实时协作房（Yjs over WS），路径 /collab-ws，独立于 /agent-ws
 attachCollabWS(server);
 
