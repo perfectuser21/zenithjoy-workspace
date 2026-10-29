@@ -42,6 +42,7 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  const leaves=[],clients=new Set(),finishedClients=new WeakSet();let active=0,sealed=false,tainted=false,returnUnknown=false,draining;
  const append=entry=>appendFileSync(ledger,JSON.stringify(entry)+'\n',{mode:0o600});
  const dispatch=async request=>{
+  if(returnUnknown)throw Error('COLLECTION_LEAF_RETURN_UNKNOWN');
   if(sealed||Date.now()>=deadlineMs||active)throw Error('COLLECTION_LEAF_CLOSED_OR_BUSY');
   if(!request||Object.keys(request).sort().join(',')!=='argv,nonce'||request.nonce!==nonce||!Array.isArray(request.argv)||request.argv.some(x=>typeof x!=='string'||x.length>12000||x.includes('\0')))throw Error('COLLECTION_LEAF_REQUEST_INVALID');
   const argv=request.argv,version=argv.length===1&&argv[0]==='version';
@@ -56,7 +57,14 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
    // This is a lifecycle proof from our nofork child close, not business success.
    entry.request_returned=[0,1].includes(result.code)&&!result.signal&&!result.tainted&&!/fork_denied=|fork(?:\(\))?: (?:Operation not permitted|Resource temporarily unavailable)/.test(result.stderr.toString());
-   if(!entry.request_returned)returnUnknown=true;append({...entry,phase:'exit'});
+   if(!entry.request_returned){
+    returnUnknown=true;
+    // Private forensic metadata only: never persist native stderr or raw argv.
+    entry.command_family=version?'version':argv[6];
+    entry.stderr_bytes=result.stderr.length;
+    entry.stderr_sha256=sha(result.stderr);
+   }
+   append({...entry,phase:'exit'});
    if(result.code!==0||result.signal||result.tainted)tainted=true;
    return {ok:true,code:result.code??124,stdout:result.stdout.toString('base64'),stderr:result.stderr.toString('base64')};
   }catch(error){tainted=true;returnUnknown=true;try{append({...entry,phase:'unknown'});}catch{}throw error;}finally{active--;}
@@ -78,6 +86,6 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
  })();
  const returned=()=>sealed&&!returnUnknown&&active===0&&leaves.every(x=>x.started_at&&x.ended_at&&x.request_returned===true);
  const snapshot=()=>({complete:sealed&&!tainted&&active===0&&leaves.length>0&&leaves.every(x=>x.started_at&&x.ended_at&&x.code===0&&!x.signal&&!x.tainted),empty_complete:sealed&&!tainted&&active===0&&leaves.length===0,requests_returned:returned()&&leaves.length>0,empty_requests_returned:returned()&&leaves.length===0,leaves:structuredClone(leaves),ledger});
- return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},
+ return {env:{WFR_COLLECTION_LEAF_SOCKET:socket,WFR_COLLECTION_LEAF_NONCE:nonce},isReturnUnknown:()=>returnUnknown,
   seal:async()=>{await drain();return snapshot();},close:drain,snapshot};
 }

@@ -65,6 +65,18 @@ test('真实guard根143但live PG仍在：unknown标记保留且不能清场/重
 });
 
 import {discoveryFixture,discoveredId} from './helpers/discovery-cleanup-fixture.mjs';
+test('101 原生137即使外层回报视频，仍不得写PG或释放原锁',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{unknownAfterLink:true,stop:false});
+ try{
+  const outcome=await f.h.collect_videos();
+  assert.equal(outcome.status,'partial');
+  assert.match(outcome.failures[0]?.detail||'',/DISCOVERY_PHONE_LEAF_RETURN_UNKNOWN/);
+  assert.equal(outcome.cleanup_phone_scope,undefined);
+  assert.deepEqual(f.stored,[],'未知叶子后的候选不得持久化');
+  assert.equal(f.rpcCalls.some(x=>x.request?.op==='discover'),false);
+  assert.equal(existsSync(f.ownerFile),true,'未知退出没有本run清场能力');
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
 test('101 冻结包缺原生闭包能力时在业务动作前拒绝，不靠 screen_limit 清场',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{stop:false,screenLimit:true});
  try{
