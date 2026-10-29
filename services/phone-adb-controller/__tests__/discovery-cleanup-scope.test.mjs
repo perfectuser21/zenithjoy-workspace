@@ -89,6 +89,28 @@ test('101 首屏有限停止且原生叶子已封闭：保留 partial、进入�
   assert.equal(f.h.state.executionUnknown,undefined);assert.equal(existsSync(f.ownerFile),false);
  }finally{rmSync(f.d,{recursive:true,force:true});}
 });
+test('101 discover 回执与最终 PG 清单读回失败：业务保持 partial，封闭原生叶子后仍独立清场',{skip:process.platform!=='darwin'},async t=>{
+ const f=await discoveryFixture(t,{stop:false,attemptLimit:2,rpcFailure:true});
+ const {invokeNativeActivity,runWorkflow}=await f.load('leadgen-workflow.mjs');let cleaned=0,verified=0,recovered=0;
+ try{
+  const out=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:f.context,
+   handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{cleaned++;f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},
+   commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>{verified++;return {verified:true};},recover:async()=>{recovered++;throw Error('不得重采');},terminationUnverified:()=>f.h.state.nativeStopUnproven});
+  assert.equal(out.status,'partial');assert.equal(out.results[0].status,'partial');
+  assert.equal(out.results[0].result.stop_reason,'persistence_failed');
+  assert.equal(out.results[0].result.manifest_verified,0,'PG读回失败不能冒称业务通过');
+  assert.equal(out.results[0].result.video_manifest_readback_failures,1);
+  assert.equal(f.stored.length,1,'第二条未知写入不能重发');
+  assert.equal(f.rpcCalls.filter(x=>x.request?.op==='discover').length,2);
+  assert.equal(f.rpcCalls.filter(x=>x.request?.op==='inspect_videos').length,1);
+  const discoverBudget=f.rpcOptions[f.rpcCalls.findIndex(x=>x.request?.op==='discover')].timeoutMs;
+  assert.ok(discoverBudget>=180000,'101 discover 须保留完整首发、读回、单次补写的有界预算');
+  assert.equal(verified,0);assert.equal(recovered,0);assert.equal(cleaned,1);
+  assert.equal(out.results.at(-1).result.cleanup_readback_verified,1);assert.equal(out.results.at(-1).result.lock_released,1);
+  assert.equal(f.h.state.executionUnknown,undefined);assert.equal(f.h.state.nativeStopUnproven,true);
+  assert.equal(existsSync(f.ownerFile),false);
+ }finally{rmSync(f.d,{recursive:true,force:true});}
+});
 test('101 有限停止不能由停止词、假进度或复制的原生能力伪造',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{stop:false,screenLimit:true});
  const {invokeNativeActivity}=await f.load('leadgen-workflow.mjs'),{discoveryFiniteStopEvidence}=await f.load('discovery-phone-scope.mjs');

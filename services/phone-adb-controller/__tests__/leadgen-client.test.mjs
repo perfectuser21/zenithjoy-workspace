@@ -117,6 +117,29 @@ test('正常执行保留stdout/stderr与真实退出码',async()=>{
 
 const discovery={kind:'queue',request:{op:'discover',line:'jinuo',run:'receipt-test',video:{videoId:'7617105883093603314',videoUrl:'https://v.douyin.com/yjrYaiSbMcg/'}}};
 const receipt=result=>({code:0,stdout:JSON.stringify({ok:true,result}),stderr:''});
+test('101 discover 的单次慢 SSH 可用本 Activity 预算取得原写入回执',async()=>{
+ const calls=[];const rpc=createRpc({frozen,execute:async(_c,_a,o)=>{
+  const op=JSON.parse(o.input).request.op;calls.push({op,timeoutMs:o.timeoutMs});
+  if(o.timeoutMs<65000)throw Error('EXECUTION_DEADLINE');
+  return receipt({status:'pending',inserted:true});
+ }});
+ const out=await rpc(discovery,{timeoutMs:240000});
+ assert.equal(out.result.inserted,true);assert.deepEqual(calls.map(c=>c.op),['discover']);
+ assert.ok(calls[0].timeoutMs>=65000&&calls[0].timeoutMs<=240000);
+});
+test('101 discover 原回执丢失后慢只读回查归还同一写入，回查失败绝不重写',async()=>{
+ for(const readbackFails of [false,true]){
+  const calls=[];const rpc=createRpc({frozen,execute:async(_c,_a,o)=>{
+   const op=JSON.parse(o.input).request.op;calls.push({op,timeoutMs:o.timeoutMs});
+   if(calls.length===1||readbackFails||o.timeoutMs<65000)throw Error('EXECUTION_DEADLINE');
+   return receipt({status:'pending',inserted:false,recovered:true});
+  }});
+  if(readbackFails)await assert.rejects(rpc(discovery,{timeoutMs:240000}),error=>error.receiptMissing===true);
+  else assert.equal((await rpc(discovery,{timeoutMs:240000})).result.recovered,true);
+  assert.deepEqual(calls.map(c=>c.op),['discover','discover_readback']);
+  assert.ok(calls.every(c=>c.timeoutMs>=65000),'两次尝试均需容纳已观测的慢 SSH');
+ }
+});
 test('发现写入丢回执先精确读回已提交行，不重复写入',async()=>{
  const calls=[];const rpc=createRpc({frozen,execute:async(_c,_a,o)=>{const b=JSON.parse(o.input);calls.push(b);return calls.length===1?{code:255,stdout:'',stderr:'secret transport diagnostic'}:receipt({status:'pending',inserted:false,recovered:true});}});
  const out=await rpc(discovery,{timeoutMs:1000});assert.equal(out.result.recovered,true);assert.deepEqual(calls.map(b=>b.request.op),['discover','discover_readback']);assert.deepEqual(calls[1].request.video,discovery.request.video);assert.deepEqual(calls[1].source,calls[0].source);
