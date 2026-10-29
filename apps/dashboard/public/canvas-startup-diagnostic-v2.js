@@ -8,7 +8,7 @@
     if (!essential && count++ >= 12) return;
     try {
       fetch('/api/creative-canvas/__diag/' + kind + '/' + detail, {
-        method: 'POST', credentials: 'same-origin', keepalive: true
+        method: 'GET', credentials: 'same-origin', cache: 'no-store', keepalive: true
       }).catch(function () {});
     } catch { /* Diagnostics must not interrupt the canvas. */ }
   }
