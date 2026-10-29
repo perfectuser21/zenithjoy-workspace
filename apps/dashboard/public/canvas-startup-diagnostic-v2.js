@@ -33,10 +33,14 @@
     probed[name] = true;
     probes++;
     // Build the request from the validated basename, never from the URL or query.
+    var controller = typeof window.AbortController === 'function' ? new window.AbortController() : null;
+    var timeout = controller ? window.setTimeout(function () { controller.abort(); }, 10000) : null;
+    function clearProbeTimeout() { if (timeout !== null) window.clearTimeout(timeout); }
     try {
-      fetch('/api/creative-canvas/assets/' + name, {
-        method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'manual'
-      }).then(function (response) {
+      var options = {method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'manual'};
+      if (controller) options.signal = controller.signal;
+      fetch('/api/creative-canvas/assets/' + name, options).then(function (response) {
+        clearProbeTimeout();
         var code = response.status;
         var kind = code === 401 || code === 403 || code === 404 || code === 429 ? String(code) :
           code >= 500 && code <= 599 ? '5xx' : code >= 200 && code <= 299 ? '2xx' :
@@ -49,8 +53,8 @@
           try { response.body.cancel().catch(function () {}); } catch { /* Ignore cleanup failure. */ }
         }
         report('probe' + kind, name, true);
-      }).catch(function () { report('probenetwork', name, true); });
-    } catch { report('probenetwork', name, true); }
+      }).catch(function () { clearProbeTimeout(); report('probenetwork', name, true); });
+    } catch { clearProbeTimeout(); report('probenetwork', name, true); }
   }
   report('start', 'ok', true);
   window.addEventListener('error', function (event) {

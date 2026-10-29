@@ -46,6 +46,20 @@ test('probes distinguish failed requests from HTML or Javascript responses witho
   for(const u of reports)assert.doesNotMatch(u,/secret|network text/);
 });
 
+test('a stalled asset probe times out and reports a bounded network result', async () => {
+  const source=readFileSync('apps/dashboard/public/canvas-startup-diagnostic-v2.js','utf8');
+  const listeners={}, sent=[], timers=[], cleared=[];
+  class Controller { constructor(){this.signal={}} abort(){this.signal.onabort()}};
+  const window={addEventListener:(name,fn)=>{listeners[name]=fn},setTimeout:(fn,ms)=>{timers.push([ms,fn]);return timers.length},clearTimeout:id=>cleared.push(id),AbortController:Controller,location:{origin:'https://test.invalid'}};
+  const document={getElementById:()=>null,querySelectorAll:()=>[]};
+  const fetch=(url,opts)=>{sent.push([url,opts]);if(url.includes('/__diag/'))return Promise.resolve({});return new Promise((_,reject)=>{opts.signal.onabort=()=>reject(new Error('aborted'))})};
+  vm.runInNewContext(source,{window,document,fetch,URL});
+  listeners.error({target:{href:'https://test.invalid/api/creative-canvas/assets/first-ABCdef12.js'}});
+  assert.equal(timers.length,4);assert.equal(timers[3][0],10000);timers[3][1]();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(sent.some(([u])=>u.includes('/probenetwork/')));assert.ok(cleared.includes(4));
+});
+
 test('nginx injects diagnostics only into the authenticated canvas document', async t => {
   const {mkdtempSync,rmSync,writeFileSync}=await import('node:fs');
   const {tmpdir}=await import('node:os');const {join}=await import('node:path');
