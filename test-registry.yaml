@@ -8429,3 +8429,11 @@ agent_suite:
   status: active
   product: AI视频
   note: 全屏切换保持原画布与未保存内容。
+
+- id: creative-canvas-static-cache-nginx
+  path: scripts/deploy/__tests__/creative-canvas-cache.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI视频
+  note: 真实 Nginx 验证画布静态缓存与鉴权、错误响应及用户数据隔离。
