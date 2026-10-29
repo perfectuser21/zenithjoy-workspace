@@ -65,6 +65,21 @@ test('采集返回partial时，Commander收到真实部分状态而不是脚本�
  assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.result.counts.persisted,11);
 });
 
+test('活动返回阻塞、待复核或未知状态时，不得继续业务或记为完成',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');
+ for(const returnedStatus of ['blocked','needs_review','unexpected']){
+  let next=0,cleaned=0;const receipts=[];
+  const result=await runWorkflow({activities:[{key:'source'},{key:'dedup'},{key:'cleanup'}],context:{},
+   handlers:{source:async()=>({status:returnedStatus}),dedup:async()=>{next++;return {};},cleanup:async()=>{cleaned++;return {}; }},
+   commander:async receipt=>{receipts.push(receipt);return {action:'continue',reason:'按证据判断'};},record:async()=>{}});
+  assert.notEqual(result.status,'completed',returnedStatus);
+  assert.notEqual(result.results[0].status,'completed',returnedStatus);
+  assert.equal(result.results[1].status,'blocked',returnedStatus);
+  assert.equal(next,0,returnedStatus);assert.equal(cleaned,1,returnedStatus);
+  assert.notEqual(receipts.find(r=>r.activity==='source'&&r.phase==='after').evidence.status,'completed',returnedStatus);
+ }
+});
+
 test('Commander叫停后不执行下一活动，锁内清场仍有前后Commander回执', async () => {
   const {runWorkflow} = await import('../leadgen-workflow.mjs');
   const executed=[],records=[];
