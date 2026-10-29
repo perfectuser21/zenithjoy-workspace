@@ -8413,3 +8413,11 @@ agent_suite:
   status: active
   product: CI治理
   note: Dashboard staging 固定候选、磁盘限制、Nginx 指针切换与信号中断回退。
+
+- id: creative-canvas-fullscreen-smoke
+  path: .github/workflows/scripts/smoke/creative-canvas-fullscreen-smoke.sh
+  type: smoke
+  ci: L4
+  status: active
+  product: AI视频
+  note: 全屏切换保持原画布与未保存内容。
