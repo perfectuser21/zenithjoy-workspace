@@ -8437,3 +8437,11 @@ agent_suite:
   status: active
   product: AI视频
   note: 真实 Nginx 验证画布静态缓存与鉴权、错误响应及用户数据隔离。
+
+- id: creative-canvas-startup-diagnostics
+  path: scripts/deploy/__tests__/creative-canvas-startup.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI视频
+  note: 验证画布启动诊断注入的权限边界和日志脱敏。
