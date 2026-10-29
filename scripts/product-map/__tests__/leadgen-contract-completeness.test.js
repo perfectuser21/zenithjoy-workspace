@@ -65,7 +65,7 @@ test('104 订单生命周期与真实发送结果探针入合同', () => {
   assert.equal(activity.preflight.compatibility, 'breaking');
   assert.ok(activity.send_dm.inputs.some(input => input.type === 'OutreachOrder'));
   assert.equal(activity.send_dm.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.send_dm.version, '4.0.0');
+  assert.equal(activity.send_dm.version, '5.0.0');
   assert.equal(activity.send_dm.compatibility, 'breaking');
   assert.equal(activity.write_back.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
   assert.equal(activity.write_back.version, '4.0.0');
