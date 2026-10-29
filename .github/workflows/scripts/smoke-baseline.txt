@@ -11,6 +11,7 @@ agent-self-heal-smoke.sh
 clips-smoke.sh
 crm-manual-history-smoke.sh
 content-publish-dispatch-smoke.sh
+creative-canvas-fullscreen-smoke.sh
 cs-oneclick-setup-smoke.sh
 dashboard-walking-skeleton-1-smoke.sh
 deploy-version-selfcheck-smoke.sh

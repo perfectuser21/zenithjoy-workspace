@@ -27,6 +27,18 @@ describe('创作画布', () => {
     expect(screen.getByRole('button', {name:'打开图片生成工作流'})).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/creative-canvas/status', expect.objectContaining({ credentials: 'include' }));
   });
+  it('可扩大画布并返回，保留同一个画布和未保存内容', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({available:true}), {status:200})));
+    render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    const frame = await screen.findByTitle('视频创作画布');
+    fireEvent.click(screen.getByRole('button', {name:'全屏画布'}));
+    expect(screen.getByRole('button', {name:'退出全屏'})).toBeInTheDocument();
+    expect(screen.getByTitle('视频创作画布')).toBe(frame);
+    expect(frame.parentElement).toHaveClass('fixed');
+    fireEvent.click(screen.getByRole('button', {name:'退出全屏'}));
+    expect(screen.getByTitle('视频创作画布')).toBe(frame);
+    expect(frame.parentElement).not.toHaveClass('fixed');
+  });
   it('在画布新建标签打开上传图片模板，保留当前工作流', async () => {
     const graph = {nodes:[{type:'LoadImage'}],links:[]};
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({available:true}),{status:200})).mockResolvedValueOnce(new Response(JSON.stringify(graph),{status:200}));

@@ -8,6 +8,8 @@ export default function CreativeCanvasPage() {
   const [status, setStatus] = useState<CanvasStatus>('checking');
   const [attempt, setAttempt] = useState(0);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
   const [opening, setOpening] = useState(false);
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'slow'>('loading');
   const [workflowError, setWorkflowError] = useState('');
@@ -35,6 +37,33 @@ export default function CreativeCanvasPage() {
     } finally { setOpening(false); }
   }, []);
   const retry = useCallback(() => { setStatus('checking'); setAttempt(value => value + 1); }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (expanded) {
+      if (document.fullscreenElement === canvasContainerRef.current) await document.exitFullscreen().catch(() => {});
+      setExpanded(false);
+      return;
+    }
+    setExpanded(true);
+    if (canvasContainerRef.current?.requestFullscreen) {
+      try { await canvasContainerRef.current.requestFullscreen(); } catch { /* Use viewport-sized fallback. */ }
+    }
+  }, [expanded]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setExpanded(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.fullscreenElement) setExpanded(false);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== 'available') return;
@@ -93,8 +122,9 @@ export default function CreativeCanvasPage() {
         <p>创作画布暂时不可用，请联系管理员。</p>
         <button type="button" onClick={retry} className="mt-3 rounded-lg border border-amber-500 px-3 py-1.5">重新连接</button>
       </div>}
-      {status === 'available' && <>
+      {status === 'available' && <div ref={canvasContainerRef} className={expanded ? 'fixed inset-0 z-[9999] flex flex-col gap-2 bg-white p-3 dark:bg-slate-950' : 'flex flex-1 flex-col gap-3'}>
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <button type="button" onClick={() => void toggleFullscreen()} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 dark:text-violet-300">{expanded ? '退出全屏' : '全屏画布'}</button>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('upload')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开上传图片工作流</button>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('generate')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开图片生成工作流</button>
           {frameState === 'loading' && <span role="status">画布正在加载，请稍候…</span>}
@@ -103,8 +133,9 @@ export default function CreativeCanvasPage() {
           {opening && <span role="status">正在打开工作流…</span>}
           {workflowError && <span role="alert">{workflowError}</span>}
         </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">切换中文：画布内选择 Menu → Settings → Comfy → Locale → Language → 中文。</p>
         <iframe ref={frameRef} title="视频创作画布" src="/api/creative-canvas/" className="min-h-[70vh] w-full flex-1 rounded-xl border border-slate-200 bg-white dark:border-slate-700" allow="clipboard-read; clipboard-write" />
-      </>}
+      </div>}
     </div>
   );
 }
