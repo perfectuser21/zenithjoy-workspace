@@ -1,0 +1,181 @@
+{
+  "kind": "historical_code_evidence_index",
+  "current_skill_verified": false,
+  "integrity_check": {
+    "verified_at": "2026-10-29T08:22:13Z",
+    "method": "read-only SSH SHA-256 and JSON status/verification readback",
+    "files_checked": 20,
+    "activity_receipts_checked": 14,
+    "business_outcome_confirmed": false
+  },
+  "source_commit": "1ed930b3c00ed1863a64cf3b3a99e3082be556ea",
+  "workflows": {
+    "douyin_video_discovery": {
+      "host": "xian-m4",
+      "ledger_dir": "~/.config/zenithjoy/ledger/douyin_video_discovery-codexyellow20261014s1ed930b3r7_101",
+      "activities": {
+        "preflight": {
+          "file": "activity-preflight.json",
+          "sha256": "683724b9ace872fbad1cdf4e4b81f63af2193453c0980341fbb77877fe26b7a8",
+          "status": "completed",
+          "verified": true
+        },
+        "collect_videos": {
+          "file": "activity-collect_videos.json",
+          "sha256": "ce13f8c167d02996957bb707fb1ff404069318a2415d790231297db00a7b72b1",
+          "status": "completed",
+          "verified": true
+        },
+        "cleanup": {
+          "file": "activity-cleanup.json",
+          "sha256": "a3242024ff67f51c37329b80a98b9e29ec53e27408c2ab98d183e8175653dfbd",
+          "status": "completed",
+          "verified": true
+        }
+      },
+      "readbacks": [
+        {
+          "file": "codexyellow20261014s1ed930b3r7_101-source-1-readback.json",
+          "sha256": "3855888ffcca0795495c5ae93ab5c617314f696a68f3c1b2b1c65affd675a928"
+        }
+      ]
+    },
+    "douyin_video_processing": {
+      "host": "xian-m4",
+      "ledger_dir": "~/.config/zenithjoy/ledger/douyin_video_processing-codexyellow20261014s1ed930b3r7_102",
+      "activities": {
+        "preflight": {
+          "file": "activity-preflight.json",
+          "sha256": "12ce5e2aff46e2fbec8f383535056039231abf3fcd17899167bb77fc03a03f93",
+          "status": "completed",
+          "verified": true
+        },
+        "dedup": {
+          "file": "activity-dedup.json",
+          "sha256": "7a83559da8820bc085c3b4454c9f5272878175b840ec4f53d284f3dfab759552",
+          "status": "completed",
+          "verified": true
+        },
+        "qualification": {
+          "file": "activity-qualification.json",
+          "sha256": "bc14355199d53f03245ddfac57f4eb8f076829a52680fc8d11fe9df72601cea2",
+          "status": "completed",
+          "verified": true
+        },
+        "collection": {
+          "file": "activity-collection.json",
+          "sha256": "b92f51a475f82d35fee372faf3ac8d220801bc331abce6a66276e20f93824005",
+          "status": "completed",
+          "verified": true
+        },
+        "cleanup": {
+          "file": "activity-cleanup.json",
+          "sha256": "c47a646379e278085b78a9b2f3ab55fc911400c760696b6b5ad22e1ce080a719",
+          "status": "completed",
+          "verified": true
+        }
+      },
+      "readbacks": [
+        {
+          "file": "codexyellow20261014s1ed930b3r7_102-intake-readback.json",
+          "sha256": "d6896cf19526e4f5f44a64f209fa82de71369890e886dcd89fb7880928a2c149"
+        },
+        {
+          "file": "codexyellow20261014s1ed930b3r7_102-sampling-readback.json",
+          "sha256": "e28c8c5c60d369ae0ba8ced2542f834fec73a53815543e753b0676c49d48b152"
+        }
+      ]
+    },
+    "douyin_comment_scoring": {
+      "host": "mmv",
+      "ledger_dir": "~/.config/zenithjoy/ledger/douyin_comment_scoring-codexyellow20261014s1ed930b3r7_103",
+      "activities": {
+        "scoring": {
+          "file": "activity-scoring.json",
+          "sha256": "15f228f254509494a20abf5fd0e8db0d2a77c8b01a54c50edc6ab8b792990899",
+          "status": "completed",
+          "verified": true
+        },
+        "mark_leads": {
+          "file": "activity-mark_leads.json",
+          "sha256": "25657fa8db28af8ec17b1a6928c39802760d5c513a1138fb525204468c555043",
+          "status": "completed",
+          "verified": true
+        }
+      },
+      "readbacks": [
+        {
+          "file": "codexyellow20261014s1ed930b3r7_103-scoring-readback.json",
+          "sha256": "458a4f9270e70d3934e938ad647e747e18a40c4b19ed6a29e2ea93dbba13915e"
+        },
+        {
+          "file": "codexyellow20261014s1ed930b3r7_103-mark_leads-readback.json",
+          "sha256": "419190fd3266213b7007b1e3ef393060834be90132739561efc5f81eb0f8b254"
+        }
+      ]
+    },
+    "douyin_lead_outreach": {
+      "host": "xian-m4",
+      "ledger_dir": "~/.config/zenithjoy/ledger/douyin_lead_outreach-codexyellow20261014s1ed930b3r7_104",
+      "activities": {
+        "preflight": {
+          "file": "activity-preflight.json",
+          "sha256": "f67c977c6fc15b8fd96988bf022d29c1a934899f82778127dcc8336b9df7dff8",
+          "status": "completed",
+          "verified": true
+        },
+        "send_dm": {
+          "file": "activity-send_dm.json",
+          "sha256": "0885c5da2239afc6014ec5018e224aa9cfcfab613ea286de3f1a3ae840a98c57",
+          "status": "completed",
+          "verified": true
+        },
+        "write_back": {
+          "file": "activity-write_back.json",
+          "sha256": "2375d5cad400143190d4a30a7f9193996bcebd16cdbcfd457fa9bc5e159b7475",
+          "status": "completed",
+          "verified": true
+        },
+        "cleanup": {
+          "file": "activity-cleanup.json",
+          "sha256": "2d3812f1686d4f5037b1839887d6482ca29e4aa4d00258871389b2d2bbba4a93",
+          "status": "completed",
+          "verified": true
+        }
+      },
+      "readbacks": [
+        {
+          "file": "codexyellow20261014s1ed930b3r7_104-write_back-readback.json",
+          "sha256": "5621ed48299d0e9f78ff16a508a1f7496de361626f929ae1dfd7a65c7b9be4d4"
+        }
+      ]
+    }
+  },
+  "outreach_receipt": {
+    "delivery_verified": false,
+    "message_delta_verified": true
+  },
+  "run_candidates": {
+    "source": "cecelia.runs + cecelia.spans, read-only production query 2026-10-29",
+    "owner_labeled": false,
+    "entries": [
+      { "workflow": "douyin_video_discovery", "run_id": "douyin_video_discovery-cicdbeb_101_attempt2_20261027_a2dcb023__a1", "observed_outcome": "pass", "failed_activities": [], "skipped_activities": [] },
+      { "workflow": "douyin_video_discovery", "run_id": "douyin_video_discovery-cicd887_101_exactraw2_20261026132806__a1", "observed_outcome": "fail", "failed_activities": ["collect_videos", "cleanup"], "skipped_activities": [] },
+      { "workflow": "douyin_video_processing", "run_id": "douyin_video_processing-cicd887_102_last_20261026_122425__a1", "observed_outcome": "pass", "failed_activities": [], "skipped_activities": [] },
+      { "workflow": "douyin_video_processing", "run_id": "douyin_video_processing-cicd353b_102_pending_20261028_e62fd171__a1", "observed_outcome": "fail", "failed_activities": ["qualification"], "skipped_activities": ["collection", "cleanup"] },
+      { "workflow": "douyin_comment_scoring", "run_id": "douyin_comment_scoring-acc524f103_20261020T0324Z__a1", "observed_outcome": "pass", "failed_activities": [], "skipped_activities": [] },
+      { "workflow": "douyin_comment_scoring", "run_id": "douyin_comment_scoring-accea15c25e6103_20261021T043301Z__a1", "observed_outcome": "fail", "failed_activities": ["scoring"], "skipped_activities": ["mark_leads"] },
+      { "workflow": "douyin_lead_outreach", "run_id": "douyin_lead_outreach-ve02ca327_legacy_104_20261017T202031Z__a1", "observed_outcome": "pass", "failed_activities": [], "skipped_activities": ["send_dm", "write_back"] },
+      { "workflow": "douyin_lead_outreach", "run_id": "douyin_lead_outreach-five_legacy_20261017T050653Z__a1", "observed_outcome": "fail", "failed_activities": ["preflight"], "skipped_activities": ["send_dm", "write_back", "cleanup"] }
+    ]
+  },
+  "test_examples": {
+    "kind": "offline_tests_not_live_skill_runs",
+    "paths": [
+      "services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs",
+      "services/phone-adb-controller/__tests__/leadgen-db-lib-qualify.test.mjs",
+      "services/phone-adb-controller/__tests__/leadgen-103-policy.test.mjs",
+      "services/phone-adb-controller/__tests__/outreach-walking-skeleton.test.mjs"
+    ]
+  }
+}
