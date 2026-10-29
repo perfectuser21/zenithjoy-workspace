@@ -206,6 +206,20 @@ def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2
     return matches[0][0]
 
 
+def verified_client_version(binary):
+    """Retry only a timed-out local version read; never invoke server lifecycle."""
+    for attempt in range(2):
+        try:
+            result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2)
+        except subprocess.TimeoutExpired:
+            if attempt == 0:
+                continue
+            raise
+        if result.returncode or not re.search(r'^Android Debug Bridge version 1\.0\.41\r?$', result.stdout, re.M):
+            raise ValueError('ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH')
+        return result.stdout, attempt == 1
+
+
 if __name__ == '__main__':
     phase = 'input'
     phase_started = time.monotonic()
@@ -218,9 +232,12 @@ if __name__ == '__main__':
         # version只读客户端；协议不符会让adb自身重启server，因此必须先拒绝。
         phase = 'client_version'
         phase_started = time.monotonic()
-        result = subprocess.run([sys.argv[2], 'version'], capture_output=True, text=True, timeout=2)
-        if result.returncode or not re.search(r'^Android Debug Bridge version 1\.0\.41\r?$', result.stdout, re.M):
-            raise ValueError('ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH')
+        _, retried = verified_client_version(sys.argv[2])
+        if retried:
+            phase = 'route_recheck'
+            phase_started = time.monotonic()
+            if select_route(sys.argv[1], os.environ.get('ADB_SERVER_SOCKET', '')) != port:
+                raise ValueError('ADB_ROUTE_CHANGED')
         print(port)
     except Exception as error:
         code = str(error) if isinstance(error, ValueError) and str(error).startswith(('ADB_ROUTE_', 'ADB_HOST_')) else 'ADB_ROUTE_PROBE_FAILED'
