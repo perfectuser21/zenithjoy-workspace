@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.3.1
+  version: 0.4.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -18,20 +18,31 @@ runner:
 trigger_inputs:
   - Comment
   - Video
-known_gaps: []
+known_gaps:
+  - gap: Workflow 的 on_status/always_run 路由尚未在本合同及 Runner 中形成可验证接线；Activity 字段齐全不代表端到端自动编排验收通过。
+    task: bdd9fb75
 activities:
   - key: scoring
     name: 评分
+    promise: 按该公司冻结的原评分政策为已提交评论写出可读回的相关度和意向等级
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_comment_scoring
+      activity_key: scoring
+      owner_labeled: false
+      current_skill_verified: false
     order: 1
-    version: 2.1.0
+    version: 2.2.0
     agent_recovery:
       max_additional_turns: 1
-    compatibility: breaking
+    compatibility: backward
     owner:
       department: line02 智能获客
       agent: 评论分拣员
     inputs:
       - type: Comment
+        source: zenithjoy.leadgen_comments 已提交且待分拣的评论
         cardinality: many
         fields:
           - dedup_key
@@ -41,12 +52,14 @@ activities:
           - profile_url
           - process_status
       - type: Video
+        source: 评论关联的原视频标题与转写
         cardinality: many
         fields:
           - title
           - transcript
     outputs:
       - type: Comment
+        destination: zenithjoy.leadgen_comments 的评分字段，交给标记人 Activity
         cardinality: many
         effect: update
         fields:
@@ -59,10 +72,11 @@ activities:
       - 模型不可达或结果非法留待重判，不伪造C级成功
     postconditions:
       - probe: scores_readback
-        asserts: 认领ID在PG独立读回，评论完成必须以线索已落实为前提
+        asserts: 认领评论 ID 的 relevance 与 intent_grade 在 PG 独立读回；本活动只交评分，完成状态由后续 mark_leads 核资格和配送后决定
       - probe: scoring_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
+      primary_kind: code
       location: mmv
       via: leadgen-workflow.mjs → scoring独立活动 → 持久化队列读回
     budget:
@@ -104,7 +118,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.2.1
+        version: 0.3.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -295,16 +309,25 @@ activities:
       entry: activity-commander.mjs
   - key: mark_leads
     name: 标记人
+    promise: 依据已评分评论核实原生收件人身份，交出线索、资格与配送状态
+    sample_candidates:
+      index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
+      workflow_keys:
+        - douyin_comment_scoring
+      activity_key: mark_leads
+      owner_labeled: false
+      current_skill_verified: false
     order: 2
-    version: 3.2.0
+    version: 3.3.0
     agent_recovery:
       max_additional_turns: 1
-    compatibility: breaking
+    compatibility: backward
     owner:
       department: line02 智能获客
       agent: 评论分拣员
     inputs:
       - type: Comment
+        source: 评分 Activity 处理的已提交评论与收件人原件
         cardinality: many
         fields:
           - dedup_key
@@ -315,12 +338,14 @@ activities:
           - process_status
           - recipient_evidence
       - type: Video
+        source: 该评论关联视频的标题与转写
         cardinality: many
         fields:
           - title
           - transcript
     outputs:
       - type: Comment
+        destination: zenithjoy.leadgen_comments 的最终处理状态
         cardinality: many
         effect: update
         fields:
@@ -329,6 +354,7 @@ activities:
           - intent_grade
           - promoted
       - type: Lead
+        destination: zenithjoy.leadgen_leads，供触达 Workflow 读取
         cardinality: many
         effect: upsert
         fields:
@@ -340,6 +366,7 @@ activities:
           - repeat_hits
           - status
       - type: RecipientQualification
+        destination: 该公司原 PostgreSQL 收件人资格记录
         cardinality: many
         effect: upsert
         fields:
@@ -353,6 +380,7 @@ activities:
           - tenant_id
           - policy_id
       - type: OutreachBridgeIntent
+        destination: 该公司原 PostgreSQL 配送意图及真实配送回执
         cardinality: many
         effect: upsert
         fields:
@@ -381,6 +409,7 @@ activities:
         asserts: 本run实际outbox IDs及同事务comment→lead映射独立PG读回；confirmed还须真实Feishu
           marker/UID/全payload与持久字段SHA，unknown POST不重发
     execution:
+      primary_kind: code
       location: mmv
       via: leadgen-workflow.mjs → mark_leads独立活动 → 持久化队列读回
     budget:
@@ -434,7 +463,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.2.1
+        version: 0.3.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
