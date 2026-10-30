@@ -139,9 +139,30 @@ async function judgeComment(comment, videoCaption, targetProfile, opts = {}) {
   };
 }
 
+// 只把稳定的阶段/HTTP状态出队；原异常文本可能含模型响应、评论或凭据。
+function scoreFailureReceipt(cause) {
+  if (cause?.message === 'COMMANDER_EVIDENCE_INVALID')
+    return { code: 'POLICY_SCORE_COMMANDER_EVIDENCE_INVALID', stage: 'commander' };
+  if (cause?.message === 'COMPANY_COMMENT_SCORING_REQUIRED')
+    return { code: 'POLICY_SCORE_CONFIG_INVALID', stage: 'config' };
+  if (cause?.message === 'COMMENT_INPUT_INVALID')
+    return { code: 'POLICY_SCORE_INPUT_INVALID', stage: 'input' };
+  if (cause instanceof JudgeApiError) {
+    const stage = ['jev', 'commander'].includes(cause.stage) ? cause.stage : 'unknown';
+    if (/找不到OPENROUTER_API_KEY/.test(cause.message))
+      return { code: 'POLICY_SCORE_MODEL_CREDENTIAL_MISSING', stage };
+    const status = Number(cause.status);
+    if (Number.isInteger(status) && status >= 400 && status <= 599)
+      return { code: 'POLICY_SCORE_MODEL_HTTP', stage, http_status: status };
+    return { code: 'POLICY_SCORE_MODEL_TRANSPORT', stage };
+  }
+  return { code: 'POLICY_SCORE_MODEL_UNAVAILABLE' };
+}
+
 module.exports = {
   JudgeApiError,
   judgeComment,
+  scoreFailureReceipt,
   judgePrimary,
   judgeCommander,
   resolveOpenRouterKey,
