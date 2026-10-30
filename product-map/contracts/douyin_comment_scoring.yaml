@@ -237,6 +237,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/judge-comment.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-policy-review.js
         revision: contract
     model:

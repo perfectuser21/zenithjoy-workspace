@@ -117,6 +117,20 @@ test('real extracted handlers belong to every consumer method source closure',t=
  }
 });
 
+test('103 scoring method lock changes when its real judge-comment scorer changes',t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/judge-comment.js';
+ put(root,path,readFileSync(join(source,path)));
+ const before=collectMethods(root);
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated scorer-byte mutation\n');
+ const after=collectMethods(root);
+ const ref='douyin_comment_scoring.scoring';
+ assert.notEqual(after.activities[ref].code_digest,before.activities[ref].code_digest,
+   'scoring method omitted its real judge-comment.js bytes');
+ for(const other of Object.keys(before.activities).filter(key=>key!==ref))
+   assert.equal(after.activities[other].code_digest,before.activities[other].code_digest,
+     other+' should not own 103 scorer bytes');
+});
+
 test('native operation receipt bytes belong to every consumer method source closure',t=>{
  const {root}=fixture(t),path='services/phone-adb-controller/native-operation-receipt.mjs';
  put(root,path,readFileSync(join(source,path)));
