@@ -152,15 +152,15 @@ test('旧单审半提交行只在精确恢复范围内重新双审，成功才�
  const old={...storedPolicyRow().row,id:oldId,harvest_batch:oldSource};
  old.judgment_config={...old.judgment_config,run_id:oldRun};
  delete old.judgment_config.policy_reviews;
- const writes=[],calls=[];let policyCalls=0;
+ const writes=[],calls=[];let policyCalls=0,allowSecond=false,outboxRows=[];
  const client={release(){},async query(sql,args=[]){calls.push({sql,args});
   if(sql==='BEGIN'||sql==='ROLLBACK')return {rows:[]};
   if(sql==='COMMIT'){if(writes.length)Object.assign(old,writes.at(-1));return {rows:[]};}
   if(sql.includes('count(*)::int AS used'))return {rows:[{used:0}]};
   if(sql.includes('company_config_runs'))return {rows:[{snapshot:policy,company_id:policy.company_id,
    tenant_id:policy.tenant_id,version:policy.version,run_id:oldRun}]};
-  if(sql.includes('leadgen_bridge_outbox'))return {rows:[]};
-  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[{...old}]};
+  if(sql.includes('leadgen_bridge_outbox'))return {rows:outboxRows};
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:args[2]?.includes(oldId)?[]:[{...old}]};
   if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{title,
    video_url:old.source_video_url,judgment_status:'matched'}]};
   if(sql.includes('UPDATE zenithjoy.leadgen_comments')){writes.push({relevance:args[1],intent_grade:args[2],
@@ -175,13 +175,47 @@ test('旧单审半提交行只在精确恢复范围内重新双审，成功才�
   judgeComment:async()=>({relevance:'相关',grade:'A',reason:'直接询问证书',
    audit:{model:'scoring-model',response_id:'new-score'}}),
   judgePolicy:async()=>({grade:'A',audit:{model:'policy-model',response_id:`new-policy-${++policyCalls}`,
-   policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:comment,
+   policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',
+    comment_signal:!allowSecond&&policyCalls%2===0?'FDE证书':comment,
     video_signal:'FDE证书',exclusion_rule:null,reason:'按冻结政策核实直接提问'}}})};
- const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:'new103',
-  source_run:oldSource,ids:[oldId],limit:1,budget_max:1,legacy_recovery:recovery},deps);
- assert.equal(result.scored,1);assert.equal(policyCalls,2);
+ const input={op:'score',line:'jinuo',run:'new103',source_run:oldSource,ids:[oldId],
+  limit:1,budget_max:1,legacy_recovery:recovery};
+ const pool={connect:async()=>client};
+ const failed=await queueRequest(pool,input,deps);
+ assert.equal(failed.scored,0);assert.equal(writes.length,0);
+ assert.equal(old.judgment_config.run_id,oldRun);
+ outboxRows=[{id:'existing-intent'}];
+ await assert.rejects(queueRequest(pool,input,deps),/POLICY_SCORE_LEGACY_RECOVERY_SCOPE_INVALID/);
+ assert.equal(writes.length,0);
+ outboxRows=[];allowSecond=true;
+ const result=await queueRequest(pool,input,deps);
+ assert.equal(result.scored,1);assert.equal(policyCalls,4);
  assert.equal(old.judgment_config.run_id,'new103');
  assert.equal(old.judgment_config.policy_reviews.length,2);
  assert.equal(writes.length,1);
  assert.ok(calls.some(c=>c.sql.includes('leadgen_bridge_outbox')));
+});
+
+test('103即使收到102失败批次的待分拣评论，也只领取PG已完成采集且来源一致的视频',async()=>{
+ const queries=[];const pool={async query(sql,args){queries.push({sql,args});return {rows:[]};}};
+ await queueRequest(pool,{op:'score_scope',line:'jinuo',run:'test103',
+  source_run:'accept3a903_jinuo102g_20261030t0712'});
+ assert.match(queries[0].sql,/JOIN zenithjoy\.leadgen_videos/);
+ assert.match(queries[0].sql,/v\.process_status='评论已采'/);
+ assert.match(queries[0].sql,/v\.harvest_batch=c\.harvest_batch/);
+ let modelCalls=0;const calls=[];
+ const client={release(){},async query(sql,args=[]){calls.push({sql,args});
+  if(sql==='BEGIN'||sql==='ROLLBACK'||sql==='COMMIT')return {rows:[]};
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:calls.filter(c=>c.sql.includes('SELECT * FROM zenithjoy.leadgen_comments')).length===1
+   ?[{id,line_key:'jinuo',harvest_batch:'accept3a903_jinuo102g_20261030t0712',
+    comment_body:comment,source_video:title,source_video_url:'https://www.douyin.com/video/7617837149999841201'}]:[]};
+  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{title,judgment_status:'matched',
+   process_status:'待人工核验:accept3a903_jinuo102g_20261030t0712',
+   harvest_batch:'accept3a903_jinuo102g_20261030t0712'}]};
+  return {rows:[]};}};
+ const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',
+  run:'test103',source_run:'accept3a903_jinuo102g_20261030t0712',limit:1},
+  {freezeCompanyConfig:async()=>policy,judgeComment:async()=>{modelCalls++;throw Error('called');}});
+ assert.equal(result.scored,0);assert.equal(result.blocked,1);assert.equal(modelCalls,0);
+ assert.ok(!calls.some(c=>c.sql.includes('UPDATE zenithjoy.leadgen_comments')));
 });
