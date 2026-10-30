@@ -7,6 +7,7 @@ import {mkdtempSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const require = createRequire(import.meta.url);
+const { JudgeApiError } = require('../judge-comment.js');
 import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
 
@@ -176,6 +177,38 @@ test('评论评分模型失败留在待评分队列，不降成C档', async () =
   assert.equal(result.status,'partial');assert.deepEqual(result.blocked_reasons,[{id:'c1',code:'POLICY_SCORE_MODEL_UNAVAILABLE'}]);
   assert.ok(pool.calls.some(c => c.sql === 'ROLLBACK'));
   assert.ok(!pool.calls.some(c => /UPDATE zenithjoy.leadgen_comments/.test(c.sql)));
+});
+
+test('103评分失败回执区分Jev HTTP故障与Commander证据无效，且不泄露模型正文', async () => {
+  const cases = [
+    {
+      failure: new JudgeApiError('jev:调用失败(HTTP 429 private response)', { stage: 'jev', status: 429 }),
+      expected: { id: 'c1', code: 'POLICY_SCORE_MODEL_HTTP', stage: 'jev', http_status: 429 },
+    },
+    {
+      failure: Error('COMMANDER_EVIDENCE_INVALID'),
+      expected: { id: 'c1', code: 'POLICY_SCORE_COMMANDER_EVIDENCE_INVALID', stage: 'commander' },
+    },
+    {
+      failure: new JudgeApiError('judgePrimary: 找不到OPENROUTER_API_KEY', { stage: 'jev' }),
+      expected: { id: 'c1', code: 'POLICY_SCORE_MODEL_CREDENTIAL_MISSING', stage: 'jev' },
+    },
+  ];
+  for (const { failure, expected } of cases) {
+    const pool = fakePool([
+      { rows: [{ id: 'c1', comment_body: '如何报名', source_video: '培训', source_video_url: 'https://www.douyin.com/video/7617837149999841201' }] },
+      { rows: [{ title: '培训', judgment_status: 'matched' }] },
+      { rows: [] },
+    ]);
+    const result = await queueRequest(pool, { op: 'score', line: 'jinuo', run: 'test' }, {
+      judgeComment: async () => { throw failure; },
+    });
+    assert.equal(result.status, 'partial');
+    assert.deepEqual(result.blocked_reasons, [expected]);
+    assert.ok(pool.calls.some(c => c.sql === 'ROLLBACK'));
+    assert.ok(!pool.calls.some(c => /UPDATE zenithjoy\.leadgen_comments/.test(c.sql)));
+    assert.ok(!JSON.stringify(result).includes('private response'));
+  }
 });
 
 test('标记人的更新与评论完成状态原子提交，已有已触达人只增加重复标记', async () => {
