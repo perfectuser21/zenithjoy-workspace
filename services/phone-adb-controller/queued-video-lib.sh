@@ -122,7 +122,7 @@ qv_qualify(){
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
   if qv_ctl --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null 2>"$error_file"; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
-    if started="$(qv_ctl --profile "$P" --lock-owner "$TAG" record-start "$record_eid" "$seconds" </dev/null 2>"$error_file")"; then
+    if started="$(qv_ctl --profile "$P" --lock-owner "$TAG" record-start "$record_eid" "$seconds" "$VID" </dev/null 2>"$error_file")"; then
       capture_mode="$(print -r -- "$started" | sed -n 's/.*capture_audio_mode=\([^ ]*\).*/\1/p')"
       capture_sdk="$(print -r -- "$started" | sed -n 's/.*capture_audio_sdk=\([^ ]*\).*/\1/p')"
       capture_required="$(print -r -- "$started" | sed -n 's/.*capture_audio_required=\([^ ]*\).*/\1/p')"
@@ -205,6 +205,7 @@ os.makedirs(d,mode=0o700,exist_ok=True)
 p={"version":2,"playback_proof_kind":"native_audio","native_audio":{},"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","playback_verified":playback_ok=="1","playback_package":playback_package,"playback_state":number(playback_start),"playback_end_state":number(playback_end),"audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"playback_raw_evidence":{},"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
 capture_fields=dict(x.split('=',1) for x in started.split() if '=' in x)
 end_fields=dict(x.split('=',1) for x in stopped.split() if '=' in x)
+p['recovery_video_identity']={'verified':capture_fields.get('recovery_video_identity_verified')=='true','video_id':capture_fields.get('recovery_video_id'),'evidence_id':capture_fields.get('recovery_video_evidence_id')}
 p['capture_audio_end']={'mode':end_fields.get('capture_audio_mode'),'sdk':int(end_fields.get('capture_audio_sdk','')) if end_fields.get('capture_audio_sdk','').isdigit() else None,'required':end_fields.get('capture_audio_required')=='true','sdk_evidence_file':end_fields.get('capture_audio_sdk_evidence_file'),'sdk_evidence_sha256':end_fields.get('capture_audio_sdk_evidence_sha256')}
 runtime_keys=['client_sha256','server_sha256','evidence_file','evidence_sha256']
 p['capture_runtime']={k:capture_fields.get('capture_runtime_'+k) for k in runtime_keys}
