@@ -388,7 +388,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
           judgment_reason:verdict.reason,judgment_config:evidence};
         const semantic=await dualPolicyReview(judged,snapshot,deps);
-        if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);if(reason)error.score_failure={code:error.message,policy_review_reason:reason};throw error;}
+        if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);
+          if(reason)error.score_failure={code:error.message,policy_review_reason:reason,
+            ...(['jev','commander'].includes(semantic.model_stage)?{policy_review_stage:semantic.model_stage}:{}),
+            ...(Number.isInteger(semantic.http_status)&&semantic.http_status>=400&&semantic.http_status<=599?{policy_review_http_status:semantic.http_status}:{}),
+            ...(semantic.evidence_check==='missing_exclusion_rule'?{policy_review_evidence_check:'missing_exclusion_rule'}:{})};throw error;}
         const audit={...evidence,model_audit:verdict.audit||null,policy_audit:semantic.reviews[0],policy_reviews:semantic.reviews};
         // 保留待分拣，交下一活动标记人；模型异常回滚，下一轮仍可重判。
         await client.query(`UPDATE zenithjoy.leadgen_comments SET relevance=$2,intent_grade=$3,

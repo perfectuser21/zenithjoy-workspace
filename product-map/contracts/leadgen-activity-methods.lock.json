@@ -213,7 +213,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "d75f49fc6d1af365f933cd7ed47e4c6f2f390f70c0ada5f15d54d1f4721ac09f",
+      "code_digest": "ff4075bee748bad0e34d99fa2fb87d9985ba7fd1e128d6647b92e2dd7f1d0c2a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "74a75ebfa45f8690d7221c52e663b4c56000af25a2244a1eeac9f8261721b729",
-        "current_code_digest": "d75f49fc6d1af365f933cd7ed47e4c6f2f390f70c0ada5f15d54d1f4721ac09f"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "d75f49fc6d1af365f933cd7ed47e4c6f2f390f70c0ada5f15d54d1f4721ac09f",
+        "current_code_digest": "ff4075bee748bad0e34d99fa2fb87d9985ba7fd1e128d6647b92e2dd7f1d0c2a"
       }
     },
     "douyin_video_processing.preflight": {
@@ -525,7 +525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "59949a2beaebb7704774769182d541ac3c5baf307024b43954ccf75f50d7135a",
+      "code_digest": "070d70e54f2336ce62500c438fb2031133e0cb48b3926c54d14edad533000e5f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "5a4c61c8b8ba330ce301eadbc2c015cd9a37eba9eec1d9887a487a75a35924be",
-        "current_code_digest": "59949a2beaebb7704774769182d541ac3c5baf307024b43954ccf75f50d7135a"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "59949a2beaebb7704774769182d541ac3c5baf307024b43954ccf75f50d7135a",
+        "current_code_digest": "070d70e54f2336ce62500c438fb2031133e0cb48b3926c54d14edad533000e5f"
       }
     },
     "douyin_video_processing.dedup": {
@@ -833,23 +833,23 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
+          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         }
       ],
-      "code_digest": "b95a9f54ff2230eaf01422a2f3ab0a871bb474f3448aa573bdd04c54681bd303",
+      "code_digest": "c546e47d20a0e3bbb08b84d1a0db3ba7ac7479fca9c66a508ebab82d8d20cbb0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 preflight, claim, qualification, collection and cleanup branches are unchanged; the new admission op is separate and keeps failed videos quarantined.",
-        "reviewed_by": "codex:interactive-leadgen-102g-admission",
-        "previous_code_digest": "91a118f8bd965a695ea421e9740db355f5e49cd6595edefd0204a32bc302ac15",
-        "current_code_digest": "b95a9f54ff2230eaf01422a2f3ab0a871bb474f3448aa573bdd04c54681bd303"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "b95a9f54ff2230eaf01422a2f3ab0a871bb474f3448aa573bdd04c54681bd303",
+        "current_code_digest": "c546e47d20a0e3bbb08b84d1a0db3ba7ac7479fca9c66a508ebab82d8d20cbb0"
       }
     },
     "douyin_video_processing.qualification": {
@@ -889,7 +889,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
+          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
         },
         {
           "kind": "code",
@@ -1085,7 +1085,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -1193,13 +1193,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "85fb6d2014fd8e1b628eccb9fb9d1f6c556d74f211f6c216486d15f0d6e83cd6",
+      "code_digest": "c292bbbb0dd6b36fc0fe122c7410af4b4fbbcc545ba83954ebffa7f895d0a214",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "657c4a4864320840e9239082c76d3af0e35ac43b9eddab98ecb722c1ba39b2cd",
-        "current_code_digest": "85fb6d2014fd8e1b628eccb9fb9d1f6c556d74f211f6c216486d15f0d6e83cd6"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "85fb6d2014fd8e1b628eccb9fb9d1f6c556d74f211f6c216486d15f0d6e83cd6",
+        "current_code_digest": "c292bbbb0dd6b36fc0fe122c7410af4b4fbbcc545ba83954ebffa7f895d0a214"
       }
     },
     "douyin_video_processing.collection": {
@@ -1429,7 +1429,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -1495,13 +1495,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "2330383583e5cf3d553e4841b619a2870e539bc1c19dded00805ffeac114a859",
+      "code_digest": "6c96b03ec40f9416480d838734e655d5cd66eea279b8301ff9f3de700d124350",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "f1af948ac15b7625a4136273106b0ebe45517ad4b7d35dfd69ec8dc2f63ff237",
-        "current_code_digest": "2330383583e5cf3d553e4841b619a2870e539bc1c19dded00805ffeac114a859"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "2330383583e5cf3d553e4841b619a2870e539bc1c19dded00805ffeac114a859",
+        "current_code_digest": "6c96b03ec40f9416480d838734e655d5cd66eea279b8301ff9f3de700d124350"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1726,7 +1726,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -1771,13 +1771,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6d35c0ed5a355b41aeab101d19b0d979b49d49c6ad89e70ece3f7fb4c810ed87",
+      "code_digest": "5d115fc154f0635515ddbdffdc825ad2d4ffd4d93da1f60e71dcd4665fa58d16",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "f0681a5241c854a921eeaf7f3e71fd517e51df0a8ba01908a42fcb1e4a3cf73a",
-        "current_code_digest": "6d35c0ed5a355b41aeab101d19b0d979b49d49c6ad89e70ece3f7fb4c810ed87"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "6d35c0ed5a355b41aeab101d19b0d979b49d49c6ad89e70ece3f7fb4c810ed87",
+        "current_code_digest": "5d115fc154f0635515ddbdffdc825ad2d4ffd4d93da1f60e71dcd4665fa58d16"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1999,7 +1999,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
+          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
         },
         {
           "kind": "code",
@@ -2034,7 +2034,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -2044,13 +2044,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "af7ac568caa3f868a0bb6ee3149fa1894ad920aae2d551c6b9567002c5c95dfc",
+      "code_digest": "da5cb2b86c1b75f2ffc531fce1ba4587d8a8f86ae3321e1f87e2e02fa538a3f0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，并将实际依赖的discovery-metrics.js字节纳入两项方法锁。原102g评论/政策/授权和其他批次阻断保持，评分及标线索规则不变。",
-        "reviewed_by": "codex:102g-lineage-fix",
-        "previous_code_digest": "a57041073faec0776207bf617090867203b669dc9b5e53f4f05d4aa9a5781565",
-        "current_code_digest": "af7ac568caa3f868a0bb6ee3149fa1894ad920aae2d551c6b9567002c5c95dfc"
+        "reason": "103 policy review failure remains fail-closed with zero score or lead writes; only sanitized reason, stage, and HTTP category are added to blocked receipt. No grade, policy, retry, or delivery rule changes.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "af7ac568caa3f868a0bb6ee3149fa1894ad920aae2d551c6b9567002c5c95dfc",
+        "current_code_digest": "da5cb2b86c1b75f2ffc531fce1ba4587d8a8f86ae3321e1f87e2e02fa538a3f0"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2279,7 +2279,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
+          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
         },
         {
           "kind": "code",
@@ -2307,7 +2307,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -2359,13 +2359,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "c048a7c3bcfeaf8fe1fd041572ff0a59dbec2fcfa1925cbed739b78017f92358",
+      "code_digest": "5247e669e0f534cc3a07346842a5c0357c0c4cfbb9839a37f471de4e030b8b8f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，并将实际依赖的discovery-metrics.js字节纳入两项方法锁。原102g评论/政策/授权和其他批次阻断保持，评分及标线索规则不变。",
-        "reviewed_by": "codex:102g-lineage-fix",
-        "previous_code_digest": "2ce699ff23a1ea29115c900f088c3c00354df0e618cd93ef602bab4cb5eec042",
-        "current_code_digest": "c048a7c3bcfeaf8fe1fd041572ff0a59dbec2fcfa1925cbed739b78017f92358"
+        "reason": "103 policy review failure remains fail-closed with zero score or lead writes; only sanitized reason, stage, and HTTP category are added to blocked receipt. No grade, policy, retry, or delivery rule changes.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "c048a7c3bcfeaf8fe1fd041572ff0a59dbec2fcfa1925cbed739b78017f92358",
+        "current_code_digest": "5247e669e0f534cc3a07346842a5c0357c0c4cfbb9839a37f471de4e030b8b8f"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2591,7 +2591,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -2664,13 +2664,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "2cf538a5309ed686c33284e8d06e616643fa8d75de184c9591f88f5a149cfe2c",
+      "code_digest": "6f083431e1f6dea347c9e8d6aaae7cecc36412473980c0c1bfbbc4ae1c3984a4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "46e7c531ecd3df36771990570cdfb8371e723cf3e1f086c65585633b409635b4",
-        "current_code_digest": "2cf538a5309ed686c33284e8d06e616643fa8d75de184c9591f88f5a149cfe2c"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "2cf538a5309ed686c33284e8d06e616643fa8d75de184c9591f88f5a149cfe2c",
+        "current_code_digest": "6f083431e1f6dea347c9e8d6aaae7cecc36412473980c0c1bfbbc4ae1c3984a4"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2885,7 +2885,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -2944,13 +2944,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "322c409c6759fed2138a8afaf4f9da44380348b5f8a8d9a438046acab157d260",
+      "code_digest": "1f02df783a3f972774bc39cf62563e12b7861588390686a547b053c8b0144bab",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b",
-        "current_code_digest": "322c409c6759fed2138a8afaf4f9da44380348b5f8a8d9a438046acab157d260"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "322c409c6759fed2138a8afaf4f9da44380348b5f8a8d9a438046acab157d260",
+        "current_code_digest": "1f02df783a3f972774bc39cf62563e12b7861588390686a547b053c8b0144bab"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3158,7 +3158,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -3217,13 +3217,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b",
+      "code_digest": "5dfa0ba95b76ea853b25a6755db5755939ec56ed4b1ba442ad13d1966b092ed5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 preflight, sending, writeback and cleanup branches are unchanged; added 103 admission module packaging does not authorize or execute private messages.",
-        "reviewed_by": "codex:interactive-leadgen-102g-admission",
-        "previous_code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1",
-        "current_code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b",
+        "current_code_digest": "5dfa0ba95b76ea853b25a6755db5755939ec56ed4b1ba442ad13d1966b092ed5"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3441,7 +3441,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
+          "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         },
         {
           "kind": "code",
@@ -3500,13 +3500,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "39426c81ac34976b21c176c5f9692ef182c3265d83776cc0ff1a9b41ae67360a",
+      "code_digest": "57e118bd7e2cf402d9c4ab8e0f21b7035a3c6ff8af555eeddbcf816e98e80377",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Bind the existing ADB route verifier into this phone Activity and allow one additional bounded local client-version startup probe; route identity, device action, and Activity input/output stay unchanged.",
-        "reviewed_by": "codex-dev-adb-version-jitter",
-        "previous_code_digest": "8d46847a4d3cb31096eb36084f10b45e0aa1e1a7f7f5003984589751424c3a2d",
-        "current_code_digest": "39426c81ac34976b21c176c5f9692ef182c3265d83776cc0ff1a9b41ae67360a"
+        "reason": "Shared code binding digest changed, but this Activity does not execute the 103 dual-policy failure branch; its inputs, outputs, source checks, phone operations, and database effects are unchanged.",
+        "reviewed_by": "codex:leadgen-103-policy-error-diagnostic",
+        "previous_code_digest": "39426c81ac34976b21c176c5f9692ef182c3265d83776cc0ff1a9b41ae67360a",
+        "current_code_digest": "57e118bd7e2cf402d9c4ab8e0f21b7035a3c6ff8af555eeddbcf816e98e80377"
       }
     }
   },

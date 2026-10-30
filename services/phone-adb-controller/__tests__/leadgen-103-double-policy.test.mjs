@@ -6,6 +6,7 @@ import {policy,sourceRun} from './fixtures/leadgen-103-v14.mjs';
 
 const require=createRequire(import.meta.url);
 const {queueRequest,reviewBoundComment}=require('../leadgen-queue.js');
+const {JudgeApiError}=require('../judge-comment.js');
 const run='double_policy_test';
 const id='00000000-0000-4000-8000-000000000301';
 const title='FDE证书刚出第二张';
@@ -52,6 +53,18 @@ test('同一评论首审通过、独立二审缺个人意向证据时整笔评�
  assert.equal(f.committed.intent_grade,null);
  assert.equal(f.committed.judgment_config,undefined);
  assert.equal(f.writes.length,0);
+});
+
+test('政策模型HTTP失败的正式评分回执只含安全阶段/状态且PG零评分',async()=>{
+ const f=fixture(true);
+ f.deps.judgePolicy=async()=>{throw new JudgeApiError('private response api_key=secret',{stage:'commander',status:429});};
+ const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
+ assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
+  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:429}]);
+ assert.equal(result.scored,0);
+ assert.equal(f.committed.relevance,null);
+ assert.equal(f.writes.length,0);
+ assert.equal(JSON.stringify(result).includes('secret'),false);
 });
 
 test('两份独立政策模型证据均通过才持久评分与两份可重验身份',async()=>{

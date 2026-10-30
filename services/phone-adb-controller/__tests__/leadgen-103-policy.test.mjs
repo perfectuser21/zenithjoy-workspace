@@ -8,7 +8,7 @@ import {spawnSync} from 'node:child_process';
 import {comments,originalRun,sourceRun,video,policy} from './fixtures/leadgen-103-v14.mjs';
 const require=createRequire(import.meta.url);
 const {queueRequest,evaluatePolicy,reviewBoundComment}=require('../leadgen-queue.js');
-const {judgeCommander}=require('../judge-comment.js');
+const {judgeCommander,JudgeApiError}=require('../judge-comment.js');
 const {safePolicyReviewReason}=require('../leadgen-policy-review.js');
 const input={op:'policy_review',line:'jinuo',run:originalRun,claim:originalRun,source_run:sourceRun,ids:comments.map(c=>c.id)};
 const primaryAudit={model:'typesafe/jev-1.13',response_id:'jev-response-1',confidence:.99};
@@ -17,6 +17,25 @@ test('政策复核原因码只准固定枚举，模型正文与凭据样式不�
  assert.equal(safePolicyReviewReason('personal_intent_evidence_missing'),'personal_intent_evidence_missing');
  assert.equal(safePolicyReviewReason('audience_or_topic_evidence_missing'),'audience_or_topic_evidence_missing');
  assert.equal(safePolicyReviewReason('raw comment API key'),null);
+});
+
+test('政策模型异常分别保留安全类别与HTTP状态，未知内部异常不能伪装服务不可用',async()=>{
+ const row={id:'00000000-0000-4000-8000-000000000099',comment_body:'人工智能训练师证书怎么报名',
+  source_video:video.title,source_video_url:video.video_url,relevance:'相关',intent_grade:'A',
+  judgment_config:{company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id,run_id:originalRun}};
+ const cases=[
+  [new JudgeApiError('private body',{stage:'commander',status:429}),'policy_model_http',{model_stage:'commander',http_status:429}],
+  [new JudgeApiError('private body',{stage:'commander'}),'policy_model_transport',{model_stage:'commander'}],
+  [Object.assign(Error('COMMANDER_EVIDENCE_INVALID'),{evidence_check:'missing_exclusion_rule'}),'policy_model_evidence_invalid',{model_stage:'commander',evidence_check:'missing_exclusion_rule'}],
+  [Error('COMPANY_COMMENT_SCORING_REQUIRED'),'policy_review_config_invalid',{}],
+  [Error('private body api_key=secret'),'policy_review_internal_error',{}],
+ ];
+ for(const [failure,reason,detail] of cases){
+  const actual=await evaluatePolicy(row,policy,{judgePolicy:async()=>{throw failure;}});
+  assert.deepEqual(actual,{id:row.id,status:'unknown',reason,...detail});
+  assert.equal(JSON.stringify(actual).includes('private body'),false);
+  assert.equal(JSON.stringify(actual).includes('secret'),false);
+ }
 });
 
 test('103新run先走正式公司冻结；首轮与丢回执恢复共享原CID和一次评分预算',async t=>{
