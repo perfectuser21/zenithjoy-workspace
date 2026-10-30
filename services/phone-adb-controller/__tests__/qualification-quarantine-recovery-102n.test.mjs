@@ -7,9 +7,34 @@ import {randomUUID} from 'node:crypto';
 const require=createRequire(import.meta.url);
 const {SCOPE,runFor,validateRequest,planBatch,recover,readback,recoverBatch}=require('../qualification-quarantine-recovery-102n.js');
 const {createAuthority,checkStopped}=require('../qualification-quarantine-recovery-102n-authority.js');
+const {queueRequest}=require('../leadgen-queue.js');
+const {validateProducerDescriptor,verifyProducerDescriptor}=await import('../producer-descriptor.mjs');
 const videos=['7690206754872817819','7701984906457456467'];
+const consumerSha='c'.repeat(40);
+const producerDescriptor=video_id=>({schema_version:3,workflow_key:'douyin_video_discovery',
+ run_tag:SCOPE.original_101_run,source_commit:SCOPE.original_source_commit,
+ snapshot_sha256:'e35c9d695e1d2704ed6763affc7b8affb5ec8ffa8ad621f222f1e33ab02c8983',
+ progress_sha256:'937f6cb4e69d8ae2c285c67443869fa28a1854bdbd180aecae455bce5cf60e83',
+ profile:'jinoshengyuan-work',serial:'ANGYVB4227006983',line:'jinuo',company_id:SCOPE.company_id,
+ tenant_id:SCOPE.tenant_id,company_config_version:14,policy_id:SCOPE.policy_id,video_ids:[video_id],
+ decision_id:request.decision_id,consumer_source_commit:consumerSha});
 const request={op:'recover_102n_qualification',line:'jinuo',run:runFor(videos[0]),
  decision_id:'e7c48034-723b-4dc4-9927-b2593a5a0a7d',maintenance_task_id:'630fead3-9b17-4132-9208-92df60b1db3e',video_id:videos[0]};
+
+test('102n冻结101n来源只接受两条视频逐条交接并绑定运行时新102 SHA',()=>{
+ const d=producerDescriptor(videos[0]);assert.deepEqual(validateProducerDescriptor(d),d);
+ const raw=Buffer.from('{"run":"'+SCOPE.original_101_run+'","profile":"jinoshengyuan-work","videos":[{"videoId":"'+videos[0]+'"}]}');
+ const real={...d,progress_sha256:require('node:crypto').createHash('sha256').update(raw).digest('hex')};
+ assert.deepEqual(verifyProducerDescriptor(real,{upstream:{deployment:{source_commit:d.source_commit},snapshot_sha256:d.snapshot_sha256,
+  run_identity:{capability:d.workflow_key,tag:d.run_tag,profile:d.profile,serial:d.serial}},progressRaw:raw,
+  progress:JSON.parse(raw),env:{LEADGEN_SOURCE_RUN:d.run_tag,P:d.profile,SERIAL:d.serial,LEADGEN_LINE:d.line},
+  company:{company_id:d.company_id,tenant_id:d.tenant_id,version:14,policy_id:d.policy_id},consumerSourceCommit:consumerSha}),real);
+ for(const change of [{video_ids:[...videos]},{video_ids:['7701531676932885802']},{run_tag:'other101'},
+  {decision_id:null},{consumer_source_commit:'d'.repeat(40)}]){
+  const bad={...real,...change};if(change.consumer_source_commit)assert.throws(()=>verifyProducerDescriptor(bad,{upstream:{deployment:{source_commit:d.source_commit},snapshot_sha256:d.snapshot_sha256,run_identity:{capability:d.workflow_key,tag:d.run_tag,profile:d.profile,serial:d.serial}},progressRaw:raw,progress:JSON.parse(raw),env:{LEADGEN_SOURCE_RUN:d.run_tag,P:d.profile,SERIAL:d.serial,LEADGEN_LINE:d.line},company:{company_id:d.company_id,tenant_id:d.tenant_id,version:14,policy_id:d.policy_id},consumerSourceCommit:consumerSha}),/PRODUCER/);
+  else assert.throws(()=>validateProducerDescriptor(bad),/PRODUCER/);
+ }
+});
 
 test('102n恢复范围只含原101n/102n、公司v14与两条隔离VID',()=>{
  assert.deepEqual(SCOPE.video_ids,videos);
@@ -125,7 +150,9 @@ test('scratch PG：102n逐VID恢复、审计、重放与隔离旁行',{skip:proc
  const scoped={query:(q,a)=>pool.query(rewrite(q),a),connect:async()=>{
   const c=await pool.connect();return {query:(q,a)=>c.query(rewrite(q),a),release:destroy=>c.release(destroy)};}};
  const snapshot={company_id:SCOPE.company_id,tenant_id:SCOPE.tenant_id,version:14,policy_id:SCOPE.policy_id,
-  config_status:'enabled',runtime_config:{routing:{line_key:'jinuo'}}};
+  config_status:'enabled',runtime_config:{routing:{line_key:'jinuo'},platform_accounts:[{profile:'jinoshengyuan-work',
+   device_serial:'ANGYVB4227006983',douyin_id:'langzi63485',company_id:SCOPE.company_id,tenant_id:SCOPE.tenant_id,
+   platform:'douyin',enabled:true,verification_status:'verified'}]}};
  let held=false;
  const authority=()=>({decision:{id:request.decision_id,made_by:'user',status:'active',decision:JSON.stringify(SCOPE)},
   originalTask:{id:SCOPE.original_task_id,status:'blocked'},maintenanceTask:{id:request.maintenance_task_id,
@@ -143,7 +170,7 @@ test('scratch PG：102n逐VID恢复、审计、重放与隔离旁行',{skip:proc
   const audit=readFileSync(new URL('../../../apps/api/db/migrations/20260820_120000_structured_workbench.sql',import.meta.url),'utf8');
   await scoped.query(audit.match(/CREATE TABLE IF NOT EXISTS zenithjoy\.db_audit \([\s\S]+?\n\);/)[0]);
   await scoped.query('CREATE TABLE zenithjoy.leadgen_comments(id uuid,line_key text,source_video_url text,harvest_batch text)');
-  await scoped.query('CREATE TABLE zenithjoy.company_config_runs(company_id uuid,tenant_id uuid,version int,run_id text,source_run text,snapshot jsonb)');
+  await scoped.query('CREATE TABLE zenithjoy.company_config_runs(company_id uuid,tenant_id uuid,version int,run_id text,source_run text,snapshot jsonb,task_inputs jsonb)');
   for(const [run,source] of [[SCOPE.original_101_run,null],[SCOPE.original_102_run,SCOPE.original_101_run]])
    await scoped.query('INSERT INTO zenithjoy.company_config_runs VALUES($1,$2,14,$3,$4,$5::jsonb)',
     [SCOPE.company_id,SCOPE.tenant_id,run,source,JSON.stringify(snapshot)]);
@@ -159,6 +186,18 @@ test('scratch PG：102n逐VID恢复、审计、重放与隔离旁行',{skip:proc
   assert.deepEqual(await row(videos[1]),secondBefore);assert.deepEqual(await row(other),otherBefore);
   assert.equal((await readback(scoped,request,dep)).status,'already_applied');
   assert.equal((await recover(scoped,request,dep)).status,'already_applied');
+  const d=producerDescriptor(videos[0]),next102='accept_new_102n_one';
+  await scoped.query('INSERT INTO zenithjoy.company_config_runs(company_id,tenant_id,version,run_id,source_run,snapshot,task_inputs) VALUES($1,$2,14,$3,$4,$5::jsonb,$6::jsonb)',
+   [SCOPE.company_id,SCOPE.tenant_id,next102,SCOPE.original_101_run,JSON.stringify(snapshot),JSON.stringify({device_binding:{profile:d.profile,device_serial:d.serial}})]);
+  const claim={op:'claim_videos',run:next102,line:'jinuo',source_run:SCOPE.original_101_run,limit:1,
+   config_required:true,video_ids:[videos[0]],producer_descriptor:d};
+  const beforeClaimOther=await row(other),beforeClaimSecond=await row(videos[1]);
+  for(const bad of [{producer_descriptor:undefined},{producer_descriptor:{...d,decision_id:undefined}},
+   {producer_descriptor:{...d,run_tag:'other101'}},{producer_descriptor:{...d,consumer_source_commit:'d'.repeat(40)}}]){
+   await assert.rejects(queueRequest(scoped,{...claim,...bad},{sourceCommit:consumerSha,freezeCompanyConfig:async()=>snapshot}),/PRODUCER|SOURCE/);
+  }
+  assert.deepEqual((await queueRequest(scoped,claim,{sourceCommit:consumerSha,freezeCompanyConfig:async()=>snapshot})).map(r=>r.video_id),[videos[0]]);
+  assert.deepEqual(await row(videos[1]),beforeClaimSecond);assert.deepEqual(await row(other),beforeClaimOther);
   await scoped.query('UPDATE zenithjoy.leadgen_videos SET judgment_status=$2 WHERE video_id=$1',[videos[1],'matched']);
   const second={...request,video_id:videos[1],run:runFor(videos[1])};
   await assert.rejects(recover(scoped,second,dep),/RECOVERY_102N_VIDEO_SCOPE_CONFLICT/);
