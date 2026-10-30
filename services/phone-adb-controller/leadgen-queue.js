@@ -47,6 +47,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(op==='recover_single_video_0353')return require('./single-video-recovery-0353.js').recoverSingleVideo(pool,input,deps.recovery0353);
   if(op==='recover_single_video_readback')return require('./single-video-recovery.js').readbackSingleVideo(pool,input,deps.recovery);
   if(op==='recover_single_video')return require('./single-video-recovery.js').recoverSingleVideo(pool,input,deps.recovery);
+  if(op==='recover_102n_qualification_readback')return require('./qualification-quarantine-recovery-102n.js').readback(pool,{...input,op:'recover_102n_qualification'},deps.recovery102n);
+  if(op==='recover_102n_qualification')return require('./qualification-quarantine-recovery-102n.js').recover(pool,input,deps.recovery102n);
+  if(op==='recover_102n_qualification_batch')return require('./qualification-quarantine-recovery-102n.js').recoverBatch(pool,input,deps.recovery102n);
   if(op==='admit_102g_comments'||op==='admit_102g_readback'){
     if(input.candidate_source_commit!==deps.sourceCommit)throw Error('ADMISSION_SOURCE_COMMIT_MISMATCH');
     return op==='admit_102g_comments'?commentAdmission.admit(pool,input,deps.commentAdmission):commentAdmission.readback(pool,input);
@@ -191,7 +194,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return require('./discovery-metrics-queue.js').discoverMetricsRequest(pool,input,deps);
   }
   if (op === 'claim_videos') {
-    if(input.producer_descriptor!==undefined)return require('./producer-pending-claim.js').claimPendingProducer(pool,input);
+    if(input.producer_descriptor!==undefined)return require('./producer-pending-claim.js').claimPendingProducer(pool,input,deps);
+    const recovery=require('./qualification-quarantine-recovery-102n.js');
+    if(sourceRun===recovery.SCOPE.original_101_run)throw Error('PRODUCER_DESCRIPTOR_REQUIRED');
     let evidence=null;
     if (input.config_required === true) {
       const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'102'});
@@ -199,12 +204,17 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     }
     const policyFilter=evidence?"(judgment_status<>'rejected' OR judgment_config IS NULL OR COALESCE(judgment_config->>'company_id','')<>$7 OR COALESCE(judgment_config->>'version','')<>$8)":"judgment_status<>'rejected'";
     const priority=input.prefer_matched===true?"CASE WHEN judgment_status='matched' THEN 0 ELSE 1 END":"CASE WHEN judgment_status='pending' THEN 0 ELSE 1 END";
+    const recoveryAuditGuard=lineKey==='jinuo'?`AND NOT EXISTS (SELECT 1 FROM zenithjoy.db_audit a
+      WHERE a.org_id='${recovery.SCOPE.tenant_id}'::uuid AND a.action='leadgen_102n_qualification_recovery'
+      AND a.detail->>'scope_sha256'='${recovery.digest(recovery.SCOPE)}'
+      AND a.detail->>'video_id'=zenithjoy.leadgen_videos.video_id)`:'';
     return transaction(pool, async client => {
       // 待采的已合格视频也入队；上次崩溃的租约15分钟后可重领，活动内调用续期。
       const result = await client.query(`WITH pending AS (
         SELECT id FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND ${policyFilter}
         AND ($6::text[] IS NOT NULL OR $5::text IS NULL OR harvest_batch=$5)
         AND ($6::text[] IS NULL OR video_id=ANY($6::text[]))
+        ${recoveryAuditGuard}
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
         ORDER BY ${priority}, discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)

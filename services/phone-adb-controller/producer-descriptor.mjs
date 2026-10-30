@@ -5,12 +5,25 @@ const fixed={schema_version:1,workflow_key:'douyin_video_discovery',run_tag:'cic
 const keys=[...Object.keys(fixed),'snapshot_sha256','progress_sha256','video_ids'].sort(),fail=()=>{throw Error('PRODUCER_DESCRIPTOR_INVALID');};
 const pendingFixed={...fixed,schema_version:2,run_tag:'cicdbeb_101_attempt2_20261027_a2dcb023',source_commit:'beb37370c047a13013aa0cc997a0fecc09534dde',
  snapshot_sha256:'fe7da095eb9184ae5eba9c71af78b7c679a6f752509e5e8c5ed1a5a4288fee67',progress_sha256:'fbbee23e36623307ab19ca9abbfb1626e6b94a00e05439dad6f3add8174646bc'};
+const recoveryFixed={...fixed,schema_version:3,run_tag:'accept7252_jinuo101n_20261031T0251',
+ source_commit:'7252b6d2d6f279768753f086abc8c29ba968ea45',profile:'jinoshengyuan-work',serial:'ANGYVB4227006983',
+ snapshot_sha256:'e35c9d695e1d2704ed6763affc7b8affb5ec8ffa8ad621f222f1e33ab02c8983',
+ progress_sha256:'937f6cb4e69d8ae2c285c67443869fa28a1854bdbd180aecae455bce5cf60e83'};
+const recoveryKeys=[...keys,'decision_id','consumer_source_commit'].sort();
+const recoveryVideos=['7690206754872817819','7701984906457456467'];
 export function assertProducerSampling(d,s){
- if(d.schema_version!==2)return;
+ if(![2,3].includes(d.schema_version))return;
  if(!s||s.schema_version!==1||s.workflow_key!=='douyin_video_processing'||s.profile!==d.profile||s.serial!==d.serial||s.line!==d.line||s.source_run!==d.run_tag
   ||!Number.isSafeInteger(s.comment_limit)||s.comment_limit<1||s.comment_limit>5||(s.collection_budget_s??480)!==480)throw Error('PRODUCER_DESCRIPTOR_SAMPLING_SCOPE_INVALID');
 }
 export function validateProducerDescriptor(d){
+ if(d?.schema_version===3){
+  if(typeof d!=='object'||Array.isArray(d)||JSON.stringify(Object.keys(d).sort())!==JSON.stringify(recoveryKeys)
+   ||Object.entries(recoveryFixed).some(([k,v])=>d[k]!==v)||!Array.isArray(d.video_ids)||d.video_ids.length!==1
+   ||!recoveryVideos.includes(d.video_ids[0])||!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(d.decision_id||'')
+   ||!/^[a-f0-9]{40}$/.test(d.consumer_source_commit||''))fail();
+  return structuredClone(d);
+ }
  if(d?.schema_version===2){
   if(typeof d!=='object'||Array.isArray(d)||JSON.stringify(Object.keys(d).sort())!==JSON.stringify(keys)||Object.entries(pendingFixed).some(([k,v])=>d[k]!==v)
    ||!Array.isArray(d.video_ids)||d.video_ids.length!==1||d.video_ids[0]!=='7689863996204591985')fail();
@@ -24,9 +37,10 @@ export function readProducerDescriptor(path){
  if(typeof path!=='string'||!path.startsWith('/'))fail();const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);
  try{const s=fstatSync(fd);if(!s.isFile()||s.nlink!==1||s.uid!==process.getuid()||(s.mode&0o777)!==0o600||s.size>32768)fail();return validateProducerDescriptor(JSON.parse(readFileSync(fd,'utf8')));}finally{closeSync(fd);}
 }
-export function verifyProducerDescriptor(d,{upstream,progressRaw,progress,env,company}){
+export function verifyProducerDescriptor(d,{upstream,progressRaw,progress,env,company,consumerSourceCommit}){
  d=validateProducerDescriptor(d);const r=upstream.run_identity;
- if(upstream.deployment.source_commit!==d.source_commit||upstream.snapshot_sha256!==d.snapshot_sha256||r?.capability!==d.workflow_key||r.tag!==d.run_tag||r.profile!==d.profile||r.serial!==d.serial
+ if(d.schema_version===3&&consumerSourceCommit!==d.consumer_source_commit
+  ||upstream.deployment.source_commit!==d.source_commit||upstream.snapshot_sha256!==d.snapshot_sha256||r?.capability!==d.workflow_key||r.tag!==d.run_tag||r.profile!==d.profile||r.serial!==d.serial
   ||createHash('sha256').update(progressRaw).digest('hex')!==d.progress_sha256||progress.run!==d.run_tag||progress.profile!==d.profile||env.LEADGEN_SOURCE_RUN!==d.run_tag||env.P!==d.profile||env.SERIAL!==d.serial||env.LEADGEN_LINE!==d.line
   ||company?.company_id!==d.company_id||company.tenant_id!==d.tenant_id||company.version!==d.company_config_version||company.policy_id!==d.policy_id||d.video_ids.some(id=>!progress.videos?.some(v=>v.videoId===id)))fail();
  return d;

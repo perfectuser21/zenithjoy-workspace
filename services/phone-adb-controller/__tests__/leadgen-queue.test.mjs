@@ -286,9 +286,10 @@ test('真实领取选择SQL优先新pending而非老matched，仍限定显式VID
  ].map(r=>({...r,line_key:'jinuo',process_status:'待判定',harvest_batch:'old102',updated_at:'2099-01-01'}));
  const calls=[];const client={release(){},async query(sql,args){calls.push({sql,args});
   if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
-  assert.match(sql,/FOR UPDATE SKIP LOCKED/);assert.match(sql,/15 minutes/);
+  assert.match(sql,/FOR UPDATE SKIP LOCKED/);assert.match(sql,/15 minutes/);assert.match(sql,/zenithjoy\.db_audit/);
   let selected=sql.match(/WITH pending AS \(\s*([\s\S]*?) FOR UPDATE SKIP LOCKED\)/)?.[1];assert.ok(selected);
   selected=selected.replace(/\$6::text\[\]/g,'$6').replace(/\$5::text/g,'$5')
+    .replace(/AND NOT EXISTS \(SELECT 1 FROM zenithjoy\.db_audit a[\s\S]*?\)/,'')
     .replace('video_id=ANY($6)','video_id IN (SELECT value FROM json_each($6))')
     .replace("now()-interval '15 minutes'","datetime('now','-15 minutes')");
   const result=spawnSync('python3',['-c',`import json,sqlite3,sys
@@ -399,9 +400,10 @@ test('采样真实领取SQL先matched仍严格source manifest/line/limit',async(
  ].map(r=>({...r,line_key:'jinuo',process_status:'待判定',harvest_batch:'old102',updated_at:'2099-01-01'}));
  const calls=[];const client={release(){},async query(sql,args){calls.push({sql,args});
   if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
-  assert.match(sql,/FOR UPDATE SKIP LOCKED/);assert.match(sql,/15 minutes/);
+  assert.match(sql,/FOR UPDATE SKIP LOCKED/);assert.match(sql,/15 minutes/);assert.match(sql,/zenithjoy\.db_audit/);
   let selected=sql.match(/WITH pending AS \(\s*([\s\S]*?) FOR UPDATE SKIP LOCKED\)/)?.[1];assert.ok(selected);
   selected=selected.replace(/\$6::text\[\]/g,'$6').replace(/\$5::text/g,'$5')
+    .replace(/AND NOT EXISTS \(SELECT 1 FROM zenithjoy\.db_audit a[\s\S]*?\)/,'')
     .replace('video_id=ANY($6)','video_id IN (SELECT value FROM json_each($6))')
     .replace("now()-interval '15 minutes'","datetime('now','-15 minutes')");
   const result=spawnSync('python3',['-c',`import json,sqlite3,sys

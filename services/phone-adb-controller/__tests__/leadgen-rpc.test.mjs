@@ -14,7 +14,8 @@ function fixture(){
 }
 test('跨机RPC核对全部固定依赖字节，缺依赖/篡改/旧版均拒绝',()=>{
   const f=fixture();verifyRpcSource(f.source,f.options);
-  for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js']){
+  for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js',
+   'qualification-quarantine-recovery-102n.js','qualification-quarantine-recovery-102n-authority.js']){
     assert.ok(RPC_FILES.includes(name));
     assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!==name)},f.options),/DEPENDENCY_MISSING/);
   }
