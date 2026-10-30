@@ -26,14 +26,12 @@ async function reviewBoundComment(pool,lineKey,id,binding,deps={}){
     return review.rows[0]||unknown;
   }catch{return unknown;}
 }
-
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
   catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
 }
-
 // 标题仅限定候选集合；身份只接受实际受信跳转中的VID。
 async function historyUrlProof(url, videoId, deps) {
   if (url === `https://www.douyin.com/video/${videoId}`) return {source_video_url:url,video_id:videoId,resolved_url:url};
@@ -54,7 +52,6 @@ async function validateHistoryRows(client,lineKey,input,old,deps) {
   const verified=await Promise.allSettled([...aliases].map(url=>historyUrlProof(url,input.video_id,deps)));
   if(verified.some(r=>r.status!=='fulfilled'))throw Error('历史URL实际VID重验失败');
 }
-
 const validRun=value=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(value);
 function validSources(ids,sources){
  return Array.isArray(ids)&&ids.length<=1000&&new Set(ids).size===ids.length&&ids.every(id=>uuid.test(id))
@@ -92,7 +89,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||Number(snapshot.version)!==Number(frozen[0].version)||snapshot.runtime_config?.routing?.line_key!==lineKey)throw Error('POLICY_REVIEW_SCOPE_INVALID');
     const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[]) AND ($3::text IS NULL OR harvest_batch=$3)`,[lineKey,ids,sourceRun])).rows;
     const urls=[...new Set(rows.map(r=>r.source_video_url).filter(Boolean))];
-    const videos=urls.length?(await pool.query(`SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=ANY($2::text[])`,[lineKey,urls])).rows:[];
+    const videos=urls.length?(await pool.query(`SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=ANY($2::text[]) AND process_status='评论已采'`,[lineKey,urls])).rows:[];
     const reviewed=[];
     for(const id of ids){const matches=rows.filter(r=>r.id===id);const row=matches[0];
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
@@ -105,8 +102,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return {verified:reviewed.every(r=>r.status==='pass'),rows:reviewed,ids,scope:{line:lineKey,run,claim:input.claim,source_run:sourceRun}};
   }
   if(op==='score_scope'){
-    const rows=(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
-      AND process_status='待分拣' ORDER BY collected_at,id LIMIT 1001`,[lineKey,sourceRun])).rows;
+    const rows=(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments c WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
+      AND process_status='待分拣' AND EXISTS (SELECT 1 FROM zenithjoy.leadgen_videos v WHERE v.line_key=c.line_key AND v.video_url=c.source_video_url AND v.title=c.source_video AND v.harvest_batch=c.harvest_batch AND v.process_status='评论已采' AND v.judgment_status='matched') ORDER BY collected_at,id LIMIT 1001`,[lineKey,sourceRun])).rows;
     if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
@@ -331,6 +328,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     });
   }
   if (op === 'score') {
+    const legacyRecovery=require('./leadgen-legacy-score-recovery.js');
+    const legacy=legacyRecovery.validate(input,lineKey,sourceRun);
     const cursor=input.cursor??null;
     if(cursor!==null&&(!cursor||typeof cursor!=='object'||Array.isArray(cursor)
       ||Object.keys(cursor).sort().join(',')!=='collected_at,id,line,run,source_run'
@@ -360,19 +359,20 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           if(count[0].used>=input.budget_max)return false;
         }
         const rows = (await client.query(`SELECT * FROM zenithjoy.leadgen_comments
-          WHERE line_key=$1 AND process_status='待分拣' AND relevance IS NULL
+          WHERE line_key=$1 AND process_status='待分拣' ${legacy?"AND id=$7 AND relevance IS NOT NULL":"AND relevance IS NULL"}
           AND ($2::text IS NULL OR harvest_batch=$2)
           AND id<>ALL($3::uuid[])
           AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
           AND ($6::uuid[] IS NULL OR id=ANY($6::uuid[]))
-          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun,[...seen],cursor?.collected_at||null,cursor?.id||null,input.ids||null])).rows;
+          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun,[...seen],cursor?.collected_at||null,cursor?.id||null,input.ids||null,...(legacy?[input.legacy_recovery.comment_id]:[])])).rows;
         if (!rows.length) return false;
         const row = rows[0];
+        if(legacy)await legacyRecovery.verify(client,row,snapshot,deps);
         if(input.sources&&row.harvest_batch!==input.sources[row.id])throw Error('POLICY_SCORE_ROW_SOURCE_CHANGED');
         const nextCursor=row.collected_at&&uuid.test(row.id)?{line:lineKey,run,source_run:sourceRun||null,
           collected_at:new Date(row.collected_at).toISOString(),id:row.id}:null;
         const videos=(await client.query(`SELECT video_id,video_url,title,judgment_status FROM zenithjoy.leadgen_videos
-          WHERE line_key=$1 AND video_url=$2`,[lineKey,row.source_video_url])).rows;
+          WHERE line_key=$1 AND video_url=$2 AND process_status='评论已采' AND harvest_batch=$3`,[lineKey,row.source_video_url,row.harvest_batch])).rows;
         if(videos.length!==1||videos[0].title!==row.source_video||videos[0].judgment_status!=='matched'){
           const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
         }

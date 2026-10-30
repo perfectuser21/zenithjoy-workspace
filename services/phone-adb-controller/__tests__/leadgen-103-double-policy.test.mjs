@@ -200,7 +200,7 @@ test('103即使收到102失败批次的待分拣评论，也只领取PG已完成
  const queries=[];const pool={async query(sql,args){queries.push({sql,args});return {rows:[]};}};
  await queueRequest(pool,{op:'score_scope',line:'jinuo',run:'test103',
   source_run:'accept3a903_jinuo102g_20261030t0712'});
- assert.match(queries[0].sql,/JOIN zenithjoy\.leadgen_videos/);
+ assert.match(queries[0].sql,/EXISTS \(SELECT 1 FROM zenithjoy\.leadgen_videos/);
  assert.match(queries[0].sql,/v\.process_status='评论已采'/);
  assert.match(queries[0].sql,/v\.harvest_batch=c\.harvest_batch/);
  let modelCalls=0;const calls=[];
@@ -209,9 +209,10 @@ test('103即使收到102失败批次的待分拣评论，也只领取PG已完成
   if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:calls.filter(c=>c.sql.includes('SELECT * FROM zenithjoy.leadgen_comments')).length===1
    ?[{id,line_key:'jinuo',harvest_batch:'accept3a903_jinuo102g_20261030t0712',
     comment_body:comment,source_video:title,source_video_url:'https://www.douyin.com/video/7617837149999841201'}]:[]};
-  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{title,judgment_status:'matched',
-   process_status:'待人工核验:accept3a903_jinuo102g_20261030t0712',
-   harvest_batch:'accept3a903_jinuo102g_20261030t0712'}]};
+  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:sql.includes("process_status='评论已采'")
+   &&sql.includes('harvest_batch=$3')?[]:[{title,judgment_status:'matched',
+    process_status:'待人工核验:accept3a903_jinuo102g_20261030t0712',
+    harvest_batch:'accept3a903_jinuo102g_20261030t0712'}]};
   return {rows:[]};}};
  const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',
   run:'test103',source_run:'accept3a903_jinuo102g_20261030t0712',limit:1},
