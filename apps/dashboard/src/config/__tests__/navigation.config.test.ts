@@ -36,10 +36,12 @@ describe('员工视频工具导航', () => {
 });
 
 describe('Aidge 定向试用导航', () => {
-  it('只留下 Aidge 入口，其他直接路径不属于试用范围', () => {
+  it('只显示 Aidge、素材库和批量混剪，其他直接路径不属于试用范围', () => {
     const paths = filterAidgeOnlyNavGroups(autopilotNavGroups).flatMap(group => group.items.map(item => item.path));
-    expect(paths).toEqual(['/aidge']);
+    expect(paths).toEqual(['/aidge', '/materials', '/mashup']);
     expect(isAidgeOnlyPath('/aidge')).toBe(true);
+    expect(isAidgeOnlyPath('/materials')).toBe(true);
+    expect(isAidgeOnlyPath('/mashup')).toBe(true);
     expect(isAidgeOnlyPath('/creative-canvas')).toBe(false);
     expect(isAidgeOnlyPath('/area/admin')).toBe(false);
   });
