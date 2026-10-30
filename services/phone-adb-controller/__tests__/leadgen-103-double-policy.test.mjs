@@ -202,13 +202,13 @@ test('旧单审半提交行只在精确恢复范围内重新双审，成功才�
  assert.ok(calls.some(c=>c.sql.includes('leadgen_bridge_outbox')));
 });
 
-test('103即使收到102失败批次的待分拣评论，也只领取PG已完成采集且来源一致的视频',async()=>{
+test('103失败102g来源默认只查受控审计回执，不领隔离视频或调用模型',async()=>{
  const queries=[];const pool={async query(sql,args){queries.push({sql,args});return {rows:[]};}};
  await queueRequest(pool,{op:'score_scope',line:'jinuo',run:'test103',
   source_run:'accept3a903_jinuo102g_20261030t0712'});
- assert.match(queries[0].sql,/EXISTS \(SELECT 1 FROM zenithjoy\.leadgen_videos/);
- assert.match(queries[0].sql,/v\.process_status='评论已采'/);
- assert.match(queries[0].sql,/v\.harvest_batch=c\.harvest_batch/);
+ assert.equal(queries.length,1);
+ assert.match(queries[0].sql,/zenithjoy\.db_audit/);
+ assert.equal(queries[0].args[1],'accept3a903_jinuo102g_20261030t0712');
  let modelCalls=0;const calls=[];
  const client={release(){},async query(sql,args=[]){calls.push({sql,args});
   if(sql==='BEGIN'||sql==='ROLLBACK'||sql==='COMMIT')return {rows:[]};
