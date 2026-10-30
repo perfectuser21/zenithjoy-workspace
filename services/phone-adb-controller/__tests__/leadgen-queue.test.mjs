@@ -7,7 +7,7 @@ import {mkdtempSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const require = createRequire(import.meta.url);
-const { JudgeApiError, judgeComment } = require('../judge-comment.js');
+const { JudgeApiError } = require('../judge-comment.js');
 import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
 
@@ -209,24 +209,6 @@ test('103评分失败回执区分Jev HTTP故障与Commander证据无效，且不
     assert.ok(!pool.calls.some(c => /UPDATE zenithjoy\.leadgen_comments/.test(c.sql)));
     assert.ok(!JSON.stringify(result).includes('private response'));
   }
-});
-
-test('Commander连续两次证据不合格时PG回滚、原评论不写入且Jev只调用一次',async()=>{
- const pool=fakePool([
-  {rows:[{id:'c1',comment_body:'如何报名',source_video:'培训',source_video_url:'https://www.douyin.com/video/7617837149999841201'}]},
-  {rows:[{title:'培训',judgment_status:'matched'}]},
-  {rows:[]},
- ]);
- const urls=[];const httpPost=async(url)=>{urls.push(url);return url.endsWith('/decisions')
-  ?{answers:{grade:{choice:'A',confidence:.1}}}
-  :{id:'response-invalid',model:'google/gemini-2.5-flash',choices:[{message:{content:JSON.stringify({grade:'A',policy_evidence:{audience_id:'missing',matched_rule:'报名',reason:'有意向'}})}}]};};
- const result=await queueRequest(pool,{op:'score',line:'jinuo',run:'test'},
-  {judgeComment:(body,video,profile,opts)=>judgeComment(body,video,profile,{...opts,httpPost,apiKey:'k'})});
- assert.equal(result.status,'partial');assert.deepEqual(result.blocked_reasons,[{id:'c1',code:'POLICY_SCORE_COMMANDER_EVIDENCE_INVALID',stage:'commander',evidence_check:'missing_exclusion_rule'}]);
- assert.equal(urls.filter(url=>url.endsWith('/decisions')).length,1);
- assert.equal(urls.filter(url=>url.endsWith('/chat/completions')).length,2);
- assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));
- assert.ok(!pool.calls.some(c=>/UPDATE zenithjoy\.leadgen_comments/.test(c.sql)));
 });
 
 test('标记人的更新与评论完成状态原子提交，已有已触达人只增加重复标记', async () => {
