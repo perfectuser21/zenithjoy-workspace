@@ -5,6 +5,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {queueRequest:queueDirect}=require('../leadgen-queue.js');
 const admission=require('../leadgen-comment-admission.js');
+const {buildObservation}=require('../discovery-metrics.js');
 const {hash:byteHash}=require('../queued-recipient-evidence.js');
 const {companyFixture}=await import('./company-config-fixture.mjs');
 const run='accept3a903_jinuo102g_20261030t0712';
@@ -35,6 +36,23 @@ const input={op:'admit_102g_comments',line:'jinuo',run:'accept103_102g_exact_a1'
 const video={line_key:'jinuo',video_id:videoId,video_url:`https://www.douyin.com/video/${videoId}`,
   title:'人工智能训练师报名',harvest_batch:run,process_status:`待人工核验:${run}`,judgment_status:'matched',
   judgment_config:{company_id:company,tenant_id:tenant,version:14,policy_id:'jinoshengyuan-existing-acquisition-rules-v1',run_id:run}};
+test('101l 原生证据复用只保留原102g来源与三评论精确边界',()=>{
+  const reusedRun='accept6cc22_jinuo101l_20261031T0022';
+  const xml='<hierarchy><node package="com.ss.android.ugc.aweme" content-desc="未点赞，喜欢2，按钮"/><node package="com.ss.android.ugc.aweme" content-desc="评论3，按钮"/></hierarchy>';
+  const observed=buildObservation({run:reusedRun,run_id:`douyin_video_discovery-${reusedRun}__a1`,
+    profile:'jinoshengyuan-work',source_commit:'6cc22d9d929a591ffb4aacb40a3d153902f6ab8e',
+    line_key:'jinuo',video_id:videoId,video_url:video.video_url,
+    observed_at:'2026-10-30T16:31:00.289Z',evidence_id:`${reusedRun}-candidate1-link-t1`,xml});
+  const reused={...structuredClone(video),harvest_batch:reusedRun,
+    discovery_metrics:{...observed,company_binding:{company_id:company,tenant_id:tenant,version:14,line_key:'jinuo',run_id:reusedRun}}};
+  assert.doesNotThrow(()=>admission.checkVideo(reused,{reuseDigest:observed.digest}));
+  for(const changed of [
+    {...reused,harvest_batch:'another101'},
+    {...reused,judgment_config:{...reused.judgment_config,run_id:reusedRun}},
+    {...reused,discovery_metrics:{...reused.discovery_metrics,source_commit:'f'.repeat(40)}},
+    {...reused,discovery_metrics:{...reused.discovery_metrics,company_binding:{...reused.discovery_metrics.company_binding,tenant_id:'other'}}},
+  ])assert.throws(()=>admission.checkVideo(changed,{reuseDigest:observed.digest}),/ADMISSION_VIDEO_SCOPE_INVALID/);
+});
 const snapshot={company_id:company,tenant_id:tenant,version:14,policy_id:'jinoshengyuan-existing-acquisition-rules-v1',runtime_config:{routing:{line_key:'jinuo'}}};
 const frozen={company_id:company,tenant_id:tenant,version:14,run_id:run,source_run:source101,snapshot};
 function native(id){
