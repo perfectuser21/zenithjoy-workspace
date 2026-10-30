@@ -26,15 +26,18 @@ export class AidgeTranslationError extends Error {
 export function makeAidgeClient(): AidgeClient {
   const accessKeyId = process.env.AIDGE_ACCESS_KEY_ID;
   const accessKeySecret = process.env.AIDGE_ACCESS_KEY_SECRET;
+  const relayEndpoint = process.env.AIDGE_ENDPOINT?.trim();
   if (!accessKeyId || !accessKeySecret) {
     throw new AidgeTranslationError(503, "Aidge 尚未配置，请联系管理员");
   }
+  if (relayEndpoint && relayEndpoint !== "aidge.cn-beijing.aliyuncs.com:18443")
+    throw new AidgeTranslationError(503, "Aidge 网络转发配置无效，请联系管理员");
 
   return new AidgeClient(
     new $OpenApiUtil.Config({
       accessKeyId,
       accessKeySecret,
-      endpoint: "aidge.cn-beijing.aliyuncs.com",
+      endpoint: relayEndpoint || "aidge.cn-beijing.aliyuncs.com",
       regionId: "cn-beijing",
       protocol: "HTTPS",
       connectTimeout: 5000,
