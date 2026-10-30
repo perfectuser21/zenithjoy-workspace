@@ -346,13 +346,21 @@ export function getAutopilotNavGroups(): NavGroup[] {
 }
 
 export function isAidgeOnlyPath(pathname: string): boolean {
-  return pathname === '/aidge';
+  return ['/aidge', '/materials', '/mashup'].includes(pathname);
 }
 
 export function filterAidgeOnlyNavGroups(groups: NavGroup[]): NavGroup[] {
-  return groups
-    .map(group => ({ ...group, items: group.items.filter(item => isAidgeOnlyPath(item.path)) }))
-    .filter(group => group.items.length > 0);
+  const items = groups.flatMap(group => group.items);
+  const aidge = items.find(item => item.path === '/aidge');
+  const materials = items.find(item => item.path === '/materials');
+  return [{
+    title: '',
+    items: [
+      ...(aidge ? [aidge] : []),
+      ...(materials ? [materials] : []),
+      { path: '/mashup', icon: Scissors, label: '批量混剪', featureKey: 'mashup', component: 'MashupPage' },
+    ],
+  }];
 }
 
 /**
