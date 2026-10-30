@@ -2006,7 +2006,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-comment-admission.js",
           "revision": "contract",
-          "sha256": "1da9644534353af942ad68812d9f9a4f59386cca7dfb04cd725d244c2199d75d"
+          "sha256": "cdc19c18fb5caa06219e293fe1b95ee02bc493e83d83b6bc7ce897096512decd"
         },
         {
           "kind": "code",
@@ -2037,7 +2037,14 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "a57041073faec0776207bf617090867203b669dc9b5e53f4f05d4aa9a5781565"
+      "code_digest": "cc325b82529e161ef4b42b70dd8eba1ad1723ec5ec1832be76a5c53055d08c82",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，保留原102g评论/政策/授权及其他批次阻断，评分和标线索规则不变。",
+        "reviewed_by": "codex:102g-lineage-fix",
+        "previous_code_digest": "a57041073faec0776207bf617090867203b669dc9b5e53f4f05d4aa9a5781565",
+        "current_code_digest": "cc325b82529e161ef4b42b70dd8eba1ad1723ec5ec1832be76a5c53055d08c82"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.5.0",
@@ -2272,7 +2279,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-comment-admission.js",
           "revision": "contract",
-          "sha256": "1da9644534353af942ad68812d9f9a4f59386cca7dfb04cd725d244c2199d75d"
+          "sha256": "cdc19c18fb5caa06219e293fe1b95ee02bc493e83d83b6bc7ce897096512decd"
         },
         {
           "kind": "code",
@@ -2338,7 +2345,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "2ce699ff23a1ea29115c900f088c3c00354df0e618cd93ef602bab4cb5eec042"
+      "code_digest": "1c5c77e097297cd72b5fce2ab76d9ece667deb0399da85be88e5e03beb703e65",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，保留原102g评论/政策/授权及其他批次阻断，评分和标线索规则不变。",
+        "reviewed_by": "codex:102g-lineage-fix",
+        "previous_code_digest": "2ce699ff23a1ea29115c900f088c3c00354df0e618cd93ef602bab4cb5eec042",
+        "current_code_digest": "1c5c77e097297cd72b5fce2ab76d9ece667deb0399da85be88e5e03beb703e65"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
