@@ -208,6 +208,14 @@ test('scratch PG：102n逐VID恢复、审计、重放与隔离旁行',{skip:proc
   const claim={op:'claim_videos',run:next102,line:'jinuo',source_run:SCOPE.original_101_run,limit:1,
    config_required:true,video_ids:[videos[0]],producer_descriptor:d};
   const beforeClaimOther=await row(other),beforeClaimSecond=await row(videos[1]);
+  for(const source_run of [undefined,'foreign101']){
+   const unproved={...claim,source_run,producer_descriptor:undefined};
+   assert.deepEqual(await queueRequest(scoped,unproved,{sourceCommit:consumerSha,freezeCompanyConfig:async()=>snapshot}),[]);
+   assert.equal((await row(videos[0])).process_status,'待判定');
+  }
+  assert.deepEqual(await queueRequest(scoped,{op:'claim_videos',run:'generic102',line:'jinuo',limit:1},
+   {sourceCommit:consumerSha}),[]);
+  assert.equal((await row(videos[0])).process_status,'待判定');
   for(const bad of [{producer_descriptor:undefined},{producer_descriptor:{...d,decision_id:undefined}},
    {producer_descriptor:{...d,run_tag:'other101'}},{producer_descriptor:{...d,consumer_source_commit:'d'.repeat(40)}}]){
    await assert.rejects(queueRequest(scoped,{...claim,...bad},{sourceCommit:consumerSha,freezeCompanyConfig:async()=>snapshot}),/PRODUCER|SOURCE/);
