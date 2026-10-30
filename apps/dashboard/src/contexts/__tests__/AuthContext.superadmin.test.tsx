@@ -6,11 +6,13 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../AuthContext';
 import * as betterAuthApi from '../../api/better-auth.api';
+import * as aidgeAccess from '../../api/aidge-access';
 
 vi.mock('../../api/better-auth.api', () => ({
   getSession: vi.fn(),
   signOut: vi.fn(),
 }));
+vi.mock('../../api/aidge-access', () => ({ getAidgeAccess: vi.fn() }));
 
 function SuperAdminStatus() {
   const { isSuperAdmin, authLoading } = useAuth();
@@ -23,6 +25,7 @@ describe('isSuperAdmin — 邮箱白名单', () => {
   const origSuperAdminFeishuIds = import.meta.env.VITE_SUPER_ADMIN_FEISHU_IDS;
 
   beforeEach(() => {
+    vi.mocked(aidgeAccess.getAidgeAccess).mockResolvedValue(null);
     vi.mocked(betterAuthApi.getSession).mockResolvedValue({
       user: { id: 'u1', name: 'Test User', email: 'admin@example.com' },
       session: { id: 's1' },
