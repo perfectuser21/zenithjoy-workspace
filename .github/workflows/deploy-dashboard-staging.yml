@@ -8,6 +8,7 @@ on:
       - 'deploy/nginx.staging.conf'
       - 'deploy/docker-compose.staging.yml'
       - 'scripts/deploy/hk-dashboard-staging.sh'
+      - 'scripts/deploy/comfy_official_assets.py'
       - '.github/workflows/deploy-dashboard-staging.yml'
   workflow_dispatch: {}
 permissions:
@@ -49,6 +50,12 @@ jobs:
           printf '{"sha":"%s"}\n' "$DEPLOY_SHA" > apps/dashboard/dist/release-sha.json
           mkdir -p "$RUNNER_TEMP/dashboard-bundle"
           cp -r apps/dashboard/dist "$RUNNER_TEMP/dashboard-bundle/dist"
+          # Add public official frontend files after Vite/PWA build so the
+          # dashboard service worker does not precache the Comfy bundle.
+          curl -fL --retry 3 --max-time 120 --max-filesize 30000000 \
+            'https://files.pythonhosted.org/packages/79/f2/2f99e418fa31d7d73d23723d7fce0a4bba2d363ad0fb59ab973d78191ea3/comfyui_frontend_package-1.57.6-py3-none-any.whl' \
+            -o "$RUNNER_TEMP/comfy-frontend.whl"
+          python3 scripts/deploy/comfy_official_assets.py "$RUNNER_TEMP/comfy-frontend.whl" "$RUNNER_TEMP/dashboard-bundle/dist"
           cp deploy/nginx.staging.conf "$RUNNER_TEMP/dashboard-bundle/nginx.conf"
           tar -czf "$RUNNER_TEMP/dashboard-staging.tar.gz" -C "$RUNNER_TEMP/dashboard-bundle" dist nginx.conf
           sha256sum "$RUNNER_TEMP/dashboard-staging.tar.gz" | awk '{print $1}' > "$RUNNER_TEMP/dashboard-staging.sha256"

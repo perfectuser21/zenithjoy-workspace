@@ -8510,6 +8510,14 @@ agent_suite:
   product: AI视频
   note: 验证画布启动诊断注入的权限边界和日志脱敏。
 
+- id: creative-canvas-official-public-assets
+  path: scripts/deploy/__tests__/comfy-official-assets.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI视频
+  note: 真实 Nginx 验证官方静态资源与鉴权隔离、版本及缺文件回退；执行 wheel 校验测试。
+
 - id: creative-canvas-stream-recovery
   path: apps/api/src/services/creative-canvas-stream.test.ts
   type: integration
