@@ -92,7 +92,7 @@ async function diagnosticCli(t,{hang=false,client='good',injected='',configured}
  const executable=join(dir,client==='missing'?sentinel:'client');
  if(client!=='missing'){
   const python=spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'});assert.equal(python.status,0,python.stderr);
-  writeFileSync(executable,`#!${python.stdout.trim()}\nimport sys,time,json\nwith open(${JSON.stringify(calls)},'a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nif sys.argv[1:]!=['version']:sys.exit(9)\n${client==='slow'?'time.sleep(3)':client==='slow_once'?`if len(open(${JSON.stringify(calls)}).readlines()) == 1: time.sleep(3)\nprint("Android Debug Bridge version 1.0.41")`:'print("Android Debug Bridge version 1.0.41")'}\n`,{mode:0o755});
+  writeFileSync(executable,`#!${python.stdout.trim()}\nimport sys,time,json\nwith open(${JSON.stringify(calls)},'a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nif sys.argv[1:]!=['version']:sys.exit(9)\n${client==='slow'?'time.sleep(3)':client==='slow_once'?`if len(open(${JSON.stringify(calls)}).readlines()) == 1: time.sleep(3)\nprint("Android Debug Bridge version 1.0.41")`:client==='slow_twice'?`if len(open(${JSON.stringify(calls)}).readlines()) <= 2: time.sleep(3)\nprint("Android Debug Bridge version 1.0.41")`:'print("Android Debug Bridge version 1.0.41")'}\n`,{mode:0o755});
  }
  const runner=join(dir,'invoke.py');
  writeFileSync(runner,`import sys,socket,runpy\nroute,port,injected=sys.argv[1:4];sys.argv=[route,'431',sys.argv[4]]\noriginal=socket.create_connection\ndef local_only(address,*args,**kwargs):\n if address!=('127.0.0.1',int(port)):raise ConnectionRefusedError()\n if injected:raise type(injected,(RuntimeError,),{})(injected)\n return original(address,*args,**kwargs)\nsocket.create_connection=local_only\nrunpy.run_path(route,run_name='__main__')\n`);
@@ -126,6 +126,12 @@ test('CLI版本子进程首次2秒抖动后只重试本地version并复核原soc
  const r=await diagnosticCli(t,{client:'slow_once'});
  assert.equal(r.status,0,r.err);assert.equal(r.out,`${r.endpoint.port}\n`);assert.equal(r.err,'');
  assert.deepEqual(r.calls,[['version'],['version']]);
+ assert.deepEqual(r.endpoint.requests,['host:version','host:devices','host:version','host:devices']);
+});
+test('CLI本地version连续两次启动抖动后恢复，仍复核原socket且不启动server',async t=>{
+ const r=await diagnosticCli(t,{client:'slow_twice'});
+ assert.equal(r.status,0,r.err);assert.equal(r.out,`${r.endpoint.port}\n`);assert.equal(r.err,'');
+ assert.deepEqual(r.calls,[['version'],['version'],['version']]);
  assert.deepEqual(r.endpoint.requests,['host:version','host:devices','host:version','host:devices']);
 });
 test('受管客户端同样恢复首次2秒本地version抖动',async t=>{
