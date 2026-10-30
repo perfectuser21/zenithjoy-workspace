@@ -2,9 +2,12 @@
 const {configTargetProfile}=require('./company-config-lib.js');
 const {judgeCommander}=require('./judge-comment.js');
 const crypto=require('node:crypto');
-const sha=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
+  ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const sha=value=>crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 const safeReasons=new Set(['binding_unverified','policy_evidence_invalid','personal_intent_evidence_missing',
-  'audience_or_topic_evidence_missing','exclusion_evidence_missing','policy_exclusion_or_grade_mismatch','policy_model_unavailable_or_invalid']);
+  'audience_or_topic_evidence_missing','exclusion_evidence_missing','policy_exclusion_or_grade_mismatch',
+  'policy_model_unavailable_or_invalid','policy_review_budget_exhausted','policy_review_identity_reused']);
 const safePolicyReviewReason=reason=>safeReasons.has(reason)?reason:null;
 // 只把冻结公司政策中的明示意向信号当作可核查的个人诉求依据。
 // 模型的人群引用、同档位及视频话题不能凭空替评论补出诉求。
@@ -70,15 +73,53 @@ async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile
       return {...base,reason:'audience_or_topic_evidence_missing'};
     if(verdict.grade==='不相关'&&hasIntent&&!proof.exclusion_rule)return {...base,reason:'exclusion_evidence_missing'};
     const pass=verdict.grade===expected&&(!proof.exclusion_rule||verdict.grade==='不相关');
-    return {id:row.id,status:pass?'pass':'fail',reason:pass?'policy_match':'policy_exclusion_or_grade_mismatch',
-      evidence_sha256:sha({model:verdict.audit.model,response_id:verdict.audit.response_id,proof}),
+    const policyEvidence={audience_id:proof.audience_id,matched_rule:proof.matched_rule,
+      comment_signal:proof.comment_signal,video_signal:proof.video_signal,
+      exclusion_rule:proof.exclusion_rule,reason:proof.reason};
+    return {id:row.id,status:pass?'pass':'fail',reason:pass?'policy_match':'policy_exclusion_or_grade_mismatch',grade:verdict.grade,
+      evidence_sha256:sha({model:verdict.audit.model,response_id:verdict.audit.response_id,proof:policyEvidence}),
       model:verdict.audit.model,response_id:verdict.audit.response_id,confidence:verdict.audit.confidence??null,
-      policy_evidence:{audience_id:proof.audience_id,matched_rule:proof.matched_rule,
-        exclusion_rule:proof.exclusion_rule,reason:proof.reason},
+      policy_evidence:policyEvidence,
       original_sha256:sha({relevance:row.relevance,intent_grade:row.intent_grade,judgment_reason:row.judgment_reason,judgment_config:config}),
       company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
       video_url_sha256:sha(row.source_video_url),actor:'leadgen-policy-review',reviewed_at:new Date().toISOString()};
   }catch{return {...base,reason:'policy_model_unavailable_or_invalid'};}
 }
 
-module.exports={evaluatePolicy,safePolicyReviewReason};
+async function dualPolicyReview(row,snapshot,deps={}){
+  let calls=0;
+  const judgePolicy=async(...args)=>{
+    if(calls>=2)throw Error('POLICY_REVIEW_BUDGET_EXHAUSTED');
+    calls++;
+    return (deps.judgePolicy||judgeCommander)(...args);
+  };
+  const first=await evaluatePolicy(row,snapshot,{judgePolicy});
+  if(first.status!=='pass')return first;
+  if(calls>=2)return {id:row.id,status:'unknown',reason:'policy_review_budget_exhausted'};
+  const second=await evaluatePolicy(row,snapshot,{judgePolicy});
+  if(second.status!=='pass')return second;
+  if(first.response_id===second.response_id||first.evidence_sha256===second.evidence_sha256)
+    return {id:row.id,status:'unknown',reason:'policy_review_identity_reused'};
+  return {id:row.id,status:'pass',reason:'policy_match',reviews:[first,second],model_call_count:calls};
+}
+
+async function verifyStoredPolicy(row,snapshot){
+  const base={id:row?.id,status:'unknown',reason:'policy_evidence_invalid'};
+  const config=row?.judgment_config,reviews=config?.policy_reviews;
+  if(!Array.isArray(reviews)||reviews.length!==2||reviews.some(v=>v?.status!=='pass'||!v.grade
+    ||!v.model||!v.response_id||!v.policy_evidence||!v.evidence_sha256||!v.original_sha256)
+    ||reviews[0].response_id===reviews[1].response_id)return base;
+  const sourceConfig={...config};delete sourceConfig.model_audit;delete sourceConfig.policy_audit;delete sourceConfig.policy_reviews;
+  for(const review of reviews){
+    const evidence=review.policy_evidence;
+    const verdict={grade:review.grade,audit:{model:review.model,response_id:review.response_id,
+      confidence:review.confidence,policy_evidence:evidence}};
+    const checked=await evaluatePolicy({...row,judgment_config:sourceConfig},snapshot,{judgePolicy:async()=>verdict});
+    if(checked.status!=='pass'||checked.evidence_sha256!==review.evidence_sha256
+      ||checked.original_sha256!==review.original_sha256)return {...base,reason:checked.status==='pass'?'policy_evidence_invalid':safePolicyReviewReason(checked.reason)||base.reason};
+  }
+  return {id:row.id,status:'pass',reason:'policy_match',model_call_count:0,
+    evidence_sha256:sha(reviews.map(v=>v.evidence_sha256)),review_count:2};
+}
+
+module.exports={evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason};

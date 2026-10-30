@@ -104,7 +104,8 @@ globalThis.fetch=async(url,opts={})=>{const parsed=new URL(url);
    :{grade:{choice:response.primary_grade,confidence:response.primary_confidence??.99}}};
  else if(parsed.pathname==='/api/v1/chat/completions'){
   const evidence=response.policy_evidence;
-  result={id:`commander-${match.id}`,model:body.model,choices:[{message:{content:response.raw||`\`\`\`json\n${JSON.stringify({grade:response.policy_grade,policy_evidence:evidence})}\n\`\`\``}}]};
+  result={id:`commander-${match.id}-${state.requests.filter(r=>r.path==='/api/v1/chat/completions'&&r.case_id===match.id).length}`,
+   model:body.model,choices:[{message:{content:response.raw||`\`\`\`json\n${JSON.stringify({grade:response.policy_grade,policy_evidence:evidence})}\n\`\`\``}}]};
  }else throw Error('SANDBOX_ENDPOINT_INVALID');
  return new Response(JSON.stringify(result),{status:200,headers:{'content-type':'application/json'}});
 };

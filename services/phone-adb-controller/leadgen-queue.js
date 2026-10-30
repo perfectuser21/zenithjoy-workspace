@@ -5,9 +5,7 @@ const { resolveLine, configEvidence } = require('./judge-video.js');
 const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
 const { judgeComment, scoreFailureReceipt } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const {evaluatePolicy,safePolicyReviewReason}=require('./leadgen-policy-review.js');
-
+const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason}=require('./leadgen-policy-review.js');
 async function reviewBoundComment(pool,lineKey,id,binding,deps={}){
   const unknown={id,status:'unknown',reason:'comment_outbox_binding_invalid'};
   if(!uuid.test(id||'')||!binding?.run||!binding.source_run||!binding.source_video||!binding.source_video_url)return unknown;
@@ -24,7 +22,7 @@ async function reviewBoundComment(pool,lineKey,id,binding,deps={}){
       if(frozen.length!==1||frozen[0].run_id!==binding.run||!mark||mark.company_id!==original.company_id
         ||mark.tenant_id!==original.tenant_id||Number(mark.version)!==Number(original.version)||mark.policy_id!==original.policy_id)return unknown;
     }
-    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id]},deps);
+    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id],require_dual_review:true},deps);
     return review.rows[0]||unknown;
   }catch{return unknown;}
 }
@@ -100,7 +98,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
       reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun:row.harvest_batch===input.sources[id])
         &&owned.length===1&&row.judgment_config?.run_id===run
-        ?await evaluatePolicy(row,snapshot,deps):{id,status:'unknown',reason:'row_or_video_scope_unverified'});
+        ?row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot)
+          :input.require_dual_review?{id,status:'unknown',reason:'policy_evidence_invalid'}:await evaluatePolicy(row,snapshot,deps)
+          :{id,status:'unknown',reason:'row_or_video_scope_unverified'});
     }
     return {verified:reviewed.every(r=>r.status==='pass'),rows:reviewed,ids,scope:{line:lineKey,run,claim:input.claim,source_run:sourceRun}};
   }
@@ -392,9 +392,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;}
         const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
           judgment_reason:verdict.reason,judgment_config:evidence};
-        const semantic=await evaluatePolicy(judged,snapshot,deps);
+        const semantic=await dualPolicyReview(judged,snapshot,deps);
         if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);if(reason)error.score_failure={code:error.message,policy_review_reason:reason};throw error;}
-        const audit={...evidence,model_audit:verdict.audit||null,policy_audit:semantic};
+        const audit={...evidence,model_audit:verdict.audit||null,policy_audit:semantic.reviews[0],policy_reviews:semantic.reviews};
         // 保留待分拣，交下一活动标记人；模型异常回滚，下一轮仍可重判。
         await client.query(`UPDATE zenithjoy.leadgen_comments SET relevance=$2,intent_grade=$3,
           judgment_reason=$4,judgment_config=$5::jsonb,updated_at=now() WHERE id=$1`, [row.id, verdict.relevance,
