@@ -48,6 +48,8 @@ test('101l 原生证据复用只保留原102g来源与三评论精确边界',()=
   assert.doesNotThrow(()=>admission.checkVideo(reused,{reuseDigest:observed.digest}));
   for(const changed of [
     {...reused,harvest_batch:'another101'},
+    {...reused,discovery_metrics:{...reused.discovery_metrics,digest:'0'.repeat(64)}},
+    {...reused,discovery_metrics:{...reused.discovery_metrics,evidence:{...reused.discovery_metrics.evidence,xml:xml.replace('评论3','评论4')}}},
     {...reused,judgment_config:{...reused.judgment_config,run_id:reusedRun}},
     {...reused,discovery_metrics:{...reused.discovery_metrics,source_commit:'f'.repeat(40)}},
     {...reused,discovery_metrics:{...reused.discovery_metrics,company_binding:{...reused.discovery_metrics.company_binding,tenant_id:'other'}}},

@@ -2,12 +2,19 @@
 // This single source can enter one explicit 103 run only through an immutable audit receipt.
 'use strict';
 const {createHash}=require('node:crypto');
+const {isDeepStrictEqual}=require('node:util');
 const {validateEvidence}=require('./queued-recipient-evidence.js');
+const {buildObservation}=require('./discovery-metrics.js');
 
 const SOURCE_RUN='accept3a903_jinuo102g_20261030t0712';
 const SOURCE_101='accept3a903_jinuo101f_20261030t0700';
 const SOURCE_COMMIT='3a903aecca5327614057d069a75673ad1732ec93';
 const VIDEO_ID='7699489394579915663';
+// This one completed 101 reuse moved harvest_batch while retaining the old
+// quarantined 102 judgment. Its native observation was independently archived.
+const REUSE_RUN='accept6cc22_jinuo101l_20261031T0022';
+const REUSE_COMMIT='6cc22d9d929a591ffb4aacb40a3d153902f6ab8e';
+const REUSE_DIGEST='801cec40749067765a046bdd2674f7b7da7eca22f99e6c823b9f4c7ae62a2ac8';
 const COMMENT_IDS=Object.freeze([
   '818dc556-0d01-409a-9b08-4d458e4a7bc1',
   '4d1375d8-7ef2-4393-a3ec-c56897f7d045',
@@ -61,13 +68,27 @@ function checkStop(stop){
     ||!Number.isSafeInteger(stop.observed_at)||Date.now()-stop.observed_at>5000
     ||stop.observed_at>Date.now()+1000)fail('OLD_EXECUTION_UNKNOWN');
 }
-function checkVideo(video){
+function checkVideo(video,{reuseDigest=REUSE_DIGEST}={}){
   const c=video?.judgment_config;
   if(video?.line_key!=='jinuo'||video.video_id!==VIDEO_ID||video.video_url!==url
-    ||video.harvest_batch!==SOURCE_RUN||video.process_status!==`待人工核验:${SOURCE_RUN}`
+    ||video.process_status!==`待人工核验:${SOURCE_RUN}`
     ||video.judgment_status!=='matched'||c?.company_id!==COMPANY_ID
     ||c.tenant_id!==TENANT_ID||Number(c.version)!==14||c.policy_id!==POLICY_ID
     ||c.run_id!==SOURCE_RUN)fail('VIDEO_SCOPE_INVALID');
+  if(video.harvest_batch===SOURCE_RUN)return;
+  const d=video.discovery_metrics,b=d?.company_binding;
+  if(video.harvest_batch!==REUSE_RUN||!d||d.digest!==reuseDigest
+    ||d.run!==REUSE_RUN||d.run_id!==`douyin_video_discovery-${REUSE_RUN}__a1`
+    ||d.profile!=='jinoshengyuan-work'||d.source_commit!==REUSE_COMMIT
+    ||d.line_key!=='jinuo'||d.video_id!==VIDEO_ID||d.video_url!==url
+    ||d.evidence_id!==`${REUSE_RUN}-candidate1-link-t1`
+    ||!isDeepStrictEqual(b,{company_id:COMPANY_ID,tenant_id:TENANT_ID,
+      version:14,line_key:'jinuo',run_id:REUSE_RUN}))fail('VIDEO_SCOPE_INVALID');
+  try{
+    const {company_binding,...observation}=d;
+    const rebuilt=buildObservation({...observation,xml:observation.evidence?.xml});
+    if(rebuilt.digest!==reuseDigest||!isDeepStrictEqual(observation,rebuilt))fail('VIDEO_SCOPE_INVALID');
+  }catch{fail('VIDEO_SCOPE_INVALID');}
 }
 function checkFrozen(frozen){
   const s=frozen?.snapshot;
