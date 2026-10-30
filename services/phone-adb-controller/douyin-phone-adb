@@ -262,7 +262,7 @@ PYDOUYIN
 }
 
 _ui_evidence_wave() {
-  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg stat_output stat_status remote_absent absent_ack max_attempts=3
+  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg stat_output stat_status remote_absent absent_ack max_attempts=3 dump_crash_seen=0 remote_started remote_mtime
   evidence_id="$1"
   case "$policy" in standard|opportunistic-search-tab|verified-seed-share|verified-seed-share-retry|paused-douyin|paused-detail) ;; *) return 2 ;; esac
   require_evidence_id "$evidence_id"
@@ -287,7 +287,13 @@ _ui_evidence_wave() {
   [[ "$policy" != opportunistic-search-tab ]] || max_attempts=1
   for (( dump_attempt=1; dump_attempt<=max_attempts; dump_attempt++ )); do
     /bin/rm -f "$local_path"
-    "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
+    "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null || return 3
+    if (( dump_crash_seen )); then
+      absent_ack="$("$ADB" -s "$SERIAL" shell "if [ ! -e '$REMOTE_UI' ] && [ ! -L '$REMOTE_UI' ]; then printf '%s' 'REMOTE_UI_ABSENT_V1'; else exit 1; fi" 2>/dev/null)" || return 3
+      [[ "$absent_ack" == REMOTE_UI_ABSENT_V1 ]] || return 3
+      remote_started="$("$ADB" -s "$SERIAL" shell date +%s 2>/dev/null | tr -d '\r')"
+      [[ "$remote_started" == <-> ]] || return 3
+    fi
     if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 ]]; then
       started="$("$PYTHON_BIN" -c 'import time; print(time.monotonic_ns())')"
     fi
@@ -296,6 +302,20 @@ _ui_evidence_wave() {
       dump_status=0
     else
       dump_status=$?
+    fi
+    # Android UiAutomation 崩溃时 ADB 可返回 137，甚至留下完整但无身份可信度的 XML。
+    # 这次 XML 一律不接收；原生 producer 仅在此精确命令已关闭时才允许下一叶。
+    if (( dump_status == 137 )); then
+      dump_crash_seen=1
+      (( dump_attempt < max_attempts )) && wait_ms 900
+      continue
+    fi
+    if (( dump_crash_seen )); then
+      (( dump_status == 0 )) || return 3
+      remote_mtime="$("$ADB" -s "$SERIAL" shell stat -c %Y "$REMOTE_UI" 2>/dev/null | tr -d '\r')"
+      [[ "$remote_mtime" == <-> ]] && (( remote_mtime >= remote_started )) || return 3
+      fg="$(foreground_package)"
+      _foreground_is_exact_douyin "$fg" || return 3
     fi
     remote_absent=0
     if [[ "$policy" == paused-* && "$dump_attempt" == 1 ]]; then
@@ -319,7 +339,7 @@ _ui_evidence_wave() {
       if [[ -s "$local_path" ]] \
         && /usr/bin/grep -q '<hierarchy' "$local_path" \
         && /usr/bin/grep -q '</hierarchy>' "$local_path" \
-        && { [[ "$policy" == standard || "$policy" == opportunistic-search-tab ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
+        && { [[ "$policy" == standard || "$policy" == opportunistic-search-tab ]] && { (( ! dump_crash_seen )) || _is_complete_douyin_xml "$local_path"; } || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
         if (( dump_status != 0 )) || [[ "$dump_output" == *"ERROR:"* ]]; then
           print -u2 -- "warning: accepted fresh complete hierarchy despite dynamic-page idle warning (attempt $dump_attempt)"
         fi
@@ -355,9 +375,15 @@ _ui_evidence_wave() {
     wait_ms 500
     /bin/rm -f "$local_path"
     "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
-    dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)" || true
+    dump_status=0
+    dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)" || dump_status=$?
     remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d $'\r' || print -- unknown)"
     "$ADB" -s "$SERIAL" shell input keyevent 85 || { [[ "$policy" != paused-* ]] || return 3; }
+    if (( dump_status == 137 )); then
+      /bin/rm -f "$local_path"
+      "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null || return 3
+      return 3
+    fi
     if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
       "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null || { [[ "$policy" != paused-* ]] || return 3; }
       if [[ -s "$local_path" ]] && /usr/bin/grep -q "<hierarchy" "$local_path" && /usr/bin/grep -q "</hierarchy>" "$local_path" \
