@@ -345,6 +345,16 @@ export function getAutopilotNavGroups(): NavGroup[] {
   return autopilotNavGroups;
 }
 
+export function isAidgeOnlyPath(pathname: string): boolean {
+  return pathname === '/aidge';
+}
+
+export function filterAidgeOnlyNavGroups(groups: NavGroup[]): NavGroup[] {
+  return groups
+    .map(group => ({ ...group, items: group.items.filter(item => isAidgeOnlyPath(item.path)) }))
+    .filter(group => group.items.length > 0);
+}
+
 /**
  * 过滤菜单项（根据 feature flag 和权限）
  */

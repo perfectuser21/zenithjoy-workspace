@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "../auth";
 import { parseFlatDirectory } from "../staff-directory";
+import { isAidgeViewerId } from "../middleware/aidge-viewer";
 import { ipKeyFn, simpleRateLimit } from "../middleware/simple-rate-limit";
 import {
   AidgeTranslationError,
@@ -43,6 +44,7 @@ async function authenticateStaff(req: Request): Promise<string | null> {
     headers: fromNodeHeaders(req.headers),
   });
   if (!session?.user?.id) return null;
+  if (isAidgeViewerId(session.user.id)) return session.user.id;
   const staff = parseFlatDirectory(process.env);
   if (
     !staff.has(session.user.id) &&
@@ -121,7 +123,7 @@ export function createAidgeRouter(options: Options = {}): Router {
       }
       const staffId = await authenticate(req);
       if (!staffId)
-        return void res.status(401).json({ error: "请使用员工账号登录" });
+        return void res.status(401).json({ error: "请使用已授权账号登录" });
       req.aidgeStaffId = staffId;
       next();
     } catch {
@@ -204,6 +206,10 @@ export function createAidgeRouter(options: Options = {}): Router {
     res
       .set("Cache-Control", "private, max-age=300")
       .json({ operations: aidgeOperations });
+  });
+
+  router.get('/access', (req, res) => {
+    res.set('Cache-Control', 'no-store').json({ role: isAidgeViewerId(req.aidgeStaffId!) ? 'viewer' : 'staff' });
   });
 
   router.post("/execute", async (req: Request, res: Response) => {

@@ -14,6 +14,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, ExternalLink } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { signInEmail } from '../api/better-auth.api';
+import { getAidgeAccess } from '../api/aidge-access';
 
 export default function SignIn() {
   const navigate = useNavigate();
@@ -38,15 +39,17 @@ export default function SignIn() {
         email: email.trim(),
         password,
       });
+      const aidgeRole = await getAidgeAccess();
       login(
         {
           id: result.user.id,
           name: result.user.name,
           email: result.user.email,
         },
-        result.token || 'better-auth-session'
+        result.token || 'better-auth-session',
+        aidgeRole
       );
-      navigate('/');
+      navigate(aidgeRole === 'viewer' ? '/aidge' : '/');
     } catch (err) {
       const msg = err instanceof Error ? err.message : '登录失败，请重试';
       setError(msg);
