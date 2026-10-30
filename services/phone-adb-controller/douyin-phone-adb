@@ -2868,6 +2868,7 @@ if p['foreground_verified'] and uid.isdigit() and int(uid)>0 and len(owners)==1 
    elif not p['foreign_started'] and not p['unparsed_media_tracks'] and len(active)==1 and len(started)==1:
     p['state']='started';p.update({k:started[0][k] for k in ('pid','piid')})
    elif not p['foreign_started'] and not p['unparsed_media_tracks'] and p['tracks'] and all(t['state'] in ('paused','stopped','idle') and t['muted']=='none' for t in p['tracks']):p['state']='inactive'
+   elif not p['foreign_started'] and not p['unparsed_media_tracks'] and p['tracks'] and all(t['state'] in ('paused','stopped','idle') and t['muted'] in ('none','clientVolume') for t in p['tracks']) and any(t['muted']=='clientVolume' for t in p['tracks']):p['state']='inactive_client_muted'
 with open(sys.argv[5],'w') as f:json.dump(p,f)
 os.chmod(sys.argv[5],0o600)
 print('native_audio_state='+p['state']+' native_audio_uid='+str(p['uid'] or 'unknown')+' native_audio_pid='+str(p.get('pid','unknown'))+' native_audio_piid='+str(p.get('piid','unknown'))+' native_audio_package_uid_verified='+str(p['package_uid_verified']).lower()+' native_audio_foreign_started='+str(len(p['foreign_started']))+' native_audio_transient_notification='+str(p.get('transient_notification',False)).lower())
@@ -2919,7 +2920,7 @@ PYRECORDDETAIL
 # 只在native仍inactive时单击新鲜树唯一语义播放器控件；混淆resource-id不作稳定身份。
 # 真机qbt文案会与音轨状态相反；动作结果必须再由native证明，不能按文案宣告播放。
 record_play_control() {
-  local eid="$1" xml="$EVIDENCE_ROOT/$1.xml" size="" pos x y before before_state
+  local eid="$1" identity_verified="${2:-false}" xml="$EVIDENCE_ROOT/$1.xml" size="" pos x y before before_state before_session
   require_evidence_id "$eid"
   umask 077
   record_detail_foreground || return 1
@@ -2952,7 +2953,11 @@ PYPLAYCONTROL
   before="$(record_native_audio "$eid-native-preclick")"
   before_state="$(print -r -- "$before" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
   [[ "$before_state" != started ]] || return 0
-  [[ "$before_state" == inactive ]] || return 1
+  if [[ "$before_state" == inactive_client_muted ]]; then
+    before_session="$(print -r -- "$before" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
+    [[ "$before_session" == 1 ]] || return 1
+  fi
+  [[ "$before_state" == inactive || ( "$identity_verified" == true && "$before_state" == inactive_client_muted ) ]] || return 1
   record_detail_foreground || return 1
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || return 1
   print -u2 -- "record-play-control: source=tree x=$x y=$y evidence=$eid single_click=true"
@@ -3079,8 +3084,8 @@ PYOWNEDSIGNAL
 }
 
 record_start() {
-  local eid max out pidf pid sdk="" capture_mode=playback_dup capture_container=matroska playback_state=unknown playback_try native="" native_state=unknown
-  eid="$1"; max="${2:-110}"
+  local eid max expected_vid identity="" actual_vid="" kind="" identity_verified=false out pidf pid sdk="" capture_mode=playback_dup capture_container=matroska playback_state=unknown playback_try native="" native_state=unknown native_session=unknown
+  eid="$1"; max="${2:-110}"; expected_vid="${3:-}"
   require_evidence_id "$eid"
   require_uint "$max"
   (( max >= 5 && max <= 1800 )) || die "record max seconds must be 5..1800"
@@ -3145,14 +3150,34 @@ PYSDKCREATE
     native="$(record_native_audio "$eid-playback-start")"
     native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
   done
-  if [[ "$native_state" == inactive ]]; then
-    record_play_control "$eid-playback-control" || die "RECORD_PLAY_CONTROL_UNVERIFIED"
+  if [[ "$native_state" == inactive_client_muted ]]; then
+    native_session="$(print -r -- "$native" | sed -n 's/.*media_session_state=\([^ ]*\).*/\1/p')"
+    [[ "$native_session" == 1 ]] || die "RECORD_STOPPED_SESSION_UNVERIFIED"
+    record_no_active_capture || die "RECORD_PLAYBACK_RECOVERY_CAPTURE_ACTIVE"
+    [[ "$expected_vid" == <-> && ${#expected_vid} -ge 16 && ${#expected_vid} -le 24 ]] || die "RECORD_VIDEO_IDENTITY_REQUIRED"
+    identity="$(DETAIL_PLAYBACK=continuous_identity current_video_link "$eid-playback-identity")" || die "RECORD_VIDEO_IDENTITY_UNVERIFIED"
+    actual_vid="$(print -r -- "$identity" | sed -n 's/^video_id=//p' | head -1)"
+    kind="$(print -r -- "$identity" | sed -n 's/^content_type=//p' | head -1)"
+    [[ "$actual_vid" == "$expected_vid" && "$kind" == video ]] || die "RECORD_VIDEO_IDENTITY_MISMATCH"
+    identity_verified=true
+    local suffix
+    for suffix in audio.txt package-uid.txt uid-owners.txt foreground.txt media-session.txt native-audio.json native-sdk.txt; do
+      [[ -f "$EVIDENCE_ROOT/$eid-playback-start.$suffix" && ! -L "$EVIDENCE_ROOT/$eid-playback-start.$suffix" && ! -e "$EVIDENCE_ROOT/$eid-playback-precheck.$suffix" ]] || die "RECORD_PLAYBACK_PRECHECK_UNVERIFIED"
+    done
+    for suffix in audio.txt package-uid.txt uid-owners.txt foreground.txt media-session.txt native-audio.json native-sdk.txt; do
+      /bin/mv "$EVIDENCE_ROOT/$eid-playback-start.$suffix" "$EVIDENCE_ROOT/$eid-playback-precheck.$suffix" || die "RECORD_PLAYBACK_PRECHECK_UNVERIFIED"
+    done
+    native="$(record_native_audio "$eid-playback-start")"
+    native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
+  fi
+  if [[ "$native_state" == inactive || ( "$identity_verified" == true && "$native_state" == inactive_client_muted ) ]]; then
+    record_play_control "$eid-playback-control" "$identity_verified" || die "RECORD_PLAY_CONTROL_UNVERIFIED"
     for playback_try in 1 2 3 4; do
       wait_ms 250
       native="$(record_native_audio "$eid-playback-start")"
       native_state="$(print -r -- "$native" | sed -n 's/.*native_audio_state=\([^ ]*\).*/\1/p')"
       [[ "$native_state" == started ]] && break
-      [[ "$native_state" == inactive ]] || break
+      [[ "$native_state" == inactive || ( "$identity_verified" == true && "$native_state" == inactive_client_muted ) ]] || break
     done
   fi
   if [[ "$native_state" == recoverable_muted ]]; then
@@ -3301,7 +3326,9 @@ PYCAPTUREREADY
     fi
     die "RECORD_CAPTURE_EXIT_UNVERIFIED recorder startup/termination unknown; see $EVIDENCE_ROOT/$eid.capture-startup.json"
   fi
-  print -- "record_started capture_audio_mode=$capture_mode $CAPTURE_RUNTIME_FIELDS capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")"
+  local recovery_identity=""
+  [[ "$identity_verified" != true ]] || recovery_identity=" recovery_video_identity_verified=true recovery_video_id=$expected_vid recovery_video_evidence_id=$eid-playback-identity"
+  print -- "record_started capture_audio_mode=$capture_mode $CAPTURE_RUNTIME_FIELDS capture_audio_sdk=$sdk capture_audio_required=true capture_audio_sdk_evidence_file=$eid.capture-sdk.txt capture_audio_sdk_evidence_sha256=$(record_playback_hash "$eid.capture-sdk.txt") pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown} playback_verified=true playback_proof_kind=native_audio $native playback_package=$DOUYIN_PACKAGE playback_state=$playback_state playback_evidence_file=$eid-playback-start.media-session.txt playback_evidence_sha256=$(record_playback_hash "$eid-playback-start.media-session.txt") playback_foreground_file=$eid-playback-start.foreground.txt playback_foreground_sha256=$(record_playback_hash "$eid-playback-start.foreground.txt")$recovery_identity"
 }
 
 record_status() {
@@ -4968,9 +4995,9 @@ case "$command" in
     record_native_audio_settled "$2"
     ;;
   record-start)
-    [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE record-start EVIDENCE_ID [MAX_SECONDS]"
+    [[ "$#" == 2 || "$#" == 3 || "$#" == 4 ]] || die "usage: douyin-phone-adb --profile PROFILE record-start EVIDENCE_ID [MAX_SECONDS] [EXPECTED_VIDEO_ID]"
     check_target_fast
-    record_start "$2" "${3:-110}"
+    record_start "$2" "${3:-110}" "${4:-}"
     ;;
   record-status)
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE record-status EVIDENCE_ID"

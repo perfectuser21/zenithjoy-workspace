@@ -13,7 +13,7 @@ const vid='7646309328911907195';
 function fakeNativeFields(eid,phase,state='started'){
  const prefix=eid+'-playback-'+phase;return ' capture_runtime_client_sha256=952ee0841791f9d37692721327a9d36530b348a93709612aebda5475aeda7c0d capture_runtime_server_sha256=8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e capture_runtime_evidence_file='+eid+'.capture-runtime.json capture_runtime_evidence_sha256='+('e'.repeat(64))+' capture_audio_sdk_evidence_file='+eid+'.capture-sdk.txt capture_audio_sdk_evidence_sha256='+('c'.repeat(64))+' playback_proof_kind=native_audio native_audio_state='+state+' native_audio_uid=10203 native_audio_pid=528 native_audio_piid=73615 native_audio_package_uid_verified=true native_audio_foreign_started=0 '+[['evidence','audio.txt'],['package_uid','package-uid.txt'],['uid_owners','uid-owners.txt']].map(([k,s])=>'native_audio_'+k+'_file='+prefix+'.'+s+' native_audio_'+k+'_sha256='+('a'.repeat(64))).join(' ');
 }
-function recordedQualification({volume='1',db='-35',startFail=false,speedFail=false,captureMode='playback_dup',captureSdk='36',audioStreams='1',playback=true,endState=3}={}){
+function recordedQualification({volume='1',db='-35',startFail=false,speedFail=false,captureMode='playback_dup',captureSdk='36',audioStreams='1',playback=true,endState=3,startExtra=''}={}){
  const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
   const ctl=path.join(dir,'ctl'),remote=path.join(dir,'remote');
   writeFileSync(ctl,`#!/bin/zsh
@@ -23,7 +23,7 @@ case "$3" in
 lock-refresh) print 'lock=refreshed';;
 current-video-link) print 'content_type=video';print 'video_id=${vid}';;
 set-playback-speed) ${speedFail?'print -u2 SPEED_CONTROL_FAILED;exit 6':'true'};;
-record-start) ${startFail?'print -u2 RECORD_NATIVE_AUDIO_UNVERIFIED state=unknown; exit 4':`print "record_started capture_audio_mode=${captureMode} capture_audio_sdk=${captureSdk} capture_audio_required=true capture_audio_sdk_evidence_file=$4.capture-sdk.txt capture_audio_sdk_evidence_sha256=${'c'.repeat(64)} media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1'+fakeNativeFields('$4','start'):''}"`};;
+record-start) ${startFail?'print -u2 RECORD_NATIVE_AUDIO_UNVERIFIED state=unknown; exit 4':`print "record_started capture_audio_mode=${captureMode} capture_audio_sdk=${captureSdk} capture_audio_required=true capture_audio_sdk_evidence_file=$4.capture-sdk.txt capture_audio_sdk_evidence_sha256=${'c'.repeat(64)} media_volume=${volume}${playback?' playback_verified=true playback_package=com.ss.android.ugc.aweme playback_state=1'+fakeNativeFields('$4','start'):''}${startExtra}"`};;
 record-stop) print "record_stopped capture_audio_mode=${captureMode} capture_audio_sdk=${captureSdk} capture_audio_required=true duration_seconds=25.1 mean_volume_db=${db} audio_streams=${audioStreams} playback_package=com.ss.android.ugc.aweme playback_state=1${fakeNativeFields('$4','end',endState===3?'started':'unknown')}";;
 record-extract-audio) print "audio_extracted path=$FIXTURE/record.wav";;
 esac
@@ -43,7 +43,12 @@ for(const volume of ['0','unknown',''])test('录前媒体音量必须真实正�
  const r=recordedQualification({volume});assert.equal(r.status,5,r.stderr);assert.ok(!r.calls.includes('remote'));assert.ok(r.calls.includes('record-stop'));assert.equal(r.proof.media_volume_verified,false);
 });
 test('真实正数媒体音量与有效音轨才能上传判定并留下本VID工件',()=>{
- const r=recordedQualification({volume:'2'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/\tmatched\tjudged/);assert.equal(r.proof.media_volume_verified,true);assert.equal(r.proof.audio_status,'usable');assert.equal(r.proof.version,2);assert.equal(r.proof.playback_state,1);assert.equal(r.proof.native_audio.start.state,'started');assert.equal(r.proof.native_audio.start.uid,10203);assert.equal(r.proof.video_id,vid);assert.ok(r.calls.includes('remote'));
+ const r=recordedQualification({volume:'2'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/\tmatched\tjudged/);assert.equal(r.proof.media_volume_verified,true);assert.equal(r.proof.audio_status,'usable');assert.equal(r.proof.version,2);assert.equal(r.proof.playback_state,1);assert.equal(r.proof.native_audio.start.state,'started');assert.equal(r.proof.native_audio.start.uid,10203);assert.equal(r.proof.video_id,vid);assert.deepEqual(r.proof.recovery_video_identity,{verified:false,video_id:null,evidence_id:null});assert.ok(r.calls.includes('remote'));
+});
+test('录音恢复的同VID原生身份回执写入资格证据',()=>{
+ const r=recordedQualification({startExtra:` recovery_video_identity_verified=true recovery_video_id=${vid} recovery_video_evidence_id=record-proof-v${vid}-qualification-record-playback-identity`});
+ assert.equal(r.status,0,r.stderr);
+ assert.deepEqual(r.proof.recovery_video_identity,{verified:true,video_id:vid,evidence_id:`record-proof-v${vid}-qualification-record-playback-identity`});
 });
 test('未知音轨电平或录制启动失败保pending，不能伪静音拒绝或内容matched',()=>{
  for(const opts of [{db:'unknown'},{startFail:true}]){const r=recordedQualification(opts);assert.equal(r.status,5,r.stderr);assert.ok(!r.calls.includes('remote'));assert.ok(!r.stdout.includes('\trejected\t'));assert.ok(!r.stdout.includes('\tmatched\t'));}
@@ -87,6 +92,7 @@ console.log('QUAL_RESULT {"verdict":"matched"}');
   const calls=readFileSync(path.join(d,'calls'),'utf8').trim().split('\n').map(JSON.parse);
   const starts=calls.filter(c=>c.cmd==='record-start').map(c=>c.args[0]);
   assert.equal(new Set(starts).size,2,'recording artifacts cannot share an ID');
+  assert.deepEqual(calls.filter(c=>c.cmd==='record-start').map(c=>c.args[2]),videos,'每条录音必须把冻结VID交给控制器核验');
   for(const cmd of ['record-stop','record-extract-audio'])assert.deepEqual(calls.filter(c=>c.cmd===cmd).map(c=>c.args[0]),starts);
   assert.deepEqual(calls.filter(c=>c.cmd==='lock-refresh').map(c=>c.args[0]),Array(6).fill('multi-video-run'),'video-specific evidence must preserve run lock ownership');
   for(const id of videos)for(const mode of ['identity','qualification','collection'])for(const step of ['open','identity']){
