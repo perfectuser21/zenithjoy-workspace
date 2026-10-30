@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import type { Duplex } from 'node:stream';
 
 const PREFIX = '/api/creative-canvas/';
-type Options = { authenticate: (request: IncomingMessage) => Promise<string | null>; instances: Record<string, string>; allowedOrigins: string[] };
+type Options = { authenticate: (request: IncomingMessage) => Promise<string | null>; instances: Record<string, string>; allowedOrigins: string[]; staticTimeoutMs?: number };
 export function createCanvasGateway(options: Options) {
   const targets = new Map<string, URL>();
   const used = new Set<string>();
@@ -33,6 +33,7 @@ export function createCanvasGateway(options: Options) {
     if (!(req.url || '').startsWith(PREFIX)) { res.writeHead(404).end(); return; }
     try {
       const { target, status } = await authorize(req);
+      if (req.aborted || res.destroyed) return;
       if (req.method === 'GET' && req.url === `${PREFIX}status`) {
         if (status === 401 || status === 403) { res.writeHead(status).end(); return; }
         if (!target) { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: false })); return; }
@@ -45,11 +46,33 @@ export function createCanvasGateway(options: Options) {
       }
       if (!target) { res.writeHead(status).end(); return; }
       const upstream = request(req, target);
+      let timedOut = false;
+      // Only immutable frontend assets receive a short inactivity timeout;
+      // jobs, uploads and other potentially long-lived operations remain unchanged.
+      const pathname = (req.url || '').split('?', 1)[0];
+      const isStatic = (req.method === 'GET' || req.method === 'HEAD') &&
+        /^\/api\/creative-canvas\/assets\/[a-zA-Z0-9_.-]+\.(?:js|css|woff2)$/.test(pathname);
+      const timeout = options.staticTimeoutMs ?? 15000;
+      const onStaticTimeout = () => {
+        timedOut = true;
+        upstream.destroy(new Error('Canvas static asset timed out'));
+      };
+      // Socket timeouts begin only after connection. A separate initial timer
+      // also bounds connection and response-header stalls.
+      const headerTimer = isStatic ? setTimeout(onStaticTimeout, timeout) : undefined;
+      if (isStatic) upstream.setTimeout(timeout, onStaticTimeout);
+      // A closed client must not leave an upstream response consuming resources.
+      res.on('close', () => { if (headerTimer) clearTimeout(headerTimer); if (!res.writableFinished) upstream.destroy(); });
+      req.on('aborted', () => upstream.destroy());
       upstream.on('response', incoming => {
+        if (headerTimer) clearTimeout(headerTimer);
+        if (res.destroyed) { incoming.destroy(); return; }
+        incoming.on('error', () => { if (!res.destroyed) res.destroy(); });
+        incoming.on('aborted', () => { if (!res.destroyed) res.destroy(); });
+        incoming.on('end', () => { if (isStatic) upstream.setTimeout(0); });
         delete incoming.headers['set-cookie'];
         // Only immutable build-fingerprinted frontend files are shareable by a
         // browser. Never cache API responses, user media, errors or templates.
-        const pathname = (req.url || '').split('?', 1)[0];
         if ((req.method === 'GET' || req.method === 'HEAD') && incoming.statusCode === 200 && /^\/api\/creative-canvas\/assets\/[a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.(?:js|css|woff2)$/.test(pathname)) {
           incoming.headers['cache-control'] = 'private, max-age=604800, immutable';
           const vary = incoming.headers.vary;
@@ -57,9 +80,14 @@ export function createCanvasGateway(options: Options) {
         }
         res.writeHead(incoming.statusCode || 502, incoming.headers); incoming.pipe(res);
       });
-      upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+      upstream.on('error', () => {
+        if (headerTimer) clearTimeout(headerTimer);
+        if (res.destroyed) return;
+        if (res.headersSent) { res.destroy(); return; }
+        res.writeHead(timedOut ? 504 : 502).end();
+      });
       req.pipe(upstream);
-    } catch { res.writeHead(503).end(); }
+    } catch { if (!res.destroyed && !res.headersSent) res.writeHead(503).end(); else if (!res.destroyed) res.destroy(); }
   }
   function attachWebSocket(server: Server) {
     server.on('upgrade', async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
