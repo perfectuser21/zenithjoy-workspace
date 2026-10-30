@@ -52,14 +52,20 @@ export function createCanvasGateway(options: Options) {
       const pathname = (req.url || '').split('?', 1)[0];
       const isStatic = (req.method === 'GET' || req.method === 'HEAD') &&
         /^\/api\/creative-canvas\/assets\/[a-zA-Z0-9_.-]+\.(?:js|css|woff2)$/.test(pathname);
-      if (isStatic) upstream.setTimeout(options.staticTimeoutMs ?? 15000, () => {
+      const timeout = options.staticTimeoutMs ?? 15000;
+      const onStaticTimeout = () => {
         timedOut = true;
         upstream.destroy(new Error('Canvas static asset timed out'));
-      });
+      };
+      // Socket timeouts begin only after connection. A separate initial timer
+      // also bounds connection and response-header stalls.
+      const headerTimer = isStatic ? setTimeout(onStaticTimeout, timeout) : undefined;
+      if (isStatic) upstream.setTimeout(timeout, onStaticTimeout);
       // A closed client must not leave an upstream response consuming resources.
-      res.on('close', () => { if (!res.writableFinished) upstream.destroy(); });
+      res.on('close', () => { if (headerTimer) clearTimeout(headerTimer); if (!res.writableFinished) upstream.destroy(); });
       req.on('aborted', () => upstream.destroy());
       upstream.on('response', incoming => {
+        if (headerTimer) clearTimeout(headerTimer);
         if (res.destroyed) { incoming.destroy(); return; }
         incoming.on('error', () => { if (!res.destroyed) res.destroy(); });
         incoming.on('aborted', () => { if (!res.destroyed) res.destroy(); });
@@ -75,6 +81,7 @@ export function createCanvasGateway(options: Options) {
         res.writeHead(incoming.statusCode || 502, incoming.headers); incoming.pipe(res);
       });
       upstream.on('error', () => {
+        if (headerTimer) clearTimeout(headerTimer);
         if (res.destroyed) return;
         if (res.headersSent) { res.destroy(); return; }
         res.writeHead(timedOut ? 504 : 502).end();
