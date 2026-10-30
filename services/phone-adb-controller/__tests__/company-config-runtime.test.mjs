@@ -36,10 +36,11 @@ test('队列释放租约不读取公司配置，仍可恢复',async()=>{
   assert.equal(result.released,true);assert.equal(froze,false);
 });
 test('103评分落库与版本来源同一次SQL并返回冻结版本',async()=>{
-  let n=0,update;
+  let n=0,update,reviewSeq=0;
   const client={query:async(sql,args)=>{if(sql.includes('FROM zenithjoy.leadgen_videos'))return{rows:[{title:'视频A',judgment_status:'matched'}]};if(sql.startsWith('SELECT'))return{rows:n++===0?[{id:'comment-A',comment_body:'报名',source_video:'视频A',source_video_url:'https://www.douyin.com/video/7617837149999841201'}]:[]};if(sql.startsWith('UPDATE'))update={sql,args};return{rows:[]}},release(){}};
-  const result=await queue.queueRequest({connect:async()=>client},{line:'jinuo',run:'run-score',op:'score',limit:1},{freezeCompanyConfig:async()=>snapshot,judgeComment:async(_c,_v,profile,opts)=>{assert.match(profile,/产品A/);assert.equal(opts.scoringRules.confidence_threshold,.8);return{grade:'A',relevance:'相关',reason:'报名',audit:{model:'fixture-primary',response_id:'fixture-score'}}},judgePolicy:async()=>({grade:'A',audit:{model:'fixture-review',response_id:'fixture-policy',policy_evidence:{audience_id:'audience-A',matched_rule:'报名',exclusion_rule:null,reason:'主动咨询'}}})});
+  const result=await queue.queueRequest({connect:async()=>client},{line:'jinuo',run:'run-score',op:'score',limit:1},{freezeCompanyConfig:async()=>snapshot,judgeComment:async(_c,_v,profile,opts)=>{assert.match(profile,/产品A/);assert.equal(opts.scoringRules.confidence_threshold,.8);return{grade:'A',relevance:'相关',reason:'报名',audit:{model:'fixture-primary',response_id:'fixture-score'}}},judgePolicy:async()=>({grade:'A',audit:{model:'fixture-review',response_id:`fixture-policy-${++reviewSeq}`,policy_evidence:{audience_id:'audience-A',matched_rule:'报名',exclusion_rule:null,reason:'主动咨询'}}})});
   assert.match(update.sql,/judgment_config=\$5/);assert.equal(JSON.parse(update.args[4]).version,7);assert.equal(result.config.company_id,'company-A');
+  assert.equal(JSON.parse(update.args[4]).policy_reviews.length,2);
 });
 test('104缺公司快照不读取批准话术或领取订单',async()=>{
   const {createOutreachHandlers}=await import('../leadgen-outreach.mjs');
