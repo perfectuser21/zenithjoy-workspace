@@ -15,11 +15,18 @@ describe('Aidge 试用账号边界', () => {
     expect(isAidgeViewerId('viewer-1', { AIDGE_VIEWER_USER_IDS: 'viewer-1,viewer-2' })).toBe(true);
     expect(isAidgeViewerId('another', { AIDGE_VIEWER_USER_IDS: 'viewer-1,viewer-2' })).toBe(false);
   });
-  it('试用账号仅能调用 Aidge 和登录接口', async () => {
+  it('试用账号可用 Aidge、自己的素材与混剪，其他业务接口仍被隔离', async () => {
     const app = testApp('viewer-1');
     expect((await request(app).get('/api/aidge/catalog').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
     expect((await request(app).post('/api/auth/sign-out').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
+    expect((await request(app).get('/api/account/me').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
+    expect((await request(app).get('/api/materials').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
+    expect((await request(app).get('/api/materials/id/preview').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
+    expect((await request(app).post('/api/mashup/runs').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
+    expect((await request(app).get('/api/mashup/templates').set('Cookie', 'better-auth.session_token=test')).status).toBe(200);
     expect((await request(app).get('/api/works').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
+    expect((await request(app).get('/api/account/license').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
+    expect((await request(app).get('/api/materials-private').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
     expect((await request(app).post('/api/creative-canvas/execute').set('Cookie', 'better-auth.session_token=test')).status).toBe(403);
   });
   it('普通用户不受影响', async () => {
