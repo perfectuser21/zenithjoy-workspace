@@ -131,6 +131,15 @@ test('103 scoring method lock changes when its real judge-comment scorer changes
      other+' should not own 103 scorer bytes');
 });
 
+test('101l 原生观测校验真身只绑定视频发现及103两项消费者',t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/discovery-metrics.js';
+ const before=collectMethods(root);
+ put(root,path,readFileSync(join(root,path),'utf8')+'\n// isolated observation-byte mutation\n');
+ const after=collectMethods(root);
+ const changed=Object.keys(before.activities).filter(ref=>after.activities[ref].code_digest!==before.activities[ref].code_digest);
+ assert.deepEqual(changed,['douyin_video_discovery.collect_videos','douyin_comment_scoring.scoring','douyin_comment_scoring.mark_leads']);
+});
+
 test('ADB route verifier bytes belong to every phone-touching leadgen Activity only',t=>{
  const {root}=fixture(t),path='services/phone-adb-controller/adb-existing-route.py';
  const expected=['douyin_video_discovery.collect_videos','douyin_video_processing.preflight',
