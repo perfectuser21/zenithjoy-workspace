@@ -190,6 +190,15 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const upstream=readFrozen(upstreamDir),current=readFrozen(env.WFR_RUN_DIR);
     if(upstream.run_identity?.capability!=='douyin_video_discovery'||upstream.run_identity.tag!==sourceRun
       ||upstream.run_identity.profile!==profile||upstream.deployment.source_commit!==current.deployment.source_commit&&!current.producer_descriptor)throw Error('上游101冻结身份或发布来源不一致');
+    const final=JSON.parse(readFileSync(join(upstreamDir,'split-result.json'),'utf8'));
+    const collect=Array.isArray(final?.results)?final.results.filter(item=>item?.activity==='collect_videos'):[];
+    const runPrefix=`douyin_video_discovery-${sourceRun}__`;
+    const attempt=typeof final?.run_id==='string'&&final.run_id.startsWith(runPrefix)?final.run_id.slice(runPrefix.length):'';
+    if(final?.status!=='completed'||final.workflow_key!=='douyin_video_discovery'
+      ||!/^a[1-9][0-9]*$/.test(attempt)
+      ||final.source_commit!==upstream.deployment.source_commit||final.profile!==profile
+      ||final.evidence_status!=='sent'||collect.length!==1
+      ||collect[0].status!=='completed'||collect[0].verification?.verified!==true)throw Error('上游101终态或collect_videos验收未通过');
     const progressRaw=readFileSync(join(upstreamDir,'discovery-progress.json'));
     const input=JSON.parse(progressRaw);
     const producer=current.producer_descriptor?verifyProducerDescriptor(current.producer_descriptor,{upstream,progressRaw,progress:input,env,company:state.companyConfig}):null;

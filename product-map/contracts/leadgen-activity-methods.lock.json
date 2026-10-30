@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "602e87cbe0b5edaeeb1a4fc3d044ab68166c7a0d336187edd88364d030e337d0",
+      "code_digest": "83dd39b8f657302a69b9062290e3260d8afe1eb95b0b8e4573a3e4cf2652cf02",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "3dfaa156c5f5aeea13c87ecf08c2403c6669e9e879e2701f561ab6fc99670598",
-        "current_code_digest": "602e87cbe0b5edaeeb1a4fc3d044ab68166c7a0d336187edd88364d030e337d0"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "602e87cbe0b5edaeeb1a4fc3d044ab68166c7a0d336187edd88364d030e337d0",
+        "current_code_digest": "83dd39b8f657302a69b9062290e3260d8afe1eb95b0b8e4573a3e4cf2652cf02"
       }
     },
     "douyin_video_processing.preflight": {
@@ -497,7 +497,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "699f248579e8de5beb0c2cb946ab2e1473023c0a554dd0f669763830d95df987",
+      "code_digest": "0731210cf83f3f149e470fc8122d7f8333464a4017dc2ed627c6c6a58586b4ff",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "310728af89288fde323f5988b766e4c697301a2852d130c8507deda233696810",
-        "current_code_digest": "699f248579e8de5beb0c2cb946ab2e1473023c0a554dd0f669763830d95df987"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "699f248579e8de5beb0c2cb946ab2e1473023c0a554dd0f669763830d95df987",
+        "current_code_digest": "0731210cf83f3f149e470fc8122d7f8333464a4017dc2ed627c6c6a58586b4ff"
       }
     },
     "douyin_video_processing.dedup": {
@@ -763,7 +763,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         }
       ],
-      "code_digest": "5ab01f6f545932bcc07c0b7f377243cab08a7e3846f5eb46ee5af237387aaf0c",
+      "code_digest": "91a118f8bd965a695ea421e9740db355f5e49cd6595edefd0204a32bc302ac15",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "48c256888f8671d536398f96b4d1d3a16f665f767a8212308af4d6ad94d0f0fc",
-        "current_code_digest": "5ab01f6f545932bcc07c0b7f377243cab08a7e3846f5eb46ee5af237387aaf0c"
+        "reason": "修复已声明的101来源验收门禁；失败来源此前未受合同授权，正常已验收来源保持原行为",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "5ab01f6f545932bcc07c0b7f377243cab08a7e3846f5eb46ee5af237387aaf0c",
+        "current_code_digest": "91a118f8bd965a695ea421e9740db355f5e49cd6595edefd0204a32bc302ac15"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1050,7 +1050,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "9e7f2ec75445e11c183974f730bef7da7b33a8c93ec15f86974eb57327c158f5",
+      "code_digest": "d59a934acc9cab7fb1dc554606ee834d63899f4a5a361691a695e89cacab9282",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "66ea4b2ff697e0582ff57f8b93c0e50d6b642c32f74261f58a0900ed4218b89a",
-        "current_code_digest": "9e7f2ec75445e11c183974f730bef7da7b33a8c93ec15f86974eb57327c158f5"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "9e7f2ec75445e11c183974f730bef7da7b33a8c93ec15f86974eb57327c158f5",
+        "current_code_digest": "d59a934acc9cab7fb1dc554606ee834d63899f4a5a361691a695e89cacab9282"
       }
     },
     "douyin_video_processing.collection": {
@@ -1387,7 +1387,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "5330abc3ee8b0239adb864ef09de0612d71c0e1afc4f5bc16f8398dd2115dfde",
+      "code_digest": "5ec8e2a2de5015a939e43b860b9a456243ef0f9740046664e79f6ea68b8debc2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "a4d761ed763f3ee8a75da63b8c9471711a17e793eb91b239c91c4c183bc425ea",
-        "current_code_digest": "5330abc3ee8b0239adb864ef09de0612d71c0e1afc4f5bc16f8398dd2115dfde"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "5330abc3ee8b0239adb864ef09de0612d71c0e1afc4f5bc16f8398dd2115dfde",
+        "current_code_digest": "5ec8e2a2de5015a939e43b860b9a456243ef0f9740046664e79f6ea68b8debc2"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1670,7 +1670,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "073bd0b9b9f11f7d6e4fde1926fbc2d71a17f58dba49f8677734fffb21caaf83",
+      "code_digest": "5204341a082195fcd3bf12c8e9c257ecde758b08a7824229f8a1437fc09367cf",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "5588ca0f394e5bbfc69d6fd844e0c87f30a8a5a054325a0137c50171e8b2bdc2",
-        "current_code_digest": "073bd0b9b9f11f7d6e4fde1926fbc2d71a17f58dba49f8677734fffb21caaf83"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "073bd0b9b9f11f7d6e4fde1926fbc2d71a17f58dba49f8677734fffb21caaf83",
+        "current_code_digest": "5204341a082195fcd3bf12c8e9c257ecde758b08a7824229f8a1437fc09367cf"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1908,7 +1908,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -1988,13 +1988,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "26ca667a362060e0faa0ab37a503030d4debc0f9a4f599894650e33ec2f80e71",
+      "code_digest": "9dffb63cb1613fc95d2e15fdadbd8713f189b06251c1d02c8bb4791831f42afe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "a3bab50821221cfd76e873835b4b9752e753a16876f104c4cd450d13c2deb1c5",
-        "current_code_digest": "26ca667a362060e0faa0ab37a503030d4debc0f9a4f599894650e33ec2f80e71"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "26ca667a362060e0faa0ab37a503030d4debc0f9a4f599894650e33ec2f80e71",
+        "current_code_digest": "9dffb63cb1613fc95d2e15fdadbd8713f189b06251c1d02c8bb4791831f42afe"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2167,7 +2167,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -2282,13 +2282,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "b6f1a677a6b6cbd8d9b5034ff93762d2a56e510ee125627839fa55d4ed90f5f3",
+      "code_digest": "48eefd1cc20865349313e92c2b23fb1752f33175aeed114b15f927cbc51227e5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "ec75ebe6200b3527b5bfa9a4a77ffdfdfb2d9b3e1c914ead7aa7dc3cabaa3127",
-        "current_code_digest": "b6f1a677a6b6cbd8d9b5034ff93762d2a56e510ee125627839fa55d4ed90f5f3"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "b6f1a677a6b6cbd8d9b5034ff93762d2a56e510ee125627839fa55d4ed90f5f3",
+        "current_code_digest": "48eefd1cc20865349313e92c2b23fb1752f33175aeed114b15f927cbc51227e5"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2493,7 +2493,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -2580,13 +2580,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "7ccdc4b8940df873c07646479c8204db250adefae015457d3ae830203f163fe7",
+      "code_digest": "16570c79f7a0dfd4659a03b8dba574e9cdcb32dd2b54f8c23091663677d796a3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "30180d4e9e828f693bbc490d19e43df8ecef49e30382099731b6670f4c6d3566",
-        "current_code_digest": "7ccdc4b8940df873c07646479c8204db250adefae015457d3ae830203f163fe7"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "7ccdc4b8940df873c07646479c8204db250adefae015457d3ae830203f163fe7",
+        "current_code_digest": "16570c79f7a0dfd4659a03b8dba574e9cdcb32dd2b54f8c23091663677d796a3"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2780,7 +2780,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -2853,13 +2853,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "015739e9aaa3a514518e945fa882ca2461aef18e53e9808a280beb971089c884",
+      "code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "726d9e3238983857eea64c5a4940ebfc17dbefd84b3af7ad806ab761b57c886f",
-        "current_code_digest": "015739e9aaa3a514518e945fa882ca2461aef18e53e9808a280beb971089c884"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "015739e9aaa3a514518e945fa882ca2461aef18e53e9808a280beb971089c884",
+        "current_code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3053,7 +3053,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -3126,13 +3126,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "015739e9aaa3a514518e945fa882ca2461aef18e53e9808a280beb971089c884",
+      "code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "726d9e3238983857eea64c5a4940ebfc17dbefd84b3af7ad806ab761b57c886f",
-        "current_code_digest": "015739e9aaa3a514518e945fa882ca2461aef18e53e9808a280beb971089c884"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "015739e9aaa3a514518e945fa882ca2461aef18e53e9808a280beb971089c884",
+        "current_code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3329,7 +3329,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "d37454704b63d65cd421523f80846ca79ea6a2c7899abb880afec143f147b556"
+          "sha256": "eca39ee56e4585958af0857d5bed19f57afef313958f36df81fba93306972c90"
         },
         {
           "kind": "code",
@@ -3402,13 +3402,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cba907fa7a161182df9663d63e17a8c5a43e76d4f217e7d5810778afa7879ef6",
+      "code_digest": "22b5c0c1383ebbe2f892e7ad51c527368238de3b7ebc204961d5c1e93d2c037c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "父CLI截止后的Skill接手只读官方child终态，并保留owner未知和原资源锁；原Activity业务输入输出、方法与正常执行路径未变。",
-        "reviewed_by": "interactive-101h-terminal-race",
-        "previous_code_digest": "91d18f32782f71e9a46c9d96411f2b32204858b76bb5a70f20dc14e93b226004",
-        "current_code_digest": "cba907fa7a161182df9663d63e17a8c5a43e76d4f217e7d5810778afa7879ef6"
+        "reason": "共享leadgen-handlers.mjs仅变更102 intake上游验收检查，本Activity执行路径与输入输出未变",
+        "reviewed_by": "codex:be85b699-8a35-4a39-a1f0-e38aeb526cf7",
+        "previous_code_digest": "cba907fa7a161182df9663d63e17a8c5a43e76d4f217e7d5810778afa7879ef6",
+        "current_code_digest": "22b5c0c1383ebbe2f892e7ad51c527368238de3b7ebc204961d5c1e93d2c037c"
       }
     }
   },
