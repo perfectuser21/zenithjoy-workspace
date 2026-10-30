@@ -32,7 +32,7 @@ case "$*" in
     fi
     exit 0;;
   *"shell stat -c %s "*) wc -c < "$CASE_REMOTE" 2>/dev/null | tr -d ' ' || echo 0; exit 0;;
-  *"shell stat -c %Y "*) if [ "$CASE_MODE" = stale ]; then echo 1; else stat -f %m "$CASE_REMOTE" 2>/dev/null || echo 0; fi; exit 0;;
+  *"shell stat -c %Y "*) if [ "$CASE_MODE" = stale ]; then echo 1; elif [ -e "$CASE_REMOTE" ]; then date +%s; else echo 0; fi; exit 0;;
   *"shell date +%s"*) date +%s; exit 0;;
   *"shell input keyevent 85"*) exit 0;;
   *" pull "*) for last; do :; done; cp "$CASE_REMOTE" "$last"; exit 0;;
