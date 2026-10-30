@@ -85,20 +85,26 @@ test('真实controller先验证既有socket再用该路由，customclient也不�
 });
 // CLI fault injection runs the original __main__ in a real Python process.
 // Only the test loopback endpoint is reachable; no host ADB service is queried.
-async function diagnosticCli(t,{hang=false,client='good',injected='',configured}={}){
+async function diagnosticCli(t,{hang=false,client='good',injected='',configured,managed=false}={}){
  const endpoint=await server(t,'431\tdevice\n',{hang});
  const dir=mkdtempSync(join(tmpdir(),'adb-route-cli-diagnostic-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const sentinel='SENSITIVE_ROUTE_DIAGNOSTIC_SENTINEL',calls=join(dir,'client-calls');
  const executable=join(dir,client==='missing'?sentinel:'client');
  if(client!=='missing'){
   const python=spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'});assert.equal(python.status,0,python.stderr);
-  writeFileSync(executable,`#!${python.stdout.trim()}\nimport sys,time,json\nwith open(${JSON.stringify(calls)},'a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nif sys.argv[1:]!=['version']:sys.exit(9)\n${client==='slow'?'time.sleep(3)':client==='slow_once'?`if len(open(${JSON.stringify(calls)}).readlines()) == 1: time.sleep(3)\nprint("Android Debug Bridge version 1.0.41")`:'print("Android Debug Bridge version 1.0.41")'}\n`,{mode:0o755});
+  writeFileSync(executable,`#!${python.stdout.trim()}\nimport sys,time,json\nwith open(${JSON.stringify(calls)},'a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nif sys.argv[1:]!=['version']:sys.exit(9)\n${client==='slow'?'time.sleep(3)':client==='slow_once'?`if len(open(${JSON.stringify(calls)}).readlines()) == 1: time.sleep(3)\nprint("Android Debug Bridge version 1.0.41")`:client==='slow_twice'?`if len(open(${JSON.stringify(calls)}).readlines()) <= 2: time.sleep(3)\nprint("Android Debug Bridge version 1.0.41")`:'print("Android Debug Bridge version 1.0.41")'}\n`,{mode:0o755});
  }
  const runner=join(dir,'invoke.py');
  writeFileSync(runner,`import sys,socket,runpy\nroute,port,injected=sys.argv[1:4];sys.argv=[route,'431',sys.argv[4]]\noriginal=socket.create_connection\ndef local_only(address,*args,**kwargs):\n if address!=('127.0.0.1',int(port)):raise ConnectionRefusedError()\n if injected:raise type(injected,(RuntimeError,),{})(injected)\n return original(address,*args,**kwargs)\nsocket.create_connection=local_only\nrunpy.run_path(route,run_name='__main__')\n`);
  const env={...process.env,HOME:dir,ADB_SERVER_SOCKET:configured??`tcp:127.0.0.1:${endpoint.port}`,ADB_PROBE_TEST_SECRET:sentinel};
  for(const key of ['ZJ_ADB_HOST_CONFIG','WFR_COLLECTION_POLICY_FILE','WFR_COLLECTION_LEAF_SOCKET','WFR_COLLECTION_LEAF_NONCE'])delete env[key];
- const result=await new Promise(resolve=>{const c=spawn('python3',[runner,helper,String(endpoint.port),injected,executable],{env});let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out,err}));});
+ if(managed){
+  const policy=join(dir,'adb-service.json');
+  writeFileSync(policy,JSON.stringify({schema_version:1,host_id:'xian-m4',transport:'usb',endpoint:`tcp:127.0.0.1:${endpoint.port}`,forbidden_ports:[],adb_bin:executable}),{mode:0o600});
+  env.ZJ_ADB_HOST_CONFIG=policy;
+ }
+ const probeBinary=managed?new URL('../adb-managed-client.py',import.meta.url).pathname:executable;
+ const result=await new Promise(resolve=>{const c=spawn('python3',[runner,helper,String(endpoint.port),injected,probeBinary],{env});let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out,err}));});
  return {...result,endpoint,sentinel,executable,callsPath:calls,calls:existsSync(calls)?readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse):[]};
 }
 function diagnostic(result,first,phase,exception){
@@ -117,15 +123,27 @@ test('CLI真实socket读取超时保首码并指明route_select阶段',async t=>
  const r=await diagnosticCli(t,{hang:true});diagnostic(r,'ADB_ROUTE_PROBE_FAILED','route_select','TimeoutError');
  assert.deepEqual(r.calls,[]);assert.deepEqual(r.endpoint.requests,['host:version']);
 });
-test('CLI真实version子进程超原2秒时指明client_version阶段',async t=>{
+test('CLI真实version子进程三次均超2秒时有界拒绝并指明client_version阶段',async t=>{
  const r=await diagnosticCli(t,{client:'slow'}),d=diagnostic(r,'ADB_ROUTE_PROBE_FAILED','client_version','TimeoutExpired');
- assert.ok(d.elapsed_ms>=3800&&d.elapsed_ms<5500);assert.deepEqual(r.calls,[['version'],['version']]);
+ assert.ok(d.elapsed_ms>=5800&&d.elapsed_ms<7500);assert.deepEqual(r.calls,[['version'],['version'],['version']]);
  assert.deepEqual(r.endpoint.requests,['host:version','host:devices']);
 });
 test('CLI版本子进程首次2秒抖动后只重试本地version并复核原socket',async t=>{
  const r=await diagnosticCli(t,{client:'slow_once'});
  assert.equal(r.status,0,r.err);assert.equal(r.out,`${r.endpoint.port}\n`);assert.equal(r.err,'');
  assert.deepEqual(r.calls,[['version'],['version']]);
+ assert.deepEqual(r.endpoint.requests,['host:version','host:devices','host:version','host:devices']);
+});
+test('CLI本地version连续两次启动抖动后恢复，仍复核原socket且不启动server',async t=>{
+ const r=await diagnosticCli(t,{client:'slow_twice'});
+ assert.equal(r.status,0,r.err);assert.equal(r.out,`${r.endpoint.port}\n`);assert.equal(r.err,'');
+ assert.deepEqual(r.calls,[['version'],['version'],['version']]);
+ assert.deepEqual(r.endpoint.requests,['host:version','host:devices','host:version','host:devices']);
+});
+test('受管ADB先核宿主策略和原路由，再对其固定真实客户端做有界版本读取',async t=>{
+ const r=await diagnosticCli(t,{client:'slow_twice',managed:true});
+ assert.equal(r.status,0,r.err);assert.equal(r.out,`${r.endpoint.port}\n`);assert.equal(r.err,'');
+ assert.deepEqual(r.calls,[['version'],['version'],['version']]);
  assert.deepEqual(r.endpoint.requests,['host:version','host:devices','host:version','host:devices']);
 });
 test('受管客户端同样恢复首次2秒本地version抖动',async t=>{

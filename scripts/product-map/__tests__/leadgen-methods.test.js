@@ -131,6 +131,18 @@ test('103 scoring method lock changes when its real judge-comment scorer changes
      other+' should not own 103 scorer bytes');
 });
 
+test('ADB route verifier bytes belong to every phone-touching leadgen Activity only',t=>{
+ const {root}=fixture(t),path='services/phone-adb-controller/adb-existing-route.py';
+ const expected=['douyin_video_discovery.collect_videos','douyin_video_processing.preflight',
+  'douyin_video_processing.qualification','douyin_video_processing.collection','douyin_video_processing.cleanup',
+  'douyin_lead_outreach.preflight','douyin_lead_outreach.send_dm','douyin_lead_outreach.cleanup'];
+ const before=collectMethods(root);
+ put(root,path,readFileSync(join(source,path),'utf8')+'\n# isolated route-verifier byte mutation\n');
+ const after=collectMethods(root);
+ const changed=Object.keys(before.activities).filter(ref=>after.activities[ref].code_digest!==before.activities[ref].code_digest);
+ assert.deepEqual(changed,expected);
+});
+
 test('native operation receipt bytes belong to every consumer method source closure',t=>{
  const {root}=fixture(t),path='services/phone-adb-controller/native-operation-receipt.mjs';
  put(root,path,readFileSync(join(source,path)));
