@@ -9,8 +9,15 @@ import {comments,originalRun,sourceRun,video,policy} from './fixtures/leadgen-10
 const require=createRequire(import.meta.url);
 const {queueRequest,evaluatePolicy,reviewBoundComment}=require('../leadgen-queue.js');
 const {judgeCommander}=require('../judge-comment.js');
+const {safePolicyReviewReason}=require('../leadgen-policy-review.js');
 const input={op:'policy_review',line:'jinuo',run:originalRun,claim:originalRun,source_run:sourceRun,ids:comments.map(c=>c.id)};
 const primaryAudit={model:'typesafe/jev-1.13',response_id:'jev-response-1',confidence:.99};
+
+test('政策复核原因码只准固定枚举，模型正文与凭据样式不得进入回执',()=>{
+ assert.equal(safePolicyReviewReason('personal_intent_evidence_missing'),'personal_intent_evidence_missing');
+ assert.equal(safePolicyReviewReason('audience_or_topic_evidence_missing'),'audience_or_topic_evidence_missing');
+ assert.equal(safePolicyReviewReason('raw comment API key'),null);
+});
 
 test('103新run先走正式公司冻结；首轮与丢回执恢复共享原CID和一次评分预算',async t=>{
  const {createHandlers}=await import('../leadgen-handlers.mjs');
@@ -88,6 +95,10 @@ test('终审只接单个 JSON 或单层 json fence，保留真实模型响应身
   {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost});
  assert.equal(r.grade,'A');assert.equal(r.audit.response_id,'actual-response-id');assert.equal(r.audit.confidence,.83);
  assert.match(requests[0].url,/\/api\/v1\/chat\/completions$/);assert.equal(requests[0].body.model,'google/gemini-2.5-flash');
+ assert.match(requests[0].body.messages[0].content,/comment_signal 与 video_signal 必须分别逐字引用评论原文与视频标题/);
+ await judgeCommander('人工智能训练师证书怎么报名',video.title,'冻结画像','video quote invalid',
+  {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost,retryVideoQuote:true});
+ assert.match(requests[1].body.messages[0].content,/上次 video_signal 未能逐字引用视频标题/);
  await assert.rejects(judgeCommander('人工智能训练师证书怎么报名',video.title,'冻结画像','low',
   {apiKey:'fixture-only',scoringRules:policy.runtime_config.comment_scoring,httpPost:async()=>({id:'r',model:'google/gemini-2.5-flash',choices:[{message:{content:`${JSON.stringify(answer)} ${JSON.stringify(answer)}`}}]})}),/COMMANDER_EVIDENCE_INVALID/);
 });
@@ -195,6 +206,82 @@ test('政策复核不能把未完成评分的空relevance当成A档通过',async
  assert.equal(r.verified,false);assert.equal(r.rows[0].status,'unknown');
 });
 
+test('冻结v14的B相关讨论无行动意向与C画像内寒暄可核通过，A无个人意向仍阻断',async()=>{
+ const examples=[
+  {grade:'B',comment:'这个考证视频挺有意思',rule:'考证视频',signal:'考证视频',expected:'pass'},
+  {grade:'C',comment:'职场人来打个卡',rule:'职场人',signal:'职场人来打个卡',expected:'pass'},
+  {grade:'A',comment:'这个考证视频挺有意思',rule:'考证视频',signal:'考证视频',expected:'unknown'},
+  {grade:'B',comment:'这是什么背景音乐',rule:'考证视频',signal:'背景音乐',expected:'unknown'},
+ ];
+ for(const example of examples){
+  const row={id:'00000000-0000-4000-8000-000000000026',comment_body:example.comment,
+   source_video:video.title,source_video_url:video.video_url,relevance:'相关',intent_grade:example.grade,
+   judgment_config:{company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id}};
+  const review=await evaluatePolicy(row,policy,{judgePolicy:async()=>({grade:example.grade,
+   audit:{model:'fixture-model',response_id:'fixture-response',policy_evidence:{audience_id:'recvvcNzUv5rzl',
+    matched_rule:example.rule,comment_signal:example.signal,exclusion_rule:null,reason:'按冻结画像分级'}}})});
+  assert.equal(review.status,example.expected,`${example.grade} ${example.comment}`);
+  if(example.grade==='A')assert.equal(review.reason,'personal_intent_evidence_missing');
+ }
+});
+
+test('A档中文直接提问须双引用同主题；无问词、错误视频或模型自由改写仍阻断',async()=>{
+ const cases=[
+  {comment:'FDE到底有几张证，哪张才是能查的',video:'FDE证书刚出第二张',signal:'FDE到底有几张证，哪张才是能查的',videoSignal:'FDE证书',expected:'pass'},
+  {comment:'FDE证书确实很多',video:'FDE证书刚出第二张',signal:'FDE证书确实很多',videoSignal:'FDE证书',expected:'unknown'},
+  {comment:'FDE到底有几张证，哪张才是能查的',video:'如何制作水彩画',signal:'FDE到底有几张证，哪张才是能查的',videoSignal:'如何制作水彩画',expected:'unknown'},
+  {comment:'FDE到底有几张证，哪张才是能查的',video:'FDE证书刚出第二张',signal:'FDE到底有几张证，哪张才是能查的',videoSignal:'FDE证书咨询',expected:'unknown'},
+ ];
+ for(const item of cases){
+  const row={id:'00000000-0000-4000-8000-000000000027',comment_body:item.comment,
+   source_video:item.video,source_video_url:video.video_url,relevance:'相关',intent_grade:'A',
+   judgment_config:{company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id}};
+  const review=await evaluatePolicy(row,policy,{judgePolicy:async()=>({grade:'A',audit:{model:'fixture-model',response_id:'fixture-response',
+   policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:item.signal,
+    video_signal:item.videoSignal,exclusion_rule:null,reason:'明确证书咨询'}}})});
+  assert.equal(review.status,item.expected,JSON.stringify({expected:item.expected,reason:review.reason}));
+ }
+});
+
+test('政策视频引用不合格只重试一次；第二次有效通过，仍无效则unknown',async()=>{
+ const row={id:'00000000-0000-4000-8000-000000000028',comment_body:'FDE到底有几张证，哪张才是能查的',
+  source_video:'FDE证书刚出第二张',source_video_url:video.video_url,relevance:'相关',intent_grade:'A',
+  judgment_config:{company_id:policy.company_id,tenant_id:policy.tenant_id,version:14,policy_id:policy.policy_id}};
+ const make=(videoSignal)=>({grade:'A',audit:{model:'fixture-model',response_id:'fixture-response',policy_evidence:{
+  audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:row.comment_body,
+  video_signal:videoSignal,exclusion_rule:null,reason:'证书直接咨询'}}});
+ for(const second of ['FDE证书','FDE证书咨询']){
+  let calls=0;const r=await evaluatePolicy(row,policy,{judgePolicy:async(_body,_video,_profile,_reason,opts)=>{
+   calls++;assert.ok(calls<=2,'政策复核不得超过两次');if(calls===2)assert.equal(opts.retryVideoQuote,true);
+   return make(calls===1?'FDE证书咨询':second);
+  }});
+  assert.equal(calls,2);assert.equal(r.status,second==='FDE证书'?'pass':'unknown');
+  if(second!=='FDE证书')assert.equal(r.reason,'personal_intent_evidence_missing');
+ }
+});
+
+test('103政策双次无效最多一次评分加两次复核且事务回滚，回执只含安全原因',async()=>{
+ const row={id:'00000000-0000-4000-8000-000000000029',line_key:'jinuo',harvest_batch:sourceRun,
+  comment_body:'FDE到底有几张证，哪张才是能查的',source_video:'FDE证书刚出第二张',source_video_url:video.video_url};
+ const calls=[];let scoreCalls=0,reviewCalls=0;
+ const client={async query(sql,args=[]){calls.push(sql);
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:args[2]?.includes(row.id)?[]:[row]};
+  if(sql.includes('leadgen_videos'))return {rows:[{title:row.source_video,judgment_status:'matched'}]};
+  return {rows:[]};},release(){}};
+ const result=await queueRequest({connect:async()=>client},
+  {op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},
+  {freezeCompanyConfig:async()=>policy,
+   judgeComment:async()=>{scoreCalls++;return {grade:'A',relevance:'相关',reason:'model:A',audit:primaryAudit};},
+   judgePolicy:async()=>{reviewCalls++;return {grade:'A',audit:{model:'fixture-model',response_id:'fixture-response',
+    policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:row.comment_body,
+     video_signal:'FDE证书咨询',exclusion_rule:null,reason:'证书咨询'}}};}});
+ assert.equal(scoreCalls,1);assert.equal(reviewCalls,2);assert.equal(result.scored,0);
+ assert.deepEqual(result.blocked_reasons,[{id:row.id,code:'POLICY_SCORE_NOT_VERIFIED',
+  policy_review_reason:'personal_intent_evidence_missing'}]);
+ assert.ok(calls.includes('ROLLBACK'));
+ assert.ok(!calls.some(sql=>sql.includes('UPDATE zenithjoy.leadgen_comments')));
+});
+
 test('新评分语义未通过时回滚且不写旧评分，模型B也不能绕过排除项',async()=>{
  const row={...comments[0],source_video:video.title,source_video_url:video.video_url,harvest_batch:sourceRun,line_key:'jinuo',relevance:null};
  const calls=[];const client={async query(sql){calls.push(sql);if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[row]};if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};return {rows:[]};},release(){}};
@@ -203,6 +290,27 @@ test('新评分语义未通过时回滚且不写旧评分，模型B也不能绕�
   judgeComment:async()=>({grade:'B',relevance:'相关',reason:'model:B',audit:primaryAudit}),
   judgePolicy:async()=>({grade:'不相关',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'就业焦虑',exclusion_rule:'泛失业或创业焦虑但未指向AI学习、考证或转行',reason:'无考证学习诉求'}}})}),/POLICY_SCORE_NOT_VERIFIED/);
  assert.ok(calls.includes('ROLLBACK'));assert.ok(!calls.some(sql=>sql.includes('UPDATE zenithjoy.leadgen_comments')));
+});
+
+test('103政策复核缺个人意向时只回传安全子码，保留待分拣且不写评分',async()=>{
+ const row={id:'00000000-0000-4000-8000-000000000025',line_key:'jinuo',harvest_batch:sourceRun,
+  comment_body:'这是什么背景音乐',source_video:video.title,source_video_url:video.video_url};
+ const calls=[];let selected=0;
+ const client={async query(sql){calls.push(sql);
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:selected++?[]:[row]};
+  if(sql.includes('leadgen_videos'))return {rows:[{...video,judgment_status:'matched'}]};
+  return {rows:[]};},release(){}};
+ const result=await queueRequest({connect:async()=>client},
+  {op:'score',line:'jinuo',run:originalRun,source_run:sourceRun,limit:1},
+  {freezeCompanyConfig:async()=>policy,
+   judgeComment:async()=>({grade:'A',relevance:'相关',reason:'model:A',audit:primaryAudit}),
+   judgePolicy:async()=>({grade:'A',audit:{model:'fixture-model',response_id:'fixture-response',
+    policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么考',exclusion_rule:null,reason:'fixture'}}})});
+ assert.equal(result.scored,0);assert.equal(result.blocked,1);
+ assert.deepEqual(result.blocked_reasons,[{id:row.id,code:'POLICY_SCORE_NOT_VERIFIED',
+  policy_review_reason:'personal_intent_evidence_missing'}]);
+ assert.ok(calls.includes('ROLLBACK'));
+ assert.ok(!calls.some(sql=>sql.includes('UPDATE zenithjoy.leadgen_comments')));
 });
 
 test('新评分的真实视频与评论语境不一致时回滚，不调用评分模型',async()=>{
