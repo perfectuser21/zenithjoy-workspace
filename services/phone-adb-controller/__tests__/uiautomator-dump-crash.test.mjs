@@ -18,7 +18,10 @@ case "$*" in
   *"REMOTE_UI_ABSENT_V1"*) if [ ! -e "$CASE_REMOTE" ]; then printf REMOTE_UI_ABSENT_V1; exit 0; else exit 1; fi;;
   *"shell uiautomator dump --compressed "*)
     n=$(cat "$CASE_COUNT" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$CASE_COUNT"
-    if [ "$CASE_MODE" = always137 ] || [ "$n" -eq 1 ]; then
+    if [ "$CASE_MODE" = fallback137 ] && [ "$n" -lt 4 ]; then
+      echo 'could not get idle state'; exit 1
+    fi
+    if [ "$CASE_MODE" = always137 ] || [ "$CASE_MODE" = fallback137 ] || [ "$n" -eq 1 ]; then
       printf '<hierarchy><node package="com.ss.android.ugc.aweme" text="old"/></hierarchy>' > "$CASE_REMOTE"
       exit 137
     fi
@@ -31,6 +34,7 @@ case "$*" in
   *"shell stat -c %s "*) wc -c < "$CASE_REMOTE" 2>/dev/null | tr -d ' ' || echo 0; exit 0;;
   *"shell stat -c %Y "*) if [ "$CASE_MODE" = stale ]; then echo 1; else stat -f %m "$CASE_REMOTE" 2>/dev/null || echo 0; fi; exit 0;;
   *"shell date +%s"*) date +%s; exit 0;;
+  *"shell input keyevent 85"*) exit 0;;
   *" pull "*) for last; do :; done; cp "$CASE_REMOTE" "$last"; exit 0;;
 esac
 exit 2`);chmodSync(adb,0o755);
@@ -55,6 +59,10 @@ test('UiAutomation code137后必须拒绝该次XML，清除后只接受第二次
 
 test('三次UiAutomation code137均不得接受遗留XML',{skip:!hasZsh},t=>{
  const r=runWave(t,'always137');assert.notEqual(r.status,0,'重复崩溃必须继续fail-closed');assert.equal(r.dumpCount,3);
+});
+
+test('暂停抓取兜底发生code137也不能接受该次XML',{skip:!hasZsh},t=>{
+ const r=runWave(t,'fallback137');assert.notEqual(r.status,0);assert.equal(r.dumpCount,4);
 });
 
 for(const mode of ['stale','wrongpackage','retained'])test(`崩溃后的${mode} XML不得作为新鲜抖音层级`,{skip:!hasZsh},t=>{
