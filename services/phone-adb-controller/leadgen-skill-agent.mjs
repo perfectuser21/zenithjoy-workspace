@@ -255,6 +255,18 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
     }
    }catch{/* no proof of termination: retain original resources */}
   }
+  // The official await can persist the child terminal just before its caller
+  // reaches the deadline. Preserve that proof, but never infer owner return.
+  try{
+   const binding=official(q,dir),terminal=privateJson(join(dir,'agent-terminal.json'));
+   if(terminal.runId!==binding.child_run_id||!Number.isFinite(terminal.endedAt)
+     ||!['ok','error','aborted','timeout'].includes(terminal.status)
+     ||terminal.status==='ok'&&(terminal.terminalReceipt?.runId!==binding.child_run_id
+       ||terminal.terminalReceipt?.effective?.provider!=='openai'
+       ||terminal.terminalReceipt?.effective?.model!=='gpt-6.1-sol'))throw Error('RPC_SKILL_TERMINAL_INVALID');
+   return {status:'unknown',execution_stopped:false,owner_execution_stopped:false,child_execution_stopped:true,
+     reason:'owner_transport_unresolved',child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
+  }catch{/* missing or invalid terminal remains unknown; retain original resources */}
   return {status:'unknown',execution_stopped:false,reason:'official_child_terminal_missing'};
  }
  }finally{await ownerTurn.close();}
