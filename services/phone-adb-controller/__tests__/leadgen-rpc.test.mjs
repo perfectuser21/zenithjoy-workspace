@@ -12,8 +12,12 @@ function fixture(){
   const read=path=>path===resolve(base,'deployment-manifest.json')?JSON.stringify({source_commit:commit}):bytes;
   return {source,options:{read,base}};
 }
-test('跨机RPC核对所有27依赖固定字节，缺依赖/篡改/旧版均拒绝',()=>{
+test('跨机RPC核对全部固定依赖字节，缺依赖/篡改/旧版均拒绝',()=>{
   const f=fixture();verifyRpcSource(f.source,f.options);
+  for(const name of ['leadgen-comment-admission.js','leadgen-comment-admission-authority.js']){
+    assert.ok(RPC_FILES.includes(name));
+    assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!==name)},f.options),/DEPENDENCY_MISSING/);
+  }
   assert.throws(()=>verifyRpcSource({...f.source,commit:'b'.repeat(40)},f.options),/REVISION_MISMATCH/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='step-judge.mjs')},f.options),/DEPENDENCY_MISSING/);
   assert.throws(()=>verifyRpcSource({...f.source,files:f.source.files.filter(r=>r.path!=='queued-comment-history.js')},f.options),/DEPENDENCY_MISSING/);

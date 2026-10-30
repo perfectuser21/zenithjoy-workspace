@@ -5,27 +5,8 @@ const { resolveLine, configEvidence } = require('./judge-video.js');
 const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
 const { judgeComment, scoreFailureReceipt } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason}=require('./leadgen-policy-review.js');
-async function reviewBoundComment(pool,lineKey,id,binding,deps={}){
-  const unknown={id,status:'unknown',reason:'comment_outbox_binding_invalid'};
-  if(!uuid.test(id||'')||!binding?.run||!binding.source_run||!binding.source_video||!binding.source_video_url)return unknown;
-  const scoringRun=binding.scoring_run||binding.run;
-  const rows=(await pool.query('SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=$2',[lineKey,id])).rows;
-  if(rows.length!==1||rows[0].id!==id||rows[0].line_key!==lineKey
-    ||rows[0].harvest_batch!==binding.source_run||rows[0].source_video!==binding.source_video
-    ||rows[0].source_video_url!==binding.source_video_url||rows[0].judgment_config?.run_id!==scoringRun)return unknown;
-  try{
-    if(scoringRun!==binding.run){
-      const frozen=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
-        WHERE run_id=$1 AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[binding.run,lineKey])).rows;
-      const mark=frozen[0]?.snapshot,original=rows[0].judgment_config;
-      if(frozen.length!==1||frozen[0].run_id!==binding.run||!mark||mark.company_id!==original.company_id
-        ||mark.tenant_id!==original.tenant_id||Number(mark.version)!==Number(original.version)||mark.policy_id!==original.policy_id)return unknown;
-    }
-    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id],require_dual_review:true},deps);
-    return review.rows[0]||unknown;
-  }catch{return unknown;}
-}
+const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment}=require('./leadgen-policy-review.js');
+const commentAdmission=require('./leadgen-comment-admission.js');
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
@@ -66,6 +47,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(op==='recover_single_video_0353')return require('./single-video-recovery-0353.js').recoverSingleVideo(pool,input,deps.recovery0353);
   if(op==='recover_single_video_readback')return require('./single-video-recovery.js').readbackSingleVideo(pool,input,deps.recovery);
   if(op==='recover_single_video')return require('./single-video-recovery.js').recoverSingleVideo(pool,input,deps.recovery);
+  if(op==='admit_102g_comments'||op==='admit_102g_readback'){
+    if(input.candidate_source_commit!==deps.sourceCommit)throw Error('ADMISSION_SOURCE_COMMIT_MISMATCH');
+    return op==='admit_102g_comments'?commentAdmission.admit(pool,input,deps.commentAdmission):commentAdmission.readback(pool,input);
+  }
   if(op==='verify_producer_company'){
     const {validateProducerDescriptor}=await import('./producer-descriptor.mjs');const d=validateProducerDescriptor(input.descriptor);if(!validRun(run)||lineKey!==d.line)throw Error('PRODUCER_REQUEST_SCOPE_INVALID');
     const rows=(await pool.query('SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[d.company_id,d.run_tag])).rows;
@@ -90,11 +75,14 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[]) AND ($3::text IS NULL OR harvest_batch=$3)`,[lineKey,ids,sourceRun])).rows;
     const urls=[...new Set(rows.map(r=>r.source_video_url).filter(Boolean))];
     const videos=urls.length?(await pool.query(`SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=ANY($2::text[]) AND process_status='评论已采'`,[lineKey,urls])).rows:[];
+    const admitted=sourceRun===commentAdmission.SOURCE_RUN
+      ?await commentAdmission.admittedRows(pool,{lineKey,run,sourceRun}):[];
     const reviewed=[];
     for(const id of ids){const matches=rows.filter(r=>r.id===id);const row=matches[0];
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
       reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun:row.harvest_batch===input.sources[id])
-        &&owned.length===1&&row.judgment_config?.run_id===run
+        &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1)
+        &&row.judgment_config?.run_id===run
         ?row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot)
           :input.require_dual_review?{id,status:'unknown',reason:'policy_evidence_invalid'}:await evaluatePolicy(row,snapshot,deps)
           :{id,status:'unknown',reason:'row_or_video_scope_unverified'});
@@ -102,8 +90,12 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return {verified:reviewed.every(r=>r.status==='pass'),rows:reviewed,ids,scope:{line:lineKey,run,claim:input.claim,source_run:sourceRun}};
   }
   if(op==='score_scope'){
-    const rows=(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments c WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
+    const normal=sourceRun===commentAdmission.SOURCE_RUN?[]:(await pool.query(`SELECT id,harvest_batch FROM zenithjoy.leadgen_comments c WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2)
       AND process_status='待分拣' AND EXISTS (SELECT 1 FROM zenithjoy.leadgen_videos v WHERE v.line_key=c.line_key AND v.video_url=c.source_video_url AND v.title=c.source_video AND v.harvest_batch=c.harvest_batch AND v.process_status='评论已采' AND v.judgment_status='matched') ORDER BY collected_at,id LIMIT 1001`,[lineKey,sourceRun])).rows;
+    const admitted=sourceRun===commentAdmission.SOURCE_RUN
+      ?(await commentAdmission.admittedRows(pool,{lineKey,run,sourceRun})).filter(r=>r.process_status==='待分拣'&&r.relevance===null)
+      :[];
+    const rows=[...normal,...admitted.map(r=>({id:r.id,harvest_batch:r.harvest_batch}))];
     if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
@@ -373,7 +365,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           collected_at:new Date(row.collected_at).toISOString(),id:row.id}:null;
         const videos=(await client.query(`SELECT video_id,video_url,title,judgment_status FROM zenithjoy.leadgen_videos
           WHERE line_key=$1 AND video_url=$2 AND process_status='评论已采' AND harvest_batch=$3`,[lineKey,row.source_video_url,row.harvest_batch])).rows;
-        if(videos.length!==1||videos[0].title!==row.source_video||videos[0].judgment_status!=='matched'){
+        const admitted=sourceRun===commentAdmission.SOURCE_RUN
+          ?await commentAdmission.admittedRows(client,{lineKey,run,sourceRun}):[];
+        if(!(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===row.id)
+          :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched')){
           const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
         }
         let verdict;
@@ -437,9 +432,13 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         if (!row) return null;
         seen.push(row.id);
         if(row.collected_at&&uuid.test(row.id))lastCursor={line:lineKey,run,source_run:sourceRun||null,collected_at:new Date(row.collected_at).toISOString(),id:row.id};
+        if(row.harvest_batch===commentAdmission.SOURCE_RUN){
+          const admitted=await commentAdmission.admittedRows(client,{lineKey,run,sourceRun:row.harvest_batch});
+          if(!admitted.some(a=>a.id===row.id))return {blocked:true,id:row.id};
+        }
         if(row.relevance==='相关'){
           const policy=await reviewBoundComment(client,lineKey,row.id,{run,scoring_run:row.judgment_config?.run_id,
-            source_run:row.harvest_batch,source_video:row.source_video,source_video_url:row.source_video_url},deps);
+            source_run:row.harvest_batch,source_video:row.source_video,source_video_url:row.source_video_url},deps,queueRequest);
           if(policy.status!=='pass')return {blocked:true,id:row.id};
         }
         let lead = null;
@@ -497,4 +496,5 @@ async function main() {
   } finally { if (pool) await pool.end(); }
 }
 if (require.main === module) main();
-module.exports = { queueRequest, transaction, evaluatePolicy, reviewBoundComment };
+module.exports = { queueRequest, transaction, evaluatePolicy,
+  reviewBoundComment:(pool,lineKey,id,binding,deps={})=>reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest) };

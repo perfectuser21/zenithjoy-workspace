@@ -1,7 +1,17 @@
 import {readFileSync,writeFileSync,appendFileSync,existsSync,renameSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
+import admission from './leadgen-comment-admission.js';
 export function createScoringHandler({env,run,line,state,queue}){return async()=>{
+      const admissionSource=env.LEADGEN_SOURCE_RUN===admission.SOURCE_RUN;
+      const admissionRequested=env.LEADGEN_102G_ADMISSION_DECISION_ID!==undefined
+        ||env.LEADGEN_102G_ADMISSION_TASK_ID!==undefined;
+      if(admissionSource||admissionRequested){
+        if(!admissionSource||line!=='jinuo'||env.LEADGEN_SEND==='1'
+          ||!env.LEADGEN_102G_ADMISSION_DECISION_ID||!env.LEADGEN_102G_ADMISSION_TASK_ID
+          ||!Number.isSafeInteger(Number(env.LEADGEN_LIMIT||2))||Number(env.LEADGEN_LIMIT||2)>3)
+          throw Error('ADMISSION_RUN_SCOPE_INVALID');
+      }
       if(env.LEADGEN_POLICY_REVIEW_IDS!==undefined){
         const ids=JSON.parse(env.LEADGEN_POLICY_REVIEW_IDS);
         if(env.LEADGEN_POLICY_CLAIM!==run||!env.LEADGEN_SOURCE_RUN)throw Error('POLICY_REVIEW_SCOPE_INVALID');
@@ -19,6 +29,19 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
         old_run:env.LEADGEN_LEGACY_SCORE_RUN,maintenance_task_id:env.LEADGEN_LEGACY_RECOVERY_TASK_ID}:null;
       if(legacyRecovery&&(!sourceRun||budget!==1))throw Error('POLICY_SCORE_LEGACY_RECOVERY_SCOPE_INVALID');
       state.company_config=await queue('company_config',{step:'103'});
+      if(admissionSource){
+        const fields={decision_id:env.LEADGEN_102G_ADMISSION_DECISION_ID,
+          maintenance_task_id:env.LEADGEN_102G_ADMISSION_TASK_ID,video_id:admission.VIDEO_ID,
+          candidate_source_commit:state.source_commit};
+        const accepted=await queue('admit_102g_comments',fields);
+        const readback=await queue('admit_102g_readback',fields);
+        if(!['applied','already_applied'].includes(accepted.status)
+          ||readback.status!=='already_applied'
+          ||accepted.decision_id!==fields.decision_id||readback.decision_id!==fields.decision_id
+          ||JSON.stringify(accepted.comment_ids)!==JSON.stringify(admission.COMMENT_IDS)
+          ||JSON.stringify(readback.comment_ids)!==JSON.stringify(admission.COMMENT_IDS))
+          throw Error('ADMISSION_READBACK_INVALID');
+      }
       const scope=legacyRecovery?{ids:[legacyRecovery.comment_id]}:await queue('score_scope');
       if(!sourceRun&&(!scope.sources||scope.ids.some(id=>typeof scope.sources[id]!=='string')))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
       const saveAttempt=value=>{const temp=`${attemptFile}.${process.pid}.${randomUUID()}.tmp`;

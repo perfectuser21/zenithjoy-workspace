@@ -122,4 +122,26 @@ async function verifyStoredPolicy(row,snapshot){
     evidence_sha256:sha(reviews.map(v=>v.evidence_sha256)),review_count:2};
 }
 
-module.exports={evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason};
+async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const unknown={id,status:'unknown',reason:'comment_outbox_binding_invalid'};
+  if(!uuid.test(id||'')||!binding?.run||!binding.source_run||!binding.source_video||!binding.source_video_url)return unknown;
+  const scoringRun=binding.scoring_run||binding.run;
+  const rows=(await pool.query('SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=$2',[lineKey,id])).rows;
+  if(rows.length!==1||rows[0].id!==id||rows[0].line_key!==lineKey
+    ||rows[0].harvest_batch!==binding.source_run||rows[0].source_video!==binding.source_video
+    ||rows[0].source_video_url!==binding.source_video_url||rows[0].judgment_config?.run_id!==scoringRun)return unknown;
+  try{
+    if(scoringRun!==binding.run){
+      const frozen=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
+        WHERE run_id=$1 AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[binding.run,lineKey])).rows;
+      const mark=frozen[0]?.snapshot,original=rows[0].judgment_config;
+      if(frozen.length!==1||frozen[0].run_id!==binding.run||!mark||mark.company_id!==original.company_id
+        ||mark.tenant_id!==original.tenant_id||Number(mark.version)!==Number(original.version)||mark.policy_id!==original.policy_id)return unknown;
+    }
+    const review=await queueRequest(pool,{op:'policy_review',line:lineKey,run:scoringRun,claim:scoringRun,source_run:binding.source_run,ids:[id],require_dual_review:true},deps);
+    return review.rows[0]||unknown;
+  }catch{return unknown;}
+}
+
+module.exports={evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment};
