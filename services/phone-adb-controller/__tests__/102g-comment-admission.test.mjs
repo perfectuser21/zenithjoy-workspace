@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 
 const require=createRequire(import.meta.url);
-const {queueRequest}=require('../leadgen-queue.js');
+const {queueRequest:queueDirect}=require('../leadgen-queue.js');
 const admission=require('../leadgen-comment-admission.js');
 const {hash:byteHash}=require('../queued-recipient-evidence.js');
 const {companyFixture}=await import('./company-config-fixture.mjs');
 const run='accept3a903_jinuo102g_20261030t0712';
+const candidate='c'.repeat(40);
+const queueRequest=(pool,input,deps={})=>queueDirect(pool,input,{sourceCommit:candidate,...deps});
 const videoId='7699489394579915663';
 const ids=[
   '818dc556-0d01-409a-9b08-4d458e4a7bc1',
@@ -29,7 +31,7 @@ const tenant='a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61';
 const source101='accept3a903_jinuo101f_20261030t0700';
 const input={op:'admit_102g_comments',line:'jinuo',run:'accept103_102g_exact_a1',source_run:run,
   video_id:videoId,decision_id:'11111111-1111-4111-8111-111111111111',
-  maintenance_task_id:'22222222-2222-4222-8222-222222222222'};
+  maintenance_task_id:'22222222-2222-4222-8222-222222222222',candidate_source_commit:candidate};
 const video={line_key:'jinuo',video_id:videoId,video_url:`https://www.douyin.com/video/${videoId}`,
   title:'人工智能训练师报名',harvest_batch:run,process_status:`待人工核验:${run}`,judgment_status:'matched',
   judgment_config:{company_id:company,tenant_id:tenant,version:14,policy_id:'jinoshengyuan-existing-acquisition-rules-v1',run_id:run}};
@@ -102,6 +104,14 @@ test('102g同批其他正常状态视频也不得借接纳决定扩大评分范�
     ?{rows:[{id:other,harvest_batch:run}]}:normal(sql,args);
   const scope=await queueRequest(pool,{op:'score_scope',line:'jinuo',run:input.run,source_run:run});
   assert.deepEqual(scope.ids,ids);
+});
+
+test('单视频用户决定须绑定真实RPC候选SHA，伪造SHA在任何PG动作前拒绝',async()=>{
+  const f=fixture();
+  await assert.rejects(queueRequest(f.pool,{...input,candidate_source_commit:'d'.repeat(40)},
+    {commentAdmission:f.authority}),/ADMISSION_SOURCE_COMMIT_MISMATCH/);
+  assert.equal(f.pool.calls.length,0);
+  assert.deepEqual(f.state.audit,[]);
 });
 
 test('102g受控接纳任一授权、终止、原生身份、政策、旧outbox或三条范围失配均不写',async()=>{

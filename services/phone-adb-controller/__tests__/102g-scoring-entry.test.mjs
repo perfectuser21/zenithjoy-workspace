@@ -10,6 +10,7 @@ const video='7699489394579915663';
 const run='accept103_102g_exact_a1';
 const decision='11111111-1111-4111-8111-111111111111';
 const task='22222222-2222-4222-8222-222222222222';
+const candidate='c'.repeat(40);
 const ids=['818dc556-0d01-409a-9b08-4d458e4a7bc1','4d1375d8-7ef2-4393-a3ec-c56897f7d045','8d95a060-25a0-4438-a5ad-c5bd91729883'];
 
 test('正式103评分先完成精确接纳及读回，再领取原102g评论',async()=>{
@@ -26,9 +27,9 @@ test('正式103评分先完成精确接纳及读回，再领取原102g评论',as
     const env={WFR_RUN_DIR:dir,LEADGEN_SOURCE_RUN:source,LEADGEN_LIMIT:'3',
       LEADGEN_102G_ADMISSION_DECISION_ID:decision,LEADGEN_102G_ADMISSION_TASK_ID:task,
       LEADGEN_SEND:'0'};
-    await assert.rejects(createScoringHandler({env,run,line:'jinuo',state:{},queue})(),/STOP_AFTER_SCOPE/);
+    await assert.rejects(createScoringHandler({env,run,line:'jinuo',state:{source_commit:candidate},queue})(),/STOP_AFTER_SCOPE/);
     assert.deepEqual(calls.map(v=>v.op),['company_config','admit_102g_comments','admit_102g_readback','score_scope']);
-    assert.deepEqual(calls[1].fields,{decision_id:decision,maintenance_task_id:task,video_id:video});
+    assert.deepEqual(calls[1].fields,{decision_id:decision,maintenance_task_id:task,video_id:video,candidate_source_commit:candidate});
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
 

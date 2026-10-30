@@ -21,6 +21,7 @@ const ACTION='leadgen_102g_comment_admission';
 const ACTOR='codex:102g-comment-admission';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX=/^[a-f0-9]{64}$/;
+const COMMIT=/^[a-f0-9]{40}$/;
 const fail=code=>{const error=Error('ADMISSION_'+code);error.code=error.message;throw error;};
 const canonical=x=>JSON.stringify(x instanceof Date?x.toJSON():x&&typeof x==='object'?Array.isArray(x)?x.map(v=>JSON.parse(canonical(v))):Object.fromEntries(Object.keys(x).sort().map(k=>[k,JSON.parse(canonical(x[k]))])):x);
 const hash=x=>createHash('sha256').update(canonical(x)).digest('hex');
@@ -29,15 +30,16 @@ const url=`https://www.douyin.com/video/${VIDEO_ID}`;
 
 function scopeFor(input){return {scope_version:1,action:'admit_exact_failed_102_comments_to_one_103_run',
   project_id:PROJECT_ID,company_id:COMPANY_ID,tenant_id:TENANT_ID,policy_id:POLICY_ID,
-  company_config_version:14,source_commit:SOURCE_COMMIT,source_run:SOURCE_RUN,
+  company_config_version:14,source_commit:SOURCE_COMMIT,candidate_source_commit:input.candidate_source_commit,source_run:SOURCE_RUN,
   source_101_run:SOURCE_101,video_id:VIDEO_ID,comment_ids:[...COMMENT_IDS],
   scoring_run:input.run,maintenance_task_id:input.maintenance_task_id,
   max_comments:3,keep_original_run_failed:true,keep_video_quarantined:true,allow_direct_messages:false};}
 function validateInput(input){
-  const keys=['decision_id','line','maintenance_task_id','op','run','source_run','video_id'];
+  const keys=['candidate_source_commit','decision_id','line','maintenance_task_id','op','run','source_run','video_id'];
   if(!input||Object.keys(input).sort().join(',')!==keys.join(',')
     ||!['admit_102g_comments','admit_102g_readback'].includes(input.op)
     ||input.line!=='jinuo'||input.source_run!==SOURCE_RUN||input.video_id!==VIDEO_ID
+    ||!COMMIT.test(input.candidate_source_commit||'')
     ||!UUID.test(input.decision_id||'')||!UUID.test(input.maintenance_task_id||'')
     ||typeof input.run!=='string'||!/^accept[a-zA-Z0-9_-]{1,110}$/.test(input.run)
     ||input.run===SOURCE_RUN)fail('SCOPE_INVALID');
@@ -105,6 +107,7 @@ function checkReceipt(receipt,input,video,comments){
   if(receipt?.id!==input.decision_id||receipt.action!==ACTION||receipt.org_id!==TENANT_ID
     ||receipt.member_id!==ACTOR||receipt.table_id!==null
     ||d?.version!==1||d.decision_id!==input.decision_id||d.scope_sha256!==hash(scopeFor(input))
+    ||d.candidate_source_commit!==input.candidate_source_commit
     ||d.scoring_run!==input.run||d.source_run!==SOURCE_RUN||d.video_id!==VIDEO_ID
     ||d.video_sha256!==hash(video)||!HEX.test(d.policy_sha256||'')
     ||!HEX.test(d.stop_sha256||'')||canonical(d.comment_hashes)!==canonical(comments))fail('RECEIPT_INVALID');
@@ -117,7 +120,8 @@ async function admittedRows(pool,{lineKey,run,sourceRun,requireScoringFrozen=tru
   if(receipts.length!==1)fail('RECEIPT_AMBIGUOUS');
   const receipt=receipts[0],decisionId=receipt.detail?.decision_id;
   const input={op:'admit_102g_comments',line:'jinuo',run,source_run:SOURCE_RUN,video_id:VIDEO_ID,
-    decision_id:decisionId,maintenance_task_id:receipt.detail?.maintenance_task_id};
+    decision_id:decisionId,maintenance_task_id:receipt.detail?.maintenance_task_id,
+    candidate_source_commit:receipt.detail?.candidate_source_commit};
   validateInput(input);
   const frozen=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=$2',[COMPANY_ID,SOURCE_RUN])).rows;
   if(frozen.length!==1||checkFrozen(frozen[0])!==receipt.detail?.policy_sha256)fail('POLICY_SCOPE_INVALID');
@@ -171,6 +175,7 @@ async function admit(pool,input,deps={}){
     checkAuthority(await authority.readAuthority(input),input);
     const stop=await authority.inspectStopped();checkStop(stop);
     const detail={version:1,decision_id:input.decision_id,maintenance_task_id:input.maintenance_task_id,
+      candidate_source_commit:input.candidate_source_commit,
       scope_sha256:hash(scopeFor(input)),scoring_run:input.run,source_run:SOURCE_RUN,video_id:VIDEO_ID,
       video_sha256:hash(video),policy_sha256:policyHash,comment_hashes:commentHashes,
       stop_sha256:stop.evidence_sha256};

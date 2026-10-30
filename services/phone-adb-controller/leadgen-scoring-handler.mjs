@@ -31,7 +31,8 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       state.company_config=await queue('company_config',{step:'103'});
       if(admissionSource){
         const fields={decision_id:env.LEADGEN_102G_ADMISSION_DECISION_ID,
-          maintenance_task_id:env.LEADGEN_102G_ADMISSION_TASK_ID,video_id:admission.VIDEO_ID};
+          maintenance_task_id:env.LEADGEN_102G_ADMISSION_TASK_ID,video_id:admission.VIDEO_ID,
+          candidate_source_commit:state.source_commit};
         const accepted=await queue('admit_102g_comments',fields);
         const readback=await queue('admit_102g_readback',fields);
         if(!['applied','already_applied'].includes(accepted.status)

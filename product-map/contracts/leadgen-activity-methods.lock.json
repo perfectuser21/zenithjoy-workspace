@@ -199,7 +199,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "98b6901408dc87165f130f5896b5d56ab823948b05b4b6cb49975bcb0e04b1d8",
+      "code_digest": "74a75ebfa45f8690d7221c52e663b4c56000af25a2244a1eeac9f8261721b729",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "101 discovery executes the unchanged queue operation; only 103 admission op and frozen packaging additions changed.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "83dd39b8f657302a69b9062290e3260d8afe1eb95b0b8e4573a3e4cf2652cf02",
-        "current_code_digest": "98b6901408dc87165f130f5896b5d56ab823948b05b4b6cb49975bcb0e04b1d8"
+        "current_code_digest": "74a75ebfa45f8690d7221c52e663b4c56000af25a2244a1eeac9f8261721b729"
       }
     },
     "douyin_video_processing.preflight": {
@@ -504,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ccb49c24cc70a635aad453d0fb8b2a9ddb25d15c0c0d3707bbcd9d0c258d30fe",
+      "code_digest": "5a4c61c8b8ba330ce301eadbc2c015cd9a37eba9eec1d9887a487a75a35924be",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "102 preflight, claim, qualification, collection and cleanup branches are unchanged; the new admission op is separate and keeps failed videos quarantined.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "0731210cf83f3f149e470fc8122d7f8333464a4017dc2ed627c6c6a58586b4ff",
-        "current_code_digest": "ccb49c24cc70a635aad453d0fb8b2a9ddb25d15c0c0d3707bbcd9d0c258d30fe"
+        "current_code_digest": "5a4c61c8b8ba330ce301eadbc2c015cd9a37eba9eec1d9887a487a75a35924be"
       }
     },
     "douyin_video_processing.dedup": {
@@ -770,7 +770,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -819,7 +819,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "a512d24accb0fbd816da26562012f6eb6493ccbd8fd527884a739446077c9e16"
+          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "77afeccd47718c40b042e1972e7fd29433ea0070b04c892973f5aa2b9a40b5ab"
         }
       ],
-      "code_digest": "8825090f2d734571a036a3a8a1f8cf2bef6174df42d4f86d20e3f29897c7911c",
+      "code_digest": "b95a9f54ff2230eaf01422a2f3ab0a871bb474f3448aa573bdd04c54681bd303",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "102 preflight, claim, qualification, collection and cleanup branches are unchanged; the new admission op is separate and keeps failed videos quarantined.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "91a118f8bd965a695ea421e9740db355f5e49cd6595edefd0204a32bc302ac15",
-        "current_code_digest": "8825090f2d734571a036a3a8a1f8cf2bef6174df42d4f86d20e3f29897c7911c"
+        "current_code_digest": "b95a9f54ff2230eaf01422a2f3ab0a871bb474f3448aa573bdd04c54681bd303"
       }
     },
     "douyin_video_processing.qualification": {
@@ -875,7 +875,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "a512d24accb0fbd816da26562012f6eb6493ccbd8fd527884a739446077c9e16"
+          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
         },
         {
           "kind": "code",
@@ -1057,7 +1057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "1bbd61f7ecac0798104af382dac410d021dd9603bd346038cef14c28304750ef",
+      "code_digest": "657c4a4864320840e9239082c76d3af0e35ac43b9eddab98ecb722c1ba39b2cd",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "102 preflight, claim, qualification, collection and cleanup branches are unchanged; the new admission op is separate and keeps failed videos quarantined.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "d59a934acc9cab7fb1dc554606ee834d63899f4a5a361691a695e89cacab9282",
-        "current_code_digest": "1bbd61f7ecac0798104af382dac410d021dd9603bd346038cef14c28304750ef"
+        "current_code_digest": "657c4a4864320840e9239082c76d3af0e35ac43b9eddab98ecb722c1ba39b2cd"
       }
     },
     "douyin_video_processing.collection": {
@@ -1394,7 +1394,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "3c6f251734924593419e60fa99e836741e88975f3c82db303ff339e435580b30",
+      "code_digest": "f1af948ac15b7625a4136273106b0ebe45517ad4b7d35dfd69ec8dc2f63ff237",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "102 preflight, claim, qualification, collection and cleanup branches are unchanged; the new admission op is separate and keeps failed videos quarantined.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "5ec8e2a2de5015a939e43b860b9a456243ef0f9740046664e79f6ea68b8debc2",
-        "current_code_digest": "3c6f251734924593419e60fa99e836741e88975f3c82db303ff339e435580b30"
+        "current_code_digest": "f1af948ac15b7625a4136273106b0ebe45517ad4b7d35dfd69ec8dc2f63ff237"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1684,7 +1684,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "33117314ffe2a8238660b396ed838844eebeb12660a05c142387125c6cc628b6",
+      "code_digest": "f0681a5241c854a921eeaf7f3e71fd517e51df0a8ba01908a42fcb1e4a3cf73a",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "102 preflight, claim, qualification, collection and cleanup branches are unchanged; the new admission op is separate and keeps failed videos quarantined.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "5204341a082195fcd3bf12c8e9c257ecde758b08a7824229f8a1437fc09367cf",
-        "current_code_digest": "33117314ffe2a8238660b396ed838844eebeb12660a05c142387125c6cc628b6"
+        "current_code_digest": "f0681a5241c854a921eeaf7f3e71fd517e51df0a8ba01908a42fcb1e4a3cf73a"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1915,7 +1915,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -1964,14 +1964,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "a512d24accb0fbd816da26562012f6eb6493ccbd8fd527884a739446077c9e16"
+          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-comment-admission.js",
           "revision": "contract",
-          "sha256": "f504e15d7ab86d6bb35a3ef312fe8ab3d1e869a425722ec7fbbaae761ecc6409"
+          "sha256": "1da9644534353af942ad68812d9f9a4f59386cca7dfb04cd725d244c2199d75d"
         },
         {
           "kind": "code",
@@ -2002,7 +2002,7 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "6943493e0c3168f80ef427eaf19e768424d73684e557db63c036c27cb6ba5138"
+      "code_digest": "a57041073faec0776207bf617090867203b669dc9b5e53f4f05d4aa9a5781565"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.5.0",
@@ -2181,7 +2181,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -2230,14 +2230,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "a512d24accb0fbd816da26562012f6eb6493ccbd8fd527884a739446077c9e16"
+          "sha256": "991ff187662f7233d1c077a218c7d0659df2d44023d26a20fadc4fde81c4a206"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-comment-admission.js",
           "revision": "contract",
-          "sha256": "f504e15d7ab86d6bb35a3ef312fe8ab3d1e869a425722ec7fbbaae761ecc6409"
+          "sha256": "1da9644534353af942ad68812d9f9a4f59386cca7dfb04cd725d244c2199d75d"
         },
         {
           "kind": "code",
@@ -2303,7 +2303,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e71d770d288fb8200d4e972f3be618d911fc3b7a090f29443c27074b3a1923a9"
+      "code_digest": "2ce699ff23a1ea29115c900f088c3c00354df0e618cd93ef602bab4cb5eec042"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2514,7 +2514,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -2594,13 +2594,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f8d9d7e81cf36e0d92e3112d32705108fc1f4464bf0669ef03909dcc72a60b2c",
+      "code_digest": "46e7c531ecd3df36771990570cdfb8371e723cf3e1f086c65585633b409635b4",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "104 preflight, sending, writeback and cleanup branches are unchanged; added 103 admission module packaging does not authorize or execute private messages.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "16570c79f7a0dfd4659a03b8dba574e9cdcb32dd2b54f8c23091663677d796a3",
-        "current_code_digest": "f8d9d7e81cf36e0d92e3112d32705108fc1f4464bf0669ef03909dcc72a60b2c"
+        "current_code_digest": "46e7c531ecd3df36771990570cdfb8371e723cf3e1f086c65585633b409635b4"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2801,7 +2801,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -2867,13 +2867,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c8b295dd8e05093535c422989abc7402d536ba3c269c913d19c53da71d4cd221",
+      "code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "104 preflight, sending, writeback and cleanup branches are unchanged; added 103 admission module packaging does not authorize or execute private messages.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1",
-        "current_code_digest": "c8b295dd8e05093535c422989abc7402d536ba3c269c913d19c53da71d4cd221"
+        "current_code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3074,7 +3074,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -3140,13 +3140,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "c8b295dd8e05093535c422989abc7402d536ba3c269c913d19c53da71d4cd221",
+      "code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "104 preflight, sending, writeback and cleanup branches are unchanged; added 103 admission module packaging does not authorize or execute private messages.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "bb64298efa40c80fd2b8e3f6e3706cb69273fb82bf97992de59337ce7990afd1",
-        "current_code_digest": "c8b295dd8e05093535c422989abc7402d536ba3c269c913d19c53da71d4cd221"
+        "current_code_digest": "81d4d664eba8c8f383cd3b9e75da20f655c1ce0d41bdf02d3faeeebbb28ecf1b"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3350,7 +3350,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "bb82db45fdb5042acfcbb2e50827eb69df4064630dd31907ffe18267f1f01613"
+          "sha256": "1a3cf4d7e750542decaa54bddde9a0bfe81940ae38ffffe5f89bb61e1e5d923c"
         },
         {
           "kind": "code",
@@ -3416,13 +3416,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "92eb223db3f70ceb5e7e0f71a58eaae984473097296027e365a4a96674889936",
+      "code_digest": "8d46847a4d3cb31096eb36084f10b45e0aa1e1a7f7f5003984589751424c3a2d",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "104 preflight, sending, writeback and cleanup branches are unchanged; added 103 admission module packaging does not authorize or execute private messages.",
         "reviewed_by": "codex:interactive-leadgen-102g-admission",
         "previous_code_digest": "22b5c0c1383ebbe2f892e7ad51c527368238de3b7ebc204961d5c1e93d2c037c",
-        "current_code_digest": "92eb223db3f70ceb5e7e0f71a58eaae984473097296027e365a4a96674889936"
+        "current_code_digest": "8d46847a4d3cb31096eb36084f10b45e0aa1e1a7f7f5003984589751424c3a2d"
       }
     }
   },
@@ -3554,7 +3554,7 @@
         "name": "douyin-leadgen-103",
         "version": "0.9.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "5fed7473f2ca8619f65f055c81bab734defbb3e5e7701aaf4104297b2bf04f60",
+        "sha256": "b0dfa1c85aa2b08648bac4156f38a0ef4802c39217501aa862c35a0489862b5e",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
@@ -3566,10 +3566,10 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/runtime-calls.json",
-            "sha256": "7388025c25030f18bf522d0e710fd0c85fd0339caad7afb83fae02019a3e2925"
+            "sha256": "188761391cee46640da871523ec8596e50b00260823644254b1424ef7c7b1a54"
           }
         ],
-        "content_digest": "21d6e2d7199807a5ca659302c42724693c5c1c850a5c585365fdc36bdf22ce2d"
+        "content_digest": "f2862619a69afa567d0a3e568a5c8fe7e3ae417c35140821d64547e5f04ca99f"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
