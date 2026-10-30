@@ -178,7 +178,7 @@ for(const parentState of ['completed','nonzero','thrown'])test(`官方停止chil
  assert.deepEqual([launches,awaits,stops],[1,1,1]);assert.equal(readFileSync(join(dir,'spawn-receipt.json'),'utf8'),raw);
 });
 
-for(const terminalPersisted of [true,false])test(`父传输截止时${terminalPersisted?'保留已持久child终态':'真缺child终态继续阻断'}`,async t=>{
+for(const terminalCase of ['valid','missing','wrongRun'])test(`父传输截止时child终态${terminalCase}保持身份与资源守卫`,async t=>{
  const home=mkdtempSync(join(tmpdir(),'skill-terminal-race-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
  const q={protocol:'leadgen-activity-v1',run_id:'terminal-race__a1',task_id:null,binding_id:'terminal-race-binding',activity_key:'preflight',nonce:'f'.repeat(48),deadline_ms:Date.now()+20000,source_commit:'a'.repeat(40),broker_host:'xian-m4',broker_request_path:'/Users/fixture/run/request.json',broker_tool_path:'/Users/fixture/run/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'isolated method'}};
  const child='12345678-0000-4000-8000-000000000002',session='agent:skill-factory:subagent:terminal-race';
@@ -194,14 +194,14 @@ for(const terminalPersisted of [true,false])test(`父传输截止时${terminalPe
   }
   if(args.includes('await')){
    awaits++;
-   if(terminalPersisted)writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:child,status:'timeout',endedAt:Date.now(),providerStarted:true,timeoutPhase:'provider'}));
+   if(terminalCase!=='missing')writeFileSync(join(dir,'agent-terminal.json'),JSON.stringify({runId:terminalCase==='valid'?child:'12345678-0000-4000-8000-000000000099',status:'timeout',endedAt:Date.now(),providerStarted:true,timeoutPhase:'provider'}));
    throw Error('EXECUTION_DEADLINE');
   }
   assert.ok(args.includes('stop'));stops++;return {code:1,stdout:'',stderr:'deadline exhausted'};
  }});
  assert.equal(result.status,'unknown');assert.equal(result.execution_stopped,false);
- assert.equal(result.reason,terminalPersisted?'owner_transport_unresolved':'official_child_terminal_missing');
- if(terminalPersisted){assert.equal(result.owner_execution_stopped,false);assert.equal(result.child_execution_stopped,true);assert.equal(result.terminal.status,'timeout');assert.equal(result.child_run_id,child);}
+ assert.equal(result.reason,terminalCase==='valid'?'owner_transport_unresolved':'official_child_terminal_missing');
+ if(terminalCase==='valid'){assert.equal(result.owner_execution_stopped,false);assert.equal(result.child_execution_stopped,true);assert.equal(result.terminal.status,'timeout');assert.equal(result.child_run_id,child);}
  assert.equal(existsSync(join(dir,'agent-returned.json')),false,'owner unknown must not publish returned receipt');
  assert.deepEqual([launches,awaits,stops],[1,1,1]);
 });
