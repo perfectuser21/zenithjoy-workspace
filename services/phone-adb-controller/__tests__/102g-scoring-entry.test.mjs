@@ -38,3 +38,10 @@ test('102g正式入口缺精确授权字段时在领取前拒绝',async()=>{
   await assert.rejects(createScoringHandler({env,run,line:'jinuo',state:{},queue})(),/ADMISSION_/);
   assert.deepEqual(calls,[]);
 });
+
+test('102g评分入口显式发送私信标志时在任何队列调用前拒绝',async()=>{
+  const calls=[],env={WFR_RUN_DIR:'/tmp',LEADGEN_SOURCE_RUN:source,LEADGEN_LIMIT:'3',LEADGEN_SEND:'1',
+    LEADGEN_102G_ADMISSION_DECISION_ID:decision,LEADGEN_102G_ADMISSION_TASK_ID:task};
+  await assert.rejects(createScoringHandler({env,run,line:'jinuo',state:{},queue:async op=>{calls.push(op);return {};}})(),/ADMISSION_RUN_SCOPE_INVALID/);
+  assert.deepEqual(calls,[]);
+});
