@@ -4,6 +4,15 @@ import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
+async function waitForNginx(port) {
+  let error;
+  for (let attempt=0; attempt<40; attempt++) {
+    try { await fetch(`http://127.0.0.1:${port}/`, {signal:AbortSignal.timeout(500)}); return; }
+    catch (e) { error=e; await new Promise(resolve=>setTimeout(resolve,100)); }
+  }
+  throw error;
+}
+
 
 // Exercise the checked-in directives in a real nginx process and a fake,
 // authenticated upstream; never touch the real service or staff data.
@@ -20,6 +29,7 @@ test('canvas static cache only applies to successful, fingerprinted assets and v
   const id=execFileSync('docker',['run','-d','--rm','-p','127.0.0.1::8080','-v',`${root}/nginx.conf:/etc/nginx/nginx.conf:ro`,'nginx:alpine'],{encoding:'utf8'}).trim();
   t.after(()=>{try{execFileSync('docker',['rm','-f',id],{stdio:'ignore'})}catch{}});
   const port=execFileSync('docker',['port',id,'8080/tcp'],{encoding:'utf8'}).trim().split(':').at(-1);
+  await waitForNginx(port);
   const get=(path,cookie='session=alice')=>fetch(`http://127.0.0.1:${port}/api/creative-canvas/${path}`,{headers:cookie?{cookie}:{},redirect:'manual'});
   const good=await get('assets/index-CqDKM-zt.js'); assert.equal(good.status,200); assert.equal(good.headers.get('cache-control'),'private, max-age=604800, immutable'); assert.match(good.headers.get('vary')||'',/cookie/i); assert.match(good.headers.get('vary')||'',/accept-encoding/i);
   for (const [path,cookie,status] of [['assets/index-CqDKM-zt.js','',401],['assets/login-CqDKM-zt.js','session=a',200],['assets/missing-CqDKM-zt.js','session=a',404],['assets/forbidden-CqDKM-zt.js','session=a',403],['assets/broken-CqDKM-zt.js','session=a',500],['assets/redirect-CqDKM-zt.js','session=a',302],['api/userdata/file-CqDKM-zt.js','session=a',200],['assets/plain.js','session=a',200]]) {

@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+async function waitForNginx(port) {
+  let error;
+  for (let attempt=0; attempt<40; attempt++) {
+    try { await fetch(`http://127.0.0.1:${port}/`, {signal:AbortSignal.timeout(500)}); return; }
+    catch (e) { error=e; await new Promise(resolve=>setTimeout(resolve,100)); }
+  }
+  throw error;
+}
+
 
 test('resource errors do not suppress timed status and probes are bounded and sanitized', async () => {
   const source=readFileSync('apps/dashboard/public/canvas-startup-diagnostic-v2.js','utf8');
@@ -67,15 +76,17 @@ test('nginx injects diagnostics only into the authenticated canvas document', as
   const source=readFileSync('deploy/nginx.staging.conf','utf8');
   const block=source.match(/# BEGIN CANVAS STARTUP DIAGNOSTIC\n([\s\S]*?)# END CANVAS STARTUP DIAGNOSTIC/)?.[1];
   const map=source.match(/# BEGIN CANVAS STARTUP DIAGNOSTIC MAP\n([\s\S]*?)# END CANVAS STARTUP DIAGNOSTIC MAP/)?.[1];
+  const assetsMap=source.match(/# BEGIN CANVAS OFFICIAL ASSETS MAP\n([\s\S]*?)# END CANVAS OFFICIAL ASSETS MAP/)?.[1];
   assert.ok(block && map,'canvas document proxy must install the diagnostic');
   const root=mkdtempSync(join(tmpdir(),'canvas-startup-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   const location=block.replace('http://zenithjoy-api-staging:5200','http://127.0.0.1:8081');
-  const conf=`events {} http { ${map} server { listen 8081; default_type text/html; if ($http_if_none_match != "") { return 304; } if ($http_cookie = "") { return 401; } return 200 '<html><head><title>Canvas</title></head><body>ok</body></html>'; } server { listen 8080; ${location} location / { proxy_pass http://127.0.0.1:8081; } } }`;
+  const conf=`events {} http { ${map} ${assetsMap} server { listen 8081; default_type text/html; if ($http_if_none_match != "") { return 304; } if ($http_cookie = "") { return 401; } return 200 '<html><head><title>Canvas</title></head><body>ok</body></html>'; } server { listen 8080; ${location} location / { proxy_pass http://127.0.0.1:8081; } } }`;
   writeFileSync(join(root,'nginx.conf'),conf);
   const id=execFileSync('docker',['run','-d','--rm','-p','127.0.0.1::8080','-v',`${root}/nginx.conf:/etc/nginx/nginx.conf:ro`,'nginx:alpine'],{encoding:'utf8'}).trim();
   t.after(()=>{try{execFileSync('docker',['rm','-f',id],{stdio:'ignore'})}catch{}});
   const port=execFileSync('docker',['port',id,'8080/tcp'],{encoding:'utf8'}).trim().split(':').at(-1);
   const base=`http://127.0.0.1:${port}`;
+  await waitForNginx(port);
   const good=await fetch(base+'/api/creative-canvas/',{headers:{cookie:'session=fixture','accept-encoding':'gzip','if-none-match':'fixture'}});const html=await good.text();
   assert.equal(good.status,200);assert.match(html,/<head><script src="\/canvas-startup-diagnostic-v2.js"><\/script>/);
   const denied=await fetch(base+'/api/creative-canvas/');assert.equal(denied.status,401);assert.doesNotMatch(await denied.text(),/canvas-startup-diagnostic-v2/);
@@ -97,6 +108,7 @@ test('diagnostic endpoint preserves authorization, status and original access lo
   t.after(()=>{try{execFileSync('docker',['rm','-f',id],{stdio:'ignore'})}catch{}});
   const port=execFileSync('docker',['port',id,'8080/tcp'],{encoding:'utf8'}).trim().split(':').at(-1);
   const base=`http://127.0.0.1:${port}`;
+  await waitForNginx(port);
   const path='/api/creative-canvas/__diag/probe401/vendor-ABCdef12.js';
   let authorized;
   for(let i=0;i<20;i++){try{authorized=await fetch(base+path,{headers:{cookie:'session=fixture'}});break}catch(error){if(i===19)throw error;await new Promise(resolve=>setTimeout(resolve,100));}}
