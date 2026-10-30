@@ -207,17 +207,17 @@ def select_existing_unique_route(serial, configured='', *, ports=PORTS, budget=2
 
 
 def verified_client_version(binary):
-    """Retry only a timed-out local version read; never invoke server lifecycle."""
-    for attempt in range(2):
+    """Bound local version startup jitter to three reads; never invoke server lifecycle."""
+    for attempt in range(3):
         try:
             result = subprocess.run([binary, 'version'], capture_output=True, text=True, timeout=2)
         except subprocess.TimeoutExpired:
-            if attempt == 0:
+            if attempt < 2:
                 continue
             raise
         if result.returncode or not re.search(r'^Android Debug Bridge version 1\.0\.41\r?$', result.stdout, re.M):
             raise ValueError('ADB_ROUTE_CLIENT_PROTOCOL_MISMATCH')
-        return result.stdout, attempt == 1
+        return result.stdout, attempt > 0
 
 
 if __name__ == '__main__':

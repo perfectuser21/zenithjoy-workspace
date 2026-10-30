@@ -117,9 +117,9 @@ test('CLI真实socket读取超时保首码并指明route_select阶段',async t=>
  const r=await diagnosticCli(t,{hang:true});diagnostic(r,'ADB_ROUTE_PROBE_FAILED','route_select','TimeoutError');
  assert.deepEqual(r.calls,[]);assert.deepEqual(r.endpoint.requests,['host:version']);
 });
-test('CLI真实version子进程超原2秒时指明client_version阶段',async t=>{
+test('CLI真实version子进程三次均超2秒时有界拒绝并指明client_version阶段',async t=>{
  const r=await diagnosticCli(t,{client:'slow'}),d=diagnostic(r,'ADB_ROUTE_PROBE_FAILED','client_version','TimeoutExpired');
- assert.ok(d.elapsed_ms>=3800&&d.elapsed_ms<5500);assert.deepEqual(r.calls,[['version'],['version']]);
+ assert.ok(d.elapsed_ms>=5800&&d.elapsed_ms<7500);assert.deepEqual(r.calls,[['version'],['version'],['version']]);
  assert.deepEqual(r.endpoint.requests,['host:version','host:devices']);
 });
 test('CLI版本子进程首次2秒抖动后只重试本地version并复核原socket',async t=>{
