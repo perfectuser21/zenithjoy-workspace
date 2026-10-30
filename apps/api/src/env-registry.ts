@@ -71,6 +71,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'ALIYUN_ACCESS_KEY_SECRET', reason: 'VIAPI 视频超分 RAM AccessKey Secret；仅服务端读取' },
   { name: 'AIDGE_ACCESS_KEY_ID', reason: 'Aidge 全能力 RAM AccessKey ID；仅服务端读取，缺失则能力接口返回未配置' },
   { name: 'AIDGE_ACCESS_KEY_SECRET', reason: 'Aidge 全能力 RAM AccessKey Secret；仅服务端读取' },
+  { name: 'AIDGE_ENDPOINT', reason: '可选：香港测试站经受限 Tailscale TLS 转发连接 Aidge 北京端点（固定域名和端口）' },
   { name: 'ALIYUN_VIAPI_OSS_BUCKET', reason: '可选自有上海 OSS bucket；试用默认通过 STS 使用 viapi-customer-temp，临时素材仅保留一天' },
   { name: 'CREATIVE_CANVAS_INSTANCES', reason: '画布员工到隔离实例的映射；未配置时画布不可用' },
   { name: 'CREATIVE_CANVAS_ALLOWED_ORIGINS', reason: '画布代理允许的额外网页来源；未配置时使用站点来源' },

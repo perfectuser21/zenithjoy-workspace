@@ -1,0 +1,19 @@
+[Unit]
+Description=Aidge HTTPS relay for HK staging
+After=network-online.target tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=simple
+User=nobody
+ExecStart=/usr/bin/node /opt/zenithjoy/aidge-relay/aidge-https-relay.cjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
