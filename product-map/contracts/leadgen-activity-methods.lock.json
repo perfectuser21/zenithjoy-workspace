@@ -1969,18 +1969,25 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/judge-comment.js",
+          "revision": "contract",
+          "sha256": "f6b539f755d376ac7b0a218e8d098cbb715c7389d2f625753d331819f4253779"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "51a793193d24e1375eb065af47261add806bd85c1506166abd073120e8f96072",
+      "code_digest": "f45b23b6198ce3dc117cefcc28c7536f23baeda966b4979f46ef0b10b052d264",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "103 评分失败回执增加白名单阶段与 HTTP 状态，仍保持原评论待分拣和事务回滚；成功评分政策与字段未变。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18",
-        "current_code_digest": "51a793193d24e1375eb065af47261add806bd85c1506166abd073120e8f96072"
+        "reason": "只把已在本轮评分调用链运行的 judge-comment.js 纳入方法源码锁；公司评分政策、输入输出与成功路径均不变。",
+        "reviewed_by": "codex-leadgen-methods-contract",
+        "previous_code_digest": "51a793193d24e1375eb065af47261add806bd85c1506166abd073120e8f96072",
+        "current_code_digest": "f45b23b6198ce3dc117cefcc28c7536f23baeda966b4979f46ef0b10b052d264"
       }
     },
     "douyin_comment_scoring.mark_leads": {
