@@ -8,6 +8,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const require = createRequire(import.meta.url);
 const { JudgeApiError } = require('../judge-comment.js');
+const {evaluatePolicy} = require('../leadgen-policy-review.js');
 import {freezeFixture,companyFixture} from './company-config-fixture.mjs';
 const queueRequest=(pool,input,deps={})=>require('../leadgen-queue.js').queueRequest(pool,input,{freezeCompanyConfig:freezeFixture,...deps});
 
@@ -216,6 +217,13 @@ test('标记人的更新与评论完成状态原子提交，已有已触达人�
   snapshot.runtime_config.routing={line_key:'jinuo'};
   const cid='11111111-1111-4111-8111-111111111111';
   const row={id:cid,line_key:'jinuo',harvest_batch:'source102',dedup_key:'甲|id|报名',nickname:'甲',douyin_id:'id',comment_body:'如何报名',source_video:'培训',source_video_url:'https://www.douyin.com/video/7617837149999841201',relevance:'相关',intent_grade:'A',judgment_config:{run_id:'test',company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id}};
+  let reviewSeq=0;
+  const judgePolicy=async()=>({grade:'A',audit:{model:'fixture-policy',response_id:`review-${++reviewSeq}`,
+    policy_evidence:{audience_id:'test-audience',matched_rule:'报名',comment_signal:'如何报名',
+      video_signal:'培训',exclusion_rule:null,reason:'明确咨询报名'}}});
+  const first=await evaluatePolicy(row,snapshot,{judgePolicy}),second=await evaluatePolicy(row,snapshot,{judgePolicy});
+  assert.equal(first.status,'pass');assert.equal(second.status,'pass');
+  row.judgment_config={...row.judgment_config,policy_audit:first,policy_reviews:[first,second]};
   const pool = fakePool([
     { rows: [] }, { rows: [row] },{rows:[row]},
     {rows:[{snapshot,company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,run_id:'test'}]},
@@ -223,7 +231,7 @@ test('标记人的更新与评论完成状态原子提交，已有已触达人�
     { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, {rows:[{id:'l1',line_key:'jinuo',douyin_id:'id'}]}, { rows: [] }, {rows:[]},
   ]);
   const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 },{freezeCompanyConfig:async()=>snapshot,
-    judgePolicy:async()=>({grade:'A',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'test-audience',matched_rule:'报名',exclusion_rule:null,reason:'咨询报名'}}})});
+    judgePolicy:async()=>{throw Error('mark_leads不得发起第三次政策模型调用');}});
   assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,blocked:0,ids:[cid],lead_ids:['l1'],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:1} });
   const person = pool.calls.find(c => /SET dup_hit_count/.test(c.sql));
   assert.ok(person);

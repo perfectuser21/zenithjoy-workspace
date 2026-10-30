@@ -15,8 +15,11 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       const requested=Number(env.LEADGEN_LIMIT||2);
       if(!Number.isSafeInteger(requested)||requested<1)throw Error('POLICY_SCORE_BUDGET_INVALID');
       const budget=Math.min(50,requested);
+      const legacyRecovery=env.LEADGEN_LEGACY_RECOVERY_ID?{comment_id:env.LEADGEN_LEGACY_RECOVERY_ID,
+        old_run:env.LEADGEN_LEGACY_SCORE_RUN,maintenance_task_id:env.LEADGEN_LEGACY_RECOVERY_TASK_ID}:null;
+      if(legacyRecovery&&(!sourceRun||budget!==1))throw Error('POLICY_SCORE_LEGACY_RECOVERY_SCOPE_INVALID');
       state.company_config=await queue('company_config',{step:'103'});
-      const scope=await queue('score_scope');
+      const scope=legacyRecovery?{ids:[legacyRecovery.comment_id]}:await queue('score_scope');
       if(!sourceRun&&(!scope.sources||scope.ids.some(id=>typeof scope.sources[id]!=='string')))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
       const saveAttempt=value=>{const temp=`${attemptFile}.${process.pid}.${randomUUID()}.tmp`;
         writeFileSync(temp,JSON.stringify(value),{flag:'wx',mode:0o600});renameSync(temp,attemptFile);};
@@ -31,7 +34,7 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
         ||recovered.ids.some(id=>!attempt.ids.includes(id)))return {scored:0,ids:[],status:'partial',reason:'POLICY_SCORE_RECOVERY_AMBIGUOUS'};
       const remaining=attempt.budget-recovered.scored;
       const r=remaining>0&&(!state.budgetDeadline||Date.now()<state.budgetDeadline)
-        ?await queue('score',{limit:remaining,budget_max:attempt.budget,ids:attempt.ids,...(!sourceRun?{sources:attempt.sources}:{}),blocked_ids:attempt.blocked_ids,cursor:attempt.cursor})
+        ?await queue('score',{limit:remaining,budget_max:attempt.budget,ids:attempt.ids,...(!sourceRun?{sources:attempt.sources}:{}),blocked_ids:attempt.blocked_ids,cursor:attempt.cursor,...(legacyRecovery?{legacy_recovery:legacyRecovery}:{})})
         :{scored:0,ids:[],blocked:attempt.blocked_ids.length,blocked_ids:attempt.blocked_ids,next_cursor:attempt.cursor};
       attempt={...attempt,blocked_ids:r.blocked_ids||attempt.blocked_ids,cursor:r.next_cursor||attempt.cursor};saveAttempt(attempt);
       const allIds=[...new Set([...recovered.ids,...r.ids])];

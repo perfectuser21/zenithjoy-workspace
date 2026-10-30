@@ -8,8 +8,18 @@ const cid='11111111-1111-4111-8111-111111111111',lid='22222222-2222-4222-8222-22
 const policySnapshot=companyFixture();policySnapshot.runtime_config.comment_scoring.audiences=[{id:'test-audience',fields:{'意向信号':'报名','人群描述':'测试人群','排除信号':'泛失业'}}];
 policySnapshot.runtime_config.routing={line_key:'jinuo'};
 const policyDeps={freezeCompanyConfig:async()=>policySnapshot,judgePolicy:async()=>({grade:'A',audit:{model:'fake',response_id:'r1',policy_evidence:{audience_id:'test-audience',matched_rule:'报名',exclusion_rule:null,reason:'咨询报名'}}})};
-function markPool({failOutbox=false}={}) {
+async function attachDualPolicyProof(comment){
+ const {evaluatePolicy}=require('../leadgen-policy-review.js');
+ const judgePolicy=response_id=>async()=>({grade:'A',audit:{model:'fixture-policy',response_id,policy_evidence:{
+  audience_id:'test-audience',matched_rule:'报名',comment_signal:'在哪里报名',video_signal:'人工智能',exclusion_rule:null,reason:'咨询报名'}}});
+ const first=await evaluatePolicy(comment,policySnapshot,{judgePolicy:judgePolicy('fixture-review-1')});
+ const second=await evaluatePolicy(comment,policySnapshot,{judgePolicy:judgePolicy('fixture-review-2')});
+ assert.equal(first.status,'pass');assert.equal(second.status,'pass');
+ comment.judgment_config={...comment.judgment_config,policy_audit:first,policy_reviews:[first,second]};
+}
+async function markPool({failOutbox=false}={}) {
  const calls=[],comment={id:cid,line_key:'jinuo',dedup_key:'comment1',nickname:'待核个人',douyin_id:'person987',profile_url:'https://www.douyin.com/user/person987',comment_body:'在哪里报名',source_video:'人工智能训练师',source_video_url:'https://www.douyin.com/video/7637880891511528896',harvest_batch:'source102',relevance:'相关',intent_grade:'A',judgment_reason:'真实原分档',judgment_config:{run_id:'score103',company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,policy_id:policySnapshot.policy_id}};
+ await attachDualPolicyProof(comment);
  const client={async query(sql,args){calls.push({sql,args});
   if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
   if(/SELECT \* FROM zenithjoy.leadgen_comments/.test(sql))return {rows:[comment]};
@@ -24,7 +34,7 @@ function markPool({failOutbox=false}={}) {
  return {calls,async connect(){return client},query:client.query.bind(client)};
 }
 test('103真实mark入口须同事务保comment→lead桥接意图，旧personal/A无native证明仍unknown',async()=>{
- const pool=markPool();await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},policyDeps);
+ const pool=await markPool();await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},policyDeps);
  const i=pool.calls.findIndex(c=>/INSERT INTO zenithjoy.leadgen_bridge_outbox/.test(c.sql));
  assert.ok(i>0,'PG已标已分拣却没有durable飞书outbox意图，异步104永远读不到');
  assert.ok(i<pool.calls.findIndex(c=>c.sql==='COMMIT'));
@@ -32,14 +42,14 @@ test('103真实mark入口须同事务保comment→lead桥接意图，旧personal
  assert.ok(intent.args.some(v=>typeof v==='string'&&v.includes('unknown')),'无真实主页证据不能以personal/A冒ready');
 });
 test('旧评分 run 进入新标人 run 时 outbox 同时保存两种身份',async()=>{
- const pool=markPool();const r=await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'mark103-new',source_run:'source102',limit:1},policyDeps);
+ const pool=await markPool();const r=await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'mark103-new',source_run:'source102',limit:1},policyDeps);
  assert.equal(r.marked,1);
  const insert=pool.calls.find(c=>/INSERT INTO zenithjoy.leadgen_bridge_outbox/.test(c.sql));assert.ok(insert);
  const payload=JSON.parse(insert.args[5]);assert.equal(payload.run,'mark103-new');assert.equal(payload.scoring_run,'score103');
  assert.equal(payload.comment_run,'source102');assert.equal(insert.args[3],'mark103-new');
 });
 test('103标记/outbox插入失败必须原评论与lead事务整体回滚，不丢重放意图',async()=>{
- const pool=markPool({failOutbox:true});await assert.rejects(queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},policyDeps),/outbox unavailable/);
+ const pool=await markPool({failOutbox:true});await assert.rejects(queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:1},policyDeps),/outbox unavailable/);
  assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));assert.ok(!pool.calls.some(c=>c.sql==='COMMIT'));
 });
 
@@ -138,6 +148,7 @@ test('旧 score → 新 mark → 104 准备前复核使用各自冻结 run',asyn
  const comment={id:cid,line_key:'jinuo',harvest_batch:'source102',source_video:row.payload.source_video,
   source_video_url:row.payload.source_video_url,comment_body:row.payload.comment_body,relevance:'相关',intent_grade:'A',
   judgment_config:{run_id:'score103',company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,policy_id:policySnapshot.policy_id}};
+ await attachDualPolicyProof(comment);
  const seen=[];const pool={async query(sql,args=[]){seen.push({sql,args});
   if(sql.includes('leadgen_bridge_outbox'))return {rows:[row]};if(sql.includes('company_config_runs'))return {rows:[{run_id:args[0],snapshot:policySnapshot,company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version}]};
   if(sql.includes('leadgen_comments'))return {rows:[comment]};if(sql.includes('leadgen_videos'))return {rows:[{video_url:comment.source_video_url,title:comment.source_video,line_key:'jinuo',judgment_status:'matched'}]};throw Error('unexpected SQL');}};
@@ -157,6 +168,7 @@ test('旧 score → 新 mark 的唯一订单可由独立 104 run 领单并准备
  const comment={id:cid,line_key:'jinuo',harvest_batch:'source102',source_video:row.payload.source_video,
   source_video_url:row.payload.source_video_url,comment_body:row.payload.comment_body,relevance:'相关',intent_grade:'A',
   judgment_config:{run_id:'score103',company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,policy_id:policySnapshot.policy_id}};
+ await attachDualPolicyProof(comment);
  const pool={async query(sql,args=[]){if(sql.includes('leadgen_bridge_outbox'))return {rows:[row]};
   if(sql.includes('company_config_runs'))return {rows:[{run_id:args[0],snapshot:policySnapshot,company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version}]};
   if(sql.includes('leadgen_comments'))return {rows:[comment]};if(sql.includes('leadgen_videos'))return {rows:[{video_url:comment.source_video_url,title:comment.source_video,line_key:'jinuo',judgment_status:'matched'}]};throw Error('unexpected SQL');}};

@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -199,14 +199,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "6c184411d27ca408b8872c6baf5ae8d548cbcb626e0334f7d22e5ab82eedec1b",
+      "code_digest": "3dfaa156c5f5aeea13c87ecf08c2403c6669e9e879e2701f561ab6fc99670598",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 collect_videos 仅绑定共享policy-review字节；执行路径不调用queue score、policy_review或mark_leads，本次评分语义与安全子码未进入101采集。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "c654dd5d55005530dcf600cb0039774ec5a0b912a21a1b36428b27fb8f1d7512",
-        "current_code_digest": "6c184411d27ca408b8872c6baf5ae8d548cbcb626e0334f7d22e5ab82eedec1b"
+        "reason": "101 collect_videos shares the policy-review module only in its source closure. It never invokes the changed 103 scoring, stored-proof verification, or mark branches; 101 behavior remains unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "6c184411d27ca408b8872c6baf5ae8d548cbcb626e0334f7d22e5ab82eedec1b",
+        "current_code_digest": "3dfaa156c5f5aeea13c87ecf08c2403c6669e9e879e2701f561ab6fc99670598"
       }
     },
     "douyin_video_processing.preflight": {
@@ -346,7 +346,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -504,14 +504,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8f82d48ff16af0fc4d9acbf465cac030c0975b03e460f5a33b8c5b5cb8b11fde",
+      "code_digest": "310728af89288fde323f5988b766e4c697301a2852d130c8507deda233696810",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 preflight 仅绑定共享policy-review字节；预检不调用queue score、policy_review或mark_leads，预检资源和账号规则未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "943a99eae29d38eb35a04513b6d2c2b67a4b0534e16fde3eaa2a1939b92df9ca",
-        "current_code_digest": "8f82d48ff16af0fc4d9acbf465cac030c0975b03e460f5a33b8c5b5cb8b11fde"
+        "reason": "102 preflight uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "8f82d48ff16af0fc4d9acbf465cac030c0975b03e460f5a33b8c5b5cb8b11fde",
+        "current_code_digest": "310728af89288fde323f5988b766e4c697301a2852d130c8507deda233696810"
       }
     },
     "douyin_video_processing.dedup": {
@@ -623,7 +623,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -770,7 +770,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
@@ -819,23 +819,23 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "11d41b13b807476b633161504258daa119abcdbb98c2c25679c1bc3937d1ff5b"
+          "sha256": "8fcb40033951acc8126005029e7841b1bbf3f0fd8e3efa542cf41e4100d4acfa"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         }
       ],
-      "code_digest": "27f0d1031efbda6117e6f196d27eac1296b6243371458effca552b43d3bcbdd8",
+      "code_digest": "48c256888f8671d536398f96b4d1d3a16f665f767a8212308af4d6ad94d0f0fc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 dedup 绑定共享队列和policy-review；本次队列差异仅在op=score，dedup原有视频判重op及输入输出未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "1588a62dbe0ecaa63cfedd095dea807764938ef15035711fd3aeba4a65e54b6b",
-        "current_code_digest": "27f0d1031efbda6117e6f196d27eac1296b6243371458effca552b43d3bcbdd8"
+        "reason": "102 dedup uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "27f0d1031efbda6117e6f196d27eac1296b6243371458effca552b43d3bcbdd8",
+        "current_code_digest": "48c256888f8671d536398f96b4d1d3a16f665f767a8212308af4d6ad94d0f0fc"
       }
     },
     "douyin_video_processing.qualification": {
@@ -875,7 +875,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "11d41b13b807476b633161504258daa119abcdbb98c2c25679c1bc3937d1ff5b"
+          "sha256": "8fcb40033951acc8126005029e7841b1bbf3f0fd8e3efa542cf41e4100d4acfa"
         },
         {
           "kind": "code",
@@ -910,7 +910,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -1057,14 +1057,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "138321af6f2024a38a7d24699ac130eb85e4b5d045a5d301751ebb109e784b5e",
+      "code_digest": "66ea4b2ff697e0582ff57f8b93c0e50d6b642c32f74261f58a0900ed4218b89a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 qualification 绑定共享队列和policy-review；本次队列差异仅在op=score，资格判断与录音证据op未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "d1260f2a711a05a0d565674676e9ccbc683e057382d8d55bc88fd883da0b55af",
-        "current_code_digest": "138321af6f2024a38a7d24699ac130eb85e4b5d045a5d301751ebb109e784b5e"
+        "reason": "102 qualification uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "138321af6f2024a38a7d24699ac130eb85e4b5d045a5d301751ebb109e784b5e",
+        "current_code_digest": "66ea4b2ff697e0582ff57f8b93c0e50d6b642c32f74261f58a0900ed4218b89a"
       }
     },
     "douyin_video_processing.collection": {
@@ -1239,7 +1239,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -1394,14 +1394,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "d370603c5fe5bec8264702b5cef054659fc776faa18854fb03d55cef04fb75de",
+      "code_digest": "a4d761ed763f3ee8a75da63b8c9471711a17e793eb91b239c91c4c183bc425ea",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 collection 仅绑定共享policy-review字节；评论采集不调用queue score、policy_review或mark_leads，持久化路径未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "c513fbfcf533210214dea7eab85ddb78759cac260d72cfc6d536488f4b729f87",
-        "current_code_digest": "d370603c5fe5bec8264702b5cef054659fc776faa18854fb03d55cef04fb75de"
+        "reason": "102 collection uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "d370603c5fe5bec8264702b5cef054659fc776faa18854fb03d55cef04fb75de",
+        "current_code_digest": "a4d761ed763f3ee8a75da63b8c9471711a17e793eb91b239c91c4c183bc425ea"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1527,7 +1527,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -1684,14 +1684,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1736,31 +1736,31 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3d12846c07f81779078ca2311ce259470d4b10e8d2590341de59c9fab7ec404f",
+      "code_digest": "5588ca0f394e5bbfc69d6fd844e0c87f30a8a5a054325a0137c50171e8b2bdc2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 cleanup 仅绑定共享policy-review字节；清理不调用queue score、policy_review或mark_leads，锁释放路径未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "af5137fb36201ff9b6f6740b9d169a2f8af9e5934b6824f578e1f54512a84b60",
-        "current_code_digest": "3d12846c07f81779078ca2311ce259470d4b10e8d2590341de59c9fab7ec404f"
+        "reason": "102 cleanup uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "3d12846c07f81779078ca2311ce259470d4b10e8d2590341de59c9fab7ec404f",
+        "current_code_digest": "5588ca0f394e5bbfc69d6fd844e0c87f30a8a5a054325a0137c50171e8b2bdc2"
       }
     },
     "douyin_comment_scoring.scoring": {
-      "activity_version": "2.2.0",
-      "contract_digest": "e2990437bd49f211ed35db07495a32bcb6cf5f9451aa800684a5c3ae16c38aac",
-      "method_version": "0.4.0",
+      "activity_version": "2.3.0",
+      "contract_digest": "b4f378294f0d36931ac6a51975b267deb8907d24e2c85b9149b303fc78a94760",
+      "method_version": "0.6.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-scoring",
-        "version": "0.4.0",
+        "version": "0.6.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
-        "sha256": "6b997f48fd46be3fb67ebcce6bf59e2b740209a00422689831a35d8380c9ff27",
+        "sha256": "c114c04e050ac9f74cd9689dfed356a6a99668a0cc3e9d1d4f677e86ed37aad0",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "bcf20acbe5547fe1e1c02177fd49e3ace986cc1af47d73983e9d898121ca2d7d"
+        "content_digest": "eadf8e7fa140e0865f7d82b16c2a414c85d66e3a5a71863a9474d10aa4b37892"
       },
       "code_bindings": [
         {
@@ -1796,7 +1796,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -1915,7 +1915,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
@@ -1964,7 +1964,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "11d41b13b807476b633161504258daa119abcdbb98c2c25679c1bc3937d1ff5b"
+          "sha256": "8fcb40033951acc8126005029e7841b1bbf3f0fd8e3efa542cf41e4100d4acfa"
         },
         {
           "kind": "code",
@@ -1978,27 +1978,34 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-legacy-score-recovery.js",
+          "revision": "contract",
+          "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "e6b47eb4e7cc5443da24746a162ccf820a4b496806f0a22f4a4628e124fd9487"
+      "code_digest": "a3bab50821221cfd76e873835b4b9752e753a16876f104c4cd450d13c2deb1c5"
     },
     "douyin_comment_scoring.mark_leads": {
-      "activity_version": "3.3.0",
-      "contract_digest": "650cbbdca040af1fea9682a8c6db8391fe135b9c021b7ae8b496579652f8c253",
-      "method_version": "0.4.0",
+      "activity_version": "3.4.0",
+      "contract_digest": "c2416ee3d17c0f33d43e97e627be1647470b9dfa7fc11c018ad6896f13bdb4c0",
+      "method_version": "0.6.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-mark-leads",
-        "version": "0.4.0",
+        "version": "0.6.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
-        "sha256": "66af5af6ed467e4654e5275466bdcd8f3a4499b5bdd08d1880d2bedd19066315",
+        "sha256": "7aa9db2185398ebc3a12b36d8b3c3c6cf3380d9900ac6979360574a873cee353",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "1b286fc636ec8b69d7e62f33c853479b172c3e251da6b02eaeefb579df0096e2"
+        "content_digest": "eb8389ae0ba824a9706ed9d3ce208748a2d3d7a126a93e64663a0420e9abb6e5"
       },
       "code_bindings": [
         {
@@ -2041,7 +2048,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -2160,7 +2167,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
@@ -2209,14 +2216,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "11d41b13b807476b633161504258daa119abcdbb98c2c25679c1bc3937d1ff5b"
+          "sha256": "8fcb40033951acc8126005029e7841b1bbf3f0fd8e3efa542cf41e4100d4acfa"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -2268,7 +2275,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a0f3e4d3888effd84b813d538965b8d90271b0d7bfe736626bdc904e3e036981"
+      "code_digest": "ec75ebe6200b3527b5bfa9a4a77ffdfdfb2d9b3e1c914ead7aa7dc3cabaa3127"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2321,7 +2328,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -2479,14 +2486,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -2559,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ac7543ff3de5ca967904948d893ff9d28544129d7efec4429cdc0266b7cae551",
+      "code_digest": "30180d4e9e828f693bbc490d19e43df8ecef49e30382099731b6670f4c6d3566",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 preflight 仅绑定共享policy-review字节；发送预检不调用queue score、policy_review或mark_leads，授权核对未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "e36bc8686c701ac465de3c656e39c6c5a7d510bee8e90065de904f920a7968cb",
-        "current_code_digest": "ac7543ff3de5ca967904948d893ff9d28544129d7efec4429cdc0266b7cae551"
+        "reason": "104 preflight shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "ac7543ff3de5ca967904948d893ff9d28544129d7efec4429cdc0266b7cae551",
+        "current_code_digest": "30180d4e9e828f693bbc490d19e43df8ecef49e30382099731b6670f4c6d3566"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2619,7 +2626,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -2766,14 +2773,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -2832,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278",
+      "code_digest": "726d9e3238983857eea64c5a4940ebfc17dbefd84b3af7ad806ab761b57c886f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 send_dm 仅绑定共享policy-review字节；本次改动不进入发送op，原始目标、批准话术和一次发送约束未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69",
-        "current_code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278"
+        "reason": "104 send_dm shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278",
+        "current_code_digest": "726d9e3238983857eea64c5a4940ebfc17dbefd84b3af7ad806ab761b57c886f"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2892,7 +2899,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -3039,14 +3046,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -3105,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278",
+      "code_digest": "726d9e3238983857eea64c5a4940ebfc17dbefd84b3af7ad806ab761b57c886f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 write_back 仅绑定共享policy-review字节；本次改动不进入写回op，发送回执与unknown读回未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69",
-        "current_code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278"
+        "reason": "104 write_back shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278",
+        "current_code_digest": "726d9e3238983857eea64c5a4940ebfc17dbefd84b3af7ad806ab761b57c886f"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3165,7 +3172,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "684bc716ad51757cd2b3572854d74d97d693826f968656d6027eca06d407c596"
+          "sha256": "cabab0484f478691b547b2c8a5a83468aee39849a7c33917f3565f3a0681a0e7"
         },
         {
           "kind": "code",
@@ -3315,14 +3322,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "cb023e11b106ca710f633757e42b8b2aca1bf852f24938a0130650c75128f40d"
+          "sha256": "807a3dc40246fc7d14262fde4f1bfe2f6b6302508aaefce937953578b611eefb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0559ed64f25795812e3d0e9e55cc0cc0695f4282c50b5d7edd6e20c4ef9d8936"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -3381,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e1340cdc6b61e1c3ce9ce8252656c361f97d001de26ef720520cc6a56112d6c4",
+      "code_digest": "91d18f32782f71e9a46c9d96411f2b32204858b76bb5a70f20dc14e93b226004",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 cleanup 仅绑定共享policy-review字节；本次改动不进入触达清理op，未决发送保护与锁规则未变。",
-        "reviewed_by": "interactive-leadgen-103-policy-receipt",
-        "previous_code_digest": "efcd9966dc7c3bac4688f665e5756b503792a43a304e47fcbcf8becf17694112",
-        "current_code_digest": "e1340cdc6b61e1c3ce9ce8252656c361f97d001de26ef720520cc6a56112d6c4"
+        "reason": "104 cleanup shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged. Deployment correction only adds leadgen-legacy-score-recovery.js to the static RPC file list in leadgen-client.mjs; this list is used for file transfer and does not change this Activity request, branch, or policy behavior.",
+        "reviewed_by": "codex:leadgen-103-double-policy",
+        "previous_code_digest": "e1340cdc6b61e1c3ce9ce8252656c361f97d001de26ef720520cc6a56112d6c4",
+        "current_code_digest": "91d18f32782f71e9a46c9d96411f2b32204858b76bb5a70f20dc14e93b226004"
       }
     }
   },
@@ -3517,13 +3524,13 @@
     "douyin_comment_scoring": {
       "workflow_skill": {
         "name": "douyin-leadgen-103",
-        "version": "0.6.0",
+        "version": "0.8.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "af83d789dd689362a4e1816cf23b48cffb56548a2dbc62b88518c9e72d250798",
+        "sha256": "982a1d786ccf57233b5df1862bc5c3a0c4f89278612eafb5f45b25e52de0353d",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-            "sha256": "13b212c8f4f63bf4e6ffe0429cc09b58ccb3641f3ac9705ea13bca9cee873633"
+            "sha256": "6a50ab52d513d7891c6ce35f187b296b29d0d2d3095275389ac84153abd7942f"
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/reuse-map.json",
@@ -3534,31 +3541,31 @@
             "sha256": "799267ef1124fcb8814970834f8c7b53b38ada04a21306f4b1a59d011f1c715a"
           }
         ],
-        "content_digest": "023567f04e5f37535b83f2474b48db9cfbc87776481a07fdb0d23d4ba4e02f7c"
+        "content_digest": "8b8ae22d5e270d50330882fa604faef44df87f7e6cf17365b77de28d93b805d6"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
-        "version": "0.6.0",
+        "version": "0.8.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_comment_scoring/SKILL.md",
-        "sha256": "e98abcbfd9a5a7c93843e1b20a41d3b7b3afabb0eeede8b7bfca53fde3952382",
+        "sha256": "d14465020e0c545defcbed65d3f14a06534885a8cdeb5ac878e0228a9cecb2c3",
         "support_files": [],
-        "content_digest": "279339817e1e153f56f69bdcad1cae515aad62b0f84c88f70e19be31738fe896"
+        "content_digest": "821242f8e755ce6e436027093123925d26cfc804e86ad5a911b127d81d5c2594"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-        "sha256": "13b212c8f4f63bf4e6ffe0429cc09b58ccb3641f3ac9705ea13bca9cee873633"
+        "sha256": "6a50ab52d513d7891c6ce35f187b296b29d0d2d3095275389ac84153abd7942f"
       },
       "activities": [
         {
           "activity_ref": "douyin_comment_scoring.scoring",
           "skill_name": "douyin-leadgen-activity-103-scoring",
-          "skill_version": "0.4.0",
+          "skill_version": "0.6.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md"
         },
         {
           "activity_ref": "douyin_comment_scoring.mark_leads",
           "skill_name": "douyin-leadgen-activity-103-mark-leads",
-          "skill_version": "0.4.0",
+          "skill_version": "0.6.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md"
         }
       ]
