@@ -21,8 +21,10 @@ export function createAidgeViewerGuard(
     try {
       const id = await resolveSession(req);
       if (!id || !isAidgeViewerId(id, env)) return next();
-      if (req.path.startsWith('/api/aidge/') || req.path === '/api/aidge') return next();
-      return void res.status(403).json({ error: '此账号仅可使用 Aidge' });
+      const allowedService = ['/api/aidge', '/api/materials', '/api/mashup']
+        .some(path => req.path === path || req.path.startsWith(`${path}/`));
+      if (allowedService || (req.method === 'GET' && req.path === '/api/account/me')) return next();
+      return void res.status(403).json({ error: '此账号仅可使用试用工作区内的功能' });
     } catch {
       return void res.status(503).json({ error: '暂时无法验证登录状态，请稍后重试' });
     }
