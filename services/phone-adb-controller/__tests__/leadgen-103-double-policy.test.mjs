@@ -118,6 +118,12 @@ test('评分后及mark_leads独立重验原文、冻结v14和双身份，不产�
   source_video:title,source_video_url:f.row.source_video_url},{judgePolicy});
  assert.equal(markReview.status,'pass');
  assert.equal(modelCalls,0);
+ const originalAudit=f.row.judgment_config.policy_audit;
+ f.row.judgment_config.policy_audit={...originalAudit,response_id:'forged-identity'};
+ const forged=await reviewBoundComment(f.pool,'jinuo',id,{run,source_run:sourceRun,
+  source_video:title,source_video_url:f.row.source_video_url},{judgePolicy});
+ assert.equal(forged.status,'unknown');
+ f.row.judgment_config.policy_audit=originalAudit;
  f.row.judgment_config.policy_reviews[1].policy_evidence.comment_signal='FDE证书';
  const tampered=await reviewBoundComment(f.pool,'jinuo',id,{run,source_run:sourceRun,
   source_video:title,source_video_url:f.row.source_video_url},{judgePolicy});
