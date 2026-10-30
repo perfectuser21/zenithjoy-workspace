@@ -76,6 +76,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 import videoRemakeRouter from './routes/video-remake';
 import { createVideoToolsRouter } from './routes/video-tools';
 import { createAidgeRouter } from './routes/aidge';
+import { createAidgeViewerGuard } from './middleware/aidge-viewer';
 import staffRouter from './routes/staff';
 // Line11 员工知识中枢 路① — 经验录入/最近沉淀/投影只读（挂 knowledgeAuthGuard，只信会话）
 import { knowledgeRouter } from './routes/knowledge';
@@ -112,6 +113,9 @@ app.use(
 if (!process.env.VITEST) {
   app.all('/api/auth/*', toNodeHandler(auth));
 }
+
+// 试用账号的服务端边界必须先于支付、画布及其它 API 路由。
+app.use(createAidgeViewerGuard());
 
 // 支付回调必须在 express.json() 之前挂载：
 // APIv3 验签基于原始字节，body 被解析后无法还原签名串（同 better-auth 的理由）

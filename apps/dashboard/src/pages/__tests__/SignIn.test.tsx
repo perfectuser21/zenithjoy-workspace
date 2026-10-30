@@ -12,6 +12,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SignIn from '../SignIn';
 import * as betterAuthApi from '../../api/better-auth.api';
+import * as aidgeAccess from '../../api/aidge-access';
 
 vi.mock('../../api/better-auth.api', () => ({
   signUpEmail: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('../../api/better-auth.api', () => ({
   requestPasswordReset: vi.fn(),
   signOut: vi.fn(),
 }));
+vi.mock('../../api/aidge-access', () => ({ getAidgeAccess: vi.fn() }));
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -57,6 +59,7 @@ function renderPage() {
 describe('SignIn [BEHAVIOR]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(aidgeAccess.getAidgeAccess).mockResolvedValue(null);
   });
 
   it('渲染登录表单 + 注册/忘记密码/飞书登录三个链接', () => {
@@ -100,6 +103,22 @@ describe('SignIn [BEHAVIOR]', () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/');
     });
+  });
+
+  it('试用账号登录后直接进入 Aidge', async () => {
+    vi.mocked(aidgeAccess.getAidgeAccess).mockResolvedValue('viewer');
+    vi.mocked(betterAuthApi.signInEmail).mockResolvedValue({
+      user: { id: 'viewer-1', email: 'trial@example.test', name: '王希' },
+      token: 'tok',
+    });
+    renderPage();
+    fireEvent.change(screen.getByLabelText(/邮箱/), { target: { value: 'trial@example.test' } });
+    fireEvent.change(screen.getByLabelText(/密码/), { target: { value: 'Password123' } });
+    fireEvent.click(screen.getByRole('button', { name: /登录/ }));
+    await waitFor(() => expect(loginMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'viewer-1' }), 'tok', 'viewer',
+    ));
+    expect(navigateMock).toHaveBeenCalledWith('/aidge');
   });
 
   it('提交失败 → 显示错误信息', async () => {

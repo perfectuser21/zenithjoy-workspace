@@ -31,6 +31,7 @@ services:
       - "127.0.0.1:5200:5200"   # 宿主 5200 仅本机调试；域名流量走 nginx→容器名:5200
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "aidge.cn-beijing.aliyuncs.com:100.79.41.61" # Aidge 固定 TLS 中继，沿用 staging 的证书校验
     env_file:
       - /opt/zenithjoy/prod-api/.env
     environment:

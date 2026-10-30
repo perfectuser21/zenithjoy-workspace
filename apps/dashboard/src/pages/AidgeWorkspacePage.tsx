@@ -98,7 +98,7 @@ export default function AidgeWorkspacePage() {
     try {
       const response = await fetch('/api/aidge/catalog', { credentials: 'include' });
       if (!response.ok)
-        throw new Error(response.status === 401 ? '请先登录员工账号' : '能力目录暂时无法加载');
+        throw new Error(response.status === 401 ? '请先登录已授权账号' : '能力目录暂时无法加载');
       const data: { operations?: Operation[] } = await response.json();
       if (!Array.isArray(data.operations) || !data.operations.length)
         throw new Error('能力目录暂时为空');

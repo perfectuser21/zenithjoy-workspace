@@ -8374,6 +8374,22 @@ agent_suite:
   product: AI视频
   note: Aidge 全能力目录、员工鉴权、参数校验、素材上传与嵌套模型。
 
+- id: aidge-viewer-boundary
+  path: apps/api/src/middleware/aidge-viewer.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: AI视频
+  note: 独立试用账号按用户 ID 授权且只能访问 Aidge API。
+
+- id: aidge-viewer-role
+  path: apps/dashboard/src/api/aidge-access.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI视频
+  note: 登录后从服务端读取定向试用角色，异常时拒绝降级。
+
 - id: aidge-catalog
   path: apps/api/src/services/aidge-catalog.test.ts
   type: unit

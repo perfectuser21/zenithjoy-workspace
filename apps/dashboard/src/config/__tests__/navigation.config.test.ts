@@ -11,6 +11,8 @@ import {
   autopilotPageComponents,
   additionalRoutes,
   filterNavGroups,
+  filterAidgeOnlyNavGroups,
+  isAidgeOnlyPath,
   extractRoutesFromNav,
 } from '../navigation.config';
 import { AREA_HUBS } from '../../pages/AreaHubPage';
@@ -30,6 +32,16 @@ describe('员工视频工具导航', () => {
   it('从导航生成员工工具路由时保留员工权限要求', () => {
     const route = extractRoutesFromNav(autopilotNavGroups).find(item => item.path === '/area/video-tools');
     expect(route).toMatchObject({ requireAuth: true, requireStaff: true });
+  });
+});
+
+describe('Aidge 定向试用导航', () => {
+  it('只留下 Aidge 入口，其他直接路径不属于试用范围', () => {
+    const paths = filterAidgeOnlyNavGroups(autopilotNavGroups).flatMap(group => group.items.map(item => item.path));
+    expect(paths).toEqual(['/aidge']);
+    expect(isAidgeOnlyPath('/aidge')).toBe(true);
+    expect(isAidgeOnlyPath('/creative-canvas')).toBe(false);
+    expect(isAidgeOnlyPath('/area/admin')).toBe(false);
   });
 });
 

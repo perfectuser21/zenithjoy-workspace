@@ -6,10 +6,10 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Route, Link, useLocation } from 'react-router-dom';
+import { Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { LogOut, PanelLeftClose, PanelLeft, Sun, Moon, Monitor } from 'lucide-react';
 // 配置驱动
-import { getAutopilotNavGroups, filterNavGroups, additionalRoutes } from './config/navigation.config';
+import { getAutopilotNavGroups, filterNavGroups, filterAidgeOnlyNavGroups, isAidgeOnlyPath, additionalRoutes } from './config/navigation.config';
 import DynamicRouter from './components/DynamicRouter';
 import { isFullBleedPath } from './lib/full-bleed-routes';
 // Context
@@ -34,7 +34,7 @@ function isAuthPath(pathname: string): boolean {
 
 function AppContent() {
   const location = useLocation();
-  const { user, logout, isAuthenticated, isSuperAdmin, isStaff, authLoading } = useAuth();
+  const { user, logout, isAuthenticated, isSuperAdmin, isStaff, isAidgeOnly, authLoading } = useAuth();
   const { theme, setTheme } = useTheme();
   const { config, loading: instanceLoading, isFeatureEnabled } = useInstance();
   const [collapsed, setCollapsed] = useState(false);
@@ -61,7 +61,9 @@ function AppContent() {
   const baseNavGroups = useMemo(() => {
     return getAutopilotNavGroups();
   }, []);
-  const navGroups = filterNavGroups(baseNavGroups, isFeatureEnabled, isSuperAdmin, isStaff);
+  const navGroups = isAidgeOnly
+    ? filterAidgeOnlyNavGroups(baseNavGroups)
+    : filterNavGroups(baseNavGroups, isFeatureEnabled, isSuperAdmin, isStaff);
 
   // 兼容旧代码
   const navItems = navGroups.flatMap(g => g.items);
@@ -102,6 +104,10 @@ function AppContent() {
     !currentRouteAllowsUnauthenticated
   ) {
     return <SignIn />;
+  }
+
+  if (isAuthenticated && isAidgeOnly && !isAidgeOnlyPath(location.pathname)) {
+    return <Navigate to="/aidge" replace />;
   }
 
   return (
@@ -296,7 +302,7 @@ function AppContent() {
 
             {/* 右侧：机器选择器 + 主题切换 */}
             <div className="flex items-center gap-3">
-              <MachineSelector />
+              {!isAidgeOnly && <MachineSelector />}
               <button
                 onClick={cycleTheme}
                 className={`relative p-2 rounded-lg transition-colors ${
