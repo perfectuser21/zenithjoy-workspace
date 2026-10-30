@@ -222,7 +222,7 @@ test('Commander连续两次证据不合格时PG回滚、原评论不写入且Jev
   :{id:'response-invalid',model:'google/gemini-2.5-flash',choices:[{message:{content:JSON.stringify({grade:'A',policy_evidence:{audience_id:'missing',matched_rule:'报名',reason:'有意向'}})}}]};};
  const result=await queueRequest(pool,{op:'score',line:'jinuo',run:'test'},
   {judgeComment:(body,video,profile,opts)=>judgeComment(body,video,profile,{...opts,httpPost,apiKey:'k'})});
- assert.equal(result.status,'partial');assert.deepEqual(result.blocked_reasons,[{id:'c1',code:'POLICY_SCORE_COMMANDER_EVIDENCE_INVALID',stage:'commander'}]);
+ assert.equal(result.status,'partial');assert.deepEqual(result.blocked_reasons,[{id:'c1',code:'POLICY_SCORE_COMMANDER_EVIDENCE_INVALID',stage:'commander',evidence_check:'missing_exclusion_rule'}]);
  assert.equal(urls.filter(url=>url.endsWith('/decisions')).length,1);
  assert.equal(urls.filter(url=>url.endsWith('/chat/completions')).length,2);
  assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));

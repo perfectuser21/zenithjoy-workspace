@@ -35,14 +35,15 @@ const evidenceRules = {...scoringRules,audiences:[{id:'audience-1',fields:{'意�
 
 test('Commander首次省略排除证据后仅重试一次，有效证据才评分且Jev只调用一次',async()=>{
  const calls=[];const replies=[decisionsResp('A',.2),missingExclusion(),audited()];
- const httpPost=async(url)=>{calls.push(url);return replies.shift();};
+ const httpPost=async(url,body)=>{calls.push({url,body});return replies.shift();};
  const result=await judgeComment('这个','视频文案','画像',{scoringRules:evidenceRules,httpPost,apiKey:'k'});
  assert.equal(result.grade,'B');assert.equal(result.audit.response_id,'response-123');
- assert.deepEqual(calls,[
+ assert.deepEqual(calls.map(c=>c.url),[
   'https://openrouter.ai/api/alpha/decisions',
   'https://openrouter.ai/api/v1/chat/completions',
   'https://openrouter.ai/api/v1/chat/completions',
  ]);
+ assert.match(calls[2].body.messages[0].content,/exclusion_rule 必须出现/);
 });
 
 test('Commander连续两次省略排除证据仍阻断，不能默认无排除或无限重试',async()=>{
