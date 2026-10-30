@@ -494,4 +494,5 @@ async function main() {
   } finally { if (pool) await pool.end(); }
 }
 if (require.main === module) main();
-module.exports = { queueRequest, transaction, evaluatePolicy, reviewBoundComment };
+module.exports = { queueRequest, transaction, evaluatePolicy,
+  reviewBoundComment:(pool,lineKey,id,binding,deps={})=>reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest) };
