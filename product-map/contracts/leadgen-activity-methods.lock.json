@@ -2011,6 +2011,13 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/discovery-metrics.js",
+          "revision": "contract",
+          "sha256": "dc33ed827f3a3fb89f652ec59cc6f669b114d9c480579e0a840de97d9598df63"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-comment-admission-authority.js",
           "revision": "contract",
           "sha256": "e59abd1140493e2210fd84b4df318081fe9a846eccd43ca86938842c4a167fb1"
@@ -2037,13 +2044,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "cc325b82529e161ef4b42b70dd8eba1ad1723ec5ec1832be76a5c53055d08c82",
+      "code_digest": "af7ac568caa3f868a0bb6ee3149fa1894ad920aae2d551c6b9567002c5c95dfc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，保留原102g评论/政策/授权及其他批次阻断，评分和标线索规则不变。",
+        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，并将实际依赖的discovery-metrics.js字节纳入两项方法锁。原102g评论/政策/授权和其他批次阻断保持，评分及标线索规则不变。",
         "reviewed_by": "codex:102g-lineage-fix",
         "previous_code_digest": "a57041073faec0776207bf617090867203b669dc9b5e53f4f05d4aa9a5781565",
-        "current_code_digest": "cc325b82529e161ef4b42b70dd8eba1ad1723ec5ec1832be76a5c53055d08c82"
+        "current_code_digest": "af7ac568caa3f868a0bb6ee3149fa1894ad920aae2d551c6b9567002c5c95dfc"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2284,6 +2291,13 @@
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/discovery-metrics.js",
+          "revision": "contract",
+          "sha256": "dc33ed827f3a3fb89f652ec59cc6f669b114d9c480579e0a840de97d9598df63"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-comment-admission-authority.js",
           "revision": "contract",
           "sha256": "e59abd1140493e2210fd84b4df318081fe9a846eccd43ca86938842c4a167fb1"
@@ -2345,13 +2359,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "1c5c77e097297cd72b5fce2ab76d9ece667deb0399da85be88e5e03beb703e65",
+      "code_digest": "c048a7c3bcfeaf8fe1fd041572ff0a59dbec2fcfa1925cbed739b78017f92358",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，保留原102g评论/政策/授权及其他批次阻断，评分和标线索规则不变。",
+        "reason": "原0.7.0方法已限定102g单VID三评论接纳；本修复只认可经原生观测摘要验证的101l精确复用视频，并将实际依赖的discovery-metrics.js字节纳入两项方法锁。原102g评论/政策/授权和其他批次阻断保持，评分及标线索规则不变。",
         "reviewed_by": "codex:102g-lineage-fix",
         "previous_code_digest": "2ce699ff23a1ea29115c900f088c3c00354df0e618cd93ef602bab4cb5eec042",
-        "current_code_digest": "1c5c77e097297cd72b5fce2ab76d9ece667deb0399da85be88e5e03beb703e65"
+        "current_code_digest": "c048a7c3bcfeaf8fe1fd041572ff0a59dbec2fcfa1925cbed739b78017f92358"
       }
     },
     "douyin_lead_outreach.preflight": {
