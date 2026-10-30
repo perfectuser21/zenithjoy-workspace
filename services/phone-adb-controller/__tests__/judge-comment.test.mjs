@@ -30,6 +30,29 @@ test("judgeComment: 主判不相关且高置信度 → relevance派生为不相�
 });
 
 const audited = (grade='B') => ({id:'response-123',model:'google/gemini-2.5-flash',choices:[{message:{content:JSON.stringify({grade,policy_evidence:{audience_id:'audience-1',matched_rule:'意向信号',exclusion_rule:null,reason:'主动咨询考试资料'}})}}]});
+const missingExclusion = () => ({id:'response-invalid',model:'google/gemini-2.5-flash',choices:[{message:{content:JSON.stringify({grade:'B',policy_evidence:{audience_id:'audience-1',matched_rule:'意向信号',reason:'主动咨询考试资料'}})}}]});
+const evidenceRules = {...scoringRules,audiences:[{id:'audience-1',fields:{'意向信号':'意向信号','排除信号':'泛失业或创业焦虑'}}]};
+
+test('Commander首次省略排除证据后仅重试一次，有效证据才评分且Jev只调用一次',async()=>{
+ const calls=[];const replies=[decisionsResp('A',.2),missingExclusion(),audited()];
+ const httpPost=async(url,body)=>{calls.push({url,body});return replies.shift();};
+ const result=await judgeComment('这个','视频文案','画像',{scoringRules:evidenceRules,httpPost,apiKey:'k'});
+ assert.equal(result.grade,'B');assert.equal(result.audit.response_id,'response-123');
+ assert.deepEqual(calls.map(c=>c.url),[
+  'https://openrouter.ai/api/alpha/decisions',
+  'https://openrouter.ai/api/v1/chat/completions',
+  'https://openrouter.ai/api/v1/chat/completions',
+ ]);
+ assert.match(calls[2].body.messages[0].content,/exclusion_rule 必须出现/);
+});
+
+test('Commander连续两次省略排除证据仍阻断，不能默认无排除或无限重试',async()=>{
+ const calls=[];const replies=[decisionsResp('A',.2),missingExclusion(),missingExclusion()];
+ const httpPost=async(url)=>{calls.push(url);return replies.shift();};
+ await assert.rejects(judgeComment('这个','视频文案','画像',{scoringRules:evidenceRules,httpPost,apiKey:'k'}),/COMMANDER_EVIDENCE_INVALID/);
+ assert.equal(calls.filter(url=>url.endsWith('/decisions')).length,1);
+ assert.equal(calls.filter(url=>url.endsWith('/chat/completions')).length,2);
+});
 
 test("judgeComment: 低置信度终审必须有独立档位、响应身份和政策依据", async () => {
   const httpPost = fakeHttpPost([
