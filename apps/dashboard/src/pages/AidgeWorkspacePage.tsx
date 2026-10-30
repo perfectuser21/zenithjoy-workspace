@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ExternalLink, Sparkles } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Field {
   name: string;
@@ -79,6 +80,7 @@ function resultValue(result: unknown, key: string): unknown {
 }
 
 export default function AidgeWorkspacePage() {
+  const { isAidgeOnly } = useAuth();
   const [operations, setOperations] = useState<Operation[]>([]);
   const [catalogError, setCatalogError] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -205,18 +207,18 @@ export default function AidgeWorkspacePage() {
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
       <header className="rounded-2xl border border-violet-200 bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-900 p-7 text-white shadow-lg dark:border-violet-800">
         <div className="flex items-center gap-2 text-sm text-violet-200">
-          <Sparkles size={18} /> 员工工具
+          <Sparkles size={18} /> {isAidgeOnly ? 'Aidge 试用' : '员工工具'}
         </div>
         <h1 className="mt-3 text-3xl font-semibold">Aidge 能力中心</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100">
           阿里云电商经营助手的翻译、图片、视频、商品经营与巡检能力，按栏目选择后直接运行。
         </p>
-        <Link
+        {!isAidgeOnly && <Link
           to="/creative-canvas"
           className="mt-5 inline-flex items-center gap-2 text-sm text-violet-200 hover:text-white"
         >
           前往创作画布 <ArrowRight size={15} />
-        </Link>
+        </Link>}
       </header>
 
       {loadingCatalog && (
