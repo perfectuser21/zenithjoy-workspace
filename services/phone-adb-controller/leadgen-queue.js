@@ -3,7 +3,7 @@
 const db = require('./leadgen-db-lib.js');
 const { resolveLine, configEvidence } = require('./judge-video.js');
 const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
-const { judgeComment } = require('./judge-comment.js');
+const { judgeComment, scoreFailureReceipt } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const {evaluatePolicy}=require('./leadgen-policy-review.js');
@@ -379,7 +379,11 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         let verdict;
         try{verdict=await deps.judgeComment(row.comment_body, row.source_video, targetProfile,
           { scoringRules: snapshot.runtime_config.comment_scoring });}
-        catch{const error=Error('POLICY_SCORE_MODEL_UNAVAILABLE');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;}
+        catch(cause){
+          const failure=scoreFailureReceipt(cause);
+          const error=Error(failure.code);error.score_failure=failure;
+          error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
+        }
         if (!['相关', '不相关'].includes(verdict?.relevance)
             || verdict.relevance === '相关' && !['A', 'B', 'C'].includes(verdict.grade)) {
           const error=Error('POLICY_SCORE_MODEL_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
@@ -397,7 +401,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           verdict.relevance === '相关' ? verdict.grade : null, verdict.reason, JSON.stringify(audit)]);
         return {id:row.id,cursor:nextCursor};
       });}catch(error){
-        if(error.blocked_id&&!seen.has(error.blocked_id)){seen.add(error.blocked_id);blockedIds.push(error.blocked_id);blocked_reasons.push({id:error.blocked_id,code:error.message});blocked++;if(error.next_cursor)lastCursor=error.next_cursor;continue;}
+        if(error.blocked_id&&!seen.has(error.blocked_id)){seen.add(error.blocked_id);blockedIds.push(error.blocked_id);blocked_reasons.push({id:error.blocked_id,...(error.score_failure||{code:error.message})});blocked++;if(error.next_cursor)lastCursor=error.next_cursor;continue;}
         throw error;
       }
       if (!result) break;

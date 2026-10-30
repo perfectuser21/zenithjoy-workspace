@@ -819,7 +819,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "f4f0a10452db51842e8d460940bb7195d06627f664ff1366eaffe0b7c057b8bc"
+          "sha256": "210374e018279cead300c61bc0fcb44b7f9e0ed832d848cd20101280b9f447d0"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "e9df21a57c1b8c4224de9c71479d513394613c3a25045ff025378b6bbea9eeb6",
+      "code_digest": "1588a62dbe0ecaa63cfedd095dea807764938ef15035711fd3aeba4a65e54b6b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
+        "reason": "共享队列代码新增 103 评分异常的安全回执分类；102 判重入口和成功/失败合同未变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "f65a45db8e2b916ff0b55e94378673888da9c1d79b8cb981ce6bd7eb68b303fe",
-        "current_code_digest": "e9df21a57c1b8c4224de9c71479d513394613c3a25045ff025378b6bbea9eeb6"
+        "previous_code_digest": "e9df21a57c1b8c4224de9c71479d513394613c3a25045ff025378b6bbea9eeb6",
+        "current_code_digest": "1588a62dbe0ecaa63cfedd095dea807764938ef15035711fd3aeba4a65e54b6b"
       }
     },
     "douyin_video_processing.qualification": {
@@ -875,7 +875,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "f4f0a10452db51842e8d460940bb7195d06627f664ff1366eaffe0b7c057b8bc"
+          "sha256": "210374e018279cead300c61bc0fcb44b7f9e0ed832d848cd20101280b9f447d0"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "0338a4872158f3ebe409285ae6da7661c80c7475ade64122c4d42ed926b0e7b0",
+      "code_digest": "d1260f2a711a05a0d565674676e9ccbc683e057382d8d55bc88fd883da0b55af",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
+        "reason": "共享队列代码新增 103 评分异常的安全回执分类；102 资格判定入口和业务规则未变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "43cbee3f14b16d1a3d1faf5bae48cb9b4d403f597c0172cf831056e999b44a47",
-        "current_code_digest": "0338a4872158f3ebe409285ae6da7661c80c7475ade64122c4d42ed926b0e7b0"
+        "previous_code_digest": "0338a4872158f3ebe409285ae6da7661c80c7475ade64122c4d42ed926b0e7b0",
+        "current_code_digest": "d1260f2a711a05a0d565674676e9ccbc683e057382d8d55bc88fd883da0b55af"
       }
     },
     "douyin_video_processing.collection": {
@@ -1964,7 +1964,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "f4f0a10452db51842e8d460940bb7195d06627f664ff1366eaffe0b7c057b8bc"
+          "sha256": "210374e018279cead300c61bc0fcb44b7f9e0ed832d848cd20101280b9f447d0"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18",
+      "code_digest": "51a793193d24e1375eb065af47261add806bd85c1506166abd073120e8f96072",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
+        "reason": "103 评分失败回执增加白名单阶段与 HTTP 状态，仍保持原评论待分拣和事务回滚；成功评分政策与字段未变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "9550f4d949674f522c41ec7f8da750efeee201fefd3a16f5a58102b0daf5ff31",
-        "current_code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18"
+        "previous_code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18",
+        "current_code_digest": "51a793193d24e1375eb065af47261add806bd85c1506166abd073120e8f96072"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2209,7 +2209,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "f4f0a10452db51842e8d460940bb7195d06627f664ff1366eaffe0b7c057b8bc"
+          "sha256": "210374e018279cead300c61bc0fcb44b7f9e0ed832d848cd20101280b9f447d0"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "48ae6a5d124f75fca59d0115552d6c802ee8c5dae810883fdf9b32fef40e5374",
+      "code_digest": "5b9817b6d04c6bb1bd493556875cc8a865a60734b05ea5df03b7bb0924ecad35",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
+        "reason": "共享队列代码新增 103 评分异常的安全回执分类；线索标记入口和原资格政策未变。",
         "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "c895ee2ba18912cd946aba6dc58912d0d9766306317dc25fade107a3d2c1c9f3",
-        "current_code_digest": "48ae6a5d124f75fca59d0115552d6c802ee8c5dae810883fdf9b32fef40e5374"
+        "previous_code_digest": "48ae6a5d124f75fca59d0115552d6c802ee8c5dae810883fdf9b32fef40e5374",
+        "current_code_digest": "5b9817b6d04c6bb1bd493556875cc8a865a60734b05ea5df03b7bb0924ecad35"
       }
     },
     "douyin_lead_outreach.preflight": {
