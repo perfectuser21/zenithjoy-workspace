@@ -202,7 +202,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       ||collect[0].status!=='completed'||collect[0].verification?.verified!==true)throw Error('上游101终态或collect_videos验收未通过');
     const progressRaw=readFileSync(join(upstreamDir,'discovery-progress.json'));
     const input=JSON.parse(progressRaw);
-    const producer=current.producer_descriptor?verifyProducerDescriptor(current.producer_descriptor,{upstream,progressRaw,progress:input,env,company:state.companyConfig}):null;
+    const producer=current.producer_descriptor?verifyProducerDescriptor(current.producer_descriptor,{upstream,progressRaw,progress:input,env,company:state.companyConfig,consumerSourceCommit:current.deployment.source_commit}):null;
     if(producer)verifyProducerCompany(producer,await queue('verify_producer_company',{descriptor:producer}));
     state.producerDescriptor=producer;
     if(input.run!==sourceRun||input.profile!==profile||!Array.isArray(input.videos)||input.videos.length>1000
@@ -344,11 +344,12 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(!state.companyConfig)state.companyConfig=await queue('company_config',{step:'102'});
       if(!state.companyConfig?.company_id||!state.companyConfig.version)throw Error('COMPANY_CONFIG_RECEIPT_MISSING');
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
-      if(state.producerDescriptor?.schema_version===2&&state.account!=='44997267357')throw Error('PRODUCER_NATIVE_ACCOUNT_INVALID');
+      if(state.producerDescriptor?.schema_version===2&&state.account!=='44997267357'
+       ||state.producerDescriptor?.schema_version===3&&state.account!=='langzi63485')throw Error('PRODUCER_NATIVE_ACCOUNT_INVALID');
       if(state.qualificationClaimUnknown)throw Error('资格领取回执未知，禁止再次认领或伪造空批成功');
       if(!qualificationClaimed){
         state.qualificationClaimUnknown=true;
-        leased=await queue('claim_videos',{config_required:true,...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(state.producerDescriptor?.schema_version===2?{producer_descriptor:state.producerDescriptor}:sampleInput?{prefer_matched:true}:{})});
+        leased=await queue('claim_videos',{config_required:true,...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...([2,3].includes(state.producerDescriptor?.schema_version)?{producer_descriptor:state.producerDescriptor}:sampleInput?{prefer_matched:true}:{})});
         if(!Array.isArray(leased))throw Error('资格领取缺合法原租约列表');
         qualificationClaimed=true;state.qualificationClaimUnknown=false;
       }

@@ -194,7 +194,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return require('./discovery-metrics-queue.js').discoverMetricsRequest(pool,input,deps);
   }
   if (op === 'claim_videos') {
-    if(input.producer_descriptor!==undefined)return require('./producer-pending-claim.js').claimPendingProducer(pool,input);
+    if(input.producer_descriptor!==undefined)return require('./producer-pending-claim.js').claimPendingProducer(pool,input,deps);
+    if(sourceRun===require('./qualification-quarantine-recovery-102n.js').SCOPE.original_101_run)throw Error('PRODUCER_DESCRIPTOR_REQUIRED');
     let evidence=null;
     if (input.config_required === true) {
       const snapshot=await (deps.freezeCompanyConfig || freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'102'});

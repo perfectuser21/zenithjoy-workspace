@@ -68,6 +68,7 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/producer-descriptor-intake.test.mjs",
   "services/phone-adb-controller/__tests__/producer-pending-handoff.test.mjs",
   "services/phone-adb-controller/__tests__/producer-pending-claim-pg.test.mjs",
+  "services/phone-adb-controller/__tests__/qualification-quarantine-recovery-102n.test.mjs",
   "services/phone-adb-controller/__tests__/runtime-definition.test.mjs",
   "services/phone-adb-controller/__tests__/runtime-host.test.mjs",
   "services/phone-adb-controller/__tests__/runtime-receipts.test.mjs",
