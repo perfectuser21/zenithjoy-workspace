@@ -144,3 +144,44 @@ test('mark_leads面对旧单份政策证据保持unknown且不补第三次模型
  assert.equal(review.status,'unknown');
  assert.equal(modelCalls,0);
 });
+
+test('旧单审半提交行只在精确恢复范围内重新双审，成功才原子覆盖',async()=>{
+ const oldId='1f3b113f-442f-425b-83b4-6c737c30a68c';
+ const oldRun='accept4da3_jinuo103h_20261030t1525';
+ const oldSource='accept3a903_jinuo102d_20261030t0245';
+ const old={...storedPolicyRow().row,id:oldId,harvest_batch:oldSource};
+ old.judgment_config={...old.judgment_config,run_id:oldRun};
+ delete old.judgment_config.policy_reviews;
+ const writes=[],calls=[];let policyCalls=0;
+ const client={release(){},async query(sql,args=[]){calls.push({sql,args});
+  if(sql==='BEGIN'||sql==='ROLLBACK')return {rows:[]};
+  if(sql==='COMMIT'){if(writes.length)Object.assign(old,writes.at(-1));return {rows:[]};}
+  if(sql.includes('count(*)::int AS used'))return {rows:[{used:0}]};
+  if(sql.includes('company_config_runs'))return {rows:[{snapshot:policy,company_id:policy.company_id,
+   tenant_id:policy.tenant_id,version:policy.version,run_id:oldRun}]};
+  if(sql.includes('leadgen_bridge_outbox'))return {rows:[]};
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments'))return {rows:[{...old}]};
+  if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{title,
+   video_url:old.source_video_url,judgment_status:'matched'}]};
+  if(sql.includes('UPDATE zenithjoy.leadgen_comments')){writes.push({relevance:args[1],intent_grade:args[2],
+   judgment_reason:args[3],judgment_config:JSON.parse(args[4])});return {rows:[],rowCount:1};}
+  return {rows:[]};
+ }};
+ const recovery={comment_id:oldId,old_run:oldRun,
+  maintenance_task_id:'ef3927ba-1f9c-40ec-b1fa-53a8f7106ee6'};
+ const deps={freezeCompanyConfig:async()=>policy,
+  readRecoveryTask:async()=>({id:recovery.maintenance_task_id,status:'in_progress',
+   claimed_by:'interactive-leadgen-103-double-policy',project_id:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6'}),
+  judgeComment:async()=>({relevance:'相关',grade:'A',reason:'直接询问证书',
+   audit:{model:'scoring-model',response_id:'new-score'}}),
+  judgePolicy:async()=>({grade:'A',audit:{model:'policy-model',response_id:`new-policy-${++policyCalls}`,
+   policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'考证视频',comment_signal:comment,
+    video_signal:'FDE证书',exclusion_rule:null,reason:'按冻结政策核实直接提问'}}})};
+ const result=await queueRequest({connect:async()=>client},{op:'score',line:'jinuo',run:'new103',
+  source_run:oldSource,ids:[oldId],limit:1,budget_max:1,legacy_recovery:recovery},deps);
+ assert.equal(result.scored,1);assert.equal(policyCalls,2);
+ assert.equal(old.judgment_config.run_id,'new103');
+ assert.equal(old.judgment_config.policy_reviews.length,2);
+ assert.equal(writes.length,1);
+ assert.ok(calls.some(c=>c.sql.includes('leadgen_bridge_outbox')));
+});
