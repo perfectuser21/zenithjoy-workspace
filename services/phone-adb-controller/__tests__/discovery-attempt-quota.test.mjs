@@ -10,18 +10,19 @@ import * as runtime from '../runtime-definition.mjs';
 import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
 import {addDiscoveryCliScopeTemplate} from './helpers/discovery-cli-scope-fixture.mjs';
 
-function input(dir,max=2){
+function input(dir,max=2,maxScreens=1){
  const keyword='人工智能训练师怎么考',file=join(dir,'keywords.txt');writeFileSync(file,keyword+'\n');
- return {env:{WF_BRAIN_WORKFLOW:'douyin_video_discovery',WFR_TAG:'attemptquota',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_KIND:'keyword',LEADGEN_SOURCES_FILE:file,LEADGEN_MAX_SCREENS:'1',LEADGEN_DISCOVERY_MAX_ATTEMPTS:String(max)},fixed:{schema_version:2,workflow_key:'douyin_video_discovery',run_tag:'attemptquota',profile:'legacy',serial:'SERIAL',line:'jinuo',max_attempts:max,max_screens:1,source_kind:'keyword',sources:[keyword],source_sha256:createHash('sha256').update(keyword+'\n').digest('hex')}};
+ return {env:{WF_BRAIN_WORKFLOW:'douyin_video_discovery',WFR_TAG:'attemptquota',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_KIND:'keyword',LEADGEN_SOURCES_FILE:file,LEADGEN_MAX_SCREENS:String(maxScreens),LEADGEN_DISCOVERY_MAX_ATTEMPTS:String(max)},fixed:{schema_version:2,workflow_key:'douyin_video_discovery',run_tag:'attemptquota',profile:'legacy',serial:'SERIAL',line:'jinuo',max_attempts:max,max_screens:maxScreens,source_kind:'keyword',sources:[keyword],source_sha256:createHash('sha256').update(keyword+'\n').digest('hex')}};
 }
 async function temp(body){const dir=mkdtempSync(join(tmpdir(),'discovery-attempt-'));try{return await body(dir);}finally{rmSync(dir,{recursive:true,force:true});}}
-function rig(dir,{missing=false,failure=false,unknown=false,limit=6,legacy=false}={}){
- const {env,fixed}=input(dir),calls=[],writes=[];
+function rig(dir,{missing=false,failure=false,unknown=false,limit=6,legacy=false,max=2,maxScreens=1}={}){
+ const {env,fixed}=input(dir,max,maxScreens),calls=[],writes=[];let screen=0;
  if(legacy){fixed.schema_version=1;fixed.max_candidates=fixed.max_attempts;delete fixed.max_attempts;env.LEADGEN_DISCOVERY_MAX_CANDIDATES=env.LEADGEN_DISCOVERY_MAX_ATTEMPTS;delete env.LEADGEN_DISCOVERY_MAX_ATTEMPTS;}
  const h=withDiscoveryMetricsFixture(createDiscoveryHandlers)({root:dir,profile:'legacy',run:'attemptquota',sources:fixed.sources,limit,location:'unlimited',discoveryInput:fixed,env:{WFR_RUN_DIR:dir,...env},execute:async()=>({code:0}),queue:async(_,{video})=>{writes.push(video.videoId);return {status:'pending',inserted:true};},phone:async(command,...args)=>{
   calls.push({command,args});
   if(command==='search-time-layer')return 'sort=latest\ntime_layer=six_months\nduration=unlimited\nscope=unlimited\nlocation=unlimited\n';
-  if(command==='search-video-cards')return Array.from({length:4},(_,i)=>`${300+i}\t540\t00:20\t目标${i}\t${missing&&i===0?'':'作者'+i}`).join('\n')+'\nvideo_tab=1\nloading=0\nend_of_results=0\nevidence=/tmp/attempt-grid.xml';
+  if(command==='search-grid-scroll'){screen++;return '';}
+  if(command==='search-video-cards')return Array.from({length:4},(_,i)=>`${300+i}\t540\t00:20\t目标${screen}-${i}\t${missing&&i===0?'':'作者'+i}`).join('\n')+'\nvideo_tab=1\nloading=0\nend_of_results=0\nevidence=/tmp/attempt-grid.xml';
   if(command==='search-kw-matches')return 'kw_matches=1';
   if(command==='tap-evidence'&&failure){const e=Error('candidate tap failed');if(unknown)e.executionStopped=false;throw e;}
   if(command==='current-video-link')return 'video_id=7700140623701611674\nshort_url=https://v.douyin.com/valid/\ncontent_type=video\nreturn_mode=results\n';return '';
@@ -30,6 +31,19 @@ function rig(dir,{missing=false,failure=false,unknown=false,limit=6,legacy=false
 test('explicit attempt input freezes schema2 without conflating displayed candidate cap',()=>temp(dir=>{
  const {env,fixed}=input(dir);assert.deepEqual(runtime.discoveryInput(env),fixed);
  assert.deepEqual(runtime.assertDiscoveryInput({discovery_input:fixed},env),fixed);
+}));
+test('schema2 freezes a second screen with the hard attempt cap and rejects changed screen count',()=>temp(dir=>{
+ const {env,fixed}=input(dir,5,2);assert.deepEqual(runtime.discoveryInput(env),fixed);
+ assert.deepEqual(runtime.assertDiscoveryInput({discovery_input:fixed},env),fixed);
+ assert.throws(()=>runtime.assertDiscoveryInput({discovery_input:fixed},{...env,LEADGEN_MAX_SCREENS:'3'}),/DISCOVERY_INPUT_MISMATCH/);
+}));
+test('schema2 crosses screens but stops before a sixth card attempt',()=>temp(async dir=>{
+ const {h,calls}=rig(dir,{max:5,maxScreens:2,limit:0});const out=await h.collect_videos();
+ assert.equal(out.counts.screens,2);assert.equal(out.counts.attempted,5);assert.equal(out.stop_reason,'attempt_limit_reached');
+ assert.equal(calls.filter(x=>x.command==='search-grid-scroll').length,1);
+ assert.equal(calls.filter(x=>x.command==='tap-evidence').length,5);
+ const p=JSON.parse(readFileSync(join(dir,'discovery-progress.json')));
+ assert.equal(p.request.max_screens,2);assert.equal(p.request.max_attempts,5);
 }));
 test('first page four cards permits only first two slots, retains true seen count and duplicate cost',()=>temp(async dir=>{
  const {h,calls,writes}=rig(dir);const out=await h.collect_videos();
@@ -62,7 +76,7 @@ test('simultaneous old and new limits fail rather than choosing a quota implicit
  const {env}=input(dir);assert.throws(()=>runtime.discoveryInput({...env,LEADGEN_DISCOVERY_MAX_CANDIDATES:'2'}),/DISCOVERY_INPUT_INVALID/);
 }));
 test('schema and quota fields cannot be relabeled to silently change strict behavior',()=>temp(dir=>{
- const {fixed}=input(dir);for(const patch of [{schema_version:1},{max_candidates:2},{max_attempts:0},{max_attempts:1001},{max_screens:2}])assert.throws(()=>runtime.validateDiscoveryInput({...fixed,...patch}),/DISCOVERY_INPUT_INVALID/);
+ const {fixed}=input(dir);for(const patch of [{schema_version:1},{max_candidates:2},{max_attempts:0},{max_attempts:1001},{max_screens:0},{max_screens:1001},{max_screens:1.5}])assert.throws(()=>runtime.validateDiscoveryInput({...fixed,...patch}),/DISCOVERY_INPUT_INVALID/);
 }));
 test('frozen input rejects addition, deletion, mode switching or quota changes',()=>temp(dir=>{
  const {env,fixed}=input(dir);for(const patch of [{},{discovery_input:{...fixed,max_attempts:3}},{discovery_input:{...fixed,schema_version:1}}])assert.throws(()=>runtime.assertDiscoveryInput(patch,env),/DISCOVERY_INPUT/);
@@ -71,7 +85,7 @@ test('frozen input rejects addition, deletion, mode switching or quota changes',
 
 import {mkdirSync} from 'node:fs';
 import {createDiscoveryAction} from '../leadgen-discovery-action.mjs';
-function freezeRig(dir){
+function freezeRig(dir,maxScreens=1){
  const root=join(dir,'deployment');mkdirSync(root);const sha='a'.repeat(40),source={repo:'test/repo',path:'contracts/raw.yaml',commit:sha};
  const entry=Buffer.from('frozen runtime\n'),plan=Buffer.from('WF_CAP=raw\n'),steps=Buffer.from('{"steps":[]}');
  for(const[name,bytes]of [['entry.sh',entry],['workflow.plan',plan],['steps.json',steps]])writeFileSync(join(root,name),bytes);
@@ -81,7 +95,7 @@ function freezeRig(dir){
  const v=(id,payload)=>({id,source_repo:source.repo,source_path:source.path,source_commit:sha,contract_sha256:runtime.digest(payload.contract),payload_sha256:runtime.digest({source,payload}),payload});
  const routes={'/api/brain/workflows':[{id:'w',key:'douyin_video_discovery',current_definition_version_id:'wv'}],'/api/brain/workflows/w/versions/wv':{version:v('wv',wp)},'/api/brain/activities/a/versions/av':{version:v('av',ap)}};
  writeFileSync(join(root,'deployment-manifest.json'),JSON.stringify({source_repo:source.repo,source_commit:sha,files:[['entry.sh',entry],['workflow.plan',plan],['steps.json',steps]].map(([name,b])=>({path:'services/phone-adb-controller/'+name,deployed_path:name,content_sha256:runtime.digest(b)}))}));
- const {env,fixed}=input(dir);env.WFR_RUN_DIR=join(dir,'run');return {env,fixed,routes,options:{runDir:env.WFR_RUN_DIR,deploymentRoot:root,planPath:join(root,'workflow.plan'),stepSpecPath:join(root,'steps.json'),workflowKey:'douyin_video_discovery',rawContractSha256:runtime.digest(contract),discoveryInput:fixed,runIdentity:{capability:'douyin_video_discovery',tag:'attemptquota',profile:'legacy',serial:'SERIAL',run_id:'run'},get:async path=>structuredClone(routes[path])}};
+ const {env,fixed}=input(dir,2,maxScreens);env.WFR_RUN_DIR=join(dir,'run');return {env,fixed,routes,options:{runDir:env.WFR_RUN_DIR,deploymentRoot:root,planPath:join(root,'workflow.plan'),stepSpecPath:join(root,'steps.json'),workflowKey:'douyin_video_discovery',rawContractSha256:runtime.digest(contract),discoveryInput:fixed,runIdentity:{capability:'douyin_video_discovery',tag:'attemptquota',profile:'legacy',serial:'SERIAL',run_id:'run'},get:async path=>structuredClone(routes[path])}};
 }
 
 test('schema2 actual freeze and action reject changed source before phone',()=>temp(async dir=>{
@@ -95,9 +109,9 @@ test('schema2 existing progress rejects before any RPC or phone',()=>temp(async 
  await assert.rejects(action.collect(),/DISCOVERY_INPUT_ALREADY_USED/);assert.equal(calls,0);
 }));
 
-test('schema2 official prepare CLI freezes explicit attempts and rejects resume changes',{timeout:15000},()=>temp(async dir=>{
+test('schema2 official prepare CLI freezes attempts and screens and rejects resume changes',{timeout:15000},()=>temp(async dir=>{
  const {createServer}=await import('node:http'),{spawn}=await import('node:child_process'),{hostname}=await import('node:os'),{deploymentTarget}=await import('../runtime-host.mjs');
- const f=freezeRig(dir),target=deploymentTarget(hostname());
+ const f=freezeRig(dir,2),target=deploymentTarget(hostname());
  const release={id:'raw-cli-release',environment:'scratch',target,payload:{schema_version:1,workflows:[f.routes['/api/brain/workflows/w/versions/wv'].version],activities:[f.routes['/api/brain/activities/a/versions/av'].version]}};
  release.manifest_sha256=runtime.digest({environment:release.environment,target,payload:release.payload});
  const manifest=join(f.options.deploymentRoot,'deployment-manifest.json');writeFileSync(manifest,JSON.stringify(addDiscoveryCliScopeTemplate(f.options.deploymentRoot,{...JSON.parse(readFileSync(manifest)),release_id:release.id,observation_id:'raw-cli-obs',environment:'scratch',target},{target,profile:'legacy',serial:'SERIAL'})));
@@ -108,5 +122,6 @@ test('schema2 official prepare CLI freezes explicit attempts and rejects resume 
   const run=()=>new Promise((resolve,reject)=>{const c=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,'prepare'],{env,timeout:5000});let stderr='';c.stderr.on('data',b=>stderr+=b);c.on('error',reject);c.on('close',code=>resolve({code,stderr}));});
   const first=await run();assert.equal(first.code,0,first.stderr);assert.deepEqual(runtime.readFrozen(f.env.WFR_RUN_DIR).discovery_input,f.fixed);
   env.LEADGEN_DISCOVERY_MAX_ATTEMPTS='3';const changed=await run();assert.notEqual(changed.code,0);assert.match(changed.stderr,/DISCOVERY_INPUT_RESUME_MISMATCH/);
+  env.LEADGEN_DISCOVERY_MAX_ATTEMPTS='2';env.LEADGEN_MAX_SCREENS='3';const changedScreens=await run();assert.notEqual(changedScreens.code,0);assert.match(changedScreens.stderr,/DISCOVERY_INPUT_RESUME_MISMATCH/);
  }finally{await new Promise(r=>server.close(r));}
 }));

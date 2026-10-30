@@ -136,7 +136,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -262,7 +262,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-discovery.mjs",
           "revision": "contract",
-          "sha256": "30bbee32877712e72a618ff65fca3ade81ef3891ffd7c111a1d40fb0f139fc64"
+          "sha256": "3d8882630f9276b868b43f46b033e72d096e482cd69d3f211877cc6414676337"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "c654dd5d55005530dcf600cb0039774ec5a0b912a21a1b36428b27fb8f1d7512",
+      "code_digest": "ddd23f57940b51e890341d18e74c72549d27211df772ad8c994b82e6c1ea95c2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 原生叶子未知退出后立即停止后续命令和视频持久化，保持失败关闭与原锁，不改变 Activity 输入输出或业务筛选。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "7fe712a0e8aa019349d24b18c7ae561d0f6d59ed3f5f70770464c8e88467f280",
-        "current_code_digest": "c654dd5d55005530dcf600cb0039774ec5a0b912a21a1b36428b27fb8f1d7512"
+        "reason": "101 冻结 schema2 屏数与尝试上限可并存；每卡尝试硬闸、来源身份与输出结构保持，schema1 仍限首屏。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "c654dd5d55005530dcf600cb0039774ec5a0b912a21a1b36428b27fb8f1d7512",
+        "current_code_digest": "ddd23f57940b51e890341d18e74c72549d27211df772ad8c994b82e6c1ea95c2"
       }
     },
     "douyin_video_processing.preflight": {
@@ -430,7 +430,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "943a99eae29d38eb35a04513b6d2c2b67a4b0534e16fde3eaa2a1939b92df9ca",
+      "code_digest": "07f48f4714faf9d9e0196a0ca0df704cbaad9b6c03965421d6b538ee5bfef1bb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "06be4b9a297ae96865e886844e79ad2ef0e52e3e0b4c7e3881a545d65203af5b",
-        "current_code_digest": "943a99eae29d38eb35a04513b6d2c2b67a4b0534e16fde3eaa2a1939b92df9ca"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "943a99eae29d38eb35a04513b6d2c2b67a4b0534e16fde3eaa2a1939b92df9ca",
+        "current_code_digest": "07f48f4714faf9d9e0196a0ca0df704cbaad9b6c03965421d6b538ee5bfef1bb"
       }
     },
     "douyin_video_processing.dedup": {
@@ -707,7 +707,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -829,13 +829,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "e9df21a57c1b8c4224de9c71479d513394613c3a25045ff025378b6bbea9eeb6",
+      "code_digest": "65487083fc6cfd5865e6fae36dce477e74895d61988d85c312d8ab87adbe7cdd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "f65a45db8e2b916ff0b55e94378673888da9c1d79b8cb981ce6bd7eb68b303fe",
-        "current_code_digest": "e9df21a57c1b8c4224de9c71479d513394613c3a25045ff025378b6bbea9eeb6"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "e9df21a57c1b8c4224de9c71479d513394613c3a25045ff025378b6bbea9eeb6",
+        "current_code_digest": "65487083fc6cfd5865e6fae36dce477e74895d61988d85c312d8ab87adbe7cdd"
       }
     },
     "douyin_video_processing.qualification": {
@@ -994,7 +994,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "0338a4872158f3ebe409285ae6da7661c80c7475ade64122c4d42ed926b0e7b0",
+      "code_digest": "567c9830c5194f3723153b88975398a5958737fae3a6c7d638d408d79a1e5c07",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "43cbee3f14b16d1a3d1faf5bae48cb9b4d403f597c0172cf831056e999b44a47",
-        "current_code_digest": "0338a4872158f3ebe409285ae6da7661c80c7475ade64122c4d42ed926b0e7b0"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "0338a4872158f3ebe409285ae6da7661c80c7475ade64122c4d42ed926b0e7b0",
+        "current_code_digest": "567c9830c5194f3723153b88975398a5958737fae3a6c7d638d408d79a1e5c07"
       }
     },
     "douyin_video_processing.collection": {
@@ -1323,7 +1323,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "c513fbfcf533210214dea7eab85ddb78759cac260d72cfc6d536488f4b729f87",
+      "code_digest": "73208796094e0ad40f6050f07b414aa7f4652ac1aed2873459c31b12942783d0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "23e52de0a3832d0f4f514ce211169867383e4414135f86ca76f33d7c89fe22f5",
-        "current_code_digest": "c513fbfcf533210214dea7eab85ddb78759cac260d72cfc6d536488f4b729f87"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "c513fbfcf533210214dea7eab85ddb78759cac260d72cfc6d536488f4b729f87",
+        "current_code_digest": "73208796094e0ad40f6050f07b414aa7f4652ac1aed2873459c31b12942783d0"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1611,7 +1611,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "af5137fb36201ff9b6f6740b9d169a2f8af9e5934b6824f578e1f54512a84b60",
+      "code_digest": "f34a074acc47e800c92b4de9a6f63fb8561a1e74d7bfd5ea2aa9dea6b3ba3def",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "bbbb47c6e11bddcc01945462ad73aedbf3c04ea6f0a61ddf594ea5fa4d4234df",
-        "current_code_digest": "af5137fb36201ff9b6f6740b9d169a2f8af9e5934b6824f578e1f54512a84b60"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "af5137fb36201ff9b6f6740b9d169a2f8af9e5934b6824f578e1f54512a84b60",
+        "current_code_digest": "f34a074acc47e800c92b4de9a6f63fb8561a1e74d7bfd5ea2aa9dea6b3ba3def"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1880,7 +1880,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -1974,13 +1974,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18",
+      "code_digest": "b0e9a66e1a615e5fad430b1f79841b9d55b4bcdd12fb24f51469f9758f4ee071",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "9550f4d949674f522c41ec7f8da750efeee201fefd3a16f5a58102b0daf5ff31",
-        "current_code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "a72af942678aef6f753ee162bd3cfcd11451858a767c7e637d509271a8ce1c18",
+        "current_code_digest": "b0e9a66e1a615e5fad430b1f79841b9d55b4bcdd12fb24f51469f9758f4ee071"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2125,7 +2125,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -2268,13 +2268,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "48ae6a5d124f75fca59d0115552d6c802ee8c5dae810883fdf9b32fef40e5374",
+      "code_digest": "5af9097ec628c3464ebd18ebb8d336459a3ece1927193d4c4662a60bb1b4b8b7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "c895ee2ba18912cd946aba6dc58912d0d9766306317dc25fade107a3d2c1c9f3",
-        "current_code_digest": "48ae6a5d124f75fca59d0115552d6c802ee8c5dae810883fdf9b32fef40e5374"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "48ae6a5d124f75fca59d0115552d6c802ee8c5dae810883fdf9b32fef40e5374",
+        "current_code_digest": "5af9097ec628c3464ebd18ebb8d336459a3ece1927193d4c4662a60bb1b4b8b7"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2412,7 +2412,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "e36bc8686c701ac465de3c656e39c6c5a7d510bee8e90065de904f920a7968cb",
+      "code_digest": "e733046eb4e536cab323d11f49b1b9274cf1e87676d016ab42fd42bc45e558e9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "255af2958d61edaabd723ed91515b48ab7cd3c546ea844a0a66f805c76223641",
-        "current_code_digest": "e36bc8686c701ac465de3c656e39c6c5a7d510bee8e90065de904f920a7968cb"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "e36bc8686c701ac465de3c656e39c6c5a7d510bee8e90065de904f920a7968cb",
+        "current_code_digest": "e733046eb4e536cab323d11f49b1b9274cf1e87676d016ab42fd42bc45e558e9"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2710,7 +2710,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69",
+      "code_digest": "ba5159d8c6ddf012722607b28dea0451b020763d0bab03e70cd0ab52538dec5d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "dfd465800d4218e4beb94e5fca11ae8cd40049b384a757d73db1706445841e77",
-        "current_code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69",
+        "current_code_digest": "ba5159d8c6ddf012722607b28dea0451b020763d0bab03e70cd0ab52538dec5d"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -2983,7 +2983,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69",
+      "code_digest": "ba5159d8c6ddf012722607b28dea0451b020763d0bab03e70cd0ab52538dec5d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "dfd465800d4218e4beb94e5fca11ae8cd40049b384a757d73db1706445841e77",
-        "current_code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "a5ffd1e2de7f87ddaf88af600d914cdac27d809b396d8b03c9dbc1c2cb17cc69",
+        "current_code_digest": "ba5159d8c6ddf012722607b28dea0451b020763d0bab03e70cd0ab52538dec5d"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3256,7 +3256,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-definition.mjs",
           "revision": "contract",
-          "sha256": "f0ebdac1d7b18047dcadaff24e5d6a676a771689512e7b02f2bd66fc53ec12f1"
+          "sha256": "4165e5bbbeecbe7a9ac1e1bee20495e1c249e7cffa823509045700bd51bc87e0"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "efcd9966dc7c3bac4688f665e5756b503792a43a304e47fcbcf8becf17694112",
+      "code_digest": "3128d05eaf38b2b5f00a3c4890a4d1d5c1bbbfae0992c9cdb61e5a7b82f4f709",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享 handler 与叶子实现的代码摘要随 101 未知退出保护变化；该 Activity 不调用 101 discover 写入路径，既有输入输出和业务判据保持兼容。",
-        "reviewed_by": "interactive-dev-skill",
-        "previous_code_digest": "df64da2c66ee386ce072b1700cdebe333a14696802355fa7f3889f86251802ef",
-        "current_code_digest": "efcd9966dc7c3bac4688f665e5756b503792a43a304e47fcbcf8becf17694112"
+        "reason": "仅共享 runtime-definition 文件摘要随 101 冻结输入校验变更；本 Activity 不调用 discoveryInput 或采集循环，输入输出和业务政策保持。",
+        "reviewed_by": "codex:cp-10300041-leadgen-multiscreen-cap",
+        "previous_code_digest": "efcd9966dc7c3bac4688f665e5756b503792a43a304e47fcbcf8becf17694112",
+        "current_code_digest": "3128d05eaf38b2b5f00a3c4890a4d1d5c1bbbfae0992c9cdb61e5a7b82f4f709"
       }
     }
   },

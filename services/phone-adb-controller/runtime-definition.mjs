@@ -33,16 +33,17 @@ export function assertCommentSampling(snapshot,env){
 export function validateDiscoveryInput(value){
  const quotaKey=value?.schema_version===2?'max_attempts':'max_candidates';
  const keys=['schema_version','workflow_key','run_tag','profile','serial','line',quotaKey,'max_screens','source_kind','sources','source_sha256'];
- if(!value||Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k))||![1,2].includes(value.schema_version)||value.workflow_key!=='douyin_video_discovery'||!['run_tag','profile','serial','line'].every(k=>/^[A-Za-z0-9_-]+$/.test(value[k]||''))||!Number.isSafeInteger(value[quotaKey])||value[quotaKey]<1||value[quotaKey]>1000||value.max_screens!==1||value.source_kind!=='keyword'||!Array.isArray(value.sources)||value.sources.length!==1||typeof value.sources[0]!=='string'||!value.sources[0].trim()||/[\r\n]/.test(value.sources[0])||!/^[a-f0-9]{64}$/.test(value.source_sha256||''))throw Error('DISCOVERY_INPUT_INVALID');
+ if(!value||Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k))||![1,2].includes(value.schema_version)||value.workflow_key!=='douyin_video_discovery'||!['run_tag','profile','serial','line'].every(k=>/^[A-Za-z0-9_-]+$/.test(value[k]||''))||!Number.isSafeInteger(value[quotaKey])||value[quotaKey]<1||value[quotaKey]>1000||!Number.isSafeInteger(value.max_screens)||value.max_screens<1||value.max_screens>1000||value.schema_version===1&&value.max_screens!==1||value.source_kind!=='keyword'||!Array.isArray(value.sources)||value.sources.length!==1||typeof value.sources[0]!=='string'||!value.sources[0].trim()||/[\r\n]/.test(value.sources[0])||!/^[a-f0-9]{64}$/.test(value.source_sha256||''))throw Error('DISCOVERY_INPUT_INVALID');
  return value;
 }
 export function discoveryInput(env){
  const candidates=Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_CANDIDATES'),attempts=Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_ATTEMPTS');
  if(!candidates&&!attempts)return null;
  const quota=attempts?env.LEADGEN_DISCOVERY_MAX_ATTEMPTS:env.LEADGEN_DISCOVERY_MAX_CANDIDATES;
- if(candidates&&attempts||!/^[1-9][0-9]{0,3}$/.test(String(quota))||env.LEADGEN_MAX_SCREENS!=='1'||env.LEADGEN_SOURCE_KIND!=='keyword'||!env.LEADGEN_SOURCES_FILE)throw Error('DISCOVERY_INPUT_INVALID');
+ const maxScreens=String(env.LEADGEN_MAX_SCREENS);
+ if(candidates&&attempts||!/^[1-9][0-9]{0,3}$/.test(String(quota))||!/^[1-9][0-9]{0,3}$/.test(maxScreens)||Number(maxScreens)>1000||candidates&&maxScreens!=='1'||env.LEADGEN_SOURCE_KIND!=='keyword'||!env.LEADGEN_SOURCES_FILE)throw Error('DISCOVERY_INPUT_INVALID');
  const bytes=readFileSync(env.LEADGEN_SOURCES_FILE);if(bytes.length>10000)throw Error('DISCOVERY_INPUT_INVALID');
- return validateDiscoveryInput({schema_version:attempts?2:1,workflow_key:env.WF_BRAIN_WORKFLOW,run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,[attempts?'max_attempts':'max_candidates']:Number(quota),max_screens:1,source_kind:'keyword',sources:bytes.toString('utf8').split('\n').filter(Boolean),source_sha256:digest(bytes)});
+ return validateDiscoveryInput({schema_version:attempts?2:1,workflow_key:env.WF_BRAIN_WORKFLOW,run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,[attempts?'max_attempts':'max_candidates']:Number(quota),max_screens:Number(maxScreens),source_kind:'keyword',sources:bytes.toString('utf8').split('\n').filter(Boolean),source_sha256:digest(bytes)});
 }
 export function assertDiscoveryInput(snapshot,env){
  const requested=discoveryInput(env),fixed=snapshot.discovery_input||null;
