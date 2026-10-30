@@ -1971,7 +1971,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/judge-comment.js",
           "revision": "contract",
-          "sha256": "f6b539f755d376ac7b0a218e8d098cbb715c7389d2f625753d331819f4253779"
+          "sha256": "cfe4f59f67ac327914e2224c3eb10052255868d21555e98df717ddc6769bb924"
         },
         {
           "kind": "code",
@@ -1981,13 +1981,13 @@
           "sha256": "8a604232e5655caa3e7884ca4a13ae86b60f61cf1569cb06b9a13d5060cdb7d2"
         }
       ],
-      "code_digest": "f45b23b6198ce3dc117cefcc28c7536f23baeda966b4979f46ef0b10b052d264",
+      "code_digest": "453aa86b2c5ffc10cb6c6416a834d709e3d60c817efcfe189d8dfa106a61fa57",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只把已在本轮评分调用链运行的 judge-comment.js 纳入方法源码锁；公司评分政策、输入输出与成功路径均不变。",
+        "reason": "将现行已合并评分器 judge-comment.js 纳入方法源码锁；公司评分政策、Activity 输入输出与成功路径不变。",
         "reviewed_by": "codex-leadgen-methods-contract",
         "previous_code_digest": "51a793193d24e1375eb065af47261add806bd85c1506166abd073120e8f96072",
-        "current_code_digest": "f45b23b6198ce3dc117cefcc28c7536f23baeda966b4979f46ef0b10b052d264"
+        "current_code_digest": "453aa86b2c5ffc10cb6c6416a834d709e3d60c817efcfe189d8dfa106a61fa57"
       }
     },
     "douyin_comment_scoring.mark_leads": {
