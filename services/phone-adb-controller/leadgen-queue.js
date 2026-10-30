@@ -47,6 +47,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(op==='recover_single_video_0353')return require('./single-video-recovery-0353.js').recoverSingleVideo(pool,input,deps.recovery0353);
   if(op==='recover_single_video_readback')return require('./single-video-recovery.js').readbackSingleVideo(pool,input,deps.recovery);
   if(op==='recover_single_video')return require('./single-video-recovery.js').recoverSingleVideo(pool,input,deps.recovery);
+  if(op==='recover_102n_qualification_readback')return require('./qualification-quarantine-recovery-102n.js').readback(pool,{...input,op:'recover_102n_qualification'},deps.recovery102n);
+  if(op==='recover_102n_qualification')return require('./qualification-quarantine-recovery-102n.js').recover(pool,input,deps.recovery102n);
+  if(op==='recover_102n_qualification_batch')return require('./qualification-quarantine-recovery-102n.js').recoverBatch(pool,input,deps.recovery102n);
   if(op==='admit_102g_comments'||op==='admit_102g_readback'){
     if(input.candidate_source_commit!==deps.sourceCommit)throw Error('ADMISSION_SOURCE_COMMIT_MISMATCH');
     return op==='admit_102g_comments'?commentAdmission.admit(pool,input,deps.commentAdmission):commentAdmission.readback(pool,input);

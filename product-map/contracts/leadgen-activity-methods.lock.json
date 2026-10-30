@@ -833,7 +833,21 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
+          "sha256": "f413ac007ace4649df34e2ad915356fbe297601e9d7142b8ceff1c611e72d427"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-quarantine-recovery-102n.js",
+          "revision": "contract",
+          "sha256": "56df9a907c22b4e951e3eb838dec31476e373a91becda7e94fbb4e836ef0f6f4"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-quarantine-recovery-102n-authority.js",
+          "revision": "contract",
+          "sha256": "be034760f71045f4b92d56723b734c245f5d389fee13f9aef79ec72e7422e393"
         },
         {
           "kind": "code",
@@ -843,13 +857,13 @@
           "sha256": "e7b609930fdc72e153c1659d69cd10f84d3cf0ef40352386abc9114fca4e5228"
         }
       ],
-      "code_digest": "ff4bd86a9978a68aad766b355600bf2747f5f89323ad9682de375f79cbccbc58",
+      "code_digest": "11559d08e06a55f3046c294b8e9786471de02de90f1acdf92defda248de93f9d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享控制器新增的录音恢复仅在102资格record-start路径触发；本Activity不调用该分支，原输入输出与设备安全守卫保持兼容。",
-        "reviewed_by": "codex-leadgen-102-playback-fix",
-        "previous_code_digest": "5edb1ad9f109352690466ac46efd40c281ce5e88788bb901f35a933c938ec1ae",
-        "current_code_digest": "ff4bd86a9978a68aad766b355600bf2747f5f89323ad9682de375f79cbccbc58"
+        "reason": "102n资格隔离维护只新增严格授权的独立恢复操作；普通102活动的原输入输出、失败门禁及用户触达行为保持原合同。",
+        "reviewed_by": "codex-leadgen-102n-recovery",
+        "previous_code_digest": "ff4bd86a9978a68aad766b355600bf2747f5f89323ad9682de375f79cbccbc58",
+        "current_code_digest": "11559d08e06a55f3046c294b8e9786471de02de90f1acdf92defda248de93f9d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -889,7 +903,21 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
+          "sha256": "f413ac007ace4649df34e2ad915356fbe297601e9d7142b8ceff1c611e72d427"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-quarantine-recovery-102n.js",
+          "revision": "contract",
+          "sha256": "56df9a907c22b4e951e3eb838dec31476e373a91becda7e94fbb4e836ef0f6f4"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-quarantine-recovery-102n-authority.js",
+          "revision": "contract",
+          "sha256": "be034760f71045f4b92d56723b734c245f5d389fee13f9aef79ec72e7422e393"
         },
         {
           "kind": "code",
@@ -1193,13 +1221,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "bd1b97383b0c6d11ec16461cffdf642300bcc2b3414e118db9c6dd3c694bc62d",
+      "code_digest": "bd93b8cca97d5151160bb6d15ff3a1331da0664cf76ff64d72b0e480ebc525ba",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅在同VID原生链接、独占录音资源、MediaSession精确STOPPED、新鲜UI和可听native音轨均核验通过时，对paused/clientVolume组合态允许一次播放恢复；其他unknown仍拒绝，原证据归档，Activity输入输出不变。",
-        "reviewed_by": "codex-leadgen-102-playback-fix",
-        "previous_code_digest": "bb2c55a866b04ff8a9c06e053e8c4c71f7a528a473ba4b67ef99efb4862739dd",
-        "current_code_digest": "bd1b97383b0c6d11ec16461cffdf642300bcc2b3414e118db9c6dd3c694bc62d"
+        "reason": "102n资格隔离维护只新增严格授权的独立恢复操作；普通102活动的原输入输出、失败门禁及用户触达行为保持原合同。",
+        "reviewed_by": "codex-leadgen-102n-recovery",
+        "previous_code_digest": "bd1b97383b0c6d11ec16461cffdf642300bcc2b3414e118db9c6dd3c694bc62d",
+        "current_code_digest": "bd93b8cca97d5151160bb6d15ff3a1331da0664cf76ff64d72b0e480ebc525ba"
       }
     },
     "douyin_video_processing.collection": {
@@ -1999,7 +2027,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
+          "sha256": "f413ac007ace4649df34e2ad915356fbe297601e9d7142b8ceff1c611e72d427"
         },
         {
           "kind": "code",
@@ -2044,13 +2072,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "7cc4d2f57f76b1af459972af06bac5e39ce29555a79dfbc46a6d63b428a9081c",
+      "code_digest": "52d5600c624a0a7879515a469558f036aaba6ba9f8ca97b71f8712986c2a0298",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "UI层级dump的code137仅在精确ADB命令、本地nofork叶已关闭时允许有界重读；每次清旧XML并核设备时间、前台和完整抖音包，失败保持拒绝；Activity输入输出与业务语义未变。",
-        "reviewed_by": "codex-leadgen-native137-fix",
-        "previous_code_digest": "da5cb2b86c1b75f2ffc531fce1ba4587d8a8f86ae3321e1f87e2e02fa538a3f0",
-        "current_code_digest": "7cc4d2f57f76b1af459972af06bac5e39ce29555a79dfbc46a6d63b428a9081c"
+        "reason": "102n维护分支仅扩展共享队列入口，其他活动不调用恢复操作，原业务行为和失败门禁保持原合同。",
+        "reviewed_by": "codex-leadgen-102n-recovery",
+        "previous_code_digest": "7cc4d2f57f76b1af459972af06bac5e39ce29555a79dfbc46a6d63b428a9081c",
+        "current_code_digest": "52d5600c624a0a7879515a469558f036aaba6ba9f8ca97b71f8712986c2a0298"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2279,7 +2307,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "3cb95e13589e6c65c26e1b7863ce43a8133806e504f8d0b09d82c2777618bae5"
+          "sha256": "f413ac007ace4649df34e2ad915356fbe297601e9d7142b8ceff1c611e72d427"
         },
         {
           "kind": "code",
@@ -2359,13 +2387,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "f26d66a059cfe0a10522dc4cca46d142618c68adb2c34113e7e81e95bd0b7f30",
+      "code_digest": "5144009c395f0fd464d058bf056c17b35b59ac19e93644ba217497a4aed28ba1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "UI层级dump的code137仅在精确ADB命令、本地nofork叶已关闭时允许有界重读；每次清旧XML并核设备时间、前台和完整抖音包，失败保持拒绝；Activity输入输出与业务语义未变。",
-        "reviewed_by": "codex-leadgen-native137-fix",
-        "previous_code_digest": "5247e669e0f534cc3a07346842a5c0357c0c4cfbb9839a37f471de4e030b8b8f",
-        "current_code_digest": "f26d66a059cfe0a10522dc4cca46d142618c68adb2c34113e7e81e95bd0b7f30"
+        "reason": "102n维护分支仅扩展共享队列入口，其他活动不调用恢复操作，原业务行为和失败门禁保持原合同。",
+        "reviewed_by": "codex-leadgen-102n-recovery",
+        "previous_code_digest": "f26d66a059cfe0a10522dc4cca46d142618c68adb2c34113e7e81e95bd0b7f30",
+        "current_code_digest": "5144009c395f0fd464d058bf056c17b35b59ac19e93644ba217497a4aed28ba1"
       }
     },
     "douyin_lead_outreach.preflight": {

@@ -688,6 +688,14 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/qualification-quarantine-recovery-102n.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/qualification-quarantine-recovery-102n-authority.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-policy-review.js
         revision: contract
     model:
@@ -870,6 +878,14 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/qualification-quarantine-recovery-102n.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/qualification-quarantine-recovery-102n-authority.js
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
