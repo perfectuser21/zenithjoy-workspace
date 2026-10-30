@@ -1,14 +1,27 @@
 'use strict';
 const {configTargetProfile}=require('./company-config-lib.js');
-const {judgeCommander}=require('./judge-comment.js');
+const {judgeCommander,scoreFailureReceipt}=require('./judge-comment.js');
 const crypto=require('node:crypto');
 const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 const sha=value=>crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 const safeReasons=new Set(['binding_unverified','policy_evidence_invalid','personal_intent_evidence_missing',
   'audience_or_topic_evidence_missing','exclusion_evidence_missing','policy_exclusion_or_grade_mismatch',
-  'policy_model_unavailable_or_invalid','policy_review_budget_exhausted','policy_review_identity_reused']);
+  'policy_model_unavailable_or_invalid','policy_model_http','policy_model_transport',
+  'policy_model_credential_missing','policy_model_evidence_invalid','policy_review_config_invalid',
+  'policy_review_internal_error','policy_review_budget_exhausted','policy_review_identity_reused']);
 const safePolicyReviewReason=reason=>safeReasons.has(reason)?reason:null;
+function policyModelFailure(error){
+  const failure=scoreFailureReceipt(error);
+  if(failure.code==='POLICY_SCORE_MODEL_HTTP')return {reason:'policy_model_http',
+    model_stage:failure.stage,http_status:failure.http_status};
+  if(failure.code==='POLICY_SCORE_MODEL_TRANSPORT')return {reason:'policy_model_transport',model_stage:failure.stage};
+  if(failure.code==='POLICY_SCORE_MODEL_CREDENTIAL_MISSING')return {reason:'policy_model_credential_missing',model_stage:failure.stage};
+  if(failure.code==='POLICY_SCORE_COMMANDER_EVIDENCE_INVALID')return {reason:'policy_model_evidence_invalid',
+    model_stage:'commander',...(failure.evidence_check?{evidence_check:failure.evidence_check}:{})};
+  if(failure.code==='POLICY_SCORE_CONFIG_INVALID')return {reason:'policy_review_config_invalid'};
+  return {reason:'policy_review_internal_error'};
+}
 // 只把冻结公司政策中的明示意向信号当作可核查的个人诉求依据。
 // 模型的人群引用、同档位及视频话题不能凭空替评论补出诉求。
 function explicitIntent(comment, audiences){
@@ -83,7 +96,7 @@ async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile
       original_sha256:sha({relevance:row.relevance,intent_grade:row.intent_grade,judgment_reason:row.judgment_reason,judgment_config:config}),
       company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version,policy_id:snapshot.policy_id,
       video_url_sha256:sha(row.source_video_url),actor:'leadgen-policy-review',reviewed_at:new Date().toISOString()};
-  }catch{return {...base,reason:'policy_model_unavailable_or_invalid'};}
+  }catch(error){return {...base,...policyModelFailure(error)};}
 }
 
 async function dualPolicyReview(row,snapshot,deps={}){
