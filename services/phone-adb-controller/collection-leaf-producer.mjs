@@ -56,7 +56,12 @@ export async function startCollectionLeafProducer({directory,policy,serial,deadl
    const result=await run(sandbox,['-p',profile,binary,...argv],{...clean,ADB_SERVER_SOCKET:policy.endpoint},deadlineMs-Date.now(),pid=>{entry.pid=pid;entry.started_at=Date.now();append({...entry,phase:'started'});});
    entry.ended_at=Date.now();entry.code=result.code;entry.signal=result.signal;entry.tainted=result.tainted;
    // This is a lifecycle proof from our nofork child close, not business success.
-   entry.request_returned=[0,1].includes(result.code)&&!result.signal&&!result.tainted&&!/fork_denied=|fork(?:\(\))?: (?:Operation not permitted|Resource temporarily unavailable)/.test(result.stderr.toString());
+   const dumpCrashReturned=result.code===137&&result.signal===null&&!result.tainted&&result.stderr.length===0
+    &&/^[A-Za-z0-9_-]{1,80}$/.test(env.P||'')
+    &&argv.length===11&&argv[6]==='shell'&&argv[7]==='uiautomator'&&argv[8]==='dump'&&argv[9]==='--compressed'
+    &&argv[10]===`/sdcard/douyin-leadgen-ui-${env.P}.xml`;
+   entry.dump_crash_returned=dumpCrashReturned;
+   entry.request_returned=(dumpCrashReturned||[0,1].includes(result.code))&&!result.signal&&!result.tainted&&!/fork_denied=|fork(?:\(\))?: (?:Operation not permitted|Resource temporarily unavailable)/.test(result.stderr.toString());
    if(!entry.request_returned){
     returnUnknown=true;
     // Private forensic metadata only: never persist native stderr or raw argv.

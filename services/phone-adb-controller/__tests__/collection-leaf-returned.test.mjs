@@ -13,7 +13,7 @@ async function fixture(t){
  const c=join(d,'client.c'),bin=join(d,'client');
  writeFileSync(c,'#include <string.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <signal.h>\nint main(int n,char**a){const char*q=a[n-1];if(n>10&&!strcmp(a[n-4],"uiautomator")&&!strcmp(a[n-3],"dump")&&!strcmp(a[n-2],"--compressed")){return 137;}if(!strcmp(q,"one")){puts("known-business-failure");return 1;}if(!strcmp(q,"unknown")){return 137;}if(!strcmp(q,"slow")){sleep(5);return 0;}if(!strcmp(q,"signal")){raise(SIGTERM);return 0;}if(!strcmp(q,"fork")){int p=fork();return p<0?77:0;}puts("returned");return 0;}\n');
  const r=spawnSync('cc',[c,'-o',bin],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
- const p=await startCollectionLeafProducer({directory:d,policy:{adb_bin:bin,adb_sha256:createHash('sha256').update(readFileSync(bin)).digest('hex'),endpoint:'tcp:127.0.0.1:12345'},serial:'NO-DEVICE',deadlineMs:Date.now()+3000,env:process.env});t.after(()=>p.close());
+ const p=await startCollectionLeafProducer({directory:d,policy:{adb_bin:bin,adb_sha256:createHash('sha256').update(readFileSync(bin)).digest('hex'),endpoint:'tcp:127.0.0.1:12345'},serial:'NO-DEVICE',deadlineMs:Date.now()+3000,env:{...process.env,P:'jinoshengyuan-work'}});t.after(()=>p.close());
  const call=word=>new Promise((yes,no)=>{const s=createConnection(p.env.WFR_COLLECTION_LEAF_SOCKET);let raw='';s.on('error',no);s.on('connect',()=>s.end(JSON.stringify({nonce:p.env.WFR_COLLECTION_LEAF_NONCE,argv:['-H','127.0.0.1','-P','12345','-s','NO-DEVICE','shell',...(Array.isArray(word)?word:[word])]})));s.on('data',b=>raw+=b);s.on('end',()=>yes(raw?JSON.parse(raw):{transport_closed:true}));});
  return {p,call};
 }
@@ -45,7 +45,7 @@ test('仅原生已关闭的UI dump code137允许下一次受控读取，其他sh
  const f=await fixture(t),dump=['uiautomator','dump','--compressed','/sdcard/douyin-leadgen-ui-jinoshengyuan-work.xml'];
  const first=await f.call(dump);assert.equal(first.code,137);
  const next=await f.call('ok');assert.equal(next.code,0,'已关闭的特定dump叶不得污染后续受管读取');
- const s=await f.p.seal();assert.equal(s.leaves[0].request_returned,true);assert.ok(s.leaves[0].ended_at<=s.leaves[1].started_at);
+ const s=await f.p.seal();assert.equal(s.leaves[0].request_returned,true);assert.equal(s.leaves[0].boundary,'darwin-sandbox-deny-process-fork-v1');assert.ok(Number.isInteger(s.leaves[0].pid)&&s.leaves[0].pid>1);assert.ok(s.leaves[0].ended_at<=s.leaves[1].started_at);
  assert.equal(s.complete,false,'dump失败不能伪装为业务成功');assert.equal(s.requests_returned,true);
 });
 
