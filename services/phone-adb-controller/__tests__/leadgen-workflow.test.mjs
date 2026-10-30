@@ -1,4 +1,5 @@
 import {handlerZero} from './helpers/no-comments-fixture.mjs';
+import {writeAcceptedDiscoveryResult} from './helpers/discovery-handoff-fixture.mjs';
 import {metricPhoneReceipt} from './helpers/discovery-metrics-fixture.mjs';
 import {withCompanyFixture} from './company-config-fixture.mjs';
 import test from 'node:test';
@@ -126,7 +127,7 @@ function upstreamFixture(dir,profile='work'){
 }
 async function freezeFixture(f){const {digest}=await import('../runtime-definition.mjs');for(const [dir,cap,tag] of [[f.upstream,'douyin_video_discovery',f.source],[f.current,'douyin_video_processing','process102']]){
  const body={files:{},deployment:{source_commit:'a'.repeat(40)},run_identity:{capability:cap,tag,profile:f.env.P}};writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
- }writeFileSync(f.env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:['自己'],ids:[]}));}
+ }writeAcceptedDiscoveryResult(f.upstream,{source:f.source,profile:f.env.P,sha:'a'.repeat(40)});writeFileSync(f.env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:['自己'],ids:[]}));}
 test('102按上游实际VID和PG终态判重，旧批次已采不重录、同标题新VID保留',async()=>{
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),dir=mkdtempSync(join(tmpdir(),'intake102-'));
  try{const f=upstreamFixture(dir);await freezeFixture(f);const ids=['7685662999797258417','7684845398191623487','7684845398191623488'];

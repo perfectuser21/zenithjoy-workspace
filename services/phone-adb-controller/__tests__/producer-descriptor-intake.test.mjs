@@ -4,6 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {digest,readFrozen} from '../runtime-definition.mjs';
+import {writeAcceptedDiscoveryResult} from './helpers/discovery-handoff-fixture.mjs';
 import {createHandlers} from '../leadgen-workflow.mjs';
 const source='cicd24c9_101_20261023_2013',vid='7699316353698753663',other='7699406826379298531';
 const oldSha='24c9e6b97b81ae144985474d9e33665bf65a6a8e',newSha='b'.repeat(40),company='ef8e14b0-4018-4e54-bc7a-866e51a0ce0b',tenant='a4ca8914-f5a7-4928-b1e3-6b69f9c0ab61';
@@ -13,7 +14,7 @@ function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'producer-intake-')),up=join(dir,'douyin_video_discovery-'+source),current=join(dir,'douyin_video_processing-new102');
  const identity={profile:'legacy',serial:'ANGYVB4402004137'};
  const producer=snapshot(up,{files:{},deployment:{source_commit:oldSha},run_identity:{...identity,capability:'douyin_video_discovery',tag:source,run_id:'douyin_video_discovery-'+source}});
- const videos=[vid,other].map(videoId=>({videoId,author:'原作者',title:'原视频'}));const raw=JSON.stringify({run:source,profile:'legacy',videos,captures:videos});writeFileSync(join(up,'discovery-progress.json'),raw);
+ const videos=[vid,other].map(videoId=>({videoId,author:'原作者',title:'原视频'}));const raw=JSON.stringify({run:source,profile:'legacy',videos,captures:videos});writeFileSync(join(up,'discovery-progress.json'),raw);writeAcceptedDiscoveryResult(up,{source,profile:'legacy',sha:oldSha});
  const descriptor={schema_version:1,workflow_key:'douyin_video_discovery',run_tag:source,source_commit:oldSha,snapshot_sha256:producer.snapshot_sha256,progress_sha256:digest(raw),...identity,line:'jinuo',company_id:company,tenant_id:tenant,company_config_version:14,policy_id:config.policy_id,video_ids:[vid]};
  const env={HOME:dir,WFR_RUN_DIR:current,WFR_TAG:'new102',P:'legacy',SERIAL:identity.serial,LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:source,OWN_ACCOUNTS_CONF:join(dir,'own.json')};writeFileSync(env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:[],ids:[]}));
  const body={files:{},deployment:{source_commit:newSha},run_identity:{...identity,capability:'douyin_video_processing',tag:'new102',run_id:'douyin_video_processing-new102'},producer_descriptor:descriptor};snapshot(current,body);

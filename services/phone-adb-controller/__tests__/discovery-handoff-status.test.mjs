@@ -37,6 +37,7 @@ function fixture(t, { status, collectStatus, verified }) {
   writeFileSync(join(upstream, 'split-result.json'), JSON.stringify({
     status, run_id: `douyin_video_discovery-${source}__a1`,
     workflow_key: 'douyin_video_discovery', source_commit: sha, profile: 'work',
+    evidence_status: 'sent',
     results: [{ activity: 'collect_videos', status: collectStatus,
       verification: { verified } }],
   }));
@@ -62,6 +63,7 @@ function fixture(t, { status, collectStatus, verified }) {
 
 for (const scenario of [
   { status: 'failed', collectStatus: 'failed', verified: false },
+  { status: 'partial', collectStatus: 'completed', verified: true },
   { status: 'completed', collectStatus: 'failed', verified: false },
   { status: 'completed', collectStatus: 'completed', verified: false },
 ]) {

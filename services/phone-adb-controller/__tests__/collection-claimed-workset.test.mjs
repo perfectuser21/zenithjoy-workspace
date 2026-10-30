@@ -7,6 +7,7 @@ import {createHandlers,invokeNativeActivity,runWorkflow} from '../leadgen-workfl
 import {digest,commentSamplingInput} from '../runtime-definition.mjs';
 import {judgeSteps} from '../step-judge.mjs';
 import {handlerZero} from './helpers/no-comments-fixture.mjs';
+import {writeAcceptedDiscoveryResult} from './helpers/discovery-handoff-fixture.mjs';
 const actual=JSON.parse(readFileSync(new URL('./fixtures/claimed-workset-570b.json',import.meta.url)));
 const steps=JSON.parse(readFileSync(new URL('../plans/douyin_video_processing.steps.json',import.meta.url)));
 const [selected,unclaimed]=actual.source_video_ids,source='cicd2fa_101_rem3_20261025_102551',run=actual.recording.run;
@@ -17,7 +18,7 @@ function fixture(t,{verdict='rejected',claimUnknown=false,qualificationFails=fal
  for(const [path,cap,tag]of[[dir,'douyin_video_processing',run],[upstream,'douyin_video_discovery',source]]){
   const f={files:{},deployment:{source_commit:'a'.repeat(40)},run_identity:{capability:cap,tag,profile:'legacy'},...(path===dir?{sampling_input:commentSamplingInput(env)}:{})};writeFileSync(join(path,'run-definition.json'),JSON.stringify({...f,snapshot_sha256:digest(f)}));
  }
- const videos=actual.source_video_ids.map(videoId=>({videoId,author:'原真实来源作者',videoUrl:'https://www.douyin.com/video/'+videoId}));writeFileSync(join(upstream,'discovery-progress.json'),JSON.stringify({run:source,profile:'legacy',videos,captures:videos}));writeFileSync(env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:[],ids:[]}));mkdirSync(join(home,'.config/openclaw'),{recursive:true});writeFileSync(join(home,'.config/openclaw/douyin-account-routes.tsv'),'legacy\t44997267357\n');
+ const videos=actual.source_video_ids.map(videoId=>({videoId,author:'原真实来源作者',videoUrl:'https://www.douyin.com/video/'+videoId}));writeFileSync(join(upstream,'discovery-progress.json'),JSON.stringify({run:source,profile:'legacy',videos,captures:videos}));writeAcceptedDiscoveryResult(upstream,{source,profile:'legacy',sha:'a'.repeat(40)});writeFileSync(env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:[],ids:[]}));mkdirSync(join(home,'.config/openclaw'),{recursive:true});writeFileSync(join(home,'.config/openclaw/douyin-account-routes.tsv'),'legacy\t44997267357\n');
  const calls=[],actions=[],stored=[];const row={video_id:selected,video_url:'https://www.douyin.com/video/'+selected,judgment_status:'pending'};
  const rpc=async body=>{const q=body.request;calls.push(q);switch(q.op){
   case 'company_config':return {result:actual.company};
