@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.8.0
+  version: 0.9.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -33,7 +33,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.3.0
+    version: 2.4.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -69,7 +69,7 @@ activities:
           - promoted
     preconditions:
       - 从PG认领待分拣评论，带关联视频标题与转写
-      - 来源视频须为同102批次、matched且PG状态评论已采；隔离或未完成采集的评论不可领
+      - 来源视频须为同102批次、matched且PG状态评论已采；隔离或未完成采集的评论不可领。唯一例外：金诺原102g失败run的VID7699489394579915663及三条固定原生评论，经用户决定、旧执行实时停止、v14冻结政策及无旧outbox核验并留下db_audit接纳回执后，只供回执绑定的单一103 run显式领取；原失败和视频隔离不改
       - 模型不可达或结果非法留待重判，不伪造C级成功
     postconditions:
       - probe: scores_readback
@@ -119,7 +119,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.6.0
+        version: 0.7.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -235,6 +235,14 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-comment-admission.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-comment-admission-authority.js
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
@@ -327,7 +335,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.4.0
+    version: 3.5.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -405,7 +413,7 @@ activities:
           - feishu_record_id
     preconditions:
       - 带company_binding的评论须按原102 harvest_batch只读既有PG冻结来源与选定设备，缺失不得补造历史run或仅信评论内绑定；当前评分政策仍独立冻结，来源公司/租户必须相同；103配送和读回沿同来源，104云profile仍未获授权
-      - 评分行须有两份不同模型身份的已持久政策证据，原评论与来源视频仍须同102批次且视频PG状态评论已采；旧单份证据和隔离视频不得推进线索
+      - 评分行须有两份不同模型身份的已持久政策证据，原评论与来源视频仍须同102批次且视频PG状态评论已采；旧单份证据和隔离视频不得推进线索。唯一金诺102g单视频例外须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定；其他隔离视频仍阻断
       - 评论 process_status=待分拣
       - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
       - 同line原锁目录使用内核advisory
@@ -473,7 +481,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.6.0
+        version: 0.7.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -589,6 +597,14 @@ activities:
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-comment-admission.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-comment-admission-authority.js
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
