@@ -108,7 +108,7 @@ async function verifyStoredPolicy(row,snapshot){
   const config=row?.judgment_config,reviews=config?.policy_reviews;
   if(!Array.isArray(reviews)||reviews.length!==2||reviews.some(v=>v?.status!=='pass'||!v.grade
     ||!v.model||!v.response_id||!v.policy_evidence||!v.evidence_sha256||!v.original_sha256)
-    ||reviews[0].response_id===reviews[1].response_id)return base;
+    ||reviews[0].response_id===reviews[1].response_id||sha(config.policy_audit)!==sha(reviews[0]))return base;
   const sourceConfig={...config};delete sourceConfig.model_audit;delete sourceConfig.policy_audit;delete sourceConfig.policy_reviews;
   for(const review of reviews){
     const evidence=review.policy_evidence;

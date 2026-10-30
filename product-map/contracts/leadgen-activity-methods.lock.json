@@ -206,7 +206,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -279,13 +279,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "2417a93fc56869286ef24bb33816fd19af535a7d1d6130f2ee7dbb63b17c906d",
+      "code_digest": "25fe4be6e96e6ff732076591aeaae03a5798527c9e55fbb8c1504c166406caa9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "101 collect_videos only shares the policy-review module in its generated source closure. Its execution path neither calls score_scope/score/policy_review/mark_leads nor the changed policy functions; discovery behavior and 101 contract are unchanged.",
+        "reason": "101 collect_videos shares the policy-review module only in its source closure. It never invokes the changed 103 scoring, stored-proof verification, or mark branches; 101 behavior remains unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "6c184411d27ca408b8872c6baf5ae8d548cbcb626e0334f7d22e5ab82eedec1b",
-        "current_code_digest": "2417a93fc56869286ef24bb33816fd19af535a7d1d6130f2ee7dbb63b17c906d"
+        "current_code_digest": "25fe4be6e96e6ff732076591aeaae03a5798527c9e55fbb8c1504c166406caa9"
       }
     },
     "douyin_video_processing.preflight": {
@@ -511,7 +511,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -556,13 +556,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eef0ba8447547171a9a2d90cc3787705c63d015840bbe86332658380f8b916d8",
+      "code_digest": "abd81e4f26b7f5f38249d4722606942643dd9920d7bb6b7cf17096fbc0b4fae8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 preflight uses its own queue operation. Changed leadgen-queue branches are exclusively 103 score_scope, score, policy_review, and mark_leads; the policy-review functions have no 102 call site. 102 collection writes, phone effects, and cleanup are unchanged.",
+        "reason": "102 preflight uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "8f82d48ff16af0fc4d9acbf465cac030c0975b03e460f5a33b8c5b5cb8b11fde",
-        "current_code_digest": "eef0ba8447547171a9a2d90cc3787705c63d015840bbe86332658380f8b916d8"
+        "current_code_digest": "abd81e4f26b7f5f38249d4722606942643dd9920d7bb6b7cf17096fbc0b4fae8"
       }
     },
     "douyin_video_processing.dedup": {
@@ -826,16 +826,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         }
       ],
-      "code_digest": "3b55f4a6a4f150dff7bc245d03a2f285b68b3721946f4a0e73c5ce1642d78acd",
+      "code_digest": "fd38c9224553dec8efb7887670411eb55eb328251cd130785f2fb789ae874386",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 dedup uses its own queue operation. Changed leadgen-queue branches are exclusively 103 score_scope, score, policy_review, and mark_leads; the policy-review functions have no 102 call site. 102 collection writes, phone effects, and cleanup are unchanged.",
+        "reason": "102 dedup uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "27f0d1031efbda6117e6f196d27eac1296b6243371458effca552b43d3bcbdd8",
-        "current_code_digest": "3b55f4a6a4f150dff7bc245d03a2f285b68b3721946f4a0e73c5ce1642d78acd"
+        "current_code_digest": "fd38c9224553dec8efb7887670411eb55eb328251cd130785f2fb789ae874386"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1064,7 +1064,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1172,13 +1172,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "bd1a7d8052c358c2b73dfcdb9e803f84dd02729ab2bd01896570fbe512c18565",
+      "code_digest": "1ad035e5220f29d27c751698477e6876e365c87c63d1a25d4aafaa5835c03efa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 qualification uses its own queue operation. Changed leadgen-queue branches are exclusively 103 score_scope, score, policy_review, and mark_leads; the policy-review functions have no 102 call site. 102 collection writes, phone effects, and cleanup are unchanged.",
+        "reason": "102 qualification uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "138321af6f2024a38a7d24699ac130eb85e4b5d045a5d301751ebb109e784b5e",
-        "current_code_digest": "bd1a7d8052c358c2b73dfcdb9e803f84dd02729ab2bd01896570fbe512c18565"
+        "current_code_digest": "1ad035e5220f29d27c751698477e6876e365c87c63d1a25d4aafaa5835c03efa"
       }
     },
     "douyin_video_processing.collection": {
@@ -1401,7 +1401,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1467,13 +1467,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "10978829bbb883e61ec1518f88966635303d9f5481d02789577a9a6ffe571278",
+      "code_digest": "476b0d8d128accd5ca96606ba8ca9f205275cb47abc26a27b60999a0eee46668",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 collection uses its own queue operation. Changed leadgen-queue branches are exclusively 103 score_scope, score, policy_review, and mark_leads; the policy-review functions have no 102 call site. 102 collection writes, phone effects, and cleanup are unchanged.",
+        "reason": "102 collection uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "d370603c5fe5bec8264702b5cef054659fc776faa18854fb03d55cef04fb75de",
-        "current_code_digest": "10978829bbb883e61ec1518f88966635303d9f5481d02789577a9a6ffe571278"
+        "current_code_digest": "476b0d8d128accd5ca96606ba8ca9f205275cb47abc26a27b60999a0eee46668"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1691,7 +1691,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1736,13 +1736,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "88e41fc14fa466b4b96aef02edb80877d21a98ddde81205a97398332e5a9b3c0",
+      "code_digest": "3026fbd9fe753609da70f3d0375b193956ec289b24edf4e620b4c17bef658987",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "102 cleanup uses its own queue operation. Changed leadgen-queue branches are exclusively 103 score_scope, score, policy_review, and mark_leads; the policy-review functions have no 102 call site. 102 collection writes, phone effects, and cleanup are unchanged.",
+        "reason": "102 cleanup uses a separate queue operation. Changed leadgen-queue branches are 103 score_scope, score, policy_review, and mark_leads; modified policy functions have no 102 call site. 102 writes and phone effects remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "3d12846c07f81779078ca2311ce259470d4b10e8d2590341de59c9fab7ec404f",
-        "current_code_digest": "88e41fc14fa466b4b96aef02edb80877d21a98ddde81205a97398332e5a9b3c0"
+        "current_code_digest": "3026fbd9fe753609da70f3d0375b193956ec289b24edf4e620b4c17bef658987"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1978,7 +1978,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -1988,7 +1988,7 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "749b98d26a5f8baa0068094d668ad0ed09e34e64e19062b94ac54d985627252b"
+      "code_digest": "6992b4938e2ea66cca12ab96fd336b678a2b0f6c286aa0fe73fbfc95b4308982"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.4.0",
@@ -2223,7 +2223,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -2275,7 +2275,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ce534b57fe7c89f2172babbb1e6ae933811012642b554effb23aaa660067f398"
+      "code_digest": "50d9d8c28cfc643281b09d4f75e01cd9a1c8e903803aa0b01c1d747955b293cd"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2493,7 +2493,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -2566,13 +2566,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6a7c531b71af834e6ce3783d20b12645435ce3a08bb6fcd09cb23124876b2957",
+      "code_digest": "1c5e61a978ade1b5a9e5eae341fd91995b30890801869e7c087ac3258cc0f98e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 preflight only shares policy-review source in its generated closure. The 104 execution path does not call the modified policy functions or 103 queue branches; 104 authorization, send, readback, and cleanup behavior remain unchanged.",
+        "reason": "104 preflight shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "ac7543ff3de5ca967904948d893ff9d28544129d7efec4429cdc0266b7cae551",
-        "current_code_digest": "6a7c531b71af834e6ce3783d20b12645435ce3a08bb6fcd09cb23124876b2957"
+        "current_code_digest": "1c5e61a978ade1b5a9e5eae341fd91995b30890801869e7c087ac3258cc0f98e"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2780,7 +2780,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -2839,13 +2839,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8861b54e2c56d10d71ddc6f0ae87cfdcb0213f71b65448fc1bd265ce75d138a2",
+      "code_digest": "419935977c1c8ce166615ac162eefee06d3c0eb87d2d59c334aff4ff49bb98b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 send_dm only shares policy-review source in its generated closure. The 104 execution path does not call the modified policy functions or 103 queue branches; 104 authorization, send, readback, and cleanup behavior remain unchanged.",
+        "reason": "104 send_dm shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278",
-        "current_code_digest": "8861b54e2c56d10d71ddc6f0ae87cfdcb0213f71b65448fc1bd265ce75d138a2"
+        "current_code_digest": "419935977c1c8ce166615ac162eefee06d3c0eb87d2d59c334aff4ff49bb98b2"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3053,7 +3053,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -3112,13 +3112,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8861b54e2c56d10d71ddc6f0ae87cfdcb0213f71b65448fc1bd265ce75d138a2",
+      "code_digest": "419935977c1c8ce166615ac162eefee06d3c0eb87d2d59c334aff4ff49bb98b2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 write_back only shares policy-review source in its generated closure. The 104 execution path does not call the modified policy functions or 103 queue branches; 104 authorization, send, readback, and cleanup behavior remain unchanged.",
+        "reason": "104 write_back shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "b40c457d68ef2ed46c9d62c4a8a8114b56bfed44cbfe1c2dc4eaf72abd95d278",
-        "current_code_digest": "8861b54e2c56d10d71ddc6f0ae87cfdcb0213f71b65448fc1bd265ce75d138a2"
+        "current_code_digest": "419935977c1c8ce166615ac162eefee06d3c0eb87d2d59c334aff4ff49bb98b2"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3329,7 +3329,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "5f9b632dbe6f9685b84fc4cf66502dd21c00acca97df33b7160af5e377990756"
+          "sha256": "d03b88c04fa2ef2abe938cc158b373a02651dd7c25c906c08a097f52b3f854e4"
         },
         {
           "kind": "code",
@@ -3388,13 +3388,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e355227c02d0d1a08b8b74be6ec2c834ce79d281dfe91a5e67b136c5dccb0efa",
+      "code_digest": "8740dc6a2e33571033f09bd7b14ed36532651095631c351a163a538ab8200118",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104 cleanup only shares policy-review source in its generated closure. The 104 execution path does not call the modified policy functions or 103 queue branches; 104 authorization, send, readback, and cleanup behavior remain unchanged.",
+        "reason": "104 cleanup shares policy-review source only in its generated closure. 104 does not invoke changed 103 policy functions or score/mark queue branches; send, authorization, readback and cleanup paths remain unchanged.",
         "reviewed_by": "codex:leadgen-103-double-policy",
         "previous_code_digest": "e1340cdc6b61e1c3ce9ce8252656c361f97d001de26ef720520cc6a56112d6c4",
-        "current_code_digest": "e355227c02d0d1a08b8b74be6ec2c834ce79d281dfe91a5e67b136c5dccb0efa"
+        "current_code_digest": "8740dc6a2e33571033f09bd7b14ed36532651095631c351a163a538ab8200118"
       }
     }
   },
