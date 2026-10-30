@@ -11,7 +11,7 @@ const id='00000000-0000-4000-8000-000000000301';
 const title='FDE证书刚出第二张';
 const comment='FDE到底有几张证，哪张才是能查的';
 
-function fixture(secondPass){
+function fixture(secondPass,firstQuoteBad=false){
  const row={id,line_key:'jinuo',harvest_batch:sourceRun,comment_body:comment,source_video:title,
   source_video_url:'https://www.douyin.com/video/7617837149999841201',process_status:'待分拣',
   relevance:null,intent_grade:null,collected_at:new Date('2026-10-20T00:00:00Z')};
@@ -35,7 +35,8 @@ function fixture(secondPass){
   judgePolicy:async()=>{policyCalls++;return {grade:'A',audit:{model:'policy-model',
    response_id:`policy-response-${policyCalls}`,policy_evidence:{audience_id:'recvvcNzUv5rzl',
     matched_rule:'考证视频',comment_signal:policyCalls===2&&!secondPass?'FDE证书':comment,
-    video_signal:'FDE证书',exclusion_rule:null,reason:'按冻结政策核实直接提问'}}};}};
+    video_signal:policyCalls===1&&firstQuoteBad?'FDE证书咨询':'FDE证书',
+    exclusion_rule:null,reason:'按冻结政策核实直接提问'}}};}};
  return {pool:{connect:async()=>client},deps,committed,writes,
   counts:()=>({policyCalls,scoreCalls})};
 }
@@ -67,7 +68,20 @@ test('两份独立政策模型证据均通过才持久评分与两份可重验�
  assert.equal(f.committed.judgment_config.policy_reviews.every(v=>v.status==='pass'),true);
 });
 
-const sha=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+test('第一次视频引用重试已用尽两次政策模型额度时阻断且PG零评分',async()=>{
+ const f=fixture(true,true);
+ const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
+ assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
+ assert.equal(result.scored,0);
+ assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
+  policy_review_reason:'policy_review_budget_exhausted'}]);
+ assert.equal(f.committed.relevance,null);
+ assert.equal(f.writes.length,0);
+});
+
+const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
+ ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const sha=value=>createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 function storedPolicyRow(){
  const config={run_id:run,company_id:policy.company_id,tenant_id:policy.tenant_id,
   version:policy.version,policy_id:policy.policy_id};
@@ -119,4 +133,14 @@ test('PG JSONB重排键顺序后原评论与双证据仍可独立复核',async()
  const review=await queueRequest(f.pool,{op:'policy_review',line:'jinuo',run,claim:run,
   source_run:sourceRun,ids:[id]},{judgePolicy:async()=>{throw Error('third call forbidden');}});
  assert.equal(review.verified,true);
+});
+
+test('mark_leads面对旧单份政策证据保持unknown且不补第三次模型',async()=>{
+ const f=storedPolicyRow();delete f.row.judgment_config.policy_reviews;
+ let modelCalls=0;
+ const review=await reviewBoundComment(f.pool,'jinuo',id,{run,source_run:sourceRun,
+  source_video:title,source_video_url:f.row.source_video_url},{judgePolicy:async()=>{
+   modelCalls++;throw Error('third call forbidden');}});
+ assert.equal(review.status,'unknown');
+ assert.equal(modelCalls,0);
 });
