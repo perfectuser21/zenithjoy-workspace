@@ -110,3 +110,13 @@ test('评分后及mark_leads独立重验原文、冻结v14和双身份，不产�
  assert.equal(tampered.status,'unknown');
  assert.equal(modelCalls,0);
 });
+
+test('PG JSONB重排键顺序后原评论与双证据仍可独立复核',async()=>{
+ const f=storedPolicyRow(),config=f.row.judgment_config;
+ f.row.judgment_config={policy_reviews:config.policy_reviews,policy_audit:config.policy_audit,
+  model_audit:config.model_audit,policy_id:config.policy_id,version:config.version,
+  tenant_id:config.tenant_id,company_id:config.company_id,run_id:config.run_id};
+ const review=await queueRequest(f.pool,{op:'policy_review',line:'jinuo',run,claim:run,
+  source_run:sourceRun,ids:[id]},{judgePolicy:async()=>{throw Error('third call forbidden');}});
+ assert.equal(review.verified,true);
+});
