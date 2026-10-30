@@ -6,7 +6,7 @@ const { freezeCompanyConfig, configTargetProfile } = require('./company-config-l
 const { judgeComment, scoreFailureReceipt } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const {evaluatePolicy}=require('./leadgen-policy-review.js');
+const {evaluatePolicy,safePolicyReviewReason}=require('./leadgen-policy-review.js');
 
 async function reviewBoundComment(pool,lineKey,id,binding,deps={}){
   const unknown={id,status:'unknown',reason:'comment_outbox_binding_invalid'};
@@ -393,7 +393,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
           judgment_reason:verdict.reason,judgment_config:evidence};
         const semantic=await evaluatePolicy(judged,snapshot,deps);
-        if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;}
+        if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);if(reason)error.score_failure={code:error.message,policy_review_reason:reason};throw error;}
         const audit={...evidence,model_audit:verdict.audit||null,policy_audit:semantic};
         // 保留待分拣，交下一活动标记人；模型异常回滚，下一轮仍可重判。
         await client.query(`UPDATE zenithjoy.leadgen_comments SET relevance=$2,intent_grade=$3,
