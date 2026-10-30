@@ -3,8 +3,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AidgeWorkspacePage from '../AidgeWorkspacePage';
 import { autopilotNavGroups } from '../../config/navigation.config';
+import { useAuth } from '../../contexts/AuthContext';
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.mocked(useAuth).mockReset();
+});
 
 const operations = [
   {
@@ -30,6 +36,7 @@ const operations = [
 
 describe('Aidge 工作台', () => {
   it('是员工侧一级菜单，列出能力栏目并可执行 SDK 接口', async () => {
+    vi.mocked(useAuth).mockReturnValue({ isAidgeOnly: false } as ReturnType<typeof useAuth>);
     expect(autopilotNavGroups.flatMap((group) => group.items)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: '/aidge', label: 'Aidge', requireStaff: true }),
@@ -70,5 +77,13 @@ describe('Aidge 工作台', () => {
       )
     );
     expect(await screen.findByText(/result\.png/)).toBeInTheDocument();
+  });
+
+  it('试用账号看不到创作画布入口', async () => {
+    vi.mocked(useAuth).mockReturnValue({ isAidgeOnly: true } as ReturnType<typeof useAuth>);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ operations }), { status: 200 })));
+    render(<MemoryRouter><AidgeWorkspacePage /></MemoryRouter>);
+    expect(await screen.findByText('Aidge 试用')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /前往创作画布/ })).not.toBeInTheDocument();
   });
 });
