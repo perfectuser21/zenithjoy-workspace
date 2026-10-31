@@ -15,10 +15,18 @@ function fixture(t, edit = () => {}) {
   const request = { businessKey: 'task-1', target: { storeId: 'store-1', productId: 'product-1' },
     plan: { sku: ['book-a', 'book-b'], images: ['image-a', 'image-b'], prices: { group: 315 },
       promotions: [{ quantity: 2, rate: 0.95 }], stock: 1, dispatch: { hours: 48 }, services: ['course'] }, proofs: [] };
-  const policy = { required: [{ kind: 'commercial', sourceRoles: ['supplier'], fields: ['sku', 'images', 'prices', 'promotions', 'stock', 'dispatch', 'services'] }], trustedDigests: [] };
+  const strings = { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } };
+  const policy = { required: [{ kind: 'commercial', sourceRoles: ['supplier'], fields: ['sku', 'images', 'prices', 'promotions', 'stock', 'dispatch', 'services'] }], trustedDigests: [], schemas: {
+    sku: strings, images: strings, services: strings,
+    prices: { type: 'object', required: ['group'], properties: { group: { type: 'number', minimum: 0 } } },
+    promotions: { type: 'array', minItems: 0, items: { type: 'object', required: ['quantity', 'rate'], properties: { quantity: { type: 'integer', minimum: 1 }, rate: { type: 'number', minimum: 0, maximum: 1 } } } },
+    stock: { type: 'integer', minimum: 0 },
+    dispatch: { type: 'object', required: ['hours'], properties: { hours: { type: 'integer', minimum: 0 } } },
+  } };
+  writeFileSync(join(root, 'source.txt'), 'original-source-fixture');
   const document = { version: 1, kind: 'commercial', subject: { businessKey: 'task-1', storeId: 'store-1', productId: 'product-1' },
     source: { id: 'supplier-record-1', role: 'supplier' }, reviewedBy: 'reviewer-1',
-    issuedAt: '2026-10-31T11:00:00Z', expiresAt: '2026-10-31T13:00:00Z', facts: structuredClone(request.plan), artifacts: [] };
+    issuedAt: '2026-10-31T11:00:00Z', expiresAt: '2026-10-31T13:00:00Z', facts: structuredClone(request.plan), artifacts: [{ path: 'source.txt', sha256: digest('original-source-fixture') }] };
   edit({ request, policy, document, root });
   const bytes = JSON.stringify(document); writeFileSync(join(root, 'review.json'), bytes);
   const sha256 = digest(bytes); request.proofs.push({ path: 'review.json', sha256 }); policy.trustedDigests.push(sha256);
@@ -84,11 +92,11 @@ test('duplicate document kinds cannot silently override conflicting facts', t =>
 });
 
 test('CLI evaluates files and leaves platform publication unauthorized', t => {
-  const f = fixture(t), root = f.options.evidenceRoot;
+  const f = fixture(t, x => { x.document.issuedAt = new Date(Date.now() - 60000).toISOString(); x.document.expiresAt = new Date(Date.now() + 60000).toISOString(); }), root = f.options.evidenceRoot;
   writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
   writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
   const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
-    join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
+    join(root, 'request.json'), root, join(root, 'policy.json')], { encoding: 'utf8' });
   assert.equal(child.status, 0, child.stderr);
   const result = JSON.parse(child.stdout);
   assert.equal(result.status, 'matched'); assert.equal(result.publicationAuthorized, false);
@@ -99,7 +107,31 @@ test('CLI signals unknown evidence without approving publication', t => {
   writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
   writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
   const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
-    join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
+    join(root, 'request.json'), root, join(root, 'policy.json')], { encoding: 'utf8' });
   assert.equal(child.status, 2, child.stderr);
   assert.equal(JSON.parse(child.stdout).status, 'unknown');
+});
+
+for (const [field, value] of [['sku', null], ['images', []], ['prices', { group: -1 }], ['stock', -5], ['dispatch', { hours: -1 }], ['services', null]]) {
+  test(`matching invalid ${field} still cannot satisfy the field contract`, t => {
+    const f = fixture(t, x => { x.document.facts[field] = value; x.request.plan[field] = value; });
+    const r = evaluatePlan(f.request, f.options);
+    assert.equal(r.status, 'rejected'); assert.ok(r.reasons.some(x => x.code === 'FIELD_SCHEMA_INVALID' && x.field === field));
+  });
+}
+test('pinned review without original artifacts remains unknown', t => {
+  const f = fixture(t, x => { x.document.artifacts = []; });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'unknown');
+});
+test('missing field schemas cannot silently weaken the trusted contract', t => {
+  const f = fixture(t); delete f.options.policy.schemas.stock;
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('production CLI rejects caller supplied historical clocks', t => {
+  const f = fixture(t), root = f.options.evidenceRoot;
+  writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
+  writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
+  const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
+    join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
+  assert.equal(child.status, 1); assert.match(JSON.parse(child.stderr).error, /用法/);
 });
