@@ -29,21 +29,11 @@ export function createBrainClient(baseUrl = 'http://localhost:5221') {
   const base = new URL(baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) throw new Error('INVALID_BRAIN_URL');
   async function request(path, body) {
-    const method = body ? 'POST' : 'GET';
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const started = performance.now();
-      try {
-        const response = await fetch(new URL(`/api/brain/device-locks${path}`, base), { method, headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) });
-        if (!response.ok) throw new Error(`LOCK_API_HTTP_${response.status}`);
-        const data = await response.json();
-        return { ...data, serverTimeMs: Date.parse(response.headers.get('date')), networkElapsedMs: performance.now() - started, requestAttempts: attempt + 1 };
-      } catch (error) {
-        if (error.message.startsWith('LOCK_API_HTTP_') || error instanceof SyntaxError) throw error;
-        // 仅只读GET有界重试；acquire/release的POST回执未知时交给归属读回，不盲重发。
-        if (method === 'POST' || attempt) throw new Error(`LOCK_API_NETWORK:${method}:${path}:${error.cause?.code || error.code || error.message}`);
-        await new Promise(resolve => setTimeout(resolve, 250));
-      }
-    }
+    const started = performance.now();
+    const response = await fetch(new URL(`/api/brain/device-locks${path}`, base), { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`LOCK_API_HTTP_${response.status}`);
+    const data = await response.json();
+    return { ...data, serverTimeMs: Date.parse(response.headers.get('date')), networkElapsedMs: performance.now() - started };
   }
   return {
     acquire: (serial, owner) => request('/acquire', { device_name: serial, locked_by: owner, ttl_minutes: 120 }),
@@ -52,7 +42,7 @@ export function createBrainClient(baseUrl = 'http://localhost:5221') {
       const data = await request('');
       const records = data.locks?.filter(value => value.device_name === serial);
       if (data.success !== true || records?.length !== 1) throw new Error('LOCK_RECORD_UNCONFIRMED');
-      return { ...records[0], serverTimeMs: data.serverTimeMs, networkElapsedMs: data.networkElapsedMs, requestAttempts: data.requestAttempts };
+      return { ...records[0], serverTimeMs: data.serverTimeMs, networkElapsedMs: data.networkElapsedMs };
     },
   };
 }
@@ -122,7 +112,7 @@ export async function probeReadOnly(config, dependencies = {}) {
     }
     if (['cleanup', 'artifact_absent'].includes(operation) && !remoteArtifacts.has(artifactPath)) throw new Error('UNOWNED_ARTIFACT');
     const invocation = readOnlyInvocation(config, operation, artifactPath);
-    const item = { operation, ...invocation, startedAt: new Date().toISOString(), leaseExpiresAt: lease.expires_at, leaseRemainingMs: remainingMs, leaseReadAttempts: lease.requestAttempts,
+    const item = { operation, ...invocation, startedAt: new Date().toISOString(), leaseExpiresAt: lease.expires_at, leaseRemainingMs: remainingMs,
       ...(['dump', 'xml', 'cleanup', 'artifact_absent'].includes(operation) ? { remotePath: artifactPath } : {}) }; trace.push(item);
     if (operation === 'dump') remoteArtifacts.add(artifactPath);
     let result;
