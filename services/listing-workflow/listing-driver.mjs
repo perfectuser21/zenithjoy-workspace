@@ -26,7 +26,7 @@ function materialize(input, contract) {
   const reasons = [], actions = [], plan = input.payload?.plan;
   if (!contract || contract.version !== 1 || !Array.isArray(contract.actions) || !contract.actions.length) return { reasons: ['UI_CONTRACT_UNVERIFIED'], actions };
   if (!plan || !Array.isArray(plan.images)) return { reasons: ['PLAN_INCOMPLETE'], actions };
-  const identifiers = new Set();
+  const identifiers = new Set(), imageIndexes = [];
   for (const action of contract.actions) {
     if (!['navigate', 'setField', 'upload', 'publish'].includes(action.operation)) { reasons.push('FORBIDDEN_ACTION'); continue; }
     if (!text(action.id) || identifiers.has(action.id) || !text(action.page) || !text(action.anchor)) { reasons.push('UI_CONTRACT_UNVERIFIED'); continue; }
@@ -43,11 +43,13 @@ function materialize(input, contract) {
       try {
         if (!Number.isSafeInteger(action.imageIndex) || !image || !text(image.path) || !/^[a-f0-9]{64}$/.test(image.sha256) || !statSync(image.path).isFile() || statSync(image.path).size > 32 * 1024 * 1024) throw new Error();
         if (digest(readFileSync(image.path)) !== image.sha256) throw new Error();
+        imageIndexes.push(action.imageIndex);
         value = image;
       } catch { reasons.push('MEDIA_HASH_MISMATCH'); continue; }
     }
     actions.push(snapshot({ ...action, ...(value === undefined ? {} : { value }) }));
   }
+  if (JSON.stringify(imageIndexes) !== JSON.stringify(plan.images.map((_, i) => i))) reasons.push('IMAGE_ORDER_UNVERIFIED');
   const publications = actions.filter(x => x.operation === 'publish');
   if (publications.length !== 1 || actions.at(-1)?.operation !== 'publish') reasons.push('SINGLE_FINAL_SUBMIT_REQUIRED');
   return { reasons: [...new Set(reasons)], actions };
@@ -66,8 +68,12 @@ export async function runListing(request, runtime = {}) {
     factsIndependentlyEstablished: false, reasons, wouldActions: built.actions };
   if (mode === 'dry-run') {
     if (typeof runtime.inspect === 'function' && !reasons.length) {
-      try { result.observation = await runtime.inspect({ operation: 'preflight', target: input.target }); }
+      try {
+        result.observation = await runtime.inspect({ operation: 'preflight', target: input.target });
+        if (result.observation?.ok !== true || result.observation.storeId !== input.target.storeId || !evidence(result.observation.evidence)) { reasons.push('CURRENT_CONTEXT_UNVERIFIED'); result.status = 'blocked'; }
+      }
       catch (error) { reasons.push(`OBSERVATION_UNAVAILABLE:${error.message}`); result.status = 'blocked'; }
+      finally { if (typeof runtime.cleanup === 'function') await runtime.cleanup(); }
     }
     return result;
   }
