@@ -29,9 +29,11 @@ export function createBrainClient(baseUrl = 'http://localhost:5221') {
   const base = new URL(baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) throw new Error('INVALID_BRAIN_URL');
   async function request(path, body) {
+    const started = performance.now();
     const response = await fetch(new URL(`/api/brain/device-locks${path}`, base), { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error(`LOCK_API_HTTP_${response.status}`);
-    return response.json();
+    const data = await response.json();
+    return { ...data, serverTimeMs: Date.parse(response.headers.get('date')), networkElapsedMs: performance.now() - started };
   }
   return {
     acquire: (serial, owner) => request('/acquire', { device_name: serial, locked_by: owner, ttl_minutes: 120 }),
@@ -40,7 +42,7 @@ export function createBrainClient(baseUrl = 'http://localhost:5221') {
       const data = await request('');
       const records = data.locks?.filter(value => value.device_name === serial);
       if (data.success !== true || records?.length !== 1) throw new Error('LOCK_RECORD_UNCONFIRMED');
-      return records[0];
+      return { ...records[0], serverTimeMs: data.serverTimeMs, networkElapsedMs: data.networkElapsedMs };
     },
   };
 }
@@ -102,13 +104,25 @@ export async function probeReadOnly(config, dependencies = {}) {
     const lease = await brain.lease(config.serial);
     if (lease.locked_by !== owner) throw new Error('LOCK_OWNERSHIP_LOST');
     // 同一命令统一预算；最长路径不足105分钟，租约120分钟，每次仍独立校验剩余租约。
-    if (lease.expired !== false || !Number.isFinite(Date.parse(lease.expires_at)) || Date.parse(lease.expires_at) - Date.now() < timeoutMs + 10000) throw new Error('LEASE_UNSAFE');
+    const remainingMs = Date.parse(lease.expires_at) - lease.serverTimeMs - lease.networkElapsedMs - 1000;
+    if (lease.expired !== false || !Number.isFinite(remainingMs) || remainingMs < timeoutMs + 10000) {
+      trace.push({ leaseRejected: { expiresAt: lease.expires_at, expired: lease.expired, remainingMs: Number.isFinite(remainingMs) ? remainingMs : null } });
+      throw new Error('LEASE_UNSAFE');
+    }
     if (['cleanup', 'artifact_absent'].includes(operation) && !remoteArtifacts.has(artifactPath)) throw new Error('UNOWNED_ARTIFACT');
     const invocation = readOnlyInvocation(config, operation, artifactPath);
-    const item = { operation, ...invocation, startedAt: new Date().toISOString(), ...(['dump', 'xml', 'cleanup', 'artifact_absent'].includes(operation) ? { remotePath: artifactPath } : {}) }; trace.push(item);
+    const item = { operation, ...invocation, startedAt: new Date().toISOString(), leaseExpiresAt: lease.expires_at, leaseRemainingMs: remainingMs,
+      ...(['dump', 'xml', 'cleanup', 'artifact_absent'].includes(operation) ? { remotePath: artifactPath } : {}) }; trace.push(item);
     if (operation === 'dump') remoteArtifacts.add(artifactPath);
-    const result = dependencies.run ? await dependencies.run(operation, invocation)
-      : spawnSync(invocation.command, invocation.args, { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, killSignal: 'SIGKILL', shell: false });
+    let result;
+    try {
+      result = dependencies.run ? await dependencies.run(operation, invocation)
+        : spawnSync(invocation.command, invocation.args, { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, killSignal: 'SIGKILL', shell: false });
+    } catch (error) {
+      if (config.route.length) remoteTerminationUnconfirmed = true;
+      item.finishedAt = new Date().toISOString(); item.transportError = error.message;
+      throw new Error(`COMMAND_FAILED:${operation}:${error.code || error.message}`);
+    }
     item.finishedAt = new Date().toISOString(); item.exitCode = result.status; item.signal = result.signal || null;
     if (config.route.length && (result.error || result.signal || result.status === 255)) remoteTerminationUnconfirmed = true;
     if (result.error || result.status !== 0) throw new Error(`COMMAND_FAILED:${operation}:${result.error?.code || result.status}`);
