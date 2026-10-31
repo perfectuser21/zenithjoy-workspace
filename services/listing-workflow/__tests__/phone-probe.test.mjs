@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { probeReadOnly, readOnlyInvocation } from '../phone-probe.mjs';
@@ -109,4 +110,24 @@ test('real read-only capture remains unknown until trusted visual review, not fa
   assert.equal(result.state, 'unknown');
   assert.equal(result.observation.status, 'observed');
   assert.equal(result.requiresVisualReview, true);
+});
+
+test('probe CLI help has no device side effects and validation refuses incomplete plans', () => {
+  const cli = new URL('../phone-probe-cli.mjs', import.meta.url).pathname;
+  const help = spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8' });
+  assert.equal(help.status, 0, help.stderr);
+  assert.ok(help.stdout.includes('只读'));
+  const f = fixture(), request = join(f.evidenceRoot, 'request.json');
+  writeFileSync(request, JSON.stringify({ target: { store: 'shop' }, payload: {} }));
+  const rejected = spawnSync(process.execPath, [cli, 'validate', request], { encoding: 'utf8' });
+  assert.equal(rejected.status, 2, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stdout).ok, false);
+});
+
+test('lost acquire response is reconciled by owner readback before cleanup', async () => {
+  const d = deps(), acquire = d.brain.acquire;
+  d.brain.acquire = async (...args) => { await acquire(...args); throw new Error('LOCK_RESPONSE_LOST'); };
+  await assert.rejects(probeReadOnly(fixture(), d), /LOCK_RESPONSE_LOST/);
+  assert.equal(d.calls.includes('online'), false);
+  assert.equal(d.calls.at(-1), 'release');
 });
