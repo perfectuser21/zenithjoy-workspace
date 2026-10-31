@@ -82,14 +82,15 @@ export async function probeReadOnly(config, dependencies = {}) {
   config = snapshotConfig(config);
   if (!idPattern.test(config.runId || '') || !config.taskId || !config.evidenceRoot || !packagePattern.test(config.expectedPackage || '')) throw new Error('INVALID_PROBE_CONFIG');
   readOnlyInvocation(config, 'online');
-  const binding = dependencies.deviceBinding;
-  if (!binding?.authority || binding.serial !== config.serial || JSON.stringify(binding.route) !== JSON.stringify(config.route)) throw new Error('DEVICE_BINDING_MISMATCH');
+  const binding = dependencies.deviceBinding ? snapshotConfig(dependencies.deviceBinding) : null;
+  if (typeof binding?.authority !== 'string' || !binding.authority.trim() || binding.serial !== config.serial || JSON.stringify(binding.route) !== JSON.stringify(config.route)
+    || (config.brainBaseUrl && config.brainBaseUrl !== (binding.brainBaseUrl || 'http://localhost:5221'))) throw new Error('DEVICE_BINDING_MISMATCH');
   const directory = join(resolve(config.evidenceRoot), `${config.runId}-${randomUUID()}`);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const manifestPath = join(directory, 'manifest.json');
   const owner = `manual-${config.runId}-${randomUUID()}`;
   let remotePath = `/sdcard/agent-probe-${randomUUID()}.xml`;
-  const brain = dependencies.brain || createBrainClient(config.brainBaseUrl);
+  const brain = dependencies.brain || createBrainClient(binding.brainBaseUrl);
   const sleep = dependencies.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
   const timeoutMs = config.commandTimeoutMs ?? 300000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) throw new Error('INVALID_COMMAND_TIMEOUT');
