@@ -8,6 +8,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {policy} from './fixtures/leadgen-103-v14.mjs';
 import {createScoringHandler} from '../leadgen-scoring-handler.mjs';
+import {createHandlers} from '../leadgen-handlers.mjs';
 
 const require=createRequire(import.meta.url);
 const {queueRequest}=require('../leadgen-queue.js');
@@ -99,6 +100,16 @@ test('102l仅精确授权单条可原子重开，旧双审审计留在恢复链�
  assert.equal(again.status,'already_applied');assert.equal(f.audit.length,1);assert.equal(f.writes.length,1);
 });
 
+test('受控恢复入口继续拒绝多余字段，不能为共享队列误注入放宽合同',async()=>{
+ for(const op of ['recover_false_exclusion_102l','recover_false_exclusion_102l_readback']){
+  const f=rig();
+  await assert.rejects(queueRequest(f.pool,{...request,op,limit:1},f.deps),
+   error=>error.message==='FALSE_EXCLUSION_SCOPE_INVALID');
+  assert.equal(f.row.process_status,'已排除');
+  assert.equal(f.audit.length,0);
+ }
+});
+
 test('102l恢复拒绝来源不匹配、无任务授权及已有线索或outbox',async()=>{
  for(const [change,rigOpts] of [
   [{source_run:'wrong-source'},{}],
@@ -135,6 +146,36 @@ test('103正式handler先受控重开并独立读回，然后只评分该CID一�
  assert.deepEqual(calls.map(c=>c.op).slice(0,3),['company_config','recover_false_exclusion_102l',
   'recover_false_exclusion_102l_readback']);
  assert.equal(calls.some(c=>c.op==='score_scope'),false);
+});
+
+test('103真实共享队列只向两项受控恢复RPC传精确字段，随后仍只评分该CID',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'leadgen-103l-queue-'));
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const f=rig(),requests=[];
+ const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:NEW,WFR_RUN_ID:`douyin_comment_scoring-${NEW}`,
+  WFR_ATTEMPT:'a1',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:SOURCE,
+  LEADGEN_LIMIT:'1',LEADGEN_SEND:'0',LEADGEN_103L_RECOVERY_ID:ID,
+  LEADGEN_103L_RECOVERY_TASK_ID:TASK};
+ const rpc=async({request:input})=>{
+  requests.push(input);
+  if(input.op==='company_config')return {result:policy};
+  if(input.op==='recover_false_exclusion_102l'||input.op==='recover_false_exclusion_102l_readback')
+   return {result:await queueRequest(f.pool,input,f.deps)};
+  if(input.op==='score_recovery')return {result:{verified:true,scored:0,ids:[],excluded_ids:[]}};
+  if(input.op==='score')return {result:{scored:1,ids:[ID],excluded:0,excluded_ids:[],blocked_ids:[]}};
+  if(input.op==='score_readback')return {result:{verified:true,failures:0,ids:[ID]}};
+  if(input.op==='policy_review')return {result:{verified:true,rows:[{id:ID,status:'pass'}]}};
+  assert.fail(`unexpected RPC ${input.op}`);
+ };
+ const h=createHandlers({root:dir,env,rpc,sourceCommit:CANDIDATE,taskId:TASK});
+ const result=await h.scoring();
+ assert.equal(result.scored,1);
+ assert.equal(f.row.process_status,'待分拣');
+ assert.equal(f.audit.length,1);
+ assert.deepEqual(requests.filter(r=>r.op.startsWith('recover_false_exclusion_102l'))
+  .map(r=>Object.keys(r).sort()),[Object.keys(request).sort(),Object.keys(request).sort()]);
+ assert.equal(requests.find(r=>r.op==='company_config').limit,1);
+ assert.deepEqual(requests.find(r=>r.op==='score').ids,[ID]);
 });
 
 test('真实PG scratch：单条重开与审计同事务提交，独立读回原来源与双审',

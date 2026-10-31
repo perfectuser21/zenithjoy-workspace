@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "3a7b429d8d1b3a6b50d98534ec17c0a0d190db88f4ceb4306fab2fadcfdcfa7c",
+      "code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "64e9849ba349f118ef44e8b9ec7a280323c083125126f670e63dd16fee4cc9dd",
-        "current_code_digest": "3a7b429d8d1b3a6b50d98534ec17c0a0d190db88f4ceb4306fab2fadcfdcfa7c"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "3a7b429d8d1b3a6b50d98534ec17c0a0d190db88f4ceb4306fab2fadcfdcfa7c",
+        "current_code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1"
       }
     },
     "douyin_video_processing.preflight": {
@@ -504,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7b9fa1a4dd71391cff30c9d7e6f16a8123fa0865b83d13aab37d47bd0fec07eb",
+      "code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "ea04476ea79bf7d86bb8b6358c9ed5b5899e67cf54066a2997860c25f8331f10",
-        "current_code_digest": "7b9fa1a4dd71391cff30c9d7e6f16a8123fa0865b83d13aab37d47bd0fec07eb"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "7b9fa1a4dd71391cff30c9d7e6f16a8123fa0865b83d13aab37d47bd0fec07eb",
+        "current_code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0"
       }
     },
     "douyin_video_processing.dedup": {
@@ -777,7 +777,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
         }
       ],
-      "code_digest": "c98c1210cdf203f80237b479877e57fb3beb715e7ea8229658851b67d6b44fc3",
+      "code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "19b0b0ece7455ad202b4e2b7e910c6486e43b578b42a610ddb5f0c05d1293c02",
-        "current_code_digest": "c98c1210cdf203f80237b479877e57fb3beb715e7ea8229658851b67d6b44fc3"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "c98c1210cdf203f80237b479877e57fb3beb715e7ea8229658851b67d6b44fc3",
+        "current_code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1092,7 +1092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -1221,13 +1221,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "1ac869a74b30a1faa0d122b4c2164395c4453daebabc258f520b0ee98ce3903a",
+      "code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "06ac78f703f469c90bd6bbd3bf22d6ed094fa1f08569c28880e7d2d651630e64",
-        "current_code_digest": "1ac869a74b30a1faa0d122b4c2164395c4453daebabc258f520b0ee98ce3903a"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "1ac869a74b30a1faa0d122b4c2164395c4453daebabc258f520b0ee98ce3903a",
+        "current_code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b"
       }
     },
     "douyin_video_processing.collection": {
@@ -1436,7 +1436,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -1523,13 +1523,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "203eec4c46c34d00641705f7fce1691108afbcfe95390eb2767883d0ffd4cdaf",
+      "code_digest": "c7d264f53d2482b6cdb19cfe445312f9c17292a30882dc42d2a0a0db6ac056ec",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "7dddf4b5fadb50b143cf86b86e0cb8cb68568c5d12eb2a56452394f8a19236d9",
-        "current_code_digest": "203eec4c46c34d00641705f7fce1691108afbcfe95390eb2767883d0ffd4cdaf"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "203eec4c46c34d00641705f7fce1691108afbcfe95390eb2767883d0ffd4cdaf",
+        "current_code_digest": "c7d264f53d2482b6cdb19cfe445312f9c17292a30882dc42d2a0a0db6ac056ec"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1726,7 +1726,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -1799,13 +1799,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2ff2d074fe38c8d6d3604f63f13f098923df180e7f84f37834a642a675b5124a",
+      "code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "f993615f52b2aa7008183cfea53ad38cf6b42fb5bc9b065481d8eff1ed9cd687",
-        "current_code_digest": "2ff2d074fe38c8d6d3604f63f13f098923df180e7f84f37834a642a675b5124a"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "2ff2d074fe38c8d6d3604f63f13f098923df180e7f84f37834a642a675b5124a",
+        "current_code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1971,7 +1971,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -2079,13 +2079,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "d95dc6b3ba4c1d8d38c567fa6abb393391b785609823be426ed2d1691ede5198",
+      "code_digest": "2b8f2b7403b4ed523342c9d5fbffe8070e16a0f6c79ca650687b97a0a85ddf98",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "50cbe1ff94f3371326d8ac24348fcdef09ca19f067f4a9444bafcca9d24b5a6a",
-        "current_code_digest": "d95dc6b3ba4c1d8d38c567fa6abb393391b785609823be426ed2d1691ede5198"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "d95dc6b3ba4c1d8d38c567fa6abb393391b785609823be426ed2d1691ede5198",
+        "current_code_digest": "2b8f2b7403b4ed523342c9d5fbffe8070e16a0f6c79ca650687b97a0a85ddf98"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2258,7 +2258,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -2401,13 +2401,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a74436c8040dcebfa93269fed132f56ac99436587b5988703df3e22985694d59",
+      "code_digest": "9114961bbc4c936eef0e90a2fafeccc75ec651c45b3bf81e7090f0727d2e967c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "c6229a6e3b1fe224a083f335d14fee48dca1a81eff8ad796fdd59dca665aad14",
-        "current_code_digest": "a74436c8040dcebfa93269fed132f56ac99436587b5988703df3e22985694d59"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "a74436c8040dcebfa93269fed132f56ac99436587b5988703df3e22985694d59",
+        "current_code_digest": "9114961bbc4c936eef0e90a2fafeccc75ec651c45b3bf81e7090f0727d2e967c"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2619,7 +2619,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -2713,13 +2713,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "44b9c039c5bd22c0f4858aebee08f1284c7da3c85009e97e80b06e6770180259",
+      "code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "ccc4211559d7468f23b6f6a885a85aa5bafdebf423d735ca06d740fb2124137f",
-        "current_code_digest": "44b9c039c5bd22c0f4858aebee08f1284c7da3c85009e97e80b06e6770180259"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "44b9c039c5bd22c0f4858aebee08f1284c7da3c85009e97e80b06e6770180259",
+        "current_code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2920,7 +2920,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -3000,13 +3000,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0f265d4c2c835032b93f3836635bb30d01eedb49d0c9defe5e529b73b6a1d00d",
+      "code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "6c0521505e4d5b5ce070da3387b704497e705b83a36abd9a6d3a34924cd59ce3",
-        "current_code_digest": "0f265d4c2c835032b93f3836635bb30d01eedb49d0c9defe5e529b73b6a1d00d"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "0f265d4c2c835032b93f3836635bb30d01eedb49d0c9defe5e529b73b6a1d00d",
+        "current_code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3207,7 +3207,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -3280,13 +3280,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "fe2e952f206fa14092e4ea25489919a4e0719a9885ba6eb599b123f94157f009",
+      "code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "a53491d2120a2fa05aaa29d11163e8ce3a8a2fe53f8b72a3483efe212f2c7baf",
-        "current_code_digest": "fe2e952f206fa14092e4ea25489919a4e0719a9885ba6eb599b123f94157f009"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "fe2e952f206fa14092e4ea25489919a4e0719a9885ba6eb599b123f94157f009",
+        "current_code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3490,7 +3490,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6d04d95c1f4cb600c69b78a4de0a31c4ab6196db8645c4aae3ba9c791c51859a"
+          "sha256": "a68b1f2a1e1d5d35f58d1fbba66e74e1d72e9fe3abbba8ce0a3420b8f888d14b"
         },
         {
           "kind": "code",
@@ -3570,13 +3570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "cc74fb3d28e8344d257951de93803477878bef4faeb199c834bf5c3127ca29b4",
+      "code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只改变共享 RPC 进程 stdout 的 UTF-8 字节缓冲与解码时点，原 Activity 输入、输出、状态和政策保持相同；修复跨块中文导致的回执摘要失配。",
-        "reviewed_by": "codex:leadgen-101-utf8-fix",
-        "previous_code_digest": "e9f44208ad8a872e40d8a4ed20f33cdbaa68ca6528fa5b85c140f5c21d481141",
-        "current_code_digest": "cc74fb3d28e8344d257951de93803477878bef4faeb199c834bf5c3127ca29b4"
+        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
+        "reviewed_by": "codex:103-recovery-limit-scope",
+        "previous_code_digest": "cc74fb3d28e8344d257951de93803477878bef4faeb199c834bf5c3127ca29b4",
+        "current_code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1"
       }
     }
   },
