@@ -32,9 +32,9 @@ function readEvidence(root, reference, maxBytes) {
   const rel = relative(root, candidate);
   if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error('EVIDENCE_PATH_ESCAPE');
   const stats = statSync(candidate);
-  if (!stats.isFile() || stats.size > maxBytes) throw new Error('EVIDENCE_SIZE_OR_TYPE');
+  if (!stats.isFile() || stats.size < 1 || stats.size > maxBytes) throw new Error('EVIDENCE_SIZE_OR_TYPE');
   const bytes = readFileSync(candidate);
-  if (bytes.length > maxBytes || hash(bytes) !== reference.sha256) throw new Error('EVIDENCE_HASH_MISMATCH');
+  if (!bytes.length || bytes.length > maxBytes || hash(bytes) !== reference.sha256) throw new Error('EVIDENCE_HASH_MISMATCH');
   return bytes;
 }
 
