@@ -7,7 +7,6 @@ const { judgeComment, scoreFailureReceipt } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment}=require('./leadgen-policy-review.js');
 const commentAdmission=require('./leadgen-comment-admission.js');
-const scoreExclusion=require('./leadgen-score-exclusion.js');
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
@@ -103,8 +102,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
-  if(op==='score_recovery')return scoreExclusion.scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources});
-  if(op==='score_exclusion_readback')return scoreExclusion.exclusionReadback(pool,input,{lineKey,sourceRun,run,validSources});
+  if(op==='score_recovery')return require('./leadgen-score-exclusion.js').scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources});
+  if(op==='score_exclusion_readback')return require('./leadgen-score-exclusion.js').exclusionReadback(pool,input,{lineKey,sourceRun,run,validSources});
   const videoIds=input.video_ids===undefined?null:input.video_ids;
   if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
   if(Object.hasOwn(input,'prefer_matched')&&(op!=='claim_videos'||typeof input.prefer_matched!=='boolean'||input.prefer_matched===true&&(!sourceRun||videoIds===null)))throw Error('采样优先必须真boolean及明确上游VID范围');
@@ -377,7 +376,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
           judgment_reason:verdict.reason,judgment_config:evidence};
         const semantic=await dualPolicyReview(judged,snapshot,deps);
-        if(semantic.status==='exclude')return scoreExclusion.commitExclusion(client,{row,verdict,semantic,evidence,lineKey,nextCursor});
+        if(semantic.status==='exclude')return require('./leadgen-score-exclusion.js').commitExclusion(client,{row,verdict,semantic,evidence,lineKey,nextCursor});
         if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);
           if(reason)error.score_failure={code:error.message,policy_review_reason:reason,
             ...(['jev','commander'].includes(semantic.model_stage)?{policy_review_stage:semantic.model_stage}:{}),

@@ -833,7 +833,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "82fc7cb58a298fac881635f3540d745ef30bc5437c9ed23abd096b0fd9882e73"
+          "sha256": "9cee80c40929fd8d78a8bcb9d62cb287733cb685e39a0faf37440fc5467de334"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "51719672845620038c1780d409b4c9a7f478cad73288f8a7b3c0948270cc87eb"
         }
       ],
-      "code_digest": "b8ecd844ed6cefa0f6bf5311469c14e6c9b80ea401517d693a9df802f95f69b5",
+      "code_digest": "7c9905056d23805ad07ba7541cadde04bd478ee658ff2a84919cf614ff30e33a",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "本Activity调用queue的102认领/判重操作；本次queue只新增score/score_recovery/score_exclusion_readback分支，102去重SQL及回执未改。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "ce77053263277529466149180876f5d8e954ff603c323043faeba1ad5d0eb773",
-        "current_code_digest": "b8ecd844ed6cefa0f6bf5311469c14e6c9b80ea401517d693a9df802f95f69b5"
+        "current_code_digest": "7c9905056d23805ad07ba7541cadde04bd478ee658ff2a84919cf614ff30e33a"
       }
     },
     "douyin_video_processing.qualification": {
@@ -903,7 +903,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "82fc7cb58a298fac881635f3540d745ef30bc5437c9ed23abd096b0fd9882e73"
+          "sha256": "9cee80c40929fd8d78a8bcb9d62cb287733cb685e39a0faf37440fc5467de334"
         },
         {
           "kind": "code",
@@ -1221,13 +1221,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "efa2f33a062784a579803c54715aa6449137bec9c93e52602348ce559a059729",
+      "code_digest": "bada6db4a7e70b11645011fa3c2b98436ff8ef3df646434fb947a52667972b8e",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "本Activity调用queue的102视频资格判定操作；新增评分终态分支与双审仅在103执行，资格判定输入输出和政策未改。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "165bd2984651cfe467c4ecbd59f19959a50043bc8b4d957ee73e00232755203c",
-        "current_code_digest": "efa2f33a062784a579803c54715aa6449137bec9c93e52602348ce559a059729"
+        "current_code_digest": "bada6db4a7e70b11645011fa3c2b98436ff8ef3df646434fb947a52667972b8e"
       }
     },
     "douyin_video_processing.collection": {
@@ -2027,7 +2027,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "82fc7cb58a298fac881635f3540d745ef30bc5437c9ed23abd096b0fd9882e73"
+          "sha256": "9cee80c40929fd8d78a8bcb9d62cb287733cb685e39a0faf37440fc5467de334"
         },
         {
           "kind": "code",
@@ -2079,7 +2079,7 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "6796f9a658128c9ba290c2a61ea1ab9d01c6a298e367b4bcabc068b21241731f"
+      "code_digest": "6aaf06fab786bc63d395d048b06eeb10c354b4a3a2accdd0cdf735731a8485d7"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.6.0",
@@ -2307,7 +2307,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "82fc7cb58a298fac881635f3540d745ef30bc5437c9ed23abd096b0fd9882e73"
+          "sha256": "9cee80c40929fd8d78a8bcb9d62cb287733cb685e39a0faf37440fc5467de334"
         },
         {
           "kind": "code",
@@ -2394,7 +2394,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d0c0af173d1010f4732a67399be1ad1fd7b7d0b582935c998a2d64870755ce59"
+      "code_digest": "86daf2506975da449bb9bd8b4a7e8b75edb4ecd1f0ba7088b89a3ed0066ba38e"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
