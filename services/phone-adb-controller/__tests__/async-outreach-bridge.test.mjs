@@ -139,6 +139,15 @@ test('104已有confirmed outbox的政策复核失败时不可成为可领订单'
  const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'fail'})};
  assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104'},opts),[]);
 });
+test('104飞书订单record匹配但comment或来源不符时不得入可领集合',async()=>{
+ const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
+ row.state='confirmed';row.feishu_record_id='recABC123456';row.fields=bridge.buildOrderFields(row,route,[{field_name:'采集时间',type:1}]);row.fields_sha256=bridge.digest(row.fields);
+ const remote=[{record_id:row.feishu_record_id,fields:structuredClone(row.fields)}];
+ const pool={async query(){return {rows:[row]}}};
+ const scope={schema_version:1,record_id:row.feishu_record_id,comment_id:'wrong-comment',company_id:'company1',source_run:'source102',mark_run:'score103',target_douyin_id:'person987',line_key:'jinuo',run_tag:'contact104',profile:'legacy',serial:'SERIAL'};
+ const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})};
+ assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104',outreach_scope:scope},opts),[]);
+});
 test('旧 score → 新 mark → 104 准备前复核使用各自冻结 run',async()=>{
  const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
  row.payload.run='mark103-new';row.payload.scoring_run='score103';row.run_tag='mark103-new';
