@@ -16,12 +16,12 @@ function deps(overrides = {}) {
   const calls = []; let owner = null;
   const brain = {
     acquire: async (serial, who) => { calls.push('acquire'); owner = who; return { acquired: true }; },
-    owner: async () => owner,
+    lease: async () => ({ locked_by: owner, expired: false, expires_at: new Date(Date.now() + 7200000).toISOString() }),
     release: async () => { calls.push('release'); owner = null; return { success: true }; },
   };
-  return { calls, brain, sleep: async () => {}, run: async operation => {
+  return { calls, brain, deviceBinding: { serial: 'SERIAL123', route: ['jump-host', 'operator@device-host'], authority: 'explicit-user-task' }, sleep: async () => {}, run: async operation => {
     calls.push(operation);
-    const out = { online: 'device', foreground: 'mCurrentFocus=Window{a u0 com.xunmeng.merchant/.Page}', telephony: 'mCallState=0\nmCallState=0', dump: 'dumped', xml, screenshot: png }[operation];
+    const out = { online: 'device', identity: 'SERIAL123', foreground: 'mCurrentFocus=Window{a u0 com.xunmeng.merchant/.Page}', telephony: 'mCallState=0\nmCallState=0', dump: 'dumped', xml, screenshot: png, cleanup: '', artifact_absent: '' }[operation];
     return { status: 0, stdout: Buffer.isBuffer(out) ? out : Buffer.from(out), stderr: Buffer.alloc(0) };
   }, ...overrides };
 }
@@ -148,4 +148,38 @@ test('dump retries use fresh remote filenames and wait before the second attempt
   };
   await probeReadOnly(fixture(), d);
   assert.equal(paths.length, 2); assert.equal(waits, 1); assert.notEqual(paths[0], paths[1]);
+});
+
+test('expired or insufficient lease never authorizes any ADB command', async () => {
+  for (const delta of [-1, 1000]) {
+    const d = deps(), lease = d.brain.lease;
+    d.brain.lease = async () => ({ ...await lease(), expired: delta < 0, expires_at: new Date(Date.now() + delta).toISOString() });
+    await assert.rejects(probeReadOnly(fixture(), d), /LEASE_UNSAFE/);
+    assert.equal(d.calls.includes('online'), false);
+  }
+});
+
+test('device binding mismatch is rejected before locking and hardware serial is checked', async () => {
+  const d = deps();
+  await assert.rejects(probeReadOnly(fixture({ route: ['different-host'] }), d), /DEVICE_BINDING_MISMATCH/);
+  assert.deepEqual(d.calls, []);
+  const wrong = deps(), original = wrong.run;
+  wrong.run = async op => op === 'identity' ? { status: 0, stdout: Buffer.from('OTHER') } : original(op);
+  await assert.rejects(probeReadOnly(fixture(), wrong), /DEVICE_IDENTITY_MISMATCH/);
+});
+
+test('SSH timeout preserves lock until remote termination is reconciled', async () => {
+  const d = deps();
+  d.run = async () => ({ status: null, error: { code: 'ETIMEDOUT' }, stdout: Buffer.alloc(0) });
+  await assert.rejects(probeReadOnly(fixture(), d), /COMMAND_FAILED/);
+  assert.equal(d.calls.includes('release'), false);
+});
+
+test('only this probe artifacts are deleted and absence is checked before release', async () => {
+  const d = deps(), result = await probeReadOnly(fixture(), d);
+  const manifest = JSON.parse(readFileSync(result.manifest));
+  assert.deepEqual(manifest.remoteArtifactsRemaining, []);
+  assert.ok(d.calls.includes('cleanup')); assert.ok(d.calls.includes('artifact_absent'));
+  assert.ok(d.calls.indexOf('cleanup') < d.calls.indexOf('release'));
+  assert.throws(() => readOnlyInvocation(fixture(), 'cleanup', '/sdcard/private.xml'), /INVALID_ARTIFACT_PATH/);
 });
