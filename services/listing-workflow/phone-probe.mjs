@@ -136,8 +136,19 @@ export async function probeReadOnly(config, dependencies = {}) {
     }
     item.finishedAt = new Date().toISOString(); item.exitCode = result.status; item.signal = result.signal || null;
     if (config.route.length && (result.error || result.signal || result.status === 255)) remoteTerminationUnconfirmed = true;
-    if (result.error || result.status !== 0) throw new Error(`COMMAND_FAILED:${operation}:${result.error?.code || result.status}`);
-    return Buffer.from(result.stdout || '');
+    if (result.error || result.status !== 0) {
+      item.diagnostic = save(`diagnostic-${trace.length}-${operation}.txt`, Buffer.from(String(result.error?.code || '') + '\n' + Buffer.from(result.stderr || '').toString('utf8').slice(0, 4096)));
+      throw new Error(`COMMAND_FAILED:${operation}:${result.error?.code || result.status}`);
+    }
+    const stdout = Buffer.from(result.stdout || '');
+    if (['online', 'identity'].includes(operation)) item.stateEvidence = save(`state-${trace.length}-${operation}.txt`, stdout);
+    if (['foreground', 'telephony'].includes(operation)) {
+      const pattern = operation === 'foreground' ? /mCurrentFocus=/ : /\bmCallState\s*=/;
+      const lines = stdout.toString('utf8').split(/\r?\n/).filter(line => pattern.test(line));
+      item.stateEvidence = save(`state-${trace.length}-${operation}.txt`, Buffer.from(lines.join('\n')));
+      item.stateEvidencePolicy = '仅保留前台或通话状态原始行，其余注册信息按隐私最小化不落盘';
+    }
+    return stdout;
   }
   async function requireForeground() {
     const foreground = foregroundOf(await run('foreground'));
