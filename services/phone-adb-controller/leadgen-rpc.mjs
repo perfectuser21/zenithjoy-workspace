@@ -132,8 +132,11 @@ export function rpcFailureReceipt(error) {
     execution_stopped:false,external_effect:'unknown'};
   const message=String(error?.message||'');
   const recovery=message.match(/^FALSE_EXCLUSION_([A-Z_]+)$/);
-  if(recovery&&recoveryReasons.has(recovery[1]))
-    return {ok:false,error:`RPC_RECOVERY_STAGE:${recovery[1]}`};
+  if(recovery&&recoveryReasons.has(recovery[1])){
+    const unresolved=['COMMIT_UNKNOWN_READBACK_REQUIRED','ROLLBACK_UNKNOWN'].includes(recovery[1]);
+    return {ok:false,error:`RPC_RECOVERY_STAGE:${recovery[1]}`,
+      ...(unresolved?{execution_stopped:false,external_effect:'unknown'}:{})};
+  }
   const code=/^RPC_[A-Z_]+(?::[a-zA-Z0-9_.-]+)?$/.test(message)
     ?message:'RPC_OPERATION_FAILED';
   return {ok:false,error:code};
