@@ -7217,6 +7217,14 @@ agent_suite:
   product: AI员工
   note: "四独立获客流程代码回归；设备和业务PG用隔离夹具，真实运行另行验收"
 
+- id: leadgen-101-utf8-rpc-receipt
+  path: services/phone-adb-controller/__tests__/leadgen-client-utf8-receipt.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实子进程跨块输出中文，验证 RPC 回执原文与 SHA 不变；真机 101 另行验收"
+
 - id: leadgen-split-empty-collection
   path: services/phone-adb-controller/__tests__/empty-collection.test.mjs
   type: unit

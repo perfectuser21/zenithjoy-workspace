@@ -82,7 +82,8 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
     // Mac/Linux上每次动作独占进程组，只停止本次动作及其子进程，不碰ADB服务或其他批次。
     const ownGroup = process.platform !== 'win32';
     const child = spawn(command, args, { env, detached: ownGroup, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer, abandonTimer, stderrTruncated = false, spawned = false,ready=Promise.resolve();
+    const stdoutChunks=[];
+    let stdoutBytes=0, stderr = '', settled = false, stoppingError, forceTimer, abandonTimer, stderrTruncated = false, spawned = false,ready=Promise.resolve();
     const timer = setTimeout(() => stop(Error('EXECUTION_DEADLINE')), timeoutMs);
     function signalOwned(signal) {
       if(operation){void ready.then(()=>operation.signalTargets(signal)).then(sent=>{if(sent===0){operation.markUnknown();child.kill(signal);}}).catch(()=>{operation.markUnknown();try{child.kill(signal);}catch{}});return;}
@@ -94,10 +95,14 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
       stoppingError = error;
       signalOwned('SIGTERM');
       forceTimer = setTimeout(() => signalOwned('SIGKILL'), 1000);
-      if(operation)abandonTimer=setTimeout(()=>{operation.markUnknown();child.stdout.destroy();child.stderr.destroy();child.stdin.destroy();child.unref();void finish(stoppingError,{code:null,stdout,stderr});},5000);
+      if(operation)abandonTimer=setTimeout(()=>{operation.markUnknown();child.stdout.destroy();child.stderr.destroy();child.stdin.destroy();child.unref();void finish(stoppingError,{code:null,stderr});},5000);
     }
     async function finish(error, result, waitSignal) {
       if (settled) return; settled = true; clearTimeout(timer); clearTimeout(forceTimer);clearTimeout(abandonTimer);
+      // Decode once after all bytes arrive. A UTF-8 character can straddle
+      // child.stdout data events; decoding each chunk corrupts signed receipts.
+      const stdout=Buffer.concat(stdoutChunks,stdoutBytes).toString('utf8');
+      if(result)result.stdout=stdout;
       if(operation){
         try{await ready;const notStarted=executionDidNotStart(error,command,args);
           const final=notStarted?operation.notStarted():await operation.stop(stoppingError?'SIGTERM/SIGKILL':null,result?.code,waitSignal);
@@ -118,8 +123,9 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
     child.on('error', cause => finish(markNotStarted(Error('EXECUTION_START_FAILED'),cause,command,args,child,spawned)));
     child.stdout.on('data', chunk => {
       if (stoppingError) return;
-      stdout += chunk;
-      if (Buffer.byteLength(stdout) > 8 * 1024 * 1024) stop(Error('EXECUTION_OUTPUT_LIMIT'));
+      stdoutChunks.push(chunk);
+      stdoutBytes+=chunk.length;
+      if (stdoutBytes > 8 * 1024 * 1024) stop(Error('EXECUTION_OUTPUT_LIMIT'));
     });
     child.stderr.on('data', chunk => {
       if (stderrTruncated) return;
@@ -131,7 +137,7 @@ export function execInput(command, args, { input = '', timeoutMs = 180000, env =
       }
     });
     // 必须等close：旧动作还活着时不可返回失败并开始操作同一台手机的下一候选。
-    child.on('close', (code,signal) => finish(stoppingError, { code, stdout, stderr },signal));
+    child.on('close', (code,signal) => finish(stoppingError, { code, stderr },signal));
     child.stdin.on('error', () => {});
     child.stdin.end(input);
   });
