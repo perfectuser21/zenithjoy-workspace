@@ -22,11 +22,22 @@ async function probe(port,adjacent=false){
  }
  return selected;
 }
+async function waitForRelease(port){
+ const deadline=Date.now()+2000;
+ while(true){
+  try{return await probe(port);}
+  catch(error){
+   if(error.code!=='EADDRINUSE')throw error;
+   if(Date.now()>=deadline)throw Error(`WORKBENCH_PORT_STILL_BUSY port=${port} waited_ms=2000`);
+   await new Promise(resolve=>setTimeout(resolve,Math.min(100,deadline-Date.now())));
+  }
+ }
+}
 try{
  const [mode,value]=process.argv.slice(2);let selected;
- if(mode==='check'||mode==='check-pair'){
+ if(mode==='check'||mode==='check-pair'||mode==='wait'){
   if(!/^[1-9][0-9]{0,4}$/.test(value||'')||Number(value)>=65535)throw Error('WORKBENCH_PORT_RANGE');
-  selected=await probe(Number(value),mode==='check-pair');
+  selected=mode==='wait'?await waitForRelease(Number(value)):await probe(Number(value),mode==='check-pair');
  }else if(mode==='allocate'&&value===undefined){
   for(let attempt=0;attempt<16;attempt++){
    try{selected=await probe(0,true);break;}catch(e){if(e.code!=='EADDRINUSE'&&e.message!=='WORKBENCH_PORT_RANGE')throw e;}

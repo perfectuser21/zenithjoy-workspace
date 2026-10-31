@@ -7,17 +7,18 @@ import {once} from 'node:events';
 import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,existsSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {spawnSync,execFileSync} from 'node:child_process';
+import {spawnSync,execFileSync,spawn} from 'node:child_process';
 const source=readFileSync(new URL('../smoke/structured-workbench-smoke.sh',import.meta.url),'utf8');
 const failFunction=source.match(/^fail\(\) \{[^\n]+\}$/m)[0];
 const helper=fileURLToPath(new URL('../smoke/lib/workbench-api-process.sh',import.meta.url));
 const startFunction='source "'+helper+'"';
 const alive=pid=>{try{process.kill(pid,0);return true;}catch{return false;}};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
-async function fixture(t,{foreign=false,http=false,healthy=false,drift='',ignoreTerm=false,hanging=false,adjacentExtra=false}={}){
+async function fixture(t,{foreign=false,http=false,healthy=false,drift='',ignoreTerm=false,hanging=false,adjacentExtra=false,transientMs=0}={}){
  const top=mkdtempSync(join(tmpdir(),'workbench-owner-')),bin=join(top,'bin'),app=join(top,'owned-api.cjs'),pidFile=join(top,'child.pid');mkdirSync(bin);
  const server=http?createHTTPServer((q,r)=>r.end('healthy')):createServer(()=>{});server.listen(0,'127.0.0.1');await once(server,'listening');const port=server.address().port;
  if(!foreign)await new Promise(r=>server.close(r));
+ const transientHolder=transientMs?await occupiedPortFor(transientMs,port):null;
  const extra=adjacentExtra?createServer():null;if(extra){extra.listen(port+2,'127.0.0.1');await once(extra,'listening');}
  writeFileSync(app,`const fs=require('fs'),http=require('http');fs.writeFileSync(process.env.TEST_CHILD_PID,String(process.pid));if(process.env.TEST_IGNORE_TERM==='1')process.on('SIGTERM',()=>fs.writeFileSync(process.env.TEST_CHILD_PID+'.term','seen'));const s=http.createServer((q,r)=>{if(process.env.TEST_HEALTH_HANG==='1')return;r.statusCode=process.env.TEST_CHILD_HEALTHY==='1'?200:503;r.end('health');});s.on('error',e=>fs.writeFileSync(process.env.TEST_CHILD_PID+'.error',e.code));s.listen(Number(process.env.PORT),()=>console.log('Works Management API + Agent WS running on port '+process.env.PORT));setInterval(()=>{},1000);`);
  writeFileSync(join(bin,'node'),'#!/bin/sh\ncase "$1" in apps/api/dist/index.js) exec "$TEST_REAL_NODE" "$TEST_CHILD_APP" "$@";; *) exec "$TEST_REAL_NODE" "$@";; esac\n',{mode:0o755});
@@ -40,6 +41,7 @@ async function fixture(t,{foreign=false,http=false,healthy=false,drift='',ignore
    assert.ok(command.includes(app),'refuse unrelated process');process.kill(pid,'SIGTERM');
   }
   if(extra?.listening)await new Promise(r=>extra.close(r));
+  if(transientHolder?.exitCode===null)transientHolder.kill();
   if(server.listening)await new Promise(r=>server.close(r));
   rmSync(top,{recursive:true,force:true});
  }
@@ -54,3 +56,22 @@ test('本人failed child实际忽略TERM时仍同身份有界KILL并wait回收',
 
 test('p+2由外来listener持有时，p及p+1实际本人API均可就绪并回收',async t=>{const r=await fixture(t,{healthy:true,adjacentExtra:true});assert.equal(r.status,0,r.stderr);assert.equal(r.extraListening,true);assert.equal(r.childAlive,false);});
 test('本人HTTP health真实不返回时40秒deadline仍收束并回收本人child',async t=>{const r=await fixture(t,{hanging:true});assert.equal(r.error,undefined);assert.equal(r.status,1,r.stderr);assert.ok(r.duration>=39000&&r.duration<44000,String(r.duration));assert.equal(r.childAlive,false);});
+
+async function occupiedPortFor(ms,specifiedPort){
+ let port=specifiedPort;
+ if(!port){const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');port=reservation.address().port;await new Promise(r=>reservation.close(r));}
+ const holder=spawn(process.execPath,['-e',`const net=require('net');const s=net.createServer();s.listen(${port},'127.0.0.1',()=>{console.log('ready');setTimeout(()=>s.close(()=>process.exit(0)),${ms})})`],{stdio:['ignore','pipe','pipe']});
+ await once(holder.stdout,'data');return specifiedPort?holder:{port,holder};
+}
+test('A29 夹具退出后端口短暂占用，A30 有界等释放再启动',async t=>{
+ const r=await fixture(t,{healthy:true,transientMs:400});
+ assert.equal(r.status,0,r.stderr);assert.equal(r.launched,true);assert.equal(r.childAlive,false);
+ assert.ok(r.duration>=200,'必须真实等待上一段释放端口');
+});
+test('外来 listener 长占端口仍须在两秒内明确失败，不清理外来进程',async t=>{
+ const {port,holder}=await occupiedPortFor(5000);t.after(()=>{if(holder.exitCode===null)holder.kill();});
+ const started=performance.now();
+ const r=spawnSync('/bin/bash',['-c',failFunction+'\n'+startFunction+'\nworkbench_wait_port_available "$1"','fixture',String(port)],{encoding:'utf8',timeout:5000});
+ assert.equal(r.status,1,r.stderr);assert.match(r.stderr,/WORKBENCH_PORT_STILL_BUSY/);
+ assert.ok(performance.now()-started<3000,'端口占用不能无界等待');assert.equal(holder.exitCode,null,'不得杀外来进程');
+});
