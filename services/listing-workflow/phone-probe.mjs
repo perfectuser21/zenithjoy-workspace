@@ -115,6 +115,11 @@ export async function probeReadOnly(config, dependencies = {}) {
     foregroundAfter = await requireForeground();
   } catch (error) {
     failure = error;
+    // 获取锁的HTTP回执也可能丢失：先确认服务端归属，才能释放本次真正取得的锁。
+    if (!acquired) {
+      try { acquired = await brain.owner(config.serial) === owner; }
+      catch (ownershipError) { trace.push({ acquireOwnershipUnconfirmed: ownershipError.message }); }
+    }
     // 错前台截图只留本地诊断，不作商品证据或上传；来电/离线/无锁时不继续读取UI。
     if (acquired && online && callIdle && !screenshot) {
       try { const bytes = await run('screenshot'); if (validScreenshot(bytes)) save('diagnostic-screen.png', bytes); }
