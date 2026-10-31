@@ -23,6 +23,10 @@
         {
           "id": "line07",
           "name": "Line 07 AI爆款视频翻拍"
+        },
+        {
+          "id": "line08",
+          "name": "Line 08 电商商品运营"
         }
       ]
     },
@@ -504,6 +508,25 @@
       ]
     },
     {
+      "id": "pdd_product_listing",
+      "app_id": "customer_app",
+      "line_id": "line08",
+      "name": "拼多多 · 图书商品上架（计划与驱动待真机验收）",
+      "status": "proposed",
+      "required_surfaces": [
+        "android"
+      ],
+      "steps": [
+        {
+          "id": "step1",
+          "name": "形成可核对的待提交商品内容和单次提交执行计划"
+        }
+      ],
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh"
+      ]
+    },
+    {
       "id": "ability_acceptance",
       "app_id": "staff_app",
       "line_id": "line00",
@@ -634,5 +657,5 @@
       ]
     }
   ],
-  "digest": "71a323dfcb19eb31288d8b8123c90bb4a178448cde1f6d338d8a8ec97212e727"
+  "digest": "485fcc93fbe8fdb9bebbf3ee54d6ed3dff5057eaec0784977106a42d3ac86282"
 }

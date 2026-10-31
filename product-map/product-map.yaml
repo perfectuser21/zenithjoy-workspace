@@ -18,6 +18,8 @@ apps:
         name: Line 05 视频剪辑
       - id: line07
         name: Line 07 AI爆款视频翻拍
+      - id: line08
+        name: Line 08 电商商品运营
 
   - id: staff_app
     name: 员工后台（Staff App）
@@ -43,6 +45,19 @@ editions:
 
 # Golden Paths
 golden_paths:
+  # 候选业务流程：当前交付待提交内容与单次提交计划，真实生产上架尚未验收。
+  - id: pdd_product_listing
+    app_id: customer_app
+    line_id: line08
+    name: 拼多多 · 图书商品上架（计划与驱动待真机验收）
+    status: proposed
+    required_surfaces: [android]
+    steps:
+      - id: step1
+        name: 形成可核对的待提交商品内容和单次提交执行计划
+    smoke_files:
+      - .github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh
+
   # 2026-08-12 收敛（本 sprint，判定点见 contract-draft.md）：与 ability_acceptance 疑似功能重叠，
   # 决策 fc7b5dc0 重写的是"验收"（ability_acceptance 所指代的功能域），skill_acceptance 未见后续
   # 重写/CI 覆盖证据，标记 deprecated（条目保留不删除）。
