@@ -33,12 +33,13 @@ test('评分与标记人按run真实认领ID读回，不借历史batch假扮本�
  assert.match(readFileSync(doc.checks,'utf8'),/独立查询PG/);
 });
 
-test('103异步bridge与104独立资格必须有真实正式合同和读回，原评分不改变',()=>{
+test('103终态排除与异步bridge、104独立资格均有正式合同和读回',()=>{
  const ctx=loadContractsFromDisk(),processing=ctx.contracts.douyin_video_processing,scoring=ctx.contracts.douyin_comment_scoring,outreach=ctx.contracts.douyin_lead_outreach;
  assert.ok(ctx.objectTypes.NativeRecipientEvidence);assert.ok(ctx.objectTypes.RecipientQualification);assert.ok(ctx.objectTypes.OutreachBridgeIntent);
  assert.ok(processing.activities.find(a=>a.key==='collection').outputs.some(o=>o.type==='Comment'&&o.fields.includes('recipient_evidence')));
- assert.equal(scoring.activities.find(a=>a.key==='scoring').version,'2.4.0');
+ assert.equal(scoring.activities.find(a=>a.key==='scoring').version,'2.5.0');
  const mark=scoring.activities.find(a=>a.key==='mark_leads');assert.ok(mark.outputs.some(o=>o.type==='OutreachBridgeIntent'));assert.ok(mark.postconditions.some(p=>p.probe==='bridge_readback'));
  assert.ok(outreach.activities.find(a=>a.key==='send_dm').inputs.some(o=>o.type==='RecipientQualification'));
  const checks=loadChecks(scoring.checks,'services/phone-adb-controller/checks/schema.json');assert.ok(checks.doc.probes.some(p=>p.key==='bridge_readback'&&p.probe.ref==='metrics.bridge_readback_failures'&&p.expect.value===0));
+ assert.ok(checks.doc.probes.some(p=>p.key==='exclusion_readback'&&p.probe.ref==='metrics.exclusion_readback_failures'&&p.expect.value===0&&p.severity==='error'));
 });

@@ -50,6 +50,8 @@ const originalFiles=[
   "services/phone-adb-controller/__tests__/discovery-receipt-recovery.test.mjs",
   "services/phone-adb-controller/__tests__/drift-check.test.mjs",
   "services/phone-adb-controller/__tests__/empty-collection.test.mjs",
+  "services/phone-adb-controller/__tests__/leadgen-103-double-policy.test.mjs",
+  "services/phone-adb-controller/__tests__/leadgen-103-policy.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-client.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-adb-route.test.mjs",
   "services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs",
