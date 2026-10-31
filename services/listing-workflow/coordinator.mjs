@@ -6,8 +6,10 @@ function canonical(value) {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
   if (Array.isArray(value)) {
-    if (Array.from({ length: value.length }, (_, i) => i).some(i => !Object.hasOwn(value, i))) throw new Error('INVALID_JSON_INPUT');
-    return `[${value.map(canonical).join(',')}]`;
+    if (Reflect.ownKeys(value).length !== value.length + 1) throw new Error('INVALID_JSON_INPUT');
+    const descriptors = Array.from({ length: value.length }, (_, i) => Object.getOwnPropertyDescriptor(value, i));
+    if (descriptors.some(d => !d || !d.enumerable || !('value' in d))) throw new Error('INVALID_JSON_INPUT');
+    return `[${descriptors.map(d => canonical(d.value)).join(',')}]`;
   }
   if (value && Object.getPrototypeOf(value) === Object.prototype) {
     if (Reflect.ownKeys(value).some(key => typeof key !== 'string' || !Object.getOwnPropertyDescriptor(value, key).enumerable || !('value' in Object.getOwnPropertyDescriptor(value, key)))) throw new Error('INVALID_JSON_INPUT');
