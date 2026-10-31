@@ -248,13 +248,17 @@ test('原截止在派发前已过时空scope可仅清理，不能冒称真实叶
 
 test('cleanup_only可过采集截止但不得过原global截止，过期保原锁',{skip:process.platform!=='darwin'},async t=>{
  const f=await discoveryFixture(t,{empty:true});try{
-  f.env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000));f.env.WF_RUN_MAX_SECONDS='2';f.h.state.budgetDeadline=Date.now()+300;
   const {invokeNativeActivity}=await f.load('leadgen-workflow.mjs');
   // 真实冷加载/调度准备可以超过业务300ms窗口；不能把准备耗时误当采集已运行。
   await new Promise(r=>setTimeout(r,350));
   const {discoveryCleanupEvidence}=await f.load('discovery-phone-scope.mjs');
+  f.env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000));f.env.WF_RUN_MAX_SECONDS='2';f.h.state.budgetDeadline=Date.now()+300;
   const result=await invokeNativeActivity(()=>f.h.collect_videos(),f.h.state);assert.ok(discoveryCleanupEvidence(result,f.context));
-  const global=(Number(f.env.WF_RUN_START_TS)+2)*1000;await new Promise(r=>setTimeout(r,Math.max(1,global-Date.now()+30)));
+  const global=(Number(f.env.WF_RUN_START_TS)+2)*1000;
+  await new Promise(r=>setTimeout(r,Math.max(1,f.h.state.budgetDeadline-Date.now()+30)));
+  assert.ok(Date.now()<global,'跨过采集截止的断言必须仍在原global内，不自动延长预算');
+  assert.ok(discoveryCleanupEvidence(result,f.context),'采集截止已过但原global未过，原cleanup能力仍有效');
+  await new Promise(r=>setTimeout(r,Math.max(1,global-Date.now()+30)));
   assert.equal(discoveryCleanupEvidence(result,f.context),null);f.h.state.currentActivity='cleanup';await assert.rejects(f.h.cleanup(),/IDENTITY_INVALID/);assert.equal(existsSync(f.ownerFile),true);
  }finally{rmSync(f.d,{recursive:true,force:true});}
 });
