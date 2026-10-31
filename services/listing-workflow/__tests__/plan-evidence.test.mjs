@@ -127,6 +127,10 @@ test('missing field schemas cannot silently weaken the trusted contract', t => {
   const f = fixture(t); delete f.options.policy.schemas.stock;
   assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
 });
+test('unsupported or inapplicable schema constraints fail rather than being ignored', t => {
+  const f = fixture(t); f.options.policy.schemas.stock.minLength = 100;
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
 test('production CLI rejects caller supplied historical clocks', t => {
   const f = fixture(t), root = f.options.evidenceRoot;
   writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
