@@ -131,3 +131,19 @@ test('MMV RPC 未继承 Brain 变量时从本机 0600 缓存只读取 token',asy
   globalThis.fetch=prior.fetch;rmSync(home,{recursive:true,force:true});
  }
 });
+test('mark_leads 在来源正式验收失效时不建线索或配送',async()=>{
+ const f=fixture({proof:{business_outcome:'partial'}}),calls=[];
+ f.comments[0].relevance='相关';f.comments[0].intent_grade='A';
+ const query=f.pool.query.bind(f.pool);
+ f.pool.query=async(sql,args)=>{
+  calls.push(sql);
+  if(sql==='BEGIN'||sql==='COMMIT'||sql==='ROLLBACK'||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
+  if(sql.includes('ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED'))return {rows:[f.comments[0]]};
+  return query(sql,args);
+ };
+ f.pool.connect=async()=>({query:f.pool.query.bind(f.pool),release(){}});
+ await assert.rejects(queueRequest(f.pool,{op:'mark_leads',line:'jinuo',run:'new103',source_run:SOURCE,limit:1},
+  {sourceCommit:NEW_SHA,freezeCompanyConfig:async()=>({company_id:'company',tenant_id:'tenant',version:14}),
+   sampledAdmission:{readProof:async()=>f.proof,verifyRecipient:()=>true}}),/SAMPLED_ADMISSION_RUN_PROOF_INVALID/);
+ assert.equal(calls.some(sql=>/INSERT INTO zenithjoy\.leadgen_(?:leads|bridge_outbox)/.test(sql)),false);
+});
