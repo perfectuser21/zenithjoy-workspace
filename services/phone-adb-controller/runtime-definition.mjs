@@ -34,11 +34,12 @@ export function assertCommentSampling(snapshot,env){
 // 104只接受私有文件中的唯一订单身份，冻结进run后续跑逐字段核对。
 export function outreachScopeInput(env){
  const file=env.LEADGEN_OUTREACH_SCOPE_FILE;
+ if(env.LEADGEN_OUTREACH_MODE&&!['exact','company_queue'].includes(env.LEADGEN_OUTREACH_MODE))throw Error('OUTREACH_SCOPE_MODE_MISMATCH');
  if(file===undefined||file===null||file===''){
-  if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND==='1')throw Error('OUTREACH_SCOPE_REQUIRED');
+  if(env.LEADGEN_OUTREACH_MODE==='exact')throw Error('OUTREACH_SCOPE_REQUIRED');
   return null;
  }
- if(env.WF_BRAIN_WORKFLOW!=='douyin_lead_outreach'||!isAbsolute(file))throw Error('OUTREACH_SCOPE_INVALID');
+ if(env.LEADGEN_OUTREACH_MODE==='company_queue'||env.WF_BRAIN_WORKFLOW!=='douyin_lead_outreach'||!isAbsolute(file))throw Error('OUTREACH_SCOPE_INVALID');
  const stat=lstatSync(file);
  if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o077)!==0||stat.size<1||stat.size>4096)throw Error('OUTREACH_SCOPE_FILE_INVALID');
  const input=JSON.parse(readFileSync(file,'utf8'));
@@ -49,7 +50,6 @@ export function outreachScopeInput(env){
 export function assertOutreachScope(snapshot,env){
  const requested=outreachScopeInput(env),frozen=snapshot.outreach_scope||null;
  if(canonical(requested)!==canonical(frozen))throw Error('OUTREACH_SCOPE_RESUME_MISMATCH');
- if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND==='1'&&!frozen)throw Error('OUTREACH_SCOPE_REQUIRED');
  return frozen;
 }
 // v1严格限制首屏候选数；v2显式限制实际尝试，二者均独立于成功入库数。

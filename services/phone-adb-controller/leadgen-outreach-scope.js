@@ -12,6 +12,12 @@ function validateOutreachScope(scope,expected={}){
  return scope;
 }
 
+function resolveOutreachMode(mode,scope){
+ const selected=mode||((scope===undefined||scope===null)?'company_queue':'exact');
+ if(!['exact','company_queue'].includes(selected)||selected==='exact'&&!scope||selected==='company_queue'&&scope)throw Error('OUTREACH_SCOPE_MODE_MISMATCH');
+ return selected;
+}
+
 function matchesOutbox(scope,row){
  const p=row?.payload;
  return row?.line_key===scope.line_key&&row?.state==='confirmed'&&row?.qualification_status==='passed'
@@ -23,4 +29,4 @@ function matchesOutbox(scope,row){
   &&String(p?.target_douyin_id||'').toLowerCase()===scope.target_douyin_id.toLowerCase();
 }
 
-module.exports={validateOutreachScope,matchesOutbox};
+module.exports={validateOutreachScope,resolveOutreachMode,matchesOutbox};

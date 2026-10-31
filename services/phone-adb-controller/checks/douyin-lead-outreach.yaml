@@ -99,7 +99,7 @@ probes:
     failure_class: needs_human
     on_fail: fail_stage
     note: 原生发送前后 XML、账号与目标、批准正文、风险页及前台原件均核验；结果未知不得判成功。
-  - key: out_exact_order_scope_verified
+  - key: out_order_scope_verified
     stage: send_dm
     journey_cell: stage:send_dm
     probe:

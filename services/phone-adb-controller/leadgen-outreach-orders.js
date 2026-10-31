@@ -5,7 +5,7 @@ const {routeOf}=require('./line-routes.js');
 const {computeDailyCap}=require('./dm-rate-ramp-lib.js');
 const {txt}=require('./next-outreach-lib.js');
 const lib=require('./next-outreach-lib.js');
-const {validateOutreachScope}=require('./leadgen-outreach-scope.js');
+const {validateOutreachScope,resolveOutreachMode}=require('./leadgen-outreach-scope.js');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const validId=v=>typeof v==='string'&&/^[A-Za-z0-9_.-]{1,64}$/.test(v);
 const recordId=v=>typeof v==='string'&&/^rec[A-Za-z0-9]{6,40}$/.test(v);
@@ -69,7 +69,7 @@ async function orderClient(route,{env=process.env,fetcher=fetch,read=fs.readFile
 function marker(kind,run,source){return `[104 ${kind}:${run}:${source}]`;}
 function receiptValid(input,line,source){const r=input.receipt;
  if(!r||r.version!==1||r.line!==line||r.run!==input.run||r.id!==input.id||r.source_commit!==source||!recordId(r.id)||!validId(r.profile)||!validId(r.sender_douyin_id)||!validId(r.target_douyin_id)||!r.script_id||!['A1','A2','B'].includes(r.script_version)||!/^https:\/\/(?:v|www)\.douyin\.com\/[A-Za-z0-9._/-]+$/.test(r.profile_url||'')||!/^[a-f0-9]{64}$/.test(r.message_sha256||'')||r.message_delta_verified!==true||r.delivery_verified!==false||!['sent','restricted','rate_limited'].includes(r.outcome))throw Error('触达本轮原始证明缺失或不符');
- validateOutreachScope(r.outreach_scope,{record_id:r.id,line_key:line,run_tag:r.run,profile:r.profile,target_douyin_id:r.target_douyin_id,company_id:r.company_config?.company_id});
+ if(resolveOutreachMode(r.outreach_mode,r.outreach_scope)==='exact')validateOutreachScope(r.outreach_scope,{record_id:r.id,line_key:line,run_tag:r.run,profile:r.profile,target_douyin_id:r.target_douyin_id,company_id:r.company_config?.company_id});
  for(const [key,suffix]of Object.entries({typed:'typed.xml',sent:'sent.xml',risk:'risk.xml',send_foreground:'send-foreground.txt',risk_foreground:'risk-foreground.txt'})){
   const f=r.raw_evidence?.[key];if(f?.file!==input.run+'-a2-dm-1-'+suffix||!/^[a-f0-9]{64}$/.test(f.sha256||''))throw Error('触达原始证明不完整');
  }return r;
@@ -78,7 +78,8 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
  const route=routeOf(input.line),run=input.run;
  if(!/^[a-zA-Z0-9_-]{1,64}$/.test(run||'')||!/^[a-f0-9]{40}$/.test(sourceCommit||''))throw Error('触达正式运行来源证明缺失');
  if(input.op==='claim_outreach')sender(route,input.profile,input.sender_douyin_id);
- const scope=['claim_outreach','prepare_outreach'].includes(input.op)
+ const mode=['claim_outreach','prepare_outreach'].includes(input.op)?resolveOutreachMode(input.outreach_mode,input.outreach_scope):null;
+ const scope=mode==='exact'
   ?validateOutreachScope(input.outreach_scope,{run_tag:run,profile:input.profile,line_key:route.key,...(input.op==='prepare_outreach'?{record_id:input.id,target_douyin_id:input.target_douyin_id}:{})}):null;
  if(['write_outreach','outreach_readback'].includes(input.op))receiptValid(input,route.key,sourceCommit);
  if(input.op!=='claim_outreach'&&!recordId(input.id))throw Error('触达原订单ID无效');
@@ -86,14 +87,18 @@ async function outreachRequest(input,{sourceCommit,client,policy=outreachPolicy,
  return lock(route.key,async()=>{
   if(input.op==='claim_outreach'){
    if(input.limit!==1)throw Error('触达必须显式首单范围');const all=await api.all();
-   const target=all.filter(r=>r.record_id===scope.record_id);
-   if(target.length!==1)throw Error('OUTREACH_SCOPE_ORDER_NOT_FOUND');
+   const target=scope?all.filter(r=>r.record_id===scope.record_id):all;
+   if(scope&&target.length!==1)throw Error('OUTREACH_SCOPE_ORDER_NOT_FOUND');
    const qualified=new Set(await (eligibleOrders||((route,rows,input)=>require('./leadgen-outreach-bridge.js').eligibleOrders(route,rows,input,{pool,freezeCompanyConfig})))(route,target,input));
-   if(!qualified.has(scope.record_id))throw Error('OUTREACH_SCOPE_QUALIFICATION_NOT_VERIFIED');
+   if(scope&&!qualified.has(scope.record_id))throw Error('OUTREACH_SCOPE_QUALIFICATION_NOT_VERIFIED');
+   if(!qualified.size)return [];
    const p=await policy(input);
    const reserved=lib.reservedRecipientSet(all);
-   const pick=target[0],lead=lib.extractLead(pick.fields);
-   if(txt(pick.fields?.['状态'])!=='待触达'||lib.classifyPending(pick.fields)!=='ok'||!lib.gradeAllowed(lib.leadGrade(pick.fields),route.outreachGrades)||reserved.has(lead.dyid.toLowerCase())||lead.dyid.toLowerCase()!==scope.target_douyin_id.toLowerCase())throw Error('OUTREACH_SCOPE_ORDER_NOT_READY');
+   const rows=target.filter(r=>qualified.has(r.record_id)&&txt(r.fields?.['状态'])==='待触达'&&lib.classifyPending(r.fields)==='ok'&&lib.gradeAllowed(lib.leadGrade(r.fields),route.outreachGrades)&&!reserved.has(lib.extractLead(r.fields).dyid.toLowerCase()));
+   if(scope&&(!rows.length||lib.extractLead(rows[0].fields).dyid.toLowerCase()!==scope.target_douyin_id.toLowerCase()))throw Error('OUTREACH_SCOPE_ORDER_NOT_READY');
+   rows.sort((a,b)=>(Number(b.fields['重复命中次数'])||0)-(Number(a.fields['重复命中次数'])||0)||lib.gradeRank(lib.leadGrade(a.fields))-lib.gradeRank(lib.leadGrade(b.fields)));
+   if(!rows.length)return [];
+   const pick=rows[0],lead=lib.extractLead(pick.fields);
    const fields={'状态':'触达中','话术ID':p.template.id,'话术版本':p.template.version,'话术内容':p.template.message,'实际分发号':input.profile+'('+input.sender_douyin_id+')','回复结果':marker('claim',run,sourceCommit)};
    await api.put(pick.record_id,fields);const back=await api.get(pick.record_id);
    if(!back||Object.entries(fields).some(([key,v])=>txt(back.fields?.[key])!==v))throw Error('触达原订单预写读回不符');

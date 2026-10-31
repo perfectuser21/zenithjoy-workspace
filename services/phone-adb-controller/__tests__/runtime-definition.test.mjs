@@ -55,6 +55,14 @@ test('104精确订单输入冻结到run，改comment来源或撤掉输入均不�
  await assert.rejects(freezeDefinition({...f.options,outreachScope:outreachScopeInput(env)}),/OUTREACH_SCOPE/);
  assert.throws(()=>assertOutreachScope(frozen,{...env,LEADGEN_OUTREACH_SCOPE_FILE:undefined}),/OUTREACH_SCOPE/);
 });
+test('104普通派发可无精确文件；显式exact缺文件不得退回公司队列',async()=>{
+ const {outreachScopeInput,assertOutreachScope}=await import('../runtime-definition.mjs');
+ const env={WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',WFR_TAG:'daily104',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo'};
+ assert.equal(outreachScopeInput(env),null);
+ assert.equal(assertOutreachScope({outreach_scope:null},env),null);
+ assert.throws(()=>outreachScopeInput({...env,LEADGEN_OUTREACH_MODE:'exact'}),/OUTREACH_SCOPE_REQUIRED/);
+ assert.throws(()=>outreachScopeInput({...env,LEADGEN_OUTREACH_MODE:'invalid'}),/OUTREACH_SCOPE_MODE_MISMATCH/);
+});
 
 test('HTTP→符号链接真实prepare CLI→冻结目录：读取精确历史版本，运行后latest和步骤清单变化不替换冻结快照',async t=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');const f=fixture();const seen=[];

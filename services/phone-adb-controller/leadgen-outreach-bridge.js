@@ -109,22 +109,24 @@ module.exports={digest,enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fi
 async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPolicy}={}){
  if(!pool)throw Error('BRIDGE_PG_AUTHORITY_MISSING');
  {
-  const scope=validateOutreachScope(input.outreach_scope,{line_key:route.key,run_tag:input.run,profile:input.profile});
+  const scope=input.outreach_scope?validateOutreachScope(input.outreach_scope,{line_key:route.key,run_tag:input.run,profile:input.profile}):null;
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,step:'104'});
-  if(snapshot.company_id!==scope.company_id)throw Error('OUTREACH_SCOPE_COMPANY_MISMATCH');
-  if(all.length!==1||all[0]?.record_id!==scope.record_id)throw Error('OUTREACH_SCOPE_ORDER_MISMATCH');
-  const rows=(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2 AND comment_id=$3",[route.key,scope.record_id,scope.comment_id])).rows;
-  if(rows.length!==1)return [];
+  if(scope&&snapshot.company_id!==scope.company_id)throw Error('OUTREACH_SCOPE_COMPANY_MISMATCH');
+  if(scope&&(all.length!==1||all[0]?.record_id!==scope.record_id))throw Error('OUTREACH_SCOPE_ORDER_MISMATCH');
+  const ids=all.map(r=>r.record_id);if(ids.length>3000)throw Error('BRIDGE_ORDER_SCOPE_EXCEEDED');
+  const rows=scope?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2 AND comment_id=$3",[route.key,scope.record_id,scope.comment_id])).rows
+   :ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
+  if(scope&&rows.length!==1)return [];
   const allowed=[];
   for(const row of rows){try{
-   if(!matchesOutbox(scope,row))continue;
+   if(scope?!matchesOutbox(scope,row):rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
    const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
    const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
      {run:p.run,scoring_run:p.scoring_run,source_run:p.comment_run,source_video:p.source_video,source_video_url:p.source_video_url});
    if(policy.status!=='pass')continue;
    if(!row.fields||digest(row.fields)!==row.fields_sha256)continue;
-   const found=all.filter(r=>r.record_id===scope.record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(scope.record_id);
+   const found=all.filter(r=>r.record_id===row.feishu_record_id);if(found.length===1&&fieldsMatch(row,found[0]))allowed.push(row.feishu_record_id);
   }catch{/* 旧/错scope/缺native证明均不ready，不改原记录。 */}}
   return allowed;
  }
@@ -133,15 +135,16 @@ module.exports.eligibleOrders=eligibleOrders;
 
 async function reviewPreparedOrder(route,record,{pool,run,scope,freezeCompanyConfig,reviewPolicy}={}){
  if(!pool||!record?.record_id||!run)return false;
- validateOutreachScope(scope,{record_id:record.record_id,line_key:route.key,run_tag:run});
- const rows=(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2 AND comment_id=$3",[route.key,scope.record_id,scope.comment_id])).rows;
+ if(scope)validateOutreachScope(scope,{record_id:record.record_id,line_key:route.key,run_tag:run});
+ const rows=scope?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2 AND comment_id=$3",[route.key,scope.record_id,scope.comment_id])).rows
+  :(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2",[route.key,record.record_id])).rows;
  if(rows.length!==1)return false;
  try{
-  if(!matchesOutbox(scope,rows[0]))return false;
+  if(scope&&!matchesOutbox(scope,rows[0]))return false;
   const companyBinding=await collectionBinding(pool,rows[0].payload?.line_key,rows[0].payload?.comment_run,rows[0].payload?.recipient_evidence);
   const p=nativeIntent(rows[0],{companyBinding});
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:run,step:'104'});
-  if(snapshot.company_id!==scope.company_id||run===p.run||run===p.scoring_run||!frozenQualification(p,snapshot))return false;
+  if(scope&&snapshot.company_id!==scope.company_id||run===p.run||run===p.scoring_run||!frozenQualification(p,snapshot))return false;
   if(txt(record.fields?.['抖音号']).toLowerCase()!==String(p.target_douyin_id).toLowerCase()
     ||txt(record.fields?.['主页链接'])!==p.profile_url)return false;
   const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,

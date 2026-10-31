@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 const {routeOf}=createRequire(import.meta.url)('./line-routes.js');
 const {computeDailyCap}=createRequire(import.meta.url)('./dm-rate-ramp-lib.js');
-const {validateOutreachScope}=createRequire(import.meta.url)('./leadgen-outreach-scope.js');
+const {validateOutreachScope,resolveOutreachMode}=createRequire(import.meta.url)('./leadgen-outreach-scope.js');
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const one=(stdout,key)=>{const rows=stdout.split('\n').filter(s=>s.startsWith(key+'='));if(rows.length!==1)throw Error('触达回执字段缺失或不唯一: '+key);return rows[0].slice(key.length+1).trim();};
@@ -32,7 +32,8 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
   if(!/^[a-f0-9]{40}$/.test(state.source_commit||''))throw Error('触达正式来源证明缺失');
   const config=state.company_config;
   if(!config?.company_id||!config.version)throw Error('COMPANY_CONFIG_RECEIPT_MISSING');
-  validateOutreachScope(state.outreach_scope,{run_tag:run,profile,serial:env.SERIAL,line_key:routeOf(line).key,company_id:config.company_id});
+  state.outreach_mode=resolveOutreachMode(env.LEADGEN_OUTREACH_MODE,state.outreach_scope);
+  if(state.outreach_mode==='exact')validateOutreachScope(state.outreach_scope,{run_tag:run,profile,serial:env.SERIAL,line_key:routeOf(line).key,company_id:config.company_id});
   const route=routeOf(line),contact=config.runtime_config?.contact_rules;
   if(contact?.ssot!=='feishu'||contact.feishu_base!==route.base||contact.orders_table!==route.lead||contact.approved_scripts_table!==route.script)throw Error('COMPANY_OUTREACH_SOURCE_MISMATCH');
   const sender=config.runtime_config?.platform_accounts?.find(a=>a.profile===profile&&a.verification_status==='verified'&&a.enabled===true);
@@ -44,7 +45,7 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
  };
  const send_dm=async()=>{
   risk();if(!policy||!state.account)throw Error('触达尚未通过账号及批准话术预检');
-  const rows=await queue('claim_outreach',{profile,sender_douyin_id:state.account,outreach_scope:state.outreach_scope});
+  const rows=await queue('claim_outreach',{profile,sender_douyin_id:state.account,outreach_mode:state.outreach_mode,outreach_scope:state.outreach_scope});
   if(rows.length!==1) return {status:'skipped',reason:'没有符合合同的未发送订单',sent:0,messages_sent_while_paused:0};
   [order]=rows;
   if(order.sender_douyin_id!==state.account||order.line_key!==policy.line_key||order.script_id!==policy.template.id||order.script_version!==policy.template.version||order.message!==policy.template.message)throw Error('领单与批准快照不符');
@@ -52,7 +53,7 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
   // 先消费本次尝试额度，再提交原订单永久预留。回复丢失也不允许第二次手机发送。
   mkdirSync(stateDir,{recursive:true});writeFileSync(current.path,String(current.value+1),{mode:0o600});chmodSync(current.path,0o600);
   prepared=true;
-  const permit=await queue('prepare_outreach',{id:order.id,profile,sender_douyin_id:state.account,outreach_scope:state.outreach_scope,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),target_douyin_id:order.douyin_id,profile_url:order.profile_url});
+  const permit=await queue('prepare_outreach',{id:order.id,profile,sender_douyin_id:state.account,outreach_mode:state.outreach_mode,outreach_scope:state.outreach_scope,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),target_douyin_id:order.douyin_id,profile_url:order.profile_url});
   if(permit?.prepared!==true||permit.order?.id!==order.id)throw Error('发送永久预留回执未知');
   const eid=`${run}-a2-dm-1`;
   const stdout=await phone('private-message-send',state.account,order.douyin_id,Buffer.from(order.message).toString('base64'),eid,order.profile_url);
@@ -97,7 +98,7 @@ if actual!=expected: raise ValueError('outcome mismatch')
 print('verified')`,target,order.message,outcome],{encoding:'utf8',timeout:5000,maxBuffer:4096});
   if(verify.status!==0||verify.stdout.trim()!=='verified')throw Error('归档私信原始证明独立核验失败');
   if(outcome==='rate_limited')writeFileSync(join(stateDir,`dm-halt-${profile}-${day()}.txt`),eid,{mode:0o600});
-  receipt={version:1,company_config:{company_id:state.company_config.company_id,tenant_id:state.company_config.tenant_id,version:state.company_config.version,product_ids:state.company_config.product_ids,policy_id:state.company_config.policy_id},outreach_scope:state.outreach_scope,source_commit:state.source_commit,line:policy.line_key,run,profile,id:order.id,sender_douyin_id:state.account,target_douyin_id:order.douyin_id,profile_url:order.profile_url,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),outcome,delivery_verified:false,message_delta_verified:true,raw_evidence:stored,typed_evidence_file:stored.typed.file,typed_evidence_sha256:stored.typed.sha256,evidence_file:stored.sent.file,evidence_sha256:stored.sent.sha256};
+  receipt={version:1,company_config:{company_id:state.company_config.company_id,tenant_id:state.company_config.tenant_id,version:state.company_config.version,product_ids:state.company_config.product_ids,policy_id:state.company_config.policy_id},outreach_mode:state.outreach_mode,outreach_scope:state.outreach_scope,source_commit:state.source_commit,line:policy.line_key,run,profile,id:order.id,sender_douyin_id:state.account,target_douyin_id:order.douyin_id,profile_url:order.profile_url,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),outcome,delivery_verified:false,message_delta_verified:true,raw_evidence:stored,typed_evidence_file:stored.typed.file,typed_evidence_sha256:stored.typed.sha256,evidence_file:stored.sent.file,evidence_sha256:stored.sent.sha256};
   writeFileSync(join(env.WFR_RUN_DIR,`${run}-outreach-receipt.json`),JSON.stringify(receipt),{mode:0o600});
   return {sent:outcome==='sent'?1:0,messages_sent:outcome==='sent'?1:0,orders_prepared:1,attempted:1,outcome,message_delta_verified:1,delivery_result_verified:1,outreach_scope_verified:1,messages_sent_while_paused:0,delivery_verified:false};
  };
