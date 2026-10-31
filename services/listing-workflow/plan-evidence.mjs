@@ -60,7 +60,7 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     }
     const identities = ['productId', 'sourceProductKey'];
     if (!text(input.businessKey) || !text(input.target?.storeId) || !identities.some(k => text(input.target?.[k])) ||
-      identities.some(k => input.target[k] != null && !text(input.target[k])) || !input.plan || Array.isArray(input.plan) ||
+      Object.entries(input.target).some(([k, v]) => k === 'businessKey' || (v == null ? !identities.includes(k) : !text(v))) || !input.plan || Array.isArray(input.plan) ||
       typeof input.plan !== 'object' || !Array.isArray(input.proofs)) throw new Error('INVALID_REQUEST');
   } catch (error) { issue(error.message, 'rejected'); return finish(); }
   const documents = new Map();
@@ -76,7 +76,7 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     if (documents.has(document.kind)) { issue('DUPLICATE_DOCUMENT_KIND', 'rejected', { kind: document.kind }); continue; }
     documents.set(document.kind, document);
     const subject = { businessKey: input.businessKey, storeId: input.target.storeId };
-    for (const key of ['productId', 'sourceProductKey']) if (text(input.target[key])) subject[key] = input.target[key];
+    for (const [key, value] of Object.entries(input.target)) if (text(value)) subject[key] = value;
     for (const [key, expected] of Object.entries(subject)) {
       if (document.subject?.[key] !== expected) issue('SUBJECT_MISMATCH', 'rejected', { kind: document.kind, field: key });
     }
