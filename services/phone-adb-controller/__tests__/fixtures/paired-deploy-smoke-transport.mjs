@@ -20,7 +20,10 @@ export function prepare(root){
 // 明示mock的PG catalog输入；生产evaluateCompanyReadiness负责给出结论。
 function companyInventory(){
  const tables={tenant_company_profiles:{company_id:'uuid',tenant_id:'uuid',company_key:'text',wiki:'jsonb',runtime_config:'jsonb',config_status:'text',config_version:'integer',source_evidence:'jsonb'},company_config_versions:{company_id:'uuid',tenant_id:'uuid',version:'integer',snapshot:'jsonb'},company_config_runs:{company_id:'uuid',tenant_id:'uuid',run_id:'text',version:'integer',snapshot:'jsonb',task_inputs:'jsonb',source_run:'text'},leadgen_videos:{judgment_config:'jsonb'},leadgen_comments:{judgment_config:'jsonb'}};
- return {columns:Object.entries(tables).flatMap(([table_name,fields])=>Object.entries(fields).map(([column_name,data_type])=>({table_name,column_name,data_type}))),indexes:[{tablename:'company_config_runs',indexdef:'CREATE UNIQUE INDEX fixture_run_key ON zenithjoy.company_config_runs (company_id, run_id)'}],triggers:['immutable_company_run','immutable_company_version'].map(tgname=>({tgname,tgenabled:'O'})),profiles:[]};
+ return {columns:Object.entries(tables).flatMap(([table_name,fields])=>Object.entries(fields).map(([column_name,data_type])=>({table_name,column_name,data_type}))),indexes:[{tablename:'company_config_runs',indexdef:'CREATE UNIQUE INDEX fixture_run_key ON zenithjoy.company_config_runs (company_id, run_id)'}],triggers:['immutable_company_run','immutable_company_version'].map(tgname=>({tgname,tgenabled:'O'})),constraints:[
+  {conname:'chk_leadgen_comments_status',convalidated:true,definition:"CHECK ((process_status = ANY (ARRAY['待分拣'::text, '已分拣'::text, '已排除'::text])))"},
+  {conname:'chk_leadgen_comments_excluded_unscored',convalidated:true,definition:"CHECK (((process_status <> '已排除'::text) OR ((relevance IS NULL) AND (intent_grade IS NULL))))"},
+ ],profiles:[]};
 }
 const sqlSource='apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql';
 const sqlName=basename(sqlSource);
