@@ -51,4 +51,10 @@ test('恢复动作停止状态不明时，RPC 不得把阶段码当成已停或�
   const error=Error('FALSE_EXCLUSION_UPDATE_FAILED');error.executionStopped=false;
   assert.deepEqual(rpc.rpcFailureReceipt(error),
     {ok:false,error:'RPC_EXECUTION_STOP_UNKNOWN',execution_stopped:false,external_effect:'unknown'});
+  assert.deepEqual(rpc.rpcFailureReceipt(Error('FALSE_EXCLUSION_COMMIT_UNKNOWN_READBACK_REQUIRED')),
+    {ok:false,error:'RPC_RECOVERY_STAGE:COMMIT_UNKNOWN_READBACK_REQUIRED',
+      execution_stopped:false,external_effect:'unknown'});
+  assert.deepEqual(rpc.rpcFailureReceipt(Error('FALSE_EXCLUSION_ROLLBACK_UNKNOWN')),
+    {ok:false,error:'RPC_RECOVERY_STAGE:ROLLBACK_UNKNOWN',
+      execution_stopped:false,external_effect:'unknown'});
 });
