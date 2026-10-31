@@ -60,7 +60,7 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     }
     const identities = ['productId', 'sourceProductKey'];
     if (!text(input.businessKey) || !text(input.target?.storeId) || !identities.some(k => text(input.target?.[k])) ||
-      Object.entries(input.target).some(([k, v]) => k === 'businessKey' || (v == null ? !identities.includes(k) : !text(v))) || !input.plan || Array.isArray(input.plan) ||
+      Object.entries(input.target).some(([k, v]) => ['businessKey', '__proto__', 'constructor', 'prototype'].includes(k) || (v == null ? !identities.includes(k) : !text(v))) || !input.plan || Array.isArray(input.plan) ||
       typeof input.plan !== 'object' || !Array.isArray(input.proofs)) throw new Error('INVALID_REQUEST');
   } catch (error) { issue(error.message, 'rejected'); return finish(); }
   const documents = new Map();
@@ -75,10 +75,10 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     }
     if (documents.has(document.kind)) { issue('DUPLICATE_DOCUMENT_KIND', 'rejected', { kind: document.kind }); continue; }
     documents.set(document.kind, document);
-    const subject = { businessKey: input.businessKey, storeId: input.target.storeId };
+    const subject = Object.assign(Object.create(null), { businessKey: input.businessKey, storeId: input.target.storeId });
     for (const [key, value] of Object.entries(input.target)) if (text(value)) subject[key] = value;
     for (const [key, expected] of Object.entries(subject)) {
-      if (document.subject?.[key] !== expected) issue('SUBJECT_MISMATCH', 'rejected', { kind: document.kind, field: key });
+      if (!document.subject || !own(document.subject, key) || document.subject[key] !== expected) issue('SUBJECT_MISMATCH', 'rejected', { kind: document.kind, field: key });
     }
     // 创建请求尚无平台ID，不得把旧商品的观察记录冒充该次创建的前置证据。
     if (!text(input.target.productId) && document.subject?.productId != null) issue('SUBJECT_MISMATCH', 'rejected', { kind: document.kind, field: 'productId' });
