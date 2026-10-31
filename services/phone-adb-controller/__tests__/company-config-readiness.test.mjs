@@ -16,6 +16,18 @@ test('缺task_inputs、错误jsonb类型、无唯一运行键、无不可变守�
   const f=fixture();mutate(f);assert.throws(()=>evaluateCompanyReadiness(f),/COMPANY_SCHEMA_NOT_READY/);
  }
 });
+test('生产评分终态部署须先读回新CHECK约束，候选准备不要求生产迁移',()=>{
+ const old=fixture();
+ assert.equal(evaluateCompanyReadiness(old).schema_verified,true);
+ assert.throws(()=>evaluateCompanyReadiness(old,{requireScoringExclusion:true}),/COMPANY_SCHEMA_NOT_READY.*leadgen_comments/);
+ const ready={...old,constraints:[
+  {conname:'chk_leadgen_comments_status',convalidated:true,definition:"CHECK ((process_status = ANY (ARRAY['待分拣'::text, '已分拣'::text, '已排除'::text])))"},
+  {conname:'chk_leadgen_comments_excluded_unscored',convalidated:true,definition:"CHECK (((process_status <> '已排除'::text) OR ((relevance IS NULL) AND (intent_grade IS NULL))))"},
+ ]};
+ assert.equal(evaluateCompanyReadiness(ready,{requireScoringExclusion:true}).schema_verified,true);
+ assert.throws(()=>evaluateCompanyReadiness({...ready,constraints:ready.constraints.map(c=>({...c,convalidated:false}))},
+  {requireScoringExclusion:true}),/COMPANY_SCHEMA_NOT_READY/);
+});
 test('只读MMV探针不使用新模块或执行迁移，不依赖尚未安装的配置代码',async()=>{
  let script;const result=await remoteCompanyInventory({execute:async input=>{script=input;return fixture()}});
  assert.ok(result.columns.length);assert.match(script,/leadgen-db-connect.js/);assert.doesNotMatch(script,/CREATE TABLE|ALTER TABLE|UPDATE |INSERT |DELETE |require\('.\/company-config-lib/);
@@ -27,4 +39,5 @@ test('正式deploy入口在任何admission写或控制器安装前执行数据�
  assert.ok(gate>0);assert.ok(gate<shell.indexOf('\ncommander_admission\n'));
  assert.ok(gate<shell.indexOf('for f in "${MMV_JS_FILES[@]}"; do'));
  const code=readFileSync(new URL('../company-config-readiness.mjs',import.meta.url),'utf8');assert.match(code,/process.exitCode=1/);assert.match(code,/business_runtime_status/);
+ assert.match(code,/WF_DEPLOY_ENVIRONMENT.*production/);
 });

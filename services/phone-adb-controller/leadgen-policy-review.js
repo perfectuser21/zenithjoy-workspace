@@ -9,8 +9,9 @@ const safeReasons=new Set(['binding_unverified','policy_evidence_invalid','perso
   'audience_or_topic_evidence_missing','exclusion_evidence_missing','policy_exclusion_or_grade_mismatch',
   'policy_model_unavailable_or_invalid','policy_model_http','policy_model_transport',
   'policy_model_credential_missing','policy_model_evidence_invalid','policy_review_config_invalid',
-  'policy_review_internal_error','policy_review_budget_exhausted','policy_review_identity_reused']);
+  'policy_review_internal_error','policy_review_budget_exhausted','policy_review_identity_reused','policy_review_disagreement']);
 const safePolicyReviewReason=reason=>safeReasons.has(reason)?reason:null;
+const terminalEvidenceReasons=new Set(['personal_intent_evidence_missing','audience_or_topic_evidence_missing']);
 function policyModelFailure(error){
   const failure=scoreFailureReceipt(error);
   if(failure.code==='POLICY_SCORE_MODEL_HTTP')return {reason:'policy_model_http',
@@ -79,11 +80,16 @@ async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile
         &&String(fields['意向信号']||'').includes(proof.matched_rule))
         ||(verifiedQuestion&&sharedTopicEvidence(proof.comment_signal,proof.video_signal)));
     const hasIntent=explicitIntent(row.comment_body,snapshot.runtime_config.comment_scoring.audiences||[])||contextualIntent;
-    if(verdict.grade==='A'&&!hasIntent)return {...base,reason:'personal_intent_evidence_missing'};
+    const missingEvidence=reason=>({...base,reason,candidate_grade:verdict.grade,
+      model:verdict.audit.model,response_id:verdict.audit.response_id,
+      evidence_sha256:sha({model:verdict.audit.model,response_id:verdict.audit.response_id,proof}),
+      original_sha256:sha({relevance:row.relevance,intent_grade:row.intent_grade,
+        judgment_reason:row.judgment_reason,judgment_config:config})});
+    if(verdict.grade==='A'&&!hasIntent)return missingEvidence('personal_intent_evidence_missing');
     if(['B','C'].includes(verdict.grade)
       &&!(typeof proof.comment_signal==='string'&&proof.comment_signal.length>=3&&proof.comment_signal.length<=100
         &&row.comment_body.includes(proof.comment_signal)&&proof.comment_signal.includes(proof.matched_rule)))
-      return {...base,reason:'audience_or_topic_evidence_missing'};
+      return missingEvidence('audience_or_topic_evidence_missing');
     if(verdict.grade==='不相关'&&hasIntent&&!proof.exclusion_rule)return {...base,reason:'exclusion_evidence_missing'};
     const pass=verdict.grade===expected&&(!proof.exclusion_rule||verdict.grade==='不相关');
     const policyEvidence={audience_id:proof.audience_id,matched_rule:proof.matched_rule,
@@ -107,6 +113,19 @@ async function dualPolicyReview(row,snapshot,deps={}){
     return (deps.judgePolicy||judgeCommander)(...args);
   };
   const first=await evaluatePolicy(row,snapshot,{judgePolicy});
+  if(terminalEvidenceReasons.has(first.reason)&&first.status==='unknown'){
+    if(calls>=2)return {id:row.id,status:'unknown',reason:'policy_review_budget_exhausted',model_call_count:calls};
+    const second=await evaluatePolicy(row,snapshot,{judgePolicy});
+    if(second.status==='unknown'&&!terminalEvidenceReasons.has(second.reason))
+      return {...second,model_call_count:calls};
+    if(second.status!=='unknown'||second.reason!==first.reason||second.candidate_grade!==first.candidate_grade)
+      return {id:row.id,status:'unknown',reason:'policy_review_disagreement',model_call_count:calls};
+    if(!first.response_id||!second.response_id||first.response_id===second.response_id
+      ||!first.evidence_sha256||!second.evidence_sha256||first.evidence_sha256===second.evidence_sha256
+      ||first.original_sha256!==second.original_sha256)
+      return {id:row.id,status:'unknown',reason:'policy_review_identity_reused',model_call_count:calls};
+    return {id:row.id,status:'exclude',reason:first.reason,reviews:[first,second],model_call_count:calls};
+  }
   if(first.status!=='pass')return first;
   if(calls>=2)return {id:row.id,status:'unknown',reason:'policy_review_budget_exhausted'};
   const second=await evaluatePolicy(row,snapshot,{judgePolicy});

@@ -195,6 +195,7 @@ for f in "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[
   [[ " ${MMV_RUNTIME_FILES[*]-} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
 done
 RELEASE_EVIDENCE_FILES=(
+  apps/api/db/migrations/20261031_180000_leadgen_comment_policy_exclusion.sql=release-evidence/20261031_180000_leadgen_comment_policy_exclusion.sql
   apps/api/db/migrations/20261022_120000_discovery_metrics.sql=release-evidence/20261022_120000_discovery_metrics.sql
   apps/api/db/migrations/20261014_130000_leadgen_outreach_bridge.sql=release-evidence/20261014_130000_leadgen_outreach_bridge.sql
 )

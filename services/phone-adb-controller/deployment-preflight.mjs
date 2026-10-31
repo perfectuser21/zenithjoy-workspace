@@ -130,10 +130,12 @@ export async function preflightDeploymentReleases({manifest,environment,releaseI
  requireThat(releaseIds&&equal(Object.keys(releaseIds).sort(),[...DEPLOY_HOSTS].sort())&&DEPLOY_HOSTS.every(h=>UUID.test(releaseIds[h])),`必须明确全部${DEPLOY_HOSTS.length}目标release`);
  const releases=[];
  for(const target of DEPLOY_HOSTS){const id=releaseIds[target],response=await request(`/api/brain/releases/${id}`);releases.push(verifyRelease(response?.release,{id,environment,target,manifest}));}
- if(manifest.files?.some(f=>f.path.endsWith('/company-config-lib.js')||f.path==='company-config-lib.js')) {
+ const requireScoringExclusion=environment==='production'&&manifest.files?.some(f=>f.path==='release-evidence/20261031_180000_leadgen_comment_policy_exclusion.sql');
+ if(requireScoringExclusion||manifest.files?.some(f=>f.path.endsWith('/company-config-lib.js')||f.path==='company-config-lib.js')) {
   requireThat(typeof companyReadiness==='function','COMPANY_READINESS_REQUIRED');
-  const readiness=await companyReadiness();
+  const readiness=await companyReadiness({requireScoringExclusion});
   requireThat(readiness?.schema_verified===true&&['ready','disabled'].includes(readiness.business_runtime_status)&&Array.isArray(readiness.gaps),'COMPANY_READINESS_INVALID');
+  if(requireScoringExclusion)requireThat(readiness.scoring_exclusion_verified===true,'SCORING_EXCLUSION_SCHEMA_NOT_READY');
   releases.company_readiness=readiness;
  }
  return releases;
@@ -174,6 +176,6 @@ export function brainRequest(base,token){
  };
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{await preflightDeploymentReleases({manifest:JSON.parse(readFileSync(process.argv[2],'utf8')),environment:process.env.WF_DEPLOY_ENVIRONMENT,releaseIds:JSON.parse(process.env.WF_RELEASE_IDS||'{}'),request:brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN),companyReadiness:async()=>{const readiness=await checkDeploymentCompanyReadiness({requireEnabled:(process.env.WF_COMPANY_REQUIRE_ENABLED||'').split(',').filter(Boolean)});process.stderr.write(JSON.stringify({company_readiness:readiness})+'\n');return readiness;}});}
+ try{await preflightDeploymentReleases({manifest:JSON.parse(readFileSync(process.argv[2],'utf8')),environment:process.env.WF_DEPLOY_ENVIRONMENT,releaseIds:JSON.parse(process.env.WF_RELEASE_IDS||'{}'),request:brainRequest(process.env.BRAIN_URL,process.env.BRAIN_INTERNAL_TOKEN),companyReadiness:async options=>{const readiness=await checkDeploymentCompanyReadiness({requireEnabled:(process.env.WF_COMPANY_REQUIRE_ENABLED||'').split(',').filter(Boolean),...options});process.stderr.write(JSON.stringify({company_readiness:readiness})+'\n');return readiness;}});}
  catch(error){process.stderr.write(`${error.message}\n`);process.exitCode=1;}
 }

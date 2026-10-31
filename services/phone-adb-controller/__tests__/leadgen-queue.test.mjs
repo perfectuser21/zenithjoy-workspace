@@ -103,6 +103,38 @@ test('评分提交后丢回执，重启先按原 CID 读回并扣预算再续扫
  const result=await h.scoring();assert.equal(result.recovered,1);assert.equal(result.scored,2);assert.deepEqual(result.ids,ids);
  assert.equal(requests.filter(r=>r.op==='score').length,2);
 });
+
+test('103纯排除批次独立读回后完成，重启恢复同一排除且不进入政策评分读回',async()=>{
+ const {createHandlers}=await import('../leadgen-handlers.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'leadgen-exclusion-attempt-'));
+ const id='00000000-0000-4000-8000-000000000171',ids=[id];
+ const calls=[];let excluded=false;
+ const rpc=async({request:r})=>{calls.push(r);
+  if(r.op==='company_config')return {result:companyFixture()};
+  if(r.op==='score_scope')return {result:{ids:excluded?[]:ids,line:'jinuo',run:'score-exclusion',source_run:'batch102'}};
+  if(r.op==='score_recovery')return {result:{verified:true,ids:[],scored:0,
+   excluded_ids:excluded?ids:[],excluded:excluded?1:0}};
+  if(r.op==='score'){excluded=true;return {result:{scored:0,ids:[],excluded:1,excluded_ids:ids,
+   excluded_reasons:[{id,reason:'personal_intent_evidence_missing'}],blocked_ids:[]}};}
+  if(r.op==='score_readback')return {result:{verified:true,failures:0}};
+  if(r.op==='score_exclusion_readback')return {result:{verified:true,failures:0,ids,
+   excluded_reasons:[{id,reason:'personal_intent_evidence_missing'}]}};
+  throw Error(`unexpected ${r.op}`);
+ };
+ const env={P:'qa',SERIAL:'fake',WFR_TAG:'score-exclusion',LEADGEN_LINE:'jinuo',
+  LEADGEN_SOURCE_RUN:'batch102',LEADGEN_LIMIT:'1',WFR_RUN_DIR:dir,WF_HOME:dir,HOME:dir};
+ const handler=createHandlers({root:dir,env,rpc});
+ for(const expectedRecovered of [0,1]){
+  const result=await handler.scoring();
+  assert.equal(result.scored,0);assert.equal(result.excluded,1);
+  assert.equal(result.recovered_excluded,expectedRecovered);
+  assert.equal(result.status,undefined);
+  assert.equal(result.exclusion_readback_failures,0);
+ }
+ assert.equal(calls.filter(r=>r.op==='score').length,1);
+ assert.equal(calls.filter(r=>r.op==='policy_review').length,0);
+ assert.deepEqual(JSON.parse(readFileSync(join(dir,'score-exclusion-exclusion-readback.json'))).ids,ids);
+});
 test('并发同 run 评分在 PG 锁内重读已用额度，满额时不再领行',async()=>{
  const id='00000000-0000-4000-8000-000000000121',calls=[];
  const client={async query(sql,args=[]){calls.push({sql,args});if(sql.includes('count(*)::int AS used'))return {rows:[{used:1}]};return {rows:[]};},release(){}};

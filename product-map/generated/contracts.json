@@ -1,5 +1,5 @@
 {
-  "object_types": "ce642cbc574a55056bda1dc1521fb53b7a229d9691824998763d1609de21c32b",
+  "object_types": "d0a01018bc7823c8fddfbb9555612c1950bea2eb20e1206d6b6bb5fa6b758a5a",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -25,10 +25,10 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "c0d83ed70ee5d681b758b0e7c17ae1e6366c5f1b503cdddc73ef6f7a85ea46ec",
+      "sha256": "9d6523ae8da13b700284ea38c8f10792290ebff768405fbc1d743e51124028a3",
       "activities": {
-        "scoring": "ccba4dd2b6578d88fa0783478db4bc6de2ca9346940235b5d058d5a92385a177",
-        "mark_leads": "66369de4c9355f13f016bdd16c23e43e4bee417ec3946e45b9695347b8bd34db"
+        "scoring": "49ebcfbbd1d3ade923e6e64e1b8c20849c1d178cfe624cbdcf8028de1c749a4f",
+        "mark_leads": "e1fdc9607b355b93d516afcb9fb302fbc6abc772debfdcb002f7f998a7087801"
       }
     },
     "douyin_lead_outreach": {
