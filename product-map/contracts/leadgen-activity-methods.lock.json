@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "33ecda013e882d68873635c4976422f4b1033f7d95ab5b37e1e174cb83024e48",
+      "code_digest": "01752c5a9ab838c64440d08bd38a095f9b9b96c402118ed737418df5401c6691",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；101发现分支、搜索、筛选、视频持久化及预算均未改，正常101环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "2e41f836a1661518c9e3c25f52636fb85e548d5247da4c2e303dd819a7c288ff",
-        "current_code_digest": "33ecda013e882d68873635c4976422f4b1033f7d95ab5b37e1e174cb83024e48"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "33ecda013e882d68873635c4976422f4b1033f7d95ab5b37e1e174cb83024e48",
+        "current_code_digest": "01752c5a9ab838c64440d08bd38a095f9b9b96c402118ed737418df5401c6691"
       }
     },
     "douyin_video_processing.preflight": {
@@ -416,7 +416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "044fd083cc8bebad18ca45a8e9b5df6ebbabbeb31a75b2908a4016b0c0c68fd5",
+      "code_digest": "23f56a0a4e857dffd3b884160fde4f8978754d23e6b6c717f7069936588a66b8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；102预检、判重、资格、评论采集及收尾分支均未改，正常102环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "be3deddd0ee1640862de021b1c9504a335410f9d838e1dd37a71bc711e895859",
-        "current_code_digest": "044fd083cc8bebad18ca45a8e9b5df6ebbabbeb31a75b2908a4016b0c0c68fd5"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "044fd083cc8bebad18ca45a8e9b5df6ebbabbeb31a75b2908a4016b0c0c68fd5",
+        "current_code_digest": "23f56a0a4e857dffd3b884160fde4f8978754d23e6b6c717f7069936588a66b8"
       }
     },
     "douyin_video_processing.dedup": {
@@ -700,7 +700,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
         }
       ],
-      "code_digest": "53200d191286829ce3556fa0ed4199c08e443a3c2aa36d5c81f74b1f5a4504aa",
+      "code_digest": "34b2789b695cc4437b7c2a646abeedaa967acd606220058199c59dcc5e846623",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；102预检、判重、资格、评论采集及收尾分支均未改，正常102环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "dd035bdf4341c4a8679338648b2e834d89129cdb49a34e1b3d150acc1daaa68a",
-        "current_code_digest": "53200d191286829ce3556fa0ed4199c08e443a3c2aa36d5c81f74b1f5a4504aa"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "53200d191286829ce3556fa0ed4199c08e443a3c2aa36d5c81f74b1f5a4504aa",
+        "current_code_digest": "34b2789b695cc4437b7c2a646abeedaa967acd606220058199c59dcc5e846623"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1015,7 +1015,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -1221,13 +1221,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "717a156d05dda4663f10a0ca922918d1f614b251486fe89a5f7c8ab76335da02",
+      "code_digest": "5dca521a1c92d1ea20b92a046a874c29c6653a1dcb6c5f579ba79dec9dc3a3ce",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；102预检、判重、资格、评论采集及收尾分支均未改，正常102环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "7bc612acb0c991b9fcf35cba8e902dcdd7bdbc5b3ac49c46f61b1d560e2db34f",
-        "current_code_digest": "717a156d05dda4663f10a0ca922918d1f614b251486fe89a5f7c8ab76335da02"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "717a156d05dda4663f10a0ca922918d1f614b251486fe89a5f7c8ab76335da02",
+        "current_code_digest": "5dca521a1c92d1ea20b92a046a874c29c6653a1dcb6c5f579ba79dec9dc3a3ce"
       }
     },
     "douyin_video_processing.collection": {
@@ -1351,7 +1351,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -1523,13 +1523,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "ecf5a8db6c7c83a9fea507bdcd3ea3c7f8602c1b6403d6bf48134b570141deee",
+      "code_digest": "6216499c9c7965a47463561eb0c9fa4a80e38921099865c237a52bd542b9ea1b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；102预检、判重、资格、评论采集及收尾分支均未改，正常102环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "ca656a3f1ede2e7f7b69fc2cd1a8c6f52c3202dc4bdb414a89ee723a365f92a6",
-        "current_code_digest": "ecf5a8db6c7c83a9fea507bdcd3ea3c7f8602c1b6403d6bf48134b570141deee"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "ecf5a8db6c7c83a9fea507bdcd3ea3c7f8602c1b6403d6bf48134b570141deee",
+        "current_code_digest": "6216499c9c7965a47463561eb0c9fa4a80e38921099865c237a52bd542b9ea1b"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1646,7 +1646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -1799,13 +1799,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8ee623ee56ae58a9e97d5933da218d4287b6f3430c463f2a5143e89e664c1319",
+      "code_digest": "8362956c4e02353cfa949052db87f0fcca1012ad1ad3a777e97e8ecbd6bd5362",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；102预检、判重、资格、评论采集及收尾分支均未改，正常102环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "d5ba76df45bf777e36ee16a07cd26c22c5de39e53e64edbd0145a4b6de622842",
-        "current_code_digest": "8ee623ee56ae58a9e97d5933da218d4287b6f3430c463f2a5143e89e664c1319"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "8ee623ee56ae58a9e97d5933da218d4287b6f3430c463f2a5143e89e664c1319",
+        "current_code_digest": "8362956c4e02353cfa949052db87f0fcca1012ad1ad3a777e97e8ecbd6bd5362"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1922,7 +1922,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -2034,7 +2034,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-score-exclusion.js",
           "revision": "contract",
-          "sha256": "646e5d08c669e37c1ee9766f018053021919e280a34066d5714b27e6d656d366"
+          "sha256": "e2e342ac5b5344e613ddfcf706b1096ab42845980a0e1f413a7ceee747aff85d"
         },
         {
           "kind": "code",
@@ -2079,13 +2079,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "1417bd60fb5010d214f518f5c7fe549cfa1768238c4017c8840cdf07e5ee25cc",
+      "code_digest": "ce342538d747b3f0cb9e8547252f04c6a0af30762fdc5909111318d45068376c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；103评分、标人、单条恢复和PG桥接分支未改，正常103环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "14c7767a86c0be661c80cc0dc32fe3aa5e4fb55bdf94092b37ab23c9389005fd",
-        "current_code_digest": "1417bd60fb5010d214f518f5c7fe549cfa1768238c4017c8840cdf07e5ee25cc"
+        "reason": "103单条受控恢复仅新增固定安全错误阶段码；成功数据合同和评分政策未变，失败继续关闭执行。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "1417bd60fb5010d214f518f5c7fe549cfa1768238c4017c8840cdf07e5ee25cc",
+        "current_code_digest": "ce342538d747b3f0cb9e8547252f04c6a0af30762fdc5909111318d45068376c"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2209,7 +2209,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -2321,7 +2321,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-score-exclusion.js",
           "revision": "contract",
-          "sha256": "646e5d08c669e37c1ee9766f018053021919e280a34066d5714b27e6d656d366"
+          "sha256": "e2e342ac5b5344e613ddfcf706b1096ab42845980a0e1f413a7ceee747aff85d"
         },
         {
           "kind": "code",
@@ -2401,13 +2401,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "42d7fa1a1916d41e70d8db80a3941b7030f895ee3383e593fdbf203b06c45545",
+      "code_digest": "1f3a9f8a3444bd2e005142484a13e8dcec7e91b62c441d5b9b487d53cda50cd8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享运行闭包新增104精确订单输入读取与RPC文件传输；103评分、标人、单条恢复和PG桥接分支未改，正常103环境不带104范围文件。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "29264c78971e04109e6a563391793daeefd019996e6a6ae0cf10a301c6b953b9",
-        "current_code_digest": "42d7fa1a1916d41e70d8db80a3941b7030f895ee3383e593fdbf203b06c45545"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "42d7fa1a1916d41e70d8db80a3941b7030f895ee3383e593fdbf203b06c45545",
+        "current_code_digest": "1f3a9f8a3444bd2e005142484a13e8dcec7e91b62c441d5b9b487d53cda50cd8"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2524,7 +2524,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -2713,13 +2713,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "2782c71ca45f4f264e27a3d8ca8c162a740ee9323bff43eae3a1ff3ca478bd33",
+      "code_digest": "e6851f58b1aa825a922a7f81b615d1de579fb03e75d338814f5e5d5d4a5e55ba",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104预检仅增exact范围模式和公司配置身份校验，普通company_queue账号、锁、政策及限额行为保持；仍无领取或手机发送。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "748e5e3f0b8bc763ce2612b948ba187abf73a4144326a3c6e931ed8fc511bca0",
-        "current_code_digest": "2782c71ca45f4f264e27a3d8ca8c162a740ee9323bff43eae3a1ff3ca478bd33"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "2782c71ca45f4f264e27a3d8ca8c162a740ee9323bff43eae3a1ff3ca478bd33",
+        "current_code_digest": "e6851f58b1aa825a922a7f81b615d1de579fb03e75d338814f5e5d5d4a5e55ba"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2836,7 +2836,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -3000,7 +3000,14 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8118ee7a33092dce84c8d4137e6071cfcd4d45ac3f61a8397260886b27da9e06"
+      "code_digest": "a4f9abead3beb9560159dc57ba3b4b444b9d740b9ad4b4b6573d5023e63dd613",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "8118ee7a33092dce84c8d4137e6071cfcd4d45ac3f61a8397260886b27da9e06",
+        "current_code_digest": "a4f9abead3beb9560159dc57ba3b4b444b9d740b9ad4b4b6573d5023e63dd613"
+      }
     },
     "douyin_lead_outreach.write_back": {
       "activity_version": "4.0.0",
@@ -3116,7 +3123,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -3273,13 +3280,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "31b6023325cf7f25cc2bece823b8d0531218096adad9ee7afc54dc81529908a7",
+      "code_digest": "1310850da5cd3bc792b0cb61dc83dd60a1220edf380c9486f1bd91d041a80b40",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104写回仍按原prepared动作与原订单状态独立读回；exact模式增加回执范围身份核验，普通company_queue写回语义未改。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "6886afc5cbcf9e85cdd0ad80fb6979bc233291ad04d0973755ef6b3125816ac7",
-        "current_code_digest": "31b6023325cf7f25cc2bece823b8d0531218096adad9ee7afc54dc81529908a7"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "31b6023325cf7f25cc2bece823b8d0531218096adad9ee7afc54dc81529908a7",
+        "current_code_digest": "1310850da5cd3bc792b0cb61dc83dd60a1220edf380c9486f1bd91d041a80b40"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3396,7 +3403,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "2d04fcc35b46c0072161f4d8243194287aca057aa9e8a451c0d0fdaa8f4ac674"
+          "sha256": "8c6bc5dace01e4e5ffbae656aadfa38a239ef1c5b8b58c477417eed2649a756f"
         },
         {
           "kind": "code",
@@ -3563,13 +3570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "374f7eb1192f58d803819e319e56691445d6a78908cdb162db80c13083209b67",
+      "code_digest": "0edf0222a0a011d4010268417c5bb45bd19a7f7f966f0a9ae9b569f778593df3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "104收尾仍只释放本run未prepared的订单，未知发送保留；新增范围状态仅影响发送领单，清理业务动作未改。",
-        "reviewed_by": "codex:104-exact-order-scope",
-        "previous_code_digest": "7486417733bdab7e757b2b1a45e07a04ee73eb242bda06a5a0f8adb7b019a10f",
-        "current_code_digest": "374f7eb1192f58d803819e319e56691445d6a78908cdb162db80c13083209b67"
+        "reason": "共享RPC执行闭包的错误封装变更只作用于103单条受控恢复；本Activity输入、成功输出和业务写入路径未变。",
+        "reviewed_by": "codex:103-rpc-stage-diagnostic",
+        "previous_code_digest": "374f7eb1192f58d803819e319e56691445d6a78908cdb162db80c13083209b67",
+        "current_code_digest": "0edf0222a0a011d4010268417c5bb45bd19a7f7f966f0a9ae9b569f778593df3"
       }
     }
   },
