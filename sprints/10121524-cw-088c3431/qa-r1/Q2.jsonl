@@ -1,0 +1,9 @@
+{"label":"js banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-IDUD7J/apps/staff-hub/sample.js: openai\n"}
+{"label":"js corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"ts banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-LsZvOn/apps/staff-hub/sample.ts: openai\n"}
+{"label":"ts corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"tsx banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-PhBJsv/apps/staff-hub/sample.tsx: openai\n"}
+{"label":"tsx corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"jsx banned","status":1,"signal":null,"error":null,"stdout":"","stderr":"/private/var/folders/z2/c1vyr94567g4hcyzw3hvyt2r0000gn/T/cw-088c3431-qa-Q2-EyS9aX/apps/staff-hub/sample.jsx: openai\n"}
+{"label":"jsx corrected","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
+{"label":"all six allowed","status":0,"signal":null,"error":null,"stdout":"OK\n","stderr":""}
