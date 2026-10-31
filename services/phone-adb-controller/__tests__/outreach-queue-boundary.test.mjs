@@ -50,6 +50,15 @@ test('104普通派发无精确scope仍按已核资格领取公司队列首单',a
   assert.equal(f.rows[0].fields['状态'],'待触达');
  }finally{f.clean();}
 });
+test('104普通派发保留同单prepare许可；显式队列模式不得夹带精确范围',async()=>{
+ const f=fakeOriginalOrders();try{
+  const ordinary={...f.input,outreach_mode:'company_queue',outreach_scope:undefined};
+  await assert.rejects(queueRequest({...f.input,op:'claim_outreach',outreach_mode:'company_queue'},f.deps),/OUTREACH_SCOPE_MODE_MISMATCH/);
+  const [order]=await queueRequest({...ordinary,op:'claim_outreach'},f.deps);
+  const result=await queueRequest({...ordinary,op:'prepare_outreach',id:order.id,script_id:'fake-B',script_version:'B',message_sha256:f.digest,target_douyin_id:order.douyin_id,profile_url:order.profile_url},f.deps);
+  assert.deepEqual(result,{prepared:true,order:{id:order.id}});
+ }finally{f.clean();}
+});
 test('真实原订单adapter同recipient两个大小写别名、两个run竞争仅领一单',async()=>{
  const f=fakeOriginalOrders();try{
  const raced=await Promise.allSettled([queueRequest({...f.input,op:'claim_outreach'},f.deps),queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps)]);
