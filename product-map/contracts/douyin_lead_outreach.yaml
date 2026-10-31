@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.5.0
+  version: 0.6.0
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -488,7 +488,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 4.0.0
+    version: 5.0.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -559,11 +559,10 @@ activities:
     postconditions:
       - probe: out_zero_send_while_paused
         asserts: 暂停时零发送；未发送阶段只记skipped
+      - probe: out_delivery_result_verified
+        asserts: 原生发送前后 XML、目标和发送账号身份、批准话术及限制结果独立核验通过；未知结果不算发送，亦不宣称对方送达
       - probe: send_dm_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
-    known_gaps:
-      - gap: 当前 checks YAML 仅验暂停零发送与 Commander；真实 UI 发送结果及原始 XML 独立核验已在执行代码内，但尚未接成 send_dm 的硬性 Activity probe。不能仅凭 workflow pass 宣称已发送。
-        task: bdd9fb75
     execution:
       primary_kind: code
       location: phone
@@ -619,7 +618,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-send-dm
-        version: 1.0.0
+        version: 1.1.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
