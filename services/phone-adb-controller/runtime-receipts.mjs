@@ -32,7 +32,12 @@ export function qualificationIdentityEvidence({dir,frozen,binding}){
     if(!identityStat.isFile()||identityStat.isSymbolicLink()||(identityStat.mode&0o077)!==0
       ||identityStat.size>1000000)throw Error('SAMPLING_ADMISSION_IDENTITY_INVALID');
     const bytes=readFileSync(identityFile),identity=JSON.parse(bytes.toString('utf8'));
-    if(identity.verified!==true||identity.observed_video_id!==video_id||identity.content_type!=='video')
+    const evidencePrefix=`${sample.run_tag}-v${video_id}-`;
+    if(identity.verified!==true||identity.expected_video_id!==video_id
+      ||identity.observed_video_id!==video_id||identity.content_type!=='video'
+      ||identity.excluded_non_video!==false||typeof identity.evidence_id!=='string'
+      ||!identity.evidence_id.startsWith(evidencePrefix)
+      ||!/^(?:identity|qualification)(?:-recovery[1-9]\d*)?-identity$/.test(identity.evidence_id.slice(evidencePrefix.length)))
       throw Error('SAMPLING_ADMISSION_IDENTITY_INVALID');
     const cached=facts[0].recordingsRequired===0;
     if(cached?!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(facts[0].cached_judgment_run||'')

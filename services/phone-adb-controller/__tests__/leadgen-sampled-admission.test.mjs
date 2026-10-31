@@ -289,11 +289,19 @@ test('102 qualification 与 collection 主 span 各发表同源原生身份和�
   assert.equal(samplingAdmissionEvidence({dir,artifact:{result:{sampling_required_count:0,sampling_receipts:[]}},frozen,binding}),null);
   writeFileSync(join(dir,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:NEW_SHA,
    qualified_video_ids:[videoId],videos:[{video_id:videoId,settled:true,recordingsRequired:1,cached_judgment_run:null}]}),{mode:0o600});
-  writeFileSync(join(dir,`${run}-identity-${videoId}.json`),JSON.stringify({verified:true,observed_video_id:videoId,content_type:'video'}),{mode:0o600});
+  const identityFile=join(dir,`${run}-identity-${videoId}.json`);
+  const identity={verified:true,expected_video_id:videoId,observed_video_id:videoId,content_type:'video',
+   excluded_non_video:false,evidence_id:`${run}-v${videoId}-qualification-identity`};
+  writeFileSync(identityFile,JSON.stringify(identity),{mode:0o600});
   writeFileSync(file,JSON.stringify({run_id:runId,sampling_input:sample,verified:true,videos:[{...publicReceipt,pg_rows:pgRows}]}),{mode:0o600});
   const qualification=qualificationIdentityEvidence({dir,frozen,binding});
   const evidence=samplingAdmissionEvidence({dir,artifact,frozen,binding});
   assert.deepEqual({video_id:videoId,...evidence.videos[0].qualification},qualification.videos[0]);
+  writeFileSync(identityFile,JSON.stringify({...identity,evidence_id:'old-run-identity'}));
+  assert.throws(()=>qualificationIdentityEvidence({dir,frozen,binding}),/SAMPLING_ADMISSION_IDENTITY_INVALID/);
+  writeFileSync(identityFile,JSON.stringify({...identity,expected_video_id:'7700992800439717699'}));
+  assert.throws(()=>qualificationIdentityEvidence({dir,frozen,binding}),/SAMPLING_ADMISSION_IDENTITY_INVALID/);
+  writeFileSync(identityFile,JSON.stringify(identity));
   assert.deepEqual(evidence.videos[0].comment_ids,ids.slice(0,2));
   assert.deepEqual(evidence.videos[0].qualification.mode,'fresh');
   assert.equal(evidence.videos[0].pg_rows_sha256,createHash('sha256').update(JSON.stringify(pgRows)).digest('hex'));

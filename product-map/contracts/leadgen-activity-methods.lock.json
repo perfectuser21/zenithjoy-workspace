@@ -1260,7 +1260,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "60980fde036de4b24e157ad296e6fa4f911a62102f20f802d22cdbef9fe582f9"
+          "sha256": "e347be855fd239f23c0f4a4a023ebf262f0fbe1666f176848994a1d709a45bbd"
         },
         {
           "kind": "code",
@@ -1530,7 +1530,7 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "6d714f2a8f9764fa82415c248918274e77fa9a2dd9276021c127c3844d5720ec"
+      "code_digest": "b38251a69423dcc954f024632aa24b21b7e9cebca058c8a8bb64e111c7dc764f"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.2.0",
