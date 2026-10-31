@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { evaluatePlan } from '../plan-evidence.mjs';
+import { createMerchantAdapter } from '../merchant-adapter.mjs';
+import { coordinate } from '../coordinator.mjs';
 
 const digest = data => createHash('sha256').update(data).digest('hex');
 const now = '2026-10-31T12:00:00Z';
@@ -183,4 +185,44 @@ test('reserved prototype identity keys cannot disappear while binding the target
   const f = fixture(t);
   Object.defineProperty(f.request.target, '__proto__', { value: 'unbound', enumerable: true });
   assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+
+function merchantFixture(t) {
+  const f = fixture(t, x => {
+    x.document.issuedAt = new Date(Date.now() - 60000).toISOString();
+    x.document.expiresAt = new Date(Date.now() + 60000).toISOString();
+  });
+  const input = { root: join(f.options.evidenceRoot, 'action-state'), runId: 'run-1', businessKey: f.request.businessKey,
+    target: f.request.target, payload: { plan: { fields: f.request.plan, evidenceDocuments: f.request.proofs } } };
+  return { ...f, input };
+}
+test('merchant validation uses trusted file evidence and reports field conflicts before any intent', async t => {
+  const f = merchantFixture(t); f.input.payload.plan.fields.stock = 2;
+  const adapter = createMerchantAdapter({ probe: async () => { throw new Error('unexpected capture'); },
+    evidenceContract: { evidenceRoot: f.options.evidenceRoot, policy: f.options.policy } });
+  const result = await adapter.validate(f.input);
+  assert.ok(result.comparison, 'validation exposes the actual evidence comparison');
+  assert.equal(result.comparison.status, 'rejected');
+  assert.ok(result.comparison.reasons.some(x => x.code === 'FACT_MISMATCH' && x.field === 'stock'));
+  await assert.rejects(coordinate(f.input, adapter), /PRECONDITIONS_UNVERIFIED/);
+  assert.equal(existsSync(f.input.root), false);
+});
+test('a matching document never enables the unavailable merchant publishing driver', async t => {
+  const f = merchantFixture(t);
+  const adapter = createMerchantAdapter({ probe: async () => { throw new Error('unexpected capture'); },
+    evidenceContract: { evidenceRoot: f.options.evidenceRoot, policy: f.options.policy } });
+  const result = await adapter.validate(f.input);
+  assert.ok(result.comparison, 'validation exposes the actual evidence comparison');
+  assert.equal(result.comparison.status, 'matched'); assert.equal(result.ok, false);
+  assert.ok(result.reasons.includes('SUBMISSION_DRIVER_UNAVAILABLE'));
+  await assert.rejects(adapter.submit(f.input), /SUBMISSION_DRIVER_UNAVAILABLE/);
+});
+test('customer payload cannot replace the execution-owned policy or historical clock', async t => {
+  const f = merchantFixture(t);
+  const adapter = createMerchantAdapter({ probe: async () => { throw new Error('unexpected capture'); },
+    evidenceContract: { evidenceRoot: f.options.evidenceRoot, policy: { ...f.options.policy, trustedDigests: [] } } });
+  f.input.payload.plan.evidenceContract = { ...f.options, now };
+  const result = await adapter.validate(f.input);
+  assert.ok(result.comparison, 'validation exposes the actual evidence comparison');
+  assert.equal(result.comparison.status, 'unknown'); assert.equal(result.ok, false);
 });
