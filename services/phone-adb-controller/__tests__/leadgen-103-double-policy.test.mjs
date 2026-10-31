@@ -69,7 +69,7 @@ test('同一评论首审通过、独立二审缺个人意向证据时整笔评�
  assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
  assert.equal(result.scored,0);
  assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'personal_intent_evidence_missing'}]);
+  policy_review_reason:'personal_intent_evidence_missing',policy_review_model_calls:2}]);
  assert.equal(f.committed.relevance,null);
  assert.equal(f.committed.intent_grade,null);
  assert.equal(f.committed.judgment_config,undefined);
@@ -81,11 +81,23 @@ test('政策模型HTTP失败的正式评分回执只含安全阶段/状态且PG�
  f.deps.judgePolicy=async()=>{throw new JudgeApiError('private response api_key=secret',{stage:'commander',status:429});};
  const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
  assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:429}]);
+  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:429,policy_review_model_calls:1}]);
  assert.equal(result.scored,0);
  assert.equal(f.committed.relevance,null);
  assert.equal(f.writes.length,0);
  assert.equal(JSON.stringify(result).includes('secret'),false);
+});
+
+test('政策证据无效回执含固定字段码和调用数，且不泄露原异常',async()=>{
+ const f=fixture(true);
+ f.deps.judgePolicy=async()=>{const error=Error('COMMANDER_EVIDENCE_INVALID');
+  error.evidence_check='matched_rule_not_frozen';error.private_response='api_key=secret';throw error;};
+ const result=await queueRequest(f.pool,{op:'score',line:'jinuo',run,source_run:sourceRun,limit:1},f.deps);
+ assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
+  policy_review_reason:'policy_model_evidence_invalid',policy_review_stage:'commander',
+  policy_review_evidence_check:'matched_rule_not_frozen',policy_review_model_calls:1}]);
+ assert.equal(JSON.stringify(result).includes('secret'),false);
+ assert.equal(f.writes.length,0);
 });
 
 test('首审缺个人意向而二审HTTP失败时仍待分拣，并保留可重试HTTP分类',async()=>{
@@ -98,7 +110,7 @@ test('首审缺个人意向而二审HTTP失败时仍待分拣，并保留可重�
  assert.equal(calls,2);
  assert.equal(result.excluded,0);
  assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:503}]);
+  policy_review_reason:'policy_model_http',policy_review_stage:'commander',policy_review_http_status:503,policy_review_model_calls:2}]);
  assert.equal(f.committed.process_status,'待分拣');
  assert.equal(f.writes.length,0);
 });
@@ -123,7 +135,7 @@ test('第一次视频引用重试已用尽两次政策模型额度时阻断且PG
  assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
  assert.equal(result.scored,0);
  assert.deepEqual(result.blocked_reasons,[{id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_review_budget_exhausted'}]);
+  policy_review_reason:'policy_review_budget_exhausted',policy_review_model_calls:2}]);
  assert.equal(f.committed.relevance,null);
  assert.equal(f.writes.length,0);
 });

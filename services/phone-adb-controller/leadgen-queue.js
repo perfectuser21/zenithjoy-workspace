@@ -3,7 +3,7 @@
 const db = require('./leadgen-db-lib.js');
 const { resolveLine, configEvidence } = require('./judge-video.js');
 const { freezeCompanyConfig, configTargetProfile } = require('./company-config-lib.js');
-const { judgeComment, scoreFailureReceipt } = require('./judge-comment.js');
+const { judgeComment, scoreFailureReceipt, safeCommanderEvidenceCheck } = require('./judge-comment.js');
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment}=require('./leadgen-policy-review.js');
 const commentAdmission=require('./leadgen-comment-admission.js');
@@ -50,6 +50,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(op==='recover_102n_qualification_readback')return require('./qualification-quarantine-recovery-102n.js').readback(pool,{...input,op:'recover_102n_qualification'},deps.recovery102n);
   if(op==='recover_102n_qualification')return require('./qualification-quarantine-recovery-102n.js').recover(pool,input,deps.recovery102n);
   if(op==='recover_102n_qualification_batch')return require('./qualification-quarantine-recovery-102n.js').recoverBatch(pool,input,deps.recovery102n);
+  if(op==='recover_false_exclusion_102l'||op==='recover_false_exclusion_102l_readback')
+    return require('./leadgen-score-exclusion.js').recoverFalseExclusion(pool,input,
+      {sourceCommit:deps.sourceCommit,recovery:deps.recovery103l});
   if(op==='admit_102g_comments'||op==='admit_102g_readback'){
     if(input.candidate_source_commit!==deps.sourceCommit)throw Error('ADMISSION_SOURCE_COMMIT_MISMATCH');
     return op==='admit_102g_comments'?commentAdmission.admit(pool,input,deps.commentAdmission):commentAdmission.readback(pool,input);
@@ -373,16 +376,22 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         }
         if(!verdict.audit?.model||!verdict.audit?.response_id){const error=Error('POLICY_SCORE_MODEL_IDENTITY_MISSING');
           error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;}
+        const boundEvidence={...evidence,...(row.judgment_config?.recovery_prior
+          ?{recovery_prior:row.judgment_config.recovery_prior}:{})};
         const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
-          judgment_reason:verdict.reason,judgment_config:evidence};
+          judgment_reason:verdict.reason,judgment_config:boundEvidence};
         const semantic=await dualPolicyReview(judged,snapshot,deps);
-        if(semantic.status==='exclude')return require('./leadgen-score-exclusion.js').commitExclusion(client,{row,verdict,semantic,evidence,lineKey,nextCursor});
+        if(semantic.status==='exclude')return require('./leadgen-score-exclusion.js').commitExclusion(client,
+          {row,verdict,semantic,evidence:boundEvidence,lineKey,nextCursor});
         if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);
           if(reason)error.score_failure={code:error.message,policy_review_reason:reason,
             ...(['jev','commander'].includes(semantic.model_stage)?{policy_review_stage:semantic.model_stage}:{}),
             ...(Number.isInteger(semantic.http_status)&&semantic.http_status>=400&&semantic.http_status<=599?{policy_review_http_status:semantic.http_status}:{}),
-            ...(semantic.evidence_check==='missing_exclusion_rule'?{policy_review_evidence_check:'missing_exclusion_rule'}:{})};throw error;}
-        const audit={...evidence,model_audit:verdict.audit||null,policy_audit:semantic.reviews[0],policy_reviews:semantic.reviews};
+            ...(safeCommanderEvidenceCheck(semantic.evidence_check)?{policy_review_evidence_check:semantic.evidence_check}:{}),
+            ...(Number.isSafeInteger(semantic.model_call_count)&&semantic.model_call_count>=0&&semantic.model_call_count<=2
+              ?{policy_review_model_calls:semantic.model_call_count}:{})};throw error;}
+        const audit={...boundEvidence,
+          model_audit:verdict.audit||null,policy_audit:semantic.reviews[0],policy_reviews:semantic.reviews};
         // 保留待分拣，交下一活动标记人；模型异常回滚，下一轮仍可重判。
         await client.query(`UPDATE zenithjoy.leadgen_comments SET relevance=$2,intent_grade=$3,
           judgment_reason=$4,judgment_config=$5::jsonb,updated_at=now() WHERE id=$1`, [row.id, verdict.relevance,

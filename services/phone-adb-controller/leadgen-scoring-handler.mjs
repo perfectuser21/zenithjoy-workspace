@@ -2,6 +2,7 @@ import {readFileSync,writeFileSync,appendFileSync,existsSync,renameSync} from 'n
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import admission from './leadgen-comment-admission.js';
+import exclusion from './leadgen-score-exclusion.js';
 export function createScoringHandler({env,run,line,state,queue}){return async()=>{
       const admissionSource=env.LEADGEN_SOURCE_RUN===admission.SOURCE_RUN;
       const admissionRequested=env.LEADGEN_102G_ADMISSION_DECISION_ID!==undefined
@@ -25,10 +26,28 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       const requested=Number(env.LEADGEN_LIMIT||2);
       if(!Number.isSafeInteger(requested)||requested<1)throw Error('POLICY_SCORE_BUDGET_INVALID');
       const budget=Math.min(50,requested);
+      const falseRecoveryRequested=env.LEADGEN_103L_RECOVERY_ID!==undefined
+        ||env.LEADGEN_103L_RECOVERY_TASK_ID!==undefined;
+      const falseRecovery=falseRecoveryRequested?{
+        comment_id:env.LEADGEN_103L_RECOVERY_ID,maintenance_task_id:env.LEADGEN_103L_RECOVERY_TASK_ID}:null;
       const legacyRecovery=env.LEADGEN_LEGACY_RECOVERY_ID?{comment_id:env.LEADGEN_LEGACY_RECOVERY_ID,
         old_run:env.LEADGEN_LEGACY_SCORE_RUN,maintenance_task_id:env.LEADGEN_LEGACY_RECOVERY_TASK_ID}:null;
       if(legacyRecovery&&(!sourceRun||budget!==1))throw Error('POLICY_SCORE_LEGACY_RECOVERY_SCOPE_INVALID');
+      if(falseRecovery&&(legacyRecovery||line!==exclusion.recoveryScope.line
+        ||sourceRun!==exclusion.recoveryScope.source_run||budget!==1||env.LEADGEN_SEND==='1'
+        ||falseRecovery.comment_id!==exclusion.recoveryScope.comment_id
+        ||falseRecovery.maintenance_task_id!==exclusion.recoveryScope.task_id))
+        throw Error('FALSE_EXCLUSION_SCOPE_INVALID');
       state.company_config=await queue('company_config',{step:'103'});
+      if(falseRecovery){
+        const fields={comment_id:falseRecovery.comment_id,maintenance_task_id:falseRecovery.maintenance_task_id,
+          old_run:exclusion.recoveryScope.old_run,candidate_source_commit:state.source_commit};
+        const accepted=await queue('recover_false_exclusion_102l',fields);
+        const readback=await queue('recover_false_exclusion_102l_readback',fields);
+        if(!['applied','already_applied'].includes(accepted.status)
+          ||readback.verified!==true||readback.comment_id!==falseRecovery.comment_id
+          ||readback.new_run!==run)throw Error('FALSE_EXCLUSION_READBACK_INVALID');
+      }
       if(admissionSource){
         const fields={decision_id:env.LEADGEN_102G_ADMISSION_DECISION_ID,
           maintenance_task_id:env.LEADGEN_102G_ADMISSION_TASK_ID,video_id:admission.VIDEO_ID,
@@ -44,7 +63,8 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       }
       let attempt=existsSync(attemptFile)?JSON.parse(readFileSync(attemptFile,'utf8')):null;
       const hadAttempt=Boolean(attempt);
-      const scope=attempt?null:legacyRecovery?{ids:[legacyRecovery.comment_id]}:await queue('score_scope');
+      const scope=attempt?null:legacyRecovery?{ids:[legacyRecovery.comment_id]}
+        :falseRecovery?{ids:[falseRecovery.comment_id]}:await queue('score_scope');
       if(scope&&!sourceRun&&(!scope.sources||scope.ids.some(id=>typeof scope.sources[id]!=='string')))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
       const saveAttempt=value=>{const temp=`${attemptFile}.${process.pid}.${randomUUID()}.tmp`;
         writeFileSync(temp,JSON.stringify(value),{flag:'wx',mode:0o600});renameSync(temp,attemptFile);};

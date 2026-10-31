@@ -20,17 +20,18 @@ const answer=(body,id)=>({grade:'A',audit:{model:'google/gemini-2.5-flash',respo
 test('真实102l评论明确索取流程，双独立A复核不能误排除',async()=>{
  let calls=0;
  const actual=await dualPolicyReview(row('怎么找机构，可以发一下流程吗？ 首评'),policy,
-  {judgePolicy:async()=>answer('怎么找机构',`review-${++calls}`)});
+  {judgePolicy:async()=>answer('找机构',`review-${++calls}`)});
  assert.equal(calls,2);
  assert.equal(actual.status,'pass');
  assert.equal(actual.reviews.length,2);
 });
 
 test('泛问句和无流程标题不因A候选自动通过',async()=>{
- for(const candidate of [row('这个怎么弄？ 首评'),
-  {...row('怎么找机构，可以发一下流程吗？ 首评'),source_video:'人工智能训练工程师介绍'}]){
+ for(const [candidate,signal] of [[row('这个怎么弄？ 首评'),'这个怎么弄？'],
+  [row('不用发流程，我只是围观'),'只是围观'],
+  [{...row('怎么找机构，可以发一下流程吗？ 首评'),source_video:'人工智能训练工程师介绍'},'找机构']]){
   let calls=0;
-  const actual=await dualPolicyReview(candidate,policy,{judgePolicy:async()=>answer('怎么找机构',`review-${++calls}`)});
+  const actual=await dualPolicyReview(candidate,policy,{judgePolicy:async()=>answer(signal,`review-${++calls}`)});
   assert.equal(actual.status,'exclude');
   assert.equal(actual.reason,'personal_intent_evidence_missing');
  }
