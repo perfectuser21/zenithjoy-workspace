@@ -67,7 +67,7 @@ export async function runListing(request, runtime = {}) {
   const result = { mode, status: reasons.length ? 'blocked' : 'planned', publicationAuthorized: false,
     factsIndependentlyEstablished: false, reasons, wouldActions: built.actions };
   if (mode === 'dry-run') {
-    if (typeof runtime.inspect === 'function' && !reasons.length) {
+    if (typeof runtime.inspect === 'function') {
       try {
         result.observation = await runtime.inspect({ operation: 'preflight', target: input.target });
         if (result.observation?.ok !== true || result.observation.storeId !== input.target.storeId || !evidence(result.observation.evidence)) { reasons.push('CURRENT_CONTEXT_UNVERIFIED'); result.status = 'blocked'; }
