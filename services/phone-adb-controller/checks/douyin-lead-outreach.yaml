@@ -104,14 +104,14 @@ probes:
     journey_cell: stage:send_dm
     probe:
       type: metric
-      ref: metrics.outreach_scope_verified
+      ref: metrics.order_selection_verified
     expect:
       op: ==
       value: 1
     severity: error
     failure_class: needs_human
     on_fail: fail_stage
-    note: 仅本run冻结record_id/comment_id/公司/来源与原订单精确匹配时为1；旁单或范围未知一律封闭。
+    note: order_selection_verified=1仅表示本次成功订单按选定模式过了资格门；company_queue核公司资格队列及排序，exact额外核冻结record/comment/公司/来源和旁单零领取，不把普通队列冒称精确核验。
   - key: send_dm_commander_verified
     stage: send_dm
     journey_cell: stage:send_dm

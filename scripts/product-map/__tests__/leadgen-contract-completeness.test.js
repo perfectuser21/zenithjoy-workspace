@@ -81,8 +81,8 @@ test('104 send_dm 缺冻结精确订单范围结果时 Activity 探针封闭', a
     return result.probes.find(probe=>probe.key==='out_order_scope_verified');
   };
   assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1}))?.pass,null);
-  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1,outreach_scope_verified:0}))?.pass,false);
-  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1,outreach_scope_verified:1}))?.pass,true);
+  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1,order_selection_verified:0}))?.pass,false);
+  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1,order_selection_verified:1}))?.pass,true);
 });
 
 test('104 send_dm 原生发送结果缺失或为零时 Activity 探针封闭', async () => {

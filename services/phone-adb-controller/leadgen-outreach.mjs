@@ -49,6 +49,7 @@ export function createOutreachHandlers({env,state,phone,queue,rpc}) {
   if(rows.length!==1) return {status:'skipped',reason:'没有符合合同的未发送订单',sent:0,messages_sent_while_paused:0};
   [order]=rows;
   if(order.sender_douyin_id!==state.account||order.line_key!==policy.line_key||order.script_id!==policy.template.id||order.script_version!==policy.template.version||order.message!==policy.template.message)throw Error('领单与批准快照不符');
+  if(state.outreach_mode==='exact'&&(order.id!==state.outreach_scope.record_id||String(order.douyin_id||'').toLowerCase()!==state.outreach_scope.target_douyin_id.toLowerCase()))throw Error('OUTREACH_SCOPE_ORDER_MISMATCH');
   risk();const current=count();if(current.value>=cap())throw Error('账号日发送上限生效');
   // 先消费本次尝试额度，再提交原订单永久预留。回复丢失也不允许第二次手机发送。
   mkdirSync(stateDir,{recursive:true});writeFileSync(current.path,String(current.value+1),{mode:0o600});chmodSync(current.path,0o600);
@@ -100,7 +101,7 @@ print('verified')`,target,order.message,outcome],{encoding:'utf8',timeout:5000,m
   if(outcome==='rate_limited')writeFileSync(join(stateDir,`dm-halt-${profile}-${day()}.txt`),eid,{mode:0o600});
   receipt={version:1,company_config:{company_id:state.company_config.company_id,tenant_id:state.company_config.tenant_id,version:state.company_config.version,product_ids:state.company_config.product_ids,policy_id:state.company_config.policy_id},outreach_mode:state.outreach_mode,outreach_scope:state.outreach_scope,source_commit:state.source_commit,line:policy.line_key,run,profile,id:order.id,sender_douyin_id:state.account,target_douyin_id:order.douyin_id,profile_url:order.profile_url,script_id:order.script_id,script_version:order.script_version,message_sha256:sha(order.message),outcome,delivery_verified:false,message_delta_verified:true,raw_evidence:stored,typed_evidence_file:stored.typed.file,typed_evidence_sha256:stored.typed.sha256,evidence_file:stored.sent.file,evidence_sha256:stored.sent.sha256};
   writeFileSync(join(env.WFR_RUN_DIR,`${run}-outreach-receipt.json`),JSON.stringify(receipt),{mode:0o600});
-  return {sent:outcome==='sent'?1:0,messages_sent:outcome==='sent'?1:0,orders_prepared:1,attempted:1,outcome,message_delta_verified:1,delivery_result_verified:1,outreach_scope_verified:1,messages_sent_while_paused:0,delivery_verified:false};
+  return {sent:outcome==='sent'?1:0,messages_sent:outcome==='sent'?1:0,orders_prepared:1,attempted:1,outcome,message_delta_verified:1,delivery_result_verified:1,order_selection_verified:1,messages_sent_while_paused:0,delivery_verified:false};
  };
  const write_back=async()=>{
   if(!receipt)return {status:'skipped',reason:'无新发送事实，保留待核实',outreach_readback_failures:0};
