@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 71a323dfcb19eb31288d8b8123c90bb4a178448cde1f6d338d8a8ec97212e727 -->
+<!-- digest: 485fcc93fbe8fdb9bebbf3ee54d6ed3dff5057eaec0784977106a42d3ac86282 -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -16,6 +16,7 @@
 | line04 | Line 04 智能客服 |
 | line05 | Line 05 视频剪辑 |
 | line07 | Line 07 AI爆款视频翻拍 |
+| line08 | Line 08 电商商品运营 |
 
 ### staff_app — 员工后台（Staff App）
 
@@ -48,6 +49,7 @@
 | batch_mashup | customer_app | line05 | active | step1:客户的素材变成系统认得出内容的可用库（素材打标签）<br>step2:客户定下这批视频要按什么套路剪（槽位模板分配）<br>step3:客户刷到一屏候选方案任选（语义检索候选生成）<br>step4:客户选中的方案变成能直接发的高清成片（渲染+内容安全Gate） | .github/workflows/scripts/smoke/material-tagging-smoke.sh<br>.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh<br>.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh<br>.github/workflows/scripts/smoke/mashup-render-smoke.sh<br>.github/workflows/scripts/smoke/mashup-history-smoke.sh |
 | video_editing | customer_app | line05 | active | — | .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh |
 | viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh |
+| pdd_product_listing | customer_app | line08 | proposed | step1:形成可核对的待提交商品内容和单次提交执行计划 | .github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh |
 | ability_acceptance | staff_app | line00 | active | — | — |
 | f1_dev_loop | staff_app | line00 | active | step1:接单进车间即分档<br>step2:合同即法律<br>step3:造完真验<br>step4:交付有回执<br>step5:kernel-contract-a20 | — |
 | gp_anchor_enforcement | staff_app | line00 | active | — | .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh |
