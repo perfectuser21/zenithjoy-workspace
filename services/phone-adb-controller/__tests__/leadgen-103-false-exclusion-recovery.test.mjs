@@ -26,7 +26,7 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const request={op:'recover_false_exclusion_102l',line:'jinuo',run:NEW,source_run:SOURCE,
  comment_id:ID,old_run:OLD,maintenance_task_id:TASK,candidate_source_commit:CANDIDATE};
 
-function rig({authorized=true,outbox=false,lead=false,source=SOURCE}={}){
+function rig({authorized=true,outbox=false,lead=false,leadIdentityOnly=false,source=SOURCE}={}){
  const prior={run_id:OLD,company_id:policy.company_id,tenant_id:policy.tenant_id,
   version:14,policy_id:policy.policy_id,exclusion_reason:'personal_intent_evidence_missing',
   exclusion_source:{harvest_batch:SOURCE,comment_sha256:hash(COMMENT),video_sha256:hash(TITLE),video_url_sha256:hash(VIDEO_URL)},
@@ -34,7 +34,8 @@ function rig({authorized=true,outbox=false,lead=false,source=SOURCE}={}){
    candidate_grade:'A',model:'google/gemini-2.5-flash',response_id:`response-${n}`,
    evidence_sha256:hash(`evidence-${n}`),original_sha256:hash('original')}))};
  const row={id:ID,line_key:'jinuo',harvest_batch:source,source_video:TITLE,source_video_url:VIDEO_URL,
-  comment_body:COMMENT,nickname:'fixture-nickname',process_status:'已排除',relevance:null,intent_grade:null,
+  comment_body:COMMENT,nickname:'fixture-nickname',douyin_id:'fixture-douyin',profile_url:'https://douyin.example/fixture',
+  process_status:'已排除',relevance:null,intent_grade:null,
   judgment_reason:'policy_excluded:personal_intent_evidence_missing',judgment_config:prior};
  const audit=[],writes=[];let pending=[];
  const query=async(sql,args=[])=>{
@@ -48,7 +49,9 @@ function rig({authorized=true,outbox=false,lead=false,source=SOURCE}={}){
   if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:[{line_key:'jinuo',video_id:'7699344115351688872',
    video_url:VIDEO_URL,title:TITLE,harvest_batch:SOURCE,process_status:'评论已采',judgment_status:'matched'}]};
   if(sql.includes('FROM zenithjoy.leadgen_bridge_outbox'))return {rows:outbox?[{comment_id:ID}]:[]};
-  if(sql.includes('FROM zenithjoy.leadgen_leads'))return {rows:lead?[{id:'lead-already-exists'}]:[]};
+  if(sql.includes('FROM zenithjoy.leadgen_leads'))return {rows:lead||leadIdentityOnly
+   &&sql.includes('douyin_id')&&sql.includes('profile_url')&&args.includes(row.douyin_id)
+    ?[{id:'lead-already-exists'}]:[]};
   if(sql.includes('FROM zenithjoy.db_audit'))return {rows:audit};
   if(sql.includes('INSERT INTO zenithjoy.db_audit')){pending.push(()=>audit.push({id:args[0],org_id:args[1],
    member_id:args[2],action:args[3],detail:JSON.parse(args[4])}));return {rows:[],rowCount:1};}
@@ -87,6 +90,7 @@ test('102l恢复拒绝来源不匹配、无任务授权及已有线索或outbox'
   [{}, {authorized:false}],
   [{}, {outbox:true}],
   [{}, {lead:true}],
+  [{}, {leadIdentityOnly:true}],
   [{}, {source:'wrong-source'}],
  ]){
   const f=rig(rigOpts);
