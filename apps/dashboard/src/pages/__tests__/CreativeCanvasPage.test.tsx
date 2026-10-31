@@ -35,6 +35,9 @@ describe('创作画布', () => {
     expect(screen.getByRole('button', {name:'退出全屏'})).toBeInTheDocument();
     expect(screen.getByTitle('视频创作画布')).toBe(frame);
     expect(frame.parentElement).toHaveClass('fixed');
+    expect(frame).toHaveClass('absolute', 'inset-0', 'h-full', 'w-full');
+    expect(screen.queryByText(/切换中文/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name:'打开上传图片工作流'})).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name:'退出全屏'}));
     expect(screen.getByTitle('视频创作画布')).toBe(frame);
     expect(frame.parentElement).not.toHaveClass('fixed');
