@@ -233,6 +233,79 @@ describe('requestLocatorAssist mode=extract（读取类保底）', () => {
     expect(p, 'extract 应要 extracted 字段').toMatch(/extracted/i);
   });
 
+  it('树文本提取默认走真调已核验的无思考 flash-lite 渠道，给安卓 25 秒留出余量', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"extracted":"dy_88"}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract', targetDesc: '抖音号' });
+    expect(r.extractedValue).toBe('dy_88');
+    const [, body, options] = (axios.post as any).mock.calls[0];
+    expect(body.model).toBe('gemini-2.5-flash-lite-official');
+    expect(body.enable_thinking).toBe(false);
+    expect(options.timeout).toBe(10_000);
+  });
+
+  it('主渠道超时后在同一 20 秒预算内改走独立渠道，并把实际模型写入病历', async () => {
+    (axios.post as any)
+      .mockRejectedValueOnce(Object.assign(new Error('timeout'), { isAxiosError: true, code: 'ECONNABORTED' }))
+      .mockResolvedValueOnce({ data: { choices: [{ message: { content: '{"extracted":"dy_88"}' }, finish_reason: 'stop' }] } });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract', targetDesc: '抖音号' });
+    expect(r.status).toBe('ok');
+    expect(r.extractedValue).toBe('dy_88');
+    const calls = (axios.post as any).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1][1].model).toBe('deepseek-v4-flash');
+    expect(calls[0][2].timeout + calls[1][2].timeout).toBeLessThanOrEqual(20_000);
+    const insert = (pool.query as any).mock.calls.find(([sql]: [string]) => /INSERT INTO zenithjoy\.rpa_locator_assist/i.test(sql));
+    expect(insert[1][10]).toBe('deepseek-v4-flash');
+  });
+
+  it('双渠道超时仍 fail-open，且不会超过安卓客户端的 25 秒读超时预算', async () => {
+    (axios.post as any).mockRejectedValue(Object.assign(new Error('timeout'), { isAxiosError: true, code: 'ECONNABORTED' }));
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract', targetDesc: '抖音号' });
+    expect(r.status).toBe('unavailable');
+    expect(r.reason).toBe('llm_timeout');
+    const calls = (axios.post as any).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0][2].timeout + calls[1][2].timeout).toBeLessThan(25_000);
+  });
+
+  it('主调用实等 10 秒、备用实等 4 秒时，14 秒内带真实备用结果返回', async () => {
+    vi.useFakeTimers();
+    try {
+      const began = Date.now();
+      (axios.post as any)
+        .mockImplementationOnce((_url: string, _body: unknown, opts: { timeout: number }) =>
+          new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'),
+            { isAxiosError: true, code: 'ECONNABORTED' })), opts.timeout)))
+        .mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve({
+          data: { choices: [{ message: { content: '{"extracted":"dy_88"}' }, finish_reason: 'stop' }] },
+        }), 4_000)));
+      const answer = requestLocatorAssist({ ...baseReq(), mode: 'extract', targetDesc: '抖音号' });
+      await vi.advanceTimersByTimeAsync(14_000);
+      expect((await answer).extractedValue).toBe('dy_88');
+      expect(Date.now() - began).toBe(14_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('两个调用都实等截止时，19 秒内返回 unavailable', async () => {
+    vi.useFakeTimers();
+    try {
+      const began = Date.now();
+      (axios.post as any).mockImplementation((_url: string, _body: unknown, opts: { timeout: number }) =>
+        new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'),
+          { isAxiosError: true, code: 'ECONNABORTED' })), opts.timeout)));
+      const answer = requestLocatorAssist({ ...baseReq(), mode: 'extract', targetDesc: '抖音号' });
+      await vi.advanceTimersByTimeAsync(19_000);
+      expect((await answer).reason).toBe('llm_timeout');
+      expect(Date.now() - began).toBe(19_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('extract 解析 AI 返回的文本值', () => {
     expect(parseExtractAnswer('{"extracted":"zhang_san_88"}')).toBe('zhang_san_88');
     expect(parseExtractAnswer('答案：{"extracted": "abc.123"}啰嗦')).toBe('abc.123');
@@ -360,6 +433,8 @@ describe('requestLocatorAssist mode=vision_select（视觉后端）', () => {
     expect(r.status).toBe('ok');
     expect(r.matchIndex).toBe(1);
     const body = (axios.post as any).mock.calls[0][1];
+    expect(body.model).toBe('gemini-2.5-flash-official');
+    expect((axios.post as any).mock.calls[0][2].timeout).toBe(20_000);
     const content = body.messages[0].content;
     expect(Array.isArray(content), 'vision 必须走多模态 content 数组').toBe(true);
     expect(content.some((c: any) => c.type === 'image_url'), '必须带 image_url').toBe(true);
