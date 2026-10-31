@@ -90,3 +90,12 @@ test('wrong field readback or incomplete final form prevents final publication',
  const two=fixture();two.runtime.productionEnabled=true;two.runtime.reviewPlan=async()=>({ok:true,storeId:'store-one',fields:{title:'other'},images:[],evidence:['wrong-form']});
  const r2=await runListing({...two.input,mode:'live'},two.runtime);assert.equal(r2.status,'unknown');assert.deepEqual(two.effects,['setField','upload']);
 });
+
+test('cleanup failure cannot erase a durable unknown submission outcome',async()=>{
+ const {runListing}=await driver();const {input,runtime}=fixture();runtime.productionEnabled=true;runtime.act=async()=>{throw new Error('connection-lost');};runtime.cleanup=async()=>{throw new Error('lock-preserved-unconfirmed-remote');};
+ const r=await runListing({...input,mode:'live'},runtime);assert.equal(r.status,'unknown');assert.equal(r.cleanupError,'lock-preserved-unconfirmed-remote');
+});
+test('blocked real probe retains original manifest when observation throws',async()=>{
+ const {runListing}=await driver();const {input,runtime}=fixture();runtime.inspect=async()=>{const e=new Error('WRONG_FOREGROUND');e.manifest='/original/probe/manifest.json';throw e;};
+ const r=await runListing(input,runtime);assert.equal(r.status,'blocked');assert.equal(r.observation.manifest,'/original/probe/manifest.json');
+});
