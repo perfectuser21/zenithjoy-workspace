@@ -29,17 +29,20 @@ import axios from 'axios';
 import pool from '../db/connection';
 
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-// 2026-09-04 默认切 gemini-2.5-flash-official：gpt-5.4-mini 渠道持续慢（llm_timeout 挡
-// rpa-locator smoke），gemini 实测 2-6s；渠道恢复可经 env 切回。预算本就按 thinking 模型给足。
-const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gemini-2.5-flash-official';
+// 树文本识别只需短 JSON。2026-11-01 真调：flash-lite 无 reasoning，四类 smoke 场景
+// 两轮均答对；原 flash 在 CI 连续两次卡满 20s。保留 env 覆盖与跨渠道重试。
+const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gemini-2.5-flash-lite-official';
+const ASSIST_FALLBACK_MODEL = 'deepseek-v4-flash';
 /** 视觉后端模型：治 Lynx 失明页（树是空的）——看截图选结果序号。通用视觉模型即可
  *  （强于数数读字），走 TOAPIS 同判定链已踩通的 image_url 调法，不自托管不用火山。
  *  默认用判定链同款 gemini-2.5-flash-official（0823 真调实测：该渠道只开了 -official 后缀
  *  的模型，gpt-4o/裸 gemini 名报 model_not_found；真截图选目标 index 一次答对）。 */
 const VISION_MODEL = process.env.LOCATOR_VISION_MODEL || 'gemini-2.5-flash-official';
-const ASSIST_TIMEOUT_MS = 20_000;
-/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径）。默认模型已切 gemini
- *  （thinking 关不掉，观测思考 189~736）——300 必截断，抬到 1200（对齐 VISION 口径留余量）。 */
+const ASSIST_PRIMARY_TIMEOUT_MS = 10_000;
+const ASSIST_FALLBACK_TIMEOUT_MS = 9_000; // 最多 19s，安卓 readTimeout=25s
+const TREE_TOTAL_TIMEOUT_MS = 20_000;
+const VISION_TIMEOUT_MS = 20_000;
+/** 行号 JSON 一句话就够；备用 DeepSeek 仍可能计 reasoning_tokens，保留 1200 防截断。 */
 const ASSIST_MAX_TOKENS = 1200;
 /** 视觉后端预算：gemini-2.5-*-official 是 thinking 模型，TOAPIS 把思考算进 completion_tokens
  *  且关不掉（reasoning_effort:'none' 只 deepseek 认）——预算给不够会被截断（PR#1684 教训）。
@@ -288,84 +291,58 @@ async function recordVisit(
 }
 
 
-async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | null; model: string; failReason?: string }> {
+async function callTreeLlm(prompt: string): Promise<{ text: string | null; model: string; failReason?: string }> {
   const apiKey = process.env.TOAPIS_API_KEY;
-  if (!apiKey) return { line: null, model: ASSIST_MODEL, failReason: 'no_api_key' };
-  try {
-    const resp = await axios.post(
-      `${TOAPIS_BASE}/chat/completions`,
-      {
-        model: ASSIST_MODEL,
-        messages: [{ role: 'user', content: buildLocatorPrompt(req) }],
-        max_tokens: ASSIST_MAX_TOKENS,
-        temperature: 0,
-        // deepseek/gpt-5.4-mini 都认这个参数；thinking 模型（如 gemini）不认，
-        // 会把含 reasoning 的总预算吃光（PR#1684）
-        enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
-      },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
-    );
-    const choice = resp.data?.choices?.[0];
-    if (choice?.finish_reason === 'length') {
-      return { line: null, model: ASSIST_MODEL, failReason: 'truncated_output' };
+  if (!apiKey) return { text: null, model: ASSIST_MODEL, failReason: 'no_api_key' };
+  const models = ASSIST_MODEL === ASSIST_FALLBACK_MODEL
+    ? [ASSIST_MODEL] : [ASSIST_MODEL, ASSIST_FALLBACK_MODEL];
+  let failReason = 'llm_error';
+  const startedAll = Date.now();
+  for (const [index, model] of models.entries()) {
+    const started = Date.now();
+    if (started >= startedAll + TREE_TOTAL_TIMEOUT_MS) break;
+    try {
+      const timeout = Math.min(index === 0 ? ASSIST_PRIMARY_TIMEOUT_MS : ASSIST_FALLBACK_TIMEOUT_MS,
+        Math.max(1, startedAll + TREE_TOTAL_TIMEOUT_MS - started));
+      const resp = await axios.post(
+        `${TOAPIS_BASE}/chat/completions`,
+        { model, messages: [{ role: 'user', content: prompt }], max_tokens: ASSIST_MAX_TOKENS,
+          temperature: 0, enable_thinking: false },
+        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout },
+      );
+      const choice = resp.data?.choices?.[0];
+      if (choice?.finish_reason === 'length') return { text: null, model, failReason: 'truncated_output' };
+      if (index > 0) console.info('[locator-assist] tree fallback recovered model=%s elapsed_ms=%d total_ms=%d',
+        model, Date.now() - started, Date.now() - startedAll);
+      return { text: choice?.message?.content ?? '', model };
+    } catch (err) {
+      const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
+      failReason = isTimeout ? 'llm_timeout' : 'llm_error';
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      console.warn('[locator-assist] tree model failure model=%s reason=%s http=%s elapsed_ms=%d fallback=%s',
+        model, failReason, status ?? '-', Date.now() - started, index + 1 < models.length);
     }
-    const text: string = choice?.message?.content ?? '';
-    const line = parseLineAnswer(text, req.uiTree.split('\n').length);
-    return { line, model: ASSIST_MODEL, failReason: line === null ? 'unparseable_answer' : undefined };
-  } catch (err) {
-    const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
-    return { line: null, model: ASSIST_MODEL, failReason: isTimeout ? 'llm_timeout' : 'llm_error' };
   }
+  console.warn('[locator-assist] tree models exhausted total_ms=%d reason=%s', Date.now() - startedAll, failReason);
+  return { text: null, model: models[models.length - 1], failReason };
+}
+
+async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | null; model: string; failReason?: string }> {
+  const r = await callTreeLlm(buildLocatorPrompt(req));
+  const line = r.text === null ? null : parseLineAnswer(r.text, req.uiTree.split('\n').length);
+  return { line, model: r.model, failReason: line === null ? r.failReason ?? 'unparseable_answer' : undefined };
 }
 
 async function askExtract(req: LocatorAssistRequest): Promise<{ value: string | null; model: string; failReason?: string }> {
-  const apiKey = process.env.TOAPIS_API_KEY;
-  if (!apiKey) return { value: null, model: ASSIST_MODEL, failReason: 'no_api_key' };
-  try {
-    const resp = await axios.post(
-      `${TOAPIS_BASE}/chat/completions`,
-      {
-        model: ASSIST_MODEL,
-        messages: [{ role: 'user', content: buildExtractPrompt(req) }],
-        max_tokens: ASSIST_MAX_TOKENS,
-        temperature: 0,
-        enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
-      },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
-    );
-    const choice = resp.data?.choices?.[0];
-    if (choice?.finish_reason === 'length') return { value: null, model: ASSIST_MODEL, failReason: 'truncated_output' };
-    const value = parseExtractAnswer(choice?.message?.content ?? '');
-    return { value, model: ASSIST_MODEL, failReason: value === null ? 'unparseable_answer' : undefined };
-  } catch (err) {
-    const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
-    return { value: null, model: ASSIST_MODEL, failReason: isTimeout ? 'llm_timeout' : 'llm_error' };
-  }
+  const r = await callTreeLlm(buildExtractPrompt(req));
+  const value = r.text === null ? null : parseExtractAnswer(r.text);
+  return { value, model: r.model, failReason: value === null ? r.failReason ?? 'unparseable_answer' : undefined };
 }
 
 async function askExtractList(req: LocatorAssistRequest): Promise<{ values: string[] | null; model: string; failReason?: string }> {
-  const apiKey = process.env.TOAPIS_API_KEY;
-  if (!apiKey) return { values: null, model: ASSIST_MODEL, failReason: 'no_api_key' };
-  try {
-    const resp = await axios.post(
-      `${TOAPIS_BASE}/chat/completions`,
-      {
-        model: ASSIST_MODEL,
-        messages: [{ role: 'user', content: buildExtractListPrompt(req) }],
-        max_tokens: ASSIST_MAX_TOKENS,
-        temperature: 0,
-        enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
-      },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
-    );
-    const choice = resp.data?.choices?.[0];
-    if (choice?.finish_reason === 'length') return { values: null, model: ASSIST_MODEL, failReason: 'truncated_output' };
-    const values = parseExtractListAnswer(choice?.message?.content ?? '');
-    return { values, model: ASSIST_MODEL, failReason: values === null ? 'unparseable_answer' : undefined };
-  } catch (err) {
-    const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
-    return { values: null, model: ASSIST_MODEL, failReason: isTimeout ? 'llm_timeout' : 'llm_error' };
-  }
+  const r = await callTreeLlm(buildExtractListPrompt(req));
+  const values = r.text === null ? null : parseExtractListAnswer(r.text);
+  return { values, model: r.model, failReason: values === null ? r.failReason ?? 'unparseable_answer' : undefined };
 }
 
 /** vision_select：截图→通用视觉模型（TOAPIS，同判定链 image_url 调法），选结果序号。 */
@@ -389,7 +366,7 @@ async function askVisionSelect(req: LocatorAssistRequest): Promise<{ matchIndex:
         max_tokens: VISION_MAX_TOKENS,
         temperature: 0,
       },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: VISION_TIMEOUT_MS },
     );
     const choice = resp.data?.choices?.[0];
     if (choice?.finish_reason === 'length') return { matchIndex: null, model: VISION_MODEL, failReason: 'truncated_output' };
