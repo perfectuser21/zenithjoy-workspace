@@ -9,6 +9,10 @@ export function createReadOnlyRuntime({ probeConfig, deviceBinding, contract = n
   }
   return {
     contract: contract && structuredClone(contract), productionEnabled: false,
+    deviceBinding: { serial: binding.serial, package: config.expectedPackage },
+    profile: { requiredPlanFields: ['title', 'isbn', 'edition', 'category', 'groupPrice', 'singlePrice', 'referencePrice', 'inventory', 'promotions', 'digitalServices'], requiredWriteFields: ['title', 'groupPrice', 'inventory'], minImages: 1 },
+    verifyAction: async () => ({ ok: false, evidence: [] }),
+    reviewPlan: async () => ({ ok: false, evidence: [] }),
     inspect: observe,
     authorize: async () => ({ ok: false, evidence: [], reasons: ['BUSINESS_FACTS_AND_FORM_ANCHORS_UNVERIFIED'] }),
     act: async () => { throw new Error('PRODUCTION_GATE_CLOSED'); },

@@ -22,11 +22,13 @@ function snapshot(value) {
   return Object.freeze(result);
 }
 
-function materialize(input, contract) {
+function materialize(input, contract, profile) {
   const reasons = [], actions = [], plan = input.payload?.plan;
   if (!contract || contract.version !== 1 || !Array.isArray(contract.actions) || !contract.actions.length) return { reasons: ['UI_CONTRACT_UNVERIFIED'], actions };
   if (!plan || !Array.isArray(plan.images)) return { reasons: ['PLAN_INCOMPLETE'], actions };
   const identifiers = new Set(), imageIndexes = [];
+  if (!profile || !Array.isArray(profile.requiredPlanFields) || !profile.requiredPlanFields.length || !Array.isArray(profile.requiredWriteFields) || !profile.requiredWriteFields.length || !Number.isSafeInteger(profile.minImages) || profile.minImages < 1 || profile.minImages > 9) reasons.push('BUSINESS_PROFILE_UNCONFIGURED');
+  else if (profile.requiredPlanFields.some(k => !text(k) || !Object.hasOwn(plan, k) || plan[k] === '' || plan[k] === null) || plan.images.length < profile.minImages || profile.requiredWriteFields.some(k => contract.actions.filter(a => a.operation === 'setField' && a.field === k).length !== 1)) reasons.push('BUSINESS_PROFILE_INCOMPLETE');
   for (const action of contract.actions) {
     if (!['navigate', 'setField', 'upload', 'publish'].includes(action.operation)) { reasons.push('FORBIDDEN_ACTION'); continue; }
     if (!text(action.id) || identifiers.has(action.id) || !text(action.page) || !text(action.anchor)) { reasons.push('UI_CONTRACT_UNVERIFIED'); continue; }
@@ -59,11 +61,12 @@ function materialize(input, contract) {
 // 本模块不把适配器自报或dry-run结果提升为独立事实、在售或生产发布授权。
 export async function runListing(request, runtime = {}) {
   const input = snapshot(request), contract = runtime.contract ? snapshot(runtime.contract) : null;
+  const profile = runtime.profile ? snapshot(runtime.profile) : null, binding = runtime.deviceBinding ? snapshot(runtime.deviceBinding) : null;
   const mode = input.mode ?? 'dry-run';
   if (!['dry-run', 'live'].includes(mode)) throw new Error('INVALID_MODE');
-  const built = materialize(input, contract);
+  const built = materialize(input, contract, profile);
   const reasons = [...built.reasons];
-  if (!['inspect', 'act', 'lookup', 'authorize'].every(k => typeof runtime[k] === 'function')) reasons.push('TRUSTED_RUNTIME_INCOMPLETE');
+  if (!['inspect', 'act', 'lookup', 'authorize', 'verifyAction', 'reviewPlan'].every(k => typeof runtime[k] === 'function')) reasons.push('TRUSTED_RUNTIME_INCOMPLETE');
   const result = { mode, status: reasons.length ? 'blocked' : 'planned', publicationAuthorized: false,
     factsIndependentlyEstablished: false, reasons, wouldActions: built.actions };
   if (mode === 'dry-run') {
@@ -93,7 +96,7 @@ export async function runListing(request, runtime = {}) {
   }
   async function inspect(action) {
     const current = await runtime.inspect(action);
-    if (current?.ok !== true || current.storeId !== input.target.storeId || !evidence(current.evidence)) throw new Error('CURRENT_CONTEXT_UNVERIFIED');
+    if (current?.ok !== true || current.storeId !== input.target.storeId || current.serial !== binding?.serial || current.package !== binding?.package || current.leaseValid !== true || current.uiApproved !== true || current.unique !== true || (action.operation !== 'preflight' && (current.page !== action.page || current.anchor !== action.anchor)) || !evidence(current.evidence)) throw new Error('CURRENT_CONTEXT_UNVERIFIED');
     return current;
   }
   const adapter = {
@@ -111,12 +114,29 @@ export async function runListing(request, runtime = {}) {
       record('preflight', 'checked');
       for (const action of built.actions) {
         // 每个动作前重查素材字节和实时页面。运行时必须在act内再次验证锁/锚点，避免TOCTOU。
-        if (materialize(input, contract).reasons.length) throw new Error('PLAN_CHANGED_BEFORE_ACTION');
+        if (materialize(input, contract, profile).reasons.length) throw new Error('PLAN_CHANGED_BEFORE_ACTION');
         const before = await inspect(action);
+        if (materialize(input, contract, profile).reasons.length) throw new Error('PLAN_CHANGED_BEFORE_ACTION');
+        if (action.operation === 'publish') {
+          const review = await runtime.reviewPlan(input, built.actions, intent);
+          if (review?.ok !== true || review.storeId !== input.target.storeId || !evidence(review.evidence) || profile.requiredWriteFields.some(k => JSON.stringify(review.fields?.[k]) !== JSON.stringify(input.payload.plan[k])) || JSON.stringify(review.images) !== JSON.stringify(input.payload.plan.images.map(x => x.sha256))) throw new Error('FINAL_FORM_UNVERIFIED');
+          record('review', 'checked', { evidence: review.evidence });
+        }
         const stage = action.operation === 'publish' ? 'submit' : 'prepare';
         const pending = record(stage, 'intent', { actionId: action.id, operation: action.operation, evidence: before.evidence });
-        const reply = await runtime.act(action, { intent, pendingEvidence: pending });
+        // 上传按已核验的不可变字节交接，真实transport不得重新从可能被替换的原路径取文件。
+        let dispatched = action;
+        if (action.operation === 'upload') {
+          const bytes = readFileSync(action.value.path);
+          if (digest(bytes) !== action.value.sha256) throw new Error('MEDIA_CHANGED_BEFORE_UPLOAD');
+          dispatched = snapshot({ ...action, value: { sha256: action.value.sha256, bytesBase64: bytes.toString('base64') } });
+        }
+        const reply = await runtime.act(dispatched, { intent, pendingEvidence: pending });
         if (reply?.ok !== true || !evidence(reply.evidence)) throw new Error('ACTION_RESULT_UNVERIFIED');
+        if (action.operation === 'setField' || action.operation === 'upload') {
+          const actual = await runtime.verifyAction(action, reply, { intent });
+          if (actual?.ok !== true || !evidence(actual.evidence) || (action.operation === 'setField' && JSON.stringify(actual.value) !== JSON.stringify(action.value)) || (action.operation === 'upload' && actual.sha256 !== action.value.sha256)) throw new Error('ACTION_READBACK_MISMATCH');
+        }
         record(stage, 'observed', { actionId: action.id, evidence: reply.evidence });
         if (action.operation === 'publish') return { productId: reply.productId, evidence: reply.evidence };
       }
