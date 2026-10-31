@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { evaluatePlan } from '../plan-evidence.mjs';
 
 const digest = data => createHash('sha256').update(data).digest('hex');
@@ -80,4 +81,25 @@ test('symlinks cannot substitute evidence outside the configured directory', t =
 test('duplicate document kinds cannot silently override conflicting facts', t => {
   const f = fixture(t); f.request.proofs.push({ ...f.request.proofs[0] });
   assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+
+test('CLI evaluates files and leaves platform publication unauthorized', t => {
+  const f = fixture(t), root = f.options.evidenceRoot;
+  writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
+  writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
+  const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
+    join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr);
+  const result = JSON.parse(child.stdout);
+  assert.equal(result.status, 'matched'); assert.equal(result.publicationAuthorized, false);
+});
+
+test('CLI signals unknown evidence without approving publication', t => {
+  const f = fixture(t), root = f.options.evidenceRoot; f.request.proofs = [];
+  writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
+  writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
+  const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
+    join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
+  assert.equal(child.status, 2, child.stderr);
+  assert.equal(JSON.parse(child.stdout).status, 'unknown');
 });
