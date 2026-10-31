@@ -12,7 +12,7 @@ const id='00000000-0000-4000-8000-000000000301';
 const title='FDE证书刚出第二张';
 const comment='FDE到底有几张证，哪张才是能查的';
 
-function fixture(secondPass,firstQuoteBad=false){
+function fixture(secondPass,firstQuoteBad=false,firstIntentMissing=false){
  const row={id,line_key:'jinuo',harvest_batch:sourceRun,comment_body:comment,source_video:title,
   source_video_url:'https://www.douyin.com/video/7617837149999841201',process_status:'待分拣',
   relevance:null,intent_grade:null,collected_at:new Date('2026-10-20T00:00:00Z')};
@@ -35,12 +35,30 @@ function fixture(secondPass,firstQuoteBad=false){
    audit:{model:'scoring-model',response_id:'score-response'}};},
   judgePolicy:async()=>{policyCalls++;return {grade:'A',audit:{model:'policy-model',
    response_id:`policy-response-${policyCalls}`,policy_evidence:{audience_id:'recvvcNzUv5rzl',
-    matched_rule:'考证视频',comment_signal:policyCalls===2&&!secondPass?'FDE证书':comment,
+    matched_rule:'考证视频',comment_signal:policyCalls===1&&firstIntentMissing||policyCalls===2&&!secondPass?'FDE证书':comment,
     video_signal:policyCalls===1&&firstQuoteBad?'FDE证书咨询':'FDE证书',
     exclusion_rule:null,reason:'按冻结政策核实直接提问'}}};}};
  return {pool:{connect:async()=>client},deps,committed,writes,
   counts:()=>({policyCalls,scoreCalls})};
 }
+
+test('两次独立复核均缺个人意向证据后评论终态排除，重复运行不再评分',async()=>{
+ const f=fixture(false,false,true);
+ const input={op:'score',line:'jinuo',run,source_run:sourceRun,limit:1};
+ const first=await queueRequest(f.pool,input,f.deps);
+ assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
+ assert.equal(first.scored,0);
+ assert.equal(first.excluded,1);
+ assert.deepEqual(first.excluded_ids,[id]);
+ assert.equal(f.committed.process_status,'已排除');
+ assert.equal(f.committed.relevance,null);
+ assert.equal(f.committed.intent_grade,null);
+ assert.equal(f.committed.judgment_config.exclusion_reason,'personal_intent_evidence_missing');
+ assert.equal(f.committed.judgment_config.policy_reviews.length,2);
+ const again=await queueRequest(f.pool,input,f.deps);
+ assert.equal(again.scored,0);
+ assert.deepEqual(f.counts(),{policyCalls:2,scoreCalls:1});
+});
 
 test('同一评论首审通过、独立二审缺个人意向证据时整笔评分回滚',async()=>{
  const f=fixture(false);
