@@ -21,6 +21,25 @@ function fakeOriginalOrders(){
  const input={line:'jinuo',run:'fake104',profile:'jinoshengyuan-work',sender_douyin_id:'langzi63485',limit:1};
  return {rows,deps,input,source,digest,clean:()=>rmSync(directory,{recursive:true,force:true})};
 }
+test('104精确订单范围只领指定飞书record，排序更靠前的旁单保持原样',async()=>{
+ const f=fakeOriginalOrders();try{
+  f.rows[0].fields['重复命中次数']=99;
+  f.rows[1].fields['重复命中次数']=1;
+  const target=f.rows[1].record_id;
+  const scope={schema_version:1,record_id:target,comment_id:'comment-test',company_id:'company-test',source_run:'source102',mark_run:'mark103',target_douyin_id:'abc123',line_key:'jinuo',run_tag:f.input.run,profile:f.input.profile,serial:'SERIAL'};
+  const claimed=await queueRequest({...f.input,op:'claim_outreach',outreach_scope:scope},f.deps);
+  assert.equal(claimed.length,1);assert.equal(claimed[0].id,target);
+  assert.equal(f.rows[0].fields['状态'],'待触达');
+  assert.equal(f.rows[1].fields['状态'],'触达中');
+ }finally{f.clean();}
+});
+test('104缺精确订单范围时拒绝领单且不改飞书原行',async()=>{
+ const f=fakeOriginalOrders();try{
+  await assert.rejects(queueRequest({...f.input,op:'claim_outreach'},f.deps),/OUTREACH_SCOPE|精确订单/);
+  assert.equal(f.rows[0].fields['状态'],'待触达');
+  assert.equal(f.rows[1].fields['状态'],'待触达');
+ }finally{f.clean();}
+});
 test('真实原订单adapter同recipient两个大小写别名、两个run竞争仅领一单',async()=>{
  const f=fakeOriginalOrders();try{
  const raced=await Promise.allSettled([queueRequest({...f.input,op:'claim_outreach'},f.deps),queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps)]);
