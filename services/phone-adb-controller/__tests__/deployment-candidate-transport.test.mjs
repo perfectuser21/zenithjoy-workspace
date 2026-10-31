@@ -24,7 +24,10 @@ function assertPrivateSsh(calls){for(const c of calls){const connect=c.args.at(-
 test('权威 absent 首次安装原字节，所有SSH原语使用私有连接且完成真实ACK',t=>{
  const f=transportFixture(t),result=f.run('normal');assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(f.calls().filter(c=>c.archive).length,2);assertPrivateSsh(f.calls());
- for(const host of ['mmv','xian-m4'])assert.equal(readFileSync(join(base(f,host),f.revision,'runtime/transport-payload.bin')).length,270000);
+ for(const host of ['mmv','xian-m4']){
+  assert.equal(readFileSync(join(base(f,host),f.revision,'runtime/transport-payload.bin')).length,270000);
+  assert.ok(readFileSync(join(base(f,host),f.revision,'runtime/leadgen-outreach-scope.js')).includes('validateOutreachScope'),'候选必须携带 runtime-definition 的新依赖');
+ }
  const posts=readFileSync(join(f.top,'brain.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(posts.length,2);
 });
 for(const mode of ['unknown','bad-json','late-pending','late-final'])test('未知或安装前出现同SHA写者拒绝继续：'+mode,t=>{
