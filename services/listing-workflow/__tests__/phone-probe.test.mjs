@@ -16,7 +16,7 @@ function deps(overrides = {}) {
   const calls = []; let owner = null;
   const brain = {
     acquire: async (serial, who) => { calls.push('acquire'); owner = who; return { acquired: true }; },
-    lease: async () => ({ locked_by: owner, expired: false, expires_at: new Date(Date.now() + 7200000).toISOString() }),
+    lease: async () => ({ locked_by: owner, expired: false, expires_at: new Date(Date.now() + 7200000).toISOString(), serverTimeMs: Date.now(), networkElapsedMs: 0 }),
     release: async () => { calls.push('release'); owner = null; return { success: true }; },
   };
   return { calls, brain, deviceBinding: { serial: 'SERIAL123', route: ['jump-host', 'operator@device-host'], authority: 'explicit-user-task' }, sleep: async () => {}, run: async operation => {
@@ -182,4 +182,14 @@ test('only this probe artifacts are deleted and absence is checked before releas
   assert.ok(d.calls.includes('cleanup')); assert.ok(d.calls.includes('artifact_absent'));
   assert.ok(d.calls.indexOf('cleanup') < d.calls.indexOf('release'));
   assert.throws(() => readOnlyInvocation(fixture(), 'cleanup', '/sdcard/private.xml'), /INVALID_ARTIFACT_PATH/);
+});
+
+test('untrusted lease clock and thrown SSH errors cannot release an unresolved remote reader', async () => {
+  const d = deps(), lease = d.brain.lease;
+  d.brain.lease = async () => ({ ...await lease(), serverTimeMs: NaN });
+  await assert.rejects(probeReadOnly(fixture(), d), /LEASE_UNSAFE/);
+  assert.equal(d.calls.includes('online'), false);
+  const uncertain = deps(); uncertain.run = async () => { throw new Error('SSH disconnected'); };
+  await assert.rejects(probeReadOnly(fixture(), uncertain), /COMMAND_FAILED/);
+  assert.equal(uncertain.calls.includes('release'), false);
 });
