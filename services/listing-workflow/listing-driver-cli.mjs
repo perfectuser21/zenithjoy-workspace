@@ -23,7 +23,7 @@ if (args[0] === '--help') {
     }
     const result = await runListing(request, runtime);
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (result.status === 'blocked' || result.status === 'unknown') process.exitCode = 2;
+    if (result.cleanupError || result.status === 'blocked' || result.status === 'unknown') process.exitCode = 2;
   } catch (error) {
     process.stderr.write(`${JSON.stringify({ error: error.message, manifest: error.manifest || null })}\n`); process.exitCode = 2;
   }
