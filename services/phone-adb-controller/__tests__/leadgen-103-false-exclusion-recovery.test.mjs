@@ -100,6 +100,16 @@ test('102l仅精确授权单条可原子重开，旧双审审计留在恢复链�
  assert.equal(again.status,'already_applied');assert.equal(f.audit.length,1);assert.equal(f.writes.length,1);
 });
 
+test('受控恢复入口继续拒绝多余字段，不能为共享队列误注入放宽合同',async()=>{
+ for(const op of ['recover_false_exclusion_102l','recover_false_exclusion_102l_readback']){
+  const f=rig();
+  await assert.rejects(queueRequest(f.pool,{...request,op,limit:1},f.deps),
+   error=>error.message==='FALSE_EXCLUSION_SCOPE_INVALID');
+  assert.equal(f.row.process_status,'已排除');
+  assert.equal(f.audit.length,0);
+ }
+});
+
 test('102l恢复拒绝来源不匹配、无任务授权及已有线索或outbox',async()=>{
  for(const [change,rigOpts] of [
   [{source_run:'wrong-source'},{}],
