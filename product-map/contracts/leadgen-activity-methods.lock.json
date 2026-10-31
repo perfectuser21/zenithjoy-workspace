@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "0815cacef7ea6bab6770a05ec44b89134d678d790694c6695973f8f600c55fb2",
+      "code_digest": "b5271954072e2aedc8caf051bdbe9f87bfe80971c49f8ecb137607cb2c12b1c6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity只执行视频发现collect_videos，新增逻辑位于103评分handler、score/score_recovery/score_exclusion_readback及双审函数；发现输入输出、设备路径与原生采集未改。",
+        "reason": "本Activity只执行视频发现collect_videos，新增逻辑位于103评分handler、score/score_recovery/score_exclusion_readback及双审函数；发现输入输出、设备路径与原生采集未改。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "cc0f74e64f5d187c55dca7d0047ceb5f8fc1c74a9fc5e94f788c3a9a5601a037",
-        "current_code_digest": "0815cacef7ea6bab6770a05ec44b89134d678d790694c6695973f8f600c55fb2"
+        "current_code_digest": "b5271954072e2aedc8caf051bdbe9f87bfe80971c49f8ecb137607cb2c12b1c6"
       }
     },
     "douyin_video_processing.preflight": {
@@ -353,7 +353,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -416,7 +416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "75ff1d42981f1ebff22d36300bc2a36d95442359fb44bd8ff7f594e719721a9e",
+      "code_digest": "2e590d356f5e6993bf21411bd8788f3c58b6ec4b16fda8449f631dd88b4c056a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity只执行102设备和账号预检；新增逻辑位于103评分handler和评分政策复核分支，102预检未调用这些分支，输入输出保持。",
+        "reason": "本Activity只执行102设备和账号预检；新增逻辑位于103评分handler和评分政策复核分支，102预检未调用这些分支，输入输出保持。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "15ab0d8d8810b1de1c364e03cdbcb677279faec42f976f8137121142b28e8c0e",
-        "current_code_digest": "75ff1d42981f1ebff22d36300bc2a36d95442359fb44bd8ff7f594e719721a9e"
+        "current_code_digest": "2e590d356f5e6993bf21411bd8788f3c58b6ec4b16fda8449f631dd88b4c056a"
       }
     },
     "douyin_video_processing.dedup": {
@@ -637,7 +637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -700,7 +700,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "51719672845620038c1780d409b4c9a7f478cad73288f8a7b3c0948270cc87eb"
         }
       ],
-      "code_digest": "7c9905056d23805ad07ba7541cadde04bd478ee658ff2a84919cf614ff30e33a",
+      "code_digest": "57381f30097b0fb679f6c8eebde34ae8fc5bd26075f444a689728781261befa1",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity调用queue的102认领/判重操作；本次queue只新增score/score_recovery/score_exclusion_readback分支，102去重SQL及回执未改。",
+        "reason": "本Activity调用queue的102认领/判重操作；本次queue只新增score/score_recovery/score_exclusion_readback分支，102去重SQL及回执未改。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "ce77053263277529466149180876f5d8e954ff603c323043faeba1ad5d0eb773",
-        "current_code_digest": "7c9905056d23805ad07ba7541cadde04bd478ee658ff2a84919cf614ff30e33a"
+        "current_code_digest": "57381f30097b0fb679f6c8eebde34ae8fc5bd26075f444a689728781261befa1"
       }
     },
     "douyin_video_processing.qualification": {
@@ -952,7 +952,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -1015,7 +1015,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -1221,13 +1221,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "bada6db4a7e70b11645011fa3c2b98436ff8ef3df646434fb947a52667972b8e",
+      "code_digest": "37502e783120e262933289c2342e36275eceeefd5185d79e99c16bfe9c9d51ab",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity调用queue的102视频资格判定操作；新增评分终态分支与双审仅在103执行，资格判定输入输出和政策未改。",
+        "reason": "本Activity调用queue的102视频资格判定操作；新增评分终态分支与双审仅在103执行，资格判定输入输出和政策未改。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "165bd2984651cfe467c4ecbd59f19959a50043bc8b4d957ee73e00232755203c",
-        "current_code_digest": "bada6db4a7e70b11645011fa3c2b98436ff8ef3df646434fb947a52667972b8e"
+        "current_code_digest": "37502e783120e262933289c2342e36275eceeefd5185d79e99c16bfe9c9d51ab"
       }
     },
     "douyin_video_processing.collection": {
@@ -1288,7 +1288,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -1351,7 +1351,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -1523,13 +1523,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "c1c3bb24416614d7abba1ba45f7546ccec70565e1757b2d62fd8f78204f73342",
+      "code_digest": "e2a6166046bbf9915bd285a0c52f6c668c6f68c0c8ec165b436cb4ff9ffc5bf0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity仅运行102评论采集与读回；新增评分handler及双审在103，评论采集入池默认待分拣的代码路径未改。",
+        "reason": "本Activity仅运行102评论采集与读回；新增评分handler及双审在103，评论采集入池默认待分拣的代码路径未改。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "f42c1149c2c9631b96f95883d1ca7453a12a4cc5c930c485aee824d8d09e9330",
-        "current_code_digest": "c1c3bb24416614d7abba1ba45f7546ccec70565e1757b2d62fd8f78204f73342"
+        "current_code_digest": "e2a6166046bbf9915bd285a0c52f6c668c6f68c0c8ec165b436cb4ff9ffc5bf0"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1583,7 +1583,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -1646,7 +1646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -1799,13 +1799,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5f24c13b1040b5b24e2fd7f87ffe12bc4fe0ccad97e259d53e78302ae8daec2f",
+      "code_digest": "64bfdf78b73e68b8be0a91e6ed936e66269ffa0947354dc082c092bc7f4d5836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity仅执行102资源归位，新增评分handler及双审在103；设备锁、清理回执和状态路径均未改。",
+        "reason": "本Activity仅执行102资源归位，新增评分handler及双审在103；设备锁、清理回执和状态路径均未改。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "a8483d48e49964f25acf4e4744db557413d3653d3b9e617bd269f376065c1f83",
-        "current_code_digest": "5f24c13b1040b5b24e2fd7f87ffe12bc4fe0ccad97e259d53e78302ae8daec2f"
+        "current_code_digest": "64bfdf78b73e68b8be0a91e6ed936e66269ffa0947354dc082c092bc7f4d5836"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1859,7 +1859,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -1922,7 +1922,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -2079,7 +2079,7 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "6aaf06fab786bc63d395d048b06eeb10c354b4a3a2accdd0cdf735731a8485d7"
+      "code_digest": "1b42a814840a1b8305276acb8a051c7fc9235a792aac9ff735982b9caf337218"
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.6.0",
@@ -2139,7 +2139,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -2202,7 +2202,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -2394,7 +2394,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "86daf2506975da449bb9bd8b4a7e8b75edb4ecd1f0ba7088b89a3ed0066ba38e"
+      "code_digest": "08435ae6b322780d6fd1cfddf09e5fd33767dbf3de1427e9cd8e2cc99626fb6e"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2447,7 +2447,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -2510,7 +2510,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -2692,13 +2692,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "0538434b4ea1a933e404a08386421f0a063205ee8ce4b1f70b21887eefc83dd9",
+      "code_digest": "2c75540ec2931eb9df792119e2ea7f2e78a91602a0c30882669112cc0c555ce5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity仅执行104授权与发送预检；变更只在103评分与双审共享文件，104预检不调用这些函数，输入输出未改。",
+        "reason": "本Activity仅执行104授权与发送预检；变更只在103评分与双审共享文件，104预检不调用这些函数，输入输出未改。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "3cde23ea34c621beddbd037081573e30f623dfb51b7ffd9a1cdfecb59f94799b",
-        "current_code_digest": "0538434b4ea1a933e404a08386421f0a063205ee8ce4b1f70b21887eefc83dd9"
+        "current_code_digest": "2c75540ec2931eb9df792119e2ea7f2e78a91602a0c30882669112cc0c555ce5"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2752,7 +2752,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -2815,7 +2815,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -2972,13 +2972,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "52cde5f47d6d9a55e7185f7fde1b781fa6920ec7615909425f539548fe07f91c",
+      "code_digest": "840c797240266da1906bbee9db4c9cffe5ed9068af5da217591c419a488ac193",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity仅消费已授权104订单并发送；本次103只改变评分来源，104发送代码和订单安全门禁未改，没有扩大可发送范围。",
+        "reason": "本Activity仅消费已授权104订单并发送；本次103只改变评分来源，104发送代码和订单安全门禁未改，没有扩大可发送范围。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "19276b411cd8ada9ecf863d56753f35b98ce175e1b7060629bc282ab858af00a",
-        "current_code_digest": "52cde5f47d6d9a55e7185f7fde1b781fa6920ec7615909425f539548fe07f91c"
+        "current_code_digest": "840c797240266da1906bbee9db4c9cffe5ed9068af5da217591c419a488ac193"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3032,7 +3032,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -3095,7 +3095,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -3245,13 +3245,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "8eb17c67b0f2e5169b9359ffb1e3ee50d80ec9fc140bd0b02764e8fcfcaa9435",
+      "code_digest": "64502fae70284115cc6aa9a42a2d11f7ecd36440348071eaf17d7fff82345113",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity仅写回104真实发送结果；103排除状态在上游不创建outbox，本次未修改104写回代码或回执。",
+        "reason": "本Activity仅写回104真实发送结果；103排除状态在上游不创建outbox，本次未修改104写回代码或回执。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "f2fb83c911b7f4efd374bd1bbf7cb4757a96027071028673a826093ee5500f34",
-        "current_code_digest": "8eb17c67b0f2e5169b9359ffb1e3ee50d80ec9fc140bd0b02764e8fcfcaa9435"
+        "current_code_digest": "64502fae70284115cc6aa9a42a2d11f7ecd36440348071eaf17d7fff82345113"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3305,7 +3305,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "ad106b62ebecaef302c5ed51bf682558b9a8e814099113a900119b603bf7a067"
+          "sha256": "48db04b5803ab148510203e0a4868628e098a4d79eb7594c858ae9489a3e6e61"
         },
         {
           "kind": "code",
@@ -3368,7 +3368,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "165255b4400087f9f8648d9643f76546170557a01e6d90034e3b799ef2b9b941"
+          "sha256": "16701a7d8ce00dd2f83e9aaf7c6a21afaebd2b8bdd67abd78976eeefbf6bec1a"
         },
         {
           "kind": "code",
@@ -3528,13 +3528,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "10ab1ee290f44706d7e0df06857f8692942e7c632fb6eeb5d41a568cfeaa2326",
+      "code_digest": "94177643aa05318e13feb7299c23b24486cf45cf502d8c87fc5bbc9967423307",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "本Activity只清理104触达资源；新增103评分handler和双审逻辑不会进入104清理路径，原合同和回执保持。",
+        "reason": "本Activity只清理104触达资源；新增103评分handler和双审逻辑不会进入104清理路径，原合同和回执保持。 本次仅把103排除模块纳入RPC固定源文件与服务端字节白名单；该Activity的调用、输入输出和执行业务条件不变。",
         "reviewed_by": "codex:leadgen-103-policy-terminal",
         "previous_code_digest": "4a3548bfcc4cf4cec1c1bdc7fa64fb306f1e79c163d4e7fda03893284173b7ca",
-        "current_code_digest": "10ab1ee290f44706d7e0df06857f8692942e7c632fb6eeb5d41a568cfeaa2326"
+        "current_code_digest": "94177643aa05318e13feb7299c23b24486cf45cf502d8c87fc5bbc9967423307"
       }
     }
   },
