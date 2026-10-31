@@ -146,3 +146,31 @@ test('production CLI rejects caller supplied historical clocks', t => {
     join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
   assert.equal(child.status, 1); assert.match(JSON.parse(child.stderr).error, /用法/);
 });
+
+test('a new listing can bind a source product identity before a platform ID exists', t => {
+  const f = fixture(t, x => {
+    delete x.request.target.productId; delete x.document.subject.productId;
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-1';
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'matched');
+});
+test('new-listing evidence for another source product is rejected', t => {
+  const f = fixture(t, x => {
+    delete x.request.target.productId; delete x.document.subject.productId;
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-2';
+  });
+  assert.ok(evaluatePlan(f.request, f.options).reasons.some(x => x.code === 'SUBJECT_MISMATCH' && x.field === 'sourceProductKey'));
+});
+test('both supplied source and platform identities must match', t => {
+  const f = fixture(t, x => {
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-2';
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('evidence tied to an old platform listing cannot approve a fresh creation identity', t => {
+  const f = fixture(t, x => {
+    delete x.request.target.productId;
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-1';
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
