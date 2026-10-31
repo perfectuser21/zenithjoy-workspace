@@ -86,6 +86,19 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: out_delivery_result_verified
+    stage: send_dm
+    journey_cell: stage:send_dm
+    probe:
+      type: metric
+      ref: metrics.delivery_result_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: 原生发送前后 XML、账号与目标、批准正文、风险页及前台原件均核验；结果未知不得判成功。
   - key: send_dm_commander_verified
     stage: send_dm
     journey_cell: stage:send_dm
