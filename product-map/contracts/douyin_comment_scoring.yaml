@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.11.1
+  version: 0.12.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -33,7 +33,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.6.0
+    version: 2.7.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -71,7 +71,7 @@ activities:
           - promoted
     preconditions:
       - 从PG认领待分拣评论，带关联视频标题与转写
-      - 普通来源视频须同102批次、matched且PG状态评论已采。正式102配额抽样可在视频仍待判定时仅消费本批已提交评论：必须核Brain原run绑定与全部pass/verified回执、冻结采样上限及101来源、同SHA、公司政策和PG整批原生身份；软预算/失败102不得借待判定状态进入。金诺102d跨SHA只限Issue 3004abdb-d5b8-448c-b35c-58203ef84e1d固定run、绑定、VID和五条原件；金诺原102g失败run的VID7699489394579915663及三条固定原生评论仍仅经用户决定、旧执行实时停止、v14冻结政策、无旧outbox及db_audit接纳回执绑定单一103 run显式领取。两种例外均不伪造视频评论已采或改旧102结论
+      - 普通来源视频须同102批次、matched且PG状态评论已采。正式102配额抽样可在视频仍待判定时仅消费collection主span逐视频点名的精确评论ID：必须核Brain原run绑定与全部pass/verified回执、冻结采样上限及101来源、同SHA、公司政策、配额=新增+历史、PG规范行摘要和原生身份；历史行保留旧批次且只准本103新评分。软预算/失败102不得借待判定状态进入。金诺102d跨SHA只限Issue 3004abdb-d5b8-448c-b35c-58203ef84e1d固定run、绑定、VID和五条原件；金诺原102g失败run的VID7699489394579915663及三条固定原生评论仍仅经用户决定、旧执行实时停止、v14冻结政策、无旧outbox及db_audit接纳回执绑定单一103 run显式领取。两种例外均不伪造视频评论已采或改旧102结论
       - 模型不可达、HTTP/网络异常、证据非法或双审不一致留待重试，不伪造C级成功，不转人工评分
     postconditions:
       - probe: scores_readback
@@ -122,7 +122,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.9.0
+        version: 0.10.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -353,7 +353,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.7.0
+    version: 3.8.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -431,7 +431,7 @@ activities:
           - feishu_record_id
     preconditions:
       - 带company_binding的评论须按原102 harvest_batch只读既有PG冻结来源与选定设备，缺失不得补造历史run或仅信评论内绑定；当前评分政策仍独立冻结，来源公司/租户必须相同；103配送和读回沿同来源，104云profile仍未获授权
-      - 评分行须有两份不同模型身份的已持久政策证据，原评论与来源视频仍须同102批次。普通视频须评论已采；正式102配额抽样视频可保持待判定，但评分及标记阶段都要核Brain pass/verified、冻结公司政策与整批原生身份；金诺102d跨SHA仅限固定历史桥。旧单份证据、软预算及失败102不得推进线索；金诺102g隔离视频仍须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定，其他隔离视频阻断
+      - 评分行须有两份不同模型身份的已持久政策证据，原评论与来源视频仍须同102身份；历史行保留旧harvest_batch，仅限正式回执精确ID集且本103新评分。普通视频须评论已采；正式102配额抽样视频可保持待判定，但评分及标记阶段都要核Brain pass/verified、冻结公司政策、逐视频配额与PG规范行摘要及原生身份；金诺102d跨SHA仅限固定历史桥。旧单份证据、软预算及失败102不得推进线索；金诺102g隔离视频仍须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定，其他隔离视频阻断
       - 评论 process_status=待分拣
       - 已排除评论保持 relevance/intent_grade 为空，不进入 Lead、outbox 或后续104；纯排除批次标记人空消费为正常完成
       - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
@@ -500,7 +500,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.9.0
+        version: 0.10.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

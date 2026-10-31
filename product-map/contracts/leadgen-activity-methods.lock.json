@@ -206,14 +206,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "ebf2feaf302d3bb344b437eb5ba0a09e034959b689d074b88fd2cf764a07453b",
+      "code_digest": "bba9e1b489f9f45b3cd70f716ecd8b8c3f81ec6c2c65ec151aad8ba79ac2467a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1",
-        "current_code_digest": "ebf2feaf302d3bb344b437eb5ba0a09e034959b689d074b88fd2cf764a07453b"
+        "current_code_digest": "bba9e1b489f9f45b3cd70f716ecd8b8c3f81ec6c2c65ec151aad8ba79ac2467a"
       }
     },
     "douyin_video_processing.preflight": {
@@ -518,14 +518,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b3320a87d3726eb2a517dd86e66f02f7991b6222e4321f237d91ef92552cd211",
+      "code_digest": "a8f86cff0dc8559648a7f9f5cd11db962dbedeaf8141be5952de3b13a5c08799",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0",
-        "current_code_digest": "b3320a87d3726eb2a517dd86e66f02f7991b6222e4321f237d91ef92552cd211"
+        "current_code_digest": "a8f86cff0dc8559648a7f9f5cd11db962dbedeaf8141be5952de3b13a5c08799"
       }
     },
     "douyin_video_processing.dedup": {
@@ -784,7 +784,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
@@ -833,7 +833,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
+          "sha256": "697437524d3b37e3fc3738d97d34cdd846d176a809b61ae75cd419ad58597a7a"
         },
         {
           "kind": "code",
@@ -854,16 +854,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "dcdb98b8cdb680a129c67d26ba39ed835e71b435bf001ddeb91f40191af96690",
+      "code_digest": "8762735f9cf84b4cab9df9da431adb6e757028a659e91bc34f5f9c250a651729",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103正式抽样来源核验且仅scoring和mark_leads业务分支受影响；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc",
-        "current_code_digest": "dcdb98b8cdb680a129c67d26ba39ed835e71b435bf001ddeb91f40191af96690"
+        "current_code_digest": "8762735f9cf84b4cab9df9da431adb6e757028a659e91bc34f5f9c250a651729"
       }
     },
     "douyin_video_processing.qualification": {
@@ -903,7 +903,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
+          "sha256": "697437524d3b37e3fc3738d97d34cdd846d176a809b61ae75cd419ad58597a7a"
         },
         {
           "kind": "code",
@@ -1106,14 +1106,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -1221,31 +1221,31 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "eecbee271e959fbf70ba841158990edc2697dbe8077da5febe01809380c020fa",
+      "code_digest": "3ccf3e684d18e0c9b183b15e139dfd35f23012db8a3b663db77846386320cc54",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103正式抽样来源核验且仅scoring和mark_leads业务分支受影响；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b",
-        "current_code_digest": "eecbee271e959fbf70ba841158990edc2697dbe8077da5febe01809380c020fa"
+        "current_code_digest": "3ccf3e684d18e0c9b183b15e139dfd35f23012db8a3b663db77846386320cc54"
       }
     },
     "douyin_video_processing.collection": {
-      "activity_version": "2.6.0",
-      "contract_digest": "bf5c81b8754dad515694438cdcb1ef403c0d9f75fd2cce98006b367047b868dd",
-      "method_version": "0.3.0",
+      "activity_version": "2.7.0",
+      "contract_digest": "6ffb4eaa33994c917752a9d1c822bf212654454223c4475854a0491bd46f8637",
+      "method_version": "0.4.0",
       "skill": {
         "name": "douyin-leadgen-activity-102-collection",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md",
-        "sha256": "1caabcfe7dda577ecfa13e527f85b00d2b180e59ea31b155162dc334c7c8adc6",
+        "sha256": "80b91759206ee203a950f71602d25877d5f7b89e1f6d509178c23c1ed4960b2c",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "ba2a7d44020fd66b0d2126883cfb3c303c269d890bb1bb46617eba5bd63c1d71"
+        "content_digest": "fba85eabcc28a26e85c2623605d0900ee851390fb6c235a572bb6edb3f0bc48d"
       },
       "code_bindings": [
         {
@@ -1254,6 +1254,13 @@
           "path": "services/phone-adb-controller/company-config-lib.js",
           "revision": "contract",
           "sha256": "dedf93ad05d9d0c1e9808beff2ec30658e9da43927e7115d6f98d791efa763fa"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/runtime-receipts.mjs",
+          "revision": "contract",
+          "sha256": "0ce6547c7c6d9409623069aa79f61d8b1ed8b57aaf03562cd0313d752b9691b5"
         },
         {
           "kind": "code",
@@ -1450,14 +1457,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -1523,14 +1530,7 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "487cbc50608ff9712cbf22219d73888f08488ed7d81aa8ae84e835f4206035c8",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "c7d264f53d2482b6cdb19cfe445312f9c17292a30882dc42d2a0a0db6ac056ec",
-        "current_code_digest": "487cbc50608ff9712cbf22219d73888f08488ed7d81aa8ae84e835f4206035c8"
-      }
+      "code_digest": "d097672509aa0ecc6aefd75c486ff72ab267930c7a15bb3f1621451976a37a20"
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.2.0",
@@ -1747,14 +1747,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -1799,31 +1799,31 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "11cdc7ccd24c294ca9878ce6f1a0b7bb548a612685ef9ec7783e11c521d70fe4",
+      "code_digest": "44f142de601fc49ab1031b0747297687eeaa18ce71c2b195e635e91ba7c626cc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d",
-        "current_code_digest": "11cdc7ccd24c294ca9878ce6f1a0b7bb548a612685ef9ec7783e11c521d70fe4"
+        "current_code_digest": "44f142de601fc49ab1031b0747297687eeaa18ce71c2b195e635e91ba7c626cc"
       }
     },
     "douyin_comment_scoring.scoring": {
-      "activity_version": "2.6.0",
-      "contract_digest": "eced2fd81d7ce61c939264795ec96756be273413a06d97786a1025f97d788149",
-      "method_version": "0.9.0",
+      "activity_version": "2.7.0",
+      "contract_digest": "18f326a0246c56b761cf8a3dea4e21a0b87a629667803dbe8563afac529e3208",
+      "method_version": "0.10.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-scoring",
-        "version": "0.9.0",
+        "version": "0.10.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
-        "sha256": "3e92070edc0643fe8e86d92f077ebb2c940484ba824ae12e33fec16d9f421c80",
+        "sha256": "20124749510924512cf007c8f7d8b51eec1b8d8643a9dc5cd98abb35523af80e",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "9adb4fd823f507d476a0e9b8e518d457d7bca834d6fbea3c9ce576ebffd10c27"
+        "content_digest": "8ef5f33f7e95d5a383e65b5731d1518d1973f1916b1bd888d29599e9cc598d10"
       },
       "code_bindings": [
         {
@@ -1978,7 +1978,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
@@ -2027,14 +2027,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
+          "sha256": "697437524d3b37e3fc3738d97d34cdd846d176a809b61ae75cd419ad58597a7a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-score-exclusion.js",
           "revision": "contract",
-          "sha256": "e2e342ac5b5344e613ddfcf706b1096ab42845980a0e1f413a7ceee747aff85d"
+          "sha256": "f248c22948a5f9dff8f81753a6495d0e54668a393b1915b23eabab7644068717"
         },
         {
           "kind": "code",
@@ -2048,7 +2048,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-sampled-admission.js",
           "revision": "contract",
-          "sha256": "b1ce4003bd6a3ba48948b3db6995a37972312915a589926cd8b9018dd8510ef2"
+          "sha256": "2e9aba62984bf5a7d85486b5e410b8e38f40373e0ba439684dedbf94defd5ec2"
         },
         {
           "kind": "code",
@@ -2076,7 +2076,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -2086,24 +2086,24 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "5acc0e0e312aa2b3275fefd03f3d9b3bc312a85136a92d7bc6c4679a7c75980e"
+      "code_digest": "d852f9e2a8e5af2b15075ec14d4849b47db0417bb9e5bba5340ae17ef14a12dc"
     },
     "douyin_comment_scoring.mark_leads": {
-      "activity_version": "3.7.0",
-      "contract_digest": "2d30673ae867f0cee6a447aab499bdce16bcbadbcf1af1034a6abca16bbfafbe",
-      "method_version": "0.9.0",
+      "activity_version": "3.8.0",
+      "contract_digest": "4956789626ed7241a8aa3d380738eaa8983933e7b242b66716d906812ee7d571",
+      "method_version": "0.10.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-mark-leads",
-        "version": "0.9.0",
+        "version": "0.10.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
-        "sha256": "885f21f34142d0873dbff3b90498ecc6fbce0a52c6e05e49fada14bca4b6584f",
+        "sha256": "2ab5d4807c337dc992e461c456fc0cb1bcad74c37674768740edf07a44702326",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "554c426910200c3d62adf775b1e0262d1e2ce0215496844dfd564df95eabbd99"
+        "content_digest": "42d2b65c2d94cb6f4c89479e80c889ad3fa6e704b2bf8980d8d081e73cb6c620"
       },
       "code_bindings": [
         {
@@ -2265,7 +2265,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
@@ -2314,14 +2314,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
+          "sha256": "697437524d3b37e3fc3738d97d34cdd846d176a809b61ae75cd419ad58597a7a"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-score-exclusion.js",
           "revision": "contract",
-          "sha256": "e2e342ac5b5344e613ddfcf706b1096ab42845980a0e1f413a7ceee747aff85d"
+          "sha256": "f248c22948a5f9dff8f81753a6495d0e54668a393b1915b23eabab7644068717"
         },
         {
           "kind": "code",
@@ -2335,7 +2335,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-sampled-admission.js",
           "revision": "contract",
-          "sha256": "b1ce4003bd6a3ba48948b3db6995a37972312915a589926cd8b9018dd8510ef2"
+          "sha256": "2e9aba62984bf5a7d85486b5e410b8e38f40373e0ba439684dedbf94defd5ec2"
         },
         {
           "kind": "code",
@@ -2356,7 +2356,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -2408,7 +2408,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a25041c93583ad069426c384cafaba8cb61e2fe1197c19b8b5e75d4ffbcf0c11"
+      "code_digest": "fe8f985d17d91618f39ae2576053c93a8839f168cc6c9cefafdbee3c762a7274"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2633,14 +2633,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -2713,13 +2713,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "ab3fe9ab045e32c33c7071aa4ed16efeee04a2e7fe6fe8361c594c69cb8d3fd0",
+      "code_digest": "fb1b2154a448261f486b56dacaa0296dc718ad423fb1958a304e4fd2cded3f54",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16",
-        "current_code_digest": "ab3fe9ab045e32c33c7071aa4ed16efeee04a2e7fe6fe8361c594c69cb8d3fd0"
+        "current_code_digest": "fb1b2154a448261f486b56dacaa0296dc718ad423fb1958a304e4fd2cded3f54"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2934,14 +2934,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -3000,13 +3000,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "eb7f57842149cad2f82e0846bd31402002bed9abcaa64563e5e268ac3f180873",
+      "code_digest": "ec3de01ad1f2c65804090beb16f1ae42c3afdd24ff14f97cb087d846d9401c06",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288",
-        "current_code_digest": "eb7f57842149cad2f82e0846bd31402002bed9abcaa64563e5e268ac3f180873"
+        "current_code_digest": "ec3de01ad1f2c65804090beb16f1ae42c3afdd24ff14f97cb087d846d9401c06"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3214,14 +3214,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -3280,13 +3280,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "db22d58c2e64be487e0132ea9a6ef026a75244ac19ba26ed8160bc5e02525def",
+      "code_digest": "7cdf30702b1db3fe122d0293e6d07c6001ca437bb04778ca2db1fc2f9a1b938b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7",
-        "current_code_digest": "db22d58c2e64be487e0132ea9a6ef026a75244ac19ba26ed8160bc5e02525def"
+        "current_code_digest": "7cdf30702b1db3fe122d0293e6d07c6001ca437bb04778ca2db1fc2f9a1b938b"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3504,14 +3504,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-scoring-handler.mjs",
           "revision": "contract",
-          "sha256": "c3d957efa1624a57e0db193172802e43d9108dabc3ce9e6728fb76236e27fbff"
+          "sha256": "6f452e820154700af3c4798aa019b72b55f00d5c5fd721e670072000d46bf309"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-policy-review.js",
           "revision": "contract",
-          "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
+          "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         },
         {
           "kind": "code",
@@ -3570,13 +3570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ee5b8af95eaeee6bf6736b15ff49ef2669e7152ca258792fa8450e4af95ed0e6",
+      "code_digest": "d811efc11b22d805989544419da238448a069fb8e9c57a7c62f617fed3873af9",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reason": "共享执行文件新增102正式采样span及103精确样本消费；此Activity入口及行为保持原合同，回归测试覆盖其原路径",
         "reviewed_by": "codex:leadgen-sample-103-admission",
         "previous_code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1",
-        "current_code_digest": "ee5b8af95eaeee6bf6736b15ff49ef2669e7152ca258792fa8450e4af95ed0e6"
+        "current_code_digest": "d811efc11b22d805989544419da238448a069fb8e9c57a7c62f617fed3873af9"
       }
     }
   },
@@ -3639,13 +3639,13 @@
     "douyin_video_processing": {
       "workflow_skill": {
         "name": "douyin-leadgen-102",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/SKILL.md",
-        "sha256": "ac12fe041831f2737bf4814e451778c27bc8f2a6ce84c15f6749c4ce2840c216",
+        "sha256": "7651d4e9e94cea4689881824a34f2ac65ffe186d5b4ebd8afdb144a56d54df1a",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-            "sha256": "66b1d0c0bbfc6c138736e207e28b2b7e4d8e9da0b6f2f64ee5c4fccd9d02dbac"
+            "sha256": "8569b40c3f0f2dcad932243d3734c23b552e3b87e71510443738dd605ee0eb9b"
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/reuse-map.json",
@@ -3653,22 +3653,22 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/runtime-calls.json",
-            "sha256": "8644477039c64033230795444fa5f0ca949e3121c22a9224fb3e55af9e1c6cd8"
+            "sha256": "47fcec823a1a26c925ef39783be66219432eb9db359cae5fbb603c51dc3e728d"
           }
         ],
-        "content_digest": "2a86ae925078a6f5adc1c7333c8474614796d5bebabc7ea84121f4739cdfbcf4"
+        "content_digest": "57db319695d1d3864693884c2c4787f6573e4645f9ca63ad65c759d194135da3"
       },
       "commander_skill": {
         "name": "wf-douyin_video_processing",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_video_processing/SKILL.md",
-        "sha256": "1c756ee928292166e45870bbcc099d9ebe629cbd66568c766bca38cfa7543cfa",
+        "sha256": "e1cf6c9a8f7db211035a8ad7d0ef4a69ddcb18c24f53270737bc7b8c13507686",
         "support_files": [],
-        "content_digest": "e9578fee2b7310fa1c8f10726a05521b2af76bf42e967e2305b3a30aa27bc270"
+        "content_digest": "f06e3dc63792e9641d3628be92be69723d9ed396d420800430f4b1573c4de98a"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-102/references/activity-methods.json",
-        "sha256": "66b1d0c0bbfc6c138736e207e28b2b7e4d8e9da0b6f2f64ee5c4fccd9d02dbac"
+        "sha256": "8569b40c3f0f2dcad932243d3734c23b552e3b87e71510443738dd605ee0eb9b"
       },
       "activities": [
         {
@@ -3692,7 +3692,7 @@
         {
           "activity_ref": "douyin_video_processing.collection",
           "skill_name": "douyin-leadgen-activity-102-collection",
-          "skill_version": "0.3.0",
+          "skill_version": "0.4.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md"
         },
         {
@@ -3706,13 +3706,13 @@
     "douyin_comment_scoring": {
       "workflow_skill": {
         "name": "douyin-leadgen-103",
-        "version": "0.11.1",
+        "version": "0.12.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "c6253fd2067700bfd913582901030a45ce67de3909328df354a897437b81bc5c",
+        "sha256": "c74286d6a9ab810dfffa7e8507865f78ed28165773782c7a266ccfc8f7b85d02",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-            "sha256": "a2cab5066f6bebd19d80f959b16d9af2768291cda9fce9f1cd2ee3d1a11d2f90"
+            "sha256": "ec15a3964265473f2c389b010693d9bcf605f9bacddc58261f94a2d876b9c89b"
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/reuse-map.json",
@@ -3720,34 +3720,34 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/runtime-calls.json",
-            "sha256": "743e2d0ee74c6d0b5280351d8187f5b08a3fc26f2a5ae634cd435295f0232b46"
+            "sha256": "2921b76659fdf6c159a214866caba4cacea65eb02c9d7dc487694988845931dd"
           }
         ],
-        "content_digest": "a0385b9d0c0e8e17ea1951fdc64aaf6c542c3f1891eec347ad663419e01b948d"
+        "content_digest": "63b6c26139d6c5eab5f01d63b84ae92bbfeb898c7a766c6e510e02b21e6eba94"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
-        "version": "0.11.1",
+        "version": "0.12.0",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_comment_scoring/SKILL.md",
-        "sha256": "4fe0bd666a2051ff321d8e4a50976cf994e4f8b5578a0465ec3f782805191dd9",
+        "sha256": "7220178b826859f637aba88800f5f875c1ea4fd4b502f45ffc7cd01c0fb79b99",
         "support_files": [],
-        "content_digest": "b2fcc666abe5dc8586a49225b40f771e9206e3501d5ff371a530da3413d61111"
+        "content_digest": "d6bb636c7849e0be1f82b708395e70bbf8825f39222979c4609a6a2249127646"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-        "sha256": "a2cab5066f6bebd19d80f959b16d9af2768291cda9fce9f1cd2ee3d1a11d2f90"
+        "sha256": "ec15a3964265473f2c389b010693d9bcf605f9bacddc58261f94a2d876b9c89b"
       },
       "activities": [
         {
           "activity_ref": "douyin_comment_scoring.scoring",
           "skill_name": "douyin-leadgen-activity-103-scoring",
-          "skill_version": "0.9.0",
+          "skill_version": "0.10.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md"
         },
         {
           "activity_ref": "douyin_comment_scoring.mark_leads",
           "skill_name": "douyin-leadgen-activity-103-mark-leads",
-          "skill_version": "0.9.0",
+          "skill_version": "0.10.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md"
         }
       ]

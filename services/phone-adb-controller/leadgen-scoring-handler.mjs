@@ -66,6 +66,7 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       const scope=attempt?null:legacyRecovery?{ids:[legacyRecovery.comment_id]}
         :falseRecovery?{ids:[falseRecovery.comment_id]}:await queue('score_scope');
       if(scope&&!sourceRun&&(!scope.sources||scope.ids.some(id=>typeof scope.sources[id]!=='string')))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
+      if(scope&&sourceRun&&!scope.sources)scope.sources=Object.fromEntries(scope.ids.map(id=>[id,sourceRun]));
       const saveAttempt=value=>{const temp=`${attemptFile}.${process.pid}.${randomUUID()}.tmp`;
         writeFileSync(temp,JSON.stringify(value),{flag:'wx',mode:0o600});renameSync(temp,attemptFile);};
       if(attempt){if(attempt.line!==line||attempt.run!==run||attempt.source_run!==sourceRun
@@ -73,13 +74,15 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
         ||new Set(attempt.ids).size!==attempt.ids.length||!Array.isArray(attempt.blocked_ids)
         ||!sourceRun&&(!attempt.sources||attempt.ids.some(id=>typeof attempt.sources[id]!=='string')))
         throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
-      }else{attempt={line,run,source_run:sourceRun,ids:scope.ids,...(!sourceRun?{sources:scope.sources}:{}),budget,blocked_ids:[],cursor:null};saveAttempt(attempt);}
+      if(attempt&&sourceRun&&!attempt.sources)attempt.sources=Object.fromEntries(attempt.ids.map(id=>[id,sourceRun]));
+      }else{attempt={line,run,source_run:sourceRun,ids:scope.ids,sources:scope.sources,budget,blocked_ids:[],cursor:null};saveAttempt(attempt);}
       const liveScope=hadAttempt&&!legacyRecovery?await queue('score_scope'):null;
+      if(liveScope&&sourceRun&&!liveScope.sources)liveScope.sources=Object.fromEntries(liveScope.ids.map(id=>[id,sourceRun]));
       if(liveScope&&(!Array.isArray(liveScope.ids)||attempt.ids.some(id=>liveScope.ids.includes(id)
-        &&!sourceRun&&attempt.sources[id]!==liveScope.sources?.[id])))
+        &&attempt.sources[id]!==liveScope.sources?.[id])))
         throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
       let recovered;
-      try{recovered=await queue('score_recovery',{ids:attempt.ids,...(!sourceRun?{sources:attempt.sources}:{})});}catch{return {scored:0,ids:[],status:'partial',reason:'POLICY_SCORE_RECOVERY_AMBIGUOUS'};}
+      try{recovered=await queue('score_recovery',{ids:attempt.ids,sources:attempt.sources});}catch{return {scored:0,ids:[],status:'partial',reason:'POLICY_SCORE_RECOVERY_AMBIGUOUS'};}
       const recoveredExcluded=recovered.excluded_ids||[];
       if(recovered.verified!==true||recovered.scored+recoveredExcluded.length>attempt.budget
         ||new Set([...recovered.ids,...recoveredExcluded]).size!==recovered.ids.length+recoveredExcluded.length
@@ -91,19 +94,19 @@ export function createScoringHandler({env,run,line,state,queue}){return async()=
       }
       const remaining=attempt.budget-recovered.scored-recoveredExcluded.length;
       const r=remaining>0&&(!state.budgetDeadline||Date.now()<state.budgetDeadline)
-        ?await queue('score',{limit:remaining,budget_max:attempt.budget,ids:attempt.ids,...(!sourceRun?{sources:attempt.sources}:{}),blocked_ids:attempt.blocked_ids,cursor:attempt.cursor,...(legacyRecovery?{legacy_recovery:legacyRecovery}:{})})
+        ?await queue('score',{limit:remaining,budget_max:attempt.budget,ids:attempt.ids,sources:attempt.sources,blocked_ids:attempt.blocked_ids,cursor:attempt.cursor,...(legacyRecovery?{legacy_recovery:legacyRecovery}:{})})
         :{scored:0,ids:[],excluded:0,excluded_ids:[],blocked:attempt.blocked_ids.length,blocked_ids:attempt.blocked_ids,next_cursor:attempt.cursor};
       attempt={...attempt,blocked_ids:r.blocked_ids||attempt.blocked_ids,cursor:r.next_cursor||attempt.cursor};saveAttempt(attempt);
       const allIds=[...new Set([...recovered.ids,...r.ids])];
       const allExcluded=[...new Set([...recoveredExcluded,...(r.excluded_ids||[])])];
       appendFileSync(join(env.WFR_RUN_DIR,'activity.log'),`SORT_STATS ${JSON.stringify(r)}\n`,{mode:0o600});
-      const readback=await queue('score_readback',{ids:allIds,...(!sourceRun?{sources:attempt.sources}:{})});
+      const readback=await queue('score_readback',{ids:allIds,sources:attempt.sources});
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-scoring-readback.json`),JSON.stringify(readback),{mode:0o600});
       const exclusionReadback=allExcluded.length?await queue('score_exclusion_readback',{ids:allExcluded,
-        ...(!sourceRun?{sources:Object.fromEntries(allExcluded.map(id=>[id,attempt.sources[id]]))}:{})}):
+        sources:Object.fromEntries(allExcluded.map(id=>[id,attempt.sources[id]]))}):
         {verified:true,failures:0,ids:[],excluded_reasons:[]};
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-exclusion-readback.json`),JSON.stringify(exclusionReadback),{mode:0o600});
-      const review=allIds.length?await queue('policy_review',{claim:run,ids:allIds,...(!sourceRun?{sources:Object.fromEntries(allIds.map(id=>[id,attempt.sources[id]]))}:{})}):
+      const review=allIds.length?await queue('policy_review',{claim:run,ids:allIds,sources:Object.fromEntries(allIds.map(id=>[id,attempt.sources[id]]))}):
         {verified:allExcluded.length>0,rows:[],reason:allExcluded.length?'no_scored_comments':'empty_batch'};
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-policy-review.json`),JSON.stringify(review),{mode:0o600});
       return {...r,scored:allIds.length,ids:allIds,excluded:allExcluded.length,excluded_ids:allExcluded,

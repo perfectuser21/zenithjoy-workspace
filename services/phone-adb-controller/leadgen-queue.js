@@ -79,17 +79,22 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const snapshot=frozen[0].snapshot;
     if(!snapshot||snapshot.company_id!==frozen[0].company_id||snapshot.tenant_id!==frozen[0].tenant_id
       ||Number(snapshot.version)!==Number(frozen[0].version)||snapshot.runtime_config?.routing?.line_key!==lineKey)throw Error('POLICY_REVIEW_SCOPE_INVALID');
-    const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[]) AND ($3::text IS NULL OR harvest_batch=$3)`,[lineKey,ids,sourceRun])).rows;
+    const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+      ?await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
+    const historicalIds=sampled.filter(r=>r.harvest_batch!==sourceRun).map(r=>r.id);
+    const rows=(await pool.query(historicalIds.length
+      ?`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])
+        AND ($3::text IS NULL OR harvest_batch=$3 OR id=ANY($4::uuid[]))`
+      :`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[]) AND ($3::text IS NULL OR harvest_batch=$3)`,
+      historicalIds.length?[lineKey,ids,sourceRun,historicalIds]:[lineKey,ids,sourceRun])).rows;
     const urls=[...new Set(rows.map(r=>r.source_video_url).filter(Boolean))];
     const videos=urls.length?(await pool.query(`SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=ANY($2::text[]) AND process_status='评论已采'`,[lineKey,urls])).rows:[];
     const admitted=sourceRun===commentAdmission.SOURCE_RUN
       ?await commentAdmission.admittedRows(pool,{lineKey,run,sourceRun}):[];
-    const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
-      ?await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
     const reviewed=[];
     for(const id of ids){const matches=rows.filter(r=>r.id===id);const row=matches[0];
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
-      reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun:row.harvest_batch===input.sources[id])
+      reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun||sampled.some(a=>a.id===id):row.harvest_batch===input.sources[id])
         &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1||sampled.some(a=>a.id===id))
         &&row.judgment_config?.run_id===run
         ?row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot)
@@ -108,11 +113,18 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ?(await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}))
         .filter(r=>r.process_status==='待分拣'&&r.relevance===null):[];
     const rows=[...normal,...admitted.map(r=>({id:r.id,harvest_batch:r.harvest_batch})),...sampled.map(r=>({id:r.id,harvest_batch:r.harvest_batch}))];
-    if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
+    if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)
+      ||sourceRun&&r.harvest_batch!==sourceRun&&!sampled.some(a=>a.id===r.id)))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
-  if(op==='score_recovery')return require('./leadgen-score-exclusion.js').scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources});
-  if(op==='score_exclusion_readback')return require('./leadgen-score-exclusion.js').exclusionReadback(pool,input,{lineKey,sourceRun,run,validSources});
+  if(op==='score_recovery'||op==='score_exclusion_readback'){
+    const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+      ?await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
+    const context={lineKey,sourceRun,run,validSources,sampledIds:new Set(sampled.map(r=>r.id))};
+    return op==='score_recovery'
+      ?require('./leadgen-score-exclusion.js').scoreRecovery(pool,input,context)
+      :require('./leadgen-score-exclusion.js').exclusionReadback(pool,input,context);
+  }
   const videoIds=input.video_ids===undefined?null:input.video_ids;
   if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
   if(Object.hasOwn(input,'prefer_matched')&&(op!=='claim_videos'||typeof input.prefer_matched!=='boolean'||input.prefer_matched===true&&(!sourceRun||videoIds===null)))throw Error('采样优先必须真boolean及明确上游VID范围');
@@ -328,7 +340,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||!Number.isFinite(Date.parse(cursor.collected_at))))throw Error('POLICY_SCORE_CURSOR_INVALID');
     if(input.blocked_ids!==undefined&&(!Array.isArray(input.blocked_ids)||input.blocked_ids.length>1000
       ||input.blocked_ids.some(id=>!uuid.test(id))||new Set(input.blocked_ids).size!==input.blocked_ids.length))throw Error('POLICY_SCORE_BLOCKED_IDS_INVALID');
-    if(input.ids!==undefined&&(!sourceRun&&!validSources(input.ids,input.sources)||!Array.isArray(input.ids)||input.ids.length>1000
+    if(input.ids!==undefined&&((!sourceRun||input.sources!==undefined)&&!validSources(input.ids,input.sources)||!Array.isArray(input.ids)||input.ids.length>1000
       ||input.ids.some(id=>!uuid.test(id))||new Set(input.ids).size!==input.ids.length))throw Error('POLICY_SCORE_IDS_INVALID');
     if(input.budget_max!==undefined&&(!Number.isSafeInteger(input.budget_max)||input.budget_max<1||input.budget_max>50
       ||!sourceRun&&!validSources(input.ids,input.sources)||input.ids===undefined))throw Error('POLICY_SCORE_BUDGET_INVALID');
@@ -340,20 +352,35 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     while(scored+excluded<limit&&seen.size<1000){
       let result;
       try{result = await transaction(pool, async client => {
+        const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+          ?await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
+        const sampledIds=sampled.map(r=>r.id);
+        const hasHistoricalSample=sampled.some(r=>r.harvest_batch!==sourceRun);
         if(input.budget_max!==undefined){
           await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`leadgen-score:${lineKey}:${run}:${sourceRun}`]);
-          const count=(await client.query(`SELECT count(*)::int AS used FROM zenithjoy.leadgen_comments
-            WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2) AND judgment_config->>'run_id'=$3`,[lineKey,sourceRun,run])).rows;
+          const count=(await client.query(hasHistoricalSample
+            ?`SELECT count(*)::int AS used FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND judgment_config->>'run_id'=$2`
+            :`SELECT count(*)::int AS used FROM zenithjoy.leadgen_comments
+              WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2) AND judgment_config->>'run_id'=$3`,
+            hasHistoricalSample?[lineKey,run]:[lineKey,sourceRun,run])).rows;
           if(count.length!==1||!Number.isSafeInteger(count[0].used)||count[0].used<0)throw Error('POLICY_SCORE_BUDGET_UNKNOWN');
           if(count[0].used>=input.budget_max)return false;
         }
-        const rows = (await client.query(`SELECT * FROM zenithjoy.leadgen_comments
+        const rows = (await client.query(hasHistoricalSample?`SELECT * FROM zenithjoy.leadgen_comments
+          WHERE line_key=$1 AND process_status='待分拣' ${legacy?"AND id=$8 AND relevance IS NOT NULL":"AND relevance IS NULL"}
+          AND ($2::text IS NULL OR harvest_batch=$2 OR id=ANY($7::uuid[]))
+          AND id<>ALL($3::uuid[])
+          AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
+          AND ($6::uuid[] IS NULL OR id=ANY($6::uuid[]))
+          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`
+          :`SELECT * FROM zenithjoy.leadgen_comments
           WHERE line_key=$1 AND process_status='待分拣' ${legacy?"AND id=$7 AND relevance IS NOT NULL":"AND relevance IS NULL"}
           AND ($2::text IS NULL OR harvest_batch=$2)
           AND id<>ALL($3::uuid[])
           AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
           AND ($6::uuid[] IS NULL OR id=ANY($6::uuid[]))
-          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun,[...seen],cursor?.collected_at||null,cursor?.id||null,input.ids||null,...(legacy?[input.legacy_recovery.comment_id]:[])])).rows;
+          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`,
+          hasHistoricalSample?[lineKey,sourceRun,[...seen],cursor?.collected_at||null,cursor?.id||null,input.ids||null,sampledIds,...(legacy?[input.legacy_recovery.comment_id]:[])]:[lineKey,sourceRun,[...seen],cursor?.collected_at||null,cursor?.id||null,input.ids||null,...(legacy?[input.legacy_recovery.comment_id]:[])])).rows;
         if (!rows.length) return false;
         const row = rows[0];
         if(legacy)await legacyRecovery.verify(client,row,snapshot,deps);
@@ -364,8 +391,6 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           WHERE line_key=$1 AND video_url=$2 AND process_status='评论已采' AND harvest_batch=$3`,[lineKey,row.source_video_url,row.harvest_batch])).rows;
         const admitted=sourceRun===commentAdmission.SOURCE_RUN
           ?await commentAdmission.admittedRows(client,{lineKey,run,sourceRun}):[];
-        const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
-          ?await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
         if(!(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===row.id)
           :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched'||sampled.some(a=>a.id===row.id))){
           const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
@@ -429,17 +454,28 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       ||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/.test(cursor.collected_at)
       ||!Number.isFinite(Date.parse(cursor.collected_at))))throw Error('POLICY_MARK_CURSOR_INVALID');
     const bridgeConfig=await (deps.freezeCompanyConfig||freezeCompanyConfig)(pool,{lineHint:input.line,runId:run,sourceRun,step:'103'});
+    const scopedSample=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+      ?await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
+    const sampledHistoryIds=scopedSample.filter(r=>r.harvest_batch!==sourceRun).map(r=>r.id);
     let marked = 0, created = 0, repeats = 0, blocked=0,lastCursor=cursor;const ids=[],lead_ids=[],seen=[];const recipient_calls={model_call_count:0,passed:0,excluded:0,unknown:0};
     while(marked<limit&&seen.length<1000){
       const result = await transaction(pool, async client => {
         // 同业务线的人员去重串行化；评论行与人员更新一起提交，崩溃重跑不增加虚假重复次数。
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`leadgen-people:${lineKey}`]);
-        const row = (await client.query(`SELECT * FROM zenithjoy.leadgen_comments
+        const row = (await client.query(sampledHistoryIds.length?`SELECT * FROM zenithjoy.leadgen_comments
+          WHERE line_key=$1 AND process_status='待分拣' AND relevance IS NOT NULL
+          AND ($2::text IS NULL OR harvest_batch=$2 OR id=ANY($6::uuid[]))
+          AND id<>ALL($3::uuid[])
+          AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
+          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`
+          :`SELECT * FROM zenithjoy.leadgen_comments
           WHERE line_key=$1 AND process_status='待分拣' AND relevance IS NOT NULL
           AND ($2::text IS NULL OR harvest_batch=$2)
           AND id<>ALL($3::uuid[])
           AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
-          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null])).rows[0];
+          ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`,
+          sampledHistoryIds.length?[lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null,sampledHistoryIds]
+            :[lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null])).rows[0];
         if (!row) return null;
         seen.push(row.id);
         if(row.collected_at&&uuid.test(row.id))lastCursor={line:lineKey,run,source_run:sourceRun||null,collected_at:new Date(row.collected_at).toISOString(),id:row.id};
@@ -447,12 +483,14 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           const admitted=await commentAdmission.admittedRows(client,{lineKey,run,sourceRun:row.harvest_batch});
           if(!admitted.some(a=>a.id===row.id))return {blocked:true,id:row.id};
         }
-        const sampled=await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun:row.harvest_batch,
-          sourceCommit:deps.sourceCommit,...deps.sampledAdmission});
-        if(sampled.length&&!sampled.some(a=>a.id===row.id))return {blocked:true,id:row.id};
+        const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+          ?await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun,
+            sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
+        if(sourceRun&&row.harvest_batch!==sourceRun&&!sampled.some(a=>a.id===row.id))return {blocked:true,id:row.id};
         if(row.relevance==='相关'){
           const policy=await reviewBoundComment(client,lineKey,row.id,{run,scoring_run:row.judgment_config?.run_id,
-            source_run:row.harvest_batch,source_video:row.source_video,source_video_url:row.source_video_url},deps,queueRequest);
+            source_run:sourceRun||row.harvest_batch,source_batch:row.harvest_batch,
+            source_video:row.source_video,source_video_url:row.source_video_url},deps,queueRequest);
           if(policy.status!=='pass')return {blocked:true,id:row.id};
         }
         let lead = null;

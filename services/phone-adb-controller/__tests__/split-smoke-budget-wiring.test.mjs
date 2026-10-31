@@ -107,9 +107,11 @@ test('split smoke executes every original complete test file once in one ordinar
  assert.ok(!full[0].args.some(x=>/^--test-(?:skip-pattern|only|todo)(?:=|$)/.test(x)),'complete suite must not skip or select individual tests');
  const files=full[0].args.filter(x=>x.endsWith('.test.mjs')||x.endsWith('.test.js'));
  assert.equal(new Set(files).size,files.length,'ordinary complete suite repeats a file');
- assert.deepEqual([...files].sort(),[...originalFiles,'services/phone-adb-controller/__tests__/split-smoke-budget-wiring.test.mjs'].sort(),'complete suite file set changed');
+ assert.deepEqual([...files].sort(),[...originalFiles,'services/phone-adb-controller/__tests__/leadgen-sampled-admission.test.mjs',
+  'services/phone-adb-controller/__tests__/split-smoke-budget-wiring.test.mjs'].sort(),'complete suite file set changed');
  for(const file of originalFiles)assert.ok(files.includes(file),'lost original complete test coverage: '+file);
  assert.ok(files.includes('services/phone-adb-controller/__tests__/split-smoke-budget-wiring.test.mjs'));
+ assert.ok(files.includes('services/phone-adb-controller/__tests__/leadgen-sampled-admission.test.mjs'));
  assert.equal(calls.filter(c=>c.args[0]==='scripts/product-map/leadgen-methods.mjs').length,1);
 });
 test('split smoke retains the actual HOME-free preflight and span assertions',()=>{

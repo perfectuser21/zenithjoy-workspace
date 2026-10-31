@@ -234,9 +234,9 @@ async function recoverFalseExclusion(pool,input,{sourceCommit,recovery={}}={}){
  }finally{client.release(discard||commitStarted&&!committed?true:undefined);}
 }
 
-async function scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources}){
+async function scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources,sampledIds=new Set()}){
  const ids=input.ids;
- if(!sourceRun&&!validSources(ids,input.sources)||!Array.isArray(ids)||ids.length>1000
+ if((!sourceRun||input.sources!==undefined)&&!validSources(ids,input.sources)||!Array.isArray(ids)||ids.length>1000
    ||new Set(ids).size!==ids.length||ids.some(id=>!uuid.test(id)))throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
  if(!ids.length)return {ids:[],scored:0,excluded:0,excluded_ids:[],excluded_reasons:[],verified:true};
  const frozen=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
@@ -245,13 +245,17 @@ async function scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources}){
    ||frozen[0].snapshot.company_id!==frozen[0].company_id||frozen[0].snapshot.tenant_id!==frozen[0].tenant_id
    ||Number(frozen[0].snapshot.version)!==Number(frozen[0].version))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
  const snapshot=frozen[0].snapshot;
+ const historicalIds=[...sampledIds];
  const rows=(await pool.query(`SELECT id,harvest_batch,line_key,process_status,relevance,intent_grade,
    comment_body,source_video,source_video_url,judgment_config FROM zenithjoy.leadgen_comments
-   WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2) AND id=ANY($3::uuid[])`,[lineKey,sourceRun,ids])).rows;
+   WHERE line_key=$1 AND ${historicalIds.length?"($2::text IS NULL OR harvest_batch=$2 OR id=ANY($4::uuid[]))":"($2::text IS NULL OR harvest_batch=$2)"} AND id=ANY($3::uuid[])`,
+   historicalIds.length?[lineKey,sourceRun,ids,historicalIds]:[lineKey,sourceRun,ids])).rows;
  if(rows.length!==ids.length||new Set(rows.map(r=>r.id)).size!==ids.length)throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
  const committed=[],excluded=[],excludedReasons=[];
  for(const row of rows){
-  if(row.line_key!==lineKey||!ids.includes(row.id)||row.harvest_batch!==(sourceRun||input.sources[row.id]))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
+  if(row.line_key!==lineKey||!ids.includes(row.id)
+    ||(sourceRun?row.harvest_batch!==sourceRun&&!sampledIds.has(row.id):row.harvest_batch!==input.sources[row.id]))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
+  if(input.sources&&row.harvest_batch!==input.sources[row.id])throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
   const c=row.judgment_config;
   if(c?.run_id!==run)continue;
   if(c.exclusion_reason){

@@ -171,7 +171,7 @@ async function reviewBoundComment(pool,lineKey,id,binding,deps,queueRequest){
   const scoringRun=binding.scoring_run||binding.run;
   const rows=(await pool.query('SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=$2',[lineKey,id])).rows;
   if(rows.length!==1||rows[0].id!==id||rows[0].line_key!==lineKey
-    ||rows[0].harvest_batch!==binding.source_run||rows[0].source_video!==binding.source_video
+    ||rows[0].harvest_batch!==(binding.source_batch||binding.source_run)||rows[0].source_video!==binding.source_video
     ||rows[0].source_video_url!==binding.source_video_url||rows[0].judgment_config?.run_id!==scoringRun)return unknown;
   try{
     if(scoringRun!==binding.run){

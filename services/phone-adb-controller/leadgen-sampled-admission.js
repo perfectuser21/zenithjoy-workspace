@@ -56,7 +56,7 @@ async function readRunProof(sourceRun){
     span_count:reconciliation?.span_count,expected_count:reconciliation?.expected_count,
     collection_outcome:activity?.outcome,collection_verified:collection.length>0&&collection.every(s=>s.outcome==='pass')
       &&collection.some(s=>s.evidence?.step_key==='douyin_video_processing.collection.collect_comments'),
-    sampling_input:sample,
+    sampling_input:sample,sampling_admission_v1:activity?.evidence?.sampling_admission_v1,
     identity_bound:binding?.run_id===runId&&reconciliation?.run_id===runId
       &&reconciliation?.run_binding_id===binding?.id&&reconciliation?.release_id===binding?.release_id
       &&binding?.workflow_definition_version_id===definition?.workflow?.id
@@ -66,14 +66,16 @@ async function readRunProof(sourceRun){
 }
 function verifyNative(row,sourceRun,upstream,video,frozen,verifyRecipient){
   const e=row.recipient_evidence;
-  if(!e||e.scope?.run!==sourceRun||e.scope.source_run!==upstream||e.scope.video_id!==video.video_id
-    ||e.scope.video_url!==video.video_url)fail('RECIPIENT_SCOPE_INVALID');
+  const historical=row.harvest_batch!==sourceRun;
+  if(!e||e.status!=='verified'||e.scope?.run!==(historical?row.harvest_batch:sourceRun)
+    ||!e.scope.source_run||!e.scope.video_url||e.scope.video_id!==video.video_id
+    ||e.scope.video_url!==row.source_video_url||!historical&&e.scope.source_run!==upstream)fail('RECIPIENT_SCOPE_INVALID');
   if(e.company_binding&&(e.company_binding.company_id!==frozen.company_id
     ||e.company_binding.tenant_id!==frozen.tenant_id||e.company_binding.version!==Number(frozen.version)
-    ||e.company_binding.run_id!==sourceRun||e.company_binding.source_run!==upstream))fail('RECIPIENT_COMPANY_SCOPE_INVALID');
-  try{const result=verifyRecipient(e,{...e.scope,line_key:row.line_key,run:sourceRun,
+    ||e.company_binding.run_id!==e.scope.run||e.company_binding.source_run!==e.scope.source_run))fail('RECIPIENT_COMPANY_SCOPE_INVALID');
+  try{const result=verifyRecipient(e,{...e.scope,line_key:row.line_key,run:e.scope.run,
     douyin_id:row.douyin_id,nickname:row.nickname,comment_body:row.comment_body,
-    comment_body_sha256:hash(row.comment_body),video_url:video.video_url},
+    comment_body_sha256:hash(row.comment_body),video_url:row.source_video_url},
     e.company_binding?{companyBinding:e.company_binding}:{});
     if(result===false)fail('RECIPIENT_EVIDENCE_INVALID');
   }catch{fail('RECIPIENT_EVIDENCE_INVALID');}
@@ -83,9 +85,8 @@ async function admittedRows(pool,{lineKey,run,sourceRun,sourceCommit,readProof=r
   const videos=(await pool.query(`SELECT * FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND harvest_batch=$2
     AND process_status='待判定' AND judgment_status='matched'`,[lineKey,sourceRun])).rows;
   if(!videos.length)return [];
-  if(videos.length!==1)fail('VIDEO_SET_AMBIGUOUS');
-  const video=videos[0];
-  if(!/^\d{16,24}$/.test(video.video_id||'')||video.video_url!==`https://www.douyin.com/video/${video.video_id}`
+  if(videos.length>1000||new Set(videos.map(v=>v.video_id)).size!==videos.length)fail('VIDEO_SET_AMBIGUOUS');
+  for(const video of videos)if(!/^\d{16,24}$/.test(video.video_id||'')||video.video_url!==`https://www.douyin.com/video/${video.video_id}`
     ||video.line_key!==lineKey||video.harvest_batch!==sourceRun
     ||video.process_status!=='待判定'||video.judgment_status!=='matched')fail('VIDEO_SCOPE_INVALID');
   const proof=await readProof(sourceRun);
@@ -102,31 +103,65 @@ async function admittedRows(pool,{lineKey,run,sourceRun,sourceCommit,readProof=r
   if(proof.identity_bound!==true)fail('RUN_BINDING_INVALID');
   const pinned=sourceRun===LEGACY.run;
   if(pinned){
+    if(videos.length!==1)fail('LEGACY_VIDEO_SET_INVALID');
     if(lineKey!==LEGACY.line||proof.source_commit!==LEGACY.source_commit
-      ||proof.binding_id!==LEGACY.binding_id||video.video_id!==LEGACY.video_id
+      ||proof.binding_id!==LEGACY.binding_id||videos[0].video_id!==LEGACY.video_id
       ||sample.comment_limit!==LEGACY.limit)fail('LEGACY_SCOPE_INVALID');
   }else if(proof.source_commit!==sourceCommit||proof.identity_bound!==true)fail('SOURCE_COMMIT_MISMATCH');
   const frozen=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE run_id=$1',[sourceRun])).rows;
   const scoring=(await pool.query('SELECT * FROM zenithjoy.company_config_runs WHERE run_id=$1',[run])).rows;
   if(frozen.length!==1||scoring.length!==1)fail('FROZEN_CONFIG_MISSING');
-  const source=frozen[0],target=scoring[0],s=source.snapshot,t=target.snapshot,c=video.judgment_config;
+  const source=frozen[0],target=scoring[0],s=source.snapshot,t=target.snapshot;
   if(source.run_id!==sourceRun||source.source_run!==sample.source_run||target.run_id!==run||target.source_run!==sourceRun
     ||source.company_id!==target.company_id||source.tenant_id!==target.tenant_id
     ||Number(source.version)!==Number(target.version)||s?.policy_id!==t?.policy_id
     ||s?.company_id!==source.company_id||s?.tenant_id!==source.tenant_id||Number(s?.version)!==Number(source.version)
     ||t?.company_id!==target.company_id||t?.tenant_id!==target.tenant_id||Number(t?.version)!==Number(target.version)
-    ||s?.runtime_config?.routing?.line_key!==lineKey||t?.runtime_config?.routing?.line_key!==lineKey
-    ||c?.company_id!==source.company_id||c?.tenant_id!==source.tenant_id||Number(c?.version)!==Number(source.version)
-    ||c?.policy_id!==s.policy_id||c?.run_id!==sourceRun)fail('FROZEN_CONFIG_MISMATCH');
-  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND harvest_batch=$2`,[lineKey,sourceRun])).rows;
-  if(rows.length!==sample.comment_limit||new Set(rows.map(r=>r.id)).size!==rows.length)fail('COMMENT_SET_INVALID');
-  for(const row of rows){
-    if(!UUID.test(row.id||'')||row.line_key!==lineKey||row.harvest_batch!==sourceRun
-      ||row.source_video_url!==video.video_url||row.source_video!==video.title
+    ||s?.runtime_config?.routing?.line_key!==lineKey||t?.runtime_config?.routing?.line_key!==lineKey)fail('FROZEN_CONFIG_MISMATCH');
+  for(const video of videos){const c=video.judgment_config;
+    if(c?.company_id!==source.company_id||c?.tenant_id!==source.tenant_id||Number(c?.version)!==Number(source.version)
+      ||c?.policy_id!==s.policy_id||c?.run_id!==sourceRun)fail('FROZEN_CONFIG_MISMATCH');}
+  let receipts;
+  if(pinned)receipts=[{video_id:videos[0].video_id,video_url:videos[0].video_url,
+    stop_reason:'quota_reached',coverage:sample.comment_limit,comments_inserted:sample.comment_limit,
+    history_verified:0,comment_ids:null,pg_rows_sha256:null}];
+  else{
+    const a=proof.sampling_admission_v1;
+    if(a?.run_id!==proof.run_id||a.run_binding_id!==proof.binding_id||a.source_commit!==proof.source_commit
+      ||a.source_run!==sample.source_run||a.line!==lineKey||a.comment_limit!==sample.comment_limit
+      ||!Array.isArray(a.videos)||a.videos.length<1||a.videos.length>1000)fail('ADMISSION_RECEIPT_INVALID');
+    receipts=a.videos.filter(v=>v.stop_reason==='quota_reached');
+    if(receipts.length!==videos.length||new Set(receipts.map(v=>v.video_id)).size!==receipts.length
+      ||receipts.some(v=>!videos.some(video=>video.video_id===v.video_id&&video.video_url===v.video_url)))fail('ADMISSION_VIDEO_SET_INVALID');
+  }
+  const allIds=receipts.flatMap(v=>v.comment_ids||[]);
+  if(!pinned&&(allIds.length>50000||new Set(allIds).size!==allIds.length||allIds.some(id=>!UUID.test(id))))fail('ADMISSION_IDS_INVALID');
+  const rows=pinned?(await pool.query(`SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND harvest_batch=$2`,[lineKey,sourceRun])).rows
+    :(await pool.query('SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])',[lineKey,allIds])).rows;
+  if(rows.length!==(pinned?sample.comment_limit:allIds.length)||new Set(rows.map(r=>r.id)).size!==rows.length)fail('COMMENT_SET_INVALID');
+  const admitted=[];
+  for(const receipt of receipts){
+    const video=videos.find(v=>v.video_id===receipt.video_id);
+    if(!video||receipt.stop_reason!=='quota_reached'||receipt.coverage!==sample.comment_limit
+      ||!Number.isSafeInteger(receipt.comments_inserted)||!Number.isSafeInteger(receipt.history_verified)
+      ||receipt.comments_inserted<0||receipt.history_verified<0
+      ||receipt.comments_inserted+receipt.history_verified!==receipt.coverage)fail('ADMISSION_COVERAGE_INVALID');
+    const selected=pinned?rows:receipt.comment_ids.map(id=>rows.find(r=>r.id===id));
+    if(selected.length!==receipt.coverage||selected.some(r=>!r))fail('ADMISSION_ROWS_INVALID');
+    const actual=selected.map(r=>({id:r.id,douyinId:r.douyin_id,commentBody:r.comment_body,sourceVideoUrl:r.source_video_url}));
+    if(!pinned&&hash(JSON.stringify(actual))!==receipt.pg_rows_sha256)fail('ADMISSION_DIGEST_INVALID');
+    if(selected.filter(r=>r.harvest_batch===sourceRun).length!==receipt.comments_inserted
+      ||selected.filter(r=>r.harvest_batch!==sourceRun).length!==receipt.history_verified)fail('ADMISSION_ORIGIN_INVALID');
+    for(const row of selected){
+    if(!UUID.test(row.id||'')||row.line_key!==lineKey||!row.harvest_batch
+      ||row.harvest_batch===sourceRun&&(row.source_video_url!==video.video_url||row.source_video!==video.title)
       ||!['待分拣','已分拣'].includes(row.process_status)
+      ||row.relevance!==null&&row.judgment_config?.run_id!==run
       ||typeof row.comment_body!=='string'||!row.comment_body)fail('COMMENT_SCOPE_INVALID');
     verifyNative(row,sourceRun,sample.source_run,video,source,verifyRecipient);
+    admitted.push(row);
+    }
   }
-  return rows;
+  return admitted;
 }
 module.exports={admittedRows,readRunProof,LEGACY};

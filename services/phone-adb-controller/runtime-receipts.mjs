@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import {readProducerDescriptor} from './producer-descriptor.mjs';
+import {createHash} from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync,writeFileSync,realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync,writeFileSync,realpathSync,lstatSync } from 'node:fs';
+import { resolve,join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput,outreachScopeInput } from './runtime-definition.mjs';
 import { bindRun,readBinding } from './runtime-binding.mjs';
@@ -10,6 +11,46 @@ import {readCollectionPhoneScopeInput,defaultCollectionPhoneScope} from './colle
 import {defaultDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
+const SHA256=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function samplingAdmissionEvidence({dir,artifact,frozen,binding}){
+  const sample=frozen.sampling_input;
+  if(!sample)return null;
+  if(artifact.result?.sampling_required_count===0&&Array.isArray(artifact.result.sampling_receipts)
+    &&artifact.result.sampling_receipts.length===0)return null;
+  const file=join(dir,`${sample.run_tag}-sampling-readback.json`),stat=lstatSync(file);
+  if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o777)!==0o600||stat.size>3000000)
+    throw Error('SAMPLING_ADMISSION_RECEIPT_INVALID');
+  const receipt=JSON.parse(readFileSync(file,'utf8'));
+  if(receipt.verified!==true||receipt.run_id!==binding.run_id
+    ||JSON.stringify(receipt.sampling_input)!==JSON.stringify(sample)
+    ||!Array.isArray(receipt.videos)||receipt.videos.length<1||receipt.videos.length>1000
+    ||artifact.result?.sampling_required_count!==receipt.videos.length
+    ||JSON.stringify(artifact.result?.sampling_receipts)!==JSON.stringify(receipt.videos.map(({pg_rows,...rest})=>rest)))
+    throw Error('SAMPLING_ADMISSION_RECEIPT_INVALID');
+  const seenVideos=new Set(),seenComments=new Set();
+  const videos=receipt.videos.map(v=>{
+    if(!/^\d{16,24}$/.test(v.video_id||'')||v.video_url!==`https://www.douyin.com/video/${v.video_id}`
+      ||seenVideos.has(v.video_id)||v.source_run!==sample.source_run||v.comment_limit!==sample.comment_limit
+      ||!['quota_reached','footer_reached','no_comments'].includes(v.stop_reason)
+      ||!Number.isSafeInteger(v.coverage)||v.coverage<0||v.coverage>sample.comment_limit
+      ||v.stop_reason==='quota_reached'&&v.coverage!==sample.comment_limit
+      ||!Number.isSafeInteger(v.comments_inserted)||!Number.isSafeInteger(v.history_verified)
+      ||v.comments_inserted<0||v.history_verified<0||v.comments_inserted+v.history_verified!==v.coverage
+      ||!Array.isArray(v.pg_rows)||v.pg_rows.length!==v.coverage)throw Error('SAMPLING_ADMISSION_VIDEO_INVALID');
+    seenVideos.add(v.video_id);
+    const commentIds=v.pg_rows.map(r=>{
+      if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.id||'')
+        ||typeof r.douyinId!=='string'||!r.douyinId||typeof r.commentBody!=='string'||!r.commentBody
+        ||typeof r.sourceVideoUrl!=='string'||!r.sourceVideoUrl||seenComments.has(r.id))throw Error('SAMPLING_ADMISSION_ROW_INVALID');
+      seenComments.add(r.id);return r.id;
+    });
+    return {video_id:v.video_id,video_url:v.video_url,stop_reason:v.stop_reason,coverage:v.coverage,
+      comments_inserted:v.comments_inserted,history_verified:v.history_verified,comment_ids:commentIds,
+      pg_rows_sha256:SHA256(v.pg_rows.map(r=>({id:r.id,douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl})))};
+  });
+  return {run_id:binding.run_id,run_binding_id:binding.id,source_commit:frozen.deployment.source_commit,
+    source_run:sample.source_run,line:sample.line,comment_limit:sample.comment_limit,videos};
+}
 // 只在prepare前选择中央同一MMV的登记地址；恢复既有run仍读取原冻结路由。
 export function selectMmvTransport(inventory,route='tailscale'){
   if(!['tailscale','public'].includes(route))throw Error('WF_MMV_SSH_ROUTE仅允许tailscale或public');
@@ -107,7 +148,9 @@ export async function run(args){
     const artifact=JSON.parse(readFileSync(file,'utf8'));const oc=occurrence(dir,`${e.WFR_ATTEMPT||'a0'}.${stage}.${n}`,false,artifact.observed_at);
     const rescan=stage==='collection'?Math.max(0,Number(artifact.metrics?.rescan_count||0)):0;
     const avatar=stage==='collection'?Math.max(0,Number(artifact.metrics?.avatar_recovery_count||0)):0;
-    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
+    const admission=stage==='collection'&&status==='completed'&&frozen.sampling_input
+      ?samplingAdmissionEvidence({dir,artifact,frozen,binding}):null;
+    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
     for(const step of (artifact.verification?.step_dod||[]).flatMap(check=>check.steps||[])){
       const owner=frozen.activities.find(owner=>owner.reference.slot_key===step.activity);
       const definition=owner?.version.payload.steps?.find(s=>step.key?.endsWith(`.${s.locator?.step_key}`));
@@ -115,9 +158,10 @@ export async function run(args){
       body.push({...body[0],reference_id:owner.reference.reference_id,activity_id:owner.reference.activity_id,
         activity_definition_version_id:owner.version.id,step_id:definition.step_id,
         occurrence_key:`${oc.key}:${definition.step_id}`,outcome:step.pass===true?'pass':step.pass===false?'fail':'unknown',
-        evidence:{...body[0].evidence,reference_id:owner.reference.reference_id,slot_key:owner.reference.slot_key,
+        evidence:{...body[0].evidence,sampling_admission_v1:undefined,reference_id:owner.reference.reference_id,slot_key:owner.reference.slot_key,
           activity_definition_version_id:owner.version.id,step_key:step.key,observed_step:step,observed_at_stage:stage}});
     }
+    if(Buffer.byteLength(JSON.stringify(body))>3000000)throw Error('SAMPLING_ADMISSION_SPAN_TOO_LARGE');
     enqueue(dir,{key:oc.key,endpoint:`${e.BRAIN_URL?.replace(/\/$/,'')}/api/brain/spans`,body});await flushReceipts(dir);return;
   }
   if(cmd==='outreach-span'){
