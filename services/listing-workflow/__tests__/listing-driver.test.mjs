@@ -4,7 +4,6 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
 
 const moduleUrl = new URL('../listing-driver.mjs', import.meta.url);
 async function driver() { try { return await import(moduleUrl); } catch (e) { if (e.code === 'ERR_MODULE_NOT_FOUND') return {}; throw e; } }
