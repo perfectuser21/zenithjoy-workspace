@@ -516,20 +516,17 @@ test('采样实际PG已canonical时本轮短链仍须受信同VID，禁止只验
  const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:[{id:'old',douyin_id:'p1',comment_body:'全文',source_video_url:canonical}]}]);
  await assert.rejects(queueRequest(p,{op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows:[{douyinId:'p1',commentBody:'全文',sourceVideoUrl:url}]},{resolveHistoryUrl:async()=>({content_type:'video',content_id:'7000000000000000001',resolved_url:'https://www.douyin.com/video/7000000000000000001'})}),e=>e.message==='RPC_SAMPLE_URL_IDENTITY_INVALID');
 });
-test('真实RPC队列调用保留采样阶段安全码，原CLI序列化不会降为泛化错误或泄漏正文',async()=>{
- const {handleRpc}=await import('../leadgen-rpc.mjs');
- const {readFileSync}=await import('node:fs');
+test('真实RPC队列调用保留采样阶段安全码，统一序列化不泄漏正文',async()=>{
+ const {handleRpc,rpcFailureReceipt}=await import('../leadgen-rpc.mjs');
  const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;
  const privateBody='不应进入RPC错误的私人正文';
  const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:[]}]);
  let failure;
  try{await handleRpc({kind:'queue',source:{},request:{op:'sample_readback',line:'jinuo',run:'new102',source_run:'source101',video_id:vid,video_url:url,rows:[{douyinId:'private-user',commentBody:privateBody,sourceVideoUrl:url}]}},{verify:()=>{},pool:p});}catch(error){failure=error;}
  assert.equal(failure?.message,'RPC_SAMPLE_IDENTITY_NOT_UNIQUE');
- // 执行原CLI catch正文（不是复制其regex），验证新码确实穿过现有序列化。
- const source=readFileSync(new URL('../leadgen-rpc.mjs',import.meta.url),'utf8');
- const emission=source.match(/catch \(error\) \{\n([\s\S]*?)\n  \}\n\}\s*$/)?.[1];assert.ok(emission);
- const child=spawnSync(process.execPath,['-e',`const error=new Error(${JSON.stringify(failure.message)});${emission}`],{encoding:'utf8'});
- assert.equal(child.status,1);assert.deepEqual(JSON.parse(child.stdout),{ok:false,error:'RPC_SAMPLE_IDENTITY_NOT_UNIQUE'});assert.equal(child.stderr,'');assert.ok(!child.stdout.includes(privateBody));assert.ok(!child.stdout.includes('private-user'));
+ const response=JSON.stringify(rpcFailureReceipt(failure));
+ assert.deepEqual(JSON.parse(response),{ok:false,error:'RPC_SAMPLE_IDENTITY_NOT_UNIQUE'});
+ assert.ok(!response.includes(privateBody));assert.ok(!response.includes('private-user'));
 });
 
 test('unknown execution video quarantine CAS binds line/run/VID and reads back persistent status',async()=>{

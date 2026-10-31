@@ -116,11 +116,35 @@ export async function handleRpc(input, deps = {}) {
   } finally { if (pool && !deps.pool) await pool.end(); }
 }
 
+const recoveryReasons=new Set([
+  'SCOPE_INVALID','AUTHORITY_UNAVAILABLE','AUTHORITY_INVALID','OLD_RUN_UNKNOWN',
+  'ROW_SCOPE_INVALID','POLICY_SCOPE_INVALID','VIDEO_SCOPE_INVALID','DOWNSTREAM_PRESENT',
+  'RECEIPT_INVALID','READBACK_INVALID','WRITE_FAILED','COMMIT_UNKNOWN_READBACK_REQUIRED',
+  'CONNECTION_FAILED','BEGIN_FAILED','LOCK_FAILED','ROW_READ_FAILED','AUDIT_READ_FAILED',
+  'POLICY_READ_FAILED','VIDEO_READ_FAILED','DOWNSTREAM_READ_FAILED',
+  'AUTHORITY_RECHECK_FAILED','UPDATE_FAILED','AUDIT_WRITE_FAILED','ROLLBACK_UNKNOWN',
+]);
+
+// Only fixed recovery reasons cross the process boundary. Never send a database
+// exception, SQL text, connection string, or arbitrary FALSE_EXCLUSION_* suffix.
+export function rpcFailureReceipt(error) {
+  if(error?.executionStopped===false)return {ok:false,error:'RPC_EXECUTION_STOP_UNKNOWN',
+    execution_stopped:false,external_effect:'unknown'};
+  const message=String(error?.message||'');
+  const recovery=message.match(/^FALSE_EXCLUSION_([A-Z_]+)$/);
+  if(recovery&&recoveryReasons.has(recovery[1])){
+    const unresolved=['COMMIT_UNKNOWN_READBACK_REQUIRED','ROLLBACK_UNKNOWN'].includes(recovery[1]);
+    return {ok:false,error:`RPC_RECOVERY_STAGE:${recovery[1]}`,
+      ...(unresolved?{execution_stopped:false,external_effect:'unknown'}:{})};
+  }
+  const code=/^RPC_[A-Z_]+(?::[a-zA-Z0-9_.-]+)?$/.test(message)
+    ?message:'RPC_OPERATION_FAILED';
+  return {ok:false,error:code};
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.stdout.write(JSON.stringify(await handleRpc(JSON.parse(readFileSync(0, 'utf8')))) + '\n'); }
   catch (error) {
-    const unknown=error.executionStopped===false;
-    const code = unknown?'RPC_EXECUTION_STOP_UNKNOWN':/^RPC_[A-Z_]+(?::[a-zA-Z0-9_.-]+)?$/.test(error.message) ? error.message : 'RPC_OPERATION_FAILED';
-    process.stdout.write(JSON.stringify({ ok: false, error: code,...(unknown?{execution_stopped:false,external_effect:'unknown'}:{}) }) + '\n'); process.exitCode = 1;
+    process.stdout.write(JSON.stringify(rpcFailureReceipt(error)) + '\n'); process.exitCode = 1;
   }
 }

@@ -178,23 +178,30 @@ async function recoverFalseExclusion(pool,input,{sourceCommit,recovery={}}={}){
  if(input.op==='recover_false_exclusion_102l_readback')return recoveryReadback(pool,input,sourceCommit);
  const authority=recovery.readTask||readRecoveryTask,inspect=recovery.inspectOldRun||inspectOldScoringRun;
  const task=await authority();const stop=await inspect();checkRecoveryAuthority(task,stop,input);
- const client=await pool.connect();let commitStarted=false,committed=false,discard=false;
+ let client;try{client=await pool.connect();}catch{recoveryFail('CONNECTION_FAILED');}
+ let commitStarted=false,committed=false,discard=false,stage='BEGIN';
  try{
   await client.query('BEGIN');
+  stage='LOCK';
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`leadgen-reopen:${recoveryScope.comment_id}`]);
+  stage='ROW_READ';
   const rows=(await client.query('SELECT * FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=$2 FOR UPDATE',
    [recoveryScope.line,recoveryScope.comment_id])).rows;
   if(rows.length!==1)recoveryFail('ROW_SCOPE_INVALID');const row=rows[0];
+  stage='AUDIT_READ';
   const audits=(await client.query(`SELECT * FROM zenithjoy.db_audit WHERE id=$1 OR
     (action=$2 AND detail->>'comment_id'=$3)`,[recoveryScope.task_id,recoveryAction,recoveryScope.comment_id])).rows;
   if(audits.length){checkRecoveryReceipt(audits,input,row);await client.query('ROLLBACK');
    return {status:'already_applied',comment_id:recoveryScope.comment_id};}
   const priorHash=checkRecoveryRow(row);
+  stage='POLICY_READ';
   const frozen=(await client.query('SELECT * FROM zenithjoy.company_config_runs WHERE company_id=$1 AND run_id=ANY($2::text[])',
    [recoveryScope.company_id,[recoveryScope.old_run,input.run]])).rows;
   const policyHash=checkRecoveryFrozen(frozen,input);
+  stage='VIDEO_READ';
   const videos=(await client.query('SELECT * FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=$2 FOR SHARE',
    [recoveryScope.line,recoveryScope.video_url])).rows;checkRecoveryVideo(videos,row);
+  stage='DOWNSTREAM_READ';
   const outbox=(await client.query('SELECT comment_id FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND comment_id=$2 LIMIT 1',
    [recoveryScope.line,recoveryScope.comment_id])).rows;
   const leads=(await client.query(`SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1
@@ -203,23 +210,27 @@ async function recoverFalseExclusion(pool,input,{sourceCommit,recovery={}}={}){
       OR (comment_body=$5 AND source_video=$6)) LIMIT 1`,
    [recoveryScope.line,row.nickname,row.douyin_id,row.profile_url,row.comment_body,row.source_video])).rows;
   if(outbox.length||leads.length)recoveryFail('DOWNSTREAM_PRESENT');
+  stage='AUTHORITY_RECHECK';
   const latestTask=await authority(),latestStop=await inspect();checkRecoveryAuthority(latestTask,latestStop,input);
   const reopened={...row.judgment_config,recovery_prior:row.judgment_config,
    recovery_task_id:recoveryScope.task_id,recovery_run_id:input.run};
+  stage='UPDATE';
   const updated=await client.query(`UPDATE zenithjoy.leadgen_comments SET process_status='待分拣',
    relevance=NULL,intent_grade=NULL,judgment_reason=NULL,judgment_config=$3::jsonb,updated_at=now()
    WHERE line_key=$1 AND id=$2 AND process_status='已排除'`,
    [recoveryScope.line,recoveryScope.comment_id,JSON.stringify(reopened)]);
   if(updated.rowCount!==1)recoveryFail('WRITE_FAILED');
   const detail=recoveryDetail(input,priorHash,policyHash,latestStop);
+  stage='AUDIT_WRITE';
   await client.query('INSERT INTO zenithjoy.db_audit(id,org_id,table_id,member_id,action,detail) VALUES($1,$2,NULL,$3,$4,$5::jsonb)',
    [recoveryScope.task_id,recoveryScope.tenant_id,recoveryActor,recoveryAction,JSON.stringify(detail)]);
   commitStarted=true;await client.query('COMMIT');committed=true;
   return {status:'applied',comment_id:recoveryScope.comment_id,source_run:recoveryScope.source_run};
  }catch(error){
   if(commitStarted&&!committed)recoveryFail('COMMIT_UNKNOWN_READBACK_REQUIRED');
-  try{await client.query('ROLLBACK');}catch{discard=true;}
-  throw error;
+  try{await client.query('ROLLBACK');}catch{discard=true;recoveryFail('ROLLBACK_UNKNOWN');}
+  if(/^FALSE_EXCLUSION_[A-Z_]+$/.test(error?.message||''))throw error;
+  recoveryFail(`${stage}_FAILED`);
  }finally{client.release(discard||commitStarted&&!committed?true:undefined);}
 }
 
