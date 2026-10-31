@@ -17,6 +17,8 @@ test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包�
   const result = spawnSync('/bin/bash', ['-c', prefix + `
     printf 'RUNTIME:%s\n' "\${MMV_RUNTIME_FILES[@]}"
     printf 'EXPECTED:%s\n' "\${DEVICE_SH_FILES[@]}" "\${DEVICE_NODE_FILES[@]}" "\${DEVICE_PLAN_FILES[@]}" "\${DEVICE_RPC_PROBE_FILES[@]}" "\${DEVICE_CTL_FILES[@]}" "\${MMV_JS_FILES[@]}" "\${MMV_PROBE_FILES[@]}"
+    printf 'MMV:%s\n' "\${MMV_JS_FILES[@]}"
+    printf 'DEVICE:%s\n' "\${DEVICE_NODE_FILES[@]}"
   `, path], {encoding:'utf8',env});
   assert.equal(result.status, 0, result.stderr);
   const lines = result.stdout.trim().split('\n');
@@ -28,6 +30,7 @@ test('正式部署在系统 bash nounset 下组装完整去重的 MMV 运行包�
   assert.ok(runtime.includes('company-config-sync-lib.js'),'公司同步lib必须进入MMV发布源manifest');
   assert.ok(!runtime.some(path=>/company-config-sync\.test\./.test(path)),'测试不作为生产运行包发布');
   assert.ok(runtime.includes('plans/douyin_comment_scoring.plan'));
+  for (const target of ['MMV:', 'DEVICE:']) assert.ok(lines.includes(`${target}leadgen-score-exclusion.js`),`${target}缺103排除恢复实现`);
  });
 });
 

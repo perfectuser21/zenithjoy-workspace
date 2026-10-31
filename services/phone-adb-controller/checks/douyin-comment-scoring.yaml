@@ -15,6 +15,19 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 跨批评分按本run认领ID逐行独立查询PG；不能拿原harvest_batch冒充评分run归属，证据存本run readback工件。
+  - key: exclusion_readback
+    stage: scoring
+    journey_cell: stage:scoring
+    probe:
+      type: metric
+      ref: metrics.exclusion_readback_failures
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 已排除评论须按本run、原来源、冻结政策和双独立缺证据摘要读回，且不存在触达outbox。
   - key: scoring_commander_verified
     stage: scoring
     journey_cell: stage:scoring
@@ -40,7 +53,7 @@ probes:
     severity: error
     failure_class: retryable
     on_fail: fail_stage
-    note: 按原run、claim、CID和冻结画像逐行只读语义核验；空批或缺证据不得由存储读回代替。
+    note: 有评分时按原run、claim、CID和冻结画像逐行只读语义核验；纯排除批次以独立排除读回验收，真正空批仍不得伪称完成。
   - key: pool_advanced
     stage: mark_leads
     journey_cell: stage:mark_leads

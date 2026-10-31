@@ -199,6 +199,15 @@ test('新公司发布schema失败阻断，schema通过但draft按disabled回执�
  const releases=await preflightDeploymentReleases({...args,companyReadiness:async()=>({schema_verified:true,business_runtime_status:'disabled',gaps:[{code:'COMPANY_CONFIG_NOT_ENABLED'}]})});
  assert.equal(releases.company_readiness.business_runtime_status,'disabled');assert.equal(releases.company_readiness.gaps.length,1);
 });
+test('排除终态候选的生产release预检必须读回已生效的数据库约束',async()=>{
+ const {preflightDeploymentReleases}=await implementation(),f=fixture();
+ f.manifest.files.push({path:'release-evidence/20261031_180000_leadgen_comment_policy_exclusion.sql',content_sha256:'c'.repeat(64)});
+ const request=async path=>({release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')});
+ const args={manifest:f.manifest,environment:'production',releaseIds:{'xian-m4':vid[0],mmv:vid[2]},request};
+ await assert.rejects(preflightDeploymentReleases({...args,companyReadiness:async()=>({schema_verified:true,business_runtime_status:'ready',gaps:[]})}),/SCORING_EXCLUSION_SCHEMA_NOT_READY/);
+ const releases=await preflightDeploymentReleases({...args,companyReadiness:async options=>{assert.equal(options.requireScoringExclusion,true);return {schema_verified:true,scoring_exclusion_verified:true,business_runtime_status:'ready',gaps:[]};}});
+ assert.equal(releases.company_readiness.scoring_exclusion_verified,true);
+});
 
 // 从官方Pilot39168880088的commander-generic产物抽取一条真实绑定及来源行。
 // 仅构造pure plan所需最小字段；保留真实逻辑/中央SHA、内容摘要、元数据及定位，不冒充完整生产快照。

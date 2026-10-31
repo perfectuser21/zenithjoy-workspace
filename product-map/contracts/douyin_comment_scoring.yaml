@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.9.0
+  version: 0.10.0
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -24,7 +24,7 @@ known_gaps:
 activities:
   - key: scoring
     name: 评分
-    promise: 按该公司冻结的原评分政策为已提交评论写出可读回的相关度和意向等级
+    promise: 按冻结原政策为已提交评论写出可读回评分；双独立复核一致缺个人意向或受众主题证据时自动排除并留原因
     sample_candidates:
       index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
       workflow_keys:
@@ -33,7 +33,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.4.0
+    version: 2.5.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -59,21 +59,25 @@ activities:
           - transcript
     outputs:
       - type: Comment
-        destination: zenithjoy.leadgen_comments 的评分字段，交给标记人 Activity
+        destination: zenithjoy.leadgen_comments 的评分或独立排除终态；仅真评分交给标记人 Activity
         cardinality: many
         effect: update
         fields:
           - process_status
           - relevance
           - intent_grade
+          - judgment_reason
+          - judgment_config
           - promoted
     preconditions:
       - 从PG认领待分拣评论，带关联视频标题与转写
       - 来源视频须为同102批次、matched且PG状态评论已采；隔离或未完成采集的评论不可领。唯一例外：金诺原102g失败run的VID7699489394579915663及三条固定原生评论，经用户决定、旧执行实时停止、v14冻结政策及无旧outbox核验并留下db_audit接纳回执后，只供回执绑定的单一103 run显式领取；原失败和视频隔离不改
-      - 模型不可达或结果非法留待重判，不伪造C级成功
+      - 模型不可达、HTTP/网络异常、证据非法或双审不一致留待重试，不伪造C级成功，不转人工评分
     postconditions:
       - probe: scores_readback
         asserts: 认领评论 ID 的 relevance、intent_grade 与两份不同模型回执的政策证据在 PG 独立读回；两审一致后原子提交，任一审失败不得写分；本活动只交评分，完成状态由后续 mark_leads 核资格和配送后决定
+      - probe: exclusion_readback
+        asserts: 两份不同模型身份均判缺个人意向或受众主题证据且原因一致时，PG原子写已排除及安全双审摘要，relevance/intent_grade清空，原评论与冻结来源哈希、理由及无outbox独立读回；纯排除批次为完成，不以零评分误报partial
       - probe: scoring_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
@@ -93,18 +97,17 @@ activities:
       empty_ok:
         - 本批无待分拣评论
       retryable:
-        - 判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）
+        - 模型HTTP/网络、鉴权/额度、证据非法或双审不一致保留待分拣，后续有界重试；不得转成人工评分或误排除
       needs_human:
-        cases:
-          - 整批判定失败（模型鉴权/额度）
+        cases: []
         alert:
           channel: bark
-          object: sort-comments 整批失败 → Bark
+          object: 仅记录运行告警，不派人工评分
       fatal: []
     side_effects:
       - kind: internal_write
         target: pg zenithjoy.leadgen_comments
-        description: 保存真实relevance与intent_grade，尚未落实线索前不推进完成状态
+        description: 双审通过保存真实relevance/intent_grade；双审一致证据缺口则清空旧分并写已排除和安全原因；两者均不由本活动创建线索
     invokers:
       - code
       - agent
@@ -119,7 +122,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.7.0
+        version: 0.8.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -238,6 +241,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-score-exclusion.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-comment-admission.js
         revision: contract
       - kind: code
@@ -299,7 +306,10 @@ activities:
         writes:
           - Comment.relevance
           - Comment.intent_grade
-        check: intent_grade ∈ {A, B, C, 不相关}；复核解析失败落 C
+          - Comment.process_status
+          - Comment.judgment_reason
+          - Comment.judgment_config
+        check: 双审通过才写A/B/C/不相关评分；双独立复核一致缺个人意向或受众主题证据写已排除且清空旧分；模型故障与复核不一致不写分、不排除
         implementation:
           status: implemented
           ref: leadgen-workflow.mjs + leadgen-queue.js scoring.judge_grade（原约束保留，真PG/证据读回）
@@ -330,7 +340,7 @@ activities:
       entry: activity-commander.mjs
   - key: mark_leads
     name: 标记人
-    promise: 依据已评分评论核实原生收件人身份，交出线索、资格与配送状态
+    promise: 仅依据双审通过的已评分评论核实原生收件人身份并交出线索、资格与配送状态；已排除评论不进入本活动
     sample_candidates:
       index: services/phone-adb-controller/__tests__/fixtures/leadgen-historical-evidence-index.json
       workflow_keys:
@@ -339,7 +349,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.5.0
+    version: 3.6.0
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -419,6 +429,7 @@ activities:
       - 带company_binding的评论须按原102 harvest_batch只读既有PG冻结来源与选定设备，缺失不得补造历史run或仅信评论内绑定；当前评分政策仍独立冻结，来源公司/租户必须相同；103配送和读回沿同来源，104云profile仍未获授权
       - 评分行须有两份不同模型身份的已持久政策证据，原评论与来源视频仍须同102批次且视频PG状态评论已采；旧单份证据和隔离视频不得推进线索。唯一金诺102g单视频例外须再次核db_audit接纳回执、三条原生身份、v14政策及本103 run绑定；其他隔离视频仍阻断
       - 评论 process_status=待分拣
+      - 已排除评论保持 relevance/intent_grade 为空，不进入 Lead、outbox 或后续104；纯排除批次标记人空消费为正常完成
       - 旧grade只保原评分；独立资格读完整native主页和本run冻结公司criteria/audiences，缺证据/失败unknown不得进104ready
       - 同line原锁目录使用内核advisory
         guard与私有owner/PID；只在同机确证死者后恢复，活owner/权限未知/旧无owner目录不清理，不按TTL抢锁
@@ -485,7 +496,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.7.0
+        version: 0.8.0
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -604,6 +615,10 @@ activities:
         revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-score-exclusion.js
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/leadgen-comment-admission.js
         revision: contract
       - kind: code
@@ -674,8 +689,8 @@ activities:
           - RecipientQualification.status
           - OutreachBridgeIntent.payload_sha256
           - OutreachBridgeIntent.state
-        check: 相关(A/B/C级)：新建（状态=待触达）或已有行
-          repeat_hits+1，按抖音号去重；只排除'不相关'(同行/广告)——0914既有决定,含C级都留档(sort-comments-lib.js:57)；真实lead
+        check: 仅待分拣且双审通过的相关(A/B/C级)：新建（状态=待触达）或已有行
+          repeat_hits+1，按抖音号去重；不相关及已排除均不建Lead/outbox，含C级仍留档；真实lead
           UID读回防昵称别名，独立recipient资格不改grade；同事务保存outbox再推进，正常103消费原Feishu桥
         implementation:
           status: implemented

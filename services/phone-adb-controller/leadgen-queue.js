@@ -102,30 +102,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
-  if(op==='score_recovery'){
-    const ids=input.ids;
-    if(!sourceRun&&!validSources(ids,input.sources)||!Array.isArray(ids)||ids.length>1000||new Set(ids).size!==ids.length||ids.some(id=>!uuid.test(id)))throw Error('POLICY_SCORE_RECOVERY_SCOPE_INVALID');
-    if(!ids.length)return {ids:[],scored:0,verified:true};
-    const frozen=(await pool.query(`SELECT company_id,tenant_id,version,run_id,snapshot FROM zenithjoy.company_config_runs
-      WHERE run_id=$1 AND snapshot->'runtime_config'->'routing'->>'line_key'=$2`,[run,lineKey])).rows;
-    if(frozen.length!==1||frozen[0].run_id!==run||!frozen[0].snapshot
-      ||frozen[0].snapshot.company_id!==frozen[0].company_id||frozen[0].snapshot.tenant_id!==frozen[0].tenant_id
-      ||Number(frozen[0].snapshot.version)!==Number(frozen[0].version))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
-    const snapshot=frozen[0].snapshot;
-    const rows=(await pool.query(`SELECT id,harvest_batch,line_key,relevance,intent_grade,judgment_config FROM zenithjoy.leadgen_comments
-      WHERE line_key=$1 AND ($2::text IS NULL OR harvest_batch=$2) AND id=ANY($3::uuid[])`,[lineKey,sourceRun,ids])).rows;
-    if(rows.length!==ids.length||new Set(rows.map(r=>r.id)).size!==ids.length)throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
-    const committed=[];
-    for(const row of rows){if(row.line_key!==lineKey||!ids.includes(row.id)||row.harvest_batch!==(sourceRun||input.sources[row.id]))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');const c=row.judgment_config;
-      if(c?.run_id!==run)continue;
-      if(c.company_id!==snapshot.company_id||c.tenant_id!==snapshot.tenant_id||c.policy_id!==snapshot.policy_id||Number(c.version)!==Number(snapshot.version)
-        ||!c.policy_audit||c.policy_audit.status!=='pass'||!c.policy_audit.response_id
-        ||!c.model_audit?.response_id||!c.model_audit?.model
-        ||!['相关','不相关'].includes(row.relevance)||row.relevance==='相关'&&!['A','B','C'].includes(row.intent_grade))throw Error('POLICY_SCORE_RECOVERY_AMBIGUOUS');
-      committed.push(row.id);
-    }
-    return {ids:committed,scored:committed.length,verified:true};
-  }
+  if(op==='score_recovery')return require('./leadgen-score-exclusion.js').scoreRecovery(pool,input,{lineKey,sourceRun,run,validSources});
+  if(op==='score_exclusion_readback')return require('./leadgen-score-exclusion.js').exclusionReadback(pool,input,{lineKey,sourceRun,run,validSources});
   const videoIds=input.video_ids===undefined?null:input.video_ids;
   if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
   if(Object.hasOwn(input,'prefer_matched')&&(op!=='claim_videos'||typeof input.prefer_matched!=='boolean'||input.prefer_matched===true&&(!sourceRun||videoIds===null)))throw Error('采样优先必须真boolean及明确上游VID范围');
@@ -349,8 +327,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const targetProfile = configTargetProfile(snapshot, '103');
     const evidence = configEvidence(snapshot, run);
 
-    let scored = 0,blocked=0,lastCursor=cursor;const ids=[],blockedIds=[...(input.blocked_ids||[])],blocked_reasons=[],seen=new Set(blockedIds);
-    while(scored<limit&&seen.size<1000){
+    let scored = 0,excluded=0,blocked=0,lastCursor=cursor;const ids=[],excluded_ids=[],excluded_reasons=[],blockedIds=[...(input.blocked_ids||[])],blocked_reasons=[],seen=new Set(blockedIds);
+    while(scored+excluded<limit&&seen.size<1000){
       let result;
       try{result = await transaction(pool, async client => {
         if(input.budget_max!==undefined){
@@ -398,6 +376,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         const judged={...row,relevance:verdict.relevance,intent_grade:verdict.relevance==='相关'?verdict.grade:null,
           judgment_reason:verdict.reason,judgment_config:evidence};
         const semantic=await dualPolicyReview(judged,snapshot,deps);
+        if(semantic.status==='exclude')return require('./leadgen-score-exclusion.js').commitExclusion(client,{row,verdict,semantic,evidence,lineKey,nextCursor});
         if(semantic.status!=='pass'){const error=Error('POLICY_SCORE_NOT_VERIFIED');error.blocked_id=row.id;error.next_cursor=nextCursor;const reason=safePolicyReviewReason(semantic.reason);
           if(reason)error.score_failure={code:error.message,policy_review_reason:reason,
             ...(['jev','commander'].includes(semantic.model_stage)?{policy_review_stage:semantic.model_stage}:{}),
@@ -414,12 +393,13 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         throw error;
       }
       if (!result) break;
-      scored++;
-      ids.push(result.id);seen.add(result.id);if(result.cursor)lastCursor=result.cursor;
+      if(result.excluded){excluded++;excluded_ids.push(result.id);excluded_reasons.push({id:result.id,reason:result.reason});}
+      else{scored++;ids.push(result.id);}
+      seen.add(result.id);if(result.cursor)lastCursor=result.cursor;
     }
-    return { scored, ids,blocked,blocked_ids:blockedIds,blocked_reasons,next_cursor:lastCursor,config: evidence,
+    return { scored, ids,excluded,excluded_ids,excluded_reasons,blocked,blocked_ids:blockedIds,blocked_reasons,next_cursor:lastCursor,config: evidence,
       ...(blockedIds.length?{status:'partial',reason:'POLICY_SCORE_NOT_VERIFIED'}:
-        scored===0?{status:'partial',reason:'POLICY_SCORE_NO_ELIGIBLE_ROWS'}:{}) };
+        scored+excluded===0?{status:'partial',reason:'POLICY_SCORE_NO_ELIGIBLE_ROWS'}:{}) };
   }
   if(op==='bridge_readback')return require('./leadgen-outreach-bridge.js').readbackBridge(pool,input);
   if(op==='bridge_outreach')return require('./leadgen-outreach-bridge.js').bridgeOutreach(pool,input,deps);

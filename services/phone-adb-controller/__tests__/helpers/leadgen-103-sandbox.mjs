@@ -9,7 +9,7 @@ import routes from '../../line-routes.js';
 
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const argv=process.argv.slice(2),mode=argv[0],option=name=>argv[argv.indexOf(name)+1];
-if(!['score','score_readback','policy_review','score_scope','score_recovery','mark_leads','mark_readback',
+if(!['score','score_readback','score_exclusion_readback','policy_review','score_scope','score_recovery','mark_leads','mark_readback',
  'bridge_outreach','bridge_readback','claim_outreach','prepare_outreach'].includes(mode)||!argv.includes('--output'))throw Error('SANDBOX_ARGS_INVALID');
 const output=option('--output');if(!output||output.startsWith('--'))throw Error('SANDBOX_OUTPUT_INVALID');
 if(!existsSync(output))mkdirSync(output,{recursive:true});
@@ -32,7 +32,7 @@ const route=routes.routeOf(scope.line);const pending=[];let before=null;const cl
  if(sql.includes('company_config_runs')&&sql.includes('company_id=$1'))return {rows:[{snapshot,source_run:state.source_run,task_inputs:{}}]};
  if(sql.includes('company_config_runs'))return {rows:[{snapshot,run_id:args[0],company_id:snapshot.company_id,tenant_id:snapshot.tenant_id,version:snapshot.version}]};
  if(sql.includes('SELECT id FROM zenithjoy.leadgen_comments'))return {rows:rows.filter(r=>r.harvest_batch===args[1]).map(r=>({id:r.id}))};
- if(sql.includes('SELECT id,harvest_batch,line_key,relevance'))return {rows:rows.filter(r=>r.harvest_batch===args[1]&&args[2].includes(r.id))};
+ if(sql.includes('SELECT id,harvest_batch,line_key,process_status'))return {rows:rows.filter(r=>r.harvest_batch===args[1]&&args[2].includes(r.id))};
  if(sql.includes('SELECT * FROM zenithjoy.leadgen_comments')){
   if(sql.includes('FOR UPDATE'))return {rows:rows.filter(r=>r.line_key===args[0]&&r.harvest_batch===args[1]&&r.process_status==='待分拣'
     &&(sql.includes('relevance IS NOT NULL')?r.relevance!=null:r.relevance==null)
@@ -47,6 +47,8 @@ const route=routes.routeOf(scope.line);const pending=[];let before=null;const cl
  if(sql.includes('UPDATE zenithjoy.leadgen_comments')){
   if(sql.includes("process_status = '已分拣'")){const row=rows.find(r=>r.line_key===args[0]&&r.dedup_key===args[1]);
     if(row)pending.push(()=>{row.process_status='已分拣';});return {rows:[],rowCount:row?1:0};}
+  if(sql.includes("process_status='已排除'")){pending.push(()=>{const row=rows.find(r=>r.id===args[0]);Object.assign(row,
+    {process_status:'已排除',relevance:null,intent_grade:null,judgment_reason:args[1],judgment_config:JSON.parse(args[2])});});return {rows:[],rowCount:1};}
   pending.push(()=>{const row=rows.find(r=>r.id===args[0]);Object.assign(row,{relevance:args[1],intent_grade:args[2],
    judgment_reason:args[3],judgment_config:JSON.parse(args[4])});});return {rows:[],rowCount:1};}
  if(sql.includes('SELECT id,relevance,intent_grade,process_status'))return {rows:rows.filter(r=>args[1].includes(r.id))};
@@ -58,6 +60,8 @@ const route=routes.routeOf(scope.line);const pending=[];let before=null;const cl
  if(sql.includes('INSERT INTO zenithjoy.leadgen_bridge_outbox')){if(!state.outbox.some(r=>r.line_key===args[0]&&r.comment_id===args[1])){
   state.outbox.push({id:randomUUID(),line_key:args[0],comment_id:args[1],lead_id:args[2],run_tag:args[3],source_run:args[4],
    payload:JSON.parse(args[5]),payload_sha256:args[6],qualification_status:args[7],state:'pending'});}return {rows:[],rowCount:1};}
+ if(sql.includes('SELECT comment_id FROM zenithjoy.leadgen_bridge_outbox'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&
+   (Array.isArray(args[1])?args[1].includes(r.comment_id):args[1]===r.comment_id)).map(r=>({comment_id:r.comment_id}))};
  if(sql.includes('SELECT * FROM zenithjoy.leadgen_bridge_outbox')){
   if(sql.includes('feishu_record_id=ANY'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&args[1].includes(r.feishu_record_id))};
   if(sql.includes('feishu_record_id=$2'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&r.feishu_record_id===args[1])};
@@ -112,7 +116,7 @@ globalThis.fetch=async(url,opts={})=>{const parsed=new URL(url);
 try{
  const run=['mark_leads','mark_readback','bridge_outreach','bridge_readback'].includes(mode)?state.mark_run||scope.run:
   ['claim_outreach','prepare_outreach'].includes(mode)?state.contact_run||'contact104':scope.run;
- const fields=mode==='score_recovery'?{ids:rows.map(r=>r.id)}:mode==='policy_review'?{claim:scope.run,ids:rows.filter(r=>r.judgment_config?.run_id===scope.run).map(r=>r.id)}:
+ const fields=mode==='score_recovery'?{ids:rows.map(r=>r.id)}:mode==='score_exclusion_readback'?{ids:rows.filter(r=>r.process_status==='已排除').map(r=>r.id)}:mode==='policy_review'?{claim:scope.run,ids:rows.filter(r=>r.judgment_config?.run_id===scope.run).map(r=>r.id)}:
   mode==='score_readback'||mode==='mark_readback'?{ids:rows.filter(r=>mode==='mark_readback'
    ?r.process_status==='已分拣'&&state.outbox.some(o=>o.comment_id===r.id&&o.run_tag===run)
    :r.judgment_config?.run_id===scope.run).map(r=>r.id),

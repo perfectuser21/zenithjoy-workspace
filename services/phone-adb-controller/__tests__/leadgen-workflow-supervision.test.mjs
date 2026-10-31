@@ -18,6 +18,7 @@ test('原批只读复核模式仅调用精确CID政策入口，不领取新评�
 test('103检查合同单独要求政策语义复核，不以存储读回代替',()=>{
  const checks=parseYaml(readFileSync('services/phone-adb-controller/checks/douyin-comment-scoring.yaml','utf8'));
  assert.ok(checks.probes.some(p=>p.key==='policy_review'&&p.probe.ref==='metrics.policy_review_failures'&&p.severity==='error'));
+ assert.ok(checks.probes.some(p=>p.key==='exclusion_readback'&&p.probe.ref==='metrics.exclusion_readback_failures'&&p.severity==='error'));
 });
 
 test('mark_leads预算partial后私有保存同scope游标，重试继续扫描',async()=>{
