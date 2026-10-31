@@ -1,0 +1,228 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { evaluatePlan } from '../plan-evidence.mjs';
+import { createMerchantAdapter } from '../merchant-adapter.mjs';
+import { coordinate } from '../coordinator.mjs';
+
+const digest = data => createHash('sha256').update(data).digest('hex');
+const now = '2026-10-31T12:00:00Z';
+function fixture(t, edit = () => {}) {
+  const root = mkdtempSync(join(tmpdir(), 'plan-evidence-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const request = { businessKey: 'task-1', target: { storeId: 'store-1', productId: 'product-1' },
+    plan: { sku: ['book-a', 'book-b'], images: ['image-a', 'image-b'], prices: { group: 315 },
+      promotions: [{ quantity: 2, rate: 0.95 }], stock: 1, dispatch: { hours: 48 }, services: ['course'] }, proofs: [] };
+  const strings = { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } };
+  const policy = { required: [{ kind: 'commercial', sourceRoles: ['supplier'], fields: ['sku', 'images', 'prices', 'promotions', 'stock', 'dispatch', 'services'] }], trustedDigests: [], schemas: {
+    sku: strings, images: strings, services: strings,
+    prices: { type: 'object', required: ['group'], properties: { group: { type: 'number', minimum: 0 } } },
+    promotions: { type: 'array', minItems: 0, items: { type: 'object', required: ['quantity', 'rate'], properties: { quantity: { type: 'integer', minimum: 1 }, rate: { type: 'number', minimum: 0, maximum: 1 } } } },
+    stock: { type: 'integer', minimum: 0 },
+    dispatch: { type: 'object', required: ['hours'], properties: { hours: { type: 'integer', minimum: 0 } } },
+  } };
+  writeFileSync(join(root, 'source.txt'), 'original-source-fixture');
+  const document = { version: 1, kind: 'commercial', subject: { businessKey: 'task-1', storeId: 'store-1', productId: 'product-1' },
+    source: { id: 'supplier-record-1', role: 'supplier' }, reviewedBy: 'reviewer-1',
+    issuedAt: '2026-10-31T11:00:00Z', expiresAt: '2026-10-31T13:00:00Z', facts: structuredClone(request.plan), artifacts: [{ path: 'source.txt', sha256: digest('original-source-fixture') }] };
+  edit({ request, policy, document, root });
+  const bytes = JSON.stringify(document); writeFileSync(join(root, 'review.json'), bytes);
+  const sha256 = digest(bytes); request.proofs.push({ path: 'review.json', sha256 }); policy.trustedDigests.push(sha256);
+  return { request, options: { evidenceRoot: root, policy, now } };
+}
+
+test('pinned current evidence can match a plan without authorizing publication', t => {
+  const f = fixture(t); const r = evaluatePlan(f.request, f.options);
+  assert.equal(r.status, 'matched'); assert.equal(r.publicationAuthorized, false);
+  assert.equal(r.factsIndependentlyEstablished, false); assert.deepEqual(r.reasons, []);
+});
+test('self-declared verified status cannot replace a pinned evidence document', t => {
+  const f = fixture(t); f.options.policy.trustedDigests = []; f.request.proofs[0].status = 'verified';
+  assert.equal(evaluatePlan(f.request, f.options).status, 'unknown');
+});
+test('changing evidence bytes after review is rejected', t => {
+  const f = fixture(t); writeFileSync(join(f.options.evidenceRoot, 'review.json'), '{}');
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+for (const [name, change] of [
+  ['expired evidence', x => { x.document.expiresAt = now; }],
+  ['future-dated evidence', x => { x.document.issuedAt = '2026-10-31T12:01:00Z'; }],
+  ['evidence for another store', x => { x.document.subject.storeId = 'store-2'; }],
+  ['evidence for another business operation', x => { x.document.subject.businessKey = 'other'; }],
+  ['evidence for another product', x => { x.document.subject.productId = 'other'; }],
+  ['unapproved source role', x => { x.document.source.role = 'customer_claim'; }],
+]) test(`${name} cannot satisfy the plan`, t => {
+  const f = fixture(t, change); assert.notEqual(evaluatePlan(f.request, f.options).status, 'matched');
+});
+for (const [field, value] of [['images', ['image-b', 'image-a']], ['sku', ['book-a']], ['prices', { group: 316 }],
+  ['promotions', []], ['stock', 2], ['dispatch', { hours: 24 }], ['services', []]]) {
+  test(`a ${field} mismatch is rejected with its field identified`, t => {
+    const f = fixture(t); f.request.plan[field] = value;
+    const r = evaluatePlan(f.request, f.options); assert.equal(r.status, 'rejected');
+    assert.ok(r.reasons.some(x => x.code === 'FACT_MISMATCH' && x.field === field));
+  });
+}
+test('missing required facts stay unknown', t => {
+  const f = fixture(t, x => { delete x.document.facts.stock; });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'unknown');
+});
+test('artifact hashes bind visual reviews to actual captured bytes', t => {
+  const f = fixture(t, x => {
+    writeFileSync(join(x.root, 'capture.png'), 'capture-a');
+    x.document.artifacts = [{ path: 'capture.png', sha256: digest('capture-a') }];
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'matched');
+  writeFileSync(join(f.options.evidenceRoot, 'capture.png'), 'capture-b');
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('evidence paths cannot escape the configured evidence directory', t => {
+  const f = fixture(t); f.request.proofs[0].path = '../review.json';
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('symlinks cannot substitute evidence outside the configured directory', t => {
+  const f = fixture(t); symlinkSync('/etc/hosts', join(f.options.evidenceRoot, 'outside'));
+  f.request.proofs[0].path = 'outside';
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('duplicate document kinds cannot silently override conflicting facts', t => {
+  const f = fixture(t); f.request.proofs.push({ ...f.request.proofs[0] });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+
+test('CLI evaluates files and leaves platform publication unauthorized', t => {
+  const f = fixture(t, x => { x.document.issuedAt = new Date(Date.now() - 60000).toISOString(); x.document.expiresAt = new Date(Date.now() + 60000).toISOString(); }), root = f.options.evidenceRoot;
+  writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
+  writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
+  const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
+    join(root, 'request.json'), root, join(root, 'policy.json')], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr);
+  const result = JSON.parse(child.stdout);
+  assert.equal(result.status, 'matched'); assert.equal(result.publicationAuthorized, false);
+});
+
+test('CLI signals unknown evidence without approving publication', t => {
+  const f = fixture(t), root = f.options.evidenceRoot; f.request.proofs = [];
+  writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
+  writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
+  const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
+    join(root, 'request.json'), root, join(root, 'policy.json')], { encoding: 'utf8' });
+  assert.equal(child.status, 2, child.stderr);
+  assert.equal(JSON.parse(child.stdout).status, 'unknown');
+});
+
+for (const [field, value] of [['sku', null], ['images', []], ['prices', { group: -1 }], ['stock', -5], ['dispatch', { hours: -1 }], ['services', null]]) {
+  test(`matching invalid ${field} still cannot satisfy the field contract`, t => {
+    const f = fixture(t, x => { x.document.facts[field] = value; x.request.plan[field] = value; });
+    const r = evaluatePlan(f.request, f.options);
+    assert.equal(r.status, 'rejected'); assert.ok(r.reasons.some(x => x.code === 'FIELD_SCHEMA_INVALID' && x.field === field));
+  });
+}
+test('pinned review without original artifacts remains unknown', t => {
+  const f = fixture(t, x => { x.document.artifacts = []; });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'unknown');
+});
+test('an empty original artifact cannot stand in for source evidence', t => {
+  const f = fixture(t, x => {
+    writeFileSync(join(x.root, 'source.txt'), '');
+    x.document.artifacts = [{ path: 'source.txt', sha256: digest('') }];
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('missing field schemas cannot silently weaken the trusted contract', t => {
+  const f = fixture(t); delete f.options.policy.schemas.stock;
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('unsupported or inapplicable schema constraints fail rather than being ignored', t => {
+  const f = fixture(t); f.options.policy.schemas.stock.minLength = 100;
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('production CLI rejects caller supplied historical clocks', t => {
+  const f = fixture(t), root = f.options.evidenceRoot;
+  writeFileSync(join(root, 'request.json'), JSON.stringify(f.request));
+  writeFileSync(join(root, 'policy.json'), JSON.stringify(f.options.policy));
+  const child = spawnSync(process.execPath, [new URL('../plan-evidence-cli.mjs', import.meta.url).pathname,
+    join(root, 'request.json'), root, join(root, 'policy.json'), now], { encoding: 'utf8' });
+  assert.equal(child.status, 1); assert.match(JSON.parse(child.stderr).error, /用法/);
+});
+
+test('a new listing can bind a source product identity before a platform ID exists', t => {
+  const f = fixture(t, x => {
+    delete x.request.target.productId; delete x.document.subject.productId;
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-1';
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'matched');
+});
+test('new-listing evidence for another source product is rejected', t => {
+  const f = fixture(t, x => {
+    delete x.request.target.productId; delete x.document.subject.productId;
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-2';
+  });
+  assert.ok(evaluatePlan(f.request, f.options).reasons.some(x => x.code === 'SUBJECT_MISMATCH' && x.field === 'sourceProductKey'));
+});
+test('both supplied source and platform identities must match', t => {
+  const f = fixture(t, x => {
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-2';
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+test('evidence tied to an old platform listing cannot approve a fresh creation identity', t => {
+  const f = fixture(t, x => {
+    delete x.request.target.productId;
+    x.request.target.sourceProductKey = 'supplier-1/sku-1'; x.document.subject.sourceProductKey = 'supplier-1/sku-1';
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+for (const key of ['platform', 'accountId']) test(`the ${key} target namespace cannot be silently ignored`, t => {
+  const f = fixture(t, x => { x.request.target[key] = 'target-a'; x.document.subject[key] = 'target-b'; });
+  const r = evaluatePlan(f.request, f.options);
+  assert.equal(r.status, 'rejected'); assert.ok(r.reasons.some(x => x.code === 'SUBJECT_MISMATCH' && x.field === key));
+});
+test('reserved prototype identity keys cannot disappear while binding the target', t => {
+  const f = fixture(t);
+  Object.defineProperty(f.request.target, '__proto__', { value: 'unbound', enumerable: true });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
+
+function merchantFixture(t) {
+  const f = fixture(t, x => {
+    x.document.issuedAt = new Date(Date.now() - 60000).toISOString();
+    x.document.expiresAt = new Date(Date.now() + 60000).toISOString();
+  });
+  const input = { root: join(f.options.evidenceRoot, 'action-state'), runId: 'run-1', businessKey: f.request.businessKey,
+    target: f.request.target, payload: { plan: { fields: f.request.plan, evidenceDocuments: f.request.proofs } } };
+  return { ...f, input };
+}
+test('merchant validation uses trusted file evidence and reports field conflicts before any intent', async t => {
+  const f = merchantFixture(t); f.input.payload.plan.fields.stock = 2;
+  const adapter = createMerchantAdapter({ probe: async () => { throw new Error('unexpected capture'); },
+    evidenceContract: { evidenceRoot: f.options.evidenceRoot, policy: f.options.policy } });
+  const result = await adapter.validate(f.input);
+  assert.ok(result.comparison, 'validation exposes the actual evidence comparison');
+  assert.equal(result.comparison.status, 'rejected');
+  assert.ok(result.comparison.reasons.some(x => x.code === 'FACT_MISMATCH' && x.field === 'stock'));
+  await assert.rejects(coordinate(f.input, adapter), /PRECONDITIONS_UNVERIFIED/);
+  assert.equal(existsSync(f.input.root), false);
+});
+test('a matching document never enables the unavailable merchant publishing driver', async t => {
+  const f = merchantFixture(t);
+  const adapter = createMerchantAdapter({ probe: async () => { throw new Error('unexpected capture'); },
+    evidenceContract: { evidenceRoot: f.options.evidenceRoot, policy: f.options.policy } });
+  const result = await adapter.validate(f.input);
+  assert.ok(result.comparison, 'validation exposes the actual evidence comparison');
+  assert.equal(result.comparison.status, 'matched'); assert.equal(result.ok, false);
+  assert.ok(result.reasons.includes('SUBMISSION_DRIVER_UNAVAILABLE'));
+  await assert.rejects(adapter.submit(f.input), /SUBMISSION_DRIVER_UNAVAILABLE/);
+});
+test('customer payload cannot replace the execution-owned policy or historical clock', async t => {
+  const f = merchantFixture(t);
+  const adapter = createMerchantAdapter({ probe: async () => { throw new Error('unexpected capture'); },
+    evidenceContract: { evidenceRoot: f.options.evidenceRoot, policy: { ...f.options.policy, trustedDigests: [] } } });
+  f.input.payload.plan.evidenceContract = { ...f.options, now };
+  const result = await adapter.validate(f.input);
+  assert.ok(result.comparison, 'validation exposes the actual evidence comparison');
+  assert.equal(result.comparison.status, 'unknown'); assert.equal(result.ok, false);
+});
