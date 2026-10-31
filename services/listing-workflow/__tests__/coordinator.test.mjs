@@ -103,3 +103,14 @@ test('late negative lookup never downgrades previously verified result', async (
   await coordinate(input, adapter({ lookup: async intent => ({ state: 'verified', productId: '123', evidence: ['trusted-readback'], binding: { businessKey: intent.businessKey, intentId: intent.intentId, fingerprint: intent.fingerprint } }) }));
   assert.equal((await coordinate(input, adapter({ lookup: async () => { throw new Error('offline'); } }))).status, 'verified');
 });
+
+test('caller mutations during async validation cannot change submitted identity', async () => {
+  const input = fixture(); let actual;
+  await coordinate(input, adapter({ validate: async () => { input.target.store = 'other'; return { ok: true, evidence: ['original-plan'] }; }, submit: async intent => { actual = intent.target.store; return { productId: '123', evidence: ['receipt'] }; } }));
+  assert.equal(actual, 'store-1');
+});
+
+test('sparse arrays are rejected before validation or publication', async () => {
+  const input = fixture(); input.payload.images = new Array(1);
+  await assert.rejects(coordinate(input, adapter()), /INVALID_JSON_INPUT/);
+});
