@@ -174,3 +174,8 @@ test('evidence tied to an old platform listing cannot approve a fresh creation i
   });
   assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
 });
+for (const key of ['platform', 'accountId']) test(`the ${key} target namespace cannot be silently ignored`, t => {
+  const f = fixture(t, x => { x.request.target[key] = 'target-a'; x.document.subject[key] = 'target-b'; });
+  const r = evaluatePlan(f.request, f.options);
+  assert.equal(r.status, 'rejected'); assert.ok(r.reasons.some(x => x.code === 'SUBJECT_MISMATCH' && x.field === key));
+});
