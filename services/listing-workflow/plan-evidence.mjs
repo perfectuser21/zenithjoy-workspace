@@ -58,7 +58,9 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
       kinds.add(rule.kind);
       if (rule.fields.some(field => !own(config.schemas, field) || !validSchema(config.schemas[field]))) throw new Error('FIELD_SCHEMA_REQUIRED');
     }
-    if (!text(input.businessKey) || !text(input.target?.storeId) || !text(input.target?.productId) || !input.plan || Array.isArray(input.plan) ||
+    const identities = ['productId', 'sourceProductKey'];
+    if (!text(input.businessKey) || !text(input.target?.storeId) || !identities.some(k => text(input.target?.[k])) ||
+      identities.some(k => input.target[k] != null && !text(input.target[k])) || !input.plan || Array.isArray(input.plan) ||
       typeof input.plan !== 'object' || !Array.isArray(input.proofs)) throw new Error('INVALID_REQUEST');
   } catch (error) { issue(error.message, 'rejected'); return finish(); }
   const documents = new Map();
@@ -73,9 +75,13 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     }
     if (documents.has(document.kind)) { issue('DUPLICATE_DOCUMENT_KIND', 'rejected', { kind: document.kind }); continue; }
     documents.set(document.kind, document);
-    for (const [key, expected] of Object.entries({ businessKey: input.businessKey, storeId: input.target.storeId, productId: input.target.productId })) {
+    const subject = { businessKey: input.businessKey, storeId: input.target.storeId };
+    for (const key of ['productId', 'sourceProductKey']) if (text(input.target[key])) subject[key] = input.target[key];
+    for (const [key, expected] of Object.entries(subject)) {
       if (document.subject?.[key] !== expected) issue('SUBJECT_MISMATCH', 'rejected', { kind: document.kind, field: key });
     }
+    // 创建请求尚无平台ID，不得把旧商品的观察记录冒充该次创建的前置证据。
+    if (!text(input.target.productId) && document.subject?.productId != null) issue('SUBJECT_MISMATCH', 'rejected', { kind: document.kind, field: 'productId' });
     const issued = Date.parse(document.issuedAt), expires = Date.parse(document.expiresAt), time = Date.parse(now);
     if (!Number.isFinite(issued) || !Number.isFinite(expires) || issued > time || expires <= time || expires <= issued) {
       issue('EVIDENCE_OUTSIDE_VALIDITY', 'unknown', { kind: document.kind });
