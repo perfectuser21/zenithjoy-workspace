@@ -99,6 +99,19 @@ probes:
     failure_class: needs_human
     on_fail: fail_stage
     note: 原生发送前后 XML、账号与目标、批准正文、风险页及前台原件均核验；结果未知不得判成功。
+  - key: out_order_scope_verified
+    stage: send_dm
+    journey_cell: stage:send_dm
+    probe:
+      type: metric
+      ref: metrics.order_selection_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: order_selection_verified=1仅表示本次成功订单按选定模式过了资格门；company_queue核公司资格队列及排序，exact额外核冻结record/comment/公司/来源和旁单零领取，不把普通队列冒称精确核验。
   - key: send_dm_commander_verified
     stage: send_dm
     journey_cell: stage:send_dm

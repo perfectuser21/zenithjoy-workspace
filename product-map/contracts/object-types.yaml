@@ -160,6 +160,23 @@ types:
       - script_id
       - message
       - result
+  OutreachScope:
+    identity:
+      - run_tag
+      - record_id
+    source_of_truth: LEADGEN_OUTREACH_SCOPE_FILE 指向的私有0600输入文件；runtime-receipts prepare纳入本run的run-definition.outreach_scope及snapshot_sha256
+    fields:
+      - record_id
+      - comment_id
+      - company_id
+      - source_run
+      - mark_run
+      - target_douyin_id
+      - line_key
+      - run_tag
+      - profile
+      - serial
+    note: 仅104 exact单条验收模式启用；只允许唯一原订单，缺失、变更、不匹配或旁单均拒发，limit=1不构成精确订单范围授权。普通company_queue沿公司资格队列。
   Run:
     identity:
       - run_tag

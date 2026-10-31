@@ -1,5 +1,5 @@
 {
-  "object_types": "d0a01018bc7823c8fddfbb9555612c1950bea2eb20e1206d6b6bb5fa6b758a5a",
+  "object_types": "451793066399fd610f0a83050b03a4305e572f9c52ce411276f526bb6e864f4b",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -32,12 +32,12 @@
       }
     },
     "douyin_lead_outreach": {
-      "sha256": "1fb9303afce8d9c63e031dd106ea8f27a61c23f69893e336ed7b2e432b852dce",
+      "sha256": "85e0599a36bad748ef4484f3d04753b1d5bb04c8f0fd558bb112138f65c6bf70",
       "activities": {
-        "preflight": "12e8f771cde0300dda6fafc32b2211cddc327512ed4fda48385b4c618406b199",
-        "send_dm": "4135c92190dedc31cc3eb843990a42bf744674823b50d02680e7ce1aa6c6f2aa",
-        "write_back": "0a1131765283d68f464dfebcd2aea9199d0b4f485758a4d9aece3806fa913a86",
-        "cleanup": "19b68bab32be0b742940321595b2a6b0d338f3e67692dfe17e099278f94ecafe"
+        "preflight": "b9be242ef1b49067cc135f00922603f21c46bbcd034f5450950e466a4a46a06c",
+        "send_dm": "a87afd977031dd02a279cc932fa806d929824becc9818a4872eba09f4d42dca9",
+        "write_back": "093cdb862cc1a0f4e8f8a9ee1a98e86859fcaab2e9a1d242ad50657de72e4cfa",
+        "cleanup": "a0520b0dc3a4204d5217d53ee4f54490cc8f40fce6d52f40a5110a61ae389179"
       }
     },
     "douyin_video_discovery": {

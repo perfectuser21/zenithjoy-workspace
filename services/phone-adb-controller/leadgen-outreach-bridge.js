@@ -29,6 +29,7 @@ module.exports={enqueueBridge};
 const {routeOf}=require('./line-routes.js');
 const {buildLeadCoreFields}=require('./lead-fields-lib.js');
 const {txt}=require('./next-outreach-lib.js');
+const {validateOutreachScope,matchesOutbox}=require('./leadgen-outreach-scope.js');
 const evidence=require('./queued-recipient-evidence.js');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 // JSONB不保留输入键序；先按JSON语义规范化，再递归排序，值/数组顺序仍严格。
@@ -108,12 +109,17 @@ module.exports={digest,enqueueBridge,bridgeOutreach,bridgeMarker,nativeIntent,fi
 async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPolicy}={}){
  if(!pool)throw Error('BRIDGE_PG_AUTHORITY_MISSING');
  {
+  const scope=input.outreach_scope?validateOutreachScope(input.outreach_scope,{line_key:route.key,run_tag:input.run,profile:input.profile}):null;
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,step:'104'});
+  if(scope&&snapshot.company_id!==scope.company_id)throw Error('OUTREACH_SCOPE_COMPANY_MISMATCH');
+  if(scope&&(all.length!==1||all[0]?.record_id!==scope.record_id))throw Error('OUTREACH_SCOPE_ORDER_MISMATCH');
   const ids=all.map(r=>r.record_id);if(ids.length>3000)throw Error('BRIDGE_ORDER_SCOPE_EXCEEDED');
-  const rows=ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
+  const rows=scope?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2 AND comment_id=$3",[route.key,scope.record_id,scope.comment_id])).rows
+   :ids.length?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=ANY($2::text[])",[route.key,ids])).rows:[];
+  if(scope&&rows.length!==1)return [];
   const allowed=[];
   for(const row of rows){try{
-   if(rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
+   if(scope?!matchesOutbox(scope,row):rows.filter(other=>other.feishu_record_id===row.feishu_record_id).length!==1)continue;
    const companyBinding=await collectionBinding(pool,row.payload?.line_key,row.payload?.comment_run,row.payload?.recipient_evidence);
    const p=nativeIntent(row,{companyBinding});if(input.run===p.run||input.run===p.scoring_run||!frozenQualification(p,snapshot))continue;
    const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,
@@ -127,15 +133,18 @@ async function eligibleOrders(route,all,input,{pool,freezeCompanyConfig,reviewPo
 }
 module.exports.eligibleOrders=eligibleOrders;
 
-async function reviewPreparedOrder(route,record,{pool,run,freezeCompanyConfig,reviewPolicy}={}){
+async function reviewPreparedOrder(route,record,{pool,run,scope,freezeCompanyConfig,reviewPolicy}={}){
  if(!pool||!record?.record_id||!run)return false;
- const rows=(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2",[route.key,record.record_id])).rows;
+ if(scope)validateOutreachScope(scope,{record_id:record.record_id,line_key:route.key,run_tag:run});
+ const rows=scope?(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2 AND comment_id=$3",[route.key,scope.record_id,scope.comment_id])).rows
+  :(await pool.query("SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND state='confirmed' AND qualification_status='passed' AND feishu_record_id=$2",[route.key,record.record_id])).rows;
  if(rows.length!==1)return false;
  try{
+  if(scope&&!matchesOutbox(scope,rows[0]))return false;
   const companyBinding=await collectionBinding(pool,rows[0].payload?.line_key,rows[0].payload?.comment_run,rows[0].payload?.recipient_evidence);
   const p=nativeIntent(rows[0],{companyBinding});
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:run,step:'104'});
-  if(run===p.run||run===p.scoring_run||!frozenQualification(p,snapshot))return false;
+  if(scope&&snapshot.company_id!==scope.company_id||run===p.run||run===p.scoring_run||!frozenQualification(p,snapshot))return false;
   if(txt(record.fields?.['抖音号']).toLowerCase()!==String(p.target_douyin_id).toLowerCase()
     ||txt(record.fields?.['主页链接'])!==p.profile_url)return false;
   const policy=await (reviewPolicy||((...args)=>require('./leadgen-queue.js').reviewBoundComment(...args)))(pool,route.key,p.comment_id,

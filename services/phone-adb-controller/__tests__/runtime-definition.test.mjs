@@ -40,6 +40,30 @@ test('无版本、被篡改快照或相同SHA标签下实际文件不同，均�
   await assert.rejects(freezeDefinition(f.options),/digest|摘要/);
 });
 
+test('104精确订单输入冻结到run，改comment来源或撤掉输入均不能续跑',async()=>{
+ const {outreachScopeInput,assertOutreachScope,readFrozen}=await import('../runtime-definition.mjs');
+ const f=fixture(),file=join(f.dir,'outreach-scope.json');
+ const requested={record_id:'recABC123456',comment_id:'comment-123',company_id:'company1',source_run:'source102',mark_run:'mark103',target_douyin_id:'person987',line_key:'jinuo'};
+ writeFileSync(file,JSON.stringify(requested),{mode:0o600});
+ const env={WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',LEADGEN_OUTREACH_SCOPE_FILE:file,WFR_TAG:'contact104',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo'};
+ f.options.workflowKey=env.WF_BRAIN_WORKFLOW;f.routes['/api/brain/workflows'][0].key=env.WF_BRAIN_WORKFLOW;
+ const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key=env.WF_BRAIN_WORKFLOW;v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});
+ const scope=outreachScopeInput(env);const frozen=await freezeDefinition({...f.options,outreachScope:scope});
+ assert.deepEqual(readFrozen(f.options.runDir).outreach_scope,scope);assert.deepEqual(assertOutreachScope(frozen,env),scope);
+ writeFileSync(file,JSON.stringify({...requested,comment_id:'other-comment'}));
+ assert.throws(()=>assertOutreachScope(frozen,env),/OUTREACH_SCOPE/);
+ await assert.rejects(freezeDefinition({...f.options,outreachScope:outreachScopeInput(env)}),/OUTREACH_SCOPE/);
+ assert.throws(()=>assertOutreachScope(frozen,{...env,LEADGEN_OUTREACH_SCOPE_FILE:undefined}),/OUTREACH_SCOPE/);
+});
+test('104普通派发可无精确文件；显式exact缺文件不得退回公司队列',async()=>{
+ const {outreachScopeInput,assertOutreachScope}=await import('../runtime-definition.mjs');
+ const env={WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',WFR_TAG:'daily104',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo'};
+ assert.equal(outreachScopeInput(env),null);
+ assert.equal(assertOutreachScope({outreach_scope:null},env),null);
+ assert.throws(()=>outreachScopeInput({...env,LEADGEN_OUTREACH_MODE:'exact'}),/OUTREACH_SCOPE_REQUIRED/);
+ assert.throws(()=>outreachScopeInput({...env,LEADGEN_OUTREACH_MODE:'invalid'}),/OUTREACH_SCOPE_MODE_MISMATCH/);
+});
+
 test('HTTP→符号链接真实prepare CLI→冻结目录：读取精确历史版本，运行后latest和步骤清单变化不替换冻结快照',async t=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');const f=fixture();const seen=[];
  const payload={schema_version:1,workflows:[f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]};

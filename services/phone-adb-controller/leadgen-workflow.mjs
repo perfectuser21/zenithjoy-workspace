@@ -24,7 +24,7 @@ export async function invokeNativeActivity(execute,state){
 }
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
-import {readFrozen,assertCommentSampling} from './runtime-definition.mjs';
+import {readFrozen,assertCommentSampling,assertOutreachScope} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput} from './leadgen-client.mjs';
 import {judgeSteps} from './step-judge.mjs';
@@ -46,7 +46,7 @@ export function activityExecutionDeadline({activity,env,previous,now=Date.now(),
 
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
-  const frozen=readFrozen(dir);assertCommentSampling(frozen,env);const binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
+  const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);const binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
   if(binding.run_id!==`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`)throw Error('运行绑定身份不符');
   const root=resolve(dir,'runtime');
   env.DOUYIN_PHONE_ADB=join(root,'douyin-phone-adb');
@@ -96,7 +96,7 @@ async function main(){
     const verified=probes.length>0&&probes.every(p=>p.pass===true)&&local.every(r=>r.steps.length===expected.length&&r.steps.every(s=>s.pass===true));
     return {verified,metrics,probes,step_dod:local};
   };
-  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:binding.task_id});
+  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:binding.task_id,outreachScope:frozen.outreach_scope||null});
   const activityDeadlines=new Map();
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
     const cleanupReserveMs=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?Number(activities.find(a=>a.key==='cleanup')?.budget?.max_duration_s||120)*1000:0;

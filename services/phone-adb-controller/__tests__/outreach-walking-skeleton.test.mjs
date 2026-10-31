@@ -18,6 +18,7 @@ function fixture(){
  const events=[];
  const env={HOME:dir,WFR_RUN_DIR:dir,P:'jinoshengyuan-work',SERIAL:'FAKE6983',WFR_TAG:'fake104',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_lead_outreach',LEADGEN_SEND:'1',LEADGEN_LIMIT:'1',DOUYIN_ACCOUNT_REGISTRY:registry,PHONE_EVIDENCE_ROOT:join(dir,'fake-evidence')};
  const order={id:'recFAKEONLY123',line_key:'jinuo',douyin_id:'1873867835',profile_url:'https://v.douyin.com/FAKEONLY/',script_id:'fake-approved-B',script_version:'B',message:'测试批准正文',sender_douyin_id:'langzi63485'};
+ const outreachScope={schema_version:1,record_id:order.id,comment_id:'fake-comment',company_id:'fake-jinuo',source_run:'source102',mark_run:'mark103',target_douyin_id:order.douyin_id,line_key:'jinuo',run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL};
  const rpc=async body=>{events.push(body);const op=body.request?.op;
   if(op==='company_config')return {result:{company_id:'fake-jinuo',tenant_id:'tenant-jinuo',version:1,product_ids:['fake-product'],policy_id:'fake-policy',runtime_config:{contact_rules:{ssot:'feishu',feishu_base:'GNuwbzY0da8GP0sv6MGcOTu9ntd',orders_table:'tblTLFj69CflUqSr',approved_scripts_table:'tblZZWdv0YUNojqI'},platform_accounts:[{profile:env.P,douyin_id:'langzi63485',device_serial:env.SERIAL,verification_status:'verified',enabled:true}]}}};
   if(op==='claim_outreach')return {result:[order]};
@@ -43,7 +44,7 @@ function fixture(){
    stdout='send_status=sent\nmessage_delta_verified=true\nsender_douyin_id=langzi63485\ntarget_douyin_id=1873867835\nmessage_sha256='+createHash('sha256').update(order.message).digest('hex')+'\nsent_ui_evidence='+raw+'\ntyped_ui_evidence='+typed+'\nrisk_ui_evidence='+risk+'\nsend_foreground_evidence='+fg+'\nrisk_foreground_evidence='+rfg+'\n';
   }
   return {code:0,stdout,stderr:''};};
- return {dir,env,events,order,rpc,execute,sourceCommit:'f'.repeat(40),clean:()=>rmSync(dir,{recursive:true,force:true})};
+ return {dir,env,events,order,outreachScope,rpc,execute,sourceCommit:'f'.repeat(40),clean:()=>rmSync(dir,{recursive:true,force:true})};
 }
 const legacyDay=()=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(x=>x.type===k).value).join('');};
 for(const stateFile of ['halt','count'])test('104遵守已有YYYYMMDD '+stateFile+'文件，不能绕过旧风控/额度',async()=>{
@@ -65,16 +66,15 @@ test('104授权新流程通过预检、永久预留、唯一一次真sender调�
  assert.equal(receipts.filter(r=>r.phase==='after').length,4);
  }finally{f.clean();}
 });
-test('104空订单保持skipped且零发送，不伪造发送结果探针',async()=>{
+test('104冻结目标订单不存在时失败且零发送，不伪造发送结果探针',async()=>{
  const f=fixture();try{
-  const h=createHandlers({root:f.dir,...f,rpc:async body=>body.request?.op==='claim_outreach'?{result:[]}:f.rpc(body)});
+  const h=createHandlers({root:f.dir,...f,rpc:async body=>{if(body.request?.op==='claim_outreach')throw Error('OUTREACH_SCOPE_ORDER_NOT_FOUND');return f.rpc(body);}});
   const verified=[];
   const out=await runWorkflow({activities:['preflight','send_dm','write_back','cleanup'].map(key=>({key})),context:{},handlers:h,
    commander:async()=>({action:'continue',reason:'fake证据'}),record:async()=>{},verify:async activity=>{verified.push(activity.key);return {verified:true};}});
   const send=out.results.find(result=>result.activity==='send_dm');
-  assert.equal(send.status,'skipped');
-  assert.equal(send.result.sent,0);
-  assert.equal(send.result.delivery_result_verified,undefined);
+  assert.equal(send.status,'failed');
+  assert.equal(send.result?.delivery_result_verified,undefined);
   assert.ok(!verified.includes('send_dm'));
   assert.equal(f.events.filter(event=>event.args?.includes('private-message-send')).length,0);
   assert.ok(!f.events.some(event=>event.request?.op==='prepare_outreach'));

@@ -64,7 +64,7 @@ const route=routes.routeOf(scope.line);const pending=[];let before=null;const cl
    (Array.isArray(args[1])?args[1].includes(r.comment_id):args[1]===r.comment_id)).map(r=>({comment_id:r.comment_id}))};
  if(sql.includes('SELECT * FROM zenithjoy.leadgen_bridge_outbox')){
   if(sql.includes('feishu_record_id=ANY'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&args[1].includes(r.feishu_record_id))};
-  if(sql.includes('feishu_record_id=$2'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&r.feishu_record_id===args[1])};
+  if(sql.includes('feishu_record_id=$2'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&r.feishu_record_id===args[1]&&(args[2]===undefined||r.comment_id===args[2]))};
   if(sql.includes('comment_id=ANY'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&args[1].includes(r.comment_id)&&r.run_tag===args[2])};
   if(sql.includes('id=ANY'))return {rows:state.outbox.filter(r=>r.line_key===args[0]&&args[1].includes(r.id))};
   return {rows:state.outbox.filter(r=>r.line_key===args[0]&&['pending','attempted','unknown'].includes(r.state))};
@@ -116,14 +116,18 @@ globalThis.fetch=async(url,opts={})=>{const parsed=new URL(url);
 try{
  const run=['mark_leads','mark_readback','bridge_outreach','bridge_readback'].includes(mode)?state.mark_run||scope.run:
   ['claim_outreach','prepare_outreach'].includes(mode)?state.contact_run||'contact104':scope.run;
+ const outreachRow=state.outbox.find(r=>r.state==='confirmed'&&r.feishu_record_id===state.orders[0]?.record_id);
+ const outreachScope=outreachRow?{schema_version:1,record_id:outreachRow.feishu_record_id,comment_id:outreachRow.comment_id,
+  company_id:outreachRow.payload.qualification.company_id,source_run:outreachRow.source_run,mark_run:outreachRow.run_tag,
+  target_douyin_id:outreachRow.payload.target_douyin_id,line_key:outreachRow.line_key,run_tag:run,profile:state.profile||'legacy',serial:'sandbox'}:null;
  const fields=mode==='score_recovery'?{ids:rows.map(r=>r.id)}:mode==='score_exclusion_readback'?{ids:rows.filter(r=>r.process_status==='已排除').map(r=>r.id)}:mode==='policy_review'?{claim:scope.run,ids:rows.filter(r=>r.judgment_config?.run_id===scope.run).map(r=>r.id)}:
   mode==='score_readback'||mode==='mark_readback'?{ids:rows.filter(r=>mode==='mark_readback'
    ?r.process_status==='已分拣'&&state.outbox.some(o=>o.comment_id===r.id&&o.run_tag===run)
    :r.judgment_config?.run_id===scope.run).map(r=>r.id),
    lead_ids:mode==='mark_readback'?state.leads.map(l=>l.id):undefined}:
   mode==='bridge_readback'?{ids:state.outbox.map(r=>r.id)}:
-  mode==='claim_outreach'?{profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',limit:1}:
-  mode==='prepare_outreach'?{id:state.claim?.id,profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',
+  mode==='claim_outreach'?{profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',limit:1,outreach_scope:outreachScope}:
+  mode==='prepare_outreach'?{id:state.claim?.id,profile:state.profile||'legacy',sender_douyin_id:state.sender_douyin_id||'sandbox-sender',outreach_scope:outreachScope,
    script_id:state.claim?.script_id,script_version:state.claim?.script_version,message_sha256:state.claim?.message?hash(state.claim.message):null,
    target_douyin_id:state.claim?.douyin_id,profile_url:state.claim?.profile_url}:{};
  const input={kind:mode.endsWith('_outreach')&&mode!=='bridge_outreach'?'outreach':'queue',
