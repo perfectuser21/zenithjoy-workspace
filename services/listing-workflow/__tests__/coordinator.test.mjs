@@ -114,3 +114,12 @@ test('sparse arrays are rejected before validation or publication', async () => 
   const input = fixture(); input.payload.images = new Array(1);
   await assert.rejects(coordinate(input, adapter()), /INVALID_JSON_INPUT/);
 });
+
+test('array accessors are rejected without executing caller code', async () => {
+  const input = fixture(); let accessed = false;
+  const images = [];
+  Object.defineProperty(images, 0, { get() { accessed = true; return 'image'; }, enumerable: true });
+  input.payload.images = images;
+  await assert.rejects(coordinate(input, adapter()), /INVALID_JSON_INPUT/);
+  assert.equal(accessed, false);
+});
