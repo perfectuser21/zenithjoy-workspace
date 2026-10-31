@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { validSchema, matchesSchema } from './field-contract.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const text = value => typeof value === 'string' && value.trim().length > 0;
@@ -49,12 +50,13 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     input = JSON.parse(canonical(request)); config = JSON.parse(canonical(policy));
     root = realpathSync(evidenceRoot);
     if (!Number.isSafeInteger(maxDocumentBytes) || maxDocumentBytes < 1 || !Number.isFinite(Date.parse(now))) throw new Error('INVALID_CONFIGURATION');
-    if (!Array.isArray(config.required) || !config.required.length || !Array.isArray(config.trustedDigests) || !config.trustedDigests.every(sha)) throw new Error('INVALID_POLICY');
+    if (!Array.isArray(config.required) || !config.required.length || !Array.isArray(config.trustedDigests) || !config.trustedDigests.every(sha) || !config.schemas) throw new Error('INVALID_POLICY');
     const kinds = new Set();
     for (const rule of config.required) {
       if (!text(rule.kind) || kinds.has(rule.kind) || !Array.isArray(rule.fields) || !rule.fields.length || !rule.fields.every(text) ||
         !Array.isArray(rule.sourceRoles) || !rule.sourceRoles.length || !rule.sourceRoles.every(text)) throw new Error('INVALID_POLICY');
       kinds.add(rule.kind);
+      if (rule.fields.some(field => !own(config.schemas, field) || !validSchema(config.schemas[field]))) throw new Error('FIELD_SCHEMA_REQUIRED');
     }
     if (!text(input.businessKey) || !text(input.target?.storeId) || !text(input.target?.productId) || !input.plan || Array.isArray(input.plan) ||
       typeof input.plan !== 'object' || !Array.isArray(input.proofs)) throw new Error('INVALID_REQUEST');
@@ -82,6 +84,7 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
       try { readEvidence(root, artifact, maxDocumentBytes); }
       catch (error) { issue(error.message, 'rejected', { kind: document.kind }); }
     }
+    if (!document.artifacts.length) issue('ORIGINAL_ARTIFACT_MISSING', 'unknown', { kind: document.kind });
     checked.push({ kind: document.kind, source: document.source.id, reviewedBy: document.reviewedBy, sha256: reference.sha256 });
   }
   for (const rule of config.required) {
@@ -90,7 +93,12 @@ export function evaluatePlan(request, { evidenceRoot, policy, now = new Date().t
     if (!rule.sourceRoles.includes(document.source.role)) issue('SOURCE_ROLE_UNAPPROVED', 'unknown', { kind: rule.kind });
     for (const field of rule.fields) {
       if (!own(input.plan, field) || !own(document.facts, field)) issue('REQUIRED_FACT_MISSING', 'unknown', { kind: rule.kind, field });
-      else if (canonical(input.plan[field]) !== canonical(document.facts[field])) issue('FACT_MISMATCH', 'rejected', { kind: rule.kind, field });
+      else {
+        if (!matchesSchema(input.plan[field], config.schemas[field]) || !matchesSchema(document.facts[field], config.schemas[field])) {
+          issue('FIELD_SCHEMA_INVALID', 'rejected', { kind: rule.kind, field });
+        }
+        if (canonical(input.plan[field]) !== canonical(document.facts[field])) issue('FACT_MISMATCH', 'rejected', { kind: rule.kind, field });
+      }
     }
   }
   return finish();
