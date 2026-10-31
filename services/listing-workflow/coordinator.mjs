@@ -1,18 +1,26 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, openSync, writeFileSync, fsyncSync, closeSync, linkSync, unlinkSync, readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 
 function canonical(value) {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (Array.isArray(value)) {
+    if (Array.from({ length: value.length }, (_, i) => i).some(i => !Object.hasOwn(value, i))) throw new Error('INVALID_JSON_INPUT');
+    return `[${value.map(canonical).join(',')}]`;
+  }
   if (value && Object.getPrototypeOf(value) === Object.prototype) {
+    if (Reflect.ownKeys(value).some(key => typeof key !== 'string' || !Object.getOwnPropertyDescriptor(value, key).enumerable || !('value' in Object.getOwnPropertyDescriptor(value, key)))) throw new Error('INVALID_JSON_INPUT');
     return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
   }
   throw new Error('INVALID_JSON_INPUT');
 }
 const hash = value => createHash('sha256').update(value).digest('hex');
 const evidenceValid = x => Array.isArray(x) && x.length > 0 && x.every(v => typeof v === 'string' && v.trim());
+function immutable(value) {
+  if (value && typeof value === 'object') { Object.values(value).forEach(immutable); Object.freeze(value); }
+  return value;
+}
 function syncDirectory(path) {
   const fd = openSync(path, 'r');
   try { fsyncSync(fd); } finally { closeSync(fd); }
@@ -78,6 +86,7 @@ export function inspect(input) {
 }
 
 export async function coordinate(input, adapter) {
+  input = immutable(JSON.parse(canonical(input)));
   const { directory, fingerprint } = context(input);
   if (!adapter || !['validate', 'submit', 'lookup'].every(k => typeof adapter[k] === 'function')) throw new Error('INVALID_ADAPTER');
   // 已有意图的重启路径只能查回；不因为业务前提变化而丢失对既有外部动作的核验。
@@ -89,9 +98,10 @@ export async function coordinate(input, adapter) {
   if (validation?.ok !== true || !evidenceValid(validation.evidence)) throw new Error('PRECONDITIONS_UNVERIFIED');
   mkdirSync(input.root, { recursive: true, mode: 0o700 });
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-  syncDirectory(resolve(input.root));
-  const intent = { version: 1, businessKey: input.businessKey, fingerprint, target: input.target, payload: input.payload, runId: input.runId,
-    intentId: randomUUID(), at: new Date().toISOString(), validationEvidence: validation.evidence };
+  // 持久化每个新目录在父目录中的目录项；断电保证仍依赖底层FS/hardware正确实现fsync。
+  for (let path = resolve(input.root); ; path = dirname(path)) { syncDirectory(path); if (path === dirname(path)) break; }
+  const intent = immutable({ version: 1, businessKey: input.businessKey, fingerprint, target: input.target, payload: input.payload, runId: input.runId,
+    intentId: randomUUID(), at: new Date().toISOString(), validationEvidence: [...validation.evidence] });
   if (!install(directory, 'intent.json', intent)) return reconcile();
   // 适配器必须在副作用前再次核对实时账号/资源，平台无条件写时仍有TOCTOU风险。
   const latest = await adapter.validate(input);

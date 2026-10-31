@@ -161,3 +161,4 @@ line04-crm-analysis-smoke.sh
 customer-workspace-http-smoke.sh
 
 video-tools-smoke.sh
+publish-recovery-core-smoke.sh
