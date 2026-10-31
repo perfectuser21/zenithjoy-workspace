@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, appendFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { coordinate } from '../coordinator.mjs';
 
 function fixture() {
@@ -81,4 +81,25 @@ test('SIGKILL after external effect recovers with lookup across processes withou
   assert.equal(second.code, 0, second.error);
   assert.equal(JSON.parse(second.output).status, 'verified');
   assert.equal(readFileSync(join(input.root, 'effects.log'), 'utf8').trim().split('\n').length, 1);
+});
+
+test('CLI reads persisted status without loading or executing a platform adapter', async () => {
+  const input = fixture(); await coordinate(input, adapter());
+  const request = join(input.root, 'request.json'); writeFileSync(request, JSON.stringify(input));
+  const result = spawnSync(process.execPath, [new URL('../cli.mjs', import.meta.url).pathname, 'inspect', request], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, 'submitted');
+});
+
+test('changed preconditions at last check leave durable unknown without submit', async () => {
+  const input = fixture(); let validations = 0, submits = 0;
+  const result = await coordinate(input, adapter({ validate: async () => (++validations === 1 ? { ok: true, evidence: ['first-check'] } : { ok: false }), submit: async () => { submits++; } }));
+  assert.equal(result.status, 'unknown'); assert.equal(submits, 0);
+  assert.equal((await coordinate(input, adapter())).status, 'unknown');
+});
+
+test('late negative lookup never downgrades previously verified result', async () => {
+  const input = fixture(); await coordinate(input, adapter());
+  await coordinate(input, adapter({ lookup: async intent => ({ state: 'verified', productId: '123', evidence: ['trusted-readback'], binding: { businessKey: intent.businessKey, intentId: intent.intentId, fingerprint: intent.fingerprint } }) }));
+  assert.equal((await coordinate(input, adapter({ lookup: async () => { throw new Error('offline'); } }))).status, 'verified');
 });
