@@ -346,7 +346,9 @@ jobs:
           echo "PREFLIGHT_DONE pillow"
       - name: node --test scripts/openclaw + services/phone-adb-controller + deploy-phone-adb-controller workflow 契约测试
         # 正式Pilot会校验陪跑Skill固定版本；合并前同样执行，避免旧正例只在发布时暴露。
-        run: node --test --test-shard=${{ matrix.shard }}/2 scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs services/listing-workflow/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js
+        run: node --test --test-shard=${{ matrix.shard }}/2 scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js
+      - name: Durable publish recovery core
+        run: node --test services/listing-workflow/__tests__/*.test.mjs
 
   # 本机内核nofork守卫不能由Linux上的platform skip代替。
   collection-phone-darwin-test:
