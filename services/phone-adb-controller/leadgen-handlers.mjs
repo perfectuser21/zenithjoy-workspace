@@ -359,7 +359,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       for(const v of leased){
         if(qualificationProgress.get(v.video_id)?.settled)continue;
         const previous={recordingsRequired,mediaVerified,recordingSilentRejected,recordingOutcomesFailures,recordingsUnverified};
-        let attempted=false,thrown=false;
+        let attempted=false,thrown=false,cachedJudgmentRun=null;
         try{
           await queue('renew_video',{video_id:v.video_id});
           const used=qualificationAttempts.get(v.video_id)||0;
@@ -368,7 +368,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
           qualificationAttempts.set(v.video_id,used+1);attempted=true;
         if(state.companyConfig&&v.judgment_status==='matched'&&v.judgment_config?.company_id===state.companyConfig?.company_id&&v.judgment_config?.version===state.companyConfig?.version){
           const identity=await videoAction('identity',v);
-          if(identity.code===0)qualified.push(v);else failures.push({video_id:v.video_id,code:identity.code,reason:identity.stderr.slice(-500)});
+          if(identity.code===0){qualified.push(v);cachedJudgmentRun=v.judgment_config?.run_id??null;}
+          else failures.push({video_id:v.video_id,code:identity.code,reason:identity.stderr.slice(-500)});
           continue;
         }
         const result=await videoAction('qualification',v);
@@ -420,7 +421,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         if(result.code===0&&verdict==='matched')qualified.push(v);
         else if(result.code!==0||verdict!=='rejected'){recordingOutcomesFailures++;failures.push({video_id:v.video_id,code:result.code,reason:result.stderr.slice(-500)});}
         }catch(error){thrown=true;throw error;}finally{
-          if(attempted)qualificationProgress.set(v.video_id,{settled:!thrown&&!failures.some(f=>f.video_id===v.video_id),recordingsRequired:recordingsRequired-previous.recordingsRequired,mediaVerified:mediaVerified-previous.mediaVerified,recordingSilentRejected:recordingSilentRejected-previous.recordingSilentRejected,recordingOutcomesFailures:recordingOutcomesFailures-previous.recordingOutcomesFailures,recordingsUnverified:recordingsUnverified-previous.recordingsUnverified});
+          if(attempted)qualificationProgress.set(v.video_id,{settled:!thrown&&!failures.some(f=>f.video_id===v.video_id),cached_judgment_run:cachedJudgmentRun,recordingsRequired:recordingsRequired-previous.recordingsRequired,mediaVerified:mediaVerified-previous.mediaVerified,recordingSilentRejected:recordingSilentRejected-previous.recordingSilentRejected,recordingOutcomesFailures:recordingOutcomesFailures-previous.recordingOutcomesFailures,recordingsUnverified:recordingsUnverified-previous.recordingsUnverified});
         }
       }
       const totals=[...qualificationProgress.values()].reduce((all,row)=>Object.fromEntries(Object.keys(all).map(k=>[k,all[k]+row[k]])),{recordingsRequired:0,mediaVerified:0,recordingSilentRejected:0,recordingOutcomesFailures:0,recordingsUnverified:0});

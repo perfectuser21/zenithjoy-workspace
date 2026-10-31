@@ -8533,3 +8533,11 @@ agent_suite:
   status: active
   product: AI视频
   note: 真正的 HTTP 流验证上游中断、静态资源停滞、客户端断开及其他请求不受影响。
+
+- id: leadgen-sampled-admission
+  path: services/phone-adb-controller/__tests__/leadgen-sampled-admission.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: 102 正式配额采样在待判定视频上的 103 评分与标记接纳、冻结来源核验及失败拒绝。

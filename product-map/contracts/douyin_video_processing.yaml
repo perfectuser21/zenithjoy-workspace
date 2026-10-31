@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_processing
 commander_skill:
   name: wf-douyin_video_processing
-  version: 0.4.0
+  version: 0.5.1
 name: 抖音视频处理
 workflow: douyin-video-processing
 brain_workflow_key: douyin_video_processing
@@ -773,7 +773,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 3
-    version: 3.4.0
+    version: 3.4.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -810,11 +810,12 @@ activities:
       - SDK≥33使用playback_dup；SDK31仅使用精确SHA固定的已验output_pcm_sdk31运行时，缺原件或SDK32保持pending
       - 从PG认领pending视频，租约绑定本run
       - 深链打开后current-video-link读到的实际video_id必须等于认领ID，不能认控制器回显的期望ID
+      - 缓存matched旧判断仅在本轮对同VID重新核原生身份且旧judgment_config与本轮冻结公司、租户、版本、政策一致时可复用；旧PG判断run保持原值
     postconditions:
       - probe: qual_none_pending
         asserts: 本批已认领视频中 judgment_status 仍为 pending 的 PG 独立读回条数为 0
       - probe: qual_reason_present
-        asserts: 本批已有资格结论的视频在 PG 中的 judgment_reason 全部非空
+        asserts: 本批已有资格结论的视频在 PG 中的 judgment_reason 全部非空；显式采样时本轮qualification主span另绑定run/binding/SHA、逐VID原生身份核验、fresh/cached模式及旧judgment run，缺私有原件或回执不能交collection
       - probe: qualification_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
@@ -866,7 +867,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-qualification/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-qualification
-        version: 0.3.0
+        version: 0.3.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/producer-descriptor.mjs
@@ -1216,7 +1217,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 2.6.0
+    version: 2.7.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1322,7 +1323,7 @@ activities:
       - probe: collection_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
       - probe: sampling_readback_verified
-        asserts: 仅显式采样时每个qualified视频须达冻结配额或真实footer/no_comments，逐完整身份独立PG读回；默认无采样required=0不声称采样通过
+        asserts: 仅显式采样时每个qualified视频须达冻结配额或真实footer/no_comments，逐完整身份独立PG读回；本run精确评论ID集、规范PG行摘要及新增/历史数进入同run/binding/SHA的collection主span；其逐VID资格身份须与qualification主span精确一致，旧matched仅核本轮资格并保留旧判断run；总POST小于3MB，供跨机103核验；默认无采样required=0不声称采样通过
       - probe: history_scope_verified
         asserts: 本次qualified实际required_count等于私有PG历史工件scope验证数量，0等于0为显式无样本，不当评分样本
       - probe: history_consumption_readback
@@ -1384,7 +1385,11 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-102-collection/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-102-collection
-        version: 0.3.0
+        version: 0.4.1
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/runtime-receipts.mjs
+        revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

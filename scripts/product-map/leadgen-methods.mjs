@@ -138,6 +138,6 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
     const args=process.argv.slice(2);let root=fileURLToPath(new URL('../../',import.meta.url)),base=null,write=false,compatibility={};
     for(let i=0;i<args.length;i++){const a=args[i];if(a==='--root')root=resolve(args[++i]);else if(a==='--base'){base=args[++i];if(!/^[a-f0-9]{40}$/.test(base??''))fail('BASE_SHA_INVALID');}else if(a==='--write')write=true;else if(a==='--compatibility')compatibility=JSON.parse(readFileSync(resolve(root,args[++i]),'utf8'));else fail('METHOD_OPTION_INVALID',a);}
     if(write){if(base)fail('METHOD_OPTION_INVALID','--write and --base cannot be combined');writeMethodsLock(root,{compatibility});console.log('method lock generated; generation is not compatibility approval');}
-    else console.log(JSON.stringify(checkMethods(root,{base})));
+    else console.log(JSON.stringify(checkMethods(root,{base,skillSource:process.env.SKILLS_SOURCE_DIR})));
   }catch(e){console.error(e.message);process.exitCode=1;}
 }

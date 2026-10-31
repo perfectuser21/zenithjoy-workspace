@@ -41,7 +41,7 @@ const route=routes.routeOf(scope.line);const pending=[];let before=null;const cl
   if(sql.includes('id=ANY'))return {rows:rows.filter(r=>r.line_key===args[0]&&args[1].includes(r.id)&&r.harvest_batch===args[2])};
   return {rows:rows.filter(r=>r.line_key===args[0]&&r.id===args[1])};
  }
- if(sql.includes('leadgen_videos'))return {rows:[{video_id:state.video?.video_id||'7617837149999841201',
+ if(sql.includes('leadgen_videos'))return {rows:sql.includes("process_status='待判定'")?[]:[{video_id:state.video?.video_id||'7617837149999841201',
   video_url:state.video?.video_url||rows[0].source_video_url,title:state.video?.title||rows[0].source_video,
   line_key:scope.line,judgment_status:'matched'}]};
  if(sql.includes('UPDATE zenithjoy.leadgen_comments')){
