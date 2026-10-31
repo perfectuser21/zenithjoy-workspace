@@ -57,6 +57,7 @@ node --test --test-concurrency=4 \
  services/phone-adb-controller/__tests__/leadgen-queue.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-103-double-policy.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-103-policy.test.mjs \
+ services/phone-adb-controller/__tests__/leadgen-sampled-admission.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-rpc.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-skill-source-contract.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-workflow.test.mjs \
