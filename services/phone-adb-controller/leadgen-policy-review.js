@@ -37,6 +37,15 @@ function sharedTopicEvidence(commentSignal,videoSignal){
       .some(pair=>!['这个','那个','视频','什么','多少','哪张','就是','真的'].includes(pair)&&video.includes(pair));
   });
 }
+// 冻结 A 规则明确接受求资料/求助时，原文索取报考流程属于个人行动诉求。
+// 只认评论中的请求动作和同一视频标题的流程原文，不把泛问句或标题话题单独当意向。
+function processRequestEvidence(comment,video,rules){
+  if(!/(?:求资料|明确求助)/u.test(String(rules?.criteria?.A||'')))return false;
+  if(!video.includes('流程'))return false;
+  if(/(?:不要|不需要|不用|不求|别发|别给).{0,8}流程/u.test(comment))return false;
+  return /(?:可以|可否|能否|能不能|能|麻烦|请)?\s*(?:发|给)(?:我)?(?:一下|一份|个)?(?:报考|报名)?流程(?:吗|[?？])?/u.test(comment)
+    ||/(?:求|要)(?:一份|一下)?(?:报考|报名)?流程/u.test(comment);
+}
 
 // 同一语义核验供只读原批复核与写入前准入复用；失败时只返回脱敏摘要。
 async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile,reason,opts)=>judgeCommander(body,video,profile,reason,opts)}={}){
@@ -78,7 +87,8 @@ async function evaluatePolicy(row,snapshot,{judgePolicy=async(body,video,profile
     const contextualIntent=quotedComment&&quotedVideo
       &&((/[?？]/.test(proof.comment_signal)&&proof.video_signal.includes(proof.matched_rule)
         &&String(fields['意向信号']||'').includes(proof.matched_rule))
-        ||(verifiedQuestion&&sharedTopicEvidence(proof.comment_signal,proof.video_signal)));
+        ||(verifiedQuestion&&sharedTopicEvidence(proof.comment_signal,proof.video_signal))
+        ||processRequestEvidence(row.comment_body,row.source_video,snapshot.runtime_config.comment_scoring));
     const hasIntent=explicitIntent(row.comment_body,snapshot.runtime_config.comment_scoring.audiences||[])||contextualIntent;
     const missingEvidence=reason=>({...base,reason,candidate_grade:verdict.grade,
       model:verdict.audit.model,response_id:verdict.audit.response_id,
@@ -126,12 +136,12 @@ async function dualPolicyReview(row,snapshot,deps={}){
       return {id:row.id,status:'unknown',reason:'policy_review_identity_reused',model_call_count:calls};
     return {id:row.id,status:'exclude',reason:first.reason,reviews:[first,second],model_call_count:calls};
   }
-  if(first.status!=='pass')return first;
-  if(calls>=2)return {id:row.id,status:'unknown',reason:'policy_review_budget_exhausted'};
+  if(first.status!=='pass')return {...first,model_call_count:calls};
+  if(calls>=2)return {id:row.id,status:'unknown',reason:'policy_review_budget_exhausted',model_call_count:calls};
   const second=await evaluatePolicy(row,snapshot,{judgePolicy});
-  if(second.status!=='pass')return second;
+  if(second.status!=='pass')return {...second,model_call_count:calls};
   if(first.response_id===second.response_id||first.evidence_sha256===second.evidence_sha256)
-    return {id:row.id,status:'unknown',reason:'policy_review_identity_reused'};
+    return {id:row.id,status:'unknown',reason:'policy_review_identity_reused',model_call_count:calls};
   return {id:row.id,status:'pass',reason:'policy_match',reviews:[first,second],model_call_count:calls};
 }
 

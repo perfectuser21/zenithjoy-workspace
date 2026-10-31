@@ -18,6 +18,16 @@ const COMMANDER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const JEV_MODEL = "typesafe/jev-1.13"; // 0923真机核对过,真实可用
 const COMMANDER_MODEL = "google/gemini-2.5-flash";
 const GRADES = ["A", "B", "C", "不相关"];
+const COMMANDER_EVIDENCE_CHECKS = new Set(['json_invalid','policy_evidence_missing',
+  'missing_exclusion_rule','grade_invalid','response_identity_invalid','audience_unknown',
+  'matched_rule_invalid','matched_rule_not_frozen','exclusion_rule_invalid',
+  'exclusion_rule_not_frozen','exclusion_grade_mismatch','reason_invalid','reason_contains_comment']);
+const safeCommanderEvidenceCheck=value=>COMMANDER_EVIDENCE_CHECKS.has(value)?value:null;
+function invalidCommanderEvidence(check) {
+  const error=Error('COMMANDER_EVIDENCE_INVALID');
+  error.evidence_check=check;
+  return error;
+}
 function validateScoringRules(rules) {
   if (!rules || !GRADES.every(g => typeof rules.criteria?.[g] === 'string' && rules.criteria[g].trim())
       || !Number.isFinite(rules.confidence_threshold) || rules.confidence_threshold < 0 || rules.confidence_threshold > 1) {
@@ -107,21 +117,29 @@ ${comment}
     const body=trimmed.startsWith('```')?trimmed.match(/^```json\s*\n([\s\S]*?)\n```$/i)?.[1]:trimmed;
     answer=JSON.parse(body);
     if(!answer||typeof answer!=='object'||Array.isArray(answer))throw Error();
-  } catch { throw Error('COMMANDER_EVIDENCE_INVALID'); }
+  } catch { throw invalidCommanderEvidence('json_invalid'); }
   const p=answer?.policy_evidence;
-  if(!p||!Object.hasOwn(p,'exclusion_rule')){
-    const error=Error('COMMANDER_EVIDENCE_INVALID');error.evidence_check='missing_exclusion_rule';throw error;
-  }
+  if(!p||typeof p!=='object'||Array.isArray(p))throw invalidCommanderEvidence('policy_evidence_missing');
+  if(!Object.hasOwn(p,'exclusion_rule'))throw invalidCommanderEvidence('missing_exclusion_rule');
   const audience=rules.audiences?.find(a=>a.id===p?.audience_id);
   const fields=audience?.fields||{};
   const rule=typeof p?.matched_rule==='string'&&p.matched_rule.length<=300&&p.matched_rule.trim();
   const exclusion=p?.exclusion_rule;
-  if(!GRADES.includes(answer.grade)||!resp.id||!resp.model||resp.model!==COMMANDER_MODEL||!audience||!rule
-    ||!(String(fields['意向信号']||'').includes(rule)||String(fields['人群描述']||'').includes(rule))
-    ||!(exclusion===null||typeof exclusion==='string'&&exclusion.trim()&&exclusion.length<=300&&String(fields['排除信号']||'').includes(exclusion))
-    ||exclusion!==null&&answer.grade!=='不相关'
-    ||typeof p.reason!=='string'||!p.reason.trim()||p.reason.length>500
-    ||typeof comment==='string'&&comment.length>=8&&p.reason.includes(comment))throw Error('COMMANDER_EVIDENCE_INVALID');
+  if(!GRADES.includes(answer.grade))throw invalidCommanderEvidence('grade_invalid');
+  if(!resp.id||!resp.model||resp.model!==COMMANDER_MODEL)throw invalidCommanderEvidence('response_identity_invalid');
+  if(!audience)throw invalidCommanderEvidence('audience_unknown');
+  if(!rule)throw invalidCommanderEvidence('matched_rule_invalid');
+  if(!(String(fields['意向信号']||'').includes(rule)||String(fields['人群描述']||'').includes(rule)))
+    throw invalidCommanderEvidence('matched_rule_not_frozen');
+  if(!(exclusion===null||typeof exclusion==='string'&&exclusion.trim()&&exclusion.length<=300))
+    throw invalidCommanderEvidence('exclusion_rule_invalid');
+  if(exclusion!==null&&!String(fields['排除信号']||'').includes(exclusion))
+    throw invalidCommanderEvidence('exclusion_rule_not_frozen');
+  if(exclusion!==null&&answer.grade!=='不相关')throw invalidCommanderEvidence('exclusion_grade_mismatch');
+  if(typeof p.reason!=='string'||!p.reason.trim()||p.reason.length>500)
+    throw invalidCommanderEvidence('reason_invalid');
+  if(typeof comment==='string'&&comment.length>=8&&p.reason.includes(comment))
+    throw invalidCommanderEvidence('reason_contains_comment');
   return {grade:answer.grade,reason:`commander:${answer.grade}`,audit:{model:resp.model,response_id:resp.id,
     confidence:Number.isFinite(answer.confidence)&&answer.confidence>=0&&answer.confidence<=1?answer.confidence:null,policy_evidence:p}};
 }
@@ -151,7 +169,7 @@ async function judgeComment(comment, videoCaption, targetProfile, opts = {}) {
 function scoreFailureReceipt(cause) {
   if (cause?.message === 'COMMANDER_EVIDENCE_INVALID')
     return { code: 'POLICY_SCORE_COMMANDER_EVIDENCE_INVALID', stage: 'commander',
-      ...(cause.evidence_check==='missing_exclusion_rule'?{evidence_check:'missing_exclusion_rule'}:{}) };
+      ...(safeCommanderEvidenceCheck(cause.evidence_check)?{evidence_check:cause.evidence_check}:{}) };
   if (cause?.message === 'COMPANY_COMMENT_SCORING_REQUIRED')
     return { code: 'POLICY_SCORE_CONFIG_INVALID', stage: 'config' };
   if (cause?.message === 'COMMENT_INPUT_INVALID')
@@ -179,4 +197,5 @@ module.exports = {
   JEV_MODEL,
   COMMANDER_MODEL,
   DECISIONS_ENDPOINT,
+  safeCommanderEvidenceCheck,
 };

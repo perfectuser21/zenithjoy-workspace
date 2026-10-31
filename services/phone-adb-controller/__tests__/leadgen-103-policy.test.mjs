@@ -298,7 +298,7 @@ test('103政策双次无效最多一次评分加两次复核且事务回滚，�
      video_signal:'FDE证书咨询',exclusion_rule:null,reason:'证书咨询'}}};}});
  assert.equal(scoreCalls,1);assert.equal(reviewCalls,2);assert.equal(result.scored,0);
  assert.deepEqual(result.blocked_reasons,[{id:row.id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_review_budget_exhausted'}]);
+  policy_review_reason:'policy_review_budget_exhausted',policy_review_model_calls:2}]);
  assert.ok(calls.includes('ROLLBACK'));
  assert.ok(!calls.some(sql=>sql.includes('UPDATE zenithjoy.leadgen_comments')));
 });
@@ -329,7 +329,7 @@ test('103政策复核缺个人意向但复用同一模型身份时保留待分�
     policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'怎么考',exclusion_rule:null,reason:'fixture'}}})});
  assert.equal(result.scored,0);assert.equal(result.blocked,1);
  assert.deepEqual(result.blocked_reasons,[{id:row.id,code:'POLICY_SCORE_NOT_VERIFIED',
-  policy_review_reason:'policy_review_identity_reused'}]);
+  policy_review_reason:'policy_review_identity_reused',policy_review_model_calls:2}]);
  assert.ok(calls.includes('ROLLBACK'));
  assert.ok(!calls.some(sql=>sql.includes('UPDATE zenithjoy.leadgen_comments')));
 });

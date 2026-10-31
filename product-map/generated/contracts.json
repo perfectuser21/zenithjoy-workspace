@@ -25,9 +25,9 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "61b04a6aa2726cd130157ee47a00afcd313d21be972870062adce1cc7dec9983",
+      "sha256": "b6e4b9127f0e8bf0451d9246bd7cc923fc7c8d92afd7f437ebd6e324613557af",
       "activities": {
-        "scoring": "f5f9d7cff8a99d19e5879845570f4cf0df8a0680e80f752122c1030379e1bbd9",
+        "scoring": "4467eeb27557ff85339f5a9215373edb2ce2efbedeaad4169ad8f17853447682",
         "mark_leads": "9038fcdb78470302b38e17456a79a10b7983898e26d7c9222b56f5aa6b9523a0"
       }
     },
