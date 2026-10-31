@@ -179,3 +179,8 @@ for (const key of ['platform', 'accountId']) test(`the ${key} target namespace c
   const r = evaluatePlan(f.request, f.options);
   assert.equal(r.status, 'rejected'); assert.ok(r.reasons.some(x => x.code === 'SUBJECT_MISMATCH' && x.field === key));
 });
+test('reserved prototype identity keys cannot disappear while binding the target', t => {
+  const f = fixture(t);
+  Object.defineProperty(f.request.target, '__proto__', { value: 'unbound', enumerable: true });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
