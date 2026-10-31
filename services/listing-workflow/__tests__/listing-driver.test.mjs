@@ -53,3 +53,21 @@ test('external messaging operations cannot enter dry-run or live action plans',a
  const {runListing}=await driver(); assert.equal(typeof runListing,'function');const {input,runtime,effects}=fixture();runtime.contract.actions[0].operation='sendMessage';
  const r=await runListing(input,runtime);assert.equal(r.status,'blocked');assert.ok(r.reasons.includes('FORBIDDEN_ACTION'));assert.deepEqual(effects,[]);
 });
+
+test('dry-run always releases probe resources including a failed read and wrong store',async()=>{
+ const {runListing}=await driver();const {input,runtime}=fixture();let cleaned=0;runtime.cleanup=async()=>{cleaned++;};
+ runtime.inspect=async()=>({ok:true,storeId:'another-store',evidence:['screen']});
+ const wrong=await runListing(input,runtime);assert.equal(wrong.status,'blocked');assert.ok(wrong.reasons.includes('CURRENT_CONTEXT_UNVERIFIED'));assert.equal(cleaned,1);
+ runtime.inspect=async()=>{throw new Error('probe-lost');};await runListing(input,runtime);assert.equal(cleaned,2);
+});
+test('a lost submit reply does not cause repeated external submission after a process retry',async()=>{
+ const {runListing}=await driver();const {input,runtime,effects}=fixture();runtime.productionEnabled=true;
+ runtime.act=async action=>{effects.push(action.operation);if(action.operation==='publish')throw new Error('network-lost-after-effect');return {ok:true,evidence:['checked']};};
+ const r=await runListing({...input,mode:'live'},runtime);assert.equal(r.status,'unknown');
+ await runListing({...input,mode:'live',runId:'retry'},runtime);assert.equal(effects.filter(x=>x==='publish').length,1);
+});
+test('dry-run rejects duplicate images and any attempt to schedule upload after final submit',async()=>{
+ const {runListing}=await driver();const {input,runtime}=fixture();
+ runtime.contract.actions.splice(2,0,{...runtime.contract.actions[1],id:'duplicate-cover'});
+ const r=await runListing(input,runtime);assert.equal(r.status,'blocked');assert.ok(r.reasons.includes('IMAGE_ORDER_UNVERIFIED'));
+});
