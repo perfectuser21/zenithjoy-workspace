@@ -71,3 +71,8 @@ test('dry-run rejects duplicate images and any attempt to schedule upload after 
  runtime.contract.actions.splice(2,0,{...runtime.contract.actions[1],id:'duplicate-cover'});
  const r=await runListing(input,runtime);assert.equal(r.status,'blocked');assert.ok(r.reasons.includes('IMAGE_ORDER_UNVERIFIED'));
 });
+
+test('missing form anchors still permit guarded read-only observation but cannot yield an executable plan',async()=>{
+ const {runListing}=await driver();const {input,runtime,effects}=fixture();let reads=0;runtime.contract=null;runtime.inspect=async()=>{reads++;return {ok:false,evidence:['raw-capture'],requiresVisualReview:true};};
+ const r=await runListing(input,runtime);assert.equal(reads,1);assert.equal(r.status,'blocked');assert.deepEqual(effects,[]);
+});
