@@ -26,7 +26,7 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const request={op:'recover_false_exclusion_102l',line:'jinuo',run:NEW,source_run:SOURCE,
  comment_id:ID,old_run:OLD,maintenance_task_id:TASK,candidate_source_commit:CANDIDATE};
 
-function rig({authorized=true,outbox=false,lead=false,leadIdentityOnly=false,source=SOURCE}={}){
+function rig({authorized=true,outbox=false,lead=false,leadIdentityOnly=false,source=SOURCE,failAt=null}={}){
  const prior={run_id:OLD,company_id:policy.company_id,tenant_id:policy.tenant_id,
   version:14,policy_id:policy.policy_id,exclusion_reason:'personal_intent_evidence_missing',
   exclusion_source:{harvest_batch:SOURCE,comment_sha256:hash(COMMENT),video_sha256:hash(TITLE),video_url_sha256:hash(VIDEO_URL)},
@@ -39,6 +39,9 @@ function rig({authorized=true,outbox=false,lead=false,leadIdentityOnly=false,sou
   judgment_reason:'policy_excluded:personal_intent_evidence_missing',judgment_config:prior};
  const audit=[],writes=[];let pending=[];
  const query=async(sql,args=[])=>{
+  if(failAt==='update'&&sql.includes('UPDATE zenithjoy.leadgen_comments'))throw Error('password=fixture-secret');
+  if(failAt==='audit'&&sql.includes('INSERT INTO zenithjoy.db_audit'))throw Error('password=fixture-secret');
+  if(failAt==='commit'&&sql==='COMMIT')throw Error('password=fixture-secret');
   if(sql==='BEGIN'){pending=[];return {rows:[]};}
   if(sql==='COMMIT'){for(const f of pending)f();pending=[];return {rows:[]};}
   if(sql==='ROLLBACK'){pending=[];return {rows:[]};}
@@ -71,6 +74,18 @@ function rig({authorized=true,outbox=false,lead=false,leadIdentityOnly=false,sou
    status:'completed',execution_stopped:true,observed_at:Date.now(),evidence_sha256:hash('completed')})}};
  return {pool:{connect:async()=>({query,release(){}}),query},deps,row,audit,writes,prior};
 }
+
+test('103 恢复写入阶段失败只给固定安全阶段码，事务不产生假成功',async()=>{
+ for(const [failAt,code] of [['update','FALSE_EXCLUSION_UPDATE_FAILED'],
+   ['audit','FALSE_EXCLUSION_AUDIT_WRITE_FAILED'],
+   ['commit','FALSE_EXCLUSION_COMMIT_UNKNOWN_READBACK_REQUIRED']]){
+  const f=rig({failAt});
+  await assert.rejects(queueRequest(f.pool,request,f.deps),error=>error.message===code);
+  assert.equal(f.audit.length,0);
+  assert.equal(f.writes.length,0);
+  assert.equal(f.row.process_status,'已排除');
+ }
+});
 
 test('102l仅精确授权单条可原子重开，旧双审审计留在恢复链且读回可验',async()=>{
  const f=rig();const result=await queueRequest(f.pool,request,f.deps);
