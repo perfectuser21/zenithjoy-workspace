@@ -193,3 +193,13 @@ test('untrusted lease clock and thrown SSH errors cannot release an unresolved r
   await assert.rejects(probeReadOnly(fixture(), uncertain), /COMMAND_FAILED/);
   assert.equal(uncertain.calls.includes('release'), false);
 });
+
+test('request cannot redirect the lock authority and binding metadata is immutable', async () => {
+  const d = deps();
+  await assert.rejects(probeReadOnly(fixture({ brainBaseUrl: 'http://untrusted.example' }), d), /DEVICE_BINDING_MISMATCH/);
+  assert.deepEqual(d.calls, []);
+  const immutable = deps(), acquire = immutable.brain.acquire;
+  immutable.brain.acquire = async (...args) => { immutable.deviceBinding.authority = 'changed'; return acquire(...args); };
+  const result = await probeReadOnly(fixture(), immutable);
+  assert.equal(JSON.parse(readFileSync(result.manifest)).deviceBindingAuthority, 'explicit-user-task');
+});
