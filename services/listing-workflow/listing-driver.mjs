@@ -75,8 +75,8 @@ export async function runListing(request, runtime = {}) {
         result.observation = await runtime.inspect({ operation: 'preflight', target: input.target });
         if (result.observation?.ok !== true || result.observation.storeId !== input.target.storeId || !evidence(result.observation.evidence)) { reasons.push('CURRENT_CONTEXT_UNVERIFIED'); result.status = 'blocked'; }
       }
-      catch (error) { reasons.push(`OBSERVATION_UNAVAILABLE:${error.message}`); result.status = 'blocked'; }
-      finally { if (typeof runtime.cleanup === 'function') await runtime.cleanup(); }
+      catch (error) { reasons.push(`OBSERVATION_UNAVAILABLE:${error.message}`); result.status = 'blocked'; if (error.manifest) result.observation = { status: 'blocked', manifest: error.manifest }; }
+      finally { if (typeof runtime.cleanup === 'function') { try { await runtime.cleanup(); } catch (error) { result.cleanupError = error.message; result.status = 'blocked'; } } }
     }
     return result;
   }
@@ -144,14 +144,18 @@ export async function runListing(request, runtime = {}) {
     },
     async lookup(intent) { record('readback', 'started'); return runtime.lookup(intent); },
   };
+  let outcome;
   try {
     const coordinated = await coordinate({ root: input.root, businessKey: input.businessKey, runId: input.runId, target: input.target, payload: input.payload }, adapter);
-    return { ...result, ...coordinated, reasons, eventDirectory };
+    outcome = { ...result, ...coordinated, reasons, eventDirectory }; return outcome;
   } catch (error) {
     if (error.message !== 'PRECONDITIONS_UNVERIFIED') throw error;
-    return { ...result, status: 'blocked', reasons: reasons.length ? reasons : ['PRECONDITIONS_UNVERIFIED'], eventDirectory };
+    outcome = { ...result, status: 'blocked', reasons: reasons.length ? reasons : ['PRECONDITIONS_UNVERIFIED'], eventDirectory }; return outcome;
   } finally {
     // cleanup只能清本人资源；运行时遇到远端终止未知必须保留有限租约并拒绝误释放。
-    if (typeof runtime.cleanup === 'function') await runtime.cleanup();
+    if (typeof runtime.cleanup === 'function') {
+      try { await runtime.cleanup(); if (eventDirectory) record('cleanup', 'observed'); }
+      catch (error) { if (outcome) outcome.cleanupError = error.message; else throw error; }
+    }
   }
 }
