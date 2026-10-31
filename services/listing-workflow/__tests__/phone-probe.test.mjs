@@ -131,3 +131,21 @@ test('lost acquire response is reconciled by owner readback before cleanup', asy
   assert.equal(d.calls.includes('online'), false);
   assert.equal(d.calls.at(-1), 'release');
 });
+
+test('caller cannot switch the serial after acquiring a different device lock', async () => {
+  const config = fixture(), d = deps(), acquire = d.brain.acquire;
+  d.brain.acquire = async (...args) => { const result = await acquire(...args); config.serial = 'OTHERDEVICE'; return result; };
+  const result = await probeReadOnly(config, d);
+  assert.equal(JSON.parse(readFileSync(result.manifest)).serial, 'SERIAL123');
+});
+
+test('dump retries use fresh remote filenames and wait before the second attempt', async () => {
+  const d = deps(), original = d.run, paths = []; let waits = 0;
+  d.sleep = async () => { waits++; };
+  d.run = async (op, invocation) => {
+    if (op === 'dump') { paths.push(invocation.args.at(-1)); if (paths.length === 1) return { status: 1, stdout: Buffer.alloc(0) }; }
+    return original(op);
+  };
+  await probeReadOnly(fixture(), d);
+  assert.equal(paths.length, 2); assert.equal(waits, 1); assert.notEqual(paths[0], paths[1]);
+});
