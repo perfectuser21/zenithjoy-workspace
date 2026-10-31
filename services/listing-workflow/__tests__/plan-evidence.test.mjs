@@ -123,6 +123,13 @@ test('pinned review without original artifacts remains unknown', t => {
   const f = fixture(t, x => { x.document.artifacts = []; });
   assert.equal(evaluatePlan(f.request, f.options).status, 'unknown');
 });
+test('an empty original artifact cannot stand in for source evidence', t => {
+  const f = fixture(t, x => {
+    writeFileSync(join(x.root, 'source.txt'), '');
+    x.document.artifacts = [{ path: 'source.txt', sha256: digest('') }];
+  });
+  assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
+});
 test('missing field schemas cannot silently weaken the trusted contract', t => {
   const f = fixture(t); delete f.options.policy.schemas.stock;
   assert.equal(evaluatePlan(f.request, f.options).status, 'rejected');
