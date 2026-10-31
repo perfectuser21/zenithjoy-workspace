@@ -11,6 +11,23 @@ async function waitForNginx(port) {
   throw error;
 }
 
+test('diagnostics identify only public official CDN assets and probe their actual path', async () => {
+  const source=readFileSync('apps/dashboard/public/canvas-startup-diagnostic-v2.js','utf8');
+  const listeners={}, sent=[];
+  const window={addEventListener:(name,fn)=>{listeners[name]=fn},setTimeout:()=>{},location:{origin:'https://test.invalid'}};
+  const document={getElementById:()=>null,querySelectorAll:()=>[]};
+  const fetch=(url,opts)=>{sent.push([url,opts]);return Promise.resolve(url.includes('/__diag/')?{}:{status:200,headers:{get:()=> 'application/javascript'}})};
+  vm.runInNewContext(source,{window,document,fetch,URL});
+  const hash='593af1d79767cefc3587c862dd3b3d90ff00530c5f83071522f8f9807c175346';
+  const path=`/assets/comfy/${hash}/assets/vendor-three-zoI3eWBk.js`;
+  listeners.error({target:{src:`https://test.invalid${path}?secret=token`}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(sent.some(([url])=>url==='/api/creative-canvas/__diag/resource/vendor-three-zoI3eWBk.js'));
+  assert.ok(sent.some(([url])=>url===path));
+  assert.ok(sent.some(([url])=>url==='/api/creative-canvas/__diag/probe2xxjs/vendor-three-zoI3eWBk.js'));
+  for(const [url] of sent)assert.doesNotMatch(url,/secret|token/);
+});
+
 
 test('resource errors do not suppress timed status and probes are bounded and sanitized', async () => {
   const source=readFileSync('apps/dashboard/public/canvas-startup-diagnostic-v2.js','utf8');
@@ -88,7 +105,7 @@ test('nginx injects diagnostics only into the authenticated canvas document', as
   const base=`http://127.0.0.1:${port}`;
   await waitForNginx(port);
   const good=await fetch(base+'/api/creative-canvas/',{headers:{cookie:'session=fixture','accept-encoding':'gzip','if-none-match':'fixture'}});const html=await good.text();
-  assert.equal(good.status,200);assert.match(html,/<head><script src="\/canvas-startup-diagnostic-v2.js"><\/script>/);
+  assert.equal(good.status,200);assert.match(html,/<head><script src="\/canvas-startup-diagnostic-v2.js\?v=3"><\/script>/);
   const denied=await fetch(base+'/api/creative-canvas/');assert.equal(denied.status,401);assert.doesNotMatch(await denied.text(),/canvas-startup-diagnostic-v2/);
   const other=await fetch(base+'/api/creative-canvas/api/features',{headers:{cookie:'session=fixture'}});assert.doesNotMatch(await other.text(),/canvas-startup-diagnostic-v2/);
 });
