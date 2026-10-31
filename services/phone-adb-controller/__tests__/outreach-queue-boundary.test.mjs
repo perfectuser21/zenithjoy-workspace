@@ -18,7 +18,8 @@ function fakeOriginalOrders(){
  const client={all:async()=>structuredClone(rows),get:async id=>structuredClone(rows.find(r=>r.record_id===id)),put:async(id,fields)=>{Object.assign(rows.find(r=>r.record_id===id).fields,fields);}};
  const message='明确fake审批正文',digest=createHash('sha256').update(message).digest('hex');
  const deps={sourceCommit:source,client,eligibleOrders:async(_route,rows)=>rows.map(r=>r.record_id),policy:async()=>({template:{id:'fake-B',version:'B',message,message_sha256:digest}}),lock:(line,fn)=>orders.withOrderLock(line,fn,{directory})};
- const input={line:'jinuo',run:'fake104',profile:'jinoshengyuan-work',sender_douyin_id:'langzi63485',limit:1};
+ const input={line:'jinuo',run:'fake104',profile:'jinoshengyuan-work',sender_douyin_id:'langzi63485',limit:1,
+  outreach_scope:{schema_version:1,record_id:rows[0].record_id,comment_id:'comment-test',company_id:'company-test',source_run:'source102',mark_run:'mark103',target_douyin_id:'ABC123',line_key:'jinuo',run_tag:'fake104',profile:'jinoshengyuan-work',serial:'SERIAL'}};
  return {rows,deps,input,source,digest,clean:()=>rmSync(directory,{recursive:true,force:true})};
 }
 test('104精确订单范围只领指定飞书record，排序更靠前的旁单保持原样',async()=>{
@@ -35,7 +36,7 @@ test('104精确订单范围只领指定飞书record，排序更靠前的旁单�
 });
 test('104缺精确订单范围时拒绝领单且不改飞书原行',async()=>{
  const f=fakeOriginalOrders();try{
-  await assert.rejects(queueRequest({...f.input,op:'claim_outreach'},f.deps),/OUTREACH_SCOPE|精确订单/);
+  await assert.rejects(queueRequest({...f.input,op:'claim_outreach',outreach_scope:undefined},f.deps),/OUTREACH_SCOPE|精确订单/);
   assert.equal(f.rows[0].fields['状态'],'待触达');
   assert.equal(f.rows[1].fields['状态'],'待触达');
  }finally{f.clean();}
@@ -44,8 +45,8 @@ test('真实原订单adapter同recipient两个大小写别名、两个run竞争�
  const f=fakeOriginalOrders();try{
  const raced=await Promise.allSettled([queueRequest({...f.input,op:'claim_outreach'},f.deps),queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps)]);
  assert.equal(raced.filter(r=>r.status==='fulfilled').flatMap(r=>r.value).length,1);
- for(const r of raced.filter(r=>r.status==='rejected'))assert.match(r.reason.message,/领单锁忙/);
- const b=await queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps);assert.equal(b.length,0);
+ for(const r of raced.filter(r=>r.status==='rejected'))assert.match(r.reason.message,/领单锁忙|OUTREACH_SCOPE_MISMATCH/);
+ await assert.rejects(queueRequest({...f.input,run:'fakeOther',op:'claim_outreach'},f.deps),/OUTREACH_SCOPE_MISMATCH/);
  assert.equal(f.rows.filter(r=>r.fields['状态']==='触达中').length,1);
  }finally{f.clean();}
 });

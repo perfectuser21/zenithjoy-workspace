@@ -99,6 +99,19 @@ probes:
     failure_class: needs_human
     on_fail: fail_stage
     note: 原生发送前后 XML、账号与目标、批准正文、风险页及前台原件均核验；结果未知不得判成功。
+  - key: out_exact_order_scope_verified
+    stage: send_dm
+    journey_cell: stage:send_dm
+    probe:
+      type: metric
+      ref: metrics.outreach_scope_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: 仅本run冻结record_id/comment_id/公司/来源与原订单精确匹配时为1；旁单或范围未知一律封闭。
   - key: send_dm_commander_verified
     stage: send_dm
     journey_cell: stage:send_dm

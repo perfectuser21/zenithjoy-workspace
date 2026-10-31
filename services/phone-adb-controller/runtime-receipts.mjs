@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync,writeFileSync,realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput } from './runtime-definition.mjs';
+import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput,outreachScopeInput } from './runtime-definition.mjs';
 import { bindRun,readBinding } from './runtime-binding.mjs';
 import {readCollectionPhoneScopeInput,defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
 import {defaultDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
@@ -71,7 +71,7 @@ export async function run(args){
     const discoveryPhoneScope=e.WF_DEPLOYMENT_ROOT||e.WF_HOME?defaultDiscoveryPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e}):undefined;
     if(e.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!discoveryPhoneScope)throw Error('DISCOVERY_PHONE_SCOPE_REQUIRED');
     if(collectionPhoneScope&&(e.WF_BRAIN_WORKFLOW!=='douyin_video_processing'||collectionPhoneScope.profile!==e.P||collectionPhoneScope.serial!==e.SERIAL||collectionPhoneScope.run_id!==`${e.WFR_RUN_ID}__${collectionPhoneScope.attempt}`))throw Error('COLLECTION_SCOPE_INPUT_IDENTITY_INVALID');
-    const samplingInput=commentSamplingInput(e),fixedDiscoveryInput=discoveryInput(e);
+    const samplingInput=commentSamplingInput(e),fixedDiscoveryInput=discoveryInput(e),outreachScope=outreachScopeInput(e);
     const producerDescriptor=e.LEADGEN_PRODUCER_DESCRIPTOR_FILE?readProducerDescriptor(e.LEADGEN_PRODUCER_DESCRIPTOR_FILE):undefined;
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
@@ -80,7 +80,7 @@ export async function run(args){
       const inventory=await request('/api/brain/machines');
       runtimeTransport=selectMmvTransport(inventory,e.WF_MMV_SSH_ROUTE);
     }
-    await freezeDefinition({discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
+    await freezeDefinition({discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){
       // prepare冻结入口统一在freezeDefinition中记录，不能由业务活动改投影台账。
       const snapshot=readFrozen(dir);

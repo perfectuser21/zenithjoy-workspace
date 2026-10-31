@@ -64,13 +64,25 @@ test('104 订单生命周期与发送结果硬探针入合同', () => {
   assert.equal(activity.preflight.compatibility, 'breaking');
   assert.ok(activity.send_dm.inputs.some(input => input.type === 'OutreachOrder'));
   assert.equal(activity.send_dm.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.send_dm.version, '5.0.0');
+  assert.equal(activity.send_dm.version, '6.0.0');
   assert.equal(activity.send_dm.compatibility, 'breaking');
   assert.equal(activity.write_back.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
   assert.equal(activity.write_back.version, '4.0.0');
   assert.equal(activity.write_back.compatibility, 'breaking');
   assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_delivery_result_verified'));
+  assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_exact_order_scope_verified'));
   assert.ok(!activity.send_dm.known_gaps?.some(gap => gap.gap.includes('硬性 Activity probe')));
+});
+test('104 send_dm 缺冻结精确订单范围结果时 Activity 探针封闭', async () => {
+  const {doc,errors}=loadChecks(resolve(root,'services/phone-adb-controller/checks/douyin-lead-outreach.yaml'),resolve(root,'services/phone-adb-controller/checks/schema.json'));
+  assert.deepEqual(errors,[]);
+  const check=async metrics => {
+    const result=await runProbes({doc,stage:'send_dm',params:{metrics},deps:{now:()=> '2026-10-31T00:00:00Z'}});
+    return result.probes.find(probe=>probe.key==='out_exact_order_scope_verified');
+  };
+  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1}))?.pass,null);
+  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1,outreach_scope_verified:0}))?.pass,false);
+  assert.equal((await check({commander_verified:1,messages_sent_while_paused:0,delivery_result_verified:1,outreach_scope_verified:1}))?.pass,true);
 });
 
 test('104 send_dm 原生发送结果缺失或为零时 Activity 探针封闭', async () => {

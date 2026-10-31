@@ -52,7 +52,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
@@ -62,7 +62,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const managedAdb=Object.hasOwn(env,'ZJ_ADB_HOST_CONFIG')||existsSync(hostPolicy)||(()=>{try{return lstatSync(hostPolicy).isSymbolicLink();}catch{return false;}})();
   const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
   let locked=false,leased=[],qualified=[],historyScoped=0;
-  const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`};
+  const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,outreach_scope:outreachScope};
   let collectionScope=null,discoveryScope=null,discoveryClosed=false;const collectionProgress=new Map();
   let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{

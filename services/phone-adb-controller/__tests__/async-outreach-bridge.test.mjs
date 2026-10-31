@@ -97,7 +97,11 @@ function pendingBridge(){
  const returned=`<hierarchy><node package="${pkg}" class="android.widget.TextView" resource-id="${pkg}:id/title" text="4条评论"/><node package="${pkg}" class="android.widget.EditText" resource-id="${pkg}:id/ety"/><node package="${pkg}" text="待核个人"/><node package="${pkg}" class="android.widget.FrameLayout" resource-id="${pkg}:id/fhn" text="" content-desc="待核个人,在哪里报名,09-27, · 山东,回复 按钮,"/></hierarchy>`;
  const hash=v=>require('crypto').createHash('sha256').update(v).digest('hex');
  p.comment_run='source102';p.recipient_evidence={version:1,status:'verified',scope:{comment_encoding:'canonical',line_key:'jinuo',run:'source102',profile:'legacy',video_id:vid,video_url:p.source_video_url,douyin_id:p.target_douyin_id,nickname:p.nickname,comment_body_sha256:hash(p.comment_body),profile_eid:prefix+'-person1-t1',video_identity_eid:prefix+'-after-card1'},raw:{profile,returned},sha256:{profile:hash(profile),returned:hash(returned)},video_identity:{verified:true,content_type:'video',expected_video_id:vid,observed_video_id:vid,evidence_id:prefix+'-after-card1'}};
- return {id:cid,line_key:'jinuo',run_tag:p.run,payload:p,payload_sha256:require('../leadgen-outreach-bridge.js').digest(p),qualification_status:'passed',state:'pending',created_at:'2026-10-14T00:00:00Z'};
+ return {id:cid,line_key:'jinuo',comment_id:p.comment_id,source_run:p.source_run,run_tag:p.run,payload:p,payload_sha256:require('../leadgen-outreach-bridge.js').digest(p),qualification_status:'passed',state:'pending',created_at:'2026-10-14T00:00:00Z'};
+}
+function scopeFor(row,run='contact104'){
+ const p=row.payload;
+ return {schema_version:1,record_id:row.feishu_record_id,comment_id:p.comment_id,company_id:p.qualification.company_id,source_run:p.source_run,mark_run:p.run,target_douyin_id:p.target_douyin_id,line_key:row.line_key,run_tag:run,profile:'legacy',serial:'sandbox'};
 }
 function bridgeStore(row){
  const calls=[];return {calls,async query(sql,args){calls.push({sql,args});
@@ -127,9 +131,9 @@ test('104旧personal/A飞书待触达行缺独立native资格不能领取，prot
  const {outreachRequest}=require('../leadgen-outreach-orders.js');
  const row={record_id:'recOLD123456',fields:{'抖音昵称':'旧机构','抖音号':'legacyOrg','主页链接':'https://www.douyin.com/user/legacyOrg','AI判断理由':'[A级] 报名','状态':'待触达'}};let puts=0;
  const client={all:async()=>[row],put:async(_id,fields)=>{puts++;Object.assign(row.fields,fields);},get:async()=>row};
- const result=await outreachRequest({op:'claim_outreach',line:'jinuo',run:'contact104',limit:1,profile:'legacy',sender_douyin_id:'sender987'},
-  {sourceCommit:'a'.repeat(40),client,lock:async(_line,fn)=>fn(),eligibleOrders:async()=>[],policy:async()=>({template:{id:'approved',version:'B',message:'你好'}})});
- assert.deepEqual(result,[]);assert.equal(puts,0);assert.equal(row.fields['状态'],'待触达');
+ await assert.rejects(outreachRequest({op:'claim_outreach',line:'jinuo',run:'contact104',limit:1,profile:'legacy',sender_douyin_id:'sender987',outreach_scope:{schema_version:1,record_id:row.record_id,comment_id:'old-comment',company_id:'company1',source_run:'source102',mark_run:'mark103',target_douyin_id:'legacyOrg',line_key:'jinuo',run_tag:'contact104',profile:'legacy',serial:'sandbox'}},
+  {sourceCommit:'a'.repeat(40),client,lock:async(_line,fn)=>fn(),eligibleOrders:async()=>[],policy:async()=>({template:{id:'approved',version:'B',message:'你好'}})}),/OUTREACH_SCOPE_QUALIFICATION_NOT_VERIFIED/);
+ assert.equal(puts,0);assert.equal(row.fields['状态'],'待触达');
 });
 test('104已有confirmed outbox的政策复核失败时不可成为可领订单',async()=>{
  const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
@@ -137,16 +141,16 @@ test('104已有confirmed outbox的政策复核失败时不可成为可领订单'
  const remote=[{record_id:row.feishu_record_id,fields:structuredClone(row.fields)}];
  const pool={async query(){return {rows:[row]}}};
  const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'fail'})};
- assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104'},opts),[]);
+ assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104',profile:'legacy',outreach_scope:scopeFor(row)},opts),[]);
 });
 test('104飞书订单record匹配但comment或来源不符时不得入可领集合',async()=>{
  const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
  row.state='confirmed';row.feishu_record_id='recABC123456';row.fields=bridge.buildOrderFields(row,route,[{field_name:'采集时间',type:1}]);row.fields_sha256=bridge.digest(row.fields);
  const remote=[{record_id:row.feishu_record_id,fields:structuredClone(row.fields)}];
  const pool={async query(){return {rows:[row]}}};
- const scope={schema_version:1,record_id:row.feishu_record_id,comment_id:'wrong-comment',company_id:'company1',source_run:'source102',mark_run:'score103',target_douyin_id:'person987',line_key:'jinuo',run_tag:'contact104',profile:'legacy',serial:'SERIAL'};
+ const scope={...scopeFor(row),comment_id:'wrong-comment'};
  const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})};
- assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104',outreach_scope:scope},opts),[]);
+ assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104',profile:'legacy',outreach_scope:scope},opts),[]);
 });
 test('旧 score → 新 mark → 104 准备前复核使用各自冻结 run',async()=>{
  const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();
@@ -162,11 +166,11 @@ test('旧 score → 新 mark → 104 准备前复核使用各自冻结 run',asyn
   if(sql.includes('leadgen_bridge_outbox'))return {rows:[row]};if(sql.includes('company_config_runs'))return {rows:[{run_id:args[0],snapshot:policySnapshot,company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version}]};
   if(sql.includes('leadgen_comments'))return {rows:[comment]};if(sql.includes('leadgen_videos'))return {rows:[{video_url:comment.source_video_url,title:comment.source_video,line_key:'jinuo',judgment_status:'matched'}]};throw Error('unexpected SQL');}};
  const record={record_id:row.feishu_record_id,fields:{'抖音号':row.payload.target_douyin_id,'主页链接':row.payload.profile_url}};
- const ok=await bridge.reviewPreparedOrder(route,record,{pool,run:'contact104',freezeCompanyConfig:async()=>policySnapshot,
+ const ok=await bridge.reviewPreparedOrder(route,record,{pool,run:'contact104',scope:scopeFor(row),freezeCompanyConfig:async()=>policySnapshot,
   reviewPolicy:(...args)=>require('../leadgen-queue.js').reviewBoundComment(...args, {judgePolicy:policyDeps.judgePolicy})});
  assert.equal(ok,true);assert.ok(seen.some(x=>x.sql.includes('company_config_runs')&&x.args[0]==='mark103-new'));
  assert.ok(seen.some(x=>x.sql.includes('company_config_runs')&&x.args[0]==='score103'));
- assert.equal(await bridge.reviewPreparedOrder(route,record,{pool,run:'mark103-new',freezeCompanyConfig:async()=>policySnapshot}),false);
+ assert.equal(await bridge.reviewPreparedOrder(route,record,{pool,run:'mark103-new',scope:scopeFor(row,'mark103-new'),freezeCompanyConfig:async()=>policySnapshot}),false);
 });
 test('旧 score → 新 mark 的唯一订单可由独立 104 run 领单并准备，沙箱无发送',async()=>{
  const bridge=require('../leadgen-outreach-bridge.js'),orders=require('../leadgen-outreach-orders.js'),route=require('../line-routes.js').routeOf('jinuo');
@@ -186,10 +190,10 @@ test('旧 score → 新 mark 的唯一订单可由独立 104 run 领单并准备
  const reviewPolicy=(...args)=>require('../leadgen-queue.js').reviewBoundComment(...args,{judgePolicy:policyDeps.judgePolicy});
  const eligible=(route,all,input)=>bridge.eligibleOrders(route,all,input,{pool,freezeCompanyConfig:async()=>policySnapshot,reviewPolicy});
  const sourceCommit='a'.repeat(40),run='contact104',profile='legacy',sender_douyin_id='sender987';
- const claimed=await orders.outreachRequest({op:'claim_outreach',line:'jinuo',run,limit:1,profile,sender_douyin_id},
+ const claimed=await orders.outreachRequest({op:'claim_outreach',line:'jinuo',run,limit:1,profile,sender_douyin_id,outreach_scope:scopeFor(row)},
   {sourceCommit,client,lock:async(_line,fn)=>fn(),eligibleOrders:eligible,policy:async()=>({template:{id:'approved',version:'B',message:'你好，请查看资料'}})});
  assert.equal(claimed.length,1);assert.equal(claimed[0].id,row.feishu_record_id);
- const prepared=await orders.outreachRequest({op:'prepare_outreach',line:'jinuo',run,id:claimed[0].id,profile,sender_douyin_id,
+ const prepared=await orders.outreachRequest({op:'prepare_outreach',line:'jinuo',run,id:claimed[0].id,profile,sender_douyin_id,outreach_scope:scopeFor(row),
   script_id:claimed[0].script_id,script_version:claimed[0].script_version,message_sha256:require('crypto').createHash('sha256').update(claimed[0].message).digest('hex'),
   target_douyin_id:claimed[0].douyin_id,profile_url:claimed[0].profile_url},
   {sourceCommit,client,lock:async(_line,fn)=>fn(),pool,freezeCompanyConfig:async()=>policySnapshot,reviewPolicy});
@@ -202,7 +206,7 @@ test('104同一飞书订单映射多个outbox时不允许任选一个CID领单',
  const remote=[{record_id:row.feishu_record_id,fields:structuredClone(row.fields)}];
  const pool={async query(){return {rows:[row,duplicate]}}};
  const opts={pool,freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:3,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})};
- assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104'},opts),[]);
+ assert.deepEqual(await bridge.eligibleOrders(route,remote,{run:'contact104',profile:'legacy',outreach_scope:scopeFor(row)},opts),[]);
 });
 test('bridge本次扫描越过前十个政策阻断outbox检查后续合格项',async()=>{
  const rows=Array.from({length:11},(_,i)=>{const r=pendingBridge();r.id=`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`;r.payload.comment_id=r.id;r.payload_sha256=require('../leadgen-outreach-bridge.js').digest(r.payload);return r;});
@@ -213,7 +217,7 @@ test('bridge本次扫描越过前十个政策阻断outbox检查后续合格项',
 test('已领订单prepare时原103资格版本与当前冻结104版本不符必须阻断',async()=>{
  const bridge=require('../leadgen-outreach-bridge.js'),route=require('../line-routes.js').routeOf('jinuo'),row=pendingBridge();row.state='confirmed';row.feishu_record_id='recABC123456';
  const pool={async query(){return {rows:[row]}}},record={record_id:row.feishu_record_id,fields:{'抖音号':row.payload.target_douyin_id,'主页链接':row.payload.profile_url}};
- const allowed=await bridge.reviewPreparedOrder(route,record,{pool,run:'contact104',freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:4,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})});
+ const allowed=await bridge.reviewPreparedOrder(route,record,{pool,run:'contact104',scope:scopeFor(row),freezeCompanyConfig:async()=>({company_id:'company1',tenant_id:'tenant1',version:4,policy_id:'policy3'}),reviewPolicy:async()=>({status:'pass'})});
  assert.equal(allowed,false);
 });
 

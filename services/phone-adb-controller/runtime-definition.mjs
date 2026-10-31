@@ -1,11 +1,13 @@
 import {validateProducerDescriptor,assertProducerSampling} from './producer-descriptor.mjs';
+import outreachScope from './leadgen-outreach-scope.js';
+import lineRoutes from './line-routes.js';
 import {userInfo} from 'node:os';
 import { assertRuntimeHost } from './runtime-host.mjs';
 import { loadRuntimeRelease } from './runtime-release.mjs';
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync, lstatSync } from 'node:fs';
-import { resolve, dirname, sep, basename } from 'node:path';
+import { resolve, dirname, sep, basename, isAbsolute } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
 // 单视频软预算加480秒收尾不得超过collection的7200秒合同。
@@ -28,6 +30,27 @@ export function assertCommentSampling(snapshot,env){
  const requested=commentSamplingInput(env),fixed=snapshot.sampling_input||null;
  if(canonical(requested)!==canonical(fixed))throw Error('评论采样请求与本run冻结输入不符');
  return fixed;
+}
+// 104只接受私有文件中的唯一订单身份，冻结进run后续跑逐字段核对。
+export function outreachScopeInput(env){
+ const file=env.LEADGEN_OUTREACH_SCOPE_FILE;
+ if(file===undefined||file===null||file===''){
+  if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND==='1')throw Error('OUTREACH_SCOPE_REQUIRED');
+  return null;
+ }
+ if(env.WF_BRAIN_WORKFLOW!=='douyin_lead_outreach'||!isAbsolute(file))throw Error('OUTREACH_SCOPE_INVALID');
+ const stat=lstatSync(file);
+ if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o077)!==0||stat.size<1||stat.size>4096)throw Error('OUTREACH_SCOPE_FILE_INVALID');
+ const input=JSON.parse(readFileSync(file,'utf8'));
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==7)throw Error('OUTREACH_SCOPE_INVALID');
+ const scope={schema_version:1,...input,run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL};
+ return outreachScope.validateOutreachScope(scope,{line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key});
+}
+export function assertOutreachScope(snapshot,env){
+ const requested=outreachScopeInput(env),frozen=snapshot.outreach_scope||null;
+ if(canonical(requested)!==canonical(frozen))throw Error('OUTREACH_SCOPE_RESUME_MISMATCH');
+ if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'&&env.LEADGEN_SEND==='1'&&!frozen)throw Error('OUTREACH_SCOPE_REQUIRED');
+ return frozen;
 }
 // v1严格限制首屏候选数；v2显式限制实际尝试，二者均独立于成功入库数。
 export function validateDiscoveryInput(value){
@@ -95,6 +118,8 @@ export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir
  try{lstatSync(marker);throw Error('整包部署或恢复未完成，拒绝新运行冻结');}catch(error){if(error.code!=='ENOENT')throw error;}
 }
 export async function freezeDefinition(o) {
+  if(o.outreachScope){const scope=outreachScope.validateOutreachScope(o.outreachScope);if(o.workflowKey!=='douyin_lead_outreach'||o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==scope[k==='tag'?'run_tag':k]))throw Error('OUTREACH_SCOPE_FREEZE_IDENTITY_INVALID');}
+  if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).outreach_scope||null)!==canonical(o.outreachScope||null))throw Error('OUTREACH_SCOPE_RESUME_MISMATCH');
   if(o.discoveryInput){const d=validateDiscoveryInput(o.discoveryInput);if(d.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==d[k==='tag'?'run_tag':k]))throw Error('DISCOVERY_INPUT_FREEZE_SCOPE_INVALID');}
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).discovery_input||null)!==canonical(o.discoveryInput||null))throw Error('DISCOVERY_INPUT_RESUME_MISMATCH');
   if(o.producerDescriptor){const d=validateProducerDescriptor(o.producerDescriptor);assertProducerSampling(d,o.samplingInput);if(o.workflowKey!=='douyin_video_processing'||o.runIdentity?.profile!==d.profile||o.runIdentity?.serial!==d.serial||o.samplingInput?.source_run!==d.run_tag)throw Error('PRODUCER_DESCRIPTOR_FREEZE_SCOPE_INVALID');}
@@ -171,7 +196,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
-    ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+    ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});
