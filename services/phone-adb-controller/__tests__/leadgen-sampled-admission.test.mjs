@@ -73,9 +73,13 @@ test('正式 Brain 定义、绑定、31 条 span 和采样输入须同一 run',a
  const runId=`douyin_video_processing-${SOURCE}__a1`,binding='92049edd-0cc7-46e3-bba3-5450aa1400ff';
  const sample={workflow_key:'douyin_video_processing',run_tag:SOURCE,source_run:UPSTREAM,
   comment_limit:5,line:'jinuo'};
- const spans=Array.from({length:31},(_,i)=>({run_id:runId,run_binding_id:binding,step_id:i===0?null:`step${i}`,
-  outcome:'pass',evidence:{activity_key:i<2?'collection':'cleanup',artifact:i===0?'activity-collection.json':'step.json',
+ const spans=Array.from({length:31},(_,i)=>({run_id:runId,run_binding_id:binding,step_id:i===0||i===2?null:`step${i}`,
+  outcome:'pass',evidence:{activity_key:i<2?'collection':i<4?'qualification':'cleanup',
+   artifact:i===0?'activity-collection.json':i===2?'activity-qualification.json':'step.json',
    step_key:i===1?'douyin_video_processing.collection.collect_comments':`step${i}`,sampling_input:sample}}));
+ spans[2].evidence.qualification_identity_v1={run_id:runId,run_binding_id:binding,source_commit:OLD_SHA,
+  source_run:UPSTREAM,line:'jinuo',videos:[{video_id:videoId,mode:'fresh',prior_judgment_run:SOURCE,
+   identity_verified:true,identity_sha256:'a'.repeat(64)}]};
  try{
   process.env.BRAIN_URL='http://brain.invalid';process.env.BRAIN_INTERNAL_TOKEN='test-only';
   globalThis.fetch=async url=>({ok:true,json:async()=>url.endsWith('/definition')
@@ -83,9 +87,12 @@ test('正式 Brain 定义、绑定、31 条 span 和采样输入须同一 run',a
    :url.endsWith('/reconciliation')?{run_id:runId,run_binding_id:binding,release_id:'release',business_outcome:'pass',evidence_status:'verified',gaps:[],span_count:31,expected_count:31}
    :{spans}});
   const proof=await readRunProof(SOURCE);
-  assert.equal(proof.identity_bound,true);assert.equal(proof.collection_verified,true);
+  assert.equal(proof.identity_bound,true);assert.equal(proof.collection_verified,true);assert.equal(proof.qualification_verified,true);
+  assert.equal(proof.qualification_identity_v1.videos[0].video_id,videoId);
   spans[2].run_binding_id='foreign';
   assert.equal((await readRunProof(SOURCE)).identity_bound,false);
+  spans[2].run_binding_id=binding;spans[3].outcome='fail';
+  assert.equal((await readRunProof(SOURCE)).qualification_verified,false);
  }finally{
   globalThis.fetch=oldFetch;
   if(oldUrl===undefined)delete process.env.BRAIN_URL;else process.env.BRAIN_URL=oldUrl;
@@ -164,13 +171,17 @@ test('正式102跨机回执精确接纳多个视频及旧批次历史评论',asy
   const pgRows=found.map(c=>({id:c.id,douyinId:c.douyin_id,commentBody:c.comment_body,sourceVideoUrl:c.source_video_url}));
   return {video_id:v.video_id,video_url:v.video_url,stop_reason:'quota_reached',coverage:2,
    comments_inserted:index===0?2:1,history_verified:index===0?0:1,comment_ids:found.map(c=>c.id),
+   qualification:{mode:'fresh',prior_judgment_run:source,identity_verified:true,identity_sha256:'b'.repeat(64)},
    pg_rows_sha256:createHash('sha256').update(JSON.stringify(pgRows)).digest('hex')};});
  for(const [video_id,stop_reason] of [['7700992800439717607','footer_reached'],['7700992800439717608','no_comments']])
   receipt.push({video_id,video_url:`https://www.douyin.com/video/${video_id}`,stop_reason,coverage:0,
-   comments_inserted:0,history_verified:0,comment_ids:[],pg_rows_sha256:createHash('sha256').update('[]').digest('hex')});
+   comments_inserted:0,history_verified:0,comment_ids:[],pg_rows_sha256:createHash('sha256').update('[]').digest('hex'),
+   qualification:{mode:'fresh',prior_judgment_run:source,identity_verified:true,identity_sha256:'d'.repeat(64)}});
  const proof={run_id:`douyin_video_processing-${source}__a1`,source_commit:NEW_SHA,source_run:upstream,
   binding_id:'11111111-1111-4111-8111-111111111111',identity_bound:true,business_outcome:'pass',evidence_status:'verified',gaps:[],span_count:31,expected_count:31,
-  collection_outcome:'pass',collection_verified:true,sampling_input:{workflow_key:'douyin_video_processing',run_tag:source,source_run:upstream,comment_limit:2,line:'jinuo'},
+  collection_outcome:'pass',collection_verified:true,qualification_verified:true,sampling_input:{workflow_key:'douyin_video_processing',run_tag:source,source_run:upstream,comment_limit:2,line:'jinuo'},
+  qualification_identity_v1:{run_id:`douyin_video_processing-${source}__a1`,run_binding_id:'11111111-1111-4111-8111-111111111111',source_commit:NEW_SHA,
+   source_run:upstream,line:'jinuo',videos:receipt.map(v=>({video_id:v.video_id,...v.qualification}))},
   sampling_admission_v1:{run_id:`douyin_video_processing-${source}__a1`,run_binding_id:'11111111-1111-4111-8111-111111111111',source_commit:NEW_SHA,source_run:upstream,line:'jinuo',comment_limit:2,videos:receipt}};
  const snap={company_id:'company',tenant_id:'tenant',version:14,policy_id:'policy',runtime_config:{routing:{line_key:'jinuo'}}};
  const pool={async query(sql,args){if(sql.includes('FROM zenithjoy.leadgen_videos'))return {rows:sql.includes("process_status='评论已采'")?[]:videos};
@@ -178,6 +189,43 @@ test('正式102跨机回执精确接纳多个视频及旧批次历史评论',asy
   if(sql.includes('FROM zenithjoy.leadgen_comments'))return {rows:sql.includes('EXISTS (SELECT 1 FROM zenithjoy.leadgen_videos')?[]:comments};throw Error('unexpected SQL '+sql);}};
  const admitted=await admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,readProof:async()=>proof,verifyRecipient:()=>true});
  assert.deepEqual(admitted.map(c=>c.id),comments.map(c=>c.id));
+ videos.push(...receipt.slice(2).map(v=>({video_id:v.video_id,video_url:v.video_url,title:'无评论或已到页尾',line_key:'jinuo',
+  harvest_batch:source,process_status:'待判定',judgment_status:'matched',
+  judgment_config:{company_id:'company',tenant_id:'tenant',version:14,policy_id:'policy',run_id:source}})));
+ assert.equal((await admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,
+  readProof:async()=>proof,verifyRecipient:()=>true})).length,4);
+ videos[1].judgment_config.run_id='old102batch';
+ receipt[1].qualification={mode:'cached',prior_judgment_run:'old102batch',identity_verified:true,identity_sha256:'c'.repeat(64)};
+ proof.qualification_identity_v1.videos[1]={video_id:vid2,...receipt[1].qualification};
+ assert.equal((await admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,
+  readProof:async()=>proof,verifyRecipient:()=>true})).length,4);
+ proof.qualification_verified=false;
+ await assert.rejects(admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,
+  readProof:async()=>proof,verifyRecipient:()=>true}),/SAMPLED_ADMISSION_/);
+ proof.qualification_verified=true;
+ for(const mutation of [
+  ()=>{videos[1].judgment_config.company_id='foreign';},
+  ()=>{videos[1].judgment_config.tenant_id='foreign';},
+  ()=>{videos[1].judgment_config.version=15;},
+  ()=>{videos[1].judgment_config.policy_id='foreign';},
+  ()=>{proof.qualification_identity_v1.videos[1].video_id='7700992800439717699';},
+  ()=>{proof.qualification_identity_v1.source_commit=OLD_SHA;},
+  ()=>{proof.qualification_identity_v1.run_binding_id='foreign';},
+ ]){
+  const savedVideo=structuredClone(videos[1].judgment_config),savedIdentity=structuredClone(proof.qualification_identity_v1);
+  mutation();
+  await assert.rejects(admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,
+   readProof:async()=>proof,verifyRecipient:()=>true}),/SAMPLED_ADMISSION_/);
+  videos[1].judgment_config=savedVideo;proof.qualification_identity_v1=savedIdentity;
+ }
+ receipt[1].qualification.prior_judgment_run='foreign102';
+ await assert.rejects(admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,
+  readProof:async()=>proof,verifyRecipient:()=>true}),/SAMPLED_ADMISSION_/);
+ receipt[1].qualification.prior_judgment_run='old102batch';
+ proof.qualification_identity_v1.videos[1].prior_judgment_run='foreign102';
+ await assert.rejects(admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,
+  readProof:async()=>proof,verifyRecipient:()=>true}),/SAMPLED_ADMISSION_ADMISSION_QUALIFICATION_INVALID/);
+ proof.qualification_identity_v1.videos[1].prior_judgment_run='old102batch';
  const alias='https://v.douyin.com/old-short-video/';
  comments[3].source_video_url=alias;comments[3].recipient_evidence.scope.video_url=alias;
  receipt[1].pg_rows_sha256=createHash('sha256').update(JSON.stringify(comments.slice(2,4).map(c=>({
@@ -226,8 +274,8 @@ test('正式102跨机回执精确接纳多个视频及旧批次历史评论',asy
  await assert.rejects(admittedRows(pool,{lineKey:'jinuo',run,sourceRun:source,sourceCommit:NEW_SHA,readProof:async()=>proof,verifyRecipient:()=>true}),/SAMPLED_ADMISSION_ADMISSION_IDS_INVALID/);
 });
 
-test('102 collection 主 span 可发表跨机精确 ID 和 PG 身份摘要，坏回执拒绝',async()=>{
- const {samplingAdmissionEvidence}=await import('../runtime-receipts.mjs');
+test('102 qualification 与 collection 主 span 各发表同源原生身份和精确 PG 身份，坏回执拒绝',async()=>{
+ const {samplingAdmissionEvidence,qualificationIdentityEvidence}=await import('../runtime-receipts.mjs');
  const dir=mkdtempSync(join(tmpdir(),'sampling-span-'));
  const run='sample102span',runId=`douyin_video_processing-${run}__a1`;
  const sample={workflow_key:'douyin_video_processing',run_tag:run,source_run:'sample101span',line:'jinuo',comment_limit:2};
@@ -239,9 +287,15 @@ test('102 collection 主 span 可发表跨机精确 ID 和 PG 身份摘要，坏
  const artifact={result:{sampling_required_count:1,sampling_receipts:[publicReceipt]}};
  try{
   assert.equal(samplingAdmissionEvidence({dir,artifact:{result:{sampling_required_count:0,sampling_receipts:[]}},frozen,binding}),null);
+  writeFileSync(join(dir,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:NEW_SHA,
+   qualified_video_ids:[videoId],videos:[{video_id:videoId,settled:true,recordingsRequired:1,cached_judgment_run:null}]}),{mode:0o600});
+  writeFileSync(join(dir,`${run}-identity-${videoId}.json`),JSON.stringify({verified:true,observed_video_id:videoId,content_type:'video'}),{mode:0o600});
   writeFileSync(file,JSON.stringify({run_id:runId,sampling_input:sample,verified:true,videos:[{...publicReceipt,pg_rows:pgRows}]}),{mode:0o600});
+  const qualification=qualificationIdentityEvidence({dir,frozen,binding});
   const evidence=samplingAdmissionEvidence({dir,artifact,frozen,binding});
+  assert.deepEqual({video_id:videoId,...evidence.videos[0].qualification},qualification.videos[0]);
   assert.deepEqual(evidence.videos[0].comment_ids,ids.slice(0,2));
+  assert.deepEqual(evidence.videos[0].qualification.mode,'fresh');
   assert.equal(evidence.videos[0].pg_rows_sha256,createHash('sha256').update(JSON.stringify(pgRows)).digest('hex'));
   writeFileSync(file,JSON.stringify({run_id:runId,sampling_input:sample,verified:true,videos:[{...publicReceipt,coverage:1,pg_rows:pgRows}]}));
   assert.throws(()=>samplingAdmissionEvidence({dir,artifact,frozen,binding}),/SAMPLING_ADMISSION_RECEIPT_INVALID/);

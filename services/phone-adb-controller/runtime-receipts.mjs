@@ -12,6 +12,37 @@ import {defaultDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
 const SHA256=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function qualificationIdentityEvidence({dir,frozen,binding}){
+  const sample=frozen.sampling_input;
+  if(!sample)return null;
+  const file=join(dir,`${sample.run_tag}-qualification-progress.json`),stat=lstatSync(file);
+  if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o077)!==0||stat.size>3000000)
+    throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
+  const progress=JSON.parse(readFileSync(file,'utf8'));
+  if(progress.run!==sample.run_tag||progress.source_commit!==frozen.deployment.source_commit
+    ||!Array.isArray(progress.qualified_video_ids)||progress.qualified_video_ids.length>1000
+    ||!Array.isArray(progress.videos)||new Set(progress.qualified_video_ids).size!==progress.qualified_video_ids.length)
+    throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
+  const videos=progress.qualified_video_ids.map(video_id=>{
+    if(!/^\d{16,24}$/.test(video_id||''))throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
+    const facts=progress.videos.filter(q=>q.video_id===video_id);
+    if(facts.length!==1||facts[0].settled!==true||!Number.isSafeInteger(facts[0].recordingsRequired)
+      ||facts[0].recordingsRequired<0)throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
+    const identityFile=join(dir,`${sample.run_tag}-identity-${video_id}.json`),identityStat=lstatSync(identityFile);
+    if(!identityStat.isFile()||identityStat.isSymbolicLink()||(identityStat.mode&0o077)!==0
+      ||identityStat.size>1000000)throw Error('SAMPLING_ADMISSION_IDENTITY_INVALID');
+    const bytes=readFileSync(identityFile),identity=JSON.parse(bytes.toString('utf8'));
+    if(identity.verified!==true||identity.observed_video_id!==video_id||identity.content_type!=='video')
+      throw Error('SAMPLING_ADMISSION_IDENTITY_INVALID');
+    const cached=facts[0].recordingsRequired===0;
+    if(cached?!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(facts[0].cached_judgment_run||'')
+      :facts[0].cached_judgment_run!==null)throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
+    return {video_id,mode:cached?'cached':'fresh',prior_judgment_run:cached?facts[0].cached_judgment_run:sample.run_tag,
+      identity_verified:true,identity_sha256:createHash('sha256').update(bytes).digest('hex')};
+  });
+  return {run_id:binding.run_id,run_binding_id:binding.id,source_commit:frozen.deployment.source_commit,
+    source_run:sample.source_run,line:sample.line,videos};
+}
 export function samplingAdmissionEvidence({dir,artifact,frozen,binding}){
   const sample=frozen.sampling_input;
   if(!sample)return null;
@@ -21,6 +52,7 @@ export function samplingAdmissionEvidence({dir,artifact,frozen,binding}){
   if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o777)!==0o600||stat.size>3000000)
     throw Error('SAMPLING_ADMISSION_RECEIPT_INVALID');
   const receipt=JSON.parse(readFileSync(file,'utf8'));
+  const qualification=qualificationIdentityEvidence({dir,frozen,binding});
   if(receipt.verified!==true||receipt.run_id!==binding.run_id
     ||JSON.stringify(receipt.sampling_input)!==JSON.stringify(sample)
     ||!Array.isArray(receipt.videos)||receipt.videos.length<1||receipt.videos.length>1000
@@ -38,6 +70,9 @@ export function samplingAdmissionEvidence({dir,artifact,frozen,binding}){
       ||v.comments_inserted<0||v.history_verified<0||v.comments_inserted+v.history_verified!==v.coverage
       ||!Array.isArray(v.pg_rows)||v.pg_rows.length!==v.coverage)throw Error('SAMPLING_ADMISSION_VIDEO_INVALID');
     seenVideos.add(v.video_id);
+    const facts=qualification.videos.filter(q=>q.video_id===v.video_id);
+    if(facts.length!==1)
+      throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
     const commentIds=v.pg_rows.map(r=>{
       if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.id||'')
         ||typeof r.douyinId!=='string'||!r.douyinId||typeof r.commentBody!=='string'||!r.commentBody
@@ -46,8 +81,11 @@ export function samplingAdmissionEvidence({dir,artifact,frozen,binding}){
     });
     return {video_id:v.video_id,video_url:v.video_url,stop_reason:v.stop_reason,coverage:v.coverage,
       comments_inserted:v.comments_inserted,history_verified:v.history_verified,comment_ids:commentIds,
+      qualification:{mode:facts[0].mode,prior_judgment_run:facts[0].prior_judgment_run,
+        identity_verified:facts[0].identity_verified,identity_sha256:facts[0].identity_sha256},
       pg_rows_sha256:SHA256(v.pg_rows.map(r=>({id:r.id,douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl})))};
   });
+  if(videos.length!==qualification.videos.length)throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
   return {run_id:binding.run_id,run_binding_id:binding.id,source_commit:frozen.deployment.source_commit,
     source_run:sample.source_run,line:sample.line,comment_limit:sample.comment_limit,videos};
 }
@@ -150,7 +188,9 @@ export async function run(args){
     const avatar=stage==='collection'?Math.max(0,Number(artifact.metrics?.avatar_recovery_count||0)):0;
     const admission=stage==='collection'&&status==='completed'&&frozen.sampling_input
       ?samplingAdmissionEvidence({dir,artifact,frozen,binding}):null;
-    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
+    const qualificationIdentity=stage==='qualification'&&status==='completed'&&frozen.sampling_input
+      ?qualificationIdentityEvidence({dir,frozen,binding}):null;
+    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(qualificationIdentity?{qualification_identity_v1:qualificationIdentity}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
     for(const step of (artifact.verification?.step_dod||[]).flatMap(check=>check.steps||[])){
       const owner=frozen.activities.find(owner=>owner.reference.slot_key===step.activity);
       const definition=owner?.version.payload.steps?.find(s=>step.key?.endsWith(`.${s.locator?.step_key}`));
@@ -158,7 +198,7 @@ export async function run(args){
       body.push({...body[0],reference_id:owner.reference.reference_id,activity_id:owner.reference.activity_id,
         activity_definition_version_id:owner.version.id,step_id:definition.step_id,
         occurrence_key:`${oc.key}:${definition.step_id}`,outcome:step.pass===true?'pass':step.pass===false?'fail':'unknown',
-        evidence:{...body[0].evidence,sampling_admission_v1:undefined,reference_id:owner.reference.reference_id,slot_key:owner.reference.slot_key,
+        evidence:{...body[0].evidence,sampling_admission_v1:undefined,qualification_identity_v1:undefined,reference_id:owner.reference.reference_id,slot_key:owner.reference.slot_key,
           activity_definition_version_id:owner.version.id,step_key:step.key,observed_step:step,observed_at_stage:stage}});
     }
     if(Buffer.byteLength(JSON.stringify(body))>3000000)throw Error('SAMPLING_ADMISSION_SPAN_TOO_LARGE');

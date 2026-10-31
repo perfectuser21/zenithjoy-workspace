@@ -48,7 +48,13 @@ async function readRunProof(sourceRun){
   const binding=definition?.binding;
   const spans=run?.spans;
   const collection=Array.isArray(spans)?spans.filter(s=>s?.evidence?.activity_key==='collection'):[];
-  const activity=collection.find(s=>s.step_id==null&&s.outcome==='pass'&&s.evidence?.artifact==='activity-collection.json');
+  const qualification=Array.isArray(spans)?spans.filter(s=>s?.evidence?.activity_key==='qualification'):[];
+  const collectionMain=collection.filter(s=>s.step_id==null);
+  const qualificationMain=qualification.filter(s=>s.step_id==null);
+  const activity=collectionMain.length===1&&collectionMain[0].outcome==='pass'
+    &&collectionMain[0].evidence?.artifact==='activity-collection.json'?collectionMain[0]:null;
+  const qualificationActivity=qualificationMain.length===1&&qualificationMain[0].outcome==='pass'
+    &&qualificationMain[0].evidence?.artifact==='activity-qualification.json'?qualificationMain[0]:null;
   const sample=activity?.evidence?.sampling_input||collection[0]?.evidence?.sampling_input;
   return {run_id:runId,binding_id:binding?.id,source_commit:definition?.workflow?.source_commit,
     source_run:sample?.source_run,business_outcome:reconciliation?.business_outcome,
@@ -56,6 +62,9 @@ async function readRunProof(sourceRun){
     span_count:reconciliation?.span_count,expected_count:reconciliation?.expected_count,
     collection_outcome:activity?.outcome,collection_verified:collection.length>0&&collection.every(s=>s.outcome==='pass')
       &&collection.some(s=>s.evidence?.step_key==='douyin_video_processing.collection.collect_comments'),
+    qualification_verified:qualification.length>0&&qualification.every(s=>s.outcome==='pass')
+      &&Boolean(qualificationActivity),
+    qualification_identity_v1:qualificationActivity?.evidence?.qualification_identity_v1,
     sampling_input:sample,sampling_admission_v1:activity?.evidence?.sampling_admission_v1,
     identity_bound:binding?.run_id===runId&&reconciliation?.run_id===runId
       &&reconciliation?.run_binding_id===binding?.id&&reconciliation?.release_id===binding?.release_id
@@ -120,19 +129,31 @@ async function admittedRows(pool,{lineKey,run,sourceRun,sourceCommit,readProof=r
     ||s?.runtime_config?.routing?.line_key!==lineKey||t?.runtime_config?.routing?.line_key!==lineKey)fail('FROZEN_CONFIG_MISMATCH');
   for(const video of videos){const c=video.judgment_config;
     if(c?.company_id!==source.company_id||c?.tenant_id!==source.tenant_id||Number(c?.version)!==Number(source.version)
-      ||c?.policy_id!==s.policy_id||c?.run_id!==sourceRun)fail('FROZEN_CONFIG_MISMATCH');}
+      ||c?.policy_id!==s.policy_id||!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(c?.run_id||'')
+      ||pinned&&c.run_id!==sourceRun)fail('FROZEN_CONFIG_MISMATCH');}
   let receipts;
   if(pinned)receipts=[{video_id:videos[0].video_id,video_url:videos[0].video_url,
     stop_reason:'quota_reached',coverage:sample.comment_limit,comments_inserted:sample.comment_limit,
     history_verified:0,comment_ids:null,pg_rows_sha256:null}];
   else{
     const a=proof.sampling_admission_v1;
+    const q=proof.qualification_identity_v1;
     if(a?.run_id!==proof.run_id||a.run_binding_id!==proof.binding_id||a.source_commit!==proof.source_commit
       ||a.source_run!==sample.source_run||a.line!==lineKey||a.comment_limit!==sample.comment_limit
-      ||!Array.isArray(a.videos)||a.videos.length<1||a.videos.length>1000)fail('ADMISSION_RECEIPT_INVALID');
+      ||!Array.isArray(a.videos)||a.videos.length<1||a.videos.length>1000
+      ||new Set(a.videos.map(v=>v.video_id)).size!==a.videos.length||proof.qualification_verified!==true
+      ||q?.run_id!==proof.run_id||q.run_binding_id!==proof.binding_id||q.source_commit!==proof.source_commit
+      ||q.source_run!==sample.source_run||q.line!==lineKey||!Array.isArray(q.videos)
+      ||q.videos.length!==a.videos.length||new Set(q.videos.map(v=>v.video_id)).size!==q.videos.length)
+      fail('ADMISSION_RECEIPT_INVALID');
     receipts=a.videos.filter(v=>v.stop_reason==='quota_reached');
-    if(receipts.length!==videos.length||new Set(receipts.map(v=>v.video_id)).size!==receipts.length
-      ||receipts.some(v=>!videos.some(video=>video.video_id===v.video_id&&video.video_url===v.video_url)))fail('ADMISSION_VIDEO_SET_INVALID');
+    if(videos.some(video=>!a.videos.some(v=>v.video_id===video.video_id&&v.video_url===video.video_url))
+      ||receipts.some(v=>!videos.some(video=>video.video_id===v.video_id&&video.video_url===v.video_url)))
+      fail('ADMISSION_VIDEO_SET_INVALID');
+    for(const receipt of a.videos){const identity=q.videos.find(v=>v.video_id===receipt.video_id),c=receipt.qualification;
+      if(!identity||!c||identity.mode!==c.mode||identity.prior_judgment_run!==c.prior_judgment_run
+        ||identity.identity_verified!==c.identity_verified||identity.identity_sha256!==c.identity_sha256)
+        fail('ADMISSION_QUALIFICATION_INVALID');}
   }
   const allIds=receipts.flatMap(v=>v.comment_ids||[]);
   if(!pinned&&(allIds.length>50000||new Set(allIds).size!==allIds.length||allIds.some(id=>!UUID.test(id))))fail('ADMISSION_IDS_INVALID');
@@ -142,6 +163,11 @@ async function admittedRows(pool,{lineKey,run,sourceRun,sourceCommit,readProof=r
   const admitted=[];
   for(const receipt of receipts){
     const video=videos.find(v=>v.video_id===receipt.video_id);
+    if(!pinned){const q=receipt.qualification;
+      if(!q||!['fresh','cached'].includes(q.mode)||q.identity_verified!==true
+        ||!/^[a-f0-9]{64}$/.test(q.identity_sha256||'')
+        ||q.prior_judgment_run!==video?.judgment_config?.run_id
+        ||q.mode==='fresh'&&q.prior_judgment_run!==sourceRun)fail('ADMISSION_QUALIFICATION_INVALID');}
     if(!video||receipt.stop_reason!=='quota_reached'||receipt.coverage!==sample.comment_limit
       ||!Number.isSafeInteger(receipt.comments_inserted)||!Number.isSafeInteger(receipt.history_verified)
       ||receipt.comments_inserted<0||receipt.history_verified<0
