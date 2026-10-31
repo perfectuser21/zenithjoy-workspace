@@ -36,9 +36,18 @@ test('104精确订单范围只领指定飞书record，排序更靠前的旁单�
 });
 test('104缺精确订单范围时拒绝领单且不改飞书原行',async()=>{
  const f=fakeOriginalOrders();try{
-  await assert.rejects(queueRequest({...f.input,op:'claim_outreach',outreach_scope:undefined},f.deps),/OUTREACH_SCOPE|精确订单/);
+  await assert.rejects(queueRequest({...f.input,op:'claim_outreach',outreach_mode:'exact',outreach_scope:undefined},f.deps),/OUTREACH_SCOPE|精确订单/);
   assert.equal(f.rows[0].fields['状态'],'待触达');
   assert.equal(f.rows[1].fields['状态'],'待触达');
+ }finally{f.clean();}
+});
+test('104普通派发无精确scope仍按已核资格领取公司队列首单',async()=>{
+ const f=fakeOriginalOrders();try{
+  f.rows[0].fields['重复命中次数']=1;
+  f.rows[1].fields['重复命中次数']=99;
+  const claimed=await queueRequest({...f.input,op:'claim_outreach',outreach_mode:'company_queue',outreach_scope:undefined},f.deps);
+  assert.equal(claimed.length,1);assert.equal(claimed[0].id,f.rows[1].record_id);
+  assert.equal(f.rows[0].fields['状态'],'待触达');
  }finally{f.clean();}
 });
 test('真实原订单adapter同recipient两个大小写别名、两个run竞争仅领一单',async()=>{
