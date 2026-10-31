@@ -141,7 +141,8 @@ test('真实PG scratch：单条重开与审计同事务提交，独立读回原�
     .match(/CREATE TABLE IF NOT EXISTS zenithjoy\.db_audit \([\s\S]+?\n\);/)[0];
    await admin.query(auditSql.replaceAll('zenithjoy.',`${schema}.`));
    await admin.query(`CREATE TABLE ${schema}.leadgen_bridge_outbox(comment_id uuid,line_key text)`);
-   await admin.query(`CREATE TABLE ${schema}.leadgen_leads(id uuid,line_key text,nickname text)`);
+   await admin.query(`CREATE TABLE ${schema}.leadgen_leads(id uuid,line_key text,nickname text,
+     douyin_id text,profile_url text,comment_body text,source_video text)`);
    await admin.query(`CREATE TABLE ${schema}.company_config_runs(company_id uuid,tenant_id uuid,version int,
      run_id text,source_run text,snapshot jsonb)`);
    await admin.query(`INSERT INTO ${schema}.leadgen_videos(line_key,video_id,video_url,title,harvest_batch,process_status,judgment_status)

@@ -163,8 +163,12 @@ async function recoveryReadback(pool,input,sourceCommit){
   [recoveryScope.line,recoveryScope.video_url])).rows;checkRecoveryVideo(videos,rows[0]);
  const outbox=(await pool.query('SELECT comment_id FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND comment_id=$2 LIMIT 1',
   [recoveryScope.line,recoveryScope.comment_id])).rows;
- const leads=(await pool.query('SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND nickname=$2 LIMIT 1',
-  [recoveryScope.line,rows[0].nickname])).rows;
+ const leads=(await pool.query(`SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1
+   AND (nickname=$2 OR (douyin_id IS NOT NULL AND douyin_id=$3)
+     OR (profile_url IS NOT NULL AND profile_url=$4)
+     OR (comment_body=$5 AND source_video=$6)) LIMIT 1`,
+  [recoveryScope.line,rows[0].nickname,rows[0].douyin_id,rows[0].profile_url,
+   rows[0].comment_body,rows[0].source_video])).rows;
  if(outbox.length||leads.length)recoveryFail('DOWNSTREAM_PRESENT');
  return {verified:true,comment_id:recoveryScope.comment_id,source_run:recoveryScope.source_run,
   old_run:recoveryScope.old_run,new_run:input.run,prior_audit_sha256:audits[0].detail.prior_audit_sha256};
@@ -193,8 +197,11 @@ async function recoverFalseExclusion(pool,input,{sourceCommit,recovery={}}={}){
    [recoveryScope.line,recoveryScope.video_url])).rows;checkRecoveryVideo(videos,row);
   const outbox=(await client.query('SELECT comment_id FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND comment_id=$2 LIMIT 1',
    [recoveryScope.line,recoveryScope.comment_id])).rows;
-  const leads=(await client.query('SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1 AND nickname=$2 LIMIT 1',
-   [recoveryScope.line,row.nickname])).rows;
+  const leads=(await client.query(`SELECT id FROM zenithjoy.leadgen_leads WHERE line_key=$1
+    AND (nickname=$2 OR (douyin_id IS NOT NULL AND douyin_id=$3)
+      OR (profile_url IS NOT NULL AND profile_url=$4)
+      OR (comment_body=$5 AND source_video=$6)) LIMIT 1`,
+   [recoveryScope.line,row.nickname,row.douyin_id,row.profile_url,row.comment_body,row.source_video])).rows;
   if(outbox.length||leads.length)recoveryFail('DOWNSTREAM_PRESENT');
   const latestTask=await authority(),latestStop=await inspect();checkRecoveryAuthority(latestTask,latestStop,input);
   const reopened={...row.judgment_config,recovery_prior:row.judgment_config,
