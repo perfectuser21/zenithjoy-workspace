@@ -7,11 +7,11 @@ const require=createRequire(import.meta.url);
 const {dualPolicyReview}=require('../leadgen-policy-review.js');
 const {judgeCommander}=require('../judge-comment.js');
 
-const title='想入行AI的注意了！人工智能训练工程师，20天就能拿下，报考流程一条给你说清楚。';
+const title='想入行AI的注意了！人工智能训练工程师，20天就能拿下，报考流程一条给你说清楚。#人工智能训练工程师 #AI行业 #考证 #人工智能';
 const binding={company_id:policy.company_id,tenant_id:policy.tenant_id,version:policy.version,
  policy_id:policy.policy_id,run_id:'accept103102lrepair'};
 const row=body=>({id:'f5e16a6d-9183-4606-b840-9698bd710eed',comment_body:body,
- source_video:title,source_video_url:'https://www.douyin.com/video/7699489394579915663',
+ source_video:title,source_video_url:'https://www.douyin.com/video/7699344115351688872',
  relevance:'相关',intent_grade:'A',judgment_reason:'候选A',judgment_config:binding});
 const answer=(body,id)=>({grade:'A',audit:{model:'google/gemini-2.5-flash',response_id:id,
  policy_evidence:{audience_id:'recvvcNzUv5rzl',matched_rule:'求资料',comment_signal:body,
