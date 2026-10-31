@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { probeReadOnly, readOnlyInvocation } from '../phone-probe.mjs';
 import { createMerchantAdapter } from '../merchant-adapter.mjs';
+import { coordinate } from '../coordinator.mjs';
+
+// 本文件注入ADB/锁响应，仅验证控制与拒绝逻辑；真实手机采集由独立证据包验收。
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHfoAAAAASUVORK5CYII=', 'base64');
 const xml = Buffer.from('<hierarchy><node package="com.xunmeng.merchant" text="商家端详情" bounds="[0,0][200,100]"/></hierarchy>');
@@ -26,7 +29,7 @@ function deps(overrides = {}) {
   }, ...overrides };
 }
 
-test('real transport exposes only read-only operations and safely quotes SSH routing', () => {
+test('transport command builder restricts operations and safely quotes SSH routing', () => {
   const config = fixture();
   const invocation = readOnlyInvocation(config, 'screenshot', '/sdcard/probe.xml');
   assert.equal(invocation.command, 'ssh');
@@ -104,7 +107,7 @@ test('merchant adapter rejects missing business facts before invoking capture or
   await assert.rejects(a.submit({}), /SUBMISSION_DRIVER_UNAVAILABLE/);
 });
 
-test('real read-only capture remains unknown until trusted visual review, not fake verified', async () => {
+test('controlled capture remains unknown until trusted visual review, not fake verified', async () => {
   const a = createMerchantAdapter({ probe: () => probeReadOnly(fixture(), deps()) });
   const result = await a.lookup({ businessKey: 'request', intentId: 'intent', fingerprint: 'digest' });
   assert.equal(result.state, 'unknown');
@@ -202,4 +205,20 @@ test('request cannot redirect the lock authority and binding metadata is immutab
   immutable.brain.acquire = async (...args) => { immutable.deviceBinding.authority = 'changed'; return acquire(...args); };
   const result = await probeReadOnly(fixture(), immutable);
   assert.equal(JSON.parse(readFileSync(result.manifest)).deviceBindingAuthority, 'explicit-user-task');
+});
+
+test('device state response evidence is retained without copying private telephony registry', async () => {
+  const result = await probeReadOnly(fixture(), deps());
+  const manifest = JSON.parse(readFileSync(result.manifest));
+  const identity = manifest.files.find(file => file.name.endsWith('-identity.txt'));
+  assert.ok(identity); assert.equal(readFileSync(identity.path, 'utf8'), 'SERIAL123');
+  const telephony = manifest.files.find(file => file.name.endsWith('-telephony.txt'));
+  assert.ok(telephony); assert.ok(readFileSync(telephony.path, 'utf8').includes('mCallState=0'));
+});
+
+test('coordinator cannot create a submit intent from an unverified merchant plan', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'merchant-rejection-')); let captures = 0;
+  const a = createMerchantAdapter({ probe: async () => { captures++; } });
+  await assert.rejects(coordinate({ root, businessKey: 'shop:request', runId: 'run', target: { store: 'shop' }, payload: {} }, a), /PRECONDITIONS_UNVERIFIED/);
+  assert.equal(captures, 0); assert.deepEqual(readdirSync(root), []);
 });
