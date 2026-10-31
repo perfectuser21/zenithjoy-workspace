@@ -1,11 +1,14 @@
 // 小型闭合 schema 方言；未知关键字拒绝，避免误以为未实现约束已经生效。
 const keys = new Set(['type', 'minimum', 'maximum', 'minLength', 'minItems', 'items', 'required', 'properties', 'additionalProperties']);
 const types = new Set(['string', 'number', 'integer', 'boolean', 'null', 'array', 'object']);
+const applicable = { string: ['minLength'], number: ['minimum', 'maximum'], integer: ['minimum', 'maximum'],
+  boolean: [], null: [], array: ['items', 'minItems'], object: ['required', 'properties', 'additionalProperties'] };
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
 export function validSchema(schema) {
   if (!object(schema) || !types.has(schema.type) || Object.keys(schema).some(k => !keys.has(k))) return false;
+  if (Object.keys(schema).some(k => k !== 'type' && !applicable[schema.type].includes(k))) return false;
   for (const k of ['minimum', 'maximum']) if (has(schema, k) && !Number.isFinite(schema[k])) return false;
   if (has(schema, 'minimum') && has(schema, 'maximum') && schema.minimum > schema.maximum) return false;
   for (const k of ['minLength', 'minItems']) if (has(schema, k) && (!Number.isSafeInteger(schema[k]) || schema[k] < 0)) return false;
