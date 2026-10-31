@@ -25,10 +25,10 @@
       }
     },
     "douyin_comment_scoring": {
-      "sha256": "b6e4b9127f0e8bf0451d9246bd7cc923fc7c8d92afd7f437ebd6e324613557af",
+      "sha256": "e0ea6c70014a0c976a4c249ba9a2b9fecac742dfbf38097634fc258d3b083e93",
       "activities": {
-        "scoring": "4467eeb27557ff85339f5a9215373edb2ce2efbedeaad4169ad8f17853447682",
-        "mark_leads": "9038fcdb78470302b38e17456a79a10b7983898e26d7c9222b56f5aa6b9523a0"
+        "scoring": "d5e3bfa5935c40fef2b7c6c3288665a66a379225f364c9b6aa58586d28565865",
+        "mark_leads": "e8ecaa04ca5d3d0a4459269928851e52a77ffaac501b8f340c08bc3211cc1012"
       }
     },
     "douyin_lead_outreach": {

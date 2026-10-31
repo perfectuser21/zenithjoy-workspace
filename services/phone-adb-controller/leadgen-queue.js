@@ -7,6 +7,7 @@ const { judgeComment, scoreFailureReceipt, safeCommanderEvidenceCheck } = requir
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const {evaluatePolicy,dualPolicyReview,verifyStoredPolicy,safePolicyReviewReason,reviewBoundComment}=require('./leadgen-policy-review.js');
 const commentAdmission=require('./leadgen-comment-admission.js');
+const sampledAdmission=require('./leadgen-sampled-admission.js');
 async function transaction(pool, fn) {
   const client = await pool.connect();
   try { await client.query('BEGIN'); const result = await fn(client); await client.query('COMMIT'); return result; }
@@ -83,11 +84,13 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const videos=urls.length?(await pool.query(`SELECT video_id,video_url,title,line_key,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=ANY($2::text[]) AND process_status='评论已采'`,[lineKey,urls])).rows:[];
     const admitted=sourceRun===commentAdmission.SOURCE_RUN
       ?await commentAdmission.admittedRows(pool,{lineKey,run,sourceRun}):[];
+    const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+      ?await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
     const reviewed=[];
     for(const id of ids){const matches=rows.filter(r=>r.id===id);const row=matches[0];
       const owned=row&&videos.filter(v=>v.video_url===row.source_video_url&&v.title===row.source_video&&v.line_key===lineKey&&v.judgment_status==='matched');
       reviewed.push(matches.length===1&&row.line_key===lineKey&&(sourceRun?row.harvest_batch===sourceRun:row.harvest_batch===input.sources[id])
-        &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1)
+        &&(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===id):owned.length===1||sampled.some(a=>a.id===id))
         &&row.judgment_config?.run_id===run
         ?row.judgment_config?.policy_reviews?await verifyStoredPolicy(row,snapshot)
           :input.require_dual_review?{id,status:'unknown',reason:'policy_evidence_invalid'}:await evaluatePolicy(row,snapshot,deps)
@@ -101,7 +104,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     const admitted=sourceRun===commentAdmission.SOURCE_RUN
       ?(await commentAdmission.admittedRows(pool,{lineKey,run,sourceRun})).filter(r=>r.process_status==='待分拣'&&r.relevance===null)
       :[];
-    const rows=[...normal,...admitted.map(r=>({id:r.id,harvest_batch:r.harvest_batch}))];
+    const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+      ?(await sampledAdmission.admittedRows(pool,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}))
+        .filter(r=>r.process_status==='待分拣'&&r.relevance===null):[];
+    const rows=[...normal,...admitted.map(r=>({id:r.id,harvest_batch:r.harvest_batch})),...sampled.map(r=>({id:r.id,harvest_batch:r.harvest_batch}))];
     if(rows.length>1000||new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>!uuid.test(r.id)||!validRun(r.harvest_batch)||sourceRun&&r.harvest_batch!==sourceRun))throw Error('POLICY_SCORE_SCOPE_AMBIGUOUS');
     return {line:lineKey,run,source_run:sourceRun,ids:rows.map(r=>r.id),sources:Object.fromEntries(rows.map(r=>[r.id,r.harvest_batch]))};
   }
@@ -358,8 +364,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           WHERE line_key=$1 AND video_url=$2 AND process_status='评论已采' AND harvest_batch=$3`,[lineKey,row.source_video_url,row.harvest_batch])).rows;
         const admitted=sourceRun===commentAdmission.SOURCE_RUN
           ?await commentAdmission.admittedRows(client,{lineKey,run,sourceRun}):[];
+        const sampled=sourceRun&&sourceRun!==commentAdmission.SOURCE_RUN
+          ?await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun,sourceCommit:deps.sourceCommit,...deps.sampledAdmission}):[];
         if(!(sourceRun===commentAdmission.SOURCE_RUN?admitted.some(a=>a.id===row.id)
-          :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched')){
+          :videos.length===1&&videos[0].title===row.source_video&&videos[0].judgment_status==='matched'||sampled.some(a=>a.id===row.id))){
           const error=Error('POLICY_VIDEO_SCOPE_INVALID');error.blocked_id=row.id;error.next_cursor=nextCursor;throw error;
         }
         let verdict;
@@ -439,6 +447,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           const admitted=await commentAdmission.admittedRows(client,{lineKey,run,sourceRun:row.harvest_batch});
           if(!admitted.some(a=>a.id===row.id))return {blocked:true,id:row.id};
         }
+        const sampled=await sampledAdmission.admittedRows(client,{lineKey,run,sourceRun:row.harvest_batch,
+          sourceCommit:deps.sourceCommit,...deps.sampledAdmission});
+        if(sampled.length&&!sampled.some(a=>a.id===row.id))return {blocked:true,id:row.id};
         if(row.relevance==='相关'){
           const policy=await reviewBoundComment(client,lineKey,row.id,{run,scoring_run:row.judgment_config?.run_id,
             source_run:row.harvest_batch,source_video:row.source_video,source_video_url:row.source_video_url},deps,queueRequest);

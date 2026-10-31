@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -115,7 +115,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1",
+      "code_digest": "ebf2feaf302d3bb344b437eb5ba0a09e034959b689d074b88fd2cf764a07453b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "3a7b429d8d1b3a6b50d98534ec17c0a0d190db88f4ceb4306fab2fadcfdcfa7c",
-        "current_code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1",
+        "current_code_digest": "ebf2feaf302d3bb344b437eb5ba0a09e034959b689d074b88fd2cf764a07453b"
       }
     },
     "douyin_video_processing.preflight": {
@@ -353,7 +353,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -416,7 +416,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0",
+      "code_digest": "b3320a87d3726eb2a517dd86e66f02f7991b6222e4321f237d91ef92552cd211",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "7b9fa1a4dd71391cff30c9d7e6f16a8123fa0865b83d13aab37d47bd0fec07eb",
-        "current_code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0",
+        "current_code_digest": "b3320a87d3726eb2a517dd86e66f02f7991b6222e4321f237d91ef92552cd211"
       }
     },
     "douyin_video_processing.dedup": {
@@ -637,7 +637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -700,7 +700,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -833,7 +833,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "760171b7295559fd33df7457021e1e84ff96f2276bf9f51d7f578f88291cb337"
+          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "0feb5ce76a6879ded986ab324d4b2b4996d955d6dfba6d0d79ece290131bed95"
         }
       ],
-      "code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc",
+      "code_digest": "dcdb98b8cdb680a129c67d26ba39ed835e71b435bf001ddeb91f40191af96690",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "c98c1210cdf203f80237b479877e57fb3beb715e7ea8229658851b67d6b44fc3",
-        "current_code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc"
+        "reason": "共享队列新增103正式抽样来源核验且仅scoring和mark_leads业务分支受影响；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc",
+        "current_code_digest": "dcdb98b8cdb680a129c67d26ba39ed835e71b435bf001ddeb91f40191af96690"
       }
     },
     "douyin_video_processing.qualification": {
@@ -903,7 +903,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "760171b7295559fd33df7457021e1e84ff96f2276bf9f51d7f578f88291cb337"
+          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
         },
         {
           "kind": "code",
@@ -952,7 +952,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -1015,7 +1015,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -1221,13 +1221,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b",
+      "code_digest": "eecbee271e959fbf70ba841158990edc2697dbe8077da5febe01809380c020fa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "1ac869a74b30a1faa0d122b4c2164395c4453daebabc258f520b0ee98ce3903a",
-        "current_code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b"
+        "reason": "共享队列新增103正式抽样来源核验且仅scoring和mark_leads业务分支受影响；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b",
+        "current_code_digest": "eecbee271e959fbf70ba841158990edc2697dbe8077da5febe01809380c020fa"
       }
     },
     "douyin_video_processing.collection": {
@@ -1288,7 +1288,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -1351,7 +1351,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -1523,13 +1523,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "c7d264f53d2482b6cdb19cfe445312f9c17292a30882dc42d2a0a0db6ac056ec",
+      "code_digest": "487cbc50608ff9712cbf22219d73888f08488ed7d81aa8ae84e835f4206035c8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "203eec4c46c34d00641705f7fce1691108afbcfe95390eb2767883d0ffd4cdaf",
-        "current_code_digest": "c7d264f53d2482b6cdb19cfe445312f9c17292a30882dc42d2a0a0db6ac056ec"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "c7d264f53d2482b6cdb19cfe445312f9c17292a30882dc42d2a0a0db6ac056ec",
+        "current_code_digest": "487cbc50608ff9712cbf22219d73888f08488ed7d81aa8ae84e835f4206035c8"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1583,7 +1583,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -1646,7 +1646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -1799,31 +1799,31 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d",
+      "code_digest": "11cdc7ccd24c294ca9878ce6f1a0b7bb548a612685ef9ec7783e11c521d70fe4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "2ff2d074fe38c8d6d3604f63f13f098923df180e7f84f37834a642a675b5124a",
-        "current_code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d",
+        "current_code_digest": "11cdc7ccd24c294ca9878ce6f1a0b7bb548a612685ef9ec7783e11c521d70fe4"
       }
     },
     "douyin_comment_scoring.scoring": {
-      "activity_version": "2.5.0",
-      "contract_digest": "a5b363ca3d4eebe17c8ad9c88b74bca403bacb9a39d582f1efdcf61c2c42b1e6",
-      "method_version": "0.8.1",
+      "activity_version": "2.6.0",
+      "contract_digest": "eced2fd81d7ce61c939264795ec96756be273413a06d97786a1025f97d788149",
+      "method_version": "0.9.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-scoring",
-        "version": "0.8.1",
+        "version": "0.9.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md",
-        "sha256": "af8a084b3302afbf551a25b452cc5d2eb9d27974aea1a24ce822fb69df8446f3",
+        "sha256": "3e92070edc0643fe8e86d92f077ebb2c940484ba824ae12e33fec16d9f421c80",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "7fa36ec40bccb788a47acaeb53dbff473cfa7f310f341eb1ea665a78c301ad01"
+        "content_digest": "9adb4fd823f507d476a0e9b8e518d457d7bca834d6fbea3c9ce576ebffd10c27"
       },
       "code_bindings": [
         {
@@ -1859,7 +1859,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -1922,7 +1922,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -2027,7 +2027,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "760171b7295559fd33df7457021e1e84ff96f2276bf9f51d7f578f88291cb337"
+          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
         },
         {
           "kind": "code",
@@ -2042,6 +2042,13 @@
           "path": "services/phone-adb-controller/leadgen-comment-admission.js",
           "revision": "contract",
           "sha256": "cdc19c18fb5caa06219e293fe1b95ee02bc493e83d83b6bc7ce897096512decd"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-sampled-admission.js",
+          "revision": "contract",
+          "sha256": "b1ce4003bd6a3ba48948b3db6995a37972312915a589926cd8b9018dd8510ef2"
         },
         {
           "kind": "code",
@@ -2079,31 +2086,24 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "2b8f2b7403b4ed523342c9d5fbffe8070e16a0f6c79ca650687b97a0a85ddf98",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "d95dc6b3ba4c1d8d38c567fa6abb393391b785609823be426ed2d1691ede5198",
-        "current_code_digest": "2b8f2b7403b4ed523342c9d5fbffe8070e16a0f6c79ca650687b97a0a85ddf98"
-      }
+      "code_digest": "5acc0e0e312aa2b3275fefd03f3d9b3bc312a85136a92d7bc6c4679a7c75980e"
     },
     "douyin_comment_scoring.mark_leads": {
-      "activity_version": "3.6.0",
-      "contract_digest": "ec473c2c63f6ecbf2673c9ff4e80fa2d02378fd0850f4d2acb08c6ed1801e82a",
-      "method_version": "0.8.0",
+      "activity_version": "3.7.0",
+      "contract_digest": "2d30673ae867f0cee6a447aab499bdce16bcbadbcf1af1034a6abca16bbfafbe",
+      "method_version": "0.9.0",
       "skill": {
         "name": "douyin-leadgen-activity-103-mark-leads",
-        "version": "0.8.0",
+        "version": "0.9.0",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md",
-        "sha256": "211a73b7d73087b4e5fbc90796d0116ab7bc399a63d835fd106056301d3bde74",
+        "sha256": "885f21f34142d0873dbff3b90498ecc6fbce0a52c6e05e49fada14bca4b6584f",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/leadgen-activity-execution.md",
             "sha256": "39ee008407436e2c20668eae0c7d36e3d18179697ebf1da47661604f2146585a"
           }
         ],
-        "content_digest": "46691089532f56ae46b50e48424ce6222abf3cee1508c0f7b23fcc5927cc3026"
+        "content_digest": "554c426910200c3d62adf775b1e0262d1e2ce0215496844dfd564df95eabbd99"
       },
       "code_bindings": [
         {
@@ -2146,7 +2146,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -2209,7 +2209,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -2314,7 +2314,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-queue.js",
           "revision": "contract",
-          "sha256": "760171b7295559fd33df7457021e1e84ff96f2276bf9f51d7f578f88291cb337"
+          "sha256": "7b15568b3811cd6e7c7fe6e30434618a3da040f6b7232c76c9f7f0c418f42f85"
         },
         {
           "kind": "code",
@@ -2329,6 +2329,13 @@
           "path": "services/phone-adb-controller/leadgen-comment-admission.js",
           "revision": "contract",
           "sha256": "cdc19c18fb5caa06219e293fe1b95ee02bc493e83d83b6bc7ce897096512decd"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/leadgen-sampled-admission.js",
+          "revision": "contract",
+          "sha256": "b1ce4003bd6a3ba48948b3db6995a37972312915a589926cd8b9018dd8510ef2"
         },
         {
           "kind": "code",
@@ -2401,14 +2408,7 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "9114961bbc4c936eef0e90a2fafeccc75ec651c45b3bf81e7090f0727d2e967c",
-      "code_compatibility": {
-        "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "a74436c8040dcebfa93269fed132f56ac99436587b5988703df3e22985694d59",
-        "current_code_digest": "9114961bbc4c936eef0e90a2fafeccc75ec651c45b3bf81e7090f0727d2e967c"
-      }
+      "code_digest": "a25041c93583ad069426c384cafaba8cb61e2fe1197c19b8b5e75d4ffbcf0c11"
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2461,7 +2461,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -2524,7 +2524,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -2713,13 +2713,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16",
+      "code_digest": "ab3fe9ab045e32c33c7071aa4ed16efeee04a2e7fe6fe8361c594c69cb8d3fd0",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "44b9c039c5bd22c0f4858aebee08f1284c7da3c85009e97e80b06e6770180259",
-        "current_code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16",
+        "current_code_digest": "ab3fe9ab045e32c33c7071aa4ed16efeee04a2e7fe6fe8361c594c69cb8d3fd0"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2773,7 +2773,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -2836,7 +2836,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -3000,13 +3000,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288",
+      "code_digest": "eb7f57842149cad2f82e0846bd31402002bed9abcaa64563e5e268ac3f180873",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "0f265d4c2c835032b93f3836635bb30d01eedb49d0c9defe5e529b73b6a1d00d",
-        "current_code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288",
+        "current_code_digest": "eb7f57842149cad2f82e0846bd31402002bed9abcaa64563e5e268ac3f180873"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3060,7 +3060,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -3123,7 +3123,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -3280,13 +3280,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7",
+      "code_digest": "db22d58c2e64be487e0132ea9a6ef026a75244ac19ba26ed8160bc5e02525def",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "fe2e952f206fa14092e4ea25489919a4e0719a9885ba6eb599b123f94157f009",
-        "current_code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7",
+        "current_code_digest": "db22d58c2e64be487e0132ea9a6ef026a75244ac19ba26ed8160bc5e02525def"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3340,7 +3340,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "733ea2bb26693812923a75be81bd5a5cdcc6360095640b4098cb9f3023e84662"
+          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
         },
         {
           "kind": "code",
@@ -3403,7 +3403,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-rpc.mjs",
           "revision": "contract",
-          "sha256": "1a5ed2cd29a9542ec88cbd160dc6b49b98e80e953cbdb3fb24f96f7d79c52e0c"
+          "sha256": "f30dce00d8341329d5452e40d9d835bd4d3c9182487c0677408fb272ad4bf299"
         },
         {
           "kind": "code",
@@ -3570,13 +3570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1",
+      "code_digest": "ee5b8af95eaeee6bf6736b15ff49ef2669e7152ca258792fa8450e4af95ed0e6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享队列仅对两项受控恢复去除自动注入的limit；其他Activity请求字段、合同与业务判据均保持原样，真实链路回归已验证。",
-        "reviewed_by": "codex:103-recovery-limit-scope",
-        "previous_code_digest": "cc74fb3d28e8344d257951de93803477878bef4faeb199c834bf5c3127ca29b4",
-        "current_code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1"
+        "reason": "共享队列新增103已验采样准入，只在score_scope、score和policy_review分支生效；本Activity行为合同不变",
+        "reviewed_by": "codex:leadgen-sample-103-admission",
+        "previous_code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1",
+        "current_code_digest": "ee5b8af95eaeee6bf6736b15ff49ef2669e7152ca258792fa8450e4af95ed0e6"
       }
     }
   },
@@ -3706,13 +3706,13 @@
     "douyin_comment_scoring": {
       "workflow_skill": {
         "name": "douyin-leadgen-103",
-        "version": "0.10.1",
+        "version": "0.11.1",
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/SKILL.md",
-        "sha256": "ec60321f612c93324847503c3f41b6138507786b6c78edc827dce71f0a82d7c3",
+        "sha256": "c6253fd2067700bfd913582901030a45ce67de3909328df354a897437b81bc5c",
         "support_files": [
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-            "sha256": "c26b0b93aa0c45d366a0d008e9e0aa5a8d23f12a1789abb9ca58ae6fe878a802"
+            "sha256": "a2cab5066f6bebd19d80f959b16d9af2768291cda9fce9f1cd2ee3d1a11d2f90"
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/reuse-map.json",
@@ -3720,34 +3720,34 @@
           },
           {
             "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/runtime-calls.json",
-            "sha256": "188761391cee46640da871523ec8596e50b00260823644254b1424ef7c7b1a54"
+            "sha256": "743e2d0ee74c6d0b5280351d8187f5b08a3fc26f2a5ae634cd435295f0232b46"
           }
         ],
-        "content_digest": "3c14f29b751ab924baf3484e44005d575573a88fb13bbf1f0653c148d35ccd7d"
+        "content_digest": "a0385b9d0c0e8e17ea1951fdc64aaf6c542c3f1891eec347ad663419e01b948d"
       },
       "commander_skill": {
         "name": "wf-douyin_comment_scoring",
-        "version": "0.10.1",
+        "version": "0.11.1",
         "path": "services/phone-adb-controller/commander/skills/wf-douyin_comment_scoring/SKILL.md",
-        "sha256": "5d0991bce204e8c0b723a3cf26ece28b2640423ba50053565b4ac7f8d37ef3fd",
+        "sha256": "4fe0bd666a2051ff321d8e4a50976cf994e4f8b5578a0465ec3f782805191dd9",
         "support_files": [],
-        "content_digest": "5a49ad8f4fa3fded0a7804f2715436d880f300b89271fb08a0652baf3c1e1e27"
+        "content_digest": "b2fcc666abe5dc8586a49225b40f771e9206e3501d5ff371a530da3413d61111"
       },
       "dependency_file": {
         "path": "services/phone-adb-controller/skills/douyin-leadgen-103/references/activity-methods.json",
-        "sha256": "c26b0b93aa0c45d366a0d008e9e0aa5a8d23f12a1789abb9ca58ae6fe878a802"
+        "sha256": "a2cab5066f6bebd19d80f959b16d9af2768291cda9fce9f1cd2ee3d1a11d2f90"
       },
       "activities": [
         {
           "activity_ref": "douyin_comment_scoring.scoring",
           "skill_name": "douyin-leadgen-activity-103-scoring",
-          "skill_version": "0.8.1",
+          "skill_version": "0.9.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md"
         },
         {
           "activity_ref": "douyin_comment_scoring.mark_leads",
           "skill_name": "douyin-leadgen-activity-103-mark-leads",
-          "skill_version": "0.8.0",
+          "skill_version": "0.9.0",
           "skill_path": "services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md"
         }
       ]
