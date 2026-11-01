@@ -13,7 +13,7 @@ export function createNativeTransport(config,bridge){
   productionEnabled:false,
   async capture(){
    const result=await bridge.host('observe');const id=String(++sequence).padStart(4,'0');
-   for(const[key,extension]of[['picture','png'],['tree','xml']]){
+   for(const[key,extension]of[['picture','png'],['tree','xml'],...(result.statusBarRaw?[['statusBarRaw','txt']]:[])]){
     const bytes=Buffer.from(result[key].bytesBase64,'base64');if(hash(bytes)!==result[key].sha256)throw new Error('EVIDENCE_HASH_MISMATCH');
     if(key==='picture'&&(bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'))throw new Error('INVALID_SCREENSHOT');
     const path=join(root,`frame-${id}.${extension}`);writeFileSync(path,bytes,{flag:'wx',mode:0o600});result[key].localPath=path;delete result[key].bytesBase64;

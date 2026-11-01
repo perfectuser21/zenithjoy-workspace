@@ -61,6 +61,15 @@ def context(config, job_id, cleanup=False):
     elif config.get('storeProof', {}).get('owner') != config['owner']: raise ValueError('STORE_CLEANUP_CONTEXT_UNPROVEN')
 
 
+def native_status_bar(config, job_id):
+    raw=adb(config,['shell','dumpsys','window','windows']).stdout
+    parsed=parse_status_bar(raw.decode(errors='strict'),config['binding'])
+    path=Path('/private/tmp/openclaw-phone/evidence')/config['profile']/('native-'+job_id+'-windows.txt')
+    with path.open('xb') as stream:
+        stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+    return {'native':parsed,'path':str(path),'sha256':sha(raw),'at':time.time()}
+
+
 def observe(config, request):
     call_idle(config)
     actual_serial = adb(config, ['shell', 'getprop', 'ro.serialno']).stdout.decode().strip()
@@ -82,6 +91,8 @@ def observe(config, request):
             raise ValueError('WRONG_STORE')
         config['storeProof'] = {'name': facts['storeName'], 'owner': config['owner'], 'at': time.time(), 'evidence': tree['path']}
     config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'windowRaw': config['lastForegroundRaw'], 'evidence': [expected, tree['path']]}
+    status_bar = native_status_bar(config,request['jobId']) if facts['storeName'] is not None else None
+    if status_bar: config['lastFrame']['statusBarProof'] = status_bar
     draft = config.get('draft', {})
     if draft.get('owned') and draft.get('discardIntent', {}).get('commandFinished') and not facts['form'] and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理')) == 1 and facts['counts'].get('草稿箱') is not None:
         before = config.get('baselineCounts', {}).get('草稿箱')
@@ -92,7 +103,7 @@ def observe(config, request):
         elif before is not None:
             draft['autoSavedPossible'] = True
     store(Path(config['remoteRoot']) / 'config.json', config)
-    return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
+    return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'statusBarRaw': read_evidence(config,status_bar['path']) if status_bar else None, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
 
 
 def navigation_destination(config, label, job_id):
@@ -159,10 +170,13 @@ def native_action(config, request):
         mask = screen.homepage_animation_mask(target)
         approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
         bounds = [0, 0, config['binding']['width'], config['binding']['height']]
-        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask], expected_size=bounds[2:])
-        actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask], expected_size=bounds[2:])
+        current_bar = native_status_bar(config,job_id+'-current')
+        approved_bar = config['lastFrame'].get('statusBarProof') or {}
+        status_mask = agree_status_bar(current_bar['native'],approved_bar.get('native'),target['bounds'],mask)
+        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
+        actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
         if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
-        comparison = {'mode': 'whole-screen-except-unique-marketing-icon', 'mask': mask, 'sha256': actual_digest, 'evidence': current_png['path']}
+        comparison = {'mode': 'homepage-except-native-status-bar-and-unique-marketing-icon', 'mask': mask, 'statusBarMask':status_mask, 'statusBarProof':{'approved':approved_bar,'current':current_bar}, 'sha256': actual_digest, 'evidence': current_png['path'],'transparentOverlayAbsenceProven':False}
     if action == 'discard-draft':
         draft = config.get('draft', {})
         if not draft.get('owned') or draft.get('owner') != config['owner'] or not draft.get('backIntent') or draft.get('discardIntent'): raise ValueError('OWNED_DISCARD_NOT_AUTHORIZED')

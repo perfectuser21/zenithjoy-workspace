@@ -36,6 +36,7 @@ export function createControllerBridge(config, dependencies = {}) {
   const albumSource = dependencies.remote ? '' : readFileSync(new URL('./owned-album.py', import.meta.url));
   const mediaCleanupSource = dependencies.remote ? '' : readFileSync(new URL('./owned-media-cleanup.py', import.meta.url));
   const pickerSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-picker.py', import.meta.url));
+  const insetsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-window-insets.py', import.meta.url));
   const gallerySource = dependencies.remote ? '' : readFileSync(new URL('./pdd-gallery-actions.py', import.meta.url));
   const pickerActionsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-actions.py', import.meta.url));
   const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
@@ -51,10 +52,12 @@ exec(base64.b64decode('${mediaCleanupSource ? mediaCleanupSource.toString('base6
 exec(base64.b64decode('${pickerSource ? pickerSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${pickerActionsSource ? pickerActionsSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${gallerySource ? gallerySource.toString('base64') : ''}'),_host)
+exec(base64.b64decode('${insetsSource ? insetsSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.insetsSha256 = createHash('sha256').update(insetsSource).digest('hex');
   state.gallerySha256 = createHash('sha256').update(gallerySource).digest('hex');
   state.pickerSha256 = createHash('sha256').update(pickerSource).digest('hex'); state.pickerActionsSha256 = createHash('sha256').update(pickerActionsSource).digest('hex');
   state.albumSha256 = createHash('sha256').update(albumSource).digest('hex'); state.mediaCleanupSha256 = createHash('sha256').update(mediaCleanupSource).digest('hex');
