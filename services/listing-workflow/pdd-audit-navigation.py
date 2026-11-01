@@ -108,6 +108,7 @@ def audit_once(config,key):
 
 def audit_navigation(config,request,screen,before,comparison):
     key={'audit-tabs':'tabs','audit-more':'more','audit-draft-tab':'draft-tab'}[request['action']]
+    if key=='tabs': require_owner_swipe_binding(config)
     audit_once(config,key)
     if config.get('pendingAction') or config.get('pendingPicker'): raise ValueError('AUDIT_PENDING_ACTION')
     if key in {'tabs','draft-tab'}:

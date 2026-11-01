@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import{authorizedImageBytes}from'./authorized-media.mjs';
+import{requireOwnerSwipeBinding}from'./controller-bridge.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const denied=new Set(['保存草稿','提交并上架','编辑','下架','改库存','改价','发送','聊天','全选','立即复制','添加账号','管理']);
 
@@ -30,7 +31,7 @@ export function createNativeTransport(config,bridge){
    if(denied.has(label)||typeof label!=='string')throw new Error('FORBIDDEN_CONTROL');
    return bridge.host('navigate',{label,approvedScreenSha256:approval(proof)});
   },
-  async audit(action,proof){if(!['tabs','more','draft-tab'].includes(action))throw new Error('FORBIDDEN_AUDIT_ACTION');if(action==='more')draftWrites();return saveObserved(await bridge.host('audit-'+action,{approvedScreenSha256:approval(proof)}));},
+  async audit(action,proof){if(!['tabs','more','draft-tab'].includes(action))throw new Error('FORBIDDEN_AUDIT_ACTION');if(action==='tabs')requireOwnerSwipeBinding(bridge.binding);if(action==='more')draftWrites();return saveObserved(await bridge.host('audit-'+action,{approvedScreenSha256:approval(proof)}));},
   async approveDraft(proof){draftWrites();return bridge.host('approve-draft',{approvedScreenSha256:approval(proof)});},
   async setField(field,value,proof){
    draftWrites();if(!['title','groupPrice','inventory'].includes(field))throw new Error('FORBIDDEN_FIELD');

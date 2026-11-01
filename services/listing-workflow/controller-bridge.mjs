@@ -20,6 +20,9 @@ function validControllerLocation(binding) {
   Object.freeze(files);
   return true;
 }
+export function requireOwnerSwipeBinding(binding) {
+  if (!binding?.controllerReleaseCommit || !validControllerLocation(binding)) throw new Error('OWNER_SWIPE_BINDING_UNVERIFIED');
+}
 export function createControllerBridge(config, dependencies = {}) {
   const clonedBinding = structuredClone(config.binding);
   clonedBinding.materialPreparationAuthorized=config.allowMaterialPreparation===true;

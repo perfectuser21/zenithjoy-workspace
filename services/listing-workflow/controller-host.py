@@ -98,9 +98,13 @@ def inspect(request):
     return {'controllerSha256': sha(controller.read_bytes()), 'focusSha256': sha(focus.read_bytes()), 'profile': read_profile(Path.home(), binding['baseProfile'])}
 
 
+def controller_release_match(binding):
+    return re.fullmatch(r'/Users/[A-Za-z0-9_-]+/\.local/share/zenithjoy/phone-candidates/([a-f0-9]{40})/runtime/douyin-phone-adb', binding.get('controllerPath', ''))
+
+
 def verify_files(config):
     binding = config['binding']
-    release = re.fullmatch(r'/Users/[A-Za-z0-9_-]+/\.local/share/zenithjoy/phone-candidates/([a-f0-9]{40})/runtime/douyin-phone-adb', binding['controllerPath'])
+    release = controller_release_match(binding)
     if release or 'controllerReleaseCommit' in binding or 'controllerBundleFiles' in binding or 'phone-candidates' in binding['controllerPath']:
         names = ('douyin-phone-adb', 'phone-lock-lib.sh', 'phone-lock-helper.py', 'text-input-focus.py')
         files = binding.get('controllerBundleFiles')
@@ -117,6 +121,16 @@ def verify_files(config):
         return
     if sha(Path(binding['controllerPath']).read_bytes()) != binding['controllerSha256'] or sha((Path(binding['controllerPath']).parent / 'text-input-focus.py').read_bytes()) != binding['focusSha256']:
         raise ValueError('CONTROLLER_HASH_CHANGED')
+
+
+def require_owner_swipe_binding(config):
+    try:
+        binding = config.get('binding') or {}
+        if not binding.get('controllerReleaseCommit') or not controller_release_match(binding):
+            raise ValueError('candidate binding required')
+        verify_files(config)
+    except (KeyError, TypeError, ValueError, OSError) as cause:
+        raise ValueError('OWNER_SWIPE_BINDING_UNVERIFIED') from cause
 
 
 def held(config):
