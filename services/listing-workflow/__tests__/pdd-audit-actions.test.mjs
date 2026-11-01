@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+const base=new URL('../',import.meta.url).pathname;
+function run(body){const r=spawnSync('python3',['-c',`import pathlib,json,xml.etree.ElementTree as ET\ng={'__name__':'test'}\nexec(pathlib.Path(${JSON.stringify(base+'pdd-native-ui.py')}).read_text(),g)\np=pathlib.Path(${JSON.stringify(base+'pdd-audit-navigation.py')})\nif p.exists():exec(p.read_text(),g)\n${body}`],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);}
+const more=`r=ET.fromstring(pathlib.Path(${JSON.stringify(base+'__tests__/fixtures/pdd-r18-more-info.xml')}).read_text())\n`;
+function morePlan(mode){return run(more+`mode=${JSON.stringify(mode)}\nif mode=='overlay':ET.SubElement(r,'node',{'package':'com.xunmeng.merchant','class':'android.widget.Button','clickable':'true','bounds':'[400,1700][800,1800]'})\nif mode=='disabled':\n for n in r.iter('node'):\n  if n.get('text')=='填写更多信息':n.set('enabled','false')\ntry:print(json.dumps(g['audit_more_plan'](g['Screen'](ET.tostring(r,encoding='unicode'),1200,2664))))\nexcept (ValueError,KeyError) as e:print(json.dumps({'error':str(e)}))`);}
+test('R18 more-info uses only the exact sibling native button',()=>assert.deepEqual(morePlan('actual'),{label:'填写更多信息',bounds:[52,1685,1146,1812],labelBounds:[432,1717,704,1776],clickable:true}));
+for(const mode of ['overlay','disabled'])test(`more-info refuses ${mode}`,()=>assert.match(morePlan(mode).error,/AUDIT_MORE_/));
+test('pending audit intent always prevents another effect, including after known completion',()=>{const r=run(`try:g['audit_once']({'auditIntents':{'tabs':{'commandFinished':True}}},'tabs')\nexcept (ValueError,KeyError) as e:print(json.dumps({'error':str(e)}))`);assert.equal(r.error,'AUDIT_ACTION_ALREADY_ATTEMPTED');});
+test('a hidden draft label never yields a tap target',()=>{const r=run(`r=pathlib.Path(${JSON.stringify(base+'__tests__/fixtures/pdd-r19-goods-tabs.xml')}).read_text()\ntry:g['audit_draft_plan'](g['Screen'](r,1200,2664))\nexcept (ValueError,KeyError) as e:print(json.dumps({'error':str(e)}))`);assert.equal(r.error,'AUDIT_DRAFT_TAB_NOT_VISIBLE');});
