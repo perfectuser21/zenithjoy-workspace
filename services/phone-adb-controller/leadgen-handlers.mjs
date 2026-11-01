@@ -68,7 +68,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const needsCentralLock=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
   let central=centralLease||null;
   const getCentral=()=>central??=createCentralDeviceLease({brainUrl:env.BRAIN_URL,token:env.BRAIN_INTERNAL_TOKEN,
-    deviceName:serial,taskId,runId:state.run_id,runSeconds:Number(env.WF_RUN_MAX_SECONDS||1800)});
+    deviceName:serial,taskId,runId:state.run_id,expectedProjectId:env.WF_BRAIN_PROJECT_ID,
+    runSeconds:Number(env.WF_RUN_MAX_SECONDS||1800)});
   let collectionScope=null,discoveryScope=null,discoveryClosed=false;const collectionProgress=new Map();
   let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{

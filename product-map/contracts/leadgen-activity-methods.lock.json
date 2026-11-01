@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "d359333b1cd24871139e36588dc6aefd71b2d9fcd42741685a10c14bc5d55349",
+      "code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "c225cd074ad1eb9ce252a4b8f0c1aa13410a44f276afd24e8e8b61c479533fb4",
-        "current_code_digest": "d359333b1cd24871139e36588dc6aefd71b2d9fcd42741685a10c14bc5d55349"
+        "current_code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20"
       }
     },
     "douyin_video_processing.preflight": {
@@ -504,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "313fbfd32250af47015cef2bebe54d4a86ec52ac4ab173ca6b3666697cca8215",
+      "code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "d331b61b986c0d8f4bc3129e5ffbb89013ff3e025c22fed2e80ca24e1a05559e",
-        "current_code_digest": "313fbfd32250af47015cef2bebe54d4a86ec52ac4ab173ca6b3666697cca8215"
+        "current_code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff"
       }
     },
     "douyin_video_processing.dedup": {
@@ -777,7 +777,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "a16bd478d4135b8f91589504617ea2e3a3edc1dbdf03f7d6f8f366e73f19e78e",
+      "code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "f3ccb7807f5e1e08d1176a17386924e09d1a8735e956ba7cbc2c84d9be10a330",
-        "current_code_digest": "a16bd478d4135b8f91589504617ea2e3a3edc1dbdf03f7d6f8f366e73f19e78e"
+        "current_code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1092,7 +1092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -1228,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "9f2e0e793bd165ec686e1ff916b8aa1cf0647668d5ac746df63731c46c22a003",
+      "code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "3322a7bdd53b68fb487154586fc653aa468af29233055c294e86683e6362032b",
-        "current_code_digest": "9f2e0e793bd165ec686e1ff916b8aa1cf0647668d5ac746df63731c46c22a003"
+        "current_code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa"
       }
     },
     "douyin_video_processing.collection": {
@@ -1450,7 +1450,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -1544,13 +1544,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "7c8d6c4b33f4679736a566248cbbcc2ff93efe9a4b6caeecb8d5ac4ac0871bdb",
+      "code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "d339268a4c37bfdc68934eba31cb64ac6220d7eadd506c350f87b093b9e0e798",
-        "current_code_digest": "7c8d6c4b33f4679736a566248cbbcc2ff93efe9a4b6caeecb8d5ac4ac0871bdb"
+        "current_code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1747,7 +1747,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -1820,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "9da50d4797f9d23853aab89acc3e3e902556ffbea47e016d5d3e1b45ae6ed96e",
+      "code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "cbe90d2f2cb9f2f99135f3047e729fe239579553a66dfcc4be256b5af6c365ca",
-        "current_code_digest": "9da50d4797f9d23853aab89acc3e3e902556ffbea47e016d5d3e1b45ae6ed96e"
+        "current_code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1992,7 +1992,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -2107,13 +2107,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "df169a08466bbd96182d53324ef9dfbedc25389a1026c9e0b86d85b476f1c151",
+      "code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "f24f10187ace4aee0182278f44a00a8e53a74bd3216b75f932f92fcf54ca2aad",
-        "current_code_digest": "df169a08466bbd96182d53324ef9dfbedc25389a1026c9e0b86d85b476f1c151"
+        "current_code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2286,7 +2286,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -2436,13 +2436,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "4c6c83df80cc479b1cb1ba9915a6ebdb7aa75b4a37b15894e64459fe369ef5e2",
+      "code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "6e7d3662a6a710df3a691df0207bd46720a60d4cf8989225430fff30b56ce4a4",
-        "current_code_digest": "4c6c83df80cc479b1cb1ba9915a6ebdb7aa75b4a37b15894e64459fe369ef5e2"
+        "current_code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2654,7 +2654,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -2748,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "4d2f218ca256e5b49b75cdd0d27e3d6b8d4d14f9a967f78bc16a67b314aae700",
+      "code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "eba30cad119f06334b095cdefab3c5ea19989492c983835577643bb50c01a4a5",
-        "current_code_digest": "4d2f218ca256e5b49b75cdd0d27e3d6b8d4d14f9a967f78bc16a67b314aae700"
+        "current_code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2955,7 +2955,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -3035,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "b093669655d7de6be8cbc087a065baf16f6ab55fa8aa089163999aadcc07f14b",
+      "code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "78056805e3d2f0ffc6d96bb886563dc37374f7ac284491e6a7f9601bfd55582b",
-        "current_code_digest": "b093669655d7de6be8cbc087a065baf16f6ab55fa8aa089163999aadcc07f14b"
+        "current_code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3242,7 +3242,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -3315,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ff6138a2992e86dd708fcab7a2672b2d194ecc92b3e827ee79a1c4bbea104582",
+      "code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "4af0fc0916224115b4888180dc5605183fac1278c076fb3bbf396c63640494e8",
-        "current_code_digest": "ff6138a2992e86dd708fcab7a2672b2d194ecc92b3e827ee79a1c4bbea104582"
+        "current_code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3525,7 +3525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "e0645d279d8b23753ed1b1aa14a578853cfdb49956023a05bd13ed8706cda354"
+          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
         },
         {
           "kind": "code",
@@ -3605,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "82941748f6816a3394c22188dfd346f489e7056173a2b45b3473d52051987a8c",
+      "code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
         "reviewed_by": "codex:leadgen-central-lock-integration",
         "previous_code_digest": "0b8772187b09dc560daf214bbbb488d74ba375ca4f7b88f87d253e63cc89990e",
-        "current_code_digest": "82941748f6816a3394c22188dfd346f489e7056173a2b45b3473d52051987a8c"
+        "current_code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb"
       }
     }
   },

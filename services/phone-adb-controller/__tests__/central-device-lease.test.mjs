@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import {centralDeviceLockEvidence} from '../runtime-receipts.mjs';
 
 const TASK='7037d210-2af1-4af9-8635-f93a805e58b6';
-function fixture({busy=false,offline=false}={}){
+function fixture({busy=false,offline=false,projectId='68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6',expectedProjectId}={}){
   const calls=[];let owner=busy?'another-task':null,expires=null;
   const fetcher=async(url,options={})=>{
     const path=new URL(url).pathname;calls.push({path,body:options.body?JSON.parse(options.body):null});
@@ -24,10 +24,10 @@ function fixture({busy=false,offline=false}={}){
       if(owner!==JSON.parse(options.body).locked_by)return json(409,{success:false});
       owner=null;expires=null;return json(200,{success:true,released:{device_name:'SERIAL',locked_by:null}});
     }
-    if(path.endsWith('/tasks/'+TASK))return json(200,{id:TASK,status:'in_progress',project_id:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6',payload:{workflow_key:'douyin_video_processing',device_serial:'SERIAL',company_line:'jinuo',source_commit:'a'.repeat(40),run_tag:'run'}});
+    if(path.endsWith('/tasks/'+TASK))return json(200,{id:TASK,status:'in_progress',project_id:projectId,payload:{workflow_key:'douyin_video_processing',device_serial:'SERIAL',company_line:'jinuo',source_commit:'a'.repeat(40),run_tag:'run'}});
     return json(200,{success:true,locks:[{device_name:'SERIAL',locked_by:owner,expires_at:expires}]});
   };
-  const lease=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture-token',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher});
+  const lease=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture-token',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher,expectedProjectId});
   return {lease,calls,get owner(){return owner;},setOffline:v=>{offline=v;}};
 }
 
@@ -51,6 +51,15 @@ test('中央锁 owner 必须来自已登记、已认领且与本次来源吻合�
   const task=await f.lease.verifyTask({workflowKey:'douyin_video_processing',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run'});
   assert.equal(task.id,TASK);assert.equal(f.calls[0].path,'/api/brain/tasks/'+TASK);
   await assert.rejects(f.lease.verifyTask({workflowKey:'douyin_video_discovery',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run'}),/CENTRAL_LOCK_TASK_MISMATCH/);
+});
+
+test('其他公司的合法项目可运行，调用方声明项目时必须精确一致',async()=>{
+  const other='11111111-2222-4333-8444-555555555555';
+  const taskFields={workflowKey:'douyin_video_processing',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run'};
+  const valid=fixture({projectId:other,expectedProjectId:other});
+  assert.equal((await valid.lease.verifyTask(taskFields)).project_id,other);
+  const mismatch=fixture({projectId:other,expectedProjectId:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6'});
+  await assert.rejects(mismatch.lease.verifyTask(taskFields),/CENTRAL_LOCK_TASK_MISMATCH/);
 });
 
 function handlerFixture(t,{acquireError=null,localReleaseError=false}={}){
