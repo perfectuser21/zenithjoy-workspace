@@ -7,7 +7,8 @@ label="com.zenithjoy.phonerecovery"
 plist="/Library/LaunchDaemons/$label.plist"
 [[ -s "$script_path" ]] || { echo 'PHONE_RECOVERY install missing script'; exit 1; }
 [[ "${1:-}" == 'xian-m4' ]] || { echo 'PHONE_RECOVERY install invalid host'; exit 1; }
-[[ "$user_name" =~ ^[a-zA-Z0-9_-]+$ && "$HOME" =~ ^/[a-zA-Z0-9_/-]+$ ]] || exit 1
+[[ "$user_name" == jinnuoshengyuan && "$HOME" == /Users/jinnuoshengyuan ]] \
+  || { echo 'PHONE_RECOVERY_SERVICE_ACCOUNT_INVALID: must install as M4 phone service account' >&2; exit 1; }
 stage="$(mktemp)"
 trap 'rm -f "$stage"' EXIT
 cat > "$stage" <<PLIST

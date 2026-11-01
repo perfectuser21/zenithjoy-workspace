@@ -21,6 +21,7 @@
 // 顶部本来就保留搜索框，这条判据在所有样本上区分度为零，会让每个视频都跳过，
 // 比原 bug 更糟。所以这里的 fixture 一律取自 evidence 目录的原始 dump。
 import { test } from 'node:test';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -51,7 +52,7 @@ function judge(xmlPath) {
   const dir = mkdtempSync(join(tmpdir(), 'vlrestore-'));
   return new Promise((resolve) => {
     const p = spawn('zsh', [SCRIPT, '--profile', 'legacy', 'detail-restored', xmlPath], {
-      env: { ...process.env, DOUYIN_PHONE_REGISTRY: makeRegistry(dir) },
+      env: { ...process.env, ...phoneLockFixtureEnv(makeRegistry(dir), join(dir, 'phone')) },
     });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });

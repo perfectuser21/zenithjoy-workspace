@@ -1,4 +1,5 @@
 import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // douyin-phone-adb return-safe-desktop 子命令回归测试（0929 DoD 审计批次4新建）。
 // 事故形状：契约"回安全桌面"(cleanup 活动 step 3)从建成起就是零实现——
 // close-app 虽然也按 HOME 键，但只验证"前台不再是抖音"，不验证"真的回到了桌面"
@@ -61,10 +62,10 @@ function setup({ launcherPkg, settleAfter, foregroundPkg } = {}) {
 }
 
 function run({ launcherPkg, settleAfter, foregroundPkg } = {}) {
-  const { reg, adbPath, countFile } = setup({ launcherPkg, settleAfter, foregroundPkg });
+  const { dir, reg, adbPath, countFile } = setup({ launcherPkg, settleAfter, foregroundPkg });
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", "return-safe-desktop"], {
-      env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: fixtureAdb(adbPath), RSD_COUNT_FILE: countFile },
+      env: { ...process.env, ...fixturePythonEnv(), ...phoneLockFixtureEnv(reg, join(dir, 'phone')), DOUYIN_ADB_BIN: fixtureAdb(adbPath), RSD_COUNT_FILE: countFile },
     });
     let out = "", err = "";
     p.stdout.on("data", (d) => { out += d; });

@@ -77,12 +77,53 @@ test('不回收任何既有设备锁目录，含owner尚未写的起锁窗口', 
   const { tmpdir } = await import('node:os');
   const root = mkdtempSync(`${tmpdir()}/recovery-lock-`);
   try {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(`${root}/.migration-complete.json`, JSON.stringify({schema_version:1,state:'complete',source_sha256:'a'.repeat(64),legacy_root:'/private/tmp/openclaw-phone/locks'}));
     mkdirSync(`${root}/SERIAL1.lock`);
     assert.equal(acquireRecoveryLock(root, 'SERIAL1', 'recovery'), false);
     assert.equal(acquireRecoveryLock(root, 'SERIAL2', 'recovery'), true);
     assert.equal(readFileSync(`${root}/SERIAL2.lock/owner`, 'utf8').trim(), 'recovery');
     assert.match(readFileSync(`${root}/SERIAL2.lock/acquired_at`, 'utf8'), /^\d+\n$/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('未核迁移的空锁根不能被 LaunchDaemon 领锁或触发 USB 动作', async () => {
+  const { acquireRecoveryLock } = await import('../phone-recovery.mjs');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const root = mkdtempSync(`${tmpdir()}/recovery-unmigrated-`);
+  try { assert.equal(acquireRecoveryLock(root, 'SERIAL1', 'recovery'), false); }
+  finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('LaunchDaemon 拒绝伪造旧锁来源的迁移标记', async () => {
+  const { acquireRecoveryLock } = await import('../phone-recovery.mjs');
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const root = mkdtempSync(`${tmpdir()}/recovery-wrong-source-`);
+  try {
+    writeFileSync(`${root}/.migration-complete.json`, JSON.stringify({schema_version:1,state:'complete',source_sha256:'a'.repeat(64),legacy_root:'/tmp/other/locks'}));
+    assert.equal(acquireRecoveryLock(root, 'SERIAL1', 'recovery'), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('system LaunchDaemon 若误以 root 身份运行，不得另开 /var/root 手机锁根', async () => {
+  const { recoveryServiceRoot } = await import('../phone-recovery.mjs');
+  assert.throws(() => recoveryServiceRoot({username:'root',homedir:'/var/root'}), /service account/i);
+  assert.equal(recoveryServiceRoot({username:'jinnuoshengyuan',homedir:'/Users/jinnuoshengyuan'}),
+    '/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-locks');
+});
+test('LaunchDaemon 与控制器读取同一持久锁根，旧临时根消失后 review 仍挡 USB 恢复', async () => {
+  const { acquireRecoveryLock, recoveryLockRoot } = await import('../phone-recovery.mjs');
+  const { mkdtempSync, mkdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const home = mkdtempSync(`${tmpdir()}/recovery-durable-`);
+  try {
+    const root = recoveryLockRoot(home);
+    mkdirSync(`${root}/SERIAL1.lock`, { recursive: true });
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(`${root}/.migration-complete.json`, JSON.stringify({schema_version:1,state:'complete',source_sha256:'a'.repeat(64),legacy_root:'/private/tmp/openclaw-phone/locks'}));
+    rmSync(`${home}/tmp`, { recursive: true, force: true });
+    assert.equal(acquireRecoveryLock(root, 'SERIAL1', 'recovery'), false);
+    assert.match(root, /\.local\/share\/zenithjoy\/phone-locks$/);
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
 test('动作前持久化恢复时间；USB操作异常后重启仍受冷却保护', async () => {
@@ -122,7 +163,10 @@ test('安装bootstrap失败后，plist相同的下一次部署仍可重新加载
     writeFileSync(`${root}/bin-harvest/phone-recovery.mjs`, 'export {};');
     writeFileSync(`${root}/mockbin/sudo`, `#!/bin/bash\nshift\ncase "$1" in\n install) cp "\${@: -2:1}" "\${@: -1}";;\n launchctl)\n case "$2" in\n print) test -f "$HOME/loaded";;\n bootstrap) if [[ ! -f "$HOME/first-failed" ]]; then touch "$HOME/first-failed"; exit 1; fi; touch "$HOME/loaded";;\n bootout) rm -f "$HOME/loaded";;\n esac;;\n *) exit 99;;\n esac\n`);
     chmodSync(`${root}/mockbin/sudo`, 0o755);
-    const script = readFileSync(new URL('../install-phone-recovery.sh', import.meta.url), 'utf8').replaceAll('/Library/LaunchDaemons', `${root}/daemons`).replace('/usr/bin/plutil', 'true');
+    const script = readFileSync(new URL('../install-phone-recovery.sh', import.meta.url), 'utf8')
+      .replaceAll('/Library/LaunchDaemons', `${root}/daemons`).replace('/usr/bin/plutil', 'true')
+      .replace('[[ "$user_name" == jinnuoshengyuan && "$HOME" == /Users/jinnuoshengyuan ]]',
+        `[[ "$user_name" == "$(id -un)" && "$HOME" == "${root}" ]]`);
     const execute = () => spawnSync('/bin/bash', ['-c', script, 'install', 'xian-m4'], { encoding: 'utf8', env: { ...process.env, HOME: root, PATH: `${root}/mockbin:${process.env.PATH}` } });
     assert.notEqual(execute().status, 0, '首次bootstrap应失败');
     assert.equal(execute().status, 0, '同plist重试应bootstrap成功');

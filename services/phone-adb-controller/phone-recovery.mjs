@@ -1,7 +1,7 @@
 // 开机与定时只读自检；离线时在设备锁内定向恢复，不代替手机端USB授权。
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, renameSync, mkdirSync, lstatSync } from 'node:fs';
-import { homedir, hostname } from 'node:os';
+import { hostname, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,12 +39,31 @@ export function honorDisks(tree, serial) {
 }
 
 export function acquireRecoveryLock(root, serial, owner) {
-  mkdirSync(root, { recursive: true });
+  if (!verifiedRecoveryRoot(root)) return false;
   const lock = join(root, `${serial}.lock`);
   try { mkdirSync(lock); } catch { return false; }
   writeFileSync(join(lock, 'acquired_at'), `${Math.floor(Date.now() / 1000)}\n`);
   writeFileSync(join(lock, 'owner'), `${owner}\n`);
   return true;
+}
+
+export const recoveryLockRoot = home => join(home, '.local/share/zenithjoy/phone-locks');
+export function recoveryServiceRoot(account) {
+  if (account.username !== 'jinnuoshengyuan' || account.homedir !== '/Users/jinnuoshengyuan')
+    throw new Error('PHONE_RECOVERY_SERVICE_ACCOUNT_INVALID: system LaunchDaemon service account differs from phone controller');
+  return recoveryLockRoot(account.homedir);
+}
+export function verifiedRecoveryRoot(root) {
+  try {
+    const info = lstatSync(root);
+    if (!info.isDirectory() || info.isSymbolicLink() || (info.mode & 0o777) !== 0o700 || info.uid !== process.geteuid()) return false;
+    const markerPath = join(root, '.migration-complete.json');
+    const markerInfo = lstatSync(markerPath);
+    if (!markerInfo.isFile() || markerInfo.isSymbolicLink() || markerInfo.uid !== process.geteuid()) return false;
+    const marker = JSON.parse(readFileSync(markerPath, 'utf8'));
+    return marker.schema_version === 1 && marker.state === 'complete' &&
+      marker.legacy_root === '/private/tmp/openclaw-phone/locks' && /^[a-f0-9]{64}$/.test(marker.source_sha256);
+  } catch { return false; }
 }
 
 export async function recoverPhones({ targets, run, sleep, notify, bins, state, now, log, acquire, owns = () => false, loadState = () => null, persist = () => {}, notifyManagesState = false, managed = false }) {
@@ -145,7 +164,10 @@ with os.fdopen(fd, 'a+') as lock:
 `;
 
 async function main() {
-  const base = join(homedir(), '.config/zenithjoy');
+  const account = userInfo();
+  const root = recoveryServiceRoot(account);
+  const serviceHome = account.homedir;
+  const base = join(serviceHome, '.config/zenithjoy');
   mkdirSync(base, { recursive: true });
   const loadState = serial => {
     const record = {};
@@ -169,17 +191,16 @@ async function main() {
   };
   {
     const state = {};
-    const targets = targetsForHost(readFileSync(join(homedir(), '.config/openclaw/douyin-phone-profiles.tsv'), 'utf8'), process.env.PHONE_RECOVERY_HOST || '');
+    const targets = targetsForHost(readFileSync(join(serviceHome, '.config/openclaw/douyin-phone-profiles.tsv'), 'utf8'), process.env.PHONE_RECOVERY_HOST || '');
     for (const { serial } of targets) state[serial] = loadState(serial);
-    const root = '/private/tmp/openclaw-phone/locks';
     const acquire = (serial, owner) => acquireRecoveryLock(root, serial, owner);
-    const owns = (serial, owner) => { try { return readFileSync(join(root, `${serial}.lock/owner`), 'utf8').trim() === owner; } catch { return false; } };
+    const owns = (serial, owner) => { try { return verifiedRecoveryRoot(root) && readFileSync(join(root, `${serial}.lock/owner`), 'utf8').trim() === owner; } catch { return false; } };
     let defaultPolicyExists = false;
-    try { lstatSync(join(homedir(), '.config/zenithjoy/adb-service.json')); defaultPolicyExists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    try { lstatSync(join(serviceHome, '.config/zenithjoy/adb-service.json')); defaultPolicyExists = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
     const managed = Object.hasOwn(process.env, 'ZJ_ADB_HOST_CONFIG') || defaultPolicyExists;
-    const bins = { adb: managed ? join(dirname(fileURLToPath(import.meta.url)), 'adb-managed-client.py') : '/opt/homebrew/bin/adb', ctl: join(homedir(), '.local/bin/douyin-phone-adb'), hub: '/opt/homebrew/bin/uhubctl', profiler: '/usr/sbin/system_profiler', disk: '/usr/sbin/diskutil' };
+    const bins = { adb: managed ? join(dirname(fileURLToPath(import.meta.url)), 'adb-managed-client.py') : '/opt/homebrew/bin/adb', ctl: join(serviceHome, '.local/bin/douyin-phone-adb'), hub: '/opt/homebrew/bin/uhubctl', profiler: '/usr/sbin/system_profiler', disk: '/usr/sbin/diskutil' };
     const notify = async (body, serial, now) => {
-      const out = run('/usr/bin/python3', ['-c', BARK_ONCE_PY, base, serial, String(now), '/opt/homebrew/bin/node', join(homedir(), 'bin-harvest/notify-bark.js'), Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64')]);
+      const out = run('/usr/bin/python3', ['-c', BARK_ONCE_PY, base, serial, String(now), '/opt/homebrew/bin/node', join(serviceHome, 'bin-harvest/notify-bark.js'), Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64')]);
       const ok = out.status === 0 && out.stdout.includes('BARK_SENT');
       console.log(`PHONE_RECOVERY bark=${ok ? 'sent' : out.stdout.includes('BARK_SKIPPED') ? 'cooldown' : 'failed'}`);
       return ok;

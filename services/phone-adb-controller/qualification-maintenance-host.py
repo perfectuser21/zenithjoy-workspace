@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import select
 import stat
@@ -104,11 +105,13 @@ def run():
     need(all(isinstance(scope[k], str) and re.fullmatch(r'[A-Za-z0-9_-]{1,120}', scope[k])
              for k in ('serial', 'profile', 'owner')))
     need(type(scope['deadline_seconds']) is int and 1 <= scope['deadline_seconds'] <= 300)
-    # 默认正式路径；既有controller同一个测试根变量用于真实隔离fixture。
-    root = Path(os.environ.get('DOUYIN_PHONE_TMP_ROOT', '/private/tmp/openclaw-phone'))
+    # 正式路径与controller同一持久根；仅隔离fixture保留旧临时根注入。
+    root = Path(os.environ.get('DOUYIN_PHONE_LOCK_ROOT') or
+                (os.environ['DOUYIN_PHONE_TMP_ROOT'] + '/locks' if 'DOUYIN_PHONE_TMP_ROOT' in os.environ
+                 else str(Path(pwd.getpwuid(os.geteuid()).pw_dir) / '.local/share/zenithjoy/phone-locks')))
     need(root.is_absolute())
-    guard = root / 'locks' / (scope['serial'] + '.guard')
-    lock = root / 'locks' / (scope['serial'] + '.lock')
+    guard = root / (scope['serial'] + '.guard')
+    lock = root / (scope['serial'] + '.lock')
     metadata = regular(guard)
     fd = os.open(guard, os.O_RDWR | os.O_NOFOLLOW)
     try:

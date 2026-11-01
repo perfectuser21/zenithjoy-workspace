@@ -66,7 +66,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -157,7 +157,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
+      "code_digest": "effd1ec73864955852ff2ebbd6ec85853390922594072976fcd53ca564a16f85",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20",
-        "current_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
+        "current_code_digest": "effd1ec73864955852ff2ebbd6ec85853390922594072976fcd53ca564a16f85"
       }
     },
     "douyin_video_processing.preflight": {
@@ -367,7 +367,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -459,7 +459,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -490,7 +490,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
+      "code_digest": "4a377044d429b879fd797950c3faeeafe434366eb9824bd9ac5c87d2d02446f2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff",
-        "current_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
+        "current_code_digest": "4a377044d429b879fd797950c3faeeafe434366eb9824bd9ac5c87d2d02446f2"
       }
     },
     "douyin_video_processing.dedup": {
@@ -651,7 +651,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -742,7 +742,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
+      "code_digest": "05cfc29b68edae248591098303575283f82e5310816087816b5d5cad4f05836e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4",
-        "current_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
+        "current_code_digest": "05cfc29b68edae248591098303575283f82e5310816087816b5d5cad4f05836e"
       }
     },
     "douyin_video_processing.qualification": {
@@ -966,7 +966,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -1057,7 +1057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -1228,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
+      "code_digest": "ebde2e27ad7271b4436baa5329b872b206f29489793166fa81254efe16434b83",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa",
-        "current_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
+        "current_code_digest": "ebde2e27ad7271b4436baa5329b872b206f29489793166fa81254efe16434b83"
       }
     },
     "douyin_video_processing.collection": {
@@ -1316,7 +1316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -1429,7 +1429,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -1544,13 +1544,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
+      "code_digest": "4707cc583098d34a59e92c719db95810e062873e23f93d044efdf049cdc03304",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44",
-        "current_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
+        "current_code_digest": "4707cc583098d34a59e92c719db95810e062873e23f93d044efdf049cdc03304"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1618,7 +1618,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -1710,7 +1710,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -1820,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
+      "code_digest": "17bb6b6bf11d67f7ccd071de69bc5fea86c0c17764d16d95d5e17674aae7887b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6",
-        "current_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
+        "current_code_digest": "17bb6b6bf11d67f7ccd071de69bc5fea86c0c17764d16d95d5e17674aae7887b"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1894,7 +1894,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2107,13 +2107,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897",
+      "code_digest": "1d507074247e7ad1675415bad29906e5ecb6b6f1147a3633dbf7c46ec0403aee",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5",
-        "current_code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897",
+        "current_code_digest": "1d507074247e7ad1675415bad29906e5ecb6b6f1147a3633dbf7c46ec0403aee"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2188,7 +2188,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2436,13 +2436,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3",
+      "code_digest": "67718627c94327477abfe11211daf118970937e2716402b422133408847d44e7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef",
-        "current_code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3",
+        "current_code_digest": "67718627c94327477abfe11211daf118970937e2716402b422133408847d44e7"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2510,7 +2510,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2609,7 +2609,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -2640,7 +2640,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -2748,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
+      "code_digest": "a7f43e41dff744a264515cea05685a55bcec5e22048ee8db0c08fb3d0007ceb8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84",
-        "current_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
+        "current_code_digest": "a7f43e41dff744a264515cea05685a55bcec5e22048ee8db0c08fb3d0007ceb8"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2822,7 +2822,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2920,7 +2920,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -3035,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
+      "code_digest": "e8a9db67e3d623d34713271085b84d60912993a36035f9545b3c36fea4f2021e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f",
-        "current_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
+        "current_code_digest": "e8a9db67e3d623d34713271085b84d60912993a36035f9545b3c36fea4f2021e"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3109,7 +3109,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -3207,7 +3207,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -3315,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
+      "code_digest": "0b1b3e857cda88634e318a3130639b54c68c7d19d272f331679e5b00c05f71a2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902",
-        "current_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
+        "current_code_digest": "0b1b3e857cda88634e318a3130639b54c68c7d19d272f331679e5b00c05f71a2"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3389,7 +3389,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -3488,7 +3488,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
         },
         {
           "kind": "code",
@@ -3605,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
+      "code_digest": "be24d5c424dbbf4da186e45e410a00ca6b617a11eec11dc5c1dfc51e405f087e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb",
-        "current_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4"
+        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
+        "current_code_digest": "be24d5c424dbbf4da186e45e410a00ca6b617a11eec11dc5c1dfc51e405f087e"
       }
     }
   },

@@ -1,4 +1,5 @@
 import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // douyin-phone-adb account-current 误读他人主页回归测试（0930 新建）。
 //
 // 事故（0930 00:39 后，xian-m4 legacy）：抖音重开时恢复到了**别人的主页**（outreach-tick 刚私信过的
@@ -69,7 +70,7 @@ function run(ctx, args) {
     const p = spawn("zsh", [SCRIPT, "--profile", PROFILE, ...args], {
       env: {
         ...process.env,
-        DOUYIN_PHONE_REGISTRY: ctx.reg,
+        ...phoneLockFixtureEnv(ctx.reg, join(ctx.dir, 'phone-tmp')),
         DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PYTHON_BIN: spawnSync("sh",["-c","command -v python3"],{encoding:"utf8"}).stdout.trim(),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),

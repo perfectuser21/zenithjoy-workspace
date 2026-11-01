@@ -40,8 +40,8 @@ export async function readRemoteMaintenanceOriginal(scope) {
 }
 export async function readRemoteMaintenanceLocal(scope) {
  need(/^[A-Za-z0-9_-]{1,120}$/.test(scope.serial)&&/^[A-Za-z0-9_-]{1,120}$/.test(scope.local_owner));
- const program=String.raw`import os,pathlib,stat,sys,json
-s=json.loads(sys.stdin.read(65537));root=pathlib.Path('/private/tmp/openclaw-phone/locks');p=root/(s['serial']+'.lock')
+ const program=String.raw`import os,pathlib,pwd,stat,sys,json
+s=json.loads(sys.stdin.read(65537));root=pathlib.Path(pwd.getpwuid(os.geteuid()).pw_dir)/'.local/share/zenithjoy/phone-locks';p=root/(s['serial']+'.lock')
 assert root.is_dir() and not root.is_symlink()
 if not os.path.lexists(p):print(json.dumps({'state':'free'}))
 else:

@@ -6,6 +6,7 @@
 // 树定位零成本且不依赖外部模型；视觉只该做兜底。另：legacy 机面板是 4 行（无「位置距离」），
 // same_city 请求原来整词作废，应降级为 unlimited 并标注 location=unavailable。
 import { test } from 'node:test';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -32,7 +33,7 @@ function cli(args, extraEnv = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'stl-'));
   return new Promise((resolve) => {
     const p = spawn('zsh', [SCRIPT, '--profile', 'legacy', ...args], {
-      env: { ...process.env, DOUYIN_PHONE_REGISTRY: makeRegistry(dir), ...extraEnv },
+      env: { ...process.env, ...phoneLockFixtureEnv(makeRegistry(dir), join(dir, 'phone')), ...extraEnv },
     });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });

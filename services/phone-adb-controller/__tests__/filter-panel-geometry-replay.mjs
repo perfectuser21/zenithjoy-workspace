@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -59,7 +60,7 @@ Image.new('RGB',(width,1600),(45,45,45)).save(results)
   if (drawn.status !== 0) throw Error(`Pillow draw failed: ${drawn.stderr.trim()}`);
   const registry = join(dir, 'profiles.tsv');
   writeFileSync(registry, `replay\tSER1\tFAKE-MODEL\t${width}\t1600\n`);
-  const env = { ...process.env, DOUYIN_PHONE_REGISTRY: registry, DOUYIN_PYTHON_BIN: python, DOUYIN_PHONE_TMP_ROOT: dir };
+  const env = { ...process.env, ...phoneLockFixtureEnv(registry, dir), DOUYIN_PYTHON_BIN: python };
   const script = (name) => {
     const start = source.indexOf(`\n${name}() {`);
     const end = name === 'verify_filter_visual' ? source.indexOf('\nPY\n}\n', start) + 3 : source.indexOf('\n}\n', start);

@@ -121,7 +121,7 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py adb-existing-route.py adb-managed-client.py adb-host-service.py adb-host-maintenance.py adb-process-observation.py maintenance-task-authority.py locate-element.py douyin-phone-adb clipboard-widget-cancel.py search-video-tab.py text-input-focus.py input-runtime-release.py
+  phone-lock-lib.sh phone-lock-helper.py phone-lock-root.py adb-existing-route.py adb-managed-client.py adb-host-service.py adb-host-maintenance.py adb-process-observation.py maintenance-task-authority.py locate-element.py douyin-phone-adb clipboard-widget-cancel.py search-video-tab.py text-input-focus.py input-runtime-release.py
   decode-recording.py runtime/scrcpy-runtime.py runtime/scrcpy-adb-shim.py runtime/runtime-policy.json runtime/runtime-policy-sdk33.json
   bypass-report.sh
 )
@@ -250,6 +250,12 @@ node "$D/deployment-backend.mjs" check-child "$(git rev-parse HEAD)" "$WF_PHONE_
 commander_admission
 [[ "$FAILED" == 0 ]] || exit 1
 deploy_release_evidence
+# PHONE_LOCK_MIGRATION_PREFLIGHT: 准入/来源核验后、任意远端代码写入前核持久根。
+# 迁移另行执行并核验；本脚本绝不隐式复制或清除现场 review。
+if ! ssh xian-m4 'python3 - verify-production' < "$D/phone-lock-root.py" >/dev/null; then
+  echo 'PHONE_LOCK_ROOT_UNSAFE: M4 持久锁迁移未验证，拒绝正式部署' >&2
+  exit 1
+fi
 
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
@@ -326,7 +332,7 @@ for host in xian-m4; do
   scp -q -p "$D/input-runtime-release.py" "$D/deployment-transaction.py" "$D/deployment-maintenance.py" "$host:$_input_stage/"
   if ssh "$host" "python3 $_input_stage/input-runtime-release.py capture ~/bin-harvest ~/.local/bin > $_input_stage/expected.json" && \
      scp -q -p "$D/douyin-phone-adb" "$D/text-input-focus.py" "$host:$_input_stage/" && \
-     ssh "$host" "python3 $_input_stage/input-runtime-release.py install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin"; then
+     ssh "$host" "python3 $_input_stage/input-runtime-release.py install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv ~/.local/share/zenithjoy/phone-locks ~/bin-harvest ~/.local/bin"; then
     echo "    ✅ input controller/helper pair CAS verified in both runtime paths"
   else
     echo "    ❌ input pair rejected (revision/source/CAS/readback); deployment cannot be declared successful"

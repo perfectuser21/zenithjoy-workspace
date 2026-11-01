@@ -1,4 +1,5 @@
 import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,existsSync} from 'node:fs';
@@ -93,7 +94,7 @@ for(const condition of ['no-owner','other','expired','free']) test(`SDK31真实C
   writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)-(condition==='expired'?1900:0)));
  }
  const args=condition==='no-owner'?[]:['--lock-owner',owner];
- const r=spawnSync('zsh',[new URL('../douyin-phone-adb',import.meta.url).pathname,'--profile','cloud',...args,'current-video-link','nonce-lock'],{encoding:'utf8',timeout:15000,env:{...process.env,TEST_DIR:dir,DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PHONE_REGISTRY:reg,DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PYTHON_BIN:'/usr/bin/python3'}});
+ const r=spawnSync('zsh',[new URL('../douyin-phone-adb',import.meta.url).pathname,'--profile','cloud',...args,'current-video-link','nonce-lock'],{encoding:'utf8',timeout:15000,env:{...process.env,...phoneLockFixtureEnv(reg,join(dir,'tmp')),TEST_DIR:dir,DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PYTHON_BIN:'/usr/bin/python3'}});
  assert.notEqual(r.status,0);assert.match(r.stderr,condition==='no-owner'?/CLIPBOARD_NONCE_LOCK_OWNER_REQUIRED/:/required lock owner|lock lease budget/);
  assert.ok(!existsSync(join(dir,'adb.log')),'拒绝锁必须发生在所有ADB动作之前');
 });

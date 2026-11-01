@@ -28,6 +28,7 @@
 // 后者跟 current-video-link 内部草稿页解析步骤的 UI 树逐字节相同。
 
 import { test } from 'node:test';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -54,7 +55,7 @@ function judge(keyword, xmlPath) {
   const dir = mkdtempSync(join(tmpdir(), 'kwmatch-'));
   return new Promise((resolve) => {
     const p = spawn('zsh', [SCRIPT, '--profile', 'legacy', 'search-kw-matches', keyword, xmlPath], {
-      env: { ...process.env, DOUYIN_PHONE_REGISTRY: makeRegistry(dir) },
+      env: { ...process.env, ...phoneLockFixtureEnv(makeRegistry(dir), join(dir, 'phone')) },
     });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });

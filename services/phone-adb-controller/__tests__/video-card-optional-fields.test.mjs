@@ -5,12 +5,13 @@ import {spawnSync} from 'node:child_process';
 import {mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 const script=new URL('../douyin-phone-adb',import.meta.url).pathname;
 const fixture=new URL('./fixtures/real-ai30-screen3-grid-no-duration.xml',import.meta.url);
 function parse(xml,{directory=false,missing=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'video-card-optional-')),reg=join(dir,'profiles.tsv'),path=directory?dir:join(dir,'grid.xml');
  writeFileSync(reg,'legacy\tSER1\tANY-MODEL\t1199\t2663\n');if(!directory&&!missing)writeFileSync(path,xml);
- return spawnSync('zsh',[script,'--profile','legacy','video-cards-from-xml',path],{encoding:'utf8',env:{...process.env,HOME:dir,DOUYIN_PHONE_REGISTRY:reg,TMPDIR:dir,DOUYIN_ADB_BIN:fixtureAdb('/usr/bin/false')}});
+ return spawnSync('zsh',[script,'--profile','legacy','video-cards-from-xml',path],{encoding:'utf8',env:{...process.env,HOME:dir,...phoneLockFixtureEnv(reg,join(dir,'tmp')),TMPDIR:dir,DOUYIN_ADB_BIN:fixtureAdb('/usr/bin/false')}});
 }
 test('原AI30第三屏61节点零时长：纯CLI解析正常输出2张几何有效真实卡片且DUR为空',()=>{
  const xml=readFileSync(fixture,'utf8');assert.equal((xml.match(/<node\b/g)||[]).length,61);assert.equal((xml.match(/text="\d{1,2}:\d{2}"/g)||[]).length,0);

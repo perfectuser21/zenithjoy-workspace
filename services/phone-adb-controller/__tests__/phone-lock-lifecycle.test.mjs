@@ -1,14 +1,32 @@
 import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // 297d7f32：真实控制器 + 隔离锁目录/fakeADB，人工会话退出必须收尾，不操作手机。
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const script = new URL('../douyin-phone-adb', import.meta.url).pathname;
+const rootScript = new URL('../phone-lock-root.py', import.meta.url).pathname;
 const python = spawnSync('sh', ['-c', 'command -v python3'], {encoding:'utf8'}).stdout.trim();
+test('受控测试夹具拒绝仓库路径或非测试目录冒充手机锁根',()=>{
+ assert.throws(()=>phoneLockFixtureEnv('/Users/jinnuoshengyuan/profiles.tsv','/tmp/fixture-phone'),/PHONE_LOCK_FIXTURE_UNSAFE/);
+ assert.throws(()=>phoneLockFixtureEnv('/tmp/fixture-profiles.tsv','/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-locks'),/PHONE_LOCK_FIXTURE_UNSAFE/);
+});
+test('生产锁根验证只返回状态并拒绝伪造路径，不输出系统账户 home',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'phone-root-verify-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const home=realpathSync(dir),otherHome=join(home,'other-account'),root=join(home,'.local','share','zenithjoy','phone-locks');
+ mkdirSync(otherHome);
+ mkdirSync(root,{recursive:true,mode:0o700});
+ writeFileSync(join(root,'.migration-complete.json'),JSON.stringify({schema_version:1,state:'complete',source_sha256:'a'.repeat(64),legacy_root:'/private/tmp/openclaw-phone/locks'}));
+ const probe=`import importlib.util, runpy, sys, types\nspec=importlib.util.spec_from_file_location('phone_lock_root',${JSON.stringify(rootScript)})\nmod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)\nmod.pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=${JSON.stringify(home)})\nmod.verify_root(${JSON.stringify(root)})\ntry: mod.verify_root(${JSON.stringify(join(home,'forged-locks'))})\nexcept ValueError: pass\nelse: raise AssertionError('forged root admitted')\nmod.pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=${JSON.stringify(otherHome)})\ntry: mod.verify_root(${JSON.stringify(root)})\nexcept ValueError: pass\nelse: raise AssertionError('wrong system account admitted')\nmod.pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=${JSON.stringify(home)})\nsys.argv=[${JSON.stringify(rootScript)},'verify-root',${JSON.stringify(root)}]\nrunpy.run_path(${JSON.stringify(rootScript)},run_name='__main__')\n`;
+ const result=spawnSync(python,['-c',probe],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);assert.equal(result.stdout,'');
+ const legacy=spawnSync(python,[rootScript,'trusted-root'],{encoding:'utf8'});
+ assert.notEqual(legacy.status,0,'旧命令不得输出系统账户 home');assert.equal(legacy.stdout,'');
+});
 function setup(t) {
   const dir=mkdtempSync(join(tmpdir(),'phone-lock-')); t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const reg=join(dir,'registry.tsv'), adb=join(dir,'adb'), ssh=join(dir,'ssh'), pgrep=join(dir,'pgrep');
@@ -18,13 +36,84 @@ function setup(t) {
   writeFileSync(ssh,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/ssh.log"\n[ -f "$TEST_DIR/ssh-fail" ] && exit 255\nfor last; do :; done\nexec /bin/sh -c "$last"\n`,{mode:0o755});
   writeFileSync(join(dir,'curl'),'#!/bin/sh\ncat "$TEST_DIR/tasks.json"\n',{mode:0o755});
   writeFileSync(join(dir,'tasks.json'),'[]');
-  const env={...process.env,PATH:dir+':'+process.env.PATH,TEST_DIR:dir,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
+  const env={...process.env,PATH:dir+':'+process.env.PATH,TEST_DIR:dir,...phoneLockFixtureEnv(reg,join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
   const lock=join(dir,'tmp','locks','SER1.lock');
   const run=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
   const stale=(owner='probe-btr-budget')=>{mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),owner+'\n');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));};
   const actions=()=>existsSync(join(dir,'adb.log'))?readFileSync(join(dir,'adb.log'),'utf8'):'';
   return {dir,env,lock,run,stale,actions};
 }
+test('临时根被重启清空时，未完成持久迁移的手机不能被判空闲或重新领锁',t=>{
+ const c=setup(t);
+ const durable=join(c.dir,'durable-phone-locks');
+ mkdirSync(c.lock,{recursive:true});
+ writeFileSync(join(c.lock,'owner'),'unknown-native-run\n');
+ writeFileSync(join(c.lock,'standalone_review_required'),'unknown-native-run\n');
+ rmSync(join(c.dir,'tmp'),{recursive:true,force:true});
+ const env={...c.env,DOUYIN_PHONE_LOCK_ROOT:durable,DOUYIN_PHONE_LOCK_TEST_MODE:''};
+ const invoke=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
+ const status=invoke('lock-status');
+ assert.notEqual(status.status,0,'未迁移持久根不能返回 lock=free');
+ assert.doesNotMatch(status.stdout,/lock=free/);
+ assert.notEqual(invoke('lock-acquire-new','another-run').status,0);
+ assert.equal(c.actions(),'');
+});
+test('外部环境不能把正式锁根指向伪造的空持久目录',t=>{
+ const c=setup(t),fake=join(realpathSync(c.dir),'fake-lock-root');
+ mkdirSync(fake,{mode:0o700});
+ writeFileSync(join(fake,'.migration-complete.json'),JSON.stringify({schema_version:1,state:'complete',source_sha256:'a'.repeat(64),legacy_root:join(c.dir,'missing-old')}));
+ const env={...c.env,DOUYIN_PHONE_LOCK_ROOT:fake,DOUYIN_PHONE_LOCK_TEST_MODE:''};
+ const r=spawnSync('zsh',[script,'--profile','p1','lock-status'],{env,encoding:'utf8',timeout:20000});
+ assert.notEqual(r.status,0,'正式锁根必须精确绑定 HOME 的持久路径');
+ assert.doesNotMatch(r.stdout,/lock=free/);assert.equal(c.actions(),'');
+ const forgedHome=spawnSync('zsh',[script,'--profile','p1','lock-status'],{env:{...env,HOME:realpathSync(c.dir)},encoding:'utf8',timeout:20000});
+ assert.notEqual(forgedHome.status,0,'同时伪造 HOME 和锁根也不能替换系统账户 home');
+ assert.doesNotMatch(forgedHome.stdout,/lock=free/);
+ const forgedFixture=spawnSync('zsh',[script,'--profile','p1','lock-status'],{env:{...env,DOUYIN_PHONE_LOCK_TEST_MODE:'1',NODE_TEST_CONTEXT:''},encoding:'utf8',timeout:20000});
+ assert.notEqual(forgedFixture.status,0,'生产调用不能只设测试模式绕过持久根');
+});
+test('受控迁移完整保留 review、一次性 claim 和 orphan 历史；重启后仍拒重领',t=>{
+ const c=setup(t),old=join(c.dir,'tmp','locks'),durable=join(realpathSync(c.dir),'durable-phone-locks');
+ mkdirSync(c.lock,{recursive:true});
+ writeFileSync(join(c.lock,'owner'),'original-run\n');
+ writeFileSync(join(c.lock,'standalone_review_required'),'original-run\n');
+ writeFileSync(join(c.lock,'acquired_at'),'1\n');
+ writeFileSync(join(old,'SER1.guard'),'');
+ mkdirSync(join(old,'standalone-claims','SER1'),{recursive:true});
+ writeFileSync(join(old,'standalone-claims','SER1','original-run'),'original-run\n');
+ mkdirSync(join(old,'.orphan-quarantine-old'),{recursive:true});
+ writeFileSync(join(old,'.orphan-quarantine-old','owner'),'earlier-run\n');
+ const migrated=spawnSync(python,[new URL('../phone-lock-root.py',import.meta.url).pathname,'migrate',old,durable],{encoding:'utf8'});
+ assert.equal(migrated.status,0,migrated.stderr);
+ assert.equal(JSON.parse(migrated.stdout).review_owners,1);
+ assert.equal(readFileSync(join(durable,'standalone-claims','SER1','original-run'),'utf8'),'original-run\n');
+ assert.equal(readFileSync(join(durable,'.orphan-quarantine-old','owner'),'utf8'),'earlier-run\n');
+ rmSync(join(c.dir,'tmp'),{recursive:true,force:true});
+ const env={...c.env,DOUYIN_PHONE_LOCK_ROOT:durable};
+ const invoke=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
+ const status=invoke('lock-status');
+ assert.equal(status.status,0,status.stderr);assert.match(status.stdout,/owner=original-run.*reclaimable=false/);
+ const preflight=spawnSync(python,[new URL('../phone-lock-root.py',import.meta.url).pathname,'check-serial',durable,'SER1'],{encoding:'utf8'});
+ assert.notEqual(preflight.status,0,'正式启动前必须挡住持久 review');
+ assert.match(preflight.stderr,/review|owner|held/);
+ assert.notEqual(invoke('lock-acquire-new','another-run').status,0);
+ assert.equal(c.actions(),'');
+});
+test('迁移拒绝活锁、缺 review 或持有中的旧 guard，不发布半成品持久根',t=>{
+ const c=setup(t),old=join(c.dir,'tmp','locks'),durable=join(realpathSync(c.dir),'durable-phone-locks');
+ mkdirSync(c.lock,{recursive:true});writeFileSync(join(c.lock,'owner'),'active-run\n');
+ writeFileSync(join(old,'SER1.guard'),'');
+ const migrate=()=>spawnSync(python,[new URL('../phone-lock-root.py',import.meta.url).pathname,'migrate',old,durable],{encoding:'utf8'});
+ let result=migrate();assert.notEqual(result.status,0);assert.match(result.stderr,/review/);assert.ok(!existsSync(durable));
+ writeFileSync(join(c.lock,'standalone_review_required'),'active-run\n');
+ const code=`import fcntl,subprocess,sys\nf=open(sys.argv[1],'r+');fcntl.flock(f,fcntl.LOCK_EX)\nr=subprocess.run(sys.argv[2:],capture_output=True,text=True);print(r.stderr,file=sys.stderr);sys.exit(r.returncode)`;
+ result=spawnSync(python,['-c',code,join(old,'SER1.guard'),python,new URL('../phone-lock-root.py',import.meta.url).pathname,'migrate',old,durable],{encoding:'utf8'});
+ assert.notEqual(result.status,0);assert.match(result.stderr,/guard busy/);assert.ok(!existsSync(durable));
+ writeFileSync(join(c.lock,'acquired_at'),'1\n');
+ rmSync(join(old,'SER1.guard'));
+ writeFileSync(join(old,'OTHER.guard'),'');
+ result=migrate();assert.notEqual(result.status,0);assert.match(result.stderr,/owner guard missing/);assert.ok(!existsSync(durable));
+});
 test('with-lock 正常退出：命令先持锁，关App在释放之前，锁最后free',t=>{
  const c=setup(t); const r=c.run('with-lock','probe','--','sh','-c','test "$(cat "$TEST_DIR/tmp/locks/SER1.lock/owner")" = probe');
  assert.equal(r.status,0,r.stderr); assert.match(c.actions(),/am force-stop/); assert.ok(!existsSync(c.lock));
@@ -104,6 +193,20 @@ test('巡检接入每分钟claimer且helper与控制器一起部署两处',()=>{
  const base=new URL('../',import.meta.url);const claimer=readFileSync(new URL('device-job-claimer.sh',base),'utf8');
  assert.match(claimer,/lock-reap/);assert.match(claimer,/lock-status/);
  const deploy=readFileSync(new URL('deploy.sh',base),'utf8');assert.match(deploy,/DEVICE_CTL_FILES=\([\s\S]*phone-lock-lib\.sh[\s\S]*phone-lock-helper\.py[\s\S]*?\)/);
+});
+test('正式部署先核持久迁移，再使用持久锁根；启动器先于运行冻结拒绝 review',()=>{
+ const base=new URL('../',import.meta.url);
+ const deploy=readFileSync(new URL('deploy.sh',base),'utf8');
+ const runner=readFileSync(new URL('leadgen-run.sh',base),'utf8');
+ const controller=readFileSync(new URL('douyin-phone-adb',base),'utf8');
+ assert.ok(deploy.indexOf('PHONE_LOCK_MIGRATION_PREFLIGHT')>=0);
+ assert.ok(deploy.indexOf('PHONE_LOCK_MIGRATION_PREFLIGHT')<deploy.indexOf('deploy_m4_payload "$host"'));
+ assert.match(deploy,/input-runtime-release\.py install-maintenance[^\n]*phone-locks/);
+ assert.match(deploy,/DEVICE_CTL_FILES=\([\s\S]*phone-lock-root\.py[\s\S]*?\)/);
+ assert.ok(runner.includes('phone-lock-root.py" verify-root'));
+ assert.ok(runner.indexOf('phone-lock-root.py" verify-root')<runner.indexOf('phone-lock-root.py" check-serial'));
+ assert.ok(runner.indexOf('phone-lock-root.py" check-serial')<runner.indexOf('runtime-receipts.mjs" prepare'));
+ assert.match(controller,/phone-lock-root\.py" verify-root/);
 });
 test('lock-reap 已明确属于另一手机的任务不阻止本机回收（短profile不误匹配priority P1）',t=>{
  const c=setup(t);c.stale();writeFileSync(join(c.dir,'tasks.json'),JSON.stringify([{id:'other',status:'in_progress',task_type:'qiumi_task',priority:'P1',payload:{phone:{serial:'OTHER',profile:'other-profile'}}}]));

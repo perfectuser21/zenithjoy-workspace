@@ -9,6 +9,7 @@ import {createHash} from 'node:crypto';
 import {Worker} from 'node:worker_threads';
 import {execInput} from '../../leadgen-client.mjs';
 import {startCollectionLeafProducer} from '../../collection-leaf-producer.mjs';
+import {phoneLockFixtureEnv} from '../helpers/phone-lock-fixture.mjs';
 import {receiptPath} from '../../native-operation-receipt.mjs';
 
 const mode=process.argv[2],dir=mkdtempSync(join(tmpdir(),'native-ipc-synthetic-'));
@@ -47,7 +48,7 @@ try{
  process.env.PATH=bin+':'+beforePath;
  producer=await startCollectionLeafProducer({directory:dir,policy,serial:'IPC-FAKE',deadlineMs:Date.now()+14000,env:process.env});
  const receipt={runDir,operationId:'controller-ipc',runId:'synthetic-controller-ipc',taskId:'synthetic-task',profile:'ipc-fixture',serial:'IPC-FAKE',sourceCommit:'a'.repeat(40),owner:'synthetic-owner',activity:'collection'};
- const env={...process.env,...producer.env,HOME:dir,DOUYIN_PHONE_REGISTRY:registry,DOUYIN_PHONE_TMP_ROOT:join(dir,'phone'),DOUYIN_PYTHON_BIN:python,DOUYIN_ADB_BIN:fileURLToPath(new URL('../../adb-managed-client.py',import.meta.url)),WFR_COLLECTION_POLICY_FILE:policyFile,ZJ_ADB_HOST_CONFIG:policyFile};
+ const env={...process.env,...producer.env,HOME:dir,...phoneLockFixtureEnv(registry,join(dir,'phone')),DOUYIN_PYTHON_BIN:python,DOUYIN_ADB_BIN:fileURLToPath(new URL('../../adb-managed-client.py',import.meta.url)),WFR_COLLECTION_POLICY_FILE:policyFile,ZJ_ADB_HOST_CONFIG:policyFile};
  for(const k of ['ADB_SERVER_SOCKET','ANDROID_ADB_SERVER_PORT','ANDROID_ADB_SERVER_ADDRESS','DOUYIN_ADB_PORT'])delete env[k];
  try{result=await execInput(python,[fileURLToPath(new URL('./native-ipc-controller.py',import.meta.url)),marker,fileURLToPath(new URL('../../douyin-phone-adb',import.meta.url))],{receipt,env,timeoutMs:11000});}
  catch(e){error={message:e.message,executionStopped:e.executionStopped};}

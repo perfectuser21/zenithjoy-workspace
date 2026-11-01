@@ -15,7 +15,7 @@ function fixture(t){
  assert.equal(scp(join(service,'input-runtime-release.py')).status,0);
  const capture=()=>ssh(`python3 ${stage}/input-runtime-release.py capture ~/bin-harvest ~/.local/bin > ${stage}/expected.json`);
  const upload=()=>scp(join(service,'douyin-phone-adb'),join(service,'text-input-focus.py'));
- const install=(dirs='~/bin-harvest ~/.local/bin')=>ssh(`python3 ${stage}/input-runtime-release.py install ${stage}/douyin-phone-adb ${stage}/text-input-focus.py ${stage}/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ${dirs}`);
+ const install=(dirs='~/bin-harvest ~/.local/bin')=>ssh(`python3 ${stage}/input-runtime-release.py install ${stage}/douyin-phone-adb ${stage}/text-input-focus.py ${stage}/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv ~/.local/share/zenithjoy/phone-locks ${dirs}`);
  return {root,stage,ssh,scp,capture,upload,install};
 }
 test('paired smoke executes real capture/install and reads both actual runtime pairs',t=>{
@@ -144,7 +144,7 @@ for(const kind of ['wrong-host','wrong-directory','disabled-loop'])test(`真实�
  const deploy=join(service,'deploy.sh'),original=readFileSync(deploy,'utf8'),start=original.indexOf('echo "=== [4/4]');
  let block=original.slice(start);
  if(kind==='wrong-host')block=block.replace('for host in xian-m4; do','for host in unregistered-host; do');
- if(kind==='wrong-directory')block=block.replace('install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin','install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/wrong');
+ if(kind==='wrong-directory')block=block.replace('install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv ~/.local/share/zenithjoy/phone-locks ~/bin-harvest ~/.local/bin','install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv ~/.local/share/zenithjoy/phone-locks ~/bin-harvest ~/wrong');
  if(kind==='disabled-loop')block=block.replace('for host in xian-m4; do','for host in; do');
  const mutation=join(root,'mutated-deploy.sh');writeFileSync(mutation,original.slice(0,start)+block);
  const result=spawnSync(process.execPath,[join(service,'__tests__/fixtures/paired-deploy-install-fragment.mjs'),root,deploy,mutation],{encoding:'utf8',timeout:30000,env:{...process.env,PATH:root+':'+process.env.PATH}});

@@ -1,4 +1,5 @@
 import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -33,7 +34,7 @@ esac
       env: {
         ...process.env, ...fixturePythonEnv(),
         DOUYIN_ADB_BIN: fixtureAdb(adb),
-        DOUYIN_PHONE_REGISTRY: registry,
+        ...phoneLockFixtureEnv(registry, join(dir, 'phone')),
         DOUYIN_PHONE_TMP_ROOT: join(dir, 'phone'),
         FOREGROUND_FIXTURE: dir,
       },
