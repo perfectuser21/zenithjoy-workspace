@@ -173,6 +173,7 @@ jobs:
             exit 1
           fi
           TOOL_CHECKOUT="$(prepare_deployment_checkout "$REPO" "$TOOL_SHA")"
+          export WF_PHONE_TOOL_SHA="$TOOL_SHA"
 
           echo "=== [2/4] ${DEPLOY_MODE}（固定 ${DEPLOY_SHA}）==="
           cd "$DEPLOY_CHECKOUT"

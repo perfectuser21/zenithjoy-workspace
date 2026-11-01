@@ -121,6 +121,27 @@ test('安全安装入口独立于业务promote：无业务run仍可进入只围�
  assert.equal(safety[0].candidate.business_runtime_status,'not_evaluated');
 });
 
+test('旧事务恢复保持业务source SHA，另核干净同仓后代工具checkout',async t=>{
+ const f=await fixture(t),toolRoot=join(f.root,'..','tool-checkout');
+ const git=(root,...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8'}).trim();
+ git(f.root,'worktree','add','--detach',toolRoot,f.sha);
+ writeFileSync(join(toolRoot,'services/phone-adb-controller/entry.sh'),'reviewed tool fix\n');
+ git(toolRoot,'add','.');git(toolRoot,'-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fix: recovery tool');
+ const toolSha=git(toolRoot,'rev-parse','HEAD');git(f.root,'update-ref','refs/remotes/origin/main',toolSha);
+ let observed;
+ const input={...f,mode:'maintenance-recover',transaction:'phone-safety-'+f.sha.slice(0,24),toolRoot,toolSha,
+  runSafetyFn:async value=>{observed=value;return{source_commit:value.sha,secured:true};}};
+ await prepareAndDeploy(input);
+ assert.equal(observed.sha,f.sha);
+ assert.equal(observed.toolSha,toolSha);
+ assert.equal(observed.toolRoot,toolRoot);
+ assert.equal(f.requests.some(r=>r.method==='POST'),false);
+ writeFileSync(join(toolRoot,'services/phone-adb-controller/entry.sh'),'mutable tool bytes\n');
+ observed=undefined;
+ await assert.rejects(prepareAndDeploy(input),/干净/);
+ assert.equal(observed,undefined);
+});
+
 test('真实prepareAndDeploy在全新迁移checkout从固定catalog恢复Skill后才构造正式release',async t=>{
  const f=await fixture(t,{migrated:true});await prepareAndDeploy(f);assert.ok(existsSync(f.marker));
  assert.equal(readFileSync(join(f.root,'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md'),'utf8'),'fixed implementation\n');

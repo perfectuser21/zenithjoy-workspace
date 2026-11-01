@@ -3,7 +3,7 @@
 import {readFileSync,realpathSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {execFileSync,spawn} from 'node:child_process';
 import {homedir,tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readDeploymentToken,brainRequest,DEPLOY_REPO} from './deployment-preflight.mjs';
 import {readDeploymentSource,fixedSourceEnvironment,prepareDeploymentSkillSources} from './deployment-fixed-source.mjs';
@@ -11,7 +11,9 @@ import {prepareTargetReleases} from './deployment-targets.mjs';
 import {verifyTransactionProtocol} from './deployment-protocol.mjs';
 import {stageCandidate} from './deployment-candidate.mjs';
 import {runMaintenanceInstall} from './maintenance-install-backend.mjs';
+const TOOL_ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[],acceptanceTaskIds={},transaction,
+ toolRoot=TOOL_ROOT,toolSha,
  stageCandidateFn=stageCandidate,runSafetyFn=runMaintenanceInstall}){
  if(!['candidate','maintenance-install','maintenance-recover','promote','recover','rollback'].includes(mode))throw Error('无效手机部署操作');
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:fixedSourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024}).trim();
@@ -23,7 +25,15 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
  if(mode==='maintenance-recover'){
   if(!/^phone-safety-[a-f0-9]{24}$/.test(transaction||''))throw Error('安全恢复必须指定原事务ID');
-  return runSafetyFn({root,sha,attemptKey,request,action:'recover',transaction});
+  if(toolSha&&toolSha!==sha){
+   const toolGit=(...args)=>execFileSync('git',['-C',toolRoot,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:fixedSourceEnvironment(),timeout:15000}).trim();
+   if(!/^[0-9a-f]{40}$/.test(toolSha)||toolGit('rev-parse','HEAD')!==toolSha||
+      toolGit('status','--porcelain=v1','--untracked-files=no')||toolGit('remote','get-url','origin')!==origin)
+    throw Error('恢复工具不是干净的同仓固定版本');
+   git('merge-base','--is-ancestor',sha,toolSha);
+   git('merge-base','--is-ancestor',toolSha,'origin/main');
+  }
+  return runSafetyFn({root,sha,attemptKey,request,action:'recover',transaction,toolRoot:toolSha?toolRoot:root,toolSha:toolSha||sha});
  }
  if(['recover','rollback'].includes(mode)){
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(transaction||''))throw Error('恢复必须指定原始事务ID');
@@ -60,6 +70,6 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  } finally {rmSync(folder,{recursive:true,force:true});}
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
- try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),transaction:process.argv[7],acceptanceTaskIds:JSON.parse(process.argv[8]||'{}'),brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env')});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
+ try{const result=await prepareAndDeploy({root:process.cwd(),sha:process.argv[2],bundlePath:process.argv[3],attemptKey:process.argv[4],mode:process.argv[5]||'candidate',businessRunIds:JSON.parse(process.argv[6]||'[]'),transaction:process.argv[7],acceptanceTaskIds:JSON.parse(process.argv[8]||'{}'),brainUrl:process.env.BRAIN_URL||'http://localhost:5221',tokenPath:join(homedir(),'.credentials/cecelia-internal.env'),toolSha:process.env.WF_PHONE_TOOL_SHA});if(result)process.stdout.write(JSON.stringify(result)+'\n');}
  catch(error){process.stderr.write(`${error.message}\n`);process.exitCode=1;}
 }

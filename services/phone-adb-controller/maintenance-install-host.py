@@ -269,7 +269,12 @@ class SafetyHost:
             rows = [line for line in process_table().splitlines()
                     if str(script) in line and ' run ' in line]
             if len(rows) == 1:
-                observed = self._adb_health(script, self.journal['adb_python'])
+                try:
+                    observed = self._adb_health(script, self.journal['adb_python'])
+                except subprocess.CalledProcessError:
+                    # The service process can appear before its ADB server answers status.
+                    time.sleep(.25)
+                    continue
                 previous = self.journal['adb_health_before']
                 before_devices = {row['serial'] for row in previous['devices'] if row.get('state') == 'device'}
                 after_devices = {row['serial'] for row in observed['devices'] if row.get('state') == 'device'}
