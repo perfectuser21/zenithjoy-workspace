@@ -42,6 +42,18 @@ describe('创作画布', () => {
     expect(screen.getByTitle('视频创作画布')).toBe(frame);
     expect(frame.parentElement).not.toHaveClass('fixed');
   });
+  it('画布页面恢复正常缩放，离开后还原原来的设置', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({available:true}), {status:200})));
+    const view = render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    await screen.findByTitle('视频创作画布');
+    expect(document.body).toHaveClass('creative-canvas-natural-zoom');
+    fireEvent.click(screen.getByRole('button', {name:'全屏画布'}));
+    expect(document.body).toHaveClass('creative-canvas-natural-zoom');
+    fireEvent.click(screen.getByRole('button', {name:'退出全屏'}));
+    expect(document.body).toHaveClass('creative-canvas-natural-zoom');
+    view.unmount();
+    expect(document.body).not.toHaveClass('creative-canvas-natural-zoom');
+  });
   it('在画布新建标签打开上传图片模板，保留当前工作流', async () => {
     const graph = {nodes:[{type:'LoadImage'}],links:[]};
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({available:true}),{status:200})).mockResolvedValueOnce(new Response(JSON.stringify(graph),{status:200}));
