@@ -30,3 +30,8 @@ test('a lost acquire receipt is reconciled without acquiring twice',async()=>{
 test('an existing unfinished local session cannot be silently overwritten by a new owner',async()=>{
  const {createControllerBridge}=await api();const f=fixture();const one=createControllerBridge(f.config,{brain:f.brain,remote:f.remote});await one.begin();assert.throws(()=>createControllerBridge(f.config,{brain:f.brain,remote:f.remote}),/EXISTING_SESSION/);await one.finish();
 });
+
+test('host data cannot override locked session identity',async()=>{
+ const {createControllerBridge}=await api();const f=fixture();const b=createControllerBridge(f.config,{brain:f.brain,remote:f.remote});await b.begin();
+ await assert.rejects(b.host('observe',{action:'controller',command:'text-input',owner:'other'}),/RESERVED_REQUEST_FIELD/);assert.equal(f.calls.includes('text-input'),false);await b.finish();
+});
