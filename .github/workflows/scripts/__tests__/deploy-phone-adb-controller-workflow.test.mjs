@@ -70,8 +70,18 @@ test("deploy.sh 和 drift-check.sh 调用都重定向 stdin（防 heredoc 假绿
   const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
   assert.match(
     yamlText,
-    /deployment-prepare\.mjs[^\n]*<\/dev\/null/,
-    "deploy.sh 调用必须加 </dev/null，否则会吃掉heredoc剩余内容导致后续步骤被跳过但job仍是绿的(C1)",
+    /DEPLOY_ENTRY=\(node "\$TOOL_CHECKOUT\/services\/phone-adb-controller\/deployment-prepare\.mjs"\)/,
+    "普通候选和晋级入口仍固定为 deployment-prepare.mjs",
+  );
+  assert.match(
+    yamlText,
+    /if \[\[ "\$DEPLOY_MODE" == maintenance-install \|\| "\$DEPLOY_MODE" == maintenance-recover \]\]; then\s+DEPLOY_ENTRY=\(python3 "\$TOOL_CHECKOUT\/services\/phone-adb-controller\/deployment-guard\.py" "\$\{DEPLOY_ENTRY\[@\]\}"\)/,
+    "安全模式必须在同一正式入口外层继承部署租锁",
+  );
+  assert.match(
+    yamlText,
+    /DEPLOY_LOG=\$\("\$\{DEPLOY_ENTRY\[@\]\}"[^\n]*<\/dev\/null/,
+    "正式入口调用必须加 </dev/null，否则会吃掉 heredoc 剩余内容导致假绿(C1)",
   );
   const helper=fs.readFileSync(path.join(__dirname,"../../../../services/phone-adb-controller/deployment-drift.mjs"),"utf8");
   assert.match(helper,/stdio:\['ignore','pipe','pipe'\]/,"事务内drift也不能消费外层stdin");

@@ -10,8 +10,10 @@ import {readDeploymentSource,fixedSourceEnvironment,prepareDeploymentSkillSource
 import {prepareTargetReleases} from './deployment-targets.mjs';
 import {verifyTransactionProtocol} from './deployment-protocol.mjs';
 import {stageCandidate} from './deployment-candidate.mjs';
-export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[],acceptanceTaskIds={},transaction}){
- if(!['candidate','promote','recover','rollback'].includes(mode))throw Error('无效手机部署操作');
+import {runMaintenanceInstall} from './maintenance-install-backend.mjs';
+export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,tokenPath,mode='candidate',businessRunIds=[],acceptanceTaskIds={},transaction,
+ stageCandidateFn=stageCandidate,runSafetyFn=runMaintenanceInstall}){
+ if(!['candidate','maintenance-install','maintenance-recover','promote','recover','rollback'].includes(mode))throw Error('无效手机部署操作');
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:fixedSourceEnvironment(),timeout:15000,maxBuffer:32*1024*1024}).trim();
  if(!/^[0-9a-f]{40}$/.test(sha)||git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署源不是干净的固定main');
  git('merge-base','--is-ancestor',sha,'origin/main');
@@ -19,6 +21,10 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
  if(![`https://github.com/${DEPLOY_REPO}.git`,`https://github.com/${DEPLOY_REPO}`,`git@github.com:${DEPLOY_REPO}.git`].includes(origin))throw Error('部署来源仓库不符');
  if(mode!=='candidate')verifyTransactionProtocol(readDeploymentSource(root,sha,'services/phone-adb-controller/deployment-protocol.json'));
  const token=readDeploymentToken(tokenPath),request=brainRequest(brainUrl,token);
+ if(mode==='maintenance-recover'){
+  if(!/^phone-safety-[a-f0-9]{24}$/.test(transaction||''))throw Error('安全恢复必须指定原事务ID');
+  return runSafetyFn({root,sha,attemptKey,request,action:'recover',transaction});
+ }
  if(['recover','rollback'].includes(mode)){
   if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(transaction||''))throw Error('恢复必须指定原始事务ID');
   const child=spawn('python3',[join(root,'services/phone-adb-controller/deployment-guard.py'),'node',join(root,'services/phone-adb-controller/deployment-backend.mjs'),mode,sha,transaction],{
@@ -35,7 +41,13 @@ export async function prepareAndDeploy({root,sha,bundlePath,attemptKey,brainUrl,
   return readDeploymentSource(root,sha,path,{materialize:true});
  }});
  if(git('rev-parse','HEAD')!==sha||git('status','--porcelain=v1','--untracked-files=no'))throw Error('部署预检期间工作区变化');
- if(mode==='candidate')return stageCandidate({root,sha,plan,attemptKey,request,brainUrl});
+ if(mode==='candidate')return stageCandidateFn({root,sha,plan,attemptKey,request,brainUrl});
+ if(mode==='maintenance-install'){
+  if(businessRunIds.length||Object.keys(acceptanceTaskIds).length)throw Error('安全安装不接收业务run或验收Task');
+  const candidate=await stageCandidateFn({root,sha,plan,attemptKey,request,brainUrl});
+  if(candidate?.source_commit!==sha||candidate.environment!==`staging:${sha}`||candidate.business_runtime_status!=='not_evaluated')throw Error('安全安装候选身份不符');
+  return runSafetyFn({root,sha,attemptKey,request,candidate,transaction});
+ }
  const folder=mkdtempSync(join(tmpdir(),'phone-deployment-plan-'));
  const planFile=join(folder,'plan.json'),mapFile=join(folder,'commander-releases.json');
  writeFileSync(planFile,JSON.stringify(plan),{mode:0o600});writeFileSync(mapFile,JSON.stringify(plan.commander_releases),{mode:0o600});

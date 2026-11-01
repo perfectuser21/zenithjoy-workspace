@@ -72,8 +72,8 @@ export async function downloadDeploymentEvidence(runId,github,candidateSha){
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
  try{const github=async(path,binary=false)=>{const bytes=execFileSync('gh',['api',path],{maxBuffer:32*1024*1024,stdio:['ignore','pipe','pipe']});return binary?bytes:JSON.parse(bytes.toString());};
-  const mode=process.argv[5]||'candidate';ensure(['candidate','promote','recover','rollback'].includes(mode),'操作类型');
-  const restoring=['recover','rollback'].includes(mode);
+  const mode=process.argv[5]||'candidate';ensure(['candidate','maintenance-install','maintenance-recover','promote','recover','rollback'].includes(mode),'操作类型');
+  const restoring=['recover','rollback','maintenance-recover'].includes(mode);
   const bundle=restoring?await recoverySource(process.argv[4],github):await downloadDeploymentEvidence(process.argv[2],github,process.argv[4]||undefined);
   writeFileSync(process.argv[3],JSON.stringify(bundle)+'\n',{mode:0o600});
   if(process.env.GITHUB_OUTPUT)appendFileSync(process.env.GITHUB_OUTPUT,`sha=${restoring?bundle.source_commit:bundle.run.sha}\nrun_id=${restoring?'':bundle.run.id}\n`);

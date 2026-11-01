@@ -32,10 +32,30 @@ def canonical_path(path):
     return path
 
 
+def pinned_registry(home, registry):
+    registry = Path(registry)
+    canonical_path(registry.parent)
+    if not registry.is_symlink():
+        return canonical_path(registry), str(registry)
+    expected = Path(home) / '.config/openclaw/douyin-phone-profiles.tsv'
+    require(registry == expected, 'registry symlink location invalid')
+    try:
+        target = registry.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError('registry symlink target unavailable') from error
+    generations = expected.parent / '.phone-registry-generations'
+    require(target.name == 'profiles.tsv' and target.parent.parent == generations and
+            re.fullmatch('[a-f0-9]{64}', target.parent.name),
+            'registry symlink target outside pinned generation')
+    canonical_path(target)
+    return target, str(registry)
+
+
 def context(home, tx, registry, root):
     home = Path(home)
     transaction.owned(home, tx)
-    registry, root = canonical_path(registry), canonical_path(root)
+    registry, registry_pointer = pinned_registry(home, registry)
+    root = canonical_path(root)
     require(root.is_dir(), 'device lock root missing')
     raw, _ = transaction.regular(registry)
     rows = list(csv.reader(raw.decode().splitlines(), delimiter='\t'))
@@ -72,7 +92,8 @@ def context(home, tx, registry, root):
                 require(stat.S_ISREG(info.st_mode), 'review guard not regular')
                 guard_identity[str(path)] = [info.st_dev, info.st_ino, info.st_ctime_ns]
     return {'transaction': tx, 'owner': 'phone-deploy-' + tx,
-            'registry': str(registry), 'registry_sha256': hashlib.sha256(raw).hexdigest(),
+            'registry': str(registry), 'registry_pointer': registry_pointer,
+            'registry_sha256': hashlib.sha256(raw).hexdigest(),
             'lock_root': str(root), 'serials': sorted(serials),
             'mode': 'review-preserve' if review_mode else 'exclusive',
             'legacy_root': migration['legacy_root'] if review_mode else None,

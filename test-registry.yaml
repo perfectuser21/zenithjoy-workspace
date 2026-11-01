@@ -39,6 +39,38 @@ api_suite:
 
 tests:
 
+- id: phone-maintenance-install-window
+  path: services/phone-adb-controller/__tests__/maintenance-install-window.test.py
+  type: unit
+  ci: L1
+  status: active
+  product: AI员工
+  note: 只关闭 review 手机的六条获客定时入口，并核 ADB 原字节与旧进程终止。
+
+- id: phone-maintenance-install-transaction
+  path: services/phone-adb-controller/__tests__/maintenance-install-transaction.test.py
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 安全围栏分阶段中断、原事务重放与上一阶段证据漂移拒绝。
+
+- id: phone-maintenance-install-host
+  path: services/phone-adb-controller/__tests__/maintenance-install-host.test.py
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 隔离宿主的 root plist 守卫、ADB 启动失败回退和旧候选围栏。
+
+- id: phone-maintenance-install-backend
+  path: services/phone-adb-controller/__tests__/maintenance-install-backend.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: Workflow 安全入口、双机候选门禁与租锁 FD 精确继承。
+
 - id: search-video-tab-native-category
   path: services/phone-adb-controller/__tests__/search-video-tab-reorder.test.mjs
   type: integration

@@ -649,6 +649,10 @@ jobs:
           python3 services/phone-adb-controller/__tests__/deployment-service.test.py
           sudo -n python3 services/phone-adb-controller/__tests__/deployment-service-root.test.py
           python3 services/phone-adb-controller/__tests__/deployment-host.test.py
+          python3 services/phone-adb-controller/__tests__/deployment-installed.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-install-window.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-install-transaction.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-install-host.test.py
           node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/*.test.mjs \
             services/phone-adb-controller/__tests__/deployment-coordinator.test.mjs services/phone-adb-controller/__tests__/deployment-rehearsal.test.mjs services/phone-adb-controller/__tests__/deployment-protocol.test.mjs services/phone-adb-controller/__tests__/deployment-drift.test.mjs \
             services/phone-adb-controller/__tests__/deployment-write-set.test.mjs \
@@ -656,6 +660,7 @@ jobs:
             services/phone-adb-controller/__tests__/deployment-candidate.test.mjs \
             services/phone-adb-controller/__tests__/deployment-candidate-rpc.test.mjs \
             services/phone-adb-controller/__tests__/deployment-prepare.test.mjs \
+            services/phone-adb-controller/__tests__/maintenance-install-backend.test.mjs \
             services/phone-adb-controller/__tests__/commander-v2.test.mjs \
             .github/workflows/scripts/__tests__/phone-deploy-evidence.test.mjs \
             .github/workflows/scripts/__tests__/deploy-phone-adb-remote-lib.test.mjs
