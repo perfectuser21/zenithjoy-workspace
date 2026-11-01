@@ -6,15 +6,17 @@ from zoneinfo import ZoneInfo
 def picker_current(config, request):
     held(config); call_idle(config); require_store(config); approval(config, request)
     package = current_package(config, request['jobId'])
-    if package not in {MERCHANT, SYSTEM_PICKER, PERMISSION}: raise ValueError('WRONG_PICKER_FOREGROUND')
+    activities={MERCHANT:MERCHANT+'.media.MultiGraphSelectorNewActivity',SYSTEM_PICKER:'com.android.providers.media.photopicker.PhotoPickerUserSelectActivity',PERMISSION:PERMISSION+'.permission.ui.GrantPermissionsActivity'}
+    if package not in activities or not re.search(r'\bu\d+ '+re.escape(package+'/'+activities.get(package,''))+r'\}',config['lastForegroundRaw']): raise ValueError('WRONG_PICKER_FOREGROUND')
     if config['lastForegroundRaw'] != config['lastFrame'].get('windowRaw'): raise ValueError('APPROVED_WINDOW_CHANGED')
     _, tree = fresh_xml(config, request['jobId'])
     if tree['sha256'] != config['lastFrame']['xmlSha256']: raise ValueError('APPROVED_UI_CHANGED')
     eid = 'native-' + request['jobId'] + '-picker-check'
     control_ok(config, 'snapshot-evidence', [eid], request['jobId']+'-picker-image')
     png = read_evidence(config, '/private/tmp/openclaw-phone/evidence/'+config['profile']+'/'+eid+'.png')
-    if png['sha256'] != config['lastFrame']['screenSha256']: raise ValueError('APPROVED_SCREEN_CHANGED')
-    return package, PickerTree(base64.b64decode(tree['bytesBase64']).decode(), config['binding']['width'], config['binding']['height']), tree, png
+    picker=PickerTree(base64.b64decode(tree['bytesBase64']).decode(), config['binding']['width'], config['binding']['height'])
+    if png['sha256'] != config['lastFrame']['screenSha256']: app_pixel_comparison(config,png,picker,request['jobId'])
+    return package,picker,tree,png
 
 
 def selected_identity(items):

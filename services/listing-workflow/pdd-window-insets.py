@@ -27,3 +27,10 @@ def agree_status_bar(current,approved,target,marketing):
     for other in [target,marketing]:
         if max(box[0],other[0])<min(box[2],other[2]) and max(box[1],other[1])<min(box[3],other[3]): raise ValueError('STATUS_BAR_MASK_OVERLAP')
     return box
+
+
+def protected_status_mask(current, approved, regions):
+    if not regions: raise ValueError('STATUS_BAR_PROTECTED_REGION_REQUIRED')
+    box = None
+    for region in regions: box = agree_status_bar(current,approved,region,region)
+    return box

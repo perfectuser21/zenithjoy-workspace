@@ -63,11 +63,26 @@ def context(config, job_id, cleanup=False):
 
 def native_status_bar(config, job_id):
     raw=adb(config,['shell','dumpsys','window','windows']).stdout
-    parsed=parse_status_bar(raw.decode(errors='strict'),config['binding'])
     path=Path('/private/tmp/openclaw-phone/evidence')/config['profile']/('native-'+job_id+'-windows.txt')
     with path.open('xb') as stream:
         stream.write(raw); stream.flush(); os.fsync(stream.fileno())
-    return {'native':parsed,'path':str(path),'sha256':sha(raw),'at':time.time()}
+    try: parsed=parse_status_bar(raw.decode(errors='strict'),config['binding']); error=None
+    except (ValueError,UnicodeError) as cause: parsed=None; error=str(cause)
+    return {'native':parsed,'error':error,'path':str(path),'sha256':sha(raw),'at':time.time()}
+
+
+def app_pixel_comparison(config,current_png,screen,job_id):
+    current_bar=native_status_bar(config,job_id+'-os-proof')
+    approved_bar=config['lastFrame'].get('statusBarProof') or {}
+    packages={'com.xunmeng.merchant','com.android.permissioncontroller','com.android.providers.media.module'}
+    regions=[screen.bounds(n) for n in screen.nodes if n.get('package') in packages and screen.bounds(n) and (n.get('class') in {'android.widget.EditText','android.widget.Button','android.widget.ImageView'} or n.get('clickable')=='true' or n.get('text') in {'保存草稿','保存并退出','提交并上架'} or re.fullmatch(r'[0-9]+',n.get('text','')))]
+    mask=protected_status_mask(current_bar.get('native'),approved_bar.get('native'),regions)
+    approved_png=read_evidence(config,config['lastFrame']['evidence'][0])
+    bounds=[0,0,config['binding']['width'],config['binding']['height']]
+    before=png_crop_sha(base64.b64decode(approved_png['bytesBase64']),bounds,[mask],expected_size=bounds[2:])
+    now=png_crop_sha(base64.b64decode(current_png['bytesBase64']),bounds,[mask],expected_size=bounds[2:])
+    if before!=now: raise ValueError('APPROVED_APP_PIXELS_CHANGED')
+    return {'mode':'entire-app-except-native-system-status-bar','statusBarMask':mask,'statusBarProof':{'approved':approved_bar,'current':current_bar},'sha256':now,'evidence':current_png['path'],'transparentOverlayAbsenceProven':False}
 
 
 def observe(config, request):
@@ -91,8 +106,11 @@ def observe(config, request):
             raise ValueError('WRONG_STORE')
         config['storeProof'] = {'name': facts['storeName'], 'owner': config['owner'], 'at': time.time(), 'evidence': tree['path']}
     config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'windowRaw': config['lastForegroundRaw'], 'evidence': [expected, tree['path']]}
-    status_bar = native_status_bar(config,request['jobId']) if facts['storeName'] is not None else None
+    status_bar = native_status_bar(config,request['jobId']) if package in {'com.xunmeng.merchant','com.android.permissioncontroller','com.android.providers.media.module'} else None
     if status_bar: config['lastFrame']['statusBarProof'] = status_bar
+    if config.get('expectNewForm') and not config.get('draft') and config.get('emptyFormBackIntent',{}).get('commandFinished') and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理'))==1 and config.get('baselineCounts',{}).get('草稿箱') is not None and facts['counts'].get('草稿箱')==config['baselineCounts']['草稿箱']:
+        config['emptyFormExitedVerified']=True
+        config['internalAutoSaveUnknown']=True
     draft = config.get('draft', {})
     if draft.get('owned') and draft.get('discardIntent', {}).get('commandFinished') and not facts['form'] and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理')) == 1 and facts['counts'].get('草稿箱') is not None:
         before = config.get('baselineCounts', {}).get('草稿箱')
@@ -139,13 +157,19 @@ def native_action(config, request):
     if action == 'back':
         screen, before = fresh_xml(config, job_id)
         facts = screen.facts()
-        if not (facts['form'] and config.get('draft', {}).get('owned')) and not facts['counts'] and not facts['storeName']:
+        empty = facts['form'] and not config.get('draft') and config.get('expectNewForm') and not config['ownedMedia'] and screen.field('title')['value']=='' and screen.field('groupPrice')['value']=='' and screen.field('inventory')['value']=='1'
+        if not empty and not (facts['form'] and config.get('draft', {}).get('owned')) and not facts['counts'] and not facts['storeName']:
             raise ValueError('UNOWNED_FORM_BACK_REFUSED')
-        if facts['form']:
-            config['draft']['backIntent'] = {'jobId': job_id, 'before': {k:v for k,v in before.items() if k != 'bytesBase64'}}
-            store(Path(config['remoteRoot']) / 'config.json', config)
         final_window_guard(config,job_id,before['sha256'])
+        if facts['form']:
+            intent = {'jobId': job_id, 'before': {k:v for k,v in before.items() if k != 'bytesBase64'}, 'commandFinished':False}
+            if empty: config['emptyFormBackIntent']=intent
+            else: config['draft']['backIntent']=intent
+            store(Path(config['remoteRoot']) / 'config.json', config)
         result = control_ok(config, 'back', [], job_id + '-back', native_tap=True)
+        if empty:
+            config['emptyFormBackIntent']['commandFinished']=True
+            store(Path(config['remoteRoot']) / 'config.json', config)
         return {'ok': True, 'evidence': [before['path']]}
     if action == 'organize-media':
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
@@ -178,18 +202,20 @@ def native_action(config, request):
         if expected_digest != png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, expected_size=size): raise ValueError('APPROVED_LIST_ENTRY_PIXELS_CHANGED')
         comparison = {'mode': 'reversible-list-entry-target-only', 'bounds': bounds, 'sha256': expected_digest, 'evidence': current_png['path'], 'outsideTargetOverlayNotProvenAbsent': True}
     elif current_png['sha256'] != config['lastFrame']['screenSha256']:
-        if action != 'navigate' or request.get('label') != '商品管理': raise ValueError('APPROVED_SCREEN_CHANGED')
-        target = screen.navigate('商品管理', [])
-        mask = screen.homepage_animation_mask(target)
-        approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
-        bounds = [0, 0, config['binding']['width'], config['binding']['height']]
-        current_bar = native_status_bar(config,job_id+'-current')
-        approved_bar = config['lastFrame'].get('statusBarProof') or {}
-        status_mask = agree_status_bar(current_bar['native'],approved_bar.get('native'),target['bounds'],mask)
-        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
-        actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
-        if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
-        comparison = {'mode': 'homepage-except-native-status-bar-and-unique-marketing-icon', 'mask': mask, 'statusBarMask':status_mask, 'statusBarProof':{'approved':approved_bar,'current':current_bar}, 'sha256': actual_digest, 'evidence': current_png['path'],'transparentOverlayAbsenceProven':False}
+        if action != 'navigate' or request.get('label') != '商品管理':
+            comparison=app_pixel_comparison(config,current_png,screen,job_id)
+        else:
+            target = screen.navigate('商品管理', [])
+            mask = screen.homepage_animation_mask(target)
+            approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
+            bounds = [0, 0, config['binding']['width'], config['binding']['height']]
+            current_bar = native_status_bar(config,job_id+'-current')
+            approved_bar = config['lastFrame'].get('statusBarProof') or {}
+            status_mask = agree_status_bar(current_bar['native'],approved_bar.get('native'),target['bounds'],mask)
+            expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
+            actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
+            if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
+            comparison = {'mode': 'homepage-except-native-status-bar-and-unique-marketing-icon', 'mask': mask, 'statusBarMask':status_mask, 'statusBarProof':{'approved':approved_bar,'current':current_bar}, 'sha256': actual_digest, 'evidence': current_png['path'],'transparentOverlayAbsenceProven':False}
     if action == 'discard-draft':
         draft = config.get('draft', {})
         if not draft.get('owned') or draft.get('owner') != config['owner'] or not draft.get('backIntent') or draft.get('discardIntent'): raise ValueError('OWNED_DISCARD_NOT_AUTHORIZED')

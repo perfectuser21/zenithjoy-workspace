@@ -249,6 +249,7 @@ def phone_readback(config):
 
 def phone_cleanup(config):
     held(config)
+    if config.get('expectNewForm') and not config.get('draft') and not config.get('emptyFormExitedVerified'): raise ValueError('EMPTY_FORM_CLEANUP_REQUIRED')
     if config.get('draft', {}).get('owned') and not config['draft'].get('exitedVerified'):
         raise ValueError('DRAFT_CLEANUP_REQUIRED')
     if any(x.get('phonePlanned') for x in config['ownedMedia']): cleanup_owned_media(config)
