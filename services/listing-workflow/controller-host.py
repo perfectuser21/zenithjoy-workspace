@@ -191,6 +191,7 @@ def execute_controller(config, command, args, job_id, native_tap=False):
     remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
     if remaining < 1: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
     started_at = time.time()
+    if command == 'audit-tabs-swipe': audit_effect_ready(config,job_id)
     process = subprocess.Popen(prefix + [('swipe' if command=='audit-tabs-swipe' else command)] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
     store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': started_at})
     timed_out = False

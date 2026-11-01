@@ -17,11 +17,11 @@ def audit_ancestor(screen,node):
         raise ValueError('AUDIT_ANCESTOR_UNSAFE')
 
 
-def audit_overlap(screen, rect, allowed, prefix):
+def audit_overlap(screen, rect, allowed, prefix, strict=False):
     for n in screen.tree.iter('node'):
         box=screen.bounds(n)
         if n in allowed or not box: continue
-        if max(box[0],rect[0])<min(box[2],rect[2]) and max(box[1],rect[1])<min(box[3],rect[3]) and (n.get('clickable')=='true' or n.get('text') in FORBIDDEN):
+        if max(box[0],rect[0])<min(box[2],rect[2]) and max(box[1],rect[1])<min(box[3],rect[3]) and (strict or n.get('clickable')=='true' or n.get('text') in FORBIDDEN):
             raise ValueError(prefix+'_OVERLAP')
 
 
@@ -66,7 +66,8 @@ def audit_tab_plan(screen):
     end=[(left[0]+left[2])//2,(left[1]+left[3])//2]
     band=[end[0],left[1],start[0]+1,left[3]]
     if start[0]<=end[0] or not audit_contains(clip,band): raise ValueError('AUDIT_TAB_PATH_UNVERIFIED')
-    audit_overlap(screen,band,allowed,'AUDIT_TAB')
+    # Nonzero bounds intersecting the path are a conflict even when hidden/nonclickable; zero/invalid bounds cannot establish geometric coverage.
+    audit_overlap(screen,band,allowed,'AUDIT_TAB',strict=True)
     return {'status':'draft-tab-hidden','tabBounds':box,'visibleClip':clip,'safeBand':band,'anchors':anchors,'draftBounds':None,'from':start,'to':end,'durationMs':350}
 
 
@@ -202,3 +203,17 @@ def audit_final_tab_proof(config,job_id,screen,approved):
     control_ok(config,'snapshot-evidence',[eid],job_id+'-final-tab-image')
     png=read_evidence(config,'/private/tmp/openclaw-phone/evidence/'+config['profile']+'/'+eid+'.png')
     return audit_tab_pixels(config,png,screen,job_id)
+
+
+def audit_effect_ready(config,job_id):
+    intent=config.get('auditIntents',{}).get('tabs') or {}
+    frame={k:config.get('lastFrame',{}).get(k) for k in ['xmlSha256','screenSha256','windowRaw']}
+    if intent.get('owner')!=config['owner'] or intent.get('jobId','')+'-audit'!=job_id or intent.get('commandFinished') is not False or frame!=intent.get('approvedFrame') or config.get('lastForegroundRaw')!=intent.get('window'): raise ValueError('AUDIT_SWIPE_FRAME_CHANGED')
+    limit=require_session_context(config,'list',config['lastForegroundRaw'],intent['before'])
+    # Session persistence above may take time: these age checks are the last work before Popen.
+    require_store(config)
+    approval(config,{'approvedScreenSha256':frame['screenSha256']})
+    now=time.time()
+    if not 0<=now-config['lastFrame']['at']<120: raise ValueError('FRESH_VISUAL_APPROVAL_REQUIRED')
+    if not 0<=now-config['storeProof']['at']<limit: raise ValueError('STORE_PROOF_UNVERIFIED_OR_EXPIRED')
+    if not 0<=now-config['closedContext']['startedAt']<limit: raise ValueError('SESSION_CONTEXT_EXPIRED')
