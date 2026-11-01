@@ -119,13 +119,25 @@ def native_action(config, request):
         return phone_readback(config)
     approval(config, request)
     screen, before = fresh_xml(config, job_id)
-    if before['sha256'] != config['lastFrame']['xmlSha256']: raise ValueError('APPROVED_UI_CHANGED')
+    list_entry = action == 'navigate' and request.get('label') == '发布商品'
+    if list_entry:
+        approved_tree = read_evidence(config, config['lastFrame']['evidence'][1])
+        approved_screen = Screen(base64.b64decode(approved_tree['bytesBase64']).decode(), config['binding']['width'], config['binding']['height'])
+        entry_point = screen.agree_list_entry(approved_screen)
+    elif before['sha256'] != config['lastFrame']['xmlSha256']: raise ValueError('APPROVED_UI_CHANGED')
     if config['lastFrame'].get('windowRaw') != config.get('lastForegroundRaw'): raise ValueError('APPROVED_WINDOW_CHANGED')
     eid = 'native-' + job_id + '-approved'
     control_ok(config, 'snapshot-evidence', [eid], job_id + '-approved-image')
     current_png = read_evidence(config, '/private/tmp/openclaw-phone/evidence/' + config['profile'] + '/' + eid + '.png')
     comparison = {'mode': 'full-png-sha256', 'evidence': current_png['path']}
-    if current_png['sha256'] != config['lastFrame']['screenSha256']:
+    if list_entry:
+        approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
+        size = [config['binding']['width'], config['binding']['height']]
+        bounds = entry_point['bounds']
+        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, expected_size=size)
+        if expected_digest != png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, expected_size=size): raise ValueError('APPROVED_LIST_ENTRY_PIXELS_CHANGED')
+        comparison = {'mode': 'reversible-list-entry-target-only', 'bounds': bounds, 'sha256': expected_digest, 'evidence': current_png['path'], 'outsideTargetOverlayNotProvenAbsent': True}
+    elif current_png['sha256'] != config['lastFrame']['screenSha256']:
         if action != 'navigate' or request.get('label') != '商品管理': raise ValueError('APPROVED_SCREEN_CHANGED')
         target = screen.navigate('商品管理', [])
         mask = screen.homepage_animation_mask(target)
@@ -153,10 +165,11 @@ def native_action(config, request):
         store(Path(config['remoteRoot']) / 'config.json', config)
         rect = point['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-tap', native_tap=True)
-        if label == '商品管理':
+        if label in {'商品管理', '发布商品'}:
             destination, destination_evidence = fresh_xml(config, job_id + '-destination')
-            if not destination.labels('商品管理') or not destination.facts()['counts']: raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED')
-        return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']] + ([destination_evidence['path']] if label == '商品管理' else [])}
+            if label == '商品管理' and (not destination.labels('商品管理') or not destination.facts()['counts']): raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED')
+            if label == '发布商品' and not destination.form(): raise ValueError('NEW_FORM_DESTINATION_UNVERIFIED')
+        return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']] + ([destination_evidence['path']] if label in {'商品管理','发布商品'} else [])}
     if action == 'set-field':
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'):
             raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')

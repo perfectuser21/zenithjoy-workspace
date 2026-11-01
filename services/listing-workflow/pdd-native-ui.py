@@ -76,6 +76,19 @@ class Screen:
             raise ValueError('ANCHOR_NOT_UNIQUE')
         return {'label': label, 'bounds': self.bounds(nodes[0]), 'clickable': nodes[0].get('clickable') == 'true', 'requiresVisualReview': True}
 
+    def agree_list_entry(self, approved):
+        for screen in [self, approved]:
+            counts = screen.facts()['counts']
+            if screen.form() or len(screen.labels('商品管理')) != 1 or not {'在售中', '发布中'} <= set(counts): raise ValueError('WRONG_LIST_PAGE')
+        point, old = self.navigate('发布商品', []), approved.navigate('发布商品', [])
+        if point['bounds'] != old['bounds']: raise ValueError('LIST_ENTRY_CHANGED')
+        rect = point['bounds']; cx, cy = (rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2
+        for text in FORBIDDEN:
+            for node in self.labels(text):
+                box = self.bounds(node)
+                if box[0] <= cx < box[2] and box[1] <= cy < box[3]: raise ValueError('DANGEROUS_CONTROL_OVERLAP')
+        return point
+
     def homepage_animation_mask(self, target):
         if target.get('label') != '商品管理' or self.form() or not self.facts()['storeName']:
             raise ValueError('ANIMATION_MASK_NOT_APPLICABLE')
