@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import zlib
@@ -181,6 +182,7 @@ class MaintenanceTest(unittest.TestCase):
             self.module.verify(self.home, 't1', self.registry, durable)
         claim.write_text('frozen-run\n')
         guard = durable / 'SERIAL1.guard'
+        time.sleep(0.01)
         guard.unlink()
         guard.touch()
         with self.assertRaisesRegex(ValueError, 'guard|identity'):

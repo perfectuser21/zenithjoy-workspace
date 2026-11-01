@@ -70,7 +70,7 @@ def context(home, tx, registry, root):
                 path = canonical_path(parent / (serial + '.guard'))
                 info = path.lstat()
                 require(stat.S_ISREG(info.st_mode), 'review guard not regular')
-                guard_identity[str(path)] = [info.st_dev, info.st_ino]
+                guard_identity[str(path)] = [info.st_dev, info.st_ino, info.st_ctime_ns]
     return {'transaction': tx, 'owner': 'phone-deploy-' + tx,
             'registry': str(registry), 'registry_sha256': hashlib.sha256(raw).hexdigest(),
             'lock_root': str(root), 'serials': sorted(serials),
@@ -104,7 +104,7 @@ def guards(record):
                 require(stat.S_ISREG(named.st_mode) and (info.st_dev, info.st_ino) == (named.st_dev, named.st_ino),
                         'device guard replaced')
                 if record['mode'] == 'review-preserve':
-                    require([info.st_dev, info.st_ino] == record['guard_identity'][str(path)],
+                    require([info.st_dev, info.st_ino, info.st_ctime_ns] == record['guard_identity'][str(path)],
                             'review guard identity changed')
         check()
         yield check
