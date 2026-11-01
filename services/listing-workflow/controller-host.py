@@ -130,27 +130,32 @@ def adb(config, args, check=True):
         if config.get('remoteRoot') and Path(config['remoteRoot']).is_dir(): store(Path(config['remoteRoot']) / 'config.json', config)
     persist_trace()
     try:
-        result = subprocess.run([binary, '-s', config['binding']['serial']] + safe_args, capture_output=True, timeout=40, env=env)
-    except subprocess.TimeoutExpired as cause:
-        trace['error'] = 'ADB_TIMEOUT'; persist_trace()
-        error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
-        raise error from cause
-    trace['localReturncode'] = result.returncode
-    proof = re.search(rb'\n' + marker.encode() + rb'([0-9]+)\n$', result.stdout) if args and args[0] == 'shell' else None
-    if result.returncode != 0 or (args and args[0] == 'shell' and not proof):
-        trace['error'] = 'ADB_TRANSPORT_OR_RECEIPT_UNKNOWN'; persist_trace()
-        error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
-        raise error
-    if proof:
-        result.returncode = int(proof.group(1))
-        result.stdout = result.stdout[:proof.start()]
-        trace['remoteExitConfirmed'] = True
-    result.remoteExitConfirmed = trace['remoteExitConfirmed']
-    trace.update(remoteReturncode=result.returncode, finishedAt=time.time(), stdoutSha256=sha(result.stdout))
-    persist_trace()
-    if check and result.returncode:
-        raise ValueError('ADB_READ_OR_CLEANUP_FAILED:' + result.stderr.decode(errors='replace')[:300])
-    return result
+        try:
+            result = subprocess.run([binary, '-s', config['binding']['serial']] + safe_args, capture_output=True, timeout=40, env=env)
+        except subprocess.TimeoutExpired as cause:
+            trace['error'] = 'ADB_TIMEOUT'; persist_trace()
+            error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
+            raise error from cause
+        trace['localReturncode'] = result.returncode
+        proof = re.search(rb'\n' + marker.encode() + rb'([0-9]+)\n$', result.stdout) if args and args[0] == 'shell' else None
+        if result.returncode != 0 or (args and args[0] == 'shell' and not proof):
+            trace['error'] = 'ADB_TRANSPORT_OR_RECEIPT_UNKNOWN'; persist_trace()
+            error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
+            raise error
+        if proof:
+            result.returncode = int(proof.group(1))
+            result.stdout = result.stdout[:proof.start()]
+            trace['remoteExitConfirmed'] = True
+        result.remoteExitConfirmed = trace['remoteExitConfirmed']
+        trace.update(remoteReturncode=result.returncode, finishedAt=time.time(), stdoutSha256=sha(result.stdout))
+        persist_trace()
+        if check and result.returncode:
+            raise ValueError('ADB_READ_OR_CLEANUP_FAILED:' + result.stderr.decode(errors='replace')[:300])
+        return result
+    except Exception as cause:
+        if not trace['remoteExitConfirmed']: cause.remoteUnknown = True
+        raise
+
 
 
 def execute_controller(config, command, args, job_id, native_tap=False):
