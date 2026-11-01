@@ -1,5 +1,7 @@
 # Only the R19 tab strip and R18 native more-info button are admitted.
 import re
+import base64
+import hashlib
 import time
 from pathlib import Path
 
@@ -24,7 +26,7 @@ def audit_tab_plan(screen):
     bars=[n for n in screen.nodes if n.get('resource-id')=='tabWrapId']
     if len(bars)!=1: raise ValueError('AUDIT_TAB_CONTAINER_UNVERIFIED')
     bar=bars[0];box=screen.bounds(bar)
-    if screen.width!=1200 or screen.height!=2664 or box!=[0,267,1200,450] or bar.get('scrollable')!='true' or bar.get('enabled')!='true': raise ValueError('AUDIT_TAB_GEOMETRY_UNVERIFIED')
+    if not box or bar.get('scrollable')!='true' or bar.get('enabled')!='true': raise ValueError('AUDIT_TAB_GEOMETRY_UNVERIFIED')
     children=list(bar);tabs=[n for n in children if n.get('class')=='android.view.View']
     expected=['在售中','已下架','已售罄','发布中','已驳回','草稿箱']
     if len(children)!=8 or children[:6]!=tabs or any(n.get('class')!='android.widget.TextView' or n.get('text','') or list(n) for n in children[6:]): raise ValueError('AUDIT_TAB_STRUCTURE_UNVERIFIED')
@@ -36,15 +38,35 @@ def audit_tab_plan(screen):
     draft=list(tabs[-1])[0]
     if screen.bounds(draft) is not None: raise ValueError('AUDIT_SCROLL_REQUIRES_HIDDEN_DRAFT')
     if draft.get('bounds')!='[0,0][0,0]': raise ValueError('AUDIT_HIDDEN_DRAFT_UNVERIFIED')
-    # The path lies in the visible tab label band, above the product cards.
-    path=[120,320,1080,341]
-    allowed=set(bar.iter('node'));parent=bar
+    allowed=set(bar.iter('node'));parent=bar;clip=box[:]
     while parent in screen.parents:
         parent=screen.parents[parent]
         if parent.get('clickable')=='true': raise ValueError('AUDIT_TAB_ANCESTOR_INTERCEPTS')
         allowed.add(parent)
-    audit_overlap(screen,path,allowed,'AUDIT_TAB')
-    return {'status':'draft-tab-hidden','tabBounds':box,'draftBounds':None,'from':[1080,330],'to':[120,330],'durationMs':350}
+        outer=screen.bounds(parent)
+        if outer: clip=[max(clip[0],outer[0]),max(clip[1],outer[1]),min(clip[2],outer[2]),min(clip[3],outer[3])]
+    # Native labels must be wholly inside their tab and the actual ancestor clipping region.
+    anchors=[]
+    for tab,name in zip(tabs,expected):
+        label=list(tab)[0];lb=screen.bounds(label);tb=screen.bounds(tab)
+        if not lb or not tb: continue
+        if not audit_contains(tb,lb): raise ValueError('AUDIT_TAB_LABEL_OUTSIDE_PARENT')
+        if clip[0]<lb[0]<lb[2]<clip[2] and clip[1]<=lb[1]<lb[3]<=clip[3]:
+            anchors.append({'label':name,'labelBounds':lb,'parentBounds':tb})
+    if len(anchors)<2 or anchors[0]['label']!='在售中' or anchors[-1]['label']!='发布中': raise ValueError('AUDIT_TAB_COMPLETE_ANCHORS_REQUIRED')
+    left,right=anchors[0]['labelBounds'],anchors[-1]['labelBounds']
+    if any(a['labelBounds'][1:4:2]!=left[1:4:2] for a in anchors) or any(a['labelBounds'][2]>=b['labelBounds'][0] for a,b in zip(anchors,anchors[1:])): raise ValueError('AUDIT_TAB_BAND_UNVERIFIED')
+    start=[(right[0]+right[2])//2,(right[1]+right[3])//2]
+    end=[(left[0]+left[2])//2,(left[1]+left[3])//2]
+    band=[end[0],left[1],start[0]+1,left[3]]
+    if start[0]<=end[0] or not audit_contains(clip,band): raise ValueError('AUDIT_TAB_PATH_UNVERIFIED')
+    audit_overlap(screen,band,allowed,'AUDIT_TAB')
+    return {'status':'draft-tab-hidden','tabBounds':box,'visibleClip':clip,'safeBand':band,'anchors':anchors,'draftBounds':None,'from':start,'to':end,'durationMs':350}
+
+
+def audit_contains(outer,inner):
+    return bool(outer and inner and outer[0]<=inner[0]<inner[2]<=outer[2] and outer[1]<=inner[1]<inner[3]<=outer[3])
+
 
 
 def audit_draft_plan(screen):
@@ -59,14 +81,15 @@ def audit_more_plan(screen):
     if not screen.form() or len(labels)!=1: raise ValueError('AUDIT_MORE_LABEL_UNVERIFIED')
     label=labels[0];parent=screen.parents.get(label);children=list(parent) if parent is not None else []
     expected=[('android.widget.TextView','填写更多信息','false'),('android.widget.Image','','false'),('android.widget.Button','','true')]
-    if screen.width!=1200 or screen.height!=2664 or screen.bounds(label)!=[432,1717,704,1776] or parent.get('clickable')!='false' or screen.bounds(parent)!=[49,1681,1149,1816] or [(n.get('class'),n.get('text',''),n.get('clickable')) for n in children]!=expected: raise ValueError('AUDIT_MORE_STRUCTURE_UNVERIFIED')
-    button=children[2];box=screen.bounds(button)
-    if box!=[52,1685,1146,1812] or screen.bounds(children[1])!=[713,1721,769,1776] or any(n.get('package')!=PACKAGE or n.get('enabled')!='true' or n.get('visible-to-user')=='false' or n.get('content-desc','') for n in [parent,*children]): raise ValueError('AUDIT_MORE_BUTTON_UNVERIFIED')
+    if parent is None or parent.get('class')!='android.view.View' or parent.get('clickable')!='false' or [(n.get('class'),n.get('text',''),n.get('clickable')) for n in children]!=expected or any(list(n) for n in children): raise ValueError('AUDIT_MORE_STRUCTURE_UNVERIFIED')
+    button=children[2];box=screen.bounds(button);label_box=screen.bounds(label);image_box=screen.bounds(children[1]);parent_box=screen.bounds(parent)
+    if not audit_contains(parent_box,box) or not audit_contains(box,label_box) or not audit_contains(box,image_box) or label_box[2]>=image_box[0] or max(label_box[1],image_box[1])>=min(label_box[3],image_box[3]) or any(n.get('package')!=PACKAGE or n.get('enabled')!='true' or n.get('visible-to-user')=='false' or n.get('content-desc','') for n in [parent,*children]): raise ValueError('AUDIT_MORE_BUTTON_UNVERIFIED')
     allowed=set(children);allowed.add(parent)
     while parent in screen.parents:
         parent=screen.parents[parent]
         if parent.get('clickable')=='true': raise ValueError('AUDIT_MORE_ANCESTOR_INTERCEPTS')
         allowed.add(parent)
+    if any(screen.bounds(n) and not audit_contains(screen.bounds(n),box) for n in allowed if n not in children): raise ValueError('AUDIT_MORE_CLIPPED_BUTTON')
     audit_overlap(screen,box,allowed,'AUDIT_MORE')
     return {'label':'填写更多信息','bounds':box,'labelBounds':screen.bounds(label),'clickable':True}
 
@@ -90,7 +113,7 @@ def audit_navigation(config,request,screen,before,comparison):
         if owned_proof['sha256']!=before['sha256']: raise ValueError('AUDIT_OWNED_FORM_CHANGED')
         point=audit_more_plan(screen)
     final_window_guard(config,request['jobId'],before['sha256'])
-    intent={'jobId':request['jobId'],'owner':config['owner'],'window':config['lastForegroundRaw'],'before':before['path'],'point':point,'commandFinished':False,'at':time.time()}
+    intent={'jobId':request['jobId'],'owner':config['owner'],'window':config['lastForegroundRaw'],'before':before['path'],'sourceTreeSha256':before['sha256'],'approvedFrame':{k:config['lastFrame'][k] for k in ['xmlSha256','screenSha256','windowRaw']},'point':point,'commandFinished':False,'at':time.time()}
     config.setdefault('auditIntents',{})[key]=intent
     store(Path(config['remoteRoot'])/'config.json',config)
     if key=='tabs':
@@ -110,4 +133,12 @@ def audit_swipe_args(config,args,job_id):
     intent=config.get('auditIntents',{}).get('tabs') or {}
     point=intent.get('point') or {}
     expected=[str(n) for n in point.get('from',[])+point.get('to',[])+[point.get('durationMs')]]
-    if intent.get('owner')!=config['owner'] or intent.get('jobId','')+'-audit'!=job_id or intent.get('commandFinished') is not False or args!=expected or args!=['1080','330','120','330','350'] or intent.get('window')!=config.get('lastForegroundRaw'): raise ValueError('AUDIT_SWIPE_INTENT_UNVERIFIED')
+    if intent.get('owner')!=config['owner'] or intent.get('jobId','')+'-audit'!=job_id or intent.get('commandFinished') is not False or args!=expected or intent.get('window')!=config.get('lastForegroundRaw'): raise ValueError('AUDIT_SWIPE_INTENT_UNVERIFIED')
+    frame={k:config.get('lastFrame',{}).get(k) for k in ['xmlSha256','screenSha256','windowRaw']}
+    if frame!=intent.get('approvedFrame') or frame['xmlSha256']!=intent.get('sourceTreeSha256') or frame['windowRaw']!=intent.get('window'): raise ValueError('AUDIT_SWIPE_FRAME_CHANGED')
+    proof=read_evidence(config,intent['before'])
+    raw=base64.b64decode(proof['bytesBase64'],validate=True)
+    if hashlib.sha256(raw).hexdigest()!=intent['sourceTreeSha256'] or proof['sha256']!=intent['sourceTreeSha256']: raise ValueError('AUDIT_SWIPE_SOURCE_CHANGED')
+    source=Screen(raw.decode(),config['binding']['width'],config['binding']['height'])
+    if audit_tab_plan(source)!=point: raise ValueError('AUDIT_SWIPE_PLAN_CHANGED')
+    final_window_guard(config,job_id+'-source-bound',intent['sourceTreeSha256'])
