@@ -52,7 +52,7 @@ def organize_owned_album(config):
         item['moveResolved'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
     native = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media', '--projection', '_id:bucket_id:bucket_display_name:relative_path:_data:_display_name', '--where', "relative_path='" + relative + "'"]).stdout.decode()
-    if sorted(re.findall(r'_id=(\d+)', native)) != sorted(x['mediaId'] for x in items): raise ValueError('ALBUM_MEMBERSHIP_CONFLICT')
+    if sorted(re.findall(r'^Row: \d+ _id=(\d+)(?:, |$)', native, re.M)) != sorted(x['mediaId'] for x in items): raise ValueError('ALBUM_MEMBERSHIP_CONFLICT')
     files = adb(config, ['shell', 'ls', '-A', '--', path]).stdout.decode().splitlines()
     if sorted(files) != sorted(x['name'] for x in items): raise ValueError('ALBUM_FILES_CONFLICT')
     config['phoneAlbum']['nativeMetadataRaw'] = native
