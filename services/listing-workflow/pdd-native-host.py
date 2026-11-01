@@ -7,7 +7,8 @@ def control_ok(config, command, args, job_id, native_tap=False):
         error.remoteUnknown = result.get('remoteUnknown', False)
         raise error
     if re.search(r'accepted fresh|\b137\b|ERROR:', result.get('stderr', '')):
-        raise ValueError('UI_PRODUCER_UNTRUSTED')
+        error = ValueError('UI_PRODUCER_UNTRUSTED'); error.remoteUnknown = True
+        raise error
     return result
 
 

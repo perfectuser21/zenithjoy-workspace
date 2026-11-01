@@ -124,7 +124,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       await send('controller', { command: 'lock-refresh', args: [state.owner] });
       await lease();
       const result = await send('controller', { command, args });
-      if (/accepted fresh|\b137\b|ERROR:/.test(result.stderr || '')) throw new Error('UI_PRODUCER_UNTRUSTED');
+      if (/accepted fresh|\b137\b|ERROR:/.test(result.stderr || '')) { state.remoteUnknown = true; persist(); throw Object.assign(new Error('UI_PRODUCER_UNTRUSTED'),{remoteUnknown:true}); }
       return result;
     },
     async host(action, data = {}) {
