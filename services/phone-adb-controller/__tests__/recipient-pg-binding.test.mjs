@@ -155,7 +155,8 @@ test('MMV102真实preflight只在PG和当前原生账号均相等后写私有bin
  const d=mkdtempSync(join(tmpdir(),'recipient-real-preflight-')),b=binding(),calls=[];
  const env={HOME:d,WFR_RUN_DIR:d,WFR_HOSTKEY:'mmv',LEADGEN_MMV_DEVICE_RUNTIME:'1',WF_BRAIN_WORKFLOW:'douyin_video_processing',P:b.profile,SERIAL:b.device_serial,WFR_TAG:run,LEADGEN_LINE:b.line_key,LEADGEN_SOURCE_RUN:sourceRun,DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/approved/adb'};
  const {line_key,source_run,...device_binding}=b;
- const h=createHandlers({root:d,env,rpc:async body=>({result:{company_id:b.company_id,tenant_id:b.tenant_id,version:b.version,run_id:run,device_binding}}),execute:async(command,args)=>{
+ const centralLease={held:false,async verifyTask(){},async acquire(){this.held=true;},async ensure(){},async release(){this.held=false;return true;}};
+ const h=createHandlers({root:d,env,taskId:'fixture-task',centralLease,rpc:async body=>({result:{company_id:b.company_id,tenant_id:b.tenant_id,version:b.version,run_id:run,device_binding}}),execute:async(command,args)=>{
   calls.push([command,args]);let stdout='';
   if(args[0]===join(d,'adb-existing-route.py')){assert.equal(command,'python3');assert.deepEqual(args,[join(d,'adb-existing-route.py'),b.device_serial,'/approved/adb']);stdout='5042\n';}
   if(command==='/approved/adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';

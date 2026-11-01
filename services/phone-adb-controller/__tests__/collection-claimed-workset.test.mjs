@@ -46,7 +46,8 @@ function fixture(t,{verdict='rejected',claimUnknown=false,qualificationFails=fal
   const cmd=args[2]==='--lock-owner'?args[4]:args[2];
   return {code:0,stdout:cmd==='lock-acquire'?'lock=acquired':cmd==='lock-refresh'?'lock=refreshed':cmd==='lock-release'?'lock=released':cmd==='account-current'?'douyin_id=44997267357':'serial=NO-REAL-DEVICE\nforeground=launcher\n',stderr:''};
  };
- const h=createHandlers({root:dir,env,rpc,execute,sourceCommit:'a'.repeat(40),taskId:'fixture-task'});h.state.budgetDeadline=Date.now()+1800000;
+ const centralLease={held:false,async verifyTask(){},async acquire(){this.held=true;},async ensure(){},async release(){this.held=false;return true;}};
+ const h=createHandlers({root:dir,env,rpc,execute,sourceCommit:'a'.repeat(40),taskId:'fixture-task',centralLease});h.state.budgetDeadline=Date.now()+1800000;
  return {home,dir,env,h,calls,actions,stored};
 }
 async function prepare(f){f.h.state.currentActivity='preflight';await f.h.preflight();await f.h.dedup();f.h.state.currentActivity='qualification';return f.h.qualification();}
