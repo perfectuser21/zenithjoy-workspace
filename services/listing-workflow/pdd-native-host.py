@@ -80,7 +80,7 @@ def observe(config, request):
         if facts['storeName'] != config['binding']['storeName']:
             raise ValueError('WRONG_STORE')
         config['storeProof'] = {'name': facts['storeName'], 'owner': config['owner'], 'at': time.time(), 'evidence': tree['path']}
-    config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'evidence': [expected, tree['path']]}
+    config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'windowRaw': config['lastForegroundRaw'], 'evidence': [expected, tree['path']]}
     draft = config.get('draft', {})
     if draft.get('owned') and not facts['form'] and facts['counts'].get('草稿箱') is not None:
         before = config.get('baselineCounts', {}).get('草稿箱')
@@ -118,12 +118,23 @@ def native_action(config, request):
         control_ok(config, 'media-push', [item['path'], '--name', item['name']], job_id + '-push', native_tap=True)
         return phone_readback(config)
     approval(config, request)
+    screen, before = fresh_xml(config, job_id)
+    if before['sha256'] != config['lastFrame']['xmlSha256']: raise ValueError('APPROVED_UI_CHANGED')
+    if config['lastFrame'].get('windowRaw') != config.get('lastForegroundRaw'): raise ValueError('APPROVED_WINDOW_CHANGED')
     eid = 'native-' + job_id + '-approved'
     control_ok(config, 'snapshot-evidence', [eid], job_id + '-approved-image')
     current_png = read_evidence(config, '/private/tmp/openclaw-phone/evidence/' + config['profile'] + '/' + eid + '.png')
-    if current_png['sha256'] != config['lastFrame']['screenSha256']: raise ValueError('APPROVED_SCREEN_CHANGED')
-    screen, before = fresh_xml(config, job_id)
-    if before['sha256'] != config['lastFrame']['xmlSha256']: raise ValueError('APPROVED_UI_CHANGED')
+    comparison = {'mode': 'full-png-sha256', 'evidence': current_png['path']}
+    if current_png['sha256'] != config['lastFrame']['screenSha256']:
+        if action != 'navigate' or request.get('label') != '商品管理': raise ValueError('APPROVED_SCREEN_CHANGED')
+        target = screen.navigate('商品管理', [])
+        mask = screen.homepage_animation_mask(target)
+        approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
+        bounds = [0, 0, config['binding']['width'], config['binding']['height']]
+        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask])
+        actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask])
+        if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
+        comparison = {'mode': 'whole-screen-except-unique-marketing-icon', 'mask': mask, 'sha256': actual_digest, 'evidence': current_png['path']}
     if action == 'approve-draft':
         if not config.get('expectNewForm') or not screen.form() or screen.field('title')['value'] or screen.field('groupPrice')['value'] or screen.field('inventory')['value'] != '1':
             raise ValueError('NEW_EMPTY_FORM_UNVERIFIED')
@@ -141,7 +152,10 @@ def native_action(config, request):
         store(Path(config['remoteRoot']) / 'config.json', config)
         rect = point['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-tap', native_tap=True)
-        return {'ok': True, 'label': label, 'candidate': point, 'evidence': [before['path']]}
+        if label == '商品管理':
+            destination, destination_evidence = fresh_xml(config, job_id + '-destination')
+            if not destination.labels('商品管理') or not destination.facts()['counts']: raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED')
+        return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']]}
     if action == 'set-field':
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'):
             raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')

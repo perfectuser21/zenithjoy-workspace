@@ -30,16 +30,20 @@ export function createControllerBridge(config, dependencies = {}) {
   persist();
   const helperSource = dependencies.remote ? '' : readFileSync(new URL('./controller-host.py', import.meta.url), 'utf8');
   const uiSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-ui.py', import.meta.url));
+  const pixelsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-pixels.py', import.meta.url));
   const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
   const script = `import base64,json,sys
 _ui={'__name__':'pdd_native_ui'}
 exec(base64.b64decode('${uiSource ? uiSource.toString('base64') : ''}'),_ui)
-_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen']}
+_pixels={'__name__':'pdd_pixels'}
+exec(base64.b64decode('${pixelsSource ? pixelsSource.toString('base64') : ''}'),_pixels)
+_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'png_crop_sha':_pixels['png_crop_sha']}
 exec(base64.b64decode('${Buffer.from(helperSource).toString('base64')}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.pixelsSha256 = createHash('sha256').update(pixelsSource).digest('hex');
   state.nativeSha256 = createHash('sha256').update(nativeSource).digest('hex'); state.helperSha256 = createHash('sha256').update(helperSource).digest('hex'); state.uiSha256 = createHash('sha256').update(uiSource).digest('hex'); persist();
   const remote = dependencies.remote || (async request => {
     let tokens = ['python3', '-c', script];

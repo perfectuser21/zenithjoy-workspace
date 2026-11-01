@@ -76,6 +76,22 @@ class Screen:
             raise ValueError('ANCHOR_NOT_UNIQUE')
         return {'label': label, 'bounds': self.bounds(nodes[0]), 'clickable': nodes[0].get('clickable') == 'true', 'requiresVisualReview': True}
 
+    def homepage_animation_mask(self, target):
+        if target.get('label') != '商品管理' or self.form() or not self.facts()['storeName']:
+            raise ValueError('ANIMATION_MASK_NOT_APPLICABLE')
+        labels = self.labels('营销活动')
+        if len(labels) != 1: raise ValueError('ANIMATION_LABEL_NOT_UNIQUE')
+        label = self.bounds(labels[0])
+        icons = [self.bounds(n) for n in self.nodes if n.get('class') == 'android.widget.ImageView' and n.get('clickable') == 'true' and self.bounds(n) and label[0] <= self.bounds(n)[0] < self.bounds(n)[2] <= label[2] and 0 <= label[1] - self.bounds(n)[3] <= label[3] - label[1]]
+        if len(icons) != 1: raise ValueError('ANIMATION_ICON_NOT_UNIQUE')
+        box, tap = icons[0], target['bounds']
+        if max(box[0], tap[0]) < min(box[2], tap[2]) and max(box[1], tap[1]) < min(box[3], tap[3]): raise ValueError('ANIMATION_MASK_OVERLAPS_TARGET')
+        if not target.get('clickable'): raise ValueError('TARGET_NOT_CLICKABLE')
+        cx, cy = (tap[0] + tap[2]) // 2, (tap[1] + tap[3]) // 2
+        covering = [n for n in self.nodes if n.get('clickable') == 'true' and self.bounds(n) and self.bounds(n)[0] <= cx < self.bounds(n)[2] and self.bounds(n)[1] <= cy < self.bounds(n)[3]]
+        if len(covering) != 1: raise ValueError('TARGET_OVERLAP_AMBIGUOUS')
+        return box
+
     def facts(self):
         names = [n.get('text') for n in self.nodes if n.get('resource-id') == PACKAGE + ':id/tv_title' and self.bounds(n)]
         counts = {}
