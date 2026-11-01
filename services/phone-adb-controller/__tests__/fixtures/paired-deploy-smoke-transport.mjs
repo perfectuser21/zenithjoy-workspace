@@ -132,7 +132,7 @@ export function transport(root,mode,args){
    }
    if(existsSync(p.receipt))unlinkSync(p.receipt);
    const install=cmd.startsWith(`python3 ${script} install-maintenance `)?'install-maintenance smoke-paired-transaction':'install';
-   if(cmd!==`python3 ${script} ${install} ${p.stage}/douyin-phone-adb ${p.stage}/text-input-focus.py ${expected} ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin`)throw Error('unexpected paired install command/destination');
+   if(cmd!==`python3 ${script} ${install} ${p.stage}/douyin-phone-adb ${p.stage}/text-input-focus.py ${expected} ~/.config/openclaw/douyin-phone-profiles.tsv ~/.local/share/zenithjoy/phone-locks ~/bin-harvest ~/.local/bin`)throw Error('unexpected paired install command/destination');
    argv=[script,...install.split(' '),join(p.stage,'douyin-phone-adb'),join(p.stage,'text-input-focus.py'),expected,p.registry,p.locks,join(p.home,'bin-harvest'),join(p.home,'.local/bin')];
    const r=spawnSync('python3',argv,{encoding:'utf8',env:{...process.env,HOME:p.home}});
    if(r.status===0){

@@ -209,7 +209,7 @@ if __name__ == '__main__':
         action, tx = sys.argv[1:3]
         home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
         registry = home / '.config/openclaw/douyin-phone-profiles.tsv'
-        root = Path('/private/tmp/openclaw-phone/locks')
+        root = home / '.local/share/zenithjoy/phone-locks'
         require(action in ('acquire', 'verify', 'release'), 'invalid maintenance action')
         result = globals()[action](home, tx, registry, root)
         print(json.dumps(result))

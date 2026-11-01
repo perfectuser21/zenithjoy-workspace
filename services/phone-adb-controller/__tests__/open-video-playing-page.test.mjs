@@ -37,7 +37,7 @@ else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.ar
 `, {mode: 0o755});
     const r = spawnSync('zsh', [script, '--profile', 'legacy', 'open-video', '7681632828384394202', 'fresh-after-card-open'], {
       env: {...process.env, HOME: dir, DOUYIN_PYTHON_BIN: pythonBin, DOUYIN_PHONE_REGISTRY: join(dir,'registry.tsv'), DOUYIN_ADB_BIN: fixtureAdb(adb),
-        DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir,'tmp'), FAKE_PHONE_DIR: dir, FAKE_DETAIL_XML: fixture},
+        DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir,'tmp'), DOUYIN_PHONE_LOCK_TEST_MODE:'1', FAKE_PHONE_DIR: dir, FAKE_DETAIL_XML: fixture},
       encoding: 'utf8', timeout: 8000,
     });
     assert.equal(r.status, 0, `autoplay UI must not exhaust retries: ${r.stderr}; ${r.error?.code || ''}`);
@@ -102,7 +102,7 @@ save();
     const evidence=join(dir,'evidence');mkdirSync(evidence,{recursive:true});
     if(stale){writeFileSync(join(evidence,'read.xml'),detail);writeFileSync(join(dir,'remote.xml'),detail);}
     const key=join(dir,'fixture-key');writeFileSync(key,'FIXTURE_ONLY=1\n');const locator=join(dir,'locate.py');writeFileSync(locator,`import os\nwith open(os.path.join(os.environ['FAKE_PHONE_DIR'],'calls'),'a') as f:f.write('LOCATE\\n')\nprint('1100 1600')\n`);
-    const env={...process.env,HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
+    const env={...process.env,HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,...(policy==='continuous_identity'?{DOUYIN_DETAIL_PLAYBACK:policy}:{}),DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PHONE_LOCK_TEST_MODE:'1',...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
     let args=[runner,'--profile','legacy',command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
     if(command==='wave'){
       const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];

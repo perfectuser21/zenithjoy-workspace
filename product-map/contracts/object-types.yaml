@@ -1,10 +1,10 @@
-version: 1
+version: 2
 types:
   Device:
     identity:
       - serial
     source_of_truth: adb 设备 + douyin-phone-adb 锁目录
-      /private/tmp/openclaw-phone/locks/<serial>.lock
+      ~/.local/share/zenithjoy/phone-locks/<serial>.lock
     fields:
       - serial
       - host

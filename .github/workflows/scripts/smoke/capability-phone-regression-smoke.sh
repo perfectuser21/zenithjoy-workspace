@@ -26,6 +26,7 @@ TESTS=(
   "$D/outreach-tick-guard.test.mjs"
   "$D/next-outreach-guard-lib.test.mjs"
   "$D/phone-lock-lifecycle.test.mjs"
+  "$D/phone-recovery.test.mjs"
   "$D/lease-heartbeat.test.mjs"
 )
 LOG="$(mktemp)"

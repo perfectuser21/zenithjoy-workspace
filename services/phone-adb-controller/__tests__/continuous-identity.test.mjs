@@ -109,7 +109,7 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  // 同目标旧短链使本次必须走nonce；不得关闭COPY_STALE。
  writeFileSync(join(cache,'legacy-last-clip.txt'),'https://v.douyin.com/Fresh/\n');
  const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:fixtureAdb(adb),
-  DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
+  DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,DOUYIN_PHONE_LOCK_TEST_MODE:'1',
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
   COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',GUIDE_DISMISS_STUCK:guideDismissStuck?'1':'0',GUIDE_DISMISS_IDLE:guideDismissIdle?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
  if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;

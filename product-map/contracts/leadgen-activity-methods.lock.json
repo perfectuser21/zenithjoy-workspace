@@ -66,7 +66,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -157,7 +157,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
+      "code_digest": "d20804aab96ab3992f40ceb4e7116edd138ff99eb193e7a492bc8a268260f362",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20",
-        "current_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
+        "current_code_digest": "d20804aab96ab3992f40ceb4e7116edd138ff99eb193e7a492bc8a268260f362"
       }
     },
     "douyin_video_processing.preflight": {
@@ -367,7 +367,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -459,7 +459,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -490,7 +490,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
+      "code_digest": "e45942bc2fe9861a5c0ba2547c52c617b7a60d66f78b19c4c266b8f17c9078bc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff",
-        "current_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
+        "current_code_digest": "e45942bc2fe9861a5c0ba2547c52c617b7a60d66f78b19c4c266b8f17c9078bc"
       }
     },
     "douyin_video_processing.dedup": {
@@ -651,7 +651,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -742,7 +742,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
+      "code_digest": "a739fec49e8cd6ffbbfdb53254c97adfb23d32318767761a805ca6295c1a0821",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4",
-        "current_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
+        "current_code_digest": "a739fec49e8cd6ffbbfdb53254c97adfb23d32318767761a805ca6295c1a0821"
       }
     },
     "douyin_video_processing.qualification": {
@@ -966,7 +966,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -1057,7 +1057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -1228,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
+      "code_digest": "60a85d89c1e6bb957004e711e2a514634c23fa8b7ad621548d599218b22a5915",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa",
-        "current_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
+        "current_code_digest": "60a85d89c1e6bb957004e711e2a514634c23fa8b7ad621548d599218b22a5915"
       }
     },
     "douyin_video_processing.collection": {
@@ -1316,7 +1316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -1429,7 +1429,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -1544,13 +1544,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
+      "code_digest": "1a959a875d6d47dee1c1aabc83428b9f0f432eb2b2fab4000f5bf6a416363ac6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44",
-        "current_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
+        "current_code_digest": "1a959a875d6d47dee1c1aabc83428b9f0f432eb2b2fab4000f5bf6a416363ac6"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1618,7 +1618,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -1710,7 +1710,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -1820,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
+      "code_digest": "603eb11d08d8aa81c2bcf69e543e31fd9dd22ebffad7504e457fd3a8a910b5ba",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6",
-        "current_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
+        "current_code_digest": "603eb11d08d8aa81c2bcf69e543e31fd9dd22ebffad7504e457fd3a8a910b5ba"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1894,7 +1894,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2107,13 +2107,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897",
+      "code_digest": "1d507074247e7ad1675415bad29906e5ecb6b6f1147a3633dbf7c46ec0403aee",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5",
-        "current_code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897",
+        "current_code_digest": "1d507074247e7ad1675415bad29906e5ecb6b6f1147a3633dbf7c46ec0403aee"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2188,7 +2188,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2436,13 +2436,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3",
+      "code_digest": "67718627c94327477abfe11211daf118970937e2716402b422133408847d44e7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef",
-        "current_code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3",
+        "current_code_digest": "67718627c94327477abfe11211daf118970937e2716402b422133408847d44e7"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2510,7 +2510,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2609,7 +2609,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -2640,7 +2640,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -2748,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
+      "code_digest": "fa7bd79aa3086111fce33bfceaaef31cde2d1f34c3333441ebdb9c5724db0a62",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84",
-        "current_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
+        "current_code_digest": "fa7bd79aa3086111fce33bfceaaef31cde2d1f34c3333441ebdb9c5724db0a62"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2822,7 +2822,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -2920,7 +2920,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -3035,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
+      "code_digest": "7a676e30dadd087768cb3631ca9712be0d091629ac3c86e67714b396587381ca",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f",
-        "current_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
+        "current_code_digest": "7a676e30dadd087768cb3631ca9712be0d091629ac3c86e67714b396587381ca"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3109,7 +3109,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -3207,7 +3207,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -3315,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
+      "code_digest": "968ff8b6096a965934314412e064fa6bac0d39b4ad4b38c6c55ec3172ba6294d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902",
-        "current_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
+        "current_code_digest": "968ff8b6096a965934314412e064fa6bac0d39b4ad4b38c6c55ec3172ba6294d"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3389,7 +3389,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
+          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
         },
         {
           "kind": "code",
@@ -3488,7 +3488,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "c36cd2be3c6227e766adddc761e701b25ef1787322c012ff91290a454434ac1d"
+          "sha256": "3184ee27b0ca1e6a813c0a504032a424423966f9f7154f0002f4b6d498c96af6"
         },
         {
           "kind": "code",
@@ -3605,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
+      "code_digest": "7c65b7c629e4d81b23dc5fd22d86bf6ef9b106d68a77959bf94b5964a9f774af",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
-        "reviewed_by": "codex:leadgen-task-binding-fix",
-        "previous_code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb",
-        "current_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4"
+        "reason": "Pins phone lock ownership to a durable reviewed root and fails closed before native activity; Activity business inputs, outputs and eligibility policy remain unchanged.",
+        "reviewed_by": "codex:durable-phone-lock-dev",
+        "previous_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
+        "current_code_digest": "7c65b7c629e4d81b23dc5fd22d86bf6ef9b106d68a77959bf94b5964a9f774af"
       }
     }
   },

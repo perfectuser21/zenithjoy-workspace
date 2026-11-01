@@ -60,7 +60,7 @@ function ownerIdentity(path,owner){
 function unchanged(r){
  try{return !r.state.executionUnknown&&epochs.get(r.state)===r.epoch&&Date.now()<r.identity.global_deadline_ms
   &&readFrozen(r.env.WFR_RUN_DIR).snapshot_sha256===r.identity.snapshot_sha256&&r.state.account===r.identity.account
-  &&['WFR_RUN_ID','WFR_ATTEMPT','WFR_TAG','P','SERIAL','WF_RUN_START_TS','WF_RUN_MAX_SECONDS','DOUYIN_PHONE_ADB','PYTHONPATH','PYTHONHOME','NODE_OPTIONS','NODE_PATH'].every(k=>r.env[k]===r.originalEnv[k])
+  &&['WFR_RUN_ID','WFR_ATTEMPT','WFR_TAG','P','SERIAL','WF_RUN_START_TS','WF_RUN_MAX_SECONDS','DOUYIN_PHONE_ADB','DOUYIN_PHONE_LOCK_ROOT','PYTHONPATH','PYTHONHOME','NODE_OPTIONS','NODE_PATH'].every(k=>r.env[k]===r.originalEnv[k])
   &&r.state.discoveryWorkDeadline===r.identity.work_deadline_ms&&r.state.source_commit===r.identity.source_commit&&r.state.run_id===r.identity.run_id&&r.state.task_id===r.identity.task_id
   &&readBinding(r.env.WFR_RUN_DIR,r.env.WFR_ATTEMPT,r.frozen).id===r.identity.binding_id
   &&hash(readFileSync(realpathSync(r.spec.policy.adb_bin)))===r.identity.client_sha256
@@ -113,7 +113,8 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  if(realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||env.DOUYIN_PHONE_ADB!==join(root,'douyin-phone-adb')||!sourceStable(root,frozen))fail('SOURCE_INVALID');
  if(Object.entries(env).some(([k,v])=>v&&(/^(DYLD_|LD_)/.test(k)||['PYTHONPATH','PYTHONHOME','PYTHONSTARTUP','PYTHONINSPECT','NODE_OPTIONS','NODE_PATH','DOUYIN_BYPASS_REPORT_BIN','OWN_ACCOUNTS_CONF'].includes(k))))fail('AMBIENT_OVERRIDE_REFUSED');
  for(const [k,v] of [['DOUYIN_CURL_BIN','/usr/bin/curl'],['DOUYIN_SIPS_BIN','/usr/bin/sips'],['DOUYIN_LOCATE_SCRIPT',join(root,'locate-element.py')]])if(env[k]&&env[k]!==v)fail('TOOL_OVERRIDE_REFUSED');
- const paths=layout(root,env,spec),ownerFile=join(paths.phoneRoot,'locks',env.SERIAL+'.lock','owner'),owner=ownerIdentity(ownerFile,identity.owner);
+ const paths=layout(root,env,spec),lockRoot=env.DOUYIN_PHONE_LOCK_ROOT||join(paths.phoneRoot,'locks');
+ const ownerFile=join(lockRoot,env.SERIAL+'.lock','owner'),owner=ownerIdentity(ownerFile,identity.owner);
  if(!quiet(paths.evidence)||readdirSync(join(env.WFR_RUN_DIR,'native-operations')).some(x=>x.endsWith('.unknown')))fail('EXISTING_UNKNOWN');
  if(purpose==='collect'){
   if(epochs.has(state)||Date.now()>=identity.work_deadline_ms)fail('COLLECT_CLOSED');
@@ -130,7 +131,7 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  const deadline=purpose==='collect'?identity.work_deadline_ms:globalDeadline,producer=await startCollectionLeafProducer({directory,policy:spec.policy,serial:env.SERIAL,deadlineMs:deadline,env});
  let sealing;const seal=()=>sealing??=producer.seal();const timer=setTimeout(()=>{seal().catch(()=>{});},Math.max(1,deadline-Date.now()));
  const r={identity:{...identity,epoch:epochs.get(state)},epoch:epochs.get(state),state,env,originalEnv:{...env},root,spec,frozen,layout:paths,ownerFile,ownerIdentity:owner,consumed:false};
- const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_TMP_ROOT:paths.phoneRoot,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
+ const scopedEnv={...producer.env,WFR_COLLECTION_POLICY_FILE:policyFile,DOUYIN_ADB_BIN:join(root,'adb-managed-client.py'),DOUYIN_PYTHON_BIN:python,DOUYIN_PHONE_TMP_ROOT:paths.phoneRoot,DOUYIN_PHONE_LOCK_ROOT:env.DOUYIN_PHONE_LOCK_ROOT,DOUYIN_PHONE_LOCK_TEST_MODE:env.DOUYIN_PHONE_LOCK_TEST_MODE,PATH:bin+':/usr/bin:/bin:/usr/sbin:/sbin',PYTHONDONTWRITEBYTECODE:'1',PYTHONPATH:'',PYTHONHOME:'',NODE_OPTIONS:'',NODE_PATH:'',ZDOTDIR:directory,ENV:'',BASH_ENV:''};
  // A nonzero ADB business probe may still have a verified nofork child close.
  // 101 cleanup needs every native request returned, never a success exit code.
  const returned=s=>s.requests_returned||s.empty_requests_returned;

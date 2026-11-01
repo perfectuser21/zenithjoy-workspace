@@ -248,7 +248,7 @@ jobs:
               # 全目录 phone-adb-controller 回归由独立必需L3执行；本脚本验证五个字段合同文件及API映射。
               # 保留原420s有限预算（含依赖准备/字段检查）、重试1次及job25m上限。
               leadgen-field-cleanup-smoke.sh) echo 420 ;;
-              capability-phone-regression-smoke.sh) echo 180 ;;  # 16套串行真实时序回归实测约122秒
+              capability-phone-regression-smoke.sh) echo 180 ;;  # 17套串行真实时序回归实测约123秒
               *) echo 90 ;;
             esac
           }

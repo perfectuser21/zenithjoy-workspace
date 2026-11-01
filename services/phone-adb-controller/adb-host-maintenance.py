@@ -28,7 +28,7 @@ PORTS = (5037, 5041, 5042)
 REQUIRED_FILES = ('adb-host-maintenance.py', 'adb-existing-route.py', 'adb-managed-client.py',
                   'adb-host-service.py', 'install-adb-host-service.sh', 'phone-lock-helper.py',
                   'maintenance-task-authority.py', 'adb-process-observation.py')
-LOCK_ROOT = Path('/private/tmp/openclaw-phone/locks')
+LOCK_ROOT = Path(pwd.getpwuid(os.geteuid()).pw_dir) / '.local/share/zenithjoy/phone-locks'
 SERVICE_LABEL = 'com.zenithjoy.adb-host'
 
 
