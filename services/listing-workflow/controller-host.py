@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import shlex
 import subprocess
 import sys
@@ -90,6 +91,8 @@ def roots(request):
 
 def inspect(request):
     binding = request['binding']
+    if 'phone-candidates' in binding['controllerPath'] or 'controllerReleaseCommit' in binding or 'controllerBundleFiles' in binding:
+        verify_files(request)
     controller = Path(binding['controllerPath'])
     focus = controller.parent / 'text-input-focus.py'
     return {'controllerSha256': sha(controller.read_bytes()), 'focusSha256': sha(focus.read_bytes()), 'profile': read_profile(Path.home(), binding['baseProfile'])}
@@ -97,6 +100,21 @@ def inspect(request):
 
 def verify_files(config):
     binding = config['binding']
+    release = re.fullmatch(r'/Users/[A-Za-z0-9_-]+/\.local/share/zenithjoy/phone-candidates/([a-f0-9]{40})/runtime/douyin-phone-adb', binding['controllerPath'])
+    if release or 'controllerReleaseCommit' in binding or 'controllerBundleFiles' in binding or 'phone-candidates' in binding['controllerPath']:
+        names = ('douyin-phone-adb', 'phone-lock-lib.sh', 'phone-lock-helper.py', 'text-input-focus.py')
+        files = binding.get('controllerBundleFiles')
+        if not release or binding.get('controllerReleaseCommit') != release[1] or not isinstance(files, dict) or set(files) != set(names) or any(not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{64}', value) for value in files.values()) or files['douyin-phone-adb'] != binding['controllerSha256'] or files['text-input-focus.py'] != binding['focusSha256']:
+            raise ValueError('INVALID_CONTROLLER_RELEASE_BINDING')
+        directory = Path(binding['controllerPath']).parent
+        for name in names:
+            path = directory / name
+            if any(parent.is_symlink() for parent in (path, *path.parents)):
+                raise ValueError('CONTROLLER_BUNDLE_SYMLINK')
+            with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode) or sha(stream.read()) != files[name]:
+                    raise ValueError('CONTROLLER_BUNDLE_HASH_CHANGED')
+        return
     if sha(Path(binding['controllerPath']).read_bytes()) != binding['controllerSha256'] or sha((Path(binding['controllerPath']).parent / 'text-input-focus.py').read_bytes()) != binding['focusSha256']:
         raise ValueError('CONTROLLER_HASH_CHANGED')
 

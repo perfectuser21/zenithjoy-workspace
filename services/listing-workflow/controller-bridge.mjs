@@ -7,6 +7,19 @@ import { materialPolicy as authorizeMaterials } from './authorized-media.mjs';
 
 const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
 const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
+function validControllerLocation(binding) {
+  if (typeof binding.controllerPath !== 'string') return false;
+  const release = /^\/Users\/[A-Za-z0-9_-]+\/\.local\/share\/zenithjoy\/phone-candidates\/([a-f0-9]{40})\/runtime\/douyin-phone-adb$/.exec(binding.controllerPath || '');
+  if (!release) return /^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') &&
+    !Object.hasOwn(binding, 'controllerReleaseCommit') && !Object.hasOwn(binding, 'controllerBundleFiles');
+  const files = binding.controllerBundleFiles;
+  const names = ['douyin-phone-adb', 'phone-lock-lib.sh', 'phone-lock-helper.py', 'text-input-focus.py'];
+  if (binding.controllerReleaseCommit !== release[1] || !files || typeof files !== 'object' || Array.isArray(files) ||
+      Object.keys(files).length !== names.length || names.some(name => !Object.hasOwn(files, name) || typeof files[name] !== 'string' || !/^[a-f0-9]{64}$/.test(files[name])) ||
+      files['douyin-phone-adb'] !== binding.controllerSha256 || files['text-input-focus.py'] !== binding.focusSha256) return false;
+  Object.freeze(files);
+  return true;
+}
 export function createControllerBridge(config, dependencies = {}) {
   const clonedBinding = structuredClone(config.binding);
   clonedBinding.materialPreparationAuthorized=config.allowMaterialPreparation===true;
@@ -18,7 +31,7 @@ export function createControllerBridge(config, dependencies = {}) {
   Object.freeze(clonedBinding.route); const binding = Object.freeze(clonedBinding);
   readOnlyInvocation({ serial: binding.serial, route: binding.route }, 'online');
   if (!/^[a-f0-9]{64}$/.test(binding.controllerSha256 || '') || !/^[a-f0-9]{64}$/.test(binding.focusSha256 || '') ||
-      !/^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') ||
+      !validControllerLocation(binding) ||
       !/^[a-zA-Z0-9_-]+$/.test(binding.baseProfile || '') || !binding.authority) throw new Error('INVALID_CONTROLLER_BINDING');
   const materialPolicy = config.materials ? authorizeMaterials(config) : null;
   const id = randomUUID(), directory = resolve(config.root);
