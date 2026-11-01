@@ -63,6 +63,8 @@ def gallery_action(config,request):
         point = picker.gallery_upload(len(selection))
     else: raise ValueError('FORBIDDEN_GALLERY_ACTION')
     final_window_guard(config,request['jobId'],tree['sha256'],package=package)
+    if action in {'gallery-upload','gallery-back'}: expect_context_transition(config,['form','source'] if action=='gallery-back' else ['form'],request['jobId'],cleanup=action=='gallery-back')
+    abandoned=config.get('pendingPicker')
     config['pendingPicker'] = {'action':action,'jobId':request['jobId'],'before':[tree['path'],png['path']]}
     store(Path(config['remoteRoot'])/'config.json',config)
     box=point['bounds']
@@ -77,7 +79,7 @@ def gallery_action(config,request):
         if len(exact)==1: verify_gallery_selection(selection,[x for x in current if x is not exact[0]])
         selection.append({'mediaId':media[0]['mediaId'],'sourceSha256':media[0]['sha256'],'visualBinding':binding,'selectedNumber':len(selection)+1,'contentSha256':exact[0]['contentSha256'],'imageSize':exact[0]['imageSize']})
     if action == 'gallery-back':
-        config['abandonedPickerAction']=config.get('pendingPicker')
+        config['abandonedPickerAction']=abandoned
         config['gallerySelection']=[]
     config['pendingPicker']=None
     store(Path(config['remoteRoot'])/'config.json',config)

@@ -42,7 +42,7 @@ def fresh_xml(config, job_id):
 
 def require_store(config):
     proof = config.get('storeProof', {})
-    if proof.get('name') != config['binding']['storeName'] or proof.get('owner') != config['owner'] or not 0 <= time.time() - proof.get('at', 0) < 900:
+    if proof.get('name') != config['binding']['storeName'] or proof.get('owner') != config['owner'] or proof.get('runId')!=config.get('runId') or not 0 <= time.time() - proof.get('at', 0) < config['binding'].get('draftContextMaxSeconds',900):
         raise ValueError('STORE_PROOF_UNVERIFIED_OR_EXPIRED')
 
 
@@ -55,10 +55,23 @@ def approval(config, request):
 def context(config, job_id, cleanup=False):
     held(config)
     call_idle(config)
-    if current_package(config, job_id) != 'com.xunmeng.merchant':
+    package=current_package(config, job_id)
+    if package != 'com.xunmeng.merchant':
         raise ValueError('WRONG_FOREGROUND')
-    if not cleanup: require_store(config)
+    screen,tree=fresh_xml(config,job_id+'-context')
+    facts=screen.facts()
+    if facts['storeName'] is not None and facts['storeName']!=config['binding']['storeName']:
+        invalidate_context(config,'WRONG_STORE');raise ValueError('WRONG_STORE')
+    role=context_role(package,config['lastForegroundRaw'],screen)
+    if not cleanup:
+        require_session_context(config,role,config['lastForegroundRaw'],tree['path'])
+        require_store(config)
     elif config.get('storeProof', {}).get('owner') != config['owner']: raise ValueError('STORE_CLEANUP_CONTEXT_UNPROVEN')
+    else: remember_context(config,role,config['lastForegroundRaw'],tree['path'])
+    if screen.form() and config.get('draft',{}).get('owned'):
+        if (role in {'form','source'} and config['draft'].get('formWindow')!=config['lastForegroundRaw']) or any(screen.field(k)['value']!=v for k,v in config['draft'].get('values',{}).items()):
+            invalidate_context(config,'OWNED_FORM_VALUES_OR_WINDOW_CHANGED');raise ValueError('OWNED_FORM_VALUES_OR_WINDOW_CHANGED')
+    return screen,tree
 
 
 def native_status_bar(config, job_id):
@@ -104,8 +117,10 @@ def observe(config, request):
     if facts['storeName'] is not None:
         if facts['storeName'] != config['binding']['storeName']:
             raise ValueError('WRONG_STORE')
-        config['storeProof'] = {'name': facts['storeName'], 'owner': config['owner'], 'at': time.time(), 'evidence': tree['path']}
+        config['storeProof'] = {'name': facts['storeName'], 'owner': config['owner'], 'runId':config.get('runId'), 'at': time.time(), 'evidence': tree['path']}
     config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'windowRaw': config['lastForegroundRaw'], 'evidence': [expected, tree['path']]}
+    role=context_role(package,config['lastForegroundRaw'],screen)
+    remember_context(config,role,config['lastForegroundRaw'],tree['path'])
     status_bar = native_status_bar(config,request['jobId']) if package in {'com.xunmeng.merchant','com.android.permissioncontroller','com.android.providers.media.module'} else None
     if status_bar: config['lastFrame']['statusBarProof'] = status_bar
     if config.get('expectNewForm') and not config.get('draft') and config.get('emptyFormBackIntent',{}).get('commandFinished') and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理'))==1 and config.get('baselineCounts',{}).get('草稿箱') is not None and facts['counts'].get('草稿箱')==config['baselineCounts']['草稿箱']:
@@ -121,7 +136,7 @@ def observe(config, request):
         elif before is not None:
             draft['autoSavedPossible'] = True
     store(Path(config['remoteRoot']) / 'config.json', config)
-    return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'statusBarRaw': read_evidence(config,status_bar['path']) if status_bar else None, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
+    return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'statusBarRaw': read_evidence(config,status_bar['path']) if status_bar else None, 'facts': facts, 'storeProof': config.get('storeProof'), 'closedContext':config.get('closedContext'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
 
 
 def final_window_guard(config, job_id, xml_sha, package='com.xunmeng.merchant', list_entry=None):
@@ -146,8 +161,9 @@ def navigation_destination(config, label, job_id):
 
 
 def current_owned_form(config,job_id):
+    if config['binding'].get('draftWritesAuthorized') is not True: raise ValueError('DRAFT_WRITES_NOT_AUTHORIZED')
     if not config.get('draft',{}).get('owned') or config['draft'].get('owner')!=config['owner'] or config.get('pendingAction') or not config.get('newFormEntryIntent'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
-    if 'com.xunmeng.merchant.ui.NewPageActivity' not in config.get('lastForegroundRaw',''): raise ValueError('OWNED_FORM_FOREGROUND_UNVERIFIED')
+    if 'com.xunmeng.merchant.ui.NewPageActivity' not in config.get('lastForegroundRaw','') or config['draft'].get('formWindow')!=config.get('lastForegroundRaw'): raise ValueError('OWNED_FORM_FOREGROUND_UNVERIFIED')
     screen,proof=fresh_xml(config,job_id+'-owned-form')
     if not screen.form() or any(screen.field(k)['value']!=v for k,v in config['draft'].get('values',{}).items()): raise ValueError('OWNED_FORM_VALUES_CHANGED')
     return screen,proof
@@ -158,13 +174,15 @@ def native_action(config, request):
     if action == 'observe':
         return observe(config, request)
     if action == 'launch':
+        invalidate_context(config,'APP_LAUNCH_OR_RESTART')
         call_idle(config)
         adb(config, ['shell', 'monkey', '-p', 'com.xunmeng.merchant', '-c', 'android.intent.category.LAUNCHER', '1'])
         return {'ok': True}
+    if action=='bootstrap-back': return bootstrap_back(config,request)
     if action=='navigate' and request.get('label')=='发布商品' and config.get('newFormEntryIntent'): raise ValueError('NEW_FORM_ALREADY_ATTEMPTED')
-    context(config, job_id, cleanup=(action in {'back', 'discard-draft'}))
+    preflight=context(config, job_id, cleanup=(action in {'back', 'discard-draft','resolve-back'}))
     if action == 'back':
-        screen, before = fresh_xml(config, job_id)
+        screen, before = preflight
         facts = screen.facts()
         empty = facts['form'] and not config.get('draft') and config.get('expectNewForm') and not config['ownedMedia'] and screen.field('title')['value']=='' and screen.field('groupPrice')['value']=='' and screen.field('inventory')['value']=='1'
         if empty and config.get('emptyFormBackIntent'): raise ValueError('EMPTY_FORM_EXIT_REQUIRES_READBACK')
@@ -177,9 +195,10 @@ def native_action(config, request):
             if empty: config['emptyFormBackIntent']=intent
             else: config['draft']['backIntent']=intent
             store(Path(config['remoteRoot']) / 'config.json', config)
+        expect_context_transition(config,['form','discard','list'] if facts['form'] else ['home'],job_id,cleanup=True)
         result = control_ok(config, 'back', [], job_id + '-back', native_tap=True)
-        if empty:
-            config['emptyFormBackIntent']['commandFinished']=True
+        if facts['form']:
+            (config['emptyFormBackIntent'] if empty else config['draft']['backIntent'])['commandFinished']=True
             store(Path(config['remoteRoot']) / 'config.json', config)
         return {'ok': True, 'evidence': [before['path']]}
     if action == 'stage-and-push-media':
@@ -201,7 +220,7 @@ def native_action(config, request):
         control_ok(config, 'media-push', [item['path'], '--name', item['name']], job_id + '-push', native_tap=True)
         return phone_readback(config)
     approval(config, request)
-    screen, before = fresh_xml(config, job_id)
+    screen, before = preflight
     list_entry = action == 'navigate' and request.get('label') == '发布商品'
     if list_entry:
         approved_tree = read_evidence(config, config['lastFrame']['evidence'][1])
@@ -235,11 +254,13 @@ def native_action(config, request):
             actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
             if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
             comparison = {'mode': 'homepage-except-native-status-bar-and-unique-marketing-icon', 'mask': mask, 'statusBarMask':status_mask, 'statusBarProof':{'approved':approved_bar,'current':current_bar}, 'sha256': actual_digest, 'evidence': current_png['path'],'transparentOverlayAbsenceProven':False}
+    if action=='resolve-back': return resolve_known_back(config,request,screen,before)
     if action == 'discard-draft':
         draft = config.get('draft', {})
         if not draft.get('owned') or draft.get('owner') != config['owner'] or not draft.get('backIntent') or draft.get('discardIntent'): raise ValueError('OWNED_DISCARD_NOT_AUTHORIZED')
         point = screen.discard()
         final_window_guard(config,job_id,before['sha256'])
+        expect_context_transition(config,['list'],job_id,cleanup=True)
         draft['discardIntent'] = {'jobId': job_id, 'before': before['path'], 'commandFinished': False}
         store(Path(config['remoteRoot']) / 'config.json', config)
         box = point['bounds']
@@ -248,9 +269,10 @@ def native_action(config, request):
         store(Path(config['remoteRoot']) / 'config.json', config)
         return {'ok': True, 'status': 'discard-command-finished-awaiting-observation', 'evidence': [before['path']]}
     if action == 'approve-draft':
+        if config['binding'].get('draftWritesAuthorized') is not True: raise ValueError('DRAFT_WRITES_NOT_AUTHORIZED')
         if not config.get('expectNewForm') or not screen.form() or screen.field('title')['value'] or screen.field('groupPrice')['value'] or screen.field('inventory')['value'] != '1':
             raise ValueError('NEW_EMPTY_FORM_UNVERIFIED')
-        config['draft'] = {'owned': True, 'owner': config['owner'], 'baseline': {k:v for k,v in before.items() if k != 'bytesBase64'}, 'values': {}, 'exitedVerified': False}
+        config['draft'] = {'owned': True, 'owner': config['owner'], 'formWindow':config['lastForegroundRaw'], 'baseline': {k:v for k,v in before.items() if k != 'bytesBase64'}, 'values': {}, 'exitedVerified': False}
         store(Path(config['remoteRoot']) / 'config.json', config)
         return {'ok': True, 'draft': config['draft']}
     if action == 'navigate':
@@ -266,6 +288,8 @@ def native_action(config, request):
             config['expectNewForm'] = True
             config['emptyFormExitedVerified']=False
             config.pop('emptyFormBackIntent',None)
+        transitions={'商品管理':['list'],'发布商品':['form'],'上传图片':['source'],'从手机相册选择':['gallery','permission'],'取消':['form']}
+        if label in transitions: expect_context_transition(config,transitions[label],job_id)
         store(Path(config['remoteRoot']) / 'config.json', config)
         rect = point['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-tap', native_tap=True)
@@ -273,6 +297,7 @@ def native_action(config, request):
             destination, destination_evidence = navigation_destination(config, label, job_id)
         return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']] + ([destination_evidence['path']] if label in {'商品管理','发布商品'} else [])}
     if action == 'set-field':
+        if config['binding'].get('draftWritesAuthorized') is not True: raise ValueError('DRAFT_WRITES_NOT_AUTHORIZED')
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'):
             raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
         field, value = request['field'], request['value']

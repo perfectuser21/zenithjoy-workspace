@@ -283,7 +283,7 @@ def dispatch_host_operation(config,request):
         return gallery_action(config, request)
     if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
         return picker_action(config, request)
-    if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'back', 'launch'}:
+    if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'}:
         return native_action(config, request)
     raise ValueError('FORBIDDEN_HOST_OPERATION')
 
@@ -312,7 +312,7 @@ def dispatch(request):
         fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
         config = json.loads((root / 'config.json').read_text())
         config['deadline'] = deadline
-        if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding'] or config.get('materialPolicy') != request.get('materialPolicy'):
+        if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding'] or config.get('materialPolicy') != request.get('materialPolicy') or config.get('runId') != request.get('runId'):
             raise ValueError('SESSION_IDENTITY_CONFLICT')
         if action == 'controller':
             return execute_controller(config, request['command'], request.get('args', []), request['jobId'])

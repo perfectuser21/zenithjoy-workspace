@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 
 def picker_current(config, request):
-    held(config); call_idle(config); require_store(config); approval(config, request)
+    held(config); call_idle(config); approval(config, request)
     package = current_package(config, request['jobId'])
     activities={MERCHANT:MERCHANT+'.media.MultiGraphSelectorNewActivity',SYSTEM_PICKER:'com.android.providers.media.photopicker.PhotoPickerUserSelectActivity',PERMISSION:PERMISSION+'.permission.ui.GrantPermissionsActivity'}
     if package not in activities or not re.search(r'\bu\d+ '+re.escape(package+'/'+activities.get(package,''))+r'\}',config['lastForegroundRaw']): raise ValueError('WRONG_PICKER_FOREGROUND')
@@ -14,6 +14,14 @@ def picker_current(config, request):
     eid = 'native-' + request['jobId'] + '-picker-check'
     control_ok(config, 'snapshot-evidence', [eid], request['jobId']+'-picker-image')
     png = read_evidence(config, '/private/tmp/openclaw-phone/evidence/'+config['profile']+'/'+eid+'.png')
+    current=Screen(base64.b64decode(tree['bytesBase64']).decode(),config['binding']['width'],config['binding']['height'])
+    role=context_role(package,config['lastForegroundRaw'],current)
+    if request['action']=='gallery-back':
+        if not config.get('draft',{}).get('owned') or config.get('storeProof',{}).get('owner')!=config['owner'] or role!='gallery': raise ValueError('GALLERY_CLEANUP_CONTEXT_UNPROVEN')
+        remember_context(config,role,config['lastForegroundRaw'],tree['path'])
+    else:
+        require_session_context(config,role,config['lastForegroundRaw'],tree['path'])
+        require_store(config)
     picker=PickerTree(base64.b64decode(tree['bytesBase64']).decode(), config['binding']['width'], config['binding']['height'])
     if png['sha256'] != config['lastFrame']['screenSha256']: app_pixel_comparison(config,png,picker,request['jobId'])
     return package,picker,tree,png
@@ -82,6 +90,8 @@ def picker_action(config, request):
         grant['confirmIntent'] = {'jobId':request['jobId'],'at':time.time()}
     else: raise ValueError('FORBIDDEN_PICKER_ACTION')
     final_window_guard(config,request['jobId'],tree['sha256'],package=package)
+    transitions={'picker-more':['permission','picker'],'picker-permission':['picker'],'picker-confirm':['gallery']}
+    if action in transitions: expect_context_transition(config,transitions[action],request['jobId'])
     config['pendingPicker'] = {'action':action,'jobId':request['jobId'],'point':point,'before':[tree['path'],png['path']]}
     store(Path(config['remoteRoot'])/'config.json',config)
     box = point['bounds']

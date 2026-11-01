@@ -20,6 +20,8 @@ export function createNativeTransport(config,bridge){
    }
    const path=join(root,`frame-${id}.json`);writeFileSync(path,JSON.stringify(result,null,2),{flag:'wx',mode:0o600});return{...result,manifest:path};
   },
+  async bootstrapBack(proof){return bridge.host('bootstrap-back',{approvedScreenSha256:approval(proof)});},
+  async resolveBack(proof){return bridge.host('resolve-back',{approvedScreenSha256:approval(proof)});},
   async launch(){return bridge.host('launch');},
   async navigate(label,proof){
    if(denied.has(label)||typeof label!=='string')throw new Error('FORBIDDEN_CONTROL');

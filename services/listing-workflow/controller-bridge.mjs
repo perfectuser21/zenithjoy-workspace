@@ -9,6 +9,9 @@ const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
 const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
 export function createControllerBridge(config, dependencies = {}) {
   const clonedBinding = structuredClone(config.binding);
+  clonedBinding.draftWritesAuthorized=config.allowDraftWrites===true;
+  clonedBinding.draftContextMaxSeconds ??= 900;
+  if(!Number.isInteger(clonedBinding.draftContextMaxSeconds)||clonedBinding.draftContextMaxSeconds<120||clonedBinding.draftContextMaxSeconds>1800||(clonedBinding.draftContextMaxSeconds>900&&!clonedBinding.draftWritesAuthorized))throw new Error('INVALID_DRAFT_CONTEXT_POLICY');
   clonedBinding.remoteBrainBaseUrl ??= 'http://100.79.41.61:5221';
   if(clonedBinding.remoteBrainBaseUrl!=='http://100.79.41.61:5221')throw new Error('INVALID_REMOTE_BRAIN_AUTHORITY');
   Object.freeze(clonedBinding.route); const binding = Object.freeze(clonedBinding);
@@ -38,6 +41,8 @@ export function createControllerBridge(config, dependencies = {}) {
   const albumSource = dependencies.remote ? '' : readFileSync(new URL('./owned-album.py', import.meta.url));
   const mediaCleanupSource = dependencies.remote ? '' : readFileSync(new URL('./owned-media-cleanup.py', import.meta.url));
   const pickerSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-picker.py', import.meta.url));
+  const cleanupNavigationSource=dependencies.remote?'':readFileSync(new URL('./pdd-cleanup-navigation.py',import.meta.url));
+  const sessionContextSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-session-context.py', import.meta.url));
   const leaseGateSource = dependencies.remote ? '' : readFileSync(new URL('./phone-lease-gate.py', import.meta.url));
   const insetsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-window-insets.py', import.meta.url));
   const gallerySource = dependencies.remote ? '' : readFileSync(new URL('./pdd-gallery-actions.py', import.meta.url));
@@ -57,10 +62,14 @@ exec(base64.b64decode('${pickerSource ? pickerSource.toString('base64') : ''}'),
 exec(base64.b64decode('${pickerActionsSource ? pickerActionsSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${gallerySource ? gallerySource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${insetsSource ? insetsSource.toString('base64') : ''}'),_host)
+exec(base64.b64decode('${sessionContextSource ? sessionContextSource.toString('base64') : ''}'),_host)
+exec(base64.b64decode('${cleanupNavigationSource?cleanupNavigationSource.toString('base64'):''}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.cleanupNavigationSha256=createHash('sha256').update(cleanupNavigationSource).digest('hex');
+  state.sessionContextSha256=createHash('sha256').update(sessionContextSource).digest('hex');
   state.leaseGateSha256=createHash('sha256').update(leaseGateSource).digest('hex');
   state.insetsSha256 = createHash('sha256').update(insetsSource).digest('hex');
   state.gallerySha256 = createHash('sha256').update(gallerySource).digest('hex');
@@ -80,8 +89,8 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
     return result;
   });
   async function send(action, extra = {}) {
-    if (Object.keys(extra).some(key => ['action','binding','owner','profile','remoteRoot','jobId','operationBudgetMs','materialPolicy'].includes(key))) throw new Error('RESERVED_REQUEST_FIELD');
-    const request = { action, binding, materialPolicy, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, operationBudgetMs: timeoutMs - 15000, ...extra };
+    if (Object.keys(extra).some(key => ['action','binding','owner','profile','remoteRoot','jobId','operationBudgetMs','materialPolicy','runId'].includes(key))) throw new Error('RESERVED_REQUEST_FIELD');
+    const request = { action, binding, materialPolicy, runId:state.runId, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, operationBudgetMs: timeoutMs - 15000, ...extra };
     const item = { action, command: extra.command, at: new Date().toISOString(), jobId: randomUUID() }; state.trace.push(item); persist();
     try { const result = await remote({ ...request, jobId: item.jobId }); item.finishedAt = new Date().toISOString(); persist(); return result; }
     catch (error) { item.error = error.message; if (error.remoteUnknown) state.remoteUnknown = true; persist(); throw error; }
@@ -136,7 +145,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'discard-draft', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); return send(action,data);
     },
     async finish() {
