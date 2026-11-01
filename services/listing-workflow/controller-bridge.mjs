@@ -14,7 +14,7 @@ export function createControllerBridge(config, dependencies = {}) {
       !/^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') ||
       !/^[a-zA-Z0-9_-]+$/.test(binding.baseProfile || '') || !binding.authority) throw new Error('INVALID_CONTROLLER_BINDING');
   const id = randomUUID(), directory = resolve(config.root);
-  let state = { processPid: process.pid, binding, id, runId: config.runId, owner: `manual-pdd-native-${id}`, profile: `pdd${id.replaceAll('-', '')}`, remoteRoot: `/private/tmp/pdd-native-${id}`,
+  let state = { processPid: process.pid, binding, id, runId: config.runId, owner: `manual-pdd-native-${id.replaceAll('-', '')}`, profile: `pdd${id.replaceAll('-', '')}`, remoteRoot: `/private/tmp/pdd-native-${id}`,
     brainHeld: false, controllerHeld: false, remoteUnknown: false, lockReleased: false, trace: [] };
   const brain = dependencies.brain || createBrainClient(binding.brainBaseUrl);
   const timeoutMs = config.commandTimeoutMs ?? 300000;
