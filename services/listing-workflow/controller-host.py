@@ -1,0 +1,252 @@
+import base64
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import sys
+import time
+
+COMMANDS = {'lock-acquire-new', 'lock-status', 'lock-refresh', 'lock-release-exact', 'preflight', 'foreground', 'snapshot-evidence', 'ui-evidence', 'text-input', 'media-push'}
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def store(path, value):
+    temporary = path.with_name(path.name + '.pending')
+    with temporary.open('w') as stream:
+        json.dump(value, stream, ensure_ascii=False)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def read_profile(home, profile):
+    source = home / '.config/openclaw/douyin-phone-profiles.tsv'
+    rows = source.read_text().splitlines()
+    header = next(row.lstrip('#').split('\t') for row in rows if row.lstrip('#').startswith('profile\t'))
+    matches = [dict(zip(header, row.split('\t'))) for row in rows if not row.startswith('#') and row.split('\t')[0] == profile]
+    if len(matches) != 1:
+        raise ValueError('PROFILE_NOT_UNIQUE')
+    row = matches[0]
+    return {'serial': row['serial'], 'model': row['model'], 'width': int(row['width']), 'height': int(row['height']), 'enabled': row.get('enabled', 'true') == 'true'}
+
+
+def private_profile(root, alias, row):
+    if not re.fullmatch(r'[A-Za-z0-9_-]+', alias):
+        raise ValueError('INVALID_PROFILE_ALIAS')
+    path = root / 'profiles.tsv'
+    data = '#profile\tserial\tmodel\twidth\theight\tenabled\n' + '\t'.join([alias, row['serial'], row['model'], str(row['width']), str(row['height']), 'true']) + '\n'
+    with path.open('x') as stream:
+        stream.write(data)
+    path.chmod(0o600)
+    return path
+
+
+def stage_media(config, request):
+    name = request.get('name', '')
+    if not re.fullmatch(r'IMG_\d{8}_\d{6}_\d{1,3}\.(?:jpg|png)', name):
+        raise ValueError('INVALID_MEDIA_NAME')
+    raw = base64.b64decode(request['bytesBase64'], validate=True)
+    if sha(raw) != request['sha256']:
+        raise ValueError('MEDIA_HASH_MISMATCH')
+    if not 0 < len(raw) <= 20 * 1024 * 1024 or not (raw.startswith(b'\xff\xd8\xff') or raw.startswith(b'\x89PNG\r\n\x1a\n')):
+        raise ValueError('INVALID_MEDIA_BYTES')
+    path = Path(config['remoteRoot']) / name
+    if path.exists():
+        raise ValueError('STAGED_MEDIA_ALREADY_EXISTS')
+    with path.open('xb') as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+    path.chmod(0o400)
+    entry = {'path': str(path), 'name': name, 'sha256': sha(raw), 'size': len(raw), 'phonePath': '/sdcard/DCIM/Camera/' + name, 'phonePlanned': False}
+    config['ownedMedia'].append(entry)
+    return entry
+
+
+def roots(request):
+    root = Path(request.get('remoteRoot', ''))
+    if not re.fullmatch(r'/private/tmp/pdd-native-[0-9a-f-]{36}', str(root)) or root.is_symlink():
+        raise ValueError('INVALID_OWNED_ROOT')
+    return root
+
+
+def inspect(request):
+    binding = request['binding']
+    controller = Path(binding['controllerPath'])
+    focus = controller.parent / 'text-input-focus.py'
+    return {'controllerSha256': sha(controller.read_bytes()), 'focusSha256': sha(focus.read_bytes()), 'profile': read_profile(Path.home(), binding['baseProfile'])}
+
+
+def verify_files(config):
+    binding = config['binding']
+    if sha(Path(binding['controllerPath']).read_bytes()) != binding['controllerSha256'] or sha((Path(binding['controllerPath']).parent / 'text-input-focus.py').read_bytes()) != binding['focusSha256']:
+        raise ValueError('CONTROLLER_HASH_CHANGED')
+
+
+def held(config):
+    path = Path('/private/tmp/openclaw-phone/locks') / (config['binding']['serial'] + '.lock')
+    if (path / 'owner').read_text().strip() != config['owner']:
+        raise ValueError('CONTROLLER_OWNER_CHANGED')
+    age = time.time() - int((path / 'acquired_at').read_text().strip())
+    if age < 0 or age + 1000 >= 1800:
+        raise ValueError('CONTROLLER_LEASE_UNSAFE')
+
+
+def adb(config, args, check=True):
+    directory = Path(config['binding']['controllerPath']).parent
+    binary = str(directory / 'adb-managed-client.py') if (Path.home() / '.config/zenithjoy/adb-service.json').exists() else '/opt/homebrew/bin/adb'
+    route = subprocess.run(['/opt/homebrew/bin/python3', str(directory / 'adb-existing-route.py'), config['binding']['serial'], binary], capture_output=True, text=True, timeout=20, check=True).stdout.strip()
+    if not route.isdigit():
+        raise ValueError('ADB_ROUTE_UNVERIFIED')
+    env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + route)
+    result = subprocess.run([binary, '-s', config['binding']['serial']] + args, capture_output=True, timeout=40, env=env)
+    if check and result.returncode:
+        raise ValueError('ADB_READ_OR_CLEANUP_FAILED:' + result.stderr.decode(errors='replace')[:300])
+    return result
+
+
+def execute_controller(config, command, args, job_id):
+    verify_files(config)
+    if command not in COMMANDS:
+        raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
+    lock_command = command.startswith('lock-')
+    if not lock_command:
+        held(config)
+    if command in {'lock-acquire-new', 'lock-refresh', 'lock-release-exact'} and args != [config['owner']]:
+        raise ValueError('EXACT_OWNER_REQUIRED')
+    if command == 'media-push':
+        matches = [x for x in config['ownedMedia'] if args == [x['path'], '--name', x['name']]]
+        if len(matches) != 1 or sha(Path(matches[0]['path']).read_bytes()) != matches[0]['sha256']:
+            raise ValueError('UNOWNED_MEDIA_PUSH')
+        matches[0]['phonePlanned'] = True
+        store(Path(config['remoteRoot']) / 'config.json', config)
+    prefix = [config['binding']['controllerPath'], '--profile', config['profile']]
+    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence'}:
+        prefix += ['--lock-owner', config['owner']]
+    if command in {'snapshot-evidence', 'ui-evidence'} and (len(args) != 1 or not re.fullmatch(r'native-[a-zA-Z0-9_-]+', args[0])):
+        raise ValueError('INVALID_EVIDENCE_ID')
+    job = Path(config['remoteRoot']) / ('job-' + job_id + '.json')
+    env = dict(os.environ, DOUYIN_PHONE_REGISTRY=str(Path(config['remoteRoot']) / 'profiles.tsv'))
+    process = subprocess.Popen(prefix + [command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
+    store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': time.time()})
+    timed_out = False
+    try:
+        stdout, stderr = process.communicate(timeout=240)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            stdout, stderr = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            stdout, stderr = process.communicate()
+    result = {'status': 'finished', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'exitCode': process.returncode, 'stdout': stdout.decode(errors='replace'), 'stderr': stderr.decode(errors='replace'), 'remoteUnknown': timed_out}
+    store(job, result)
+    if timed_out:
+        result['error'] = 'REMOTE_COMMAND_TIMED_OUT'
+    elif process.returncode:
+        result['error'] = 'CONTROLLER_COMMAND_FAILED:' + result['stderr'][-1500:] + result['stdout'][-500:]
+    return result
+
+
+def read_evidence(config, path):
+    path = Path(path)
+    root = Path('/private/tmp/openclaw-phone/evidence') / config['profile']
+    if path.parent != root or path.is_symlink() or not path.is_file() or path.suffix not in {'.png', '.jpg', '.xml', '.json', '.txt'} or path.stat().st_size > 24 * 1024 * 1024:
+        raise ValueError('UNOWNED_EVIDENCE_PATH')
+    raw = path.read_bytes()
+    return {'path': str(path), 'bytesBase64': base64.b64encode(raw).decode(), 'sha256': sha(raw)}
+
+
+def phone_readback(config):
+    held(config)
+    result = []
+    for item in config['ownedMedia']:
+        if not item['phonePlanned']:
+            continue
+        digest = adb(config, ['shell', 'sha256sum', item['phonePath']]).stdout.decode().split()[0]
+        if digest != item['sha256']:
+            raise ValueError('PHONE_MEDIA_HASH_MISMATCH')
+        result.append(dict(item, phoneSha256=digest))
+    return {'media': result}
+
+
+def phone_cleanup(config):
+    held(config)
+    for item in config['ownedMedia']:
+        if item['phonePlanned']:
+            result = adb(config, ['shell', 'test', '-e', item['phonePath']], check=False)
+            if result.returncode == 0:
+                actual = adb(config, ['shell', 'sha256sum', item['phonePath']]).stdout.decode().split()[0]
+                if actual != item['sha256']:
+                    raise ValueError('REFUSE_DELETE_CHANGED_MEDIA')
+                adb(config, ['shell', 'rm', '-f', '--', item['phonePath']])
+            adb(config, ['shell', 'test', '!', '-e', item['phonePath']])
+            adb(config, ['shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', 'file://' + item['phonePath']])
+        path = Path(item['path'])
+        if path.exists():
+            if sha(path.read_bytes()) != item['sha256']:
+                raise ValueError('REFUSE_DELETE_CHANGED_HOST_MEDIA')
+            path.unlink()
+    for name in ['douyin-leadgen-shot-', 'douyin-leadgen-ui-']:
+        path = '/sdcard/' + name + config['profile'] + ('.png' if 'shot' in name else '.xml')
+        adb(config, ['shell', 'rm', '-f', '--', path])
+        adb(config, ['shell', 'test', '!', '-e', path])
+    return {'ok': True, 'phoneArtifactsRemaining': [], 'retainedHostAuditRoot': config['remoteRoot']}
+
+
+def dispatch(request):
+    action = request.get('action')
+    if action == 'controller' and request.get('command') not in COMMANDS:
+        raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
+    if action == 'inspect':
+        return inspect(request)
+    root = roots(request)
+    if action == 'initialize':
+        actual = inspect(request)
+        if actual['controllerSha256'] != request['binding']['controllerSha256'] or actual['focusSha256'] != request['binding']['focusSha256']:
+            raise ValueError('CONTROLLER_BINDING_MISMATCH')
+        root.mkdir(mode=0o700)
+        private_profile(root, request['profile'], actual['profile'])
+        config = {**request, 'ownedMedia': []}
+        store(root / 'config.json', config)
+        return {'ok': True}
+    config = json.loads((root / 'config.json').read_text())
+    if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding']:
+        raise ValueError('SESSION_IDENTITY_CONFLICT')
+    with (root / 'operation.guard').open('a') as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if action == 'controller':
+            return execute_controller(config, request['command'], request.get('args', []), request['jobId'])
+        verify_files(config)
+        held(config)
+        if action == 'stage-media':
+            result = stage_media(config, request)
+            store(root / 'config.json', config)
+            return result
+        if action == 'read-evidence':
+            return read_evidence(config, request['path'])
+        if action == 'phone-readback':
+            return phone_readback(config)
+        if action == 'phone-cleanup':
+            return phone_cleanup(config)
+        raise ValueError('FORBIDDEN_HOST_OPERATION')
+
+
+if __name__ == '__main__':
+    try:
+        print(json.dumps(dispatch(json.load(sys.stdin)), ensure_ascii=False))
+    except Exception as error:
+        print(json.dumps({'error': str(error)}))
