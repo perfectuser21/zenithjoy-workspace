@@ -120,7 +120,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'discard-draft', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); await lease(); return send(action, data);
     },
     async finish() {

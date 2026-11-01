@@ -82,7 +82,7 @@ def observe(config, request):
         config['storeProof'] = {'name': facts['storeName'], 'owner': config['owner'], 'at': time.time(), 'evidence': tree['path']}
     config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'windowRaw': config['lastForegroundRaw'], 'evidence': [expected, tree['path']]}
     draft = config.get('draft', {})
-    if draft.get('owned') and not facts['form'] and facts['counts'].get('草稿箱') is not None:
+    if draft.get('owned') and draft.get('discardIntent', {}).get('commandFinished') and not facts['form'] and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理')) == 1 and facts['counts'].get('草稿箱') is not None:
         before = config.get('baselineCounts', {}).get('草稿箱')
         if before is not None and facts['counts']['草稿箱'] == before:
             draft['exitedVerified'] = True
@@ -102,12 +102,15 @@ def native_action(config, request):
         call_idle(config)
         adb(config, ['shell', 'monkey', '-p', 'com.xunmeng.merchant', '-c', 'android.intent.category.LAUNCHER', '1'])
         return {'ok': True}
-    context(config, job_id, cleanup=(action == 'back'))
+    context(config, job_id, cleanup=(action in {'back', 'discard-draft'}))
     if action == 'back':
         screen, before = fresh_xml(config, job_id)
         facts = screen.facts()
         if not (facts['form'] and config.get('draft', {}).get('owned')) and not facts['counts'] and not facts['storeName']:
             raise ValueError('UNOWNED_FORM_BACK_REFUSED')
+        if facts['form']:
+            config['draft']['backIntent'] = {'jobId': job_id, 'before': {k:v for k,v in before.items() if k != 'bytesBase64'}}
+            store(Path(config['remoteRoot']) / 'config.json', config)
         result = control_ok(config, 'back', [], job_id + '-back', native_tap=True)
         return {'ok': True, 'evidence': [before['path']]}
     if action == 'organize-media':
@@ -150,10 +153,21 @@ def native_action(config, request):
         actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask], expected_size=bounds[2:])
         if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
         comparison = {'mode': 'whole-screen-except-unique-marketing-icon', 'mask': mask, 'sha256': actual_digest, 'evidence': current_png['path']}
+    if action == 'discard-draft':
+        draft = config.get('draft', {})
+        if not draft.get('owned') or draft.get('owner') != config['owner'] or not draft.get('backIntent') or draft.get('discardIntent'): raise ValueError('OWNED_DISCARD_NOT_AUTHORIZED')
+        point = screen.discard()
+        draft['discardIntent'] = {'jobId': job_id, 'before': before['path'], 'commandFinished': False}
+        store(Path(config['remoteRoot']) / 'config.json', config)
+        box = point['bounds']
+        control_ok(config, 'tap', [str((box[0]+box[2])//2),str((box[1]+box[3])//2)], job_id+'-discard', native_tap=True)
+        draft['discardIntent']['commandFinished'] = True
+        store(Path(config['remoteRoot']) / 'config.json', config)
+        return {'ok': True, 'status': 'discard-command-finished-awaiting-observation', 'evidence': [before['path']]}
     if action == 'approve-draft':
         if not config.get('expectNewForm') or not screen.form() or screen.field('title')['value'] or screen.field('groupPrice')['value'] or screen.field('inventory')['value'] != '1':
             raise ValueError('NEW_EMPTY_FORM_UNVERIFIED')
-        config['draft'] = {'owned': True, 'owner': config['owner'], 'baseline': before, 'values': {}, 'exitedVerified': False}
+        config['draft'] = {'owned': True, 'owner': config['owner'], 'baseline': {k:v for k,v in before.items() if k != 'bytesBase64'}, 'values': {}, 'exitedVerified': False}
         store(Path(config['remoteRoot']) / 'config.json', config)
         return {'ok': True, 'draft': config['draft']}
     if action == 'navigate':
@@ -182,7 +196,7 @@ def native_action(config, request):
         if (field == 'title' and (not value.strip() or sum(2 if ord(x) > 127 else 1 for x in value) > 60 or any(ord(x) < 32 for x in value))) or (field == 'inventory' and not re.fullmatch(r'\d{1,7}', value)) or (field == 'groupPrice' and (not re.fullmatch(r'(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?', value) or float(value) <= 0)):
             raise ValueError('INVALID_FIELD_VALUE')
         candidate = screen.field(field)
-        config['pendingAction'] = {'field': field, 'value': value, 'before': before, 'jobId': job_id}
+        config['pendingAction'] = {'field': field, 'value': value, 'before': {k:v for k,v in before.items() if k != 'bytesBase64'}, 'jobId': job_id}
         store(Path(config['remoteRoot']) / 'config.json', config)
         rect = candidate['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-focus', native_tap=True)

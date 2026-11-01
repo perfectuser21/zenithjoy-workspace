@@ -42,6 +42,7 @@ export function createNativeTransport(config,bridge){
    return{status:'staged-to-device',pddUploadVerified:false,...actual};
   },
   async organizeMedia(){draftWrites();return bridge.host('organize-media');},
+  async discardDraft(proof){draftWrites();return bridge.host('discard-draft',{approvedScreenSha256:approval(proof)});},
   async back(){return bridge.host('back');},
   async submit(){throw new Error('PRODUCTION_GATE_CLOSED');},
   async finish(){return bridge.finish();},

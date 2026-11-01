@@ -118,6 +118,16 @@ class Screen:
         if len(covering) != 1: raise ValueError('TARGET_OVERLAP_AMBIGUOUS')
         return box
 
+    def discard(self):
+        message = '退出后不会保存本次编辑内容，您可选择保存草稿，以便后续编辑'
+        if len(self.labels(message)) != 1: raise ValueError('DISCARD_DIALOG_UNVERIFIED')
+        buttons = [n for n in self.nodes if n.get('class') == 'android.widget.Button' and n.get('text') == '直接退出' and n.get('enabled') == 'true' and n.get('clickable') == 'true' and self.bounds(n)]
+        saves = [n for n in self.nodes if n.get('text') == '保存并退出' and self.bounds(n)]
+        if len(buttons) != 1 or len(saves) != 1: raise ValueError('DISCARD_CONTROL_UNVERIFIED')
+        box = self.bounds(buttons[0]); cx, cy = (box[0] + box[2]) // 2, (box[1] + box[3]) // 2
+        if any(n is not buttons[0] and n.get('clickable') == 'true' and self.bounds(n) and self.bounds(n)[0] <= cx < self.bounds(n)[2] and self.bounds(n)[1] <= cy < self.bounds(n)[3] for n in self.nodes): raise ValueError('DISCARD_CONTROL_OVERLAP')
+        return {'label': '直接退出', 'bounds': box}
+
     def facts(self):
         names = [n.get('text') for n in self.nodes if n.get('resource-id') == PACKAGE + ':id/tv_title' and self.bounds(n)]
         counts = {}
@@ -134,6 +144,8 @@ def dispatch(data):
         return screen.field(data['field'])
     if data['action'] == 'navigate':
         return screen.navigate(data['label'], data.get('ownedNames', []))
+    if data['action'] == 'discard':
+        return screen.discard()
     if data['action'] == 'facts':
         return screen.facts()
     raise ValueError('FORBIDDEN_UI_OPERATION')

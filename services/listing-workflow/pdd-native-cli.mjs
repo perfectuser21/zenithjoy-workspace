@@ -25,6 +25,7 @@ if(file==='--help'){
      case'set-field':result=await native.setField(q.field,q.value,q);break;
      case'stage-image':result=await native.stageImage(q);break;
      case'organize-media':result=await native.organizeMedia();break;
+     case'discard-draft':result=await native.discardDraft(q);break;
      case'back':result=await native.back();break;
      case'finish':result=await native.finish();output({command:q.command,result});process.exit(0);break;
      default:throw new Error('FORBIDDEN_NATIVE_COMMAND');

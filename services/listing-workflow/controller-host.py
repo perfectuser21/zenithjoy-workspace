@@ -299,7 +299,7 @@ def dispatch(request):
             return phone_readback(config)
         if action == 'phone-cleanup':
             return phone_cleanup(config)
-        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'back', 'launch'}:
+        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'discard-draft', 'back', 'launch'}:
             return native_action(config, request)
         raise ValueError('FORBIDDEN_HOST_OPERATION')
 
