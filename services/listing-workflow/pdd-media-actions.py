@@ -23,7 +23,8 @@ def picker_current(config, request):
         require_session_context(config,role,config['lastForegroundRaw'],tree['path'])
         require_store(config)
     picker=PickerTree(base64.b64decode(tree['bytesBase64']).decode(), config['binding']['width'], config['binding']['height'])
-    if png['sha256'] != config['lastFrame']['screenSha256']: app_pixel_comparison(config,png,picker,request['jobId'])
+    comparison=app_pixel_comparison(config,png,picker,request['jobId']) if png['sha256']!=config['lastFrame']['screenSha256'] else {'mode':'exact-screen-sha256'}
+    png['approvalRelation']={'approvedScreenSha256':config['lastFrame']['screenSha256'],'observedScreenSha256':png['sha256'],'approvedTreeSha256':config['lastFrame']['xmlSha256'],'observedTreeSha256':tree['sha256'],'windowRaw':config['lastFrame']['windowRaw'],'pixelComparison':comparison}
     return package,picker,tree,png
 
 
