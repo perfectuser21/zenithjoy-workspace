@@ -79,6 +79,7 @@ def picker_action(config, request):
         if grant.get('confirmIntent'): raise ValueError('GRANT_CONFIRM_REQUIRES_READBACK')
         grant['confirmIntent'] = {'jobId':request['jobId'],'at':time.time()}
     else: raise ValueError('FORBIDDEN_PICKER_ACTION')
+    final_window_guard(config,request['jobId'],tree['sha256'],package=package)
     config['pendingPicker'] = {'action':action,'jobId':request['jobId'],'point':point,'before':[tree['path'],png['path']]}
     store(Path(config['remoteRoot'])/'config.json',config)
     box = point['bounds']

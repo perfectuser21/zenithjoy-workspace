@@ -106,6 +106,18 @@ def observe(config, request):
     return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'statusBarRaw': read_evidence(config,status_bar['path']) if status_bar else None, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
 
 
+def final_window_guard(config, job_id, xml_sha, package='com.xunmeng.merchant', list_entry=None):
+    held(config)
+    if current_package(config,job_id+'-final-window') != package or config.get('lastForegroundRaw') != config.get('lastFrame',{}).get('windowRaw'): raise ValueError('FINAL_WINDOW_CHANGED')
+    final, proof=fresh_xml(config,job_id+'-final-tree')
+    if proof['sha256'] != xml_sha:
+        if list_entry is None: raise ValueError('FINAL_UI_CHANGED')
+        final.agree_list_entry(list_entry)
+    held(config)
+    if current_package(config,job_id+'-final-focus') != package or config.get('lastForegroundRaw') != config.get('lastFrame',{}).get('windowRaw'): raise ValueError('FINAL_WINDOW_CHANGED')
+    return final, proof
+
+
 def navigation_destination(config, label, job_id):
     for attempt in range(2):
         if attempt: time.sleep(1.5)
@@ -132,6 +144,7 @@ def native_action(config, request):
         if facts['form']:
             config['draft']['backIntent'] = {'jobId': job_id, 'before': {k:v for k,v in before.items() if k != 'bytesBase64'}}
             store(Path(config['remoteRoot']) / 'config.json', config)
+        final_window_guard(config,job_id,before['sha256'])
         result = control_ok(config, 'back', [], job_id + '-back', native_tap=True)
         return {'ok': True, 'evidence': [before['path']]}
     if action == 'organize-media':
@@ -181,6 +194,7 @@ def native_action(config, request):
         draft = config.get('draft', {})
         if not draft.get('owned') or draft.get('owner') != config['owner'] or not draft.get('backIntent') or draft.get('discardIntent'): raise ValueError('OWNED_DISCARD_NOT_AUTHORIZED')
         point = screen.discard()
+        final_window_guard(config,job_id,before['sha256'])
         draft['discardIntent'] = {'jobId': job_id, 'before': before['path'], 'commandFinished': False}
         store(Path(config['remoteRoot']) / 'config.json', config)
         box = point['bounds']
@@ -204,6 +218,7 @@ def native_action(config, request):
             config['baselineCounts'] = screen.facts()['counts']
             config['expectNewForm'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
+        final_window_guard(config,job_id,before['sha256'],list_entry=screen if list_entry else None)
         rect = point['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-tap', native_tap=True)
         if label in {'商品管理', '发布商品'}:
@@ -218,6 +233,7 @@ def native_action(config, request):
         if (field == 'title' and (not value.strip() or sum(2 if ord(x) > 127 else 1 for x in value) > 60 or any(ord(x) < 32 for x in value))) or (field == 'inventory' and not re.fullmatch(r'\d{1,7}', value)) or (field == 'groupPrice' and (not re.fullmatch(r'(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?', value) or float(value) <= 0)):
             raise ValueError('INVALID_FIELD_VALUE')
         candidate = screen.field(field)
+        final_window_guard(config,job_id,before['sha256'])
         config['pendingAction'] = {'field': field, 'value': value, 'before': {k:v for k,v in before.items() if k != 'bytesBase64'}, 'jobId': job_id}
         store(Path(config['remoteRoot']) / 'config.json', config)
         rect = candidate['bounds']
@@ -225,6 +241,8 @@ def native_action(config, request):
         focused, focus_evidence = fresh_xml(config, job_id + '-focused')
         if not focused.field(field)['focused']:
             raise ValueError('EXPECTED_NATIVE_FIELD_NOT_FOCUSED')
+        final_focus,_=final_window_guard(config,job_id+'-typing',focus_evidence['sha256'])
+        if not final_focus.field(field)['focused']: raise ValueError('EXPECTED_NATIVE_FIELD_NOT_FOCUSED')
         typed = control_ok(config, 'text-input', [value], job_id + '-typed', native_tap=True)
         if 'text_input=ok' not in typed['stdout']:
             raise ValueError('NATIVE_INPUT_ACK_UNCONFIRMED')

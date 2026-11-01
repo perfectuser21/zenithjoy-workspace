@@ -19,3 +19,5 @@ test('an unchanged full screenshot still cannot authorize an overlapped homepage
 });
 
 test('navigation waits for a lagging native tree without dispatching another tap',()=>{const r=run(`calls=[]\nclass S:\n def __init__(self,ready):self.ready=ready\n def labels(self,*a):return [1] if self.ready else []\n def facts(self):return {'counts':{'在售中':47}}\n def form(self):return self.ready\ndef fresh(*a):\n calls.append(1);return S(len(calls)>1),{'path':'tree'+str(len(calls))}\ng['fresh_xml']=fresh;g['time'].sleep=lambda *a:None\ns,e=g['navigation_destination']({},'商品管理','job');print(json.dumps({'reads':len(calls),'path':e['path']}))`);assert.deepEqual(r,{reads:2,path:'tree2'});});
+
+test('a foreground switch after screenshot approval is rejected before any native effect',()=>{const r=run(`g['held']=lambda c:None\ng['current_package']=lambda *a:'com.other.app'\ntry:g['final_window_guard']({'lastFrame':{'windowRaw':'approved'}},'job','tree')\nexcept ValueError as e:print(json.dumps({'error':str(e)}))`);assert.equal(r.error,'FINAL_WINDOW_CHANGED');});

@@ -62,6 +62,7 @@ def gallery_action(config,request):
         config['galleryUploadIntent'] = {'jobId':request['jobId'],'orderedMedia':selection,'at':time.time()}
         point = picker.gallery_upload(len(selection))
     else: raise ValueError('FORBIDDEN_GALLERY_ACTION')
+    final_window_guard(config,request['jobId'],tree['sha256'],package=package)
     config['pendingPicker'] = {'action':action,'jobId':request['jobId'],'before':[tree['path'],png['path']]}
     store(Path(config['remoteRoot'])/'config.json',config)
     box=point['bounds']
