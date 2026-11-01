@@ -95,6 +95,15 @@ def observe(config, request):
     return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
 
 
+def navigation_destination(config, label, job_id):
+    for attempt in range(2):
+        if attempt: time.sleep(1.5)
+        destination, evidence = fresh_xml(config, job_id + '-destination-' + str(attempt))
+        ready = (bool(destination.labels('商品管理')) and bool(destination.facts()['counts'])) if label == '商品管理' else destination.form()
+        if ready: return destination, evidence
+    raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED' if label == '商品管理' else 'NEW_FORM_DESTINATION_UNVERIFIED')
+
+
 def native_action(config, request):
     action, job_id = request['action'], request['jobId']
     if action == 'observe':
@@ -184,9 +193,7 @@ def native_action(config, request):
         rect = point['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-tap', native_tap=True)
         if label in {'商品管理', '发布商品'}:
-            destination, destination_evidence = fresh_xml(config, job_id + '-destination')
-            if label == '商品管理' and (not destination.labels('商品管理') or not destination.facts()['counts']): raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED')
-            if label == '发布商品' and not destination.form(): raise ValueError('NEW_FORM_DESTINATION_UNVERIFIED')
+            destination, destination_evidence = navigation_destination(config, label, job_id)
         return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']] + ([destination_evidence['path']] if label in {'商品管理','发布商品'} else [])}
     if action == 'set-field':
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'):
