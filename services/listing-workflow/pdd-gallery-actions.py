@@ -41,7 +41,7 @@ def gallery_action(config,request):
     if action == 'gallery-menu': point = picker.gallery_control('全部图片')
     elif action == 'gallery-album':
         album = owned_album_inventory(config)
-        point = picker.gallery_control(album['name'])
+        point = picker.gallery_control(album['name'], expected_count=len(config['ownedMedia']))
     elif action == 'gallery-refresh':
         owned_album_inventory(config)
         point = picker.gallery_control('返回')

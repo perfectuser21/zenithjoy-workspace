@@ -44,12 +44,21 @@ class PickerTree:
         nodes = [n for n in self.nodes if n.get('package') == SYSTEM_PICKER and n.get('resource-id') == SYSTEM_PICKER + ':id/button_add' and re.fullmatch(r'允许\s*\(' + str(count) + r'\)', n.get('text', ''))]
         return self.point(nodes, 'EXACT_PERMISSION_COUNT_UNVERIFIED')
 
-    def gallery_control(self, label):
+    def gallery_control(self, label, expected_count=None):
         if label not in {'全部图片', '返回', '添加更多可访问照片'} and not re.fullmatch(r'PDD_pdd[0-9a-f]{32}', label): raise ValueError('UNSAFE_GALLERY_LABEL')
         if not any(n.get('text') == '预览' and n.get('package') == MERCHANT for n in self.nodes): raise ValueError('GALLERY_PAGE_UNVERIFIED')
         nodes = [n for n in self.nodes if n.get('text') == label and n.get('package') == MERCHANT and self.eligible(n)]
         if len(nodes) != 1: raise ValueError('GALLERY_CONTROL_NOT_UNIQUE')
         node = nodes[0]
+        if re.fullmatch(r'PDD_pdd[0-9a-f]{32}', label):
+            parents = {c:p for p in self.root.iter() for c in p}
+            row = parents.get(node); listing = parents.get(row)
+            if row is None or listing is None or row.get('package') != MERCHANT or row.get('class') != 'android.widget.RelativeLayout' or not self.eligible(row) or row.get('clickable') != 'true' or listing.get('package') != MERCHANT or listing.get('class') != 'androidx.recyclerview.widget.RecyclerView' or not self.eligible(listing): raise ValueError('GALLERY_ALBUM_ROW_UNVERIFIED')
+            box, name, container = self.bounds(row), self.bounds(node), self.bounds(listing)
+            if box[0] != 0 or box[2] != self.width or box[3]-box[1] > self.height/4 or not (container[0] <= box[0] <= name[0] < name[2] <= box[2] <= container[2] and container[1] <= box[1] <= name[1] < name[3] <= box[3] <= container[3]): raise ValueError('GALLERY_ALBUM_GEOMETRY_UNVERIFIED')
+            counters = [n.get('text') for n in row.iter('node') if n.get('package') == MERCHANT and self.eligible(n) and re.fullmatch(r'[0-9]+张',n.get('text',''))]
+            if type(expected_count) is not int or expected_count <= 0 or counters != [str(expected_count)+'张'] or any(n is not row and n.get('clickable') == 'true' for n in row.iter('node')): raise ValueError('GALLERY_ALBUM_COUNT_OR_CONTROL_CONFLICT')
+            node = row
         # Only the explicit add-more tile was observed with a non-clickable label.
         if label in {'添加更多可访问照片', '返回'}:
             parents = {c:p for p in self.root.iter() for c in p}
