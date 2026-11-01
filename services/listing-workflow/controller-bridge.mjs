@@ -7,6 +7,22 @@ import { materialPolicy as authorizeMaterials } from './authorized-media.mjs';
 
 const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
 const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
+function validControllerLocation(binding) {
+  if (typeof binding.controllerPath !== 'string') return false;
+  const release = /^\/Users\/[A-Za-z0-9_-]+\/\.local\/share\/zenithjoy\/phone-candidates\/([a-f0-9]{40})\/runtime\/douyin-phone-adb$/.exec(binding.controllerPath || '');
+  if (!release) return /^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') &&
+    !Object.hasOwn(binding, 'controllerReleaseCommit') && !Object.hasOwn(binding, 'controllerBundleFiles');
+  const files = binding.controllerBundleFiles;
+  const names = ['douyin-phone-adb', 'phone-lock-lib.sh', 'phone-lock-helper.py', 'text-input-focus.py'];
+  if (binding.controllerReleaseCommit !== release[1] || !files || typeof files !== 'object' || Array.isArray(files) ||
+      Object.keys(files).length !== names.length || names.some(name => !Object.hasOwn(files, name) || typeof files[name] !== 'string' || !/^[a-f0-9]{64}$/.test(files[name])) ||
+      files['douyin-phone-adb'] !== binding.controllerSha256 || files['text-input-focus.py'] !== binding.focusSha256) return false;
+  Object.freeze(files);
+  return true;
+}
+export function requireOwnerSwipeBinding(binding) {
+  if (!binding?.controllerReleaseCommit || !validControllerLocation(binding)) throw new Error('OWNER_SWIPE_BINDING_UNVERIFIED');
+}
 export function createControllerBridge(config, dependencies = {}) {
   const clonedBinding = structuredClone(config.binding);
   clonedBinding.materialPreparationAuthorized=config.allowMaterialPreparation===true;
@@ -18,7 +34,7 @@ export function createControllerBridge(config, dependencies = {}) {
   Object.freeze(clonedBinding.route); const binding = Object.freeze(clonedBinding);
   readOnlyInvocation({ serial: binding.serial, route: binding.route }, 'online');
   if (!/^[a-f0-9]{64}$/.test(binding.controllerSha256 || '') || !/^[a-f0-9]{64}$/.test(binding.focusSha256 || '') ||
-      !/^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') ||
+      !validControllerLocation(binding) ||
       !/^[a-zA-Z0-9_-]+$/.test(binding.baseProfile || '') || !binding.authority) throw new Error('INVALID_CONTROLLER_BINDING');
   const materialPolicy = config.materials ? authorizeMaterials(config) : null;
   const id = randomUUID(), directory = resolve(config.root);
@@ -48,13 +64,14 @@ export function createControllerBridge(config, dependencies = {}) {
   const insetsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-window-insets.py', import.meta.url));
   const gallerySource = dependencies.remote ? '' : readFileSync(new URL('./pdd-gallery-actions.py', import.meta.url));
   const pickerActionsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-actions.py', import.meta.url));
+  const auditSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-audit-navigation.py', import.meta.url));
   const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
   const script = `import base64,json,sys
 _ui={'__name__':'pdd_native_ui'}
 exec(base64.b64decode('${uiSource ? uiSource.toString('base64') : ''}'),_ui)
 _pixels={'__name__':'pdd_pixels'}
 exec(base64.b64decode('${pixelsSource ? pixelsSource.toString('base64') : ''}'),_pixels)
-_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'png_crop_sha':_pixels['png_crop_sha'],'png_rgba':_pixels['png_rgba'],'crop_sha_from_rgba':_pixels['crop_sha_from_rgba']}
+_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'PACKAGE':_ui['PACKAGE'],'FORBIDDEN':_ui['FORBIDDEN'],'png_crop_sha':_pixels['png_crop_sha'],'png_rgba':_pixels['png_rgba'],'crop_sha_from_rgba':_pixels['crop_sha_from_rgba']}
 exec(base64.b64decode('${Buffer.from(helperSource).toString('base64')}'),_host)
 exec(base64.b64decode('${leaseGateSource ? leaseGateSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${albumSource ? albumSource.toString('base64') : ''}'),_host)
@@ -65,10 +82,12 @@ exec(base64.b64decode('${gallerySource ? gallerySource.toString('base64') : ''}'
 exec(base64.b64decode('${insetsSource ? insetsSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${sessionContextSource ? sessionContextSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${cleanupNavigationSource?cleanupNavigationSource.toString('base64'):''}'),_host)
+exec(base64.b64decode('${auditSource ? auditSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.auditNavigationSha256=createHash('sha256').update(auditSource).digest('hex');
   state.cleanupNavigationSha256=createHash('sha256').update(cleanupNavigationSource).digest('hex');
   state.sessionContextSha256=createHash('sha256').update(sessionContextSource).digest('hex');
   state.leaseGateSha256=createHash('sha256').update(leaseGateSource).digest('hex');
@@ -149,7 +168,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['prepare-media', 'prepare-album', 'stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['prepare-media', 'prepare-album', 'stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'audit-tabs', 'audit-more', 'audit-draft-tab', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); return send(action,data);
     },
     async finish() {

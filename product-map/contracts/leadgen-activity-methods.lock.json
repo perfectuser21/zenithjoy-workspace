@@ -157,7 +157,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "effd1ec73864955852ff2ebbd6ec85853390922594072976fcd53ca564a16f85",
+      "code_digest": "015821cc9aedba64d81f33c7f445fd99cbe35d72333a00b67cdb0080c571e340",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
-        "current_code_digest": "effd1ec73864955852ff2ebbd6ec85853390922594072976fcd53ca564a16f85"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "effd1ec73864955852ff2ebbd6ec85853390922594072976fcd53ca564a16f85",
+        "current_code_digest": "015821cc9aedba64d81f33c7f445fd99cbe35d72333a00b67cdb0080c571e340"
       }
     },
     "douyin_video_processing.preflight": {
@@ -459,7 +459,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -490,7 +490,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "4a377044d429b879fd797950c3faeeafe434366eb9824bd9ac5c87d2d02446f2",
+      "code_digest": "601f16979c624209ccc7b783a0b5f72afa6a5a7c61e86903c78f58d5a2c26c41",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
-        "current_code_digest": "4a377044d429b879fd797950c3faeeafe434366eb9824bd9ac5c87d2d02446f2"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "4a377044d429b879fd797950c3faeeafe434366eb9824bd9ac5c87d2d02446f2",
+        "current_code_digest": "601f16979c624209ccc7b783a0b5f72afa6a5a7c61e86903c78f58d5a2c26c41"
       }
     },
     "douyin_video_processing.dedup": {
@@ -742,7 +742,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "05cfc29b68edae248591098303575283f82e5310816087816b5d5cad4f05836e",
+      "code_digest": "295036344e8646fafd53e3496194a96aaca0b5f579c1cefb6a7980c74644171d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
-        "current_code_digest": "05cfc29b68edae248591098303575283f82e5310816087816b5d5cad4f05836e"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "05cfc29b68edae248591098303575283f82e5310816087816b5d5cad4f05836e",
+        "current_code_digest": "295036344e8646fafd53e3496194a96aaca0b5f579c1cefb6a7980c74644171d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1057,7 +1057,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -1228,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "ebde2e27ad7271b4436baa5329b872b206f29489793166fa81254efe16434b83",
+      "code_digest": "fdfd20be1f3ecad9cf65cfa1a643b1b34e36fb2fe82c37f02850dc94eb5472c5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
-        "current_code_digest": "ebde2e27ad7271b4436baa5329b872b206f29489793166fa81254efe16434b83"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "ebde2e27ad7271b4436baa5329b872b206f29489793166fa81254efe16434b83",
+        "current_code_digest": "fdfd20be1f3ecad9cf65cfa1a643b1b34e36fb2fe82c37f02850dc94eb5472c5"
       }
     },
     "douyin_video_processing.collection": {
@@ -1429,7 +1429,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "return_to_results",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -1544,13 +1544,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "4707cc583098d34a59e92c719db95810e062873e23f93d044efdf049cdc03304",
+      "code_digest": "472771f248c2122db080fc7b81a6d02fb24b73c6eacd30694efc2ad2ca05e691",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
-        "current_code_digest": "4707cc583098d34a59e92c719db95810e062873e23f93d044efdf049cdc03304"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "4707cc583098d34a59e92c719db95810e062873e23f93d044efdf049cdc03304",
+        "current_code_digest": "472771f248c2122db080fc7b81a6d02fb24b73c6eacd30694efc2ad2ca05e691"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1710,7 +1710,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -1820,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "17bb6b6bf11d67f7ccd071de69bc5fea86c0c17764d16d95d5e17674aae7887b",
+      "code_digest": "7dbebd30a42fb1d9b79bfaae51e13fd293b17a032c1560be173c4692b5e49ecb",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
-        "current_code_digest": "17bb6b6bf11d67f7ccd071de69bc5fea86c0c17764d16d95d5e17674aae7887b"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "17bb6b6bf11d67f7ccd071de69bc5fea86c0c17764d16d95d5e17674aae7887b",
+        "current_code_digest": "7dbebd30a42fb1d9b79bfaae51e13fd293b17a032c1560be173c4692b5e49ecb"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -2609,7 +2609,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -2640,7 +2640,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "account_selfcheck",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -2748,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "a7f43e41dff744a264515cea05685a55bcec5e22048ee8db0c08fb3d0007ceb8",
+      "code_digest": "778f98cd7804bb2aacd5d6d8026176ced95ee98e93af78f53f6d18ae8c8157c7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
-        "current_code_digest": "a7f43e41dff744a264515cea05685a55bcec5e22048ee8db0c08fb3d0007ceb8"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "a7f43e41dff744a264515cea05685a55bcec5e22048ee8db0c08fb3d0007ceb8",
+        "current_code_digest": "778f98cd7804bb2aacd5d6d8026176ced95ee98e93af78f53f6d18ae8c8157c7"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2920,7 +2920,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -3035,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e8a9db67e3d623d34713271085b84d60912993a36035f9545b3c36fea4f2021e",
+      "code_digest": "97ae57d361879a2024389bb285787b492336e0570296e4dcb603c113166d7d92",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
-        "current_code_digest": "e8a9db67e3d623d34713271085b84d60912993a36035f9545b3c36fea4f2021e"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "e8a9db67e3d623d34713271085b84d60912993a36035f9545b3c36fea4f2021e",
+        "current_code_digest": "97ae57d361879a2024389bb285787b492336e0570296e4dcb603c113166d7d92"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3207,7 +3207,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -3315,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0b1b3e857cda88634e318a3130639b54c68c7d19d272f331679e5b00c05f71a2",
+      "code_digest": "277db6194049a1737dc69d9a90b79bf4395a7b2397f1258ed61c36daeccb2993",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
-        "current_code_digest": "0b1b3e857cda88634e318a3130639b54c68c7d19d272f331679e5b00c05f71a2"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "0b1b3e857cda88634e318a3130639b54c68c7d19d272f331679e5b00c05f71a2",
+        "current_code_digest": "277db6194049a1737dc69d9a90b79bf4395a7b2397f1258ed61c36daeccb2993"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3488,7 +3488,7 @@
           "path": "services/phone-adb-controller/douyin-phone-adb",
           "revision": "contract",
           "enabler_key": "device_lock",
-          "sha256": "167f3a80a67b07c08fb52b40d3639b872692a9eec09b0e8e23bfb809c2fe396f"
+          "sha256": "b22cfc7d7a9d2e863be89c9e6af354e985083a8acdd56029f3da191c009d7fa6"
         },
         {
           "kind": "code",
@@ -3605,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "be24d5c424dbbf4da186e45e410a00ca6b617a11eec11dc5c1dfc51e405f087e",
+      "code_digest": "a480eb1f364e39151f5560be47d9c75706ce9cdee17dd79a22c00aa11d3d6ab6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "The reviewed phone lock root remains bound to the effective system account and migration marker. The CLI now proves the caller path by exit status instead of emitting the passwd home path; legitimate Activity inputs, outputs, eligibility and delivery policy remain unchanged.",
-        "reviewed_by": "codex:durable-phone-lock-dev",
-        "previous_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
-        "current_code_digest": "be24d5c424dbbf4da186e45e410a00ca6b617a11eec11dc5c1dfc51e405f087e"
+        "reason": "仅已审两行guard变动：既有有owner/无owner命令行为未弱化，新增owner swipe仍经过真实flock、精确owner及lease校验。依据9项真实CLI离线、3项helper及430相关回归作代码兼容评估，不声明101-104或PDD真实业务验收。",
+        "reviewed_by": "Codex集成代理（依据Root确认的44b71fc42独立代码审与源码diff复核）",
+        "previous_code_digest": "be24d5c424dbbf4da186e45e410a00ca6b617a11eec11dc5c1dfc51e405f087e",
+        "current_code_digest": "a480eb1f364e39151f5560be47d9c75706ce9cdee17dd79a22c00aa11d3d6ab6"
       }
     }
   },

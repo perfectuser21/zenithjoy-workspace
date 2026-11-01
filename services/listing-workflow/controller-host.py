@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import shlex
 import subprocess
 import sys
@@ -90,15 +91,46 @@ def roots(request):
 
 def inspect(request):
     binding = request['binding']
+    if 'phone-candidates' in binding['controllerPath'] or 'controllerReleaseCommit' in binding or 'controllerBundleFiles' in binding:
+        verify_files(request)
     controller = Path(binding['controllerPath'])
     focus = controller.parent / 'text-input-focus.py'
     return {'controllerSha256': sha(controller.read_bytes()), 'focusSha256': sha(focus.read_bytes()), 'profile': read_profile(Path.home(), binding['baseProfile'])}
 
 
+def controller_release_match(binding):
+    return re.fullmatch(r'/Users/[A-Za-z0-9_-]+/\.local/share/zenithjoy/phone-candidates/([a-f0-9]{40})/runtime/douyin-phone-adb', binding.get('controllerPath', ''))
+
+
 def verify_files(config):
     binding = config['binding']
+    release = controller_release_match(binding)
+    if release or 'controllerReleaseCommit' in binding or 'controllerBundleFiles' in binding or 'phone-candidates' in binding['controllerPath']:
+        names = ('douyin-phone-adb', 'phone-lock-lib.sh', 'phone-lock-helper.py', 'text-input-focus.py')
+        files = binding.get('controllerBundleFiles')
+        if not release or binding.get('controllerReleaseCommit') != release[1] or not isinstance(files, dict) or set(files) != set(names) or any(not isinstance(value, str) or not re.fullmatch(r'[a-f0-9]{64}', value) for value in files.values()) or files['douyin-phone-adb'] != binding['controllerSha256'] or files['text-input-focus.py'] != binding['focusSha256']:
+            raise ValueError('INVALID_CONTROLLER_RELEASE_BINDING')
+        directory = Path(binding['controllerPath']).parent
+        for name in names:
+            path = directory / name
+            if any(parent.is_symlink() for parent in (path, *path.parents)):
+                raise ValueError('CONTROLLER_BUNDLE_SYMLINK')
+            with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode) or sha(stream.read()) != files[name]:
+                    raise ValueError('CONTROLLER_BUNDLE_HASH_CHANGED')
+        return
     if sha(Path(binding['controllerPath']).read_bytes()) != binding['controllerSha256'] or sha((Path(binding['controllerPath']).parent / 'text-input-focus.py').read_bytes()) != binding['focusSha256']:
         raise ValueError('CONTROLLER_HASH_CHANGED')
+
+
+def require_owner_swipe_binding(config):
+    try:
+        binding = config.get('binding') or {}
+        if not binding.get('controllerReleaseCommit') or not controller_release_match(binding):
+            raise ValueError('candidate binding required')
+        verify_files(config)
+    except (KeyError, TypeError, ValueError, OSError) as cause:
+        raise ValueError('OWNER_SWIPE_BINDING_UNVERIFIED') from cause
 
 
 def held(config):
@@ -161,7 +193,7 @@ def adb(config, args, check=True):
 
 def execute_controller(config, command, args, job_id, native_tap=False):
     verify_files(config)
-    if (command in {'text-input','media-push'} and not native_tap) or (command not in COMMANDS and not (native_tap and command in {'tap', 'back'})):
+    if (command in {'text-input','media-push'} and not native_tap) or (command not in COMMANDS and not (native_tap and command in {'tap', 'back', 'audit-tabs-swipe'})):
         raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
     lock_command = command.startswith('lock-')
     if not lock_command:
@@ -179,8 +211,9 @@ def execute_controller(config, command, args, job_id, native_tap=False):
         item['absenceProvedAt'] = time.time()
         item['phonePlanned'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
+    if command == 'audit-tabs-swipe': audit_swipe_args(config,args,job_id)
     prefix = [config['binding']['controllerPath'], '--profile', config['profile']]
-    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence', 'tap'}:
+    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence', 'tap', 'audit-tabs-swipe'}:
 
         prefix += ['--lock-owner', config['owner']]
     if command in {'snapshot-evidence', 'ui-evidence'} and (len(args) != 1 or not re.fullmatch(r'native-[a-zA-Z0-9_-]+', args[0])):
@@ -190,7 +223,8 @@ def execute_controller(config, command, args, job_id, native_tap=False):
     remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
     if remaining < 1: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
     started_at = time.time()
-    process = subprocess.Popen(prefix + [command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
+    if command == 'audit-tabs-swipe': audit_effect_ready(config,job_id)
+    process = subprocess.Popen(prefix + [('swipe' if command=='audit-tabs-swipe' else command)] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
     store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': started_at})
     timed_out = False
     try:
@@ -284,7 +318,7 @@ def dispatch_host_operation(config,request):
         return gallery_action(config, request)
     if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
         return picker_action(config, request)
-    if action in {'prepare-media', 'prepare-album', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'}:
+    if action in {'prepare-media', 'prepare-album', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'audit-tabs', 'audit-more', 'audit-draft-tab', 'back', 'launch'}:
         return native_action(config, request)
     raise ValueError('FORBIDDEN_HOST_OPERATION')
 
