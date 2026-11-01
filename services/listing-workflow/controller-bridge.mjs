@@ -9,6 +9,8 @@ const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
 const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
 export function createControllerBridge(config, dependencies = {}) {
   const clonedBinding = structuredClone(config.binding);
+  clonedBinding.remoteBrainBaseUrl ??= 'http://100.79.41.61:5221';
+  if(clonedBinding.remoteBrainBaseUrl!=='http://100.79.41.61:5221')throw new Error('INVALID_REMOTE_BRAIN_AUTHORITY');
   Object.freeze(clonedBinding.route); const binding = Object.freeze(clonedBinding);
   readOnlyInvocation({ serial: binding.serial, route: binding.route }, 'online');
   if (!/^[a-f0-9]{64}$/.test(binding.controllerSha256 || '') || !/^[a-f0-9]{64}$/.test(binding.focusSha256 || '') ||
@@ -36,6 +38,7 @@ export function createControllerBridge(config, dependencies = {}) {
   const albumSource = dependencies.remote ? '' : readFileSync(new URL('./owned-album.py', import.meta.url));
   const mediaCleanupSource = dependencies.remote ? '' : readFileSync(new URL('./owned-media-cleanup.py', import.meta.url));
   const pickerSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-picker.py', import.meta.url));
+  const leaseGateSource = dependencies.remote ? '' : readFileSync(new URL('./phone-lease-gate.py', import.meta.url));
   const insetsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-window-insets.py', import.meta.url));
   const gallerySource = dependencies.remote ? '' : readFileSync(new URL('./pdd-gallery-actions.py', import.meta.url));
   const pickerActionsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-actions.py', import.meta.url));
@@ -47,6 +50,7 @@ _pixels={'__name__':'pdd_pixels'}
 exec(base64.b64decode('${pixelsSource ? pixelsSource.toString('base64') : ''}'),_pixels)
 _host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'png_crop_sha':_pixels['png_crop_sha']}
 exec(base64.b64decode('${Buffer.from(helperSource).toString('base64')}'),_host)
+exec(base64.b64decode('${leaseGateSource ? leaseGateSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${albumSource ? albumSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${mediaCleanupSource ? mediaCleanupSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${pickerSource ? pickerSource.toString('base64') : ''}'),_host)
@@ -57,6 +61,7 @@ exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.leaseGateSha256=createHash('sha256').update(leaseGateSource).digest('hex');
   state.insetsSha256 = createHash('sha256').update(insetsSource).digest('hex');
   state.gallerySha256 = createHash('sha256').update(gallerySource).digest('hex');
   state.pickerSha256 = createHash('sha256').update(pickerSource).digest('hex'); state.pickerActionsSha256 = createHash('sha256').update(pickerActionsSource).digest('hex');
@@ -131,12 +136,12 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'discard-draft', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
-      await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); await lease(); return send(action, data);
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'discard-draft', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      await lease(); return send(action,data);
     },
     async finish() {
       await lease(); await controllerStatus();
-      await send('phone-cleanup');
+      state.cleanupReceipt=await send('phone-cleanup'); persist();
       await send('controller', { command: 'lock-release-exact', args: [state.owner] });
       const status = await send('controller', { command: 'lock-status', args: [] });
       if (status.stdout.trim() !== 'lock=free') throw new Error('CONTROLLER_RELEASE_UNCONFIRMED');

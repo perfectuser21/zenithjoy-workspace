@@ -36,10 +36,9 @@ export function createNativeTransport(config,bridge){
   async stageImage(image){
    draftWrites();const bytes=authorizedImageBytes(config,image);
    if(hash(bytes)!==image.sha256)throw new Error('MEDIA_HASH_MISMATCH');
-   const staged=await bridge.host('stage-media',{name:image.name,bytesBase64:bytes.toString('base64'),sha256:image.sha256});
-   const readback=await bridge.host('push-owned-media',{name:staged.name});const actual=readback.media.find(x=>x.name===image.name);
+   const readback=await bridge.host('stage-and-push-media',{name:image.name,bytesBase64:bytes.toString('base64'),sha256:image.sha256});const actual=readback.media.find(x=>x.name===image.name);
    if(!actual||actual.phoneSha256!==image.sha256)throw new Error('PHONE_MEDIA_HASH_MISMATCH');
-   return{status:'staged-to-device',pddUploadVerified:false,...actual};
+   return{status:'staged-to-device',pddUploadVerified:false,...actual,leaseProof:readback.leaseProof};
   },
   async picker(action,proof){draftWrites();if(!['more','permission','select','confirm'].includes(action))throw new Error('FORBIDDEN_PICKER_ACTION');return bridge.host('picker-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{mediaId:String(proof.mediaId)}:{})});},
   async gallery(action,proof){draftWrites();if(!['state','menu','album','select','upload','back'].includes(action))throw new Error('FORBIDDEN_GALLERY_ACTION');return bridge.host('gallery-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{visualBinding:structuredClone(proof.visualBinding)}:{})});},

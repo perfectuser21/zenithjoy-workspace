@@ -67,6 +67,7 @@ def stage_media(config, request):
         raise ValueError('INVALID_MEDIA_BYTES')
     policy = config.get('materialPolicy') or {}
     if sha(raw) not in policy.get('allowedDigests', []): raise ValueError('MATERIAL_NOT_AUTHORIZED')
+    if any(x.get('name')==name for x in config['ownedMedia']): raise ValueError('STAGED_MEDIA_ALREADY_EXISTS')
     path = Path(config['remoteRoot']) / name
     if path.exists():
         raise ValueError('STAGED_MEDIA_ALREADY_EXISTS')
@@ -252,7 +253,7 @@ def phone_cleanup(config):
     if config.get('expectNewForm') and not config.get('draft') and not config.get('emptyFormExitedVerified'): raise ValueError('EMPTY_FORM_CLEANUP_REQUIRED')
     if config.get('draft', {}).get('owned') and not config['draft'].get('exitedVerified'):
         raise ValueError('DRAFT_CLEANUP_REQUIRED')
-    if any(x.get('phonePlanned') for x in config['ownedMedia']): cleanup_owned_media(config)
+    media_cleanup=cleanup_owned_media(config) if any(x.get('phonePlanned') for x in config['ownedMedia']) else {'ok':True,'removedMediaIds':[]}
     for item in config['ownedMedia']:
         path = Path(item['path'])
         if path.exists():
@@ -263,7 +264,28 @@ def phone_cleanup(config):
         path = '/sdcard/' + name + config['profile'] + ('.png' if 'shot' in name else '.xml')
         adb(config, ['shell', 'rm', '-f', '--', path])
         adb(config, ['shell', 'test', '!', '-e', path])
-    return {'ok': True, 'phoneArtifactsRemaining': [], 'retainedHostAuditRoot': config['remoteRoot']}
+    return {'ok': True, 'mediaCleanup':media_cleanup, 'phoneArtifactsRemaining': [], 'retainedHostAuditRoot': config['remoteRoot']}
+
+
+def dispatch_host_operation(config,request):
+    action=request['action']
+    if action == 'stage-media':
+        result = stage_media(config, request)
+        store(root / 'config.json', config)
+        return result
+    if action == 'read-evidence':
+        return read_evidence(config, request['path'])
+    if action == 'phone-readback':
+        return phone_readback(config)
+    if action == 'phone-cleanup':
+        return phone_cleanup(config)
+    if action in {'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back'}:
+        return gallery_action(config, request)
+    if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
+        return picker_action(config, request)
+    if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'back', 'launch'}:
+        return native_action(config, request)
+    raise ValueError('FORBIDDEN_HOST_OPERATION')
 
 
 def dispatch(request):
@@ -295,23 +317,7 @@ def dispatch(request):
             return execute_controller(config, request['command'], request.get('args', []), request['jobId'])
         verify_files(config)
         held(config)
-        if action == 'stage-media':
-            result = stage_media(config, request)
-            store(root / 'config.json', config)
-            return result
-        if action == 'read-evidence':
-            return read_evidence(config, request['path'])
-        if action == 'phone-readback':
-            return phone_readback(config)
-        if action == 'phone-cleanup':
-            return phone_cleanup(config)
-        if action in {'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back'}:
-            return gallery_action(config, request)
-        if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
-            return picker_action(config, request)
-        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'discard-draft', 'back', 'launch'}:
-            return native_action(config, request)
-        raise ValueError('FORBIDDEN_HOST_OPERATION')
+        return guarded_host_operation(config,request,lambda:dispatch_host_operation(config,request))
 
 
 if __name__ == '__main__':

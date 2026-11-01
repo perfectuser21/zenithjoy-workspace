@@ -145,6 +145,14 @@ def navigation_destination(config, label, job_id):
     raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED' if label == '商品管理' else 'NEW_FORM_DESTINATION_UNVERIFIED')
 
 
+def current_owned_form(config,job_id):
+    if not config.get('draft',{}).get('owned') or config['draft'].get('owner')!=config['owner'] or config.get('pendingAction') or not config.get('newFormEntryIntent'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
+    if 'com.xunmeng.merchant.ui.NewPageActivity' not in config.get('lastForegroundRaw',''): raise ValueError('OWNED_FORM_FOREGROUND_UNVERIFIED')
+    screen,proof=fresh_xml(config,job_id+'-owned-form')
+    if not screen.form() or any(screen.field(k)['value']!=v for k,v in config['draft'].get('values',{}).items()): raise ValueError('OWNED_FORM_VALUES_CHANGED')
+    return screen,proof
+
+
 def native_action(config, request):
     action, job_id = request['action'], request['jobId']
     if action == 'observe':
@@ -174,10 +182,18 @@ def native_action(config, request):
             config['emptyFormBackIntent']['commandFinished']=True
             store(Path(config['remoteRoot']) / 'config.json', config)
         return {'ok': True, 'evidence': [before['path']]}
+    if action == 'stage-and-push-media':
+        current_owned_form(config,job_id)
+        item=stage_media(config,request)
+        store(Path(config['remoteRoot'])/'config.json',config)
+        control_ok(config,'media-push',[item['path'],'--name',item['name']],job_id+'-push',native_tap=True)
+        return phone_readback(config)
     if action == 'organize-media':
+        current_owned_form(config,job_id)
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
         return organize_owned_album(config)
     if action == 'push-owned-media':
+        current_owned_form(config,job_id)
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
         matches = [x for x in config['ownedMedia'] if x['name'] == request.get('name')]
         if len(matches) != 1 or matches[0].get('phonePlanned'): raise ValueError('OWNED_UNPUSHED_MEDIA_REQUIRED')
