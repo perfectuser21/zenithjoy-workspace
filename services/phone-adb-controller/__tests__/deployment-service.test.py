@@ -135,6 +135,21 @@ class ServiceTest(unittest.TestCase):
         self.assertTrue(self.value['disabled'])
         self.assertFalse(self.value['loaded'])
 
+    def test_child_readback_rejects_review_daemon_before_suspend_or_after_reenable(self):
+        self.prepare()
+        for value in (
+                {'file':self.old,'loaded':True,'disabled':False},
+                {'file':self.old,'loaded':False,'disabled':False},
+                {'file':self.old,'loaded':True,'disabled':True},
+                {'file':{**self.old,'bytes':'dW5rbm93bg=='},'loaded':False,'disabled':True}):
+            self.value = value
+            with self.assertRaises(ValueError):
+                self.mod.verify_suspended_review(self.path, self.get)
+        self.value = {'file':self.old,'loaded':False,'disabled':True}
+        self.mod.verify_suspended_review(self.path, self.get)
+        self.value['file'] = self.new
+        self.mod.verify_suspended_review(self.path, self.get)
+
 
 if __name__ == '__main__':
     unittest.main()

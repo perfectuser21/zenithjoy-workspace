@@ -93,6 +93,17 @@ def suspend_review(path, get, set_disabled, set_loaded):
     return record
 
 
+def verify_suspended_review(path, get):
+    """child 安装前只读确认旧服务已跨重启禁用，且 plist 属于原事务。"""
+    record = read(path)
+    current = get()
+    require(current['disabled'] and not current['loaded'],
+            'review service not suspended')
+    require(current['file'] in (record['before']['file'], record['after']['file']),
+            'review service plist conflict')
+    return record
+
+
 def change_review(path, direction, get, set_file, set_disabled, set_loaded):
     """失败回退只回文件，不重新开启可能仍读旧 tmp 锁的 daemon。"""
     require(direction in ('before', 'after'), 'invalid service direction')
@@ -218,6 +229,9 @@ if __name__ == '__main__':
                     suspend_review(path,service_state,cli_disabled,cli_loaded)
                 else:
                     require(action == 'suspend-if-review', 'review suspension requires exact migrated review owners')
+            elif action == 'verify-suspended-if-review':
+                require(review, 'review suspension requires exact migrated review owners')
+                verify_suspended_review(path,service_state)
             elif action in ('apply','restore'):
                 if review:
                     change_review(path,'after' if action == 'apply' else 'before',
@@ -231,7 +245,10 @@ if __name__ == '__main__':
                 require(service_state() == expected, 'service final readback mismatch')
             else:
                 raise ValueError('invalid service action')
-        print(json.dumps({'operation':action,'verified':True}))
+        result = {'operation':action,'verified':True}
+        if action == 'verify-suspended-if-review':
+            result['review_suspended'] = True
+        print(json.dumps(result))
     except (OSError,ValueError,KeyError,subprocess.SubprocessError):
         print('phone deployment service operation failed',file=sys.stderr)
         sys.exit(1)

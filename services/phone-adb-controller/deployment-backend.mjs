@@ -78,7 +78,13 @@ export function verifyChildTransaction(sha,transaction){
   const record=hostCall(host,'inspect');
   need(record?.phase==='prepared'&&record.identity.source_commit===sha&&record.identity.release_id===descriptor.plan.release_ids[host],'安装journal身份不符');
  }
- transport.call('xian-m4','deployment-maintenance.py','verify',transaction);
+ const admission=transport.call('xian-m4','deployment-maintenance.py','verify',transaction);
+ if(admission.mode==='review-preserve'){
+  const service=transport.call('xian-m4','deployment-service.py','verify-suspended-if-review',transaction);
+  const fence=transport.call('xian-m4','deployment-candidate-fence.py','verify-if-review',transaction);
+  need(service.review_suspended===true&&fence.verified===true&&!fence.skipped,
+   '旧 review 的 daemon 或候选入口尚未封存');
+ }
  return {verified:true,transaction};
 }
 export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,action='deploy',transaction}){

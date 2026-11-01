@@ -86,6 +86,15 @@ test('持久 review 安装必须先禁用旧 daemon 和封存候选，任一文�
  assert.match(deploy.slice(Math.max(0,apply-300),apply),/\[\[ "\$FAILED" == 0 \]\] \|\| exit 1/,
               '任一M4 payload、input pair 或 controller 安装失败，不能启动新daemon');
 });
+test('child 安装入口必须独立读回旧 daemon 已禁用和候选已封存',()=>{
+ const backend=readFileSync(new URL('../deployment-backend.mjs',import.meta.url),'utf8');
+ const child=backend.slice(backend.indexOf('export function verifyChildTransaction'),backend.indexOf('export async function runPackageTransaction'));
+ assert.match(child,/deployment-service\.py','verify-suspended-if-review'/);
+ assert.match(child,/deployment-candidate-fence\.py','verify-if-review'/);
+ assert.ok(child.indexOf('deployment-service.py')<child.indexOf('deployment-candidate-fence.py'));
+ assert.match(child,/service\.review_suspended===true&&fence\.verified===true&&!fence\.skipped/,
+              '跳过或未知读回不能放行 child 安装');
+});
 test('自洽重算plan与receipt也不能伪造未绑定来源、版本、漏项或malformed集合',async()=>{
  const {targetDefinitions}=await import('../deployment-targets.mjs');
  for(const [label,mutate]of [
