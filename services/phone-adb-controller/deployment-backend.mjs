@@ -26,6 +26,7 @@ function verifyBackendSource(root,sha){
  for(const file of ['deployment-backend.mjs','deployment-drift.mjs','deployment-protocol.mjs','deployment-transport.mjs',
   'deployment-coordinator.mjs','deployment-write-set.mjs','deployment-unified-observe.mjs','deployment-fixed-source.mjs',
   'deployment-preflight.mjs','deployment-targets.mjs','deployment-release.mjs','deployment-business-admission.mjs','deployment-skill-acceptance.mjs',
+  'deployment-candidate-fence.py','phone-lock-root.py',
   'company-config-readiness.mjs','company-config-lib.js','line-routes.js','runtime-definition.mjs','runtime-host.mjs',
   'runtime-release.mjs','runtime-outbox.mjs','deployment-guard.py','deployment-installed.py','commander/wf-v2-io.py',
   'drift-check.sh','deploy.sh'])ownSource(root,sha,file);
@@ -77,7 +78,15 @@ export function verifyChildTransaction(sha,transaction){
   const record=hostCall(host,'inspect');
   need(record?.phase==='prepared'&&record.identity.source_commit===sha&&record.identity.release_id===descriptor.plan.release_ids[host],'安装journal身份不符');
  }
- transport.call('xian-m4','deployment-maintenance.py','verify',transaction);
+ const admission=transport.call('xian-m4','deployment-maintenance.py','verify',transaction);
+ need(admission.verified===true&&['review-preserve','exclusive'].includes(admission.mode),
+  '维护准入模式或读回未知');
+ if(admission.mode==='review-preserve'){
+  const service=transport.call('xian-m4','deployment-service.py','verify-suspended-if-review',transaction);
+  const fence=transport.call('xian-m4','deployment-candidate-fence.py','verify-if-review',transaction);
+  need(service.review_suspended===true&&fence.verified===true&&!fence.skipped,
+   '旧 review 的 daemon 或候选入口尚未封存');
+ }
  return {verified:true,transaction};
 }
 export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,action='deploy',transaction}){
@@ -159,7 +168,12 @@ export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,
     release_id:descriptor.plan.release_ids[host],previous_release_id:descriptor.previous_plan.release_ids[host]}});
    barrier(host);
    if(host==='mmv')tool(host,'effects','prepare',{skills:descriptor.skills});
-   else tool(host,'service','prepare',{file:{kind:'file',bytes:Buffer.from(transport.renderService()).toString('base64'),mode:0o644,uid:0,gid:0}});
+   else {
+    tool(host,'service','prepare',{file:{kind:'file',bytes:Buffer.from(transport.renderService()).toString('base64'),mode:0o644,uid:0,gid:0}});
+    // 旧 review 未解时先跨重启禁用旧 daemon，再封存两处旧候选入口；中断后仍保持禁用与封存。
+    tool(host,'service','suspend-if-review');
+    tool(host,'candidate-fence','seal-if-review');
+   }
   },
   reacquire:async host=>{
    const current=hostCall(host,'inspect');
@@ -180,10 +194,15 @@ export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,
    need(current.manifest.source_commit===sha&&current.manifest.release_id===descriptor.plan.release_ids[host],'当前安装身份不符');
    await gate(request,current.manifest.release_id,current.manifest.observation_id);
    tool(host,host==='mmv'?'effects':'service','verify-installed');
+   if(host==='xian-m4')tool(host,'candidate-fence','verify-if-review');
    hostCall(host,'verify',{direction:'after'});
   },
   commit:async host=>hostCall(host,'commit'),
   restore:async host=>{
+   if(host==='xian-m4'&&hostCall(host,'effect-exists',{effect:'service'})){
+    tool(host,'service','suspend-if-review');
+    tool(host,'candidate-fence','seal-if-review');
+   }
    hostCall(host,'restore',{explicit:action==='rollback'||readRecord('decision')==='restore'});
    const effect=host==='mmv'?'effects':'service';
    if(hostCall(host,'effect-exists',{effect}))tool(host,effect,'restore');
@@ -196,11 +215,18 @@ export async function runPackageTransaction({root,sha,planFile,xianFile,mmvFile,
    if(hostCall(host,'effect-exists',{effect}))tool(host,effect,'verify-restored');
    else need(!readRecord('started'),'安装已开始但副作用快照缺失');
    hostCall(host,'verify',{direction:'before'});
+   if(host==='xian-m4')tool(host,'candidate-fence','verify-if-review');
    const current=hostCall(host,'current',{target:host});await gate(request,current.manifest.release_id,current.manifest.observation_id);
   },
   release:async host=>{
    const state=hostCall(host,'inspect'),restored=state.phase==='restored'||state.released_direction==='restored';
-   if(host==='xian-m4')tool(host,'maintenance','release');
+   if(host==='xian-m4'){
+    tool(host,'candidate-fence','verify-if-review');
+    const admission=tool(host,'maintenance','verify');
+    const released=tool(host,'maintenance','release');
+    need(admission.mode!=='review-preserve'||released.review_preserved===true,
+     '旧 review 必须在代码部署后继续隔离');
+   }
    hostCall(host,'release',{release_id:(restored?descriptor.previous_plan:descriptor.plan).release_ids[host]});
   },recover:action==='recover',rollback:action==='rollback'
  };

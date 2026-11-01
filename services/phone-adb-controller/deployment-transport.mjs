@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {readDeploymentSource} from './deployment-fixed-source.mjs';
 import {digest} from './runtime-definition.mjs';
 export const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";
-const TOOLS=['transaction','maintenance','effects','service','host'].map(n=>'deployment-'+n+'.py').concat(['install-phone-recovery.sh','input-runtime-release.py']);
+const TOOLS=['transaction','maintenance','candidate-fence','effects','service','host'].map(n=>'deployment-'+n+'.py').concat(['install-phone-recovery.sh','input-runtime-release.py','phone-lock-root.py']);
 const run=(host,code,args,input)=>execFileSync('ssh',['-T','-o','BatchMode=yes','-o','ConnectTimeout=15',host,
  'python3 -c '+quote(code)+' '+args.map(quote).join(' ')],{input:input===undefined?undefined:JSON.stringify(input),encoding:'utf8',timeout:120000,maxBuffer:32*1024*1024});
 const BASE=String.raw`import os,sys,json,hashlib,pwd,re,tempfile,runpy

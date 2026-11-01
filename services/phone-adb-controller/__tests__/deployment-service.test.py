@@ -98,6 +98,58 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(self.value['file'], self.old)
         self.assertTrue(self.value['loaded'])
 
+    def test_review_install_suspends_old_daemon_across_reboot_and_failure_keeps_it_disabled(self):
+        self.prepare()
+        def disable(wanted):
+            self.calls.append('disable' if wanted else 'enable')
+            self.value['disabled'] = wanted
+        self.mod.suspend_review(self.path, self.get, disable, self.load)
+        self.assertEqual(self.value, {'file':self.old,'loaded':False,'disabled':True})
+        self.assertEqual(self.calls, ['disable','unload'])
+        self.mod.suspend_review(self.path, self.get, disable, self.load)
+        self.assertEqual(self.calls, ['disable','unload'],'suspend must be idempotent after interruption')
+        self.mod.change_review(self.path,'before',self.get,self.set_file,disable,self.load)
+        self.assertEqual(self.value, {'file':self.old,'loaded':False,'disabled':True},
+                         'rollback cannot re-enable the old daemon while review is held')
+        self.mod.change_review(self.path,'after',self.get,self.set_file,disable,self.load)
+        self.assertEqual(self.value, {'file':self.new,'loaded':True,'disabled':False})
+
+    def test_review_restore_from_partial_new_daemon_disables_before_restoring_old_file(self):
+        self.prepare()
+        self.value.update(file=self.new,loaded=True,disabled=False)
+        calls = self.calls
+        def disable(wanted):
+            calls.append('disable' if wanted else 'enable')
+            self.value['disabled'] = wanted
+        self.mod.change_review(self.path,'before',self.get,self.set_file,disable,self.load)
+        self.assertEqual(calls,['disable','unload','file'])
+        self.assertEqual(self.value, {'file':self.old,'loaded':False,'disabled':True})
+
+    def test_unknown_plist_still_disables_old_daemon_before_conflict_is_reported(self):
+        self.prepare()
+        self.value['file'] = {**self.old, 'bytes':'dW5rbm93bg=='}
+        def disable(wanted):
+            self.value['disabled'] = wanted
+        with self.assertRaisesRegex(ValueError, 'conflict'):
+            self.mod.suspend_review(self.path, self.get, disable, self.load)
+        self.assertTrue(self.value['disabled'])
+        self.assertFalse(self.value['loaded'])
+
+    def test_child_readback_rejects_review_daemon_before_suspend_or_after_reenable(self):
+        self.prepare()
+        for value in (
+                {'file':self.old,'loaded':True,'disabled':False},
+                {'file':self.old,'loaded':False,'disabled':False},
+                {'file':self.old,'loaded':True,'disabled':True},
+                {'file':{**self.old,'bytes':'dW5rbm93bg=='},'loaded':False,'disabled':True}):
+            self.value = value
+            with self.assertRaises(ValueError):
+                self.mod.verify_suspended_review(self.path, self.get)
+        self.value = {'file':self.old,'loaded':False,'disabled':True}
+        self.mod.verify_suspended_review(self.path, self.get)
+        self.value['file'] = self.new
+        self.mod.verify_suspended_review(self.path, self.get)
+
 
 if __name__ == '__main__':
     unittest.main()

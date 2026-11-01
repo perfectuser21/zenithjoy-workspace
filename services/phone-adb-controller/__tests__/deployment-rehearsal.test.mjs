@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {coordinateDeployment} from '../deployment-coordinator.mjs';
 const ssh=process.env.PHONE_REHEARSAL_SSH==='1',rows=[];
 const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";
-const modules=['transaction','maintenance','host'].map(name=>'deployment-'+name+'.py');
+const modules=['transaction','maintenance','host'].map(name=>'deployment-'+name+'.py').concat(['phone-lock-root.py']);
 const files=Object.fromEntries(modules.map(name=>[name,readFileSync(new URL('../'+name,import.meta.url)).toString('base64')]));
 const SETUP=String.raw`import json,base64,tempfile,hashlib,os
 from pathlib import Path

@@ -101,11 +101,24 @@ def device_barrier(registry, lock_root, maintenance=None):
     root = Path(lock_root)
     if not root.is_dir():
         raise ValueError("kernel device lock root missing; installation safety is unknown")
+    module = None
+    review = None
+    if maintenance is not None:
+        spec = importlib.util.spec_from_file_location('phone_maintenance', Path(__file__).with_name('deployment-maintenance.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        review = module.context(maintenance[0], maintenance[1], registry, lock_root)
+        module.read_intent(maintenance[0], maintenance[1], review)
+    paths = [root / (serial + '.guard') for serial in serials]
+    if review is not None and review['mode'] == 'review-preserve':
+        paths.extend(Path(review['legacy_root']) / (serial + '.guard') for serial in serials)
     descriptors = []
     try:
-        for serial in serials:
-            fd = os.open(root / (serial + ".guard"), os.O_RDWR)
-            descriptors.append(fd)
+        for path in sorted(paths):
+            fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+            descriptors.append((fd, path))
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise ValueError('kernel device guard not regular')
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -116,20 +129,18 @@ def device_barrier(registry, lock_root, maintenance=None):
             # Any owner directory, including malformed/stale/unknown serial, blocks deployment.
             if maintenance is not None:
                 # 同一事务已用原standalone隔离所有设备；不允许任意force/旧owner借道。
-                spec = importlib.util.spec_from_file_location('phone_maintenance', Path(__file__).with_name('deployment-maintenance.py'))
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                module.verify(maintenance[0], maintenance[1], registry, lock_root)
+                module.verify(maintenance[0], maintenance[1], registry, lock_root,
+                              guards_held=review['mode'] == 'review-preserve')
             elif list(root.glob("*.lock")):
                 raise ValueError("kernel device owner exists; installation refused without reap")
-            for serial, fd in zip(serials, descriptors):
-                actual, expected = os.fstat(fd), os.stat(root / (serial + ".guard"))
-                if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+            for fd, path in descriptors:
+                actual, expected = os.fstat(fd), path.lstat()
+                if not stat.S_ISREG(expected.st_mode) or (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
                     raise ValueError("device guard identity changed")
         verify_free()
         yield verify_free
     finally:
-        for fd in descriptors:
+        for fd, _ in descriptors:
             os.close(fd)
 
 
