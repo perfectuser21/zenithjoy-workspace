@@ -25,11 +25,11 @@ on:
         required: true
         type: string
       mode:
-        description: '准备候选、验收后晋级，或恢复原整包事务'
+        description: '准备候选、安全围栏安装/原事务恢复、业务验收后晋级或整包恢复'
         required: true
         default: candidate
         type: choice
-        options: [candidate, promote, recover, rollback]
+        options: [candidate, maintenance-install, maintenance-recover, promote, recover, rollback]
       transaction_id:
         description: 'recover/rollback必填：原部署日志PHONE_PACKAGE_TRANSACTION的完整ID'
         required: false
@@ -131,7 +131,7 @@ jobs:
           BUSINESS_RUN_IDS="$(printf '%s' "$BUSINESS_RUNS_B64" | node -e 'process.stdout.write(Buffer.from(require("fs").readFileSync(0,"utf8"),"base64").toString())')"
           BUSINESS_ACCEPTANCE_TASK_IDS="$(printf '%s' "$ACCEPTANCE_TASKS_B64" | node -e 'process.stdout.write(Buffer.from(require("fs").readFileSync(0,"utf8"),"base64").toString())')"
           TRANSACTION_ID="$(printf '%s' "$TRANSACTION_B64" | node -e 'process.stdout.write(Buffer.from(require("fs").readFileSync(0,"utf8"),"base64").toString())')"
-          case "$DEPLOY_MODE" in candidate|promote) ;; recover|rollback) [[ "$TRANSACTION_ID" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$ ]] || exit 1;; *) exit 1;; esac
+          case "$DEPLOY_MODE" in candidate|maintenance-install|promote) ;; maintenance-recover) [[ "$TRANSACTION_ID" =~ ^phone-safety-[a-f0-9]{24}$ ]] || exit 1;; recover|rollback) [[ "$TRANSACTION_ID" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$ ]] || exit 1;; *) exit 1;; esac
           [[ "$TOOL_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
           CI_BUNDLE=$(mktemp)
           trap 'rm -f "$CI_BUNDLE"' EXIT
@@ -177,8 +177,12 @@ jobs:
           echo "=== [2/4] ${DEPLOY_MODE}（固定 ${DEPLOY_SHA}）==="
           cd "$DEPLOY_CHECKOUT"
           export PYTHONDONTWRITEBYTECODE=1
-          # wrapper从mmv 0600凭据镜像读token，先构造/核验release，再调用现有deploy.sh。
-          if ! DEPLOY_LOG=$(node "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-prepare.mjs" "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" "$DEPLOY_MODE" "$BUSINESS_RUN_IDS" "$TRANSACTION_ID" "$BUSINESS_ACCEPTANCE_TASK_IDS" </dev/null 2>&1); then
+          # 安全事务也必须继承部署租锁 FD；普通候选和整包晋级仍走原入口。
+          DEPLOY_ENTRY=(node "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-prepare.mjs")
+          if [[ "$DEPLOY_MODE" == maintenance-install || "$DEPLOY_MODE" == maintenance-recover ]]; then
+            DEPLOY_ENTRY=(python3 "$TOOL_CHECKOUT/services/phone-adb-controller/deployment-guard.py" "${DEPLOY_ENTRY[@]}")
+          fi
+          if ! DEPLOY_LOG=$("${DEPLOY_ENTRY[@]}" "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" "$DEPLOY_MODE" "$BUSINESS_RUN_IDS" "$TRANSACTION_ID" "$BUSINESS_ACCEPTANCE_TASK_IDS" </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
             DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"
             [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
@@ -192,6 +196,10 @@ jobs:
           echo "$DEPLOY_LOG"
           if [[ "$DEPLOY_MODE" == candidate ]]; then
             notify "phone-adb候选已准备" "独立版本目录就绪，业务尚未验收，正式安装未切换(sha=${DEPLOY_SHA:0:8})" "active"
+            exit 0
+          fi
+          if [[ "$DEPLOY_MODE" == maintenance-install || "$DEPLOY_MODE" == maintenance-recover ]]; then
+            notify "phone安全围栏事务" "安全-only结果见原始回执；业务包及生产release未晋级(sha=${DEPLOY_SHA:0:8}, mode=$DEPLOY_MODE)" "active"
             exit 0
           fi
 
