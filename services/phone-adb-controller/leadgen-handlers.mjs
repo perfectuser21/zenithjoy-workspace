@@ -15,6 +15,7 @@ import {createOutreachHandlers} from './leadgen-outreach.mjs';
 import history from './queued-comment-history.js';
 import {assertCaptureStrategy} from './capture-strategy.mjs';
 import {readBinding} from './runtime-binding.mjs';
+import {freezeQualificationIdentity} from './qualification-identity-snapshot.mjs';
 import {createVideoAction} from './leadgen-video-action.mjs';
 import {startCollectionPhoneScope,startCollectionReturnedScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
 import {startDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
@@ -426,6 +427,12 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       }
       const totals=[...qualificationProgress.values()].reduce((all,row)=>Object.fromEntries(Object.keys(all).map(k=>[k,all[k]+row[k]])),{recordingsRequired:0,mediaVerified:0,recordingSilentRejected:0,recordingOutcomesFailures:0,recordingsUnverified:0});
       ({recordingsRequired,mediaVerified,recordingSilentRejected,recordingOutcomesFailures,recordingsUnverified}=totals);
+      if(sampleInput)for(const v of qualified){
+        const facts=qualificationProgress.get(v.video_id);
+        if(!facts?.settled)throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
+        const snapshot=freezeQualificationIdentity({dir:env.WFR_RUN_DIR,run,videoId:v.video_id});
+        qualificationProgress.set(v.video_id,{...facts,identity_snapshot_sha256:snapshot.sha256});
+      }
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:sourceCommit,leased_video_ids:leased.map(v=>v.video_id),qualified_video_ids:qualified.map(v=>v.video_id),videos:[...qualificationProgress].map(([video_id,facts])=>({video_id,...facts,attempts:qualificationAttempts.get(video_id)}))}),{mode:0o600});
       const verified=leased.filter(v=>{try {const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,`${run}-identity-${v.video_id}.json`),'utf8'));
         return proof.verified===true&&proof.observed_video_id===v.video_id&&proof.content_type==='video';}catch{return false;}}).length;

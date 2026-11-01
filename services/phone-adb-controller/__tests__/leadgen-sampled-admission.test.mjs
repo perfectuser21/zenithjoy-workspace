@@ -276,6 +276,7 @@ test('正式102跨机回执精确接纳多个视频及旧批次历史评论',asy
 
 test('102 qualification 与 collection 主 span 各发表同源原生身份和精确 PG 身份，坏回执拒绝',async()=>{
  const {samplingAdmissionEvidence,qualificationIdentityEvidence}=await import('../runtime-receipts.mjs');
+ const {freezeQualificationIdentity}=await import('../qualification-identity-snapshot.mjs');
  const dir=mkdtempSync(join(tmpdir(),'sampling-span-'));
  const run='sample102span',runId=`douyin_video_processing-${run}__a1`;
  const sample={workflow_key:'douyin_video_processing',run_tag:run,source_run:'sample101span',line:'jinuo',comment_limit:2};
@@ -287,20 +288,28 @@ test('102 qualification 与 collection 主 span 各发表同源原生身份和�
  const artifact={result:{sampling_required_count:1,sampling_receipts:[publicReceipt]}};
  try{
   assert.equal(samplingAdmissionEvidence({dir,artifact:{result:{sampling_required_count:0,sampling_receipts:[]}},frozen,binding}),null);
-  writeFileSync(join(dir,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:NEW_SHA,
-   qualified_video_ids:[videoId],videos:[{video_id:videoId,settled:true,recordingsRequired:1,cached_judgment_run:null}]}),{mode:0o600});
   const identityFile=join(dir,`${run}-identity-${videoId}.json`);
   const identity={verified:true,expected_video_id:videoId,observed_video_id:videoId,content_type:'video',
    excluded_non_video:false,evidence_id:`${run}-v${videoId}-qualification-identity`};
   writeFileSync(identityFile,JSON.stringify(identity),{mode:0o600});
+  const snapshot=freezeQualificationIdentity({dir,run,videoId});
+  writeFileSync(join(dir,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:NEW_SHA,
+   qualified_video_ids:[videoId],videos:[{video_id:videoId,settled:true,recordingsRequired:1,
+    cached_judgment_run:null,identity_snapshot_sha256:snapshot.sha256}]}),{mode:0o600});
   writeFileSync(file,JSON.stringify({run_id:runId,sampling_input:sample,verified:true,videos:[{...publicReceipt,pg_rows:pgRows}]}),{mode:0o600});
   const qualification=qualificationIdentityEvidence({dir,frozen,binding});
   const evidence=samplingAdmissionEvidence({dir,artifact,frozen,binding});
   assert.deepEqual({video_id:videoId,...evidence.videos[0].qualification},qualification.videos[0]);
   writeFileSync(identityFile,JSON.stringify({...identity,evidence_id:'old-run-identity'}));
-  assert.throws(()=>qualificationIdentityEvidence({dir,frozen,binding}),/SAMPLING_ADMISSION_IDENTITY_INVALID/);
+  assert.deepEqual(qualificationIdentityEvidence({dir,frozen,binding}),qualification);
+  assert.deepEqual(samplingAdmissionEvidence({dir,artifact,frozen,binding}),evidence);
   writeFileSync(identityFile,JSON.stringify({...identity,expected_video_id:'7700992800439717699'}));
+  assert.deepEqual(qualificationIdentityEvidence({dir,frozen,binding}),qualification);
+  assert.deepEqual(samplingAdmissionEvidence({dir,artifact,frozen,binding}),evidence);
+  const snapshotFile=join(dir,`${run}-qualification-identity-${videoId}-${snapshot.sha256}.json`);
+  writeFileSync(snapshotFile,JSON.stringify({...identity,expected_video_id:'7700992800439717699'}));
   assert.throws(()=>qualificationIdentityEvidence({dir,frozen,binding}),/SAMPLING_ADMISSION_IDENTITY_INVALID/);
+  writeFileSync(snapshotFile,JSON.stringify(identity));
   writeFileSync(identityFile,JSON.stringify(identity));
   assert.deepEqual(evidence.videos[0].comment_ids,ids.slice(0,2));
   assert.deepEqual(evidence.videos[0].qualification.mode,'fresh');
@@ -309,5 +318,27 @@ test('102 qualification 与 collection 主 span 各发表同源原生身份和�
   assert.throws(()=>samplingAdmissionEvidence({dir,artifact,frozen,binding}),/SAMPLING_ADMISSION_RECEIPT_INVALID/);
   writeFileSync(file,'x'.repeat(3000001));
   assert.throws(()=>samplingAdmissionEvidence({dir,artifact,frozen,binding}),/SAMPLING_ADMISSION_RECEIPT_INVALID/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('102 资格身份在采集覆写可变路径后仍由冻结原件生成 span',async()=>{
+ const {qualificationIdentityEvidence}=await import('../runtime-receipts.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'qualification-snapshot-'));
+ const run='snapshot102',sample={run_tag:run,source_run:'source101',line:'jinuo',comment_limit:5};
+ const frozen={sampling_input:sample,deployment:{source_commit:NEW_SHA}};
+ const binding={run_id:`douyin_video_processing-${run}__a1`,id:'11111111-1111-4111-8111-111111111111'};
+ const identity={verified:true,expected_video_id:videoId,observed_video_id:videoId,content_type:'video',
+  excluded_non_video:false,evidence_id:`${run}-v${videoId}-identity-identity`};
+ const bytes=JSON.stringify(identity),sha=createHash('sha256').update(bytes).digest('hex');
+ try{
+  writeFileSync(join(dir,`${run}-qualification-identity-${videoId}-${sha}.json`),bytes,{mode:0o600});
+  writeFileSync(join(dir,`${run}-qualification-progress.json`),JSON.stringify({run,source_commit:NEW_SHA,
+   qualified_video_ids:[videoId],videos:[{video_id:videoId,settled:true,recordingsRequired:0,
+    cached_judgment_run:'prior102',identity_snapshot_sha256:sha}]}),{mode:0o600});
+  writeFileSync(join(dir,`${run}-identity-${videoId}.json`),JSON.stringify({...identity,
+   evidence_id:`${run}-v${videoId}-collection-after-card8`}),{mode:0o600});
+  const proof=qualificationIdentityEvidence({dir,frozen,binding});
+  assert.equal(proof.videos[0].identity_sha256,sha);
+  assert.equal(proof.videos[0].prior_judgment_run,'prior102');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

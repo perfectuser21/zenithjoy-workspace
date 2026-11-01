@@ -52,7 +52,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -66,7 +66,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "243e20bfdf727a910413fa736362dd30ad13e815b8689d6682ed7775d71b4214",
+      "code_digest": "c225cd074ad1eb9ce252a4b8f0c1aa13410a44f276afd24e8e8b61c479533fb4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "f51320144984b992cc580f6f1de502aceed0f69fe4cca408cfb23a9b1ecd67b1",
-        "current_code_digest": "243e20bfdf727a910413fa736362dd30ad13e815b8689d6682ed7775d71b4214"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "243e20bfdf727a910413fa736362dd30ad13e815b8689d6682ed7775d71b4214",
+        "current_code_digest": "c225cd074ad1eb9ce252a4b8f0c1aa13410a44f276afd24e8e8b61c479533fb4"
       }
     },
     "douyin_video_processing.preflight": {
@@ -353,7 +353,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -367,7 +367,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -504,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "e912a21ddabd38f18c0590c4fe2d6656562551deb4e39ea079fa9f965d1b99b9",
+      "code_digest": "d331b61b986c0d8f4bc3129e5ffbb89013ff3e025c22fed2e80ca24e1a05559e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "b1393ae9457e3f00ba27e28bdce1d8e6d9a46867c77efecb2ee6ab9da08d41e0",
-        "current_code_digest": "e912a21ddabd38f18c0590c4fe2d6656562551deb4e39ea079fa9f965d1b99b9"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "e912a21ddabd38f18c0590c4fe2d6656562551deb4e39ea079fa9f965d1b99b9",
+        "current_code_digest": "d331b61b986c0d8f4bc3129e5ffbb89013ff3e025c22fed2e80ca24e1a05559e"
       }
     },
     "douyin_video_processing.dedup": {
@@ -637,7 +637,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -651,7 +651,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -777,7 +777,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "375934991d64b86b4811b3c4223e4ca11fba2dc1e49b5f049b71d3cea7d3f7a2",
+      "code_digest": "f3ccb7807f5e1e08d1176a17386924e09d1a8735e956ba7cbc2c84d9be10a330",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "1842caaad89d6dbb3728fee9c0f04e06051e7650f8ad1d8fac00e145f35e9adc",
-        "current_code_digest": "375934991d64b86b4811b3c4223e4ca11fba2dc1e49b5f049b71d3cea7d3f7a2"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "375934991d64b86b4811b3c4223e4ca11fba2dc1e49b5f049b71d3cea7d3f7a2",
+        "current_code_digest": "f3ccb7807f5e1e08d1176a17386924e09d1a8735e956ba7cbc2c84d9be10a330"
       }
     },
     "douyin_video_processing.qualification": {
@@ -952,7 +952,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -966,7 +966,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -1092,7 +1092,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-identity-snapshot.mjs",
+          "revision": "contract",
+          "sha256": "495c580aa4e3b06eb190a14a44a26779a4336b4998a9ab051ed13fb32b42a863"
         },
         {
           "kind": "code",
@@ -1221,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "7f67090d1d1b62a4efabd2aca05e3fed4bed14d0038bf0d5d0e73237b41d6e69",
+      "code_digest": "3322a7bdd53b68fb487154586fc653aa468af29233055c294e86683e6362032b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "643b584635657f398b78edf62e86c3ff147ecba6989a3bf932d5601cbad5936b",
-        "current_code_digest": "7f67090d1d1b62a4efabd2aca05e3fed4bed14d0038bf0d5d0e73237b41d6e69"
+        "reason": "Qualification identity JSON is frozen before comment collection and both existing spans read the immutable SHA-bound original; business eligibility, scoring and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "7f67090d1d1b62a4efabd2aca05e3fed4bed14d0038bf0d5d0e73237b41d6e69",
+        "current_code_digest": "3322a7bdd53b68fb487154586fc653aa468af29233055c294e86683e6362032b"
       }
     },
     "douyin_video_processing.collection": {
@@ -1260,7 +1267,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "e347be855fd239f23c0f4a4a023ebf262f0fbe1666f176848994a1d709a45bbd"
+          "sha256": "d205a75fb5a1ea2efffec45a82ffef1f45d7bfe53013bfbf35bbf7823c764ec5"
         },
         {
           "kind": "code",
@@ -1295,7 +1302,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -1309,7 +1316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -1443,7 +1450,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
+        },
+        {
+          "kind": "code",
+          "repo": "perfectuser21/zenithjoy-workspace",
+          "path": "services/phone-adb-controller/qualification-identity-snapshot.mjs",
+          "revision": "contract",
+          "sha256": "495c580aa4e3b06eb190a14a44a26779a4336b4998a9ab051ed13fb32b42a863"
         },
         {
           "kind": "code",
@@ -1530,7 +1544,14 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "b38251a69423dcc954f024632aa24b21b7e9cebca058c8a8bb64e111c7dc764f"
+      "code_digest": "d339268a4c37bfdc68934eba31cb64ac6220d7eadd506c350f87b093b9e0e798",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "Qualification identity JSON is frozen before comment collection and both existing spans read the immutable SHA-bound original; business eligibility, scoring and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "b38251a69423dcc954f024632aa24b21b7e9cebca058c8a8bb64e111c7dc764f",
+        "current_code_digest": "d339268a4c37bfdc68934eba31cb64ac6220d7eadd506c350f87b093b9e0e798"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.2.0",
@@ -1583,7 +1604,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -1597,7 +1618,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -1726,7 +1747,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -1799,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2cac9e1d6dbf33c8dc5b60fd0ada6e098b36fb01358776bde14dedf918ac15c7",
+      "code_digest": "cbe90d2f2cb9f2f99135f3047e729fe239579553a66dfcc4be256b5af6c365ca",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "d8093d4be270ac54ed7f1306c46c6de3dcd33a0d4851b7268cc116b193958d5d",
-        "current_code_digest": "2cac9e1d6dbf33c8dc5b60fd0ada6e098b36fb01358776bde14dedf918ac15c7"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "2cac9e1d6dbf33c8dc5b60fd0ada6e098b36fb01358776bde14dedf918ac15c7",
+        "current_code_digest": "cbe90d2f2cb9f2f99135f3047e729fe239579553a66dfcc4be256b5af6c365ca"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1859,7 +1880,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -1873,7 +1894,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -1971,7 +1992,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -2086,7 +2107,14 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "438b4f64e5d66bcf39da68716464180cb65d20e0432ea63f0f86043dc3ed2103"
+      "code_digest": "f24f10187ace4aee0182278f44a00a8e53a74bd3216b75f932f92fcf54ca2aad",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "438b4f64e5d66bcf39da68716464180cb65d20e0432ea63f0f86043dc3ed2103",
+        "current_code_digest": "f24f10187ace4aee0182278f44a00a8e53a74bd3216b75f932f92fcf54ca2aad"
+      }
     },
     "douyin_comment_scoring.mark_leads": {
       "activity_version": "3.8.1",
@@ -2146,7 +2174,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -2160,7 +2188,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -2258,7 +2286,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -2408,7 +2436,14 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "678b510be034fdda411546b0235f063616c908d382226fcfa88418efabc96ca0"
+      "code_digest": "6e7d3662a6a710df3a691df0207bd46720a60d4cf8989225430fff30b56ce4a4",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "678b510be034fdda411546b0235f063616c908d382226fcfa88418efabc96ca0",
+        "current_code_digest": "6e7d3662a6a710df3a691df0207bd46720a60d4cf8989225430fff30b56ce4a4"
+      }
     },
     "douyin_lead_outreach.preflight": {
       "activity_version": "5.0.0",
@@ -2461,7 +2496,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -2475,7 +2510,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -2619,7 +2654,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -2713,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "bd328496f4e9ab41b952c6239e5f3216f31460b9026a0ab23042395f6bc1be76",
+      "code_digest": "eba30cad119f06334b095cdefab3c5ea19989492c983835577643bb50c01a4a5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "dcc8efc396fbc50cbe6e161c8ee863748dc5f49fbb9de825161cd62829ef4d16",
-        "current_code_digest": "bd328496f4e9ab41b952c6239e5f3216f31460b9026a0ab23042395f6bc1be76"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "bd328496f4e9ab41b952c6239e5f3216f31460b9026a0ab23042395f6bc1be76",
+        "current_code_digest": "eba30cad119f06334b095cdefab3c5ea19989492c983835577643bb50c01a4a5"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2773,7 +2808,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -2787,7 +2822,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -2920,7 +2955,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -3000,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "1d10444eb01ceda4363c6a0fe98147e1d53395a0c8b272df07c0ffc79f8df1cd",
+      "code_digest": "78056805e3d2f0ffc6d96bb886563dc37374f7ac284491e6a7f9601bfd55582b",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "589bb5e46923ed87dc42108e66e35b6d4102a7d0d2bbae2deff1fa8943a91288",
-        "current_code_digest": "1d10444eb01ceda4363c6a0fe98147e1d53395a0c8b272df07c0ffc79f8df1cd"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "1d10444eb01ceda4363c6a0fe98147e1d53395a0c8b272df07c0ffc79f8df1cd",
+        "current_code_digest": "78056805e3d2f0ffc6d96bb886563dc37374f7ac284491e6a7f9601bfd55582b"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3060,7 +3095,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -3074,7 +3109,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -3207,7 +3242,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -3280,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5326681eaf66ebdf7cfaaa35833b8bfa3b967c2c5b71d4ae81ddf393923df0bd",
+      "code_digest": "4af0fc0916224115b4888180dc5605183fac1278c076fb3bbf396c63640494e8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "efa15065189db2424a38c2b9c4dc6270e19359d6b883a6e3ad728c73a61da4c7",
-        "current_code_digest": "5326681eaf66ebdf7cfaaa35833b8bfa3b967c2c5b71d4ae81ddf393923df0bd"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "5326681eaf66ebdf7cfaaa35833b8bfa3b967c2c5b71d4ae81ddf393923df0bd",
+        "current_code_digest": "4af0fc0916224115b4888180dc5605183fac1278c076fb3bbf396c63640494e8"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3340,7 +3375,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-client.mjs",
           "revision": "contract",
-          "sha256": "804d08e772cb08b66454efc9c37c7f1e3ae9df33c41508bb27eafc989bcf0e63"
+          "sha256": "ca4715dbdc23d96ecfe6272af11f72aecd6d4ac9dfa039e7cf524c324fc4939a"
         },
         {
           "kind": "code",
@@ -3354,7 +3389,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "5e8b66548ea15b1eec3209a7bf56eb772dd767dfa7e54302b9b083893597fe3f"
+          "sha256": "43bea523ea716c9ecdff3ff5e625d7aff4d1c9ffe759f68d45bda98485b99868"
         },
         {
           "kind": "code",
@@ -3490,7 +3525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "5d181a7b9179322de81c6d03d1205e52c5806b37d62a35ced56f6606e95f748e"
+          "sha256": "826d9736907d314c2e90627b7d0fa183d1e0dc3f98d0bc0ae10f0e1fe0905e67"
         },
         {
           "kind": "code",
@@ -3570,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d81edfce5d6e8e95d93a0d93d4de9f3b28c184b9e1d66b1c06ce43e26a3b76cb",
+      "code_digest": "0b8772187b09dc560daf214bbbb488d74ba375ca4f7b88f87d253e63cc89990e",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "共享源码增加102资格与采集双主span跨机收据及103精确样本消费；该Activity原入口和非采样行为保持，现有回归覆盖",
-        "reviewed_by": "codex:leadgen-sample-103-admission",
-        "previous_code_digest": "f4b64b76846c88e5b72bc6b57dd60d0de55e1d9e28f04f4cd9c613dfc54845a1",
-        "current_code_digest": "d81edfce5d6e8e95d93a0d93d4de9f3b28c184b9e1d66b1c06ce43e26a3b76cb"
+        "reason": "Shared runner deployment source closure includes the immutable 102 qualification identity helper; this Activity inputs, outputs, decisions and policy remain unchanged.",
+        "reviewed_by": "codex:leadgen-102-identity-fix",
+        "previous_code_digest": "d81edfce5d6e8e95d93a0d93d4de9f3b28c184b9e1d66b1c06ce43e26a3b76cb",
+        "current_code_digest": "0b8772187b09dc560daf214bbbb488d74ba375ca4f7b88f87d253e63cc89990e"
       }
     }
   },

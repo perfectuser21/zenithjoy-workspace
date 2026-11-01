@@ -212,6 +212,9 @@ async function sampleFixture(dir){
  const {digest}=await import('../runtime-definition.mjs');
  const file=join(f.current,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(readFileSync(file));body.sampling_input={schema_version:1,workflow_key:'douyin_video_processing',run_tag:'process102',profile:'work',serial:'S',line:'jinuo',source_run:f.source,comment_limit:5};writeFileSync(file,JSON.stringify({...body,snapshot_sha256:digest(body)}));
  const videoId='7646309328911907195',video={videoId,title:'AI',author:'别人'};writeFileSync(join(f.upstream,'discovery-progress.json'),JSON.stringify({run:f.source,profile:'work',videos:[video],captures:[video]}));
+ writeFileSync(join(f.current,`process102-identity-${videoId}.json`),JSON.stringify({verified:true,
+  expected_video_id:videoId,observed_video_id:videoId,content_type:'video',excluded_non_video:false,
+  evidence_id:`process102-v${videoId}-identity-identity`}),{mode:0o600});
  return {...f,videoId,url:'https://www.douyin.com/video/'+videoId};
 }
 for(const mode of ['quota','footer','bad_pg','fake_footer','budget'])test('真实102 wrapper采样持租约与PG状态 '+mode,async()=>{
