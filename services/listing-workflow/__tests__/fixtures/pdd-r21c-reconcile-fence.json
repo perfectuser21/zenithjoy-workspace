@@ -1,0 +1,17 @@
+{
+  "owner": "manual-pdd-native-98549a255bd5438aa8fb8e2b6f23a9cf",
+  "runId": "pdd-native-r21c-6483edbe-c1b9-4c58-a56f-2cee5434f53f",
+  "jobId": "e3bde6d1-db57-4706-b575-927e5db8a966",
+  "jobSha256": "bd693821aaf44ec63570a3ef489dd731e86c4472cfcce05cb7846dddcb120362",
+  "fence": "r21c-rejected-before-swipe-e3bde6d1-db57-4706-b575-927e5db8a966",
+  "sourceHashes": {
+    "douyin-phone-adb": "620fc1a8b0f1a7969d7d057740ce0c5611f4b6ae238e33eddf5c9d9d05cb8f33",
+    "phone-lock-lib.sh": "ed2840ffbd5ded0aaa2b142a4b14405946610575536a55740c38247d5c440271",
+    "phone-lock-helper.py": "9f583cbfd989e57f1b0c5320dad3b7b6f1d5d31bf2ab9cb0d97db003b7890c4a",
+    "text-input-focus.py": "2918eaacad5a16eb712d82df5db137bec1bd6a0af8a2d8c6b920b7724b91a70f"
+  },
+  "processCensusSha256": "ef3217a0f059d65a2644b8939c4944052a04b6ba1c9e1b9ff14423c387118775",
+  "originalConfigSha256": "b03483f29f09815ca2982af6246919ec64545ca3e8fb23535405e2602d9c6146",
+  "at": 1793531221.873646,
+  "originalSessionUnknownRetained": true
+}
