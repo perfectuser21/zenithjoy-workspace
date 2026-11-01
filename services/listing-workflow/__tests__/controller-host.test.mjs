@@ -27,3 +27,12 @@ test('phone readback binds the exact MediaStore identity and persists verified o
 });
 
 test('remote public controller route cannot bypass native text field guard',()=>{const r=spawnSync('python3',[helper],{input:JSON.stringify({action:'controller',command:'text-input',args:['x']}),encoding:'utf8'});assert.equal(JSON.parse(r.stdout).error,'FORBIDDEN_CONTROLLER_COMMAND');});
+
+test('existing phone path is refused before recording ownership or invoking media-push',()=>{
+ const r=run(`with tempfile.TemporaryDirectory() as t:
+ c={'remoteRoot':t,'owner':'owner','binding':{'controllerPath':'/trusted/controller'},'profile':'pddrun','ownedMedia':[]};b=b'\\xff\\xd8\\xffimage';item=h.stage_media(c,{'name':'IMG_20261101_070000_1.jpg','bytesBase64':base64.b64encode(b).decode(),'sha256':hashlib.sha256(b).hexdigest()});h.verify_files=lambda c:None;h.held=lambda c:None
+ h.adb=lambda c,args,check=True:type('R',(),{'returncode':0,'stdout':b'No result found.'})()
+ try:h.execute_controller(c,'media-push',[item['path'],'--name',item['name']],'job')
+ except ValueError as e:print(json.dumps({'error':str(e),'planned':item['phonePlanned']}))`);
+ assert.equal(r.error,'PHONE_MEDIA_ALREADY_EXISTS_OR_UNKNOWN');assert.equal(r.planned,false);
+});
