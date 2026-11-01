@@ -37,8 +37,11 @@ function fixture(raw=bytes){
 }
 function scope(f,key){const env={...f.env,WF_BRAIN_WORKFLOW:key};return (key==='douyin_video_discovery'?defaultDiscoveryPhoneScope:defaultCollectionPhoneScope)({root:f.runtime,env});}
 try{
- if(['101','101-work','102'].includes(mode)){
-  const f=fixture(),key=mode==='102'?'douyin_video_processing':'douyin_video_discovery',value=scope(f,key);
+ if(['101','101-work','102','101-task','102-task'].includes(mode)){
+  const f=fixture(),key=mode.startsWith('102')?'douyin_video_processing':'douyin_video_discovery';
+  if(mode.endsWith('-task'))f.env.WF_BRAIN_TASK_ID='11111111-2222-4333-8444-555555555555';
+  const value=scope(f,key);
+  if(mode.endsWith('-task'))assert.equal(value.task_id,f.env.WF_BRAIN_TASK_ID,'已验证 Task UUID 必须进入正式冻结手机范围');
   const r=spawnSync('python3',['-c',"import importlib.util,json,sys;s=importlib.util.spec_from_file_location('service',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);print(json.dumps(m.POLICY))",join(source,'adb-host-service.py')],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);const policy=JSON.parse(r.stdout);
   assert.deepEqual(Object.fromEntries(Object.keys(policy).map(k=>[k,value.policy[k]])),policy,'new default must match approved single5037 service policy');
   assert.equal(value.source_commit,f.manifest.source_commit);assert.equal(value.profile,host.profile);assert.equal(value.serial,host.serial);assert.equal(value.expected_account,host.expected_account);assert.deepEqual(value.executables,host.executables);

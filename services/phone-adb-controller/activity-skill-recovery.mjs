@@ -50,14 +50,16 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
  return async({activity,failure,execute})=>{
   const directory=join(runDir,'skill-handoff',activity.key);
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
-  const phoneProof=collectionEvidenceProof(failure,{run_id:binding.run_id,task_id:binding.task_id??null,source_commit:frozen.deployment.source_commit,activity:activity.key});
-  const phoneAuthorized=!!phoneProof&&consumeCollectionPhoneProof(phoneProof,{task_id:binding.task_id??null,run_id:binding.run_id,attempt:env.WFR_ATTEMPT,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,activity:activity.key,owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id});
+  const proofTaskId=handlers.state.task_id??null;
+  if(binding.task_id!==null&&binding.task_id!==proofTaskId)noLaunch('SKILL_HANDOFF_TASK_BINDING_MISMATCH');
+  const phoneProof=collectionEvidenceProof(failure,{run_id:binding.run_id,task_id:proofTaskId,source_commit:frozen.deployment.source_commit,activity:activity.key});
+  const phoneAuthorized=!!phoneProof&&consumeCollectionPhoneProof(phoneProof,{task_id:proofTaskId,run_id:binding.run_id,attempt:env.WFR_ATTEMPT,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,activity:activity.key,owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id});
   const returned=activity.key==='collection'&&failure.status==='failed'&&failure.verification?.verified===false
-    &&collectionReturnedEvidence(failure,{run_id:binding.run_id,task_id:binding.task_id??null,source_commit:frozen.deployment.source_commit,activity:activity.key});
+    &&collectionReturnedEvidence(failure,{run_id:binding.run_id,task_id:proofTaskId,source_commit:frozen.deployment.source_commit,activity:activity.key});
   const native=handlers.state.nativeStopProof;
   const nativeStopVerified=failure.execution_stopped===true&&failure.external_effect==='unknown'
     &&/\bEXECUTION_START_FAILED\b/.test(failure.error||'')
-    &&verifiedNativeNotStartedProof(native,{runDir,operationId:failure.operation_id,runId:binding.run_id,taskId:binding.task_id,profile:env.P,serial:env.SERIAL,owner:env.WFR_TAG,sourceCommit:frozen.deployment.source_commit,activity:activity.key});
+    &&verifiedNativeNotStartedProof(native,{runDir,operationId:failure.operation_id,runId:binding.run_id,taskId:proofTaskId,profile:env.P,serial:env.SERIAL,owner:env.WFR_TAG,sourceCommit:frozen.deployment.source_commit,activity:activity.key});
   if(handlers.state.executionUnknown||!phoneAuthorized&&!returned&&((handlers.state.nativeStopUnproven||native||failure.operation_id)&&!nativeStopVerified||failure.execution_stopped===false||(/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(failure))&&!nativeStopVerified))){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
   const classified=classifyActivityFailure(activity,failure,{collectionSemantic:phoneAuthorized});
   const mode=returned&&classified!=='blocked'?'readback_only':classified;
@@ -69,7 +71,7 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
   const entry=frozen.activities.find(a=>a.reference.slot_key===activity.key),policy=entry.version.payload.contract?.agent_recovery;
   if(policy!=null&&(!policy||typeof policy!=='object'||Array.isArray(policy)||Object.keys(policy).length!==1||policy.max_additional_turns!==1))noLaunch('SKILL_AGENT_RECOVERY_POLICY_INVALID');
   mkdirSync(directory,{recursive:true,mode:0o700});
-  let request={protocol:'leadgen-activity-v1',run_id:binding.run_id,task_id:binding.task_id||null,binding_id:binding.id,activity_key:activity.key,
+  let request={protocol:'leadgen-activity-v1',run_id:binding.run_id,task_id:proofTaskId,binding_id:binding.id,activity_key:activity.key,
    ...(policy?{transport_generation:0}:{}),nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,source_commit:frozen.deployment.source_commit,workflow_definition_version_id:frozen.workflow_version.id,
    runtime_snapshot_sha256:frozen.snapshot_sha256,release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,mode,method,broker_host:frozen.deployment.target,broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
    failure:{status:failure.status,attempt:failure.attempt,error:safeExecutionDiagnostic(failure.error||'',env),result_status:failure.result?.status||null,failures:(failure.result?.failures||[]).slice(0,4).map(f=>safeExecutionDiagnostic(JSON.stringify(f),env))}};

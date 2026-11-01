@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createCentralDeviceLease} from '../central-device-lease.mjs';
+import {createCentralDeviceLease,verifyCentralTaskAssociation,persistCentralTaskAssociation} from '../central-device-lease.mjs';
 import {createHandlers} from '../leadgen-handlers.mjs';
-import {mkdtempSync,writeFileSync,appendFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,appendFileSync,rmSync,readFileSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {centralDeviceLockEvidence} from '../runtime-receipts.mjs';
@@ -28,7 +28,7 @@ function fixture({busy=false,offline=false,projectId='68ca6b4f-5e53-4ccf-a2aa-87
     return json(200,{success:true,locks:[{device_name:'SERIAL',locked_by:owner,expires_at:expires}]});
   };
   const lease=createCentralDeviceLease({brainUrl:'http://brain.test:5221',token:'fixture-token',deviceName:'SERIAL',taskId:TASK,runId:'run__a1',fetcher,expectedProjectId});
-  return {lease,calls,get owner(){return owner;},setOffline:v=>{offline=v;}};
+  return {lease,calls,get owner(){return owner;},setOffline:v=>{offline=v;},setOwner:v=>{owner=v;}};
 }
 
 test('原子获取后精确读回，同 Task 续租，再按 owner 释放并读回',async()=>{
@@ -60,6 +60,37 @@ test('其他公司的合法项目可运行，调用方声明项目时必须精�
   assert.equal((await valid.lease.verifyTask(taskFields)).project_id,other);
   const mismatch=fixture({projectId:other,expectedProjectId:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6'});
   await assert.rejects(mismatch.lease.verifyTask(taskFields),/CENTRAL_LOCK_TASK_MISMATCH/);
+});
+
+test('官方无 Task 字段的 binding 以 Brain Task 与实时中心租约建立受控关联',async()=>{
+  const f=fixture({expectedProjectId:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6'});
+  await f.lease.acquire();
+  const base={lease:f.lease,workflowKey:'douyin_video_processing',companyLine:'jinuo',sourceCommit:'a'.repeat(40),runTag:'run',
+    taskId:TASK,projectId:'68ca6b4f-5e53-4ccf-a2aa-874e5c32bbe6',deviceName:'SERIAL',runId:'run__a1',
+    binding:{id:'binding-id',run_id:'run__a1',task_id:null},scope:{task_id:TASK,run_id:'run__a1',serial:'SERIAL',source_commit:'a'.repeat(40)},
+    snapshotSha256:'b'.repeat(64)};
+  const receipt=await verifyCentralTaskAssociation(base);
+  assert.equal(receipt.task_id,TASK);assert.equal(receipt.binding_id,'binding-id');
+  assert.equal(f.calls.at(-1).path,'/api/brain/device-locks');
+  await assert.rejects(verifyCentralTaskAssociation({...base,binding:{...base.binding,task_id:'another-task'}}),/CENTRAL_TASK_ASSOCIATION_MISMATCH/);
+  await assert.rejects(verifyCentralTaskAssociation({...base,binding:{...base.binding,run_id:'other__a1'}}),/CENTRAL_TASK_ASSOCIATION_MISMATCH/);
+  await assert.rejects(verifyCentralTaskAssociation({...base,scope:{...base.scope,task_id:null}}),/CENTRAL_TASK_ASSOCIATION_MISMATCH/);
+  await assert.rejects(verifyCentralTaskAssociation({...base,workflowKey:'douyin_video_discovery'}),/CENTRAL_LOCK_TASK_MISMATCH/);
+  f.setOwner(null);await assert.rejects(verifyCentralTaskAssociation(base),/CENTRAL_LOCK_OWNER_MISMATCH/);
+  f.setOwner('another-task');await assert.rejects(verifyCentralTaskAssociation(base),/CENTRAL_LOCK_OWNER_MISMATCH/);
+  f.setOwner(TASK);
+  await f.lease.release();
+  await assert.rejects(verifyCentralTaskAssociation(base),/CENTRAL_LOCK_NOT_HELD/);
+});
+
+test('受控 Task 关联保留原字节、0600 且拒绝同路径换绑',t=>{
+  const dir=mkdtempSync(join(tmpdir(),'central-task-association-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const receipt={kind:'verified_external_task_association',task_id:TASK,binding_id:'binding-id'};
+  persistCentralTaskAssociation(dir,receipt);
+  const path=join(dir,'central-task-association.json'),original=readFileSync(path,'utf8');
+  assert.equal(statSync(path).mode&0o777,0o600);
+  persistCentralTaskAssociation(dir,receipt);assert.equal(readFileSync(path,'utf8'),original);
+  assert.throws(()=>persistCentralTaskAssociation(dir,{...receipt,binding_id:'other'}),/CENTRAL_TASK_ASSOCIATION_CHANGED/);
 });
 
 function handlerFixture(t,{acquireError=null,localReleaseError=false}={}){
