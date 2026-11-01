@@ -50,8 +50,9 @@ export function createActivityRecovery({runDir,frozen,binding,env,handlers,rpc,v
  return async({activity,failure,execute})=>{
   const directory=join(runDir,'skill-handoff',activity.key);
   if(existsSync(directory)){const error=Error('SKILL_HANDOFF_ALREADY_REQUESTED_TERMINATION_UNVERIFIED');error.executionStopped=false;throw error;}
-  const proofTaskId=handlers.state.task_id??null;
-  if(binding.task_id!==null&&binding.task_id!==proofTaskId)noLaunch('SKILL_HANDOFF_TASK_BINDING_MISMATCH');
+  const centralWorkflow=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+  const proofTaskId=centralWorkflow?handlers.state.task_id??null:binding.task_id??null;
+  if(centralWorkflow&&binding.task_id!=null&&binding.task_id!==proofTaskId)noLaunch('SKILL_HANDOFF_TASK_BINDING_MISMATCH');
   const phoneProof=collectionEvidenceProof(failure,{run_id:binding.run_id,task_id:proofTaskId,source_commit:frozen.deployment.source_commit,activity:activity.key});
   const phoneAuthorized=!!phoneProof&&consumeCollectionPhoneProof(phoneProof,{task_id:proofTaskId,run_id:binding.run_id,attempt:env.WFR_ATTEMPT,source_commit:frozen.deployment.source_commit,profile:env.P,serial:env.SERIAL,activity:activity.key,owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:handlers.state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id});
   const returned=activity.key==='collection'&&failure.status==='failed'&&failure.verification?.verified===false
