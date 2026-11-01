@@ -41,6 +41,7 @@ export function createNativeTransport(config,bridge){
    if(!actual||actual.phoneSha256!==image.sha256)throw new Error('PHONE_MEDIA_HASH_MISMATCH');
    return{status:'staged-to-device',pddUploadVerified:false,...actual};
   },
+  async picker(action,proof){draftWrites();if(!['more','permission','select','confirm'].includes(action))throw new Error('FORBIDDEN_PICKER_ACTION');return bridge.host('picker-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{mediaId:String(proof.mediaId)}:{})});},
   async organizeMedia(){draftWrites();return bridge.host('organize-media');},
   async discardDraft(proof){draftWrites();return bridge.host('discard-draft',{approvedScreenSha256:approval(proof)});},
   async back(){return bridge.host('back');},
