@@ -67,7 +67,7 @@ class PickerTree:
 
     def gallery_images(self, album):
         if not re.fullmatch(r'PDD_pdd[0-9a-f]{32}', album) or len([n for n in self.nodes if n.get('package') == MERCHANT and n.get('text') == album and self.eligible(n)]) != 1: raise ValueError('OWNED_GALLERY_ALBUM_UNVERIFIED')
-        previews = [n for n in self.nodes if n.get('package') == MERCHANT and n.get('text') == '预览' and self.eligible(n)]
+        previews = [n for n in self.nodes if n.get('package') == MERCHANT and n.get('class') == 'android.widget.TextView' and n.get('text') == '预览' and self.bounds(n) and n.get('visible-to-user') != 'false']
         if len(previews) != 1: raise ValueError('GALLERY_PAGE_UNVERIFIED')
         bottom = self.bounds(previews[0])[1]
         photos = [n for n in self.nodes if n.get('package') == MERCHANT and n.get('class') == 'android.widget.ImageView' and self.eligible(n) and n.get('clickable') == 'true' and self.bounds(n)[3] < bottom and self.bounds(n)[2]-self.bounds(n)[0] == self.bounds(n)[3]-self.bounds(n)[1]]
