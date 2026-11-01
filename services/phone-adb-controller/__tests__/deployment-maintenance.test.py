@@ -92,6 +92,26 @@ class MaintenanceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlink'):
             self.acquire()
 
+    def test_only_pinned_registry_generation_symlink_is_admitted_and_retarget_fails(self):
+        generations = self.registry.parent / '.phone-registry-generations'
+        first = generations / ('a' * 64) / 'profiles.tsv'
+        first.parent.mkdir(parents=True)
+        self.registry.rename(first)
+        self.registry.symlink_to(first)
+        self.acquire()
+        self.module.verify(self.home, 't1', self.registry, self.locks)
+        second = generations / ('b' * 64) / 'profiles.tsv'
+        second.parent.mkdir(parents=True)
+        second.write_bytes(first.read_bytes())
+        self.registry.unlink()
+        self.registry.symlink_to(second)
+        with self.assertRaisesRegex(ValueError, 'registry|identity'):
+            self.module.verify(self.home, 't1', self.registry, self.locks)
+        self.registry.unlink()
+        self.registry.symlink_to(self.home / 'untrusted.tsv')
+        with self.assertRaisesRegex(ValueError, 'registry|symlink'):
+            self.module.verify(self.home, 't1', self.registry, self.locks)
+
     def test_input_pair_accepts_only_its_frozen_transaction_quarantine(self):
         self.acquire()
         spec = importlib.util.spec_from_file_location('input_release', SERVICE / 'input-runtime-release.py')

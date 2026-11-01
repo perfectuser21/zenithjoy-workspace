@@ -108,6 +108,19 @@ test('Pilot绿但业务失败时禁止创建production release及执行部署',a
  assert.equal(f.requests.some(r=>r.method==='POST'),false);assert.equal(existsSync(f.marker),false);
 });
 
+test('安全安装入口独立于业务promote：无业务run仍可进入只围栏模式，且不生成production release',async t=>{
+ const f=await fixture(t);
+ const safety=[];
+ const result=await prepareAndDeploy({...f,mode:'maintenance-install',businessRunIds:[],acceptanceTaskIds:{},
+  stageCandidateFn:async input=>({source_commit:input.sha,environment:`staging:${input.sha}`,release_ids:input.plan.release_ids,observation_ids:{mmv:'obs-mmv','xian-m4':'obs-m4'},business_runtime_status:'not_evaluated'}),
+  runSafetyFn:async input=>{safety.push(input);return{mode:'maintenance-install',source_commit:input.sha,secured:true};}});
+ assert.equal(result?.mode,'maintenance-install');
+ assert.equal(f.requests.some(r=>r.method==='POST'&&r.environment==='production'),false);
+ assert.equal(existsSync(f.marker),false,'安全入口不得执行整包deploy.sh');
+ assert.equal(safety.length,1);
+ assert.equal(safety[0].candidate.business_runtime_status,'not_evaluated');
+});
+
 test('真实prepareAndDeploy在全新迁移checkout从固定catalog恢复Skill后才构造正式release',async t=>{
  const f=await fixture(t,{migrated:true});await prepareAndDeploy(f);assert.ok(existsSync(f.marker));
  assert.equal(readFileSync(join(f.root,'services/phone-adb-controller/commander/skills/workflow-commander/SKILL.md'),'utf8'),'fixed implementation\n');
