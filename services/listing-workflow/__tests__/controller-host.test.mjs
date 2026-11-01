@@ -15,3 +15,13 @@ test('stages only expected immutable bytes and rejects changed bytes or traversa
 test('host executable rejects arbitrary controller commands before reading profiles or touching a device',()=>{
  if(!existsSync(helper)){assert.fail('HELPER_UNAVAILABLE');return;}const r=spawnSync('python3',[helper],{input:JSON.stringify({action:'controller',command:'tap',args:['1','1']}),encoding:'utf8'});assert.equal(r.status,0);assert.equal(JSON.parse(r.stdout).error,'FORBIDDEN_CONTROLLER_COMMAND');
 });
+
+test('phone readback binds the exact MediaStore identity and persists verified ownership',()=>{
+ const r=run(`with tempfile.TemporaryDirectory() as t:
+ c={'remoteRoot':t,'ownedMedia':[{'name':'IMG_20261101_070000_1.jpg','phonePath':'/sdcard/DCIM/Camera/IMG_20261101_070000_1.jpg','sha256':'a'*64,'phonePlanned':True}]};h.held=lambda c:None
+ def adb(c,args,check=True):
+  if 'sha256sum' in args:return type('R',(),{'stdout':('a'*64+'  path').encode()})()
+  return type('R',(),{'stdout':b'Row: 0 _id=42, _data=/storage/emulated/0/DCIM/Camera/IMG_20261101_070000_1.jpg\\n'})()
+ h.adb=adb;result=h.phone_readback(c);print(json.dumps({'result':result,'verified':c['ownedMedia'][0].get('phoneVerified')}))`);
+ assert.equal(r.verified,true);assert.equal(r.result.media[0].mediaId,'42');
+});
