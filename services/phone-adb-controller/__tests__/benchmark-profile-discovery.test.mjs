@@ -9,6 +9,7 @@ import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
 //   · 采收循环归位不能用 back-to-results（只认搜索结果页，在主页上会一路 back 把人退出抖音），
 //     改用 back-to-profile，且看见 feed 就停手不再按 back。
 import { test } from "node:test";
+import { phoneLockFixtureEnv } from './helpers/phone-lock-fixture.mjs';
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { writeFileSync, mkdtempSync, chmodSync, readFileSync, existsSync } from "node:fs";
@@ -35,7 +36,7 @@ function ctl(args, extraEnv = {}) {
   const { dir, reg } = registry();
   const r = spawnSync("zsh", [SCRIPT, "--profile", "legacy", ...args], {
     encoding: "utf8",
-    env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), DOUYIN_PHONE_LOCK_TEST_MODE: '1', ...extraEnv },
+    env: { ...process.env, ...fixturePythonEnv(), ...phoneLockFixtureEnv(reg, join(dir, 'phone')), ...extraEnv },
   });
   return { code: r.status, out: r.stdout.replace(/\n+$/, ""), err: r.stderr.trim(), dir };
 }

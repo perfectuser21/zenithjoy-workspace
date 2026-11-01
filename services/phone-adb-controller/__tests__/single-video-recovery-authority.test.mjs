@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
@@ -45,7 +46,7 @@ test('真实controller新_a2三行acquire及两行release回执可被adapter严�
  writeFileSync(adb,'#!/bin/sh\nprintf touched >> "'+join(dir,'adb-touched')+'"\nexit 99\n',{mode:0o755});
  const oldRun='single_video_recovery_ab68977b',oldClaim=join(root,'locks','standalone-claims','ANGYVB4402004137',oldRun);mkdirSync(join(oldClaim,'..'),{recursive:true});writeFileSync(oldClaim,oldRun+'\n');
  const python=spawnSync('sh',['-c','command -v python3'],{encoding:'utf8'}).stdout.trim();assert.ok(python);
- const env={...process.env,DOUYIN_PHONE_REGISTRY:registry,DOUYIN_ADB_BIN:adb,DOUYIN_PHONE_TMP_ROOT:root,DOUYIN_PYTHON_BIN:python,DOUYIN_BYPASS_REPORT:'off'};
+ const env={...process.env,...phoneLockFixtureEnv(registry,root),DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:python,DOUYIN_BYPASS_REPORT:'off'};
  const outputs=[],controller=(cmd,owner)=>{const r=spawnSync('zsh',[new URL('../douyin-phone-adb',import.meta.url).pathname,'--profile','legacy',cmd,...(owner?[owner]:[])],{env,encoding:'utf8',timeout:10000});assert.equal(r.status,0,r.stderr);outputs.push({cmd,stdout:r.stdout});return {stdout:r.stdout,stderr:r.stderr};};
  const f=fixture(),execute=async(command,args,options)=>{const text=args.join(' ');if(command==='ssh'&&text.includes('douyin-phone-adb')){const m=text.match(/(lock-acquire-new|lock-release-exact|lock-status)(?: ([A-Za-z0-9_-]+))?$/);assert.ok(m,text);return controller(m[1],m[2]);}return f.io.execute(command,args,options);};
  const a=await factory({...f.io,execute,evidenceRoot,readLockReceipt:async({kind,run})=>JSON.parse(readFileSync(join(evidenceRoot,run+'-lock-'+kind+'.json'),'utf8'))});

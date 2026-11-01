@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 const client=new URL('../adb-managed-client.py',import.meta.url).pathname;
 async function fixture(t,{version='0029',devices='SER1\tdevice\nSER2\tdevice\n'}={}){
  const dir=mkdtempSync(join(tmpdir(),'managed-adb-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
@@ -35,7 +36,7 @@ test('raw devices也拒绝附加server，不因无serial绕过host守卫',async 
 test('offline及重复serial都拒绝，不运行实际设备命令',async t=>{for(const devices of ['SER1\toffline\n','SER1\tdevice\nSER1\tdevice\n']){const f=await fixture(t,{devices});const r=await f.run(['-s','SER1','get-state']);assert.notEqual(r.status,0);assert.match(r.err,/ADB_(HOST|ROUTE|MANAGED)_/);assert.equal(existsSync(f.log),false);}});
 test('受管server未知时recovery在拿手机锁/USB动作前失败',async()=>{const {recoverPhones}=await import('../phone-recovery.mjs');const calls=[];await assert.rejects(recoverPhones({managed:true,targets:[{profile:'p',serial:'SER1'}],run:(bin,args)=>{calls.push([bin,...args]);return {status:2,stdout:''};},bins:{adb:'managed',ctl:'ctl',hub:'hub'},sleep:async()=>{},notify:async()=>true,state:{},now:1,log:()=>{}}),/ADB_MANAGED_UNAVAILABLE/);assert.deepEqual(calls,[['managed','devices']]);});
 test('wall和controller实际调用在策略激活后忽略旧binary，未激活保legacy',async t=>{
- const f=await fixture(t);const env={...process.env,HOME:f.dir,ZJ_ADB_HOST_CONFIG:f.config,ADB:'/forbidden-legacy-adb',DOUYIN_ADB_BIN:'/forbidden-legacy-adb',DOUYIN_PYTHON_BIN:'python3',DOUYIN_PHONE_TMP_ROOT:join(f.dir,'tmp'),DOUYIN_PHONE_LOCK_TEST_MODE:'1'};
+ const f=await fixture(t);const env={...process.env,HOME:f.dir,ZJ_ADB_HOST_CONFIG:f.config,ADB:'/forbidden-legacy-adb',DOUYIN_ADB_BIN:'/forbidden-legacy-adb',DOUYIN_PYTHON_BIN:'python3',...phoneLockFixtureEnv(join(f.dir,'profiles'),join(f.dir,'tmp'))};
  writeFileSync(f.adb,readFileSync(f.adb,'utf8').replace("else:\n print(json.dumps", "elif a[-1:]==['get-state']: print('device')\nelif a[-2:]==['getprop','ro.product.model']: print('MODEL')\nelse:\n print(json.dumps"));
  const wallenv=join(f.dir,'wall.env');writeFileSync(wallenv,'ZJ_API_BASE=http://127.0.0.1:1\nZJ_LICENSE=fixture\n');
  const run=(bin,args,extra={})=>new Promise(resolve=>{const c=spawn(bin,args,{env:{...env,...extra}});let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out,err}));});

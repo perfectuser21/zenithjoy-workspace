@@ -6,6 +6,7 @@ import {mkdtempSync,writeFileSync,readFileSync,mkdirSync,rmSync,existsSync} from
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 
 const controller=new URL('../douyin-phone-adb',import.meta.url).pathname;
 const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
@@ -108,8 +109,8 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const lock=join(tmp,'locks','SER1.lock');mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),'continuous-run');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)));
  // 同目标旧短链使本次必须走nonce；不得关闭COPY_STALE。
  writeFileSync(join(cache,'legacy-last-clip.txt'),'https://v.douyin.com/Fresh/\n');
- const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:fixtureAdb(adb),
-  DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,DOUYIN_PHONE_LOCK_TEST_MODE:'1',
+ const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,...phoneLockFixtureEnv(join(d,'registry'),tmp),DOUYIN_ADB_BIN:fixtureAdb(adb),
+  DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
   COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',GUIDE_DISMISS_STUCK:guideDismissStuck?'1':'0',GUIDE_DISMISS_IDLE:guideDismissIdle?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
  if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;

@@ -7,6 +7,7 @@
 // 跳过自家号作者;剩下的才点开取链接,取到链接后仍按 video_id 复核(原有 seen-videos 一道不动)。
 // 其他号(legacy/悦升)行为不变。
 import { test } from "node:test";
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, chmodSync, mkdirSync, readFileSync, existsSync } from "node:fs";
@@ -30,7 +31,7 @@ test("卡片解析带出作者列(真机网格 fixture): X Y DUR 标题 作者",
   const reg = join(dir, "profiles.tsv");
   writeFileSync(reg, "legacy\tSER1\tANY-MODEL\t1199\t2663\n");
   const r = spawnSync(ZSH, [DPA, "--profile", "legacy", "video-cards-from-xml", join(HERE, "fixtures", "real-search-results-grid.xml")],
-    { encoding: "utf8", env: { ...process.env, DOUYIN_PHONE_REGISTRY: reg } });
+    { encoding: "utf8", env: { ...process.env, ...phoneLockFixtureEnv(reg, join(dir, 'phone')) } });
   assert.equal(r.status, 0, r.stderr);
   const rows = r.stdout.trim().split("\n").map((l) => l.split("\t"));
   assert.equal(rows.length, 4, r.stdout);

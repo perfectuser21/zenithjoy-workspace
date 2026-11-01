@@ -1,4 +1,5 @@
 import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // douyin-phone-adb account-current 昵称误读回归测试（0929 新建）。
 //
 // 事故（0929 17:20，小蓝 profile jinoshengyuan-work）：account-current 读出 nickname=11，
@@ -86,7 +87,7 @@ function run(ctx) {
     const p = spawn("zsh", [SCRIPT, "--profile", PROFILE, "account-current", "acct-t"], {
       env: {
         ...process.env, ...fixturePythonEnv(),
-        DOUYIN_PHONE_REGISTRY: ctx.reg,
+        ...phoneLockFixtureEnv(ctx.reg, join(ctx.dir, 'phone-tmp')),
         DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),
         FIXTURE_DIR: ctx.dir,

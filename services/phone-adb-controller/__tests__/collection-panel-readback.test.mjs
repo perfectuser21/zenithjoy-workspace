@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import {createServer} from 'node:net';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import {createHash} from 'node:crypto';
 import {verifiedCollectionPanelFailure} from '../collection-acceptance-probe.mjs';
 const eid='current-run-v7681632828384394203-collection-screen1';
@@ -18,7 +19,7 @@ async function fixture(t){
  writeFileSync(source,`#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\nint main(int n,char**a){if(n==2&&!strcmp(a[1],"version")){puts("Android Debug Bridge version 1.0.41");return 0;}if(!strcmp(a[n-1],"get-state")){puts("device");return 0;}if(!strcmp(a[n-1],"ro.product.model")){puts("MODEL");return 0;}if(n>4&&!strcmp(a[n-4],"stat")){puts("999");return 0;}for(int i=1;i<n;i++)if(!strcmp(a[i],"pull")){char p[4096];snprintf(p,sizeof p,"%s/tree.xml",getenv("PANEL_FIXTURE_DIR"));FILE*in=fopen(p,"rb"),*out=fopen(a[n-1],"wb");if(!in||!out)return 4;int c;while((c=fgetc(in))!=EOF)fputc(c,out);fclose(in);fclose(out);return 0;}for(int i=1;i<n;i++)if(!strcmp(a[i],"size")){puts("Physical size: 1200x2664");return 0;}return 0;}\n`);
  const cc=spawnSync('cc',[source,'-o',adb],{encoding:'utf8'});assert.equal(cc.status,0,cc.stderr);
  const reg=join(d,'profiles');writeFileSync(reg,'p\tFIXTURE-PHONE\tMODEL\t1199\t2663\n');
- const env={...process.env,HOME:d,PANEL_FIXTURE_DIR:d,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:'python3',DOUYIN_PHONE_TMP_ROOT:join(d,'phone'),DOUYIN_PHONE_LOCK_TEST_MODE:'1',ADB_SERVER_SOCKET:'tcp:127.0.0.1:'+server.address().port};
+ const env={...process.env,HOME:d,PANEL_FIXTURE_DIR:d,...phoneLockFixtureEnv(reg,join(d,'phone')),DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:'python3',ADB_SERVER_SOCKET:'tcp:127.0.0.1:'+server.address().port};
  const run=()=>new Promise(resolve=>{const p=spawn('zsh',[controller,'--profile','p','collect-comments',eid],{env});let stdout='',stderr='';p.stdout.on('data',b=>stdout+=b);p.stderr.on('data',b=>stderr+=b);p.on('close',status=>resolve({status,stdout,stderr}));});
  return {d,run};
 }

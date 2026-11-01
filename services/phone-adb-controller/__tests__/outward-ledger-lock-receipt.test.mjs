@@ -1,4 +1,5 @@
 import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // douyin-phone-adb 对外动作账 / 锁回执证据 / tap-evidence 取证超时 单元测试（1010，Brain 任务 d1b395c7）。
 //
 // 背景：技能工厂样板「试跑 抖音·视频发布」(48b623db) 执行成功，但独立核验 (314b51ed) 判 fail：
@@ -84,7 +85,7 @@ function run(ctx, args, extraEnv = {}, { owner = RUN } = {}) {
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", ...pre, ...args], {
       env: {
-        ...process.env, STATE_DIR: ctx.state, DOUYIN_PHONE_REGISTRY: ctx.reg, DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
+        ...process.env, ...phoneLockFixtureEnv(ctx.reg, ctx.tmpRoot), STATE_DIR: ctx.state, DOUYIN_ADB_BIN: fixtureAdb(ctx.adb),
         DOUYIN_PHONE_TMP_ROOT: ctx.tmpRoot, DOUYIN_PYTHON_BIN: PYTHON, DOUYIN_SIPS_BIN: ctx.sips,
         DOUYIN_LOCATE_SCRIPT: ctx.locate, DOUYIN_LOCATE_KEY_FILE: ctx.keyFile, ...extraEnv,
       },

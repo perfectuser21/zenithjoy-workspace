@@ -1,4 +1,5 @@
 import {fixtureAdb} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // 297d7f32：真实控制器 + 隔离锁目录/fakeADB，人工会话退出必须收尾，不操作手机。
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
@@ -9,6 +10,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const script = new URL('../douyin-phone-adb', import.meta.url).pathname;
 const python = spawnSync('sh', ['-c', 'command -v python3'], {encoding:'utf8'}).stdout.trim();
+test('受控测试夹具拒绝仓库路径或非测试目录冒充手机锁根',()=>{
+ assert.throws(()=>phoneLockFixtureEnv('/Users/jinnuoshengyuan/profiles.tsv','/tmp/fixture-phone'),/PHONE_LOCK_FIXTURE_UNSAFE/);
+ assert.throws(()=>phoneLockFixtureEnv('/tmp/fixture-profiles.tsv','/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-locks'),/PHONE_LOCK_FIXTURE_UNSAFE/);
+});
 function setup(t) {
   const dir=mkdtempSync(join(tmpdir(),'phone-lock-')); t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const reg=join(dir,'registry.tsv'), adb=join(dir,'adb'), ssh=join(dir,'ssh'), pgrep=join(dir,'pgrep');
@@ -18,7 +23,7 @@ function setup(t) {
   writeFileSync(ssh,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/ssh.log"\n[ -f "$TEST_DIR/ssh-fail" ] && exit 255\nfor last; do :; done\nexec /bin/sh -c "$last"\n`,{mode:0o755});
   writeFileSync(join(dir,'curl'),'#!/bin/sh\ncat "$TEST_DIR/tasks.json"\n',{mode:0o755});
   writeFileSync(join(dir,'tasks.json'),'[]');
-  const env={...process.env,PATH:dir+':'+process.env.PATH,TEST_DIR:dir,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PHONE_LOCK_TEST_MODE:'1',DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
+  const env={...process.env,PATH:dir+':'+process.env.PATH,TEST_DIR:dir,...phoneLockFixtureEnv(reg,join(dir,'tmp')),DOUYIN_ADB_BIN:fixtureAdb(adb),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
   const lock=join(dir,'tmp','locks','SER1.lock');
   const run=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
   const stale=(owner='probe-btr-budget')=>{mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),owner+'\n');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));};

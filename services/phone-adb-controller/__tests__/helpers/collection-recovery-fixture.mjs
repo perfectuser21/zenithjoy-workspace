@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {Worker} from 'node:worker_threads';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
+import {phoneLockFixtureEnv} from './phone-lock-fixture.mjs';
 export const vids=['7681632828384394202','7681632828384394203'];
 const hash=x=>createHash('sha256').update(x).digest('hex');
 export async function collectionFixture(t,{sample=false,panelProbe=false,blockIdentity=false}={}){
@@ -39,8 +40,8 @@ switch(cmd){case 'preflight':console.log('serial=NO-DEVICE');break;case 'account
  if(sample)frozen.sampling_input={schema_version:1,workflow_key:'douyin_video_processing',run_tag:'scope-owner',profile:'scope-profile',serial:'NO-DEVICE',line:'jinuo',source_run:'scope-source101',comment_limit:1};
  const {digest}=await import(pathToFileURL(join(runtime,'runtime-definition.mjs')));delete frozen.snapshot_sha256;frozen.snapshot_sha256=digest(frozen);writeFileSync(join(d,'run-definition.json'),JSON.stringify(frozen));
  mkdirSync(join(d,'run-bindings'));writeFileSync(join(d,'run-bindings/a1.request.json'),JSON.stringify({runtime_snapshot_sha256:frozen.snapshot_sha256,run_id:'scope-run__a1',body:{task_id:'scope-task'}}));writeFileSync(join(d,'run-bindings/a1.ack.json'),JSON.stringify({binding:{id:'scope-binding',run_id:'scope-run__a1',task_id:'scope-task'}}));
- const env={...process.env,HOME:d,PATH:bin+':'+process.env.PATH,WFR_RUN_DIR:d,WFR_RUN_ID:'scope-run',WFR_ATTEMPT:'a1',WFR_TAG:'scope-owner',P:'scope-profile',SERIAL:'NO-DEVICE',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'scope-source101',DOUYIN_PHONE_ADB:controller,DOUYIN_PHONE_TMP_ROOT:join(d,'phone'),DOUYIN_PHONE_LOCK_TEST_MODE:'1',COLLECTION_FIXTURE_DIR:d,PYTHONDONTWRITEBYTECODE:'1',ZJ_ADB_HOST_CONFIG:policyFile,HARVEST_KEYWORD_TESTING:'1'};
- if(panelProbe)env.DOUYIN_PHONE_REGISTRY=join(d,'profiles');
+ const env={...process.env,HOME:d,PATH:bin+':'+process.env.PATH,WFR_RUN_DIR:d,WFR_RUN_ID:'scope-run',WFR_ATTEMPT:'a1',WFR_TAG:'scope-owner',P:'scope-profile',SERIAL:'NO-DEVICE',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'scope-source101',DOUYIN_PHONE_ADB:controller,...phoneLockFixtureEnv(join(d,'profiles'),join(d,'phone')),COLLECTION_FIXTURE_DIR:d,PYTHONDONTWRITEBYTECODE:'1',ZJ_ADB_HOST_CONFIG:policyFile,HARVEST_KEYWORD_TESTING:'1'};
+ if(!panelProbe)delete env.DOUYIN_PHONE_REGISTRY;
  if(sample){env.LEADGEN_COMMENT_LIMIT='1';env.WF_BRAIN_WORKFLOW='douyin_video_processing';}
  if(blockIdentity){let blocked=false;const timer=setInterval(()=>{if(blocked||!existsSync(join(d,'observer-block-ready')))return;blocked=true;writeFileSync(join(d,'observer-block-go'),'go');const started=Date.now();Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,750);writeFileSync(join(d,'observer-block-duration-ms'),String(Date.now()-started));},1);t.after(()=>clearInterval(timer));}
  const dbCalls=[],stored=new Map();

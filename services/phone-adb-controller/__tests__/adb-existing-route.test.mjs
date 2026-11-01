@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import {createHash} from 'node:crypto';
 const self=fileURLToPath(import.meta.url), direct=process.argv[1]===self, worker=direct&&process.argv[2]==='--fixture-worker';
 if(worker){
@@ -74,7 +75,7 @@ test('真实controller先验证既有socket再用该路由，customclient也不�
  const s=await server(t,'431\tdevice\n'),dir=mkdtempSync(join(tmpdir(),'adb-route-controller-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const adb=join(dir,'adb'),reg=join(dir,'profiles'),log=join(dir,'calls');writeFileSync(reg,'p\t431\tMODEL\t1199\t2663\n');
  writeFileSync(adb,'#!/usr/bin/env python3\nimport os,sys\na=sys.argv[1:]\nwith open(os.environ["ADB_CALL_LOG"],"a") as f:f.write(" ".join(a)+"\\n")\nif a==["version"]: print("Android Debug Bridge version 1.0.41")\nelif a[-1:]==["get-state"]: print("device" if os.environ.get("ADB_SERVER_SOCKET")==os.environ["EXPECTED_SOCKET"] else "offline")\nelif a[-2:]==["getprop","ro.product.model"]: print("MODEL")\nelse: sys.exit(8)\n',{mode:0o755});
- const base={...process.env,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PHONE_LOCK_TEST_MODE:'1',ADB_CALL_LOG:log,EXPECTED_SOCKET:`tcp:127.0.0.1:${s.port}`};
+ const base={...process.env,...phoneLockFixtureEnv(reg,join(dir,'tmp')),DOUYIN_ADB_BIN:adb,DOUYIN_PYTHON_BIN:'/usr/bin/python3',ADB_CALL_LOG:log,EXPECTED_SOCKET:`tcp:127.0.0.1:${s.port}`};
  const call=(op,socket)=>new Promise(resolve=>{const c=spawn('zsh',[new URL('../douyin-phone-adb',import.meta.url).pathname,'--profile','p',op],{env:{...base,ADB_SERVER_SOCKET:socket}});let out='',err='';c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('close',status=>resolve({status,out,err}));});
  const good=await call('status',base.EXPECTED_SOCKET);assert.equal(good.status,0,good.err);assert.match(good.out,/431 device MODEL/);
  const before=readFileSync(log,'utf8');assert.doesNotMatch(before,/start-server|kill-server/);

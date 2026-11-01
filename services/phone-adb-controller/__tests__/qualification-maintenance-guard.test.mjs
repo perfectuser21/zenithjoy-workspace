@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync,copyFileSync,realpathSync} from 'node:fs';
@@ -11,7 +12,7 @@ function fixture(t) {
  const dir=mkdtempSync(join(tmpdir(),'qualification-guard-')),root=join(dir,'phone'),locks=join(root,'locks'),lock=join(locks,'SER1.lock');mkdirSync(lock,{recursive:true});
  const reg=join(dir,'profiles.tsv');writeFileSync(reg,'p1\tSER1\tfixture\t1080\t1920\n');
  writeFileSync(join(lock,'owner'),'original-run\n');writeFileSync(join(lock,'standalone_review_required'),'original-run\n');writeFileSync(join(locks,'SER1.guard'),'');
- const env={...process.env,DOUYIN_PHONE_TMP_ROOT:root,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_ADB_BIN:'/bin/false'};
+ const env={...process.env,...phoneLockFixtureEnv(reg,root),DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_ADB_BIN:'/bin/false'};
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
  return {dir,root,lock,env,guard:join(locks,'SER1.guard')};
 }

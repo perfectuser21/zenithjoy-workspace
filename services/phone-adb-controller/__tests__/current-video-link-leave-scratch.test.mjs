@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 
 const SCRIPT = new URL('../douyin-phone-adb', import.meta.url).pathname;
 const FIXTURES = new URL('./fixtures/', import.meta.url).pathname;
@@ -150,7 +151,7 @@ case "$*" in
 esac
 exit 0
 `, { mode: 0o755 });
-  const env = { ...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: fixtureAdb(adb), DOUYIN_CURL_BIN: curl, DOUYIN_PYTHON_BIN: 'python3', DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir, 'tmp'), DOUYIN_PHONE_LOCK_TEST_MODE:'1' };
+  const env = { ...process.env, HOME: dir, ...phoneLockFixtureEnv(reg,join(dir, 'tmp')), DOUYIN_ADB_BIN: fixtureAdb(adb), DOUYIN_CURL_BIN: curl, DOUYIN_PYTHON_BIN: 'python3', DOUYIN_SIPS_BIN: '/usr/bin/true' };
   if(peerUrl){
     const runDir=join(dir,'run');mkdirSync(join(runDir,'runtime'),{recursive:true});
     writeFileSync(join(runDir,'run-definition.json'),'{}');

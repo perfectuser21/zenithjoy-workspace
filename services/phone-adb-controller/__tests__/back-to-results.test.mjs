@@ -1,4 +1,5 @@
 import {fixtureAdb,fixturePythonEnv} from './adb-existing-route.test.mjs';
+import {phoneLockFixtureEnv} from './helpers/phone-lock-fixture.mjs';
 // services/phone-adb-controller/__tests__/back-to-results.test.mjs
 //
 // 采收循环处理完一个视频后的**归位**守卫。
@@ -35,7 +36,7 @@ function judge(foreground) {
   writeFileSync(reg, 'legacy\tSER1\tANY-MODEL\t1199\t2663\n');
   return new Promise((resolve) => {
     const p = spawn('zsh', [SCRIPT, '--profile', 'legacy', 'on-search-results', foreground], {
-      env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg },
+      env: { ...process.env, ...fixturePythonEnv(), ...phoneLockFixtureEnv(reg, join(dir, 'phone')) },
     });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });
@@ -125,7 +126,7 @@ function runBackToResults(opts, maxArg) {
   const args = [SCRIPT, '--profile', 'legacy', 'back-to-results'];
   if (maxArg) args.push(String(maxArg));
   return new Promise((resolve) => {
-    const p = spawn('zsh', args, { env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: fixtureAdb(adb.path) } });
+    const p = spawn('zsh', args, { env: { ...process.env, ...fixturePythonEnv(), ...phoneLockFixtureEnv(reg, join(dir, 'phone')), DOUYIN_ADB_BIN: fixtureAdb(adb.path) } });
     let out = '', err = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { err += d; });
