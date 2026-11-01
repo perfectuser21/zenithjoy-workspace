@@ -203,7 +203,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,
       ...(needsCentralLock?{central_lock_task_id:taskId,central_lock_run_id:state.run_id}:{}),...outreachProof};
   };
-  const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},verifyPhoneAssociation});
+  const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;},verifyPhoneAssociation});
   const getDiscovery=discoveryAction.getDiscovery;
   const intake=async()=>{
     state.companyConfig=await queue('company_config',{step:'102'});

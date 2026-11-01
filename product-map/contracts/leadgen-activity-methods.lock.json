@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "c19291ed3084397e4974a211735574a89476a6559ce10741738fc9abb88bb3ea",
+      "code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20",
-        "current_code_digest": "c19291ed3084397e4974a211735574a89476a6559ce10741738fc9abb88bb3ea"
+        "current_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36"
       }
     },
     "douyin_video_processing.preflight": {
@@ -504,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "3d1cda25c8401773b9a9ef44eaecc0077ccb24cb9fc35179dcba6cd17cc398fa",
+      "code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff",
-        "current_code_digest": "3d1cda25c8401773b9a9ef44eaecc0077ccb24cb9fc35179dcba6cd17cc398fa"
+        "current_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3"
       }
     },
     "douyin_video_processing.dedup": {
@@ -777,7 +777,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "d98549ece8bda92ee92ec1886665a7bf834675db1ad397cbe77c33f821287109",
+      "code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4",
-        "current_code_digest": "d98549ece8bda92ee92ec1886665a7bf834675db1ad397cbe77c33f821287109"
+        "current_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1092,7 +1092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -1228,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "21291eadf88af924513bd9b61071780fdc86a3a6a137d86be1ba488f6c72e1eb",
+      "code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa",
-        "current_code_digest": "21291eadf88af924513bd9b61071780fdc86a3a6a137d86be1ba488f6c72e1eb"
+        "current_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227"
       }
     },
     "douyin_video_processing.collection": {
@@ -1450,7 +1450,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -1544,13 +1544,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "6f8fbd8bc9d4ad916484e87d9b6e5aace682dc37f263632c2db667dd2e031997",
+      "code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44",
-        "current_code_digest": "6f8fbd8bc9d4ad916484e87d9b6e5aace682dc37f263632c2db667dd2e031997"
+        "current_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1747,7 +1747,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -1820,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "047648180739c66e0c546331071af1cb4f37f45345d55ad258762fe0b6f6fb90",
+      "code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6",
-        "current_code_digest": "047648180739c66e0c546331071af1cb4f37f45345d55ad258762fe0b6f6fb90"
+        "current_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1992,7 +1992,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -2107,13 +2107,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "01db331e5f9905ca84e1556b99a192bc6cb80dfee9ec441dc3d98060187303ae",
+      "code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5",
-        "current_code_digest": "01db331e5f9905ca84e1556b99a192bc6cb80dfee9ec441dc3d98060187303ae"
+        "current_code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2286,7 +2286,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -2436,13 +2436,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "8b6e05e3a07deb4c53fd4adeb75d21b0b7182269bde2e15379d7faa25da0e0cf",
+      "code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef",
-        "current_code_digest": "8b6e05e3a07deb4c53fd4adeb75d21b0b7182269bde2e15379d7faa25da0e0cf"
+        "current_code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2654,7 +2654,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -2748,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6a502d72cfcbe3767156f43e8a0eb49819209886e9bd930b68414784245c7a72",
+      "code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84",
-        "current_code_digest": "6a502d72cfcbe3767156f43e8a0eb49819209886e9bd930b68414784245c7a72"
+        "current_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2955,7 +2955,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -3035,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7537ff503b0824d481f10d17b755c74566b79baf95aa4ebee1b4376fed91a3b5",
+      "code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f",
-        "current_code_digest": "7537ff503b0824d481f10d17b755c74566b79baf95aa4ebee1b4376fed91a3b5"
+        "current_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3242,7 +3242,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -3315,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "97f8ad8bbfc0c621fa44807631c42fd615423ba7763246e39a2e06b0c0c3561d",
+      "code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902",
-        "current_code_digest": "97f8ad8bbfc0c621fa44807631c42fd615423ba7763246e39a2e06b0c0c3561d"
+        "current_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3525,7 +3525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "014a2ee0f0458ccbd601584fa6f00f45967ff5a36a9917eb8f6801662da8a607"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -3605,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "d9958f2630198c3c06c6dbfb22a35e8c4bfaed112d430cddc9648e223969aa00",
+      "code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
       "code_compatibility": {
         "kind": "internal_compatible",
         "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
         "reviewed_by": "codex:leadgen-task-binding-fix",
         "previous_code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb",
-        "current_code_digest": "d9958f2630198c3c06c6dbfb22a35e8c4bfaed112d430cddc9648e223969aa00"
+        "current_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4"
       }
     }
   },
