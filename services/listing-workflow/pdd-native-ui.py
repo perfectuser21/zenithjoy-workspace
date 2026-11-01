@@ -30,6 +30,18 @@ class Screen:
     def form(self):
         return all(self.labels(x) for x in ['发布商品', '商品轮播图', '保存草稿', '提交并上架'])
 
+    def empty_carousel(self):
+        roots=[n for n in self.nodes if n.get('resource-id')=='goodsCarousel']
+        if len(roots)!=1: return None
+        root=roots[0];nodes=list(root.iter('node'));box=self.bounds(root)
+        expected=[('android.view.View','goodsCarousel','',2),('android.view.View','goodsCarouselElement','',2),('android.view.View','','',2),('android.widget.TextView','','商品轮播图',0),('android.widget.TextView','','*',0),('android.widget.TextView','','拖拽可调整顺序',0),('android.view.View','','',1),('android.view.View','','',1),('android.view.View','','',1),('android.view.View','','',3),('android.widget.Image','','',0),('android.widget.TextView','','上传图片',0),('android.widget.TextView','','主图',0)]
+        signature=[(n.get('class'),n.get('resource-id',''),n.get('text',''),len(list(n))) for n in nodes]
+        if signature!=expected or not box or box[0]!=0 or box[2]!=self.width or any(n.get('package')!=PACKAGE or n.get('enabled')!='true' or n.get('visible-to-user')=='false' or n.get('content-desc','') or not self.bounds(n) for n in nodes): return None
+        if any(not (box[0]<=self.bounds(n)[0]<self.bounds(n)[2]<=box[2] and box[1]<=self.bounds(n)[1]<self.bounds(n)[3]<=box[3]) for n in nodes): return None
+        placeholder,image,upload,main=nodes[9:13];slot=self.bounds(placeholder);camera=self.bounds(image)
+        if self.parents.get(image) is not placeholder or self.parents.get(upload) is not placeholder or self.parents.get(main) is not placeholder or slot[2]-slot[0]!=slot[3]-slot[1] or not (slot[0]<camera[0]<camera[2]<slot[2] and slot[1]<camera[1]<camera[3]<slot[3]) or camera[2]-camera[0]>=(slot[2]-slot[0])/2 or camera[3]-camera[1]>=(slot[3]-slot[1])/2: return None
+        return {'kind':'exact-empty-carousel-with-single-camera-placeholder','nodeCount':13,'carouselBounds':box,'placeholderBounds':slot,'cameraBounds':camera}
+
     def field(self, key):
         if key not in FIELDS:
             raise ValueError('FORBIDDEN_FIELD')

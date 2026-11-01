@@ -148,8 +148,10 @@ def confirm_empty_owned_exit(config, screen, tree):
     if before['sha256']!=back['before']['sha256'] or sha(raw)!=back['before']['sha256']: raise ValueError('EMPTY_OWNED_BEFORE_HASH_MISMATCH')
     prior=Screen(raw.decode(),config['binding']['width'],config['binding']['height'])
     if not prior.form() or any(prior.field(k)['value']!=v for k,v in {'title':'','groupPrice':'','inventory':'1'}.items()): raise ValueError('EMPTY_OWNED_BEFORE_NOT_EMPTY')
+    carousel=prior.empty_carousel()
+    if not carousel: raise ValueError('EMPTY_OWNED_CAROUSEL_UNVERIFIED')
     proof_path=Path(config['remoteRoot'])/('empty-owned-exit-'+back['jobId']+'.json')
-    proof={'owner':config['owner'],'job':job,'jobSha256':sha(job_path.read_bytes()),'before':back['before'],'after':tree,'processAndChildrenAbsent':True,'internalAutoSaveUnknown':True,'at':time.time()}
+    proof={'owner':config['owner'],'job':job,'jobSha256':sha(job_path.read_bytes()),'before':back['before'],'emptyCarousel':carousel,'after':tree,'processAndChildrenAbsent':True,'internalAutoSaveUnknown':True,'at':time.time()}
     store(proof_path,proof)
     draft.update(exitedVerified=True,visibleDraftCountUnchanged=True,internalAutoSaveUnknown=True,emptyDirectExitReadback={'path':str(proof_path),'jobId':back['jobId']})
     return True
