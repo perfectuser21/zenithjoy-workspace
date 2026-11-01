@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, openSync, writeFileSync, fsyncSync, closeSync } from 'node:fs';
+import { mkdirSync, readFileSync, openSync, writeFileSync, fsyncSync, closeSync, existsSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createBrainClient, readOnlyInvocation } from './phone-probe.mjs';
@@ -20,9 +20,13 @@ export function createControllerBridge(config, dependencies = {}) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000 || !config.runId) throw new Error('INVALID_COMMAND_BUDGET');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const statePath = join(directory, 'controller-session.json');
+  if (existsSync(statePath)) throw new Error('EXISTING_SESSION_REQUIRES_RECOVERY');
   function persist() {
-    const fd = openSync(statePath, 'w', 0o600); try { writeFileSync(fd, JSON.stringify(state, null, 2)); fsyncSync(fd); } finally { closeSync(fd); }
+    const temporary = statePath + '.pending-' + randomUUID();
+    const fd = openSync(temporary, 'wx', 0o600); try { writeFileSync(fd, JSON.stringify(state, null, 2)); fsyncSync(fd); } finally { closeSync(fd); }
+    renameSync(temporary, statePath); const dir = openSync(directory, 'r'); try { fsyncSync(dir); } finally { closeSync(dir); }
   }
+  persist();
   const remote = dependencies.remote || (async request => {
     const script = readFileSync(new URL('./controller-host.py', import.meta.url), 'utf8');
     let tokens = ['python3', '-c', script];
@@ -67,10 +71,15 @@ export function createControllerBridge(config, dependencies = {}) {
         const expected = { serial: binding.serial, model: binding.model, width: binding.width, height: binding.height, enabled: true };
         if (actual.controllerSha256 !== binding.controllerSha256 || actual.focusSha256 !== binding.focusSha256 || JSON.stringify(actual.profile) !== JSON.stringify(expected)) throw new Error('CONTROLLER_BINDING_MISMATCH');
         await send('initialize');
+        state.controllerAcquireAttempted = true; persist();
         const lock = await send('controller', { command: 'lock-acquire-new', args: [state.owner] });
         if (!lock.stdout.includes(`lock=acquired owner=${state.owner}`)) throw new Error('CONTROLLER_ACQUIRE_UNCONFIRMED');
         state.controllerHeld = true; persist(); await controllerStatus(); return state;
       } catch (error) {
+        if (!state.brainHeld) { try { state.brainHeld = (await brain.lease(binding.serial)).locked_by === state.owner; } catch { state.brainOwnershipUnconfirmed = true; } persist(); }
+        if (state.controllerAcquireAttempted && !state.controllerHeld && !state.remoteUnknown) {
+          try { const status = await send('controller', { command: 'lock-status', args: [] }); state.controllerHeld = status.stdout.includes('owner=' + state.owner); } catch { state.remoteUnknown = true; } persist();
+        }
         if (!state.remoteUnknown && state.brainHeld && !state.controllerHeld) { await brain.release(binding.serial, state.owner); state.brainHeld = false; persist(); }
         throw error;
       }
