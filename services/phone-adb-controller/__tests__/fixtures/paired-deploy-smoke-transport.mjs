@@ -100,7 +100,7 @@ export function transport(root,mode,args){
     const sources=args.slice(0,-1).filter(a=>!a.startsWith('-'));
     if(![p.stage+'/',join(p.stage,'input-runtime-release.py')].includes(destination))throw Error('unexpected paired upload destination');
     for(const source of sources){
-     const name=basename(source);if(!['input-runtime-release.py','deployment-transaction.py','deployment-maintenance.py','douyin-phone-adb','text-input-focus.py'].includes(name))throw Error('unexpected paired source');
+     const name=basename(source);if(!['input-runtime-release.py','deployment-transaction.py','deployment-maintenance.py','phone-lock-root.py','douyin-phone-adb','text-input-focus.py'].includes(name))throw Error('unexpected paired source');
      copyFileSync(source,join(p.stage,name));
     }
    }

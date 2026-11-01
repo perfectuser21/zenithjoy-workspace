@@ -74,6 +74,18 @@ test('部署前置同样消费完整source_set摘要，不在下一道旧格式�
  b.report.implementation_source_set.sort((a,b)=>digest(a).localeCompare(digest(b)));sealPlan(b);
  assert.equal(validateDeploymentEvidence(b,sha,()=>bytes).definitions.workflows.length,4);
 });
+test('持久 review 安装必须先禁用旧 daemon 和封存候选，任一文件失败不得启新 daemon',()=>{
+ const backend=readFileSync(new URL('../deployment-backend.mjs',import.meta.url),'utf8');
+ const deploy=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const suspend=backend.indexOf("tool(host,'service','suspend-if-review')");
+ const seal=backend.indexOf("tool(host,'candidate-fence','seal-if-review')");
+ const start=backend.indexOf("writeRecord('started',true,null)");
+ assert.ok(suspend>=0&&seal>suspend&&start>seal,'安装开始前须完成跨重启禁用与旧候选封存');
+ const apply=deploy.indexOf('phone_transaction_tool xian-m4 service apply');
+ assert.ok(apply>0);
+ assert.match(deploy.slice(Math.max(0,apply-300),apply),/\[\[ "\$FAILED" == 0 \]\] \|\| exit 1/,
+              '任一M4 payload、input pair 或 controller 安装失败，不能启动新daemon');
+});
 test('自洽重算plan与receipt也不能伪造未绑定来源、版本、漏项或malformed集合',async()=>{
  const {targetDefinitions}=await import('../deployment-targets.mjs');
  for(const [label,mutate]of [

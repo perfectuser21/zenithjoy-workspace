@@ -97,6 +97,57 @@ def check_serial(root, serial):
     return {'serial': serial, 'state': 'free', 'migration': 'verified'}
 
 
+def verify_review(old, durable, guards_held=False):
+    """在旧、新 guard 下核代码安装所需的双根原件；不解除任何 owner。"""
+    old, durable = Path(old), Path(durable)
+    require(old.is_absolute() and old.is_dir() and not old.is_symlink(), 'legacy root unavailable')
+    marker = verify(durable)
+    require(marker['legacy_root'] == str(old), 'migration source changed')
+    require(type(marker.get('entries')) is int and marker['entries'] > 0 and
+            type(marker.get('review_owners')) is int and marker['review_owners'] > 0,
+            'migration review inventory missing')
+    legacy_guards = sorted(old.glob('*.guard'))
+    require(legacy_guards, 'legacy guards missing')
+    require({p.name for p in legacy_guards} == {p.name for p in durable.glob('*.guard')},
+            'guard set changed')
+    descriptors = []
+    try:
+        if not guards_held:
+            for path in sorted([*legacy_guards, *(durable / p.name for p in legacy_guards)]):
+                fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+                descriptors.append((fd, path))
+                require(stat.S_ISREG(os.fstat(fd).st_mode), 'guard not regular')
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise ValueError('PHONE_LOCK_ROOT_UNSAFE: guard busy') from None
+        before = inventory(old)
+        copied = [item for item in inventory(durable) if item[0] != MARKER]
+        require(before == copied and len(before) == marker['entries'], 'dual root inventory changed')
+        source = hashlib.sha256(json.dumps(before, separators=(',', ':')).encode()).hexdigest()
+        require(source == marker['source_sha256'], 'migration source digest changed')
+        owners = sorted(old.glob('*.lock'))
+        require(len(owners) == marker['review_owners'] and owners, 'review owner set changed')
+        for owner in owners:
+            require(owner.is_dir() and not owner.is_symlink() and
+                    (old / (owner.stem + '.guard')).is_file(), 'review owner guard missing')
+            owner_bytes = regular(owner / 'owner')
+            require(owner_bytes == regular(owner / 'standalone_review_required'),
+                    'legacy review owner changed')
+            require(regular(durable / owner.name / 'owner') == owner_bytes and
+                    regular(durable / owner.name / 'standalone_review_required') == owner_bytes,
+                    'persistent review owner changed')
+        for fd, path in descriptors:
+            info, named = os.fstat(fd), path.lstat()
+            require(stat.S_ISREG(named.st_mode) and (info.st_dev, info.st_ino) == (named.st_dev, named.st_ino),
+                    'guard inode changed')
+        require(inventory(old) == before, 'legacy root changed during verification')
+        return {'verified': True, 'review_owners': len(owners), 'entries': len(before)}
+    finally:
+        for fd, _ in descriptors:
+            os.close(fd)
+
+
 def migrate(old, durable):
     old, durable = Path(old), Path(durable)
     require(old.is_absolute() and old.is_dir() and not old.is_symlink(), 'legacy root unavailable')
@@ -183,8 +234,10 @@ if __name__ == '__main__':
             print(json.dumps(check_serial(sys.argv[2], sys.argv[3]), sort_keys=True))
         elif len(sys.argv) == 4 and sys.argv[1] == 'migrate':
             print(json.dumps(migrate(sys.argv[2], sys.argv[3]), sort_keys=True))
+        elif len(sys.argv) == 4 and sys.argv[1] == 'verify-review':
+            print(json.dumps(verify_review(sys.argv[2], sys.argv[3]), sort_keys=True))
         else:
-            raise ValueError('usage: phone-lock-root.py verify-root ROOT | verify-production | migrate-production | verify ROOT | check-serial ROOT SERIAL | migrate OLD_ROOT DURABLE_ROOT')
+            raise ValueError('usage: phone-lock-root.py verify-root ROOT | verify-production | migrate-production | verify ROOT | check-serial ROOT SERIAL | migrate OLD_ROOT DURABLE_ROOT | verify-review OLD_ROOT DURABLE_ROOT')
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(2)

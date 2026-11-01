@@ -99,6 +99,27 @@ test('受控迁移完整保留 review、一次性 claim 和 orphan 历史；重�
  assert.notEqual(invoke('lock-acquire-new','another-run').status,0);
  assert.equal(c.actions(),'');
 });
+test('代码安装准入逐字复核旧根与持久根，旧 claim 或 review 漂移即拒绝',t=>{
+ const c=setup(t),old=join(c.dir,'tmp','locks'),durable=join(realpathSync(c.dir),'durable-phone-locks');
+ mkdirSync(c.lock,{recursive:true});
+ for(const name of ['owner','standalone_review_required'])writeFileSync(join(c.lock,name),'frozen-run\n');
+ writeFileSync(join(c.lock,'acquired_at'),'1\n');
+ writeFileSync(join(old,'SER1.guard'),'');
+ mkdirSync(join(old,'standalone-claims','SER1'),{recursive:true});
+ writeFileSync(join(old,'standalone-claims','SER1','frozen-run'),'frozen-run\n');
+ mkdirSync(join(old,'.orphan-quarantine-old'));
+ writeFileSync(join(old,'.orphan-quarantine-old','owner'),'earlier-run\n');
+ const run=(...args)=>spawnSync(python,[rootScript,...args],{encoding:'utf8'});
+ assert.equal(run('migrate',old,durable).status,0);
+ assert.equal(run('verify-review',old,durable).status,0,'精确原件应可准入代码安装');
+ writeFileSync(join(old,'standalone-claims','SER1','frozen-run'),'changed\n');
+ assert.notEqual(run('verify-review',old,durable).status,0,'claim 漂移必须阻断');
+ writeFileSync(join(old,'standalone-claims','SER1','frozen-run'),'frozen-run\n');
+ writeFileSync(join(durable,'SER1.lock','standalone_review_required'),'wrong-owner\n');
+ assert.notEqual(run('verify-review',old,durable).status,0,'持久 review 漂移必须阻断');
+ assert.equal(readFileSync(join(old,'SER1.lock','owner'),'utf8'),'frozen-run\n');
+ assert.equal(c.actions(),'');
+});
 test('迁移拒绝活锁、缺 review 或持有中的旧 guard，不发布半成品持久根',t=>{
  const c=setup(t),old=join(c.dir,'tmp','locks'),durable=join(realpathSync(c.dir),'durable-phone-locks');
  mkdirSync(c.lock,{recursive:true});writeFileSync(join(c.lock,'owner'),'active-run\n');

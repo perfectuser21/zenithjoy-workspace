@@ -19,6 +19,9 @@ spec = importlib.util.spec_from_file_location('phone_transaction', Path(__file__
 transaction = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(transaction)
 require = transaction.require
+root_spec = importlib.util.spec_from_file_location('phone_lock_root', Path(__file__).with_name('phone-lock-root.py'))
+lock_root_tool = importlib.util.module_from_spec(root_spec)
+root_spec.loader.exec_module(lock_root_tool)
 
 
 def canonical_path(path):
@@ -49,9 +52,32 @@ def context(home, tx, registry, root):
         require(re.fullmatch('[A-Za-z0-9_-]{1,80}', serial), 'invalid registry serial')
         serials.append(serial)
     require(serials and len(set(serials)) == len(serials), 'registry serials empty/repeated')
+    marker = root / lock_root_tool.MARKER
+    migration = lock_root_tool.verify(root) if marker.exists() else None
+    if migration:
+        require(type(migration.get('review_owners')) is int and migration['review_owners'] >= 0,
+                'migration review count invalid')
+    review_mode = bool(migration and migration['review_owners'])
+    if review_mode:
+        expected_guards = {serial + '.guard' for serial in serials}
+        require({path.name for path in root.glob('*.guard')} == expected_guards and
+                {path.name for path in Path(migration['legacy_root']).glob('*.guard')} == expected_guards,
+                'review guard set differs from registry')
+    guard_identity = {}
+    if review_mode:
+        for parent in (root, Path(migration['legacy_root'])):
+            for serial in serials:
+                path = canonical_path(parent / (serial + '.guard'))
+                info = path.lstat()
+                require(stat.S_ISREG(info.st_mode), 'review guard not regular')
+                guard_identity[str(path)] = [info.st_dev, info.st_ino]
     return {'transaction': tx, 'owner': 'phone-deploy-' + tx,
             'registry': str(registry), 'registry_sha256': hashlib.sha256(raw).hexdigest(),
-            'lock_root': str(root), 'serials': sorted(serials)}
+            'lock_root': str(root), 'serials': sorted(serials),
+            'mode': 'review-preserve' if review_mode else 'exclusive',
+            'legacy_root': migration['legacy_root'] if review_mode else None,
+            'migration_sha256': migration['source_sha256'] if review_mode else None,
+            'guard_identity': guard_identity}
 
 
 @contextmanager
@@ -59,8 +85,12 @@ def guards(record):
     root = canonical_path(record['lock_root'])
     descriptors = []
     try:
-        for serial in record['serials']:
-            path = canonical_path(root / (serial + '.guard'))
+        paths = [root / (serial + '.guard') for serial in record['serials']]
+        if record['mode'] == 'review-preserve':
+            old = canonical_path(record['legacy_root'])
+            paths.extend(old / (serial + '.guard') for serial in record['serials'])
+        for path in sorted(paths):
+            path = canonical_path(path)
             fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
             descriptors.append((fd, path))
             require(stat.S_ISREG(os.fstat(fd).st_mode), 'regular device guard required')
@@ -73,6 +103,9 @@ def guards(record):
                 info, named = os.fstat(fd), path.lstat()
                 require(stat.S_ISREG(named.st_mode) and (info.st_dev, info.st_ino) == (named.st_dev, named.st_ino),
                         'device guard replaced')
+                if record['mode'] == 'review-preserve':
+                    require([info.st_dev, info.st_ino] == record['guard_identity'][str(path)],
+                            'review guard identity changed')
         check()
         yield check
     finally:
@@ -147,11 +180,20 @@ def acquire(home, tx, registry, root):
     with guards(current) as check:
         if intent.exists():
             read_intent(home, tx, current)
-            check_owners(current, allow_missing=True)
-            clean_retired(current)
+            if current['mode'] == 'review-preserve':
+                lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+            else:
+                check_owners(current, allow_missing=True)
+                clean_retired(current)
         else:
-            require(not list(Path(root).glob('*.lock')), 'device owner exists; deployment cannot reap')
+            if current['mode'] == 'review-preserve':
+                lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+            else:
+                require(not list(Path(root).glob('*.lock')), 'device owner exists; deployment cannot reap')
             transaction.atomic_bytes(intent, transaction.canonical(current))
+        if current['mode'] == 'review-preserve':
+            check()
+            return current
         for serial in current['serials']:
             path = Path(root) / (serial + '.lock')
             if path.exists():
@@ -175,10 +217,18 @@ def acquire(home, tx, registry, root):
     return current
 
 
-def verify(home, tx, registry, root):
+def verify(home, tx, registry, root, guards_held=False):
     current = context(home, tx, registry, root)
     read_intent(home, tx, current)
-    check_owners(current)
+    if current['mode'] == 'review-preserve':
+        if guards_held:
+            lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+        else:
+            with guards(current) as check:
+                lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+                check()
+    else:
+        check_owners(current)
     return current
 
 
@@ -186,6 +236,10 @@ def release(home, tx, registry, root):
     current = context(home, tx, registry, root)
     read_intent(home, tx, current)
     with guards(current) as check:
+        if current['mode'] == 'review-preserve':
+            lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+            check()
+            return {'released': False, 'review_preserved': True, 'transaction': tx}
         # Validate all owners first; an unrelated owner never causes partial unlocking.
         check_owners(current, allow_missing=True)
         clean_retired(current)
@@ -212,7 +266,10 @@ if __name__ == '__main__':
         root = home / '.local/share/zenithjoy/phone-locks'
         require(action in ('acquire', 'verify', 'release'), 'invalid maintenance action')
         result = globals()[action](home, tx, registry, root)
-        print(json.dumps(result))
+        if action == 'release':
+            print(json.dumps(result))
+        else:
+            print(json.dumps({'transaction':tx, 'mode':result['mode'], 'verified':True}))
     except (OSError, ValueError, KeyError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

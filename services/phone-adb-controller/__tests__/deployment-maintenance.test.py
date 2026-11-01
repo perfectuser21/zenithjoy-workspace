@@ -1,12 +1,16 @@
 """真实flock与原手机owner目录，部署不能回收正在使用的设备。"""
 import fcntl
+import base64
 import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import zlib
 
 SERVICE = Path(__file__).resolve().parents[1]
 
@@ -136,6 +140,109 @@ class MaintenanceTest(unittest.TestCase):
             self.module.release(self.home, 't1', self.registry, self.locks)
         self.assertEqual(len(list(self.locks.glob('*.lock'))), 2)
         self.assertEqual((retired / 'owner').read_text(), 'someone-else')
+
+    def test_code_only_review_admission_preserves_old_and_durable_owners(self):
+        spec = importlib.util.spec_from_file_location('phone_lock_root', SERVICE / 'phone-lock-root.py')
+        root_tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(root_tool)
+        old = self.home / 'old-locks'
+        old.mkdir()
+        for serial in ['SERIAL1', 'SERIAL2']:
+            (old / (serial + '.guard')).touch()
+        review = old / 'SERIAL1.lock'
+        review.mkdir()
+        for name, value in [('owner', 'frozen-run\n'), ('standalone_review_required', 'frozen-run\n'),
+                            ('acquired_at', '1\n')]:
+            (review / name).write_text(value)
+        claim = old / 'standalone-claims/SERIAL1/frozen-run'
+        claim.parent.mkdir(parents=True)
+        claim.write_text('frozen-run\n')
+        orphan = old / '.orphan-quarantine-old'
+        orphan.mkdir()
+        (orphan / 'owner').write_text('prior-run\n')
+        durable = self.home / 'durable-locks'
+        root_tool.migrate(old, durable)
+        record = self.module.acquire(self.home, 't1', self.registry, durable)
+        self.assertEqual(record['mode'], 'review-preserve')
+        self.module.verify(self.home, 't1', self.registry, durable)
+        spec = importlib.util.spec_from_file_location('input_release', SERVICE / 'input-runtime-release.py')
+        input_tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(input_tool)
+        with input_tool.device_barrier(self.registry, durable, maintenance=(self.home, 't1')) as verify_input:
+            verify_input()
+        self.module.release(self.home, 't1', self.registry, durable)
+        self.assertEqual((review / 'owner').read_text(), 'frozen-run\n')
+        self.assertEqual((durable / 'SERIAL1.lock/owner').read_text(), 'frozen-run\n')
+        self.assertFalse((durable / 'SERIAL2.lock').exists())
+        self.assertEqual(claim.read_text(), 'frozen-run\n')
+        self.assertEqual((orphan / 'owner').read_text(), 'prior-run\n')
+        claim.write_text('changed\n')
+        with self.assertRaisesRegex(ValueError, 'inventory|digest|review'):
+            self.module.verify(self.home, 't1', self.registry, durable)
+        claim.write_text('frozen-run\n')
+        guard = durable / 'SERIAL1.guard'
+        guard.unlink()
+        guard.touch()
+        with self.assertRaisesRegex(ValueError, 'guard|identity'):
+            self.module.verify(self.home, 't1', self.registry, durable)
+
+    def test_frozen_candidate_is_atomically_sealed_and_stays_sealed_after_rollback(self):
+        source = SERVICE / 'deployment-candidate-fence.py'
+        spec = importlib.util.spec_from_file_location('candidate_fence', source)
+        fence = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fence)
+        root = self.home / '.local/share/zenithjoy/phone-candidate-runs'
+        packages = self.home / '.local/share/zenithjoy/phone-candidates'
+        package = packages / ('a' * 40)
+        package.mkdir(parents=True)
+        (package / 'run.sh').write_text('old launcher')
+        frozen = root / ('a' * 40) / 'ledger' / 'old-run' / 'runtime'
+        frozen.mkdir(parents=True)
+        (frozen / 'douyin-phone-adb').write_text('old executable bytes')
+        record = fence.seal(self.home, 't1')
+        self.assertTrue(root.is_file(), 'frozen runtime directory must be replaced by a blocker file')
+        self.assertTrue(packages.is_file(), 'old candidate directory must be replaced by a blocker file')
+        self.assertEqual(packages.read_text(), 'PHONE_CANDIDATE_FENCE t1\n')
+        self.assertEqual((Path(record['roots'][1]['sealed_path']) / ('a' * 40) / 'ledger' / 'old-run' /
+                          'runtime/douyin-phone-adb').read_text(), 'old executable bytes')
+        self.assertEqual((Path(record['roots'][0]['sealed_path']) / ('a' * 40) / 'run.sh').read_text(),
+                         'old launcher')
+        encoded = base64.b64encode(zlib.compress(json.dumps({'sha':'a' * 40}).encode())).decode()
+        old_installer = subprocess.run([sys.executable, str(SERVICE / 'deployment-candidate-remote.py'),
+                                        'presence', encoded], env={**os.environ, 'HOME':str(self.home)},
+                                       capture_output=True, text=True)
+        self.assertNotEqual(old_installer.returncode, 0,
+                            'old candidate installer must reject blocker as a non-directory')
+        self.assertEqual(fence.verify(self.home, 't1'), record)
+        self.assertEqual(fence.seal(self.home, 't1'), record, 'interrupted seal resumes exact inode')
+        root.unlink()
+        root.mkdir()
+        with self.assertRaisesRegex(ValueError, 'candidate|fence'):
+            fence.verify(self.home, 't1')
+
+    def test_candidate_seal_resumes_after_first_rename_without_reopening_old_entry(self):
+        source = SERVICE / 'deployment-candidate-fence.py'
+        spec = importlib.util.spec_from_file_location('candidate_fence', source)
+        fence = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fence)
+        parent = self.home / '.local/share/zenithjoy'
+        for name in ('phone-candidates', 'phone-candidate-runs'):
+            (parent / name).mkdir(parents=True)
+        original = fence.exchange
+        calls = [0]
+        def crash_second(*args):
+            calls[0] += 1
+            if calls[0] == 2:
+                raise OSError('process lost between atomic swaps')
+            return original(*args)
+        with patch.object(fence, 'exchange', crash_second):
+            with self.assertRaisesRegex(OSError, 'process lost'):
+                fence.seal(self.home, 't1')
+        self.assertTrue((parent / 'phone-candidates').is_file())
+        self.assertTrue((parent / 'phone-candidate-runs').exists())
+        fence.seal(self.home, 't1')
+        self.assertTrue((parent / 'phone-candidate-runs').is_file())
+        self.assertEqual(fence.verify(self.home, 't1')['state'], 'sealed')
 
 
 if __name__ == '__main__':

@@ -77,6 +77,51 @@ def change(path, direction, get, set_file, set_loaded):
     return record
 
 
+def suspend_review(path, get, set_disabled, set_loaded):
+    """旧 review 未解时先持久禁用系统 daemon，再停止当前实例。"""
+    record = read(path)
+    current = get()
+    if not current['disabled']:
+        set_disabled(True)
+        require(get()['disabled'], 'service persistent disable readback failed')
+    if get()['loaded']:
+        set_loaded(False)
+        require(not get()['loaded'], 'service bootout readback failed')
+    require(get()['disabled'] and not get()['loaded'], 'review service suspension failed')
+    require(get()['file'] in (record['before']['file'], record['after']['file']),
+            'root plist writer conflict')
+    return record
+
+
+def change_review(path, direction, get, set_file, set_disabled, set_loaded):
+    """失败回退只回文件，不重新开启可能仍读旧 tmp 锁的 daemon。"""
+    require(direction in ('before', 'after'), 'invalid service direction')
+    record = read(path)
+    current = get()
+    if direction == 'before':
+        suspend_review(path, get, set_disabled, set_loaded)
+        wanted = record['before']['file']
+        if get()['file'] != wanted:
+            set_file(get()['file'], wanted)
+        require(get() == {'file':wanted, 'loaded':False, 'disabled':True},
+                'old daemon not safely suspended after restore')
+    else:
+        wanted = record['after']
+        if get() == wanted:
+            return record
+        suspend_review(path, get, set_disabled, set_loaded)
+        if get()['file'] != wanted['file']:
+            set_file(get()['file'], wanted['file'])
+            require(get()['file'] == wanted['file'], 'new root plist readback failed')
+        if get()['disabled'] != wanted['disabled']:
+            set_disabled(wanted['disabled'])
+            require(get()['disabled'] == wanted['disabled'], 'service enable readback failed')
+        if get()['loaded'] != wanted['loaded']:
+            set_loaded(wanted['loaded'])
+        require(get() == wanted, 'new service final readback failed')
+    return record
+
+
 def file_state():
     for parent in (PLIST, *PLIST.parents):
         require(not parent.is_symlink(), 'root plist symlink rejected')
@@ -144,6 +189,10 @@ def cli_loaded(wanted):
         launch('bootout','system/'+LABEL)
 
 
+def cli_disabled(wanted):
+    launch('disable' if wanted else 'enable', 'system/'+LABEL)
+
+
 if __name__ == '__main__':
     try:
         action = sys.argv[1]
@@ -156,12 +205,30 @@ if __name__ == '__main__':
             tx.owned(home,transaction)
             require(tx.read_transaction(home,transaction)['identity']['target'] == 'xian-m4', 'M4 service only')
             path = tx.transaction_directory(home,transaction)/'service.json'
+            spec = importlib.util.spec_from_file_location('phone_maintenance', Path(__file__).with_name('deployment-maintenance.py'))
+            maintenance = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(maintenance)
+            review = maintenance.verify(home, transaction,
+                                        home/'.config/openclaw/douyin-phone-profiles.tsv',
+                                        home/'.local/share/zenithjoy/phone-locks')['mode'] == 'review-preserve'
             if action == 'prepare':
                 prepare(path,json.load(sys.stdin)['file'],service_state)
+            elif action in ('suspend', 'suspend-if-review'):
+                if review:
+                    suspend_review(path,service_state,cli_disabled,cli_loaded)
+                else:
+                    require(action == 'suspend-if-review', 'review suspension requires exact migrated review owners')
             elif action in ('apply','restore'):
-                change(path,'after' if action == 'apply' else 'before',service_state,cli_file,cli_loaded)
+                if review:
+                    change_review(path,'after' if action == 'apply' else 'before',
+                                  service_state,cli_file,cli_disabled,cli_loaded)
+                else:
+                    change(path,'after' if action == 'apply' else 'before',service_state,cli_file,cli_loaded)
             elif action in ('verify-installed','verify-restored'):
-                require(service_state() == read(path)['after' if action == 'verify-installed' else 'before'], 'service final readback mismatch')
+                expected = read(path)['after' if action == 'verify-installed' else 'before']
+                if review and action == 'verify-restored':
+                    expected = {'file':expected['file'], 'loaded':False, 'disabled':True}
+                require(service_state() == expected, 'service final readback mismatch')
             else:
                 raise ValueError('invalid service action')
         print(json.dumps({'operation':action,'verified':True}))

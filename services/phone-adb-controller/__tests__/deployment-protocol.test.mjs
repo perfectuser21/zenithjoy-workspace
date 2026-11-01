@@ -41,7 +41,8 @@ test('backend rejects drift in every execution helper before guard or remote act
  const sha=git('rev-parse','HEAD');
  for(const name of ['deployment-preflight.mjs','deployment-targets.mjs','deployment-fixed-source.mjs','runtime-definition.mjs',
   'deployment-release.mjs','deployment-business-admission.mjs','company-config-readiness.mjs','company-config-lib.js','line-routes.js',
-  'runtime-host.mjs','runtime-release.mjs','runtime-outbox.mjs','deployment-guard.py','deployment-installed.py','commander/wf-v2-io.py','drift-check.sh']){
+  'runtime-host.mjs','runtime-release.mjs','runtime-outbox.mjs','deployment-guard.py','deployment-installed.py',
+  'deployment-candidate-fence.py','phone-lock-root.py','commander/wf-v2-io.py','drift-check.sh']){
   await t.test(name,async()=>{
    const path=join(folder,name),before=readFileSync(path);
    writeFileSync(path,Buffer.concat([before,Buffer.from('\n# accidental working-copy drift\n')]));

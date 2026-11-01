@@ -329,7 +329,7 @@ for host in xian-m4; do
   # Capture both runtime paths before upload; install compares them under one deployment guard.
   # A new paused/viewport controller is allowed when it carries the same verified input pair.
   _input_stage="$(ssh "$host" 'mktemp -d /tmp/input-runtime-deploy.XXXXXX')"
-  scp -q -p "$D/input-runtime-release.py" "$D/deployment-transaction.py" "$D/deployment-maintenance.py" "$host:$_input_stage/"
+  scp -q -p "$D/input-runtime-release.py" "$D/deployment-transaction.py" "$D/deployment-maintenance.py" "$D/phone-lock-root.py" "$host:$_input_stage/"
   if ssh "$host" "python3 $_input_stage/input-runtime-release.py capture ~/bin-harvest ~/.local/bin > $_input_stage/expected.json" && \
      scp -q -p "$D/douyin-phone-adb" "$D/text-input-focus.py" "$host:$_input_stage/" && \
      ssh "$host" "python3 $_input_stage/input-runtime-release.py install-maintenance $WF_PHONE_TRANSACTION $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv ~/.local/share/zenithjoy/phone-locks ~/bin-harvest ~/.local/bin"; then
@@ -338,7 +338,7 @@ for host in xian-m4; do
     echo "    ❌ input pair rejected (revision/source/CAS/readback); deployment cannot be declared successful"
     FAILED=1
   fi
-  ssh "$host" "rm -f $_input_stage/deployment-transaction.py $_input_stage/deployment-maintenance.py $_input_stage/input-runtime-release.py $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json; rmdir $_input_stage" || true
+  ssh "$host" "rm -f $_input_stage/deployment-transaction.py $_input_stage/deployment-maintenance.py $_input_stage/phone-lock-root.py $_input_stage/input-runtime-release.py $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json; rmdir $_input_stage" || true
   for f in "${DEVICE_CTL_FILES[@]}"; do
     [[ "$f" != "douyin-phone-adb" && "$f" != "text-input-focus.py" ]] || continue
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
@@ -373,6 +373,9 @@ for host in xian-m4; do
 done
 
 deploy_commander
+
+# review 事务在此之前已持久禁用旧 daemon；任何文件失败都不得启动新 daemon。
+[[ "$FAILED" == 0 ]] || exit 1
 
 if ! phone_transaction_tool xian-m4 service apply; then
   echo "❌ PHONE_RECOVERY 开机自检安装失败"; FAILED=1
