@@ -40,13 +40,25 @@ def cleanup_owned_media(config):
     # An ID/path snapshot cannot prove an Android operation has terminated.
     # Unknown replies retain every artifact and both locks until separate recovery.
     if any(x.get('moveIntent') and not x.get('moveCommandFinished') for x in items): raise ValueError('MOVE_TERMINATION_PROOF_REQUIRED')
+    if any(x.get('deleteIntent') and not x.get('deleteCommandFinished') for x in items): raise ValueError('DELETE_TERMINATION_PROOF_REQUIRED')
     observations = [(item, observe_owned_location(config, item)) for item in items]
     for item, path in observations:
+        if observe_owned_location(config, item) != path: raise ValueError('MEDIA_CHANGED_BEFORE_DELETE')
         if path is not None:
             item['phonePath'] = path
             item['deleteIntent'] = {'mediaId': item['mediaId'], 'owner': config['owner'], 'paths': owned_locations(config, item)}
+            item['deleteCommandFinished'] = False
             store(Path(config['remoteRoot']) / 'config.json', config)
-            adb(config, ['shell', 'content', 'delete', '--uri', 'content://media/external/images/media/' + item['mediaId']])
+            predicate = "_id=" + item['mediaId'] + " AND _data='" + path.replace('/sdcard/', '/storage/emulated/0/', 1) + "'"
+            try:
+                adb(config, ['shell', 'content', 'delete', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--where', predicate])
+            except Exception as error:
+                if not getattr(error, 'remoteUnknown', False):
+                    item['deleteCommandFinished'] = True
+                    store(Path(config['remoteRoot']) / 'config.json', config)
+                raise
+            item['deleteCommandFinished'] = True
+            store(Path(config['remoteRoot']) / 'config.json', config)
             if observe_owned_location(config, item) is not None: raise ValueError('PHONE_MEDIA_DELETE_UNCONFIRMED')
         item['phoneRemoved'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
