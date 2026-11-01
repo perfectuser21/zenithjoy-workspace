@@ -28,7 +28,11 @@ def organize_owned_album(config):
         item['moveIntent'] = {'source': item['phonePath'], 'destination': destination, 'mediaId': item['mediaId']}
         store(Path(config['remoteRoot']) / 'config.json', config)
         try:
-            result = adb(config, ['shell', 'content', 'update', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--bind', 'relative_path:s:' + relative]).stdout.decode().strip()
+            reply = adb(config, ['shell', 'content', 'update', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--bind', 'relative_path:s:' + relative])
+            item['moveReceipt'] = {'stdoutHex': reply.stdout.hex(), 'returncode': reply.returncode, 'remoteExitConfirmed': getattr(reply, 'remoteExitConfirmed', False)}
+            if reply.returncode != 0 or not item['moveReceipt']['remoteExitConfirmed']:
+                error = ValueError('MOVE_TERMINATION_PROOF_REQUIRED'); error.remoteUnknown = True
+                raise error
         except Exception as error:
             if not getattr(error, 'remoteUnknown', False):
                 item['moveCommandFinished'] = True
@@ -36,7 +40,7 @@ def organize_owned_album(config):
             raise
         item['moveCommandFinished'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
-        if result != 'Updated 1 rows.': raise ValueError('ALBUM_MOVE_RECEIPT_UNCONFIRMED')
+        if reply.stdout.strip() not in {b'', b'Updated 1 rows.'}: raise ValueError('ALBUM_MOVE_RECEIPT_UNCONFIRMED')
         raw = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--projection', '_id:_data']).stdout.decode()
         expected = '/storage/emulated/0/DCIM/' + album + '/' + item['name']
         matches = re.findall(r'_id=(\d+), _data=([^\r\n]+)', raw)
