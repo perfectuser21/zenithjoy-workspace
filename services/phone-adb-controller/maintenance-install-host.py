@@ -48,7 +48,7 @@ def sha(raw):
 
 
 def command(argv, *, input=None, check=True, timeout=30):
-    return subprocess.run(argv, input=input, text=isinstance(input, str),
+    return subprocess.run(argv, input=input, text=True,
                           capture_output=True, check=check, timeout=timeout)
 
 
