@@ -115,6 +115,10 @@ class SafetyHostTests(unittest.TestCase):
             self.plist.write_bytes(base64.b64decode(data['new_plist_b64']))
             return types.SimpleNamespace(stdout='')
         if 'status' in args and '--config' in args:
+            script = plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1]
+            if '/adb-host-stable/' in script and self.state.get('transient_stable_status_failures', 0):
+                self.state['transient_stable_status_failures'] -= 1
+                raise subprocess.CalledProcessError(2, args)
             return types.SimpleNamespace(stdout=json.dumps({'host_id': 'm4', 'endpoint': 'tcp:127.0.0.1:5037',
                                                               'port': 5037, 'devices': [{'serial': 'SERIAL1', 'state': 'device'}]}))
         raise AssertionError(args)
@@ -222,6 +226,26 @@ class SafetyHostTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'RESTORE_ADB_FAILED'):
             host.run()
         self.assertNotIn('harvest-cron.sh', self.state['cron'])
+
+    def test_transient_adb_status_after_bootstrap_retries_before_success(self):
+        self.state['transient_stable_status_failures'] = 1
+        self.state['fail_second_seal'] = False
+        host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
+        result = host.run()
+        self.assertTrue(result['secured'])
+        self.assertEqual(host.journal['completed'], list(host_module.sequence.STEPS))
+        self.assertEqual(self.state['transient_stable_status_failures'], 0)
+
+    def test_persistent_adb_status_failure_keeps_cron_closed_and_old_service(self):
+        self.state['transient_stable_status_failures'] = 100
+        self.state['fail_second_seal'] = False
+        host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
+        with patch.object(host_module.time, 'sleep', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'maintenance-only step not independently verified: relocate_adb'):
+                host.run()
+        self.assertEqual(host.journal['completed'], ['close_review_cron'])
+        self.assertNotIn('harvest-cron.sh', self.state['cron'])
+        self.assertIn('/phone-candidates/', plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1])
 
     def test_root_writer_rejects_wrong_plist_permissions_before_mutation(self):
         host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)

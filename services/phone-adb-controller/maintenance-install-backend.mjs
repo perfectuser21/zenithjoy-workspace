@@ -3,18 +3,30 @@
 import {execFileSync} from 'node:child_process';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {stageTools,deploymentTransport} from './deployment-transport.mjs';
+import {stageTools,deploymentTransport,TOOLS} from './deployment-transport.mjs';
+import {readDeploymentSource} from './deployment-fixed-source.mjs';
 import {inheritedDeploymentStdio} from './deployment-protocol.mjs';
 import {digest} from './runtime-definition.mjs';
 const HERE=dirname(fileURLToPath(import.meta.url));
 const need=(value,message)=>{if(!value)throw Error('安全安装: '+message);};
+const RECOVERY_SOURCE='3fe8783b021fd9fa1a8cd4242d79a3c703c6c21b';
 export const guardChannel=(action,{env=process.env,exec=execFileSync}={})=>
  exec('python3',[join(HERE,'deployment-guard.py'),action],
   {stdio:inheritedDeploymentStdio(env),timeout:120000});
 
 export async function runMaintenanceInstall({root,sha,attemptKey,request,candidate,action='install',transaction,
+ toolRoot=root,toolSha=sha,readSourceFn=readDeploymentSource,
  guardFn=guardChannel,stageToolsFn=stageTools,transportFn=deploymentTransport}){
  need(/^[a-f0-9]{40}$/.test(sha)&&['install','recover'].includes(action),'固定来源或操作无效');
+ need(/^[a-f0-9]{40}$/.test(toolSha),'工具来源无效');
+ if(toolSha!==sha){
+  need(action==='recover'&&sha===RECOVERY_SOURCE,'跨来源工具仅限原3fe事务恢复');
+  const changed=TOOLS.filter(name=>{
+   const path='services/phone-adb-controller/'+name;
+   return !readSourceFn(root,sha,path).equals(readSourceFn(toolRoot,toolSha,path));
+  });
+  need(changed.length===1&&changed[0]==='maintenance-install-host.py','恢复工具闭包变化超出ADB健康修复');
+ }
  if(action==='install'){
   need(candidate?.source_commit===sha&&candidate.environment===`staging:${sha}`&&candidate.business_runtime_status==='not_evaluated',
    '候选来源不符');
@@ -29,8 +41,8 @@ export async function runMaintenanceInstall({root,sha,attemptKey,request,candida
  transaction=transaction||'phone-safety-'+sha.slice(0,24);
  need(transaction==='phone-safety-'+sha.slice(0,24),'安全事务ID与来源不符');
  guardFn('check');
- stageToolsFn(root,sha);
- const transport=transportFn(sha);
+ stageToolsFn(toolRoot,toolSha);
+ const transport=transportFn(toolSha);
  guardFn('admit');
  let began=false;
  try{

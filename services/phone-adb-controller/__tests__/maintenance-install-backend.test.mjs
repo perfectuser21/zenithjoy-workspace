@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runMaintenanceInstall,guardChannel} from '../maintenance-install-backend.mjs';
+import {TOOLS} from '../deployment-transport.mjs';
 
 const sha='a'.repeat(40);
 const uuid=n=>`${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
@@ -26,6 +27,7 @@ test('Workflow 安全模式通过租锁 wrapper 进入 prepare，常规候选路
  assert.match(source,/DEPLOY_ENTRY=\(node "\$TOOL_CHECKOUT\/services\/phone-adb-controller\/deployment-prepare[.]mjs"\)/);
  assert.match(source,/if \[\[ "\$DEPLOY_MODE" == maintenance-install \|\| "\$DEPLOY_MODE" == maintenance-recover \]\]; then\s+DEPLOY_ENTRY=\(python3 "\$TOOL_CHECKOUT\/services\/phone-adb-controller\/deployment-guard[.]py" "\$\{DEPLOY_ENTRY\[@\]\}"\)/);
  assert.match(source,/DEPLOY_LOG=\$\("\$\{DEPLOY_ENTRY\[@\]\}"/);
+ assert.match(source,/export WF_PHONE_TOOL_SHA="\$TOOL_SHA"/);
 });
 
 test('安全-only 双机候选门禁后才调用唯一 M4 事务，且不走正式部署',async()=>{
@@ -60,4 +62,32 @@ test('远端结果未知时不完成部署 guard，原事务保持可恢复',asy
   guardFn:action=>actions.push(action),stageToolsFn:()=>actions.push('stage'),
   transportFn:()=>({call:()=>{throw Error('M4 disconnected');}})}),/M4 disconnected/);
  assert.deepEqual(actions,['check','stage','admit']);
+});
+
+test('旧固定事务仅用受审新工具闭包恢复，事务和原来源保持不变',async()=>{
+ const sourceSha='3fe8783b021fd9fa1a8cd4242d79a3c703c6c21b',toolSha='b'.repeat(40);
+ const actions=[],tx='phone-safety-'+sourceSha.slice(0,24);
+ const result=await runMaintenanceInstall({root:'/old',sha:sourceSha,toolRoot:'/new',toolSha,
+  action:'recover',transaction:tx,request,
+  readSourceFn:(_root,_sha,path)=>Buffer.from(path.endsWith('/maintenance-install-host.py')&&_sha===toolSha?'repaired':'original'),
+  guardFn:action=>actions.push(action),stageToolsFn:(root,sha)=>actions.push(['stage',root,sha]),
+  transportFn:sha=>{actions.push(['transport',sha]);return{call:(host,name,action,transaction,input)=>{
+   assert.deepEqual([host,name,action,transaction,input],['xian-m4','maintenance-install-host.py','recover',tx,{source_commit:sourceSha}]);
+   return{transaction:tx,source_commit:sourceSha,secured:true};}};}});
+ assert.equal(TOOLS.includes('maintenance-install-host.py'),true);
+ assert.deepEqual(actions,['check',['stage','/new',toolSha],['transport',toolSha],'admit','complete']);
+ assert.equal(result.source_commit,sourceSha);
+});
+
+test('跨来源恢复若非原3fe事务或其他工具也变化，任何远端动作前拒绝',async()=>{
+ const sourceSha='3fe8783b021fd9fa1a8cd4242d79a3c703c6c21b',toolSha='b'.repeat(40);
+ for(const [sha,changed] of [['a'.repeat(40),false],[sourceSha,true]]){
+  const actions=[];
+  await assert.rejects(runMaintenanceInstall({root:'/old',sha,toolRoot:'/new',toolSha,
+   action:'recover',transaction:'phone-safety-'+sha.slice(0,24),request,
+   readSourceFn:(_root,_sha,path)=>Buffer.from(_sha===toolSha&&
+    (path.endsWith('/maintenance-install-host.py')||(changed&&path.endsWith('/deployment-service.py')))?'changed':'original'),
+   guardFn:action=>actions.push(action),stageToolsFn:()=>actions.push('stage'),transportFn:()=>{throw Error('transport must not run');}}),/工具|来源/);
+  assert.deepEqual(actions,[]);
+ }
 });
