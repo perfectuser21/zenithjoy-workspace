@@ -51,10 +51,12 @@ def organize_owned_album(config):
         item['albumVerified'] = True
         item['moveResolved'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
-    native = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media', '--projection', '_id', '--where', "relative_path='" + relative + "'"]).stdout.decode()
+    native = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media', '--projection', '_id:bucket_id:bucket_display_name:relative_path:_data:_display_name', '--where', "relative_path='" + relative + "'"]).stdout.decode()
     if sorted(re.findall(r'_id=(\d+)', native)) != sorted(x['mediaId'] for x in items): raise ValueError('ALBUM_MEMBERSHIP_CONFLICT')
     files = adb(config, ['shell', 'ls', '-A', '--', path]).stdout.decode().splitlines()
     if sorted(files) != sorted(x['name'] for x in items): raise ValueError('ALBUM_FILES_CONFLICT')
+    config['phoneAlbum']['nativeMetadataRaw'] = native
+    config['phoneAlbum']['bucketMetadataValidated'] = False
     config['phoneAlbum']['verified'] = True
     store(Path(config['remoteRoot']) / 'config.json', config)
     return {'album': config['phoneAlbum'], 'media': items}

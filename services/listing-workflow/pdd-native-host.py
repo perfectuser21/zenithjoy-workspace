@@ -1,5 +1,43 @@
 # Bundled into the immutable per-run host namespace; no generic shell/tap RPC.
 
+def refresh_media_identity(config):
+    return [{k:x.get(k) for k in ('mediaId','sha256','phonePath')} for x in config['ownedMedia']]
+
+
+def begin_gallery_refresh(config, job_id):
+    if config.get('galleryRefresh'): raise ValueError('GALLERY_REFRESH_ALREADY_ATTEMPTED')
+    draft=config.get('draft') or {}
+    if len(config.get('galleryEntries',[]))!=1 or not config.get('limitedGrant',{}).get('confirmIntent') or not config.get('phoneAlbum',{}).get('verified') or config.get('gallerySelection') or config.get('galleryUploadIntent') or not draft.get('owned') or draft.get('owner')!=config['owner']: raise ValueError('GALLERY_REFRESH_UNSAFE_STATE')
+    config['galleryRefresh']={'intentJobId':job_id,'owner':config['owner'],'formWindow':draft['formWindow'],'values':{'title':'','groupPrice':'','inventory':'1',**draft['values']},'media':refresh_media_identity(config),'startedAt':time.time(),'status':'exiting'}
+    store(Path(config['remoteRoot'])/'config.json',config)
+
+
+def observe_gallery_refresh(config, role, screen, tree):
+    refresh=config.get('galleryRefresh')
+    if not refresh: return
+    if refresh.get('owner')!=config['owner'] or refresh['media']!=refresh_media_identity(config): raise ValueError('GALLERY_REFRESH_MEDIA_CHANGED')
+    if role in {'form','source'} and not refresh.get('entryJobId'):
+        draft=config.get('draft') or {}
+        if not draft.get('owned') or draft.get('owner')!=config['owner'] or config['lastForegroundRaw']!=refresh['formWindow'] or any(screen.field(k)['value']!=v for k,v in refresh['values'].items()): raise ValueError('GALLERY_REFRESH_FORM_CHANGED')
+        if role=='form': refresh['formReadback']={'path':tree['path'],'at':time.time()}
+        elif refresh.get('formReadback'): refresh['sourceReadback']={'path':tree['path'],'at':time.time()}
+    if role=='gallery' and refresh.get('entryJobId'): refresh['status']='reentered-readback'
+    store(Path(config['remoteRoot'])/'config.json',config)
+
+
+def record_gallery_entry(config, job_id):
+    entries=config.setdefault('galleryEntries',[])
+    if len(entries)>=2: raise ValueError('GALLERY_ENTRY_LIMIT')
+    if entries:
+        refresh=config.get('galleryRefresh') or {}
+        if not refresh.get('formReadback') or not refresh.get('sourceReadback') or refresh.get('entryJobId'): raise ValueError('GALLERY_REFRESH_READBACK_REQUIRED')
+        if refresh.get('owner')!=config['owner'] or refresh['media']!=refresh_media_identity(config): raise ValueError('GALLERY_REFRESH_MEDIA_CHANGED')
+        phone_readback(config)
+        refresh.update(entryJobId=job_id,status='reentering')
+    entries.append({'jobId':job_id,'at':time.time()})
+    store(Path(config['remoteRoot'])/'config.json',config)
+
+
 def control_ok(config, command, args, job_id, native_tap=False):
     result = execute_controller(config, command, args, job_id, native_tap=native_tap)
     if result.get('error'):
@@ -121,6 +159,7 @@ def observe(config, request):
     config['lastFrame'] = {'screenSha256': png['sha256'], 'xmlSha256': tree['sha256'], 'at': time.time(), 'package': package, 'windowRaw': config['lastForegroundRaw'], 'evidence': [expected, tree['path']]}
     role=context_role(package,config['lastForegroundRaw'],screen)
     remember_context(config,role,config['lastForegroundRaw'],tree['path'])
+    observe_gallery_refresh(config,role,screen,tree)
     status_bar = native_status_bar(config,request['jobId']) if package in {'com.xunmeng.merchant','com.android.permissioncontroller','com.android.providers.media.module'} else None
     if status_bar: config['lastFrame']['statusBarProof'] = status_bar
     if config.get('expectNewForm') and not config.get('draft') and config.get('emptyFormBackIntent',{}).get('commandFinished') and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理'))==1 and config.get('baselineCounts',{}).get('草稿箱') is not None and facts['counts'].get('草稿箱')==config['baselineCounts']['草稿箱']:
@@ -282,6 +321,7 @@ def native_action(config, request):
         point = screen.navigate(label, [x['name'] for x in config['ownedMedia'] if x.get('phoneVerified')])
         if label == '商品管理': screen.homepage_animation_mask(point)
         final_window_guard(config,job_id,before['sha256'],list_entry=screen if list_entry else None)
+        if label == '从手机相册选择': record_gallery_entry(config,job_id)
         if label == '发布商品':
             config['newFormEntryIntent']={'jobId':job_id,'at':time.time()}
             config['baselineCounts'] = screen.facts()['counts']

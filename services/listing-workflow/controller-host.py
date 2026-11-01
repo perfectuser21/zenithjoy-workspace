@@ -279,7 +279,7 @@ def dispatch_host_operation(config,request):
         return phone_readback(config)
     if action == 'phone-cleanup':
         return phone_cleanup(config)
-    if action in {'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back'}:
+    if action in {'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh'}:
         return gallery_action(config, request)
     if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
         return picker_action(config, request)

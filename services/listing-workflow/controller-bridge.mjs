@@ -53,7 +53,7 @@ _ui={'__name__':'pdd_native_ui'}
 exec(base64.b64decode('${uiSource ? uiSource.toString('base64') : ''}'),_ui)
 _pixels={'__name__':'pdd_pixels'}
 exec(base64.b64decode('${pixelsSource ? pixelsSource.toString('base64') : ''}'),_pixels)
-_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'png_crop_sha':_pixels['png_crop_sha']}
+_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'png_crop_sha':_pixels['png_crop_sha'],'png_rgba':_pixels['png_rgba'],'crop_sha_from_rgba':_pixels['crop_sha_from_rgba']}
 exec(base64.b64decode('${Buffer.from(helperSource).toString('base64')}'),_host)
 exec(base64.b64decode('${leaseGateSource ? leaseGateSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${albumSource ? albumSource.toString('base64') : ''}'),_host)
@@ -145,7 +145,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); return send(action,data);
     },
     async finish() {

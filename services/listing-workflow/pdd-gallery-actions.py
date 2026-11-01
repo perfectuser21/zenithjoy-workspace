@@ -42,6 +42,9 @@ def gallery_action(config,request):
     elif action == 'gallery-album':
         album = owned_album_inventory(config)
         point = picker.gallery_control(album['name'])
+    elif action == 'gallery-refresh':
+        owned_album_inventory(config)
+        point = picker.gallery_control('返回')
     elif action == 'gallery-back': point = picker.gallery_control('返回')
     elif action == 'gallery-select':
         images = gallery_candidates(config,picker,png)
@@ -63,7 +66,8 @@ def gallery_action(config,request):
         point = picker.gallery_upload(len(selection))
     else: raise ValueError('FORBIDDEN_GALLERY_ACTION')
     final_window_guard(config,request['jobId'],tree['sha256'],package=package)
-    if action in {'gallery-upload','gallery-back'}: expect_context_transition(config,['form','source'] if action=='gallery-back' else ['form'],request['jobId'],cleanup=action=='gallery-back')
+    if action == 'gallery-refresh': begin_gallery_refresh(config,request['jobId'])
+    if action in {'gallery-upload','gallery-back','gallery-refresh'}: expect_context_transition(config,['form','source'] if action=='gallery-back' else ['form'],request['jobId'],cleanup=action=='gallery-back')
     abandoned=config.get('pendingPicker')
     config['pendingPicker'] = {'action':action,'jobId':request['jobId'],'before':[tree['path'],png['path']]}
     store(Path(config['remoteRoot'])/'config.json',config)

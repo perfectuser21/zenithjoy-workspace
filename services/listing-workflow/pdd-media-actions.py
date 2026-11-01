@@ -33,8 +33,11 @@ def selected_identity(items):
 
 def picker_selected(config, picker, png):
     result = picker.selected()
-    raw = base64.b64decode(png['bytesBase64'])
-    for item in result: item['cropSha256'] = png_crop_sha(raw, item['bounds'], expected_size=[config['binding']['width'], config['binding']['height']])
+    if not result: return result
+    raw = base64.b64decode(png['bytesBase64'], validate=True)
+    if sha(raw) != png.get('sha256'): raise ValueError('PICKER_FRAME_HASH_MISMATCH')
+    decoded = png_rgba(raw, expected_size=[config['binding']['width'], config['binding']['height']])
+    for item in result: item['cropSha256'] = crop_sha_from_rgba(decoded, item['bounds'])
     return result
 
 

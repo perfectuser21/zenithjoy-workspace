@@ -53,8 +53,10 @@ def png_rgba(raw, expected_size=None):
     return width, height, bytes(output)
 
 
-def png_crop_sha(raw, bounds, masks=(), expected_size=None):
-    width, height, pixels = png_rgba(raw, expected_size)
+def crop_sha_from_rgba(decoded, bounds, masks=()):
+    if type(decoded) is not tuple or len(decoded) != 3: raise ValueError('UNSAFE_RGBA_FRAME')
+    width, height, pixels = decoded
+    if type(width) is not int or type(height) is not int or not 0 < width <= 4096 or not 0 < height <= 8192 or type(pixels) is not bytes or len(pixels) != width * height * 4: raise ValueError('UNSAFE_RGBA_FRAME')
     if len(bounds) != 4 or any(type(x) is not int for x in bounds): raise ValueError('UNSAFE_PNG_BOUNDS')
     x1, y1, x2, y2 = bounds
     if not 0 <= x1 < x2 <= width or not 0 <= y1 < y2 <= height: raise ValueError('UNSAFE_PNG_CROP')
@@ -67,3 +69,7 @@ def png_crop_sha(raw, bounds, masks=(), expected_size=None):
             if my1 <= y < my2: row[mx1 * 4:mx2 * 4] = bytes((mx2 - mx1) * 4)
         digest.update(row[x1 * 4:x2 * 4])
     return digest.hexdigest()
+
+
+def png_crop_sha(raw, bounds, masks=(), expected_size=None):
+    return crop_sha_from_rgba(png_rgba(raw, expected_size), bounds, masks)
