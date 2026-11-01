@@ -136,6 +136,25 @@ def app_pixel_comparison(config,current_png,screen,job_id):
     return {'mode':'entire-app-except-native-system-status-bar','statusBarMask':mask,'statusBarProof':{'approved':approved_bar,'current':current_bar},'sha256':now,'evidence':current_png['path'],'transparentOverlayAbsenceProven':False}
 
 
+def confirm_empty_owned_exit(config, screen, tree):
+    draft=config.get('draft') or {};back=draft.get('backIntent') or {}
+    if draft.get('exitedVerified') or not draft.get('owned') or draft.get('owner')!=config['owner'] or draft.get('values') or not config.get('newFormEntryIntent') or back.get('commandFinished') is not True or config.get('pendingAction') or config.get('pendingPicker') or config.get('gallerySelection') or config.get('galleryUploadIntent') or draft.get('discardIntent'): return False
+    if screen.form() or len(screen.labels('商品管理'))!=1 or not re.search(r'\bu\d+ com\.xunmeng\.merchant/com\.xunmeng\.merchant\.goods_management\.GoodsManagementActivity\}',config.get('lastForegroundRaw','')) or screen.facts()['counts']!=config.get('baselineCounts') or config.get('baselineCounts',{}).get('草稿箱') is None: return False
+    job_path=Path(config['remoteRoot'])/('job-'+back['jobId']+'-back.json');job=json.loads(job_path.read_text())
+    if job.get('owner')!=config['owner'] or job.get('command')!='back' or job.get('status')!='finished' or job.get('exitCode')!=0 or job.get('remoteUnknown') is not False or type(job.get('pid')) is not int or job['pid']<=1: raise ValueError('EMPTY_OWNED_BACK_TERMINATION_UNCONFIRMED')
+    processes=subprocess.run(['ps','-axo','pid=,ppid='],capture_output=True,text=True,check=True,timeout=5).stdout
+    if any(job['pid'] in tuple(map(int,line.split())) for line in processes.splitlines() if line.strip()): raise ValueError('EMPTY_OWNED_BACK_PROCESS_STILL_EXISTS')
+    before=read_evidence(config,back['before']['path']);raw=base64.b64decode(before['bytesBase64'],validate=True)
+    if before['sha256']!=back['before']['sha256'] or sha(raw)!=back['before']['sha256']: raise ValueError('EMPTY_OWNED_BEFORE_HASH_MISMATCH')
+    prior=Screen(raw.decode(),config['binding']['width'],config['binding']['height'])
+    if not prior.form() or any(prior.field(k)['value']!=v for k,v in {'title':'','groupPrice':'','inventory':'1'}.items()): raise ValueError('EMPTY_OWNED_BEFORE_NOT_EMPTY')
+    proof_path=Path(config['remoteRoot'])/('empty-owned-exit-'+back['jobId']+'.json')
+    proof={'owner':config['owner'],'job':job,'jobSha256':sha(job_path.read_bytes()),'before':back['before'],'after':tree,'processAndChildrenAbsent':True,'internalAutoSaveUnknown':True,'at':time.time()}
+    store(proof_path,proof)
+    draft.update(exitedVerified=True,visibleDraftCountUnchanged=True,internalAutoSaveUnknown=True,emptyDirectExitReadback={'path':str(proof_path),'jobId':back['jobId']})
+    return True
+
+
 def observe(config, request):
     call_idle(config)
     actual_serial = adb(config, ['shell', 'getprop', 'ro.serialno']).stdout.decode().strip()
@@ -166,6 +185,7 @@ def observe(config, request):
         config['emptyFormExitedVerified']=True
         config['internalAutoSaveUnknown']=True
     draft = config.get('draft', {})
+    confirm_empty_owned_exit(config,screen,tree)
     if draft.get('owned') and draft.get('discardIntent', {}).get('commandFinished') and not facts['form'] and 'GoodsManagementActivity' in config['lastForegroundRaw'] and len(screen.labels('商品管理')) == 1 and facts['counts'].get('草稿箱') is not None:
         before = config.get('baselineCounts', {}).get('草稿箱')
         if before is not None and facts['counts']['草稿箱'] == before:

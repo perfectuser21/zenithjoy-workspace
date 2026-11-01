@@ -87,4 +87,4 @@ def gallery_action(config,request):
         config['gallerySelection']=[]
     config['pendingPicker']=None
     store(Path(config['remoteRoot'])/'config.json',config)
-    return {'ok':True,'action':action,'status':'command-finished-awaiting-observation','gallerySelection':config.get('gallerySelection'),'evidence':[tree['path'],png['path']],'pddUploadVerified':False}
+    return {'ok':True,'action':action,'status':'command-finished-awaiting-observation','gallerySelection':config.get('gallerySelection'),'evidence':[tree['path'],png['path']],'pddUploadVerified':False,**({'observedFrame':result} if action=='gallery-select' else {})}

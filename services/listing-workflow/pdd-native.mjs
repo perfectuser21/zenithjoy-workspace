@@ -9,17 +9,20 @@ export function createNativeTransport(config,bridge){
  const root=resolve(config.root);mkdirSync(root,{recursive:true,mode:0o700});let sequence=0;
  function draftWrites(){if(config.allowDraftWrites!==true)throw new Error('DRAFT_WRITES_NOT_AUTHORIZED');}
  function approval(value){if(!/^[a-f0-9]{64}$/.test(value?.approvedScreenSha256||''))throw new Error('FRESH_VISUAL_APPROVAL_REQUIRED');return value.approvedScreenSha256;}
- return{
-  productionEnabled:false,
-  async capture(){
-   const result=await bridge.host('observe');const id=String(++sequence).padStart(4,'0');
+ function saveFrame(result){
+  if(result.frame?.screenSha256!==result.picture?.sha256||result.frame?.xmlSha256!==result.tree?.sha256)throw new Error('FRAME_DIGEST_MISMATCH');
+   const id=String(++sequence).padStart(4,'0');
    for(const[key,extension]of[['picture','png'],['tree','xml'],...(result.statusBarRaw?[['statusBarRaw','txt']]:[])]){
     const bytes=Buffer.from(result[key].bytesBase64,'base64');if(hash(bytes)!==result[key].sha256)throw new Error('EVIDENCE_HASH_MISMATCH');
     if(key==='picture'&&(bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'))throw new Error('INVALID_SCREENSHOT');
     const path=join(root,`frame-${id}.${extension}`);writeFileSync(path,bytes,{flag:'wx',mode:0o600});result[key].localPath=path;delete result[key].bytesBase64;
    }
    const path=join(root,`frame-${id}.json`);writeFileSync(path,JSON.stringify(result,null,2),{flag:'wx',mode:0o600});return{...result,manifest:path};
-  },
+ }
+ function saveObserved(result){if(result.observedFrame){try{result.observedFrame=saveFrame(result.observedFrame);}catch(error){error.deviceActionCompleted=true;error.requiresReadback=true;throw error;}}return result;}
+ return{
+  productionEnabled:false,
+  async capture(){return saveFrame(await bridge.host('observe'));},
   async bootstrapBack(proof){return bridge.host('bootstrap-back',{approvedScreenSha256:approval(proof)});},
   async resolveBack(proof){return bridge.host('resolve-back',{approvedScreenSha256:approval(proof)});},
   async launch(){return bridge.host('launch');},
@@ -42,8 +45,8 @@ export function createNativeTransport(config,bridge){
    if(!actual||actual.phoneSha256!==image.sha256)throw new Error('PHONE_MEDIA_HASH_MISMATCH');
    return{status:'staged-to-device',pddUploadVerified:false,...actual,leaseProof:readback.leaseProof};
   },
-  async picker(action,proof){draftWrites();if(!['more','permission','select','confirm'].includes(action))throw new Error('FORBIDDEN_PICKER_ACTION');return bridge.host('picker-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{mediaId:String(proof.mediaId)}:{})});},
-  async gallery(action,proof){draftWrites();if(!['state','menu','album','select','upload','back','refresh'].includes(action))throw new Error('FORBIDDEN_GALLERY_ACTION');return bridge.host('gallery-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{visualBinding:structuredClone(proof.visualBinding)}:{})});},
+  async picker(action,proof){draftWrites();if(!['more','permission','select','confirm'].includes(action))throw new Error('FORBIDDEN_PICKER_ACTION');return saveObserved(await bridge.host('picker-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{mediaId:String(proof.mediaId)}:{})}));},
+  async gallery(action,proof){draftWrites();if(!['state','menu','album','select','upload','back','refresh'].includes(action))throw new Error('FORBIDDEN_GALLERY_ACTION');return saveObserved(await bridge.host('gallery-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{visualBinding:structuredClone(proof.visualBinding)}:{})}));},
   async organizeMedia(){draftWrites();return bridge.host('organize-media');},
   async discardDraft(proof){draftWrites();return bridge.host('discard-draft',{approvedScreenSha256:approval(proof)});},
   async back(){return bridge.host('back');},

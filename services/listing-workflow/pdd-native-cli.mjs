@@ -15,8 +15,9 @@ if(file==='--help'){
   await bridge.begin();output({event:'ready',owner:bridge.state.owner,statePath:bridge.statePath});
   for await(const line of createInterface({input:process.stdin,crlfDelay:Infinity})){
    if(!line.trim())continue;
+   let command;const startedAt=new Date().toISOString(),started=performance.now();
    try{
-    const q=JSON.parse(line);let result;
+    const q=JSON.parse(line);command=q.command;output({event:'command-start',command,startedAt});let result;
     switch(q.command){
      case'capture':result=await native.capture();break;
      case'bootstrap-back':result=await native.bootstrapBack(q);break;
@@ -31,11 +32,11 @@ if(file==='--help'){
      case'gallery':result=await native.gallery(q.action,q);break;
      case'picker':result=await native.picker(q.action,q);break;
      case'back':result=await native.back();break;
-     case'finish':result=await native.finish();output({command:q.command,result});process.exit(0);break;
+     case'finish':result=await native.finish();output({command:q.command,result,startedAt,durationMs:performance.now()-started});process.exit(0);break;
      default:throw new Error('FORBIDDEN_NATIVE_COMMAND');
     }
-    output({command:q.command,result});
-   }catch(error){output({error:error.message,statePath:bridge.statePath,remoteUnknown:bridge.state.remoteUnknown});}
+    output({command:q.command,result,startedAt,durationMs:performance.now()-started});
+   }catch(error){output({command,startedAt,durationMs:performance.now()-started,deviceActionCompleted:error.deviceActionCompleted===true,requiresReadback:error.requiresReadback===true,error:error.message,statePath:bridge.statePath,remoteUnknown:bridge.state.remoteUnknown});}
   }
   output({event:'input-closed',lockReleased:bridge.state.lockReleased,statePath:bridge.statePath});process.exitCode=2;
  }catch(error){output({error:error.message,statePath:bridge.statePath});process.exitCode=2;}

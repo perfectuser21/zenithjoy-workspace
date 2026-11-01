@@ -189,8 +189,9 @@ def execute_controller(config, command, args, job_id, native_tap=False):
     env = dict(os.environ, DOUYIN_PHONE_REGISTRY=str(Path(config['remoteRoot']) / 'profiles.tsv'))
     remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
     if remaining < 1: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
+    started_at = time.time()
     process = subprocess.Popen(prefix + [command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
-    store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': time.time()})
+    store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': started_at})
     timed_out = False
     try:
         stdout, stderr = process.communicate(timeout=remaining)
@@ -202,7 +203,7 @@ def execute_controller(config, command, args, job_id, native_tap=False):
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             stdout, stderr = process.communicate()
-    result = {'status': 'finished', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'exitCode': process.returncode, 'stdout': stdout.decode(errors='replace'), 'stderr': stderr.decode(errors='replace'), 'remoteUnknown': timed_out or (process.returncode != 0 and not lock_command)}
+    result = {'startedAt': started_at, 'finishedAt': time.time(), 'status': 'finished', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'exitCode': process.returncode, 'stdout': stdout.decode(errors='replace'), 'stderr': stderr.decode(errors='replace'), 'remoteUnknown': timed_out or (process.returncode != 0 and not lock_command)}
     store(job, result)
     if timed_out:
         result['error'] = 'REMOTE_COMMAND_TIMED_OUT'

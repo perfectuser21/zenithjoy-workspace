@@ -113,4 +113,4 @@ def picker_action(config, request):
         # Comparison strips our metadata absent from the native selected list.
     config['pendingPicker'] = None
     store(Path(config['remoteRoot'])/'config.json',config)
-    return {'ok':True,'action':action,'limitedGrant':config.get('limitedGrant'),'evidence':[tree['path'],png['path']]}
+    return {'ok':True,'action':action,'limitedGrant':config.get('limitedGrant'),'evidence':[tree['path'],png['path']],**({'observedFrame':result} if action=='picker-select' else {})}

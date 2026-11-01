@@ -97,7 +97,10 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
   }
   async function lease() {
     if (state.remoteUnknown) throw new Error('REMOTE_TERMINATION_UNCONFIRMED');
-    const current = await brain.lease(binding.serial);
+    const timing={startedAt:new Date().toISOString()},started=performance.now();(state.leaseTrace??=[]).push(timing);let current;
+    try{current=await brain.lease(binding.serial);timing.requestAttempts=current.requestAttempts;timing.networkElapsedMs=current.networkElapsedMs;}
+    catch(error){timing.error=error.message;throw error;}
+    finally{timing.finishedAt=new Date().toISOString();timing.elapsedMs=performance.now()-started;persist();}
     if (current.locked_by !== state.owner) throw new Error('BRAIN_LOCK_OWNERSHIP_LOST');
     const remaining = Date.parse(current.expires_at) - current.serverTimeMs - current.networkElapsedMs - 1000;
     if (current.expired !== false || !Number.isFinite(remaining) || remaining < timeoutMs + 10000) throw new Error('LEASE_UNSAFE');
