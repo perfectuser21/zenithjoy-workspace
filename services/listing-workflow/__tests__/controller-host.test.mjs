@@ -50,3 +50,5 @@ test('the public host cannot stage bytes outside its immutable authorized materi
  try:h.stage_media(c,{'name':'IMG_20261101_101600_1.jpg','sha256':hashlib.sha256(raw).hexdigest(),'bytesBase64':base64.b64encode(raw).decode()})
  except ValueError as e:print(json.dumps({'error':str(e),'files':len(list(pathlib.Path(t).iterdir()))}))`);assert.equal(r.error,'MATERIAL_NOT_AUTHORIZED');assert.equal(r.files,0);
 });
+
+test('the complete host staging dispatcher durably saves its entry in the run root',()=>{const r=run(`with tempfile.TemporaryDirectory() as t:\n c={'remoteRoot':t,'ownedMedia':[]};b=b'\\xff\\xd8\\xffimage';digest=hashlib.sha256(b).hexdigest();c['materialPolicy']={'allowedDigests':[digest]};q={'action':'stage-media','name':'IMG_20261101_120000_1.jpg','bytesBase64':base64.b64encode(b).decode(),'sha256':digest}\n h.dispatch_host_operation(c,q);saved=json.loads((pathlib.Path(t)/'config.json').read_text());print(json.dumps({'name':saved['ownedMedia'][0]['name'],'count':len(saved['ownedMedia'])}))`);assert.equal(r.count,1);assert.equal(r.name,'IMG_20261101_120000_1.jpg');});

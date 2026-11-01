@@ -271,7 +271,7 @@ def dispatch_host_operation(config,request):
     action=request['action']
     if action == 'stage-media':
         result = stage_media(config, request)
-        store(root / 'config.json', config)
+        store(Path(config['remoteRoot']) / 'config.json', config)
         return result
     if action == 'read-evidence':
         return read_evidence(config, request['path'])
@@ -307,12 +307,13 @@ def dispatch(request):
         config = {**request, 'ownedMedia': []}
         store(root / 'config.json', config)
         return {'ok': True}
-    config = json.loads((root / 'config.json').read_text())
-    config['deadline'] = time.monotonic() + min(285, max(1, request.get('operationBudgetMs', 285000) / 1000))
-    if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding'] or config.get('materialPolicy') != request.get('materialPolicy'):
-        raise ValueError('SESSION_IDENTITY_CONFLICT')
+    deadline = time.monotonic() + min(285, max(1, request.get('operationBudgetMs', 285000) / 1000))
     with (root / 'operation.guard').open('a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        config = json.loads((root / 'config.json').read_text())
+        config['deadline'] = deadline
+        if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding'] or config.get('materialPolicy') != request.get('materialPolicy'):
+            raise ValueError('SESSION_IDENTITY_CONFLICT')
         if action == 'controller':
             return execute_controller(config, request['command'], request.get('args', []), request['jobId'])
         verify_files(config)
