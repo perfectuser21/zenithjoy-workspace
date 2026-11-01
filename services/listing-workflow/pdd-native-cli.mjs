@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import{readFileSync}from'node:fs';
+import{readFileSync,appendFileSync}from'node:fs';
+import{join}from'node:path';
 import{createInterface}from'node:readline';
 import{createControllerBridge}from'./controller-bridge.mjs';
 import{createNativeTransport}from'./pdd-native.mjs';
@@ -9,7 +10,7 @@ if(file==='--help'){
 }else{
  const config=JSON.parse(readFileSync(file,'utf8'));
  const bridge=createControllerBridge(config),native=createNativeTransport(config,bridge);
- const output=x=>process.stdout.write(JSON.stringify(x)+'\n');
+ const output=x=>{const line=JSON.stringify({at:new Date().toISOString(),...x})+'\n';appendFileSync(join(config.root,'commands.ndjson'),line,{mode:0o600});process.stdout.write(line);};
  try{
   await bridge.begin();output({event:'ready',owner:bridge.state.owner,statePath:bridge.statePath});
   for await(const line of createInterface({input:process.stdin,crlfDelay:Infinity})){

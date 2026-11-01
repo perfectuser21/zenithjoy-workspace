@@ -13,6 +13,7 @@ def control_ok(config, command, args, job_id, native_tap=False):
 
 def current_package(config, job_id):
     result = control_ok(config, 'foreground', [], job_id + '-foreground')['stdout']
+    config['lastForegroundRaw'] = result
     matches = re.findall(r'\bu\d+\s+([A-Za-z0-9_.]+)/', result)
     if len(matches) != 1:
         raise ValueError('FOREGROUND_UNCONFIRMED')
@@ -21,6 +22,7 @@ def current_package(config, job_id):
 
 def call_idle(config):
     raw = adb(config, ['shell', 'dumpsys', 'telephony.registry']).stdout.decode(errors='replace')
+    config['lastCallStatesRaw'] = '\n'.join(line.strip() for line in raw.splitlines() if re.search(r'\bmCallState\s*=', line))
     states = re.findall(r'\bmCallState\s*=\s*(\d+)', raw)
     if not states or any(x != '0' for x in states):
         raise ValueError('CALL_STATE_UNSAFE')
@@ -70,6 +72,8 @@ def observe(config, request):
     if expected not in picture['stdout'].splitlines():
         raise ValueError('SCREEN_PATH_UNCONFIRMED')
     png = read_evidence(config, expected)
+    header = base64.b64decode(png['bytesBase64'])
+    if header[:8] != b'\x89PNG\r\n\x1a\n' or int.from_bytes(header[16:20], 'big') != config['binding']['width'] or int.from_bytes(header[20:24], 'big') != config['binding']['height']: raise ValueError('SCREEN_DIMENSION_MISMATCH')
     screen, tree = fresh_xml(config, request['jobId'])
     facts = screen.facts()
     if facts['storeName'] is not None:
@@ -87,7 +91,7 @@ def observe(config, request):
         elif before is not None:
             draft['autoSavedPossible'] = True
     store(Path(config['remoteRoot']) / 'config.json', config)
-    return {'ok': True, 'package': package, 'picture': png, 'tree': tree, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
+    return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'facts': facts, 'storeProof': config.get('storeProof'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
 
 
 def native_action(config, request):
