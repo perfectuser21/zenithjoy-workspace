@@ -49,12 +49,12 @@
       }
     },
     "douyin_video_processing": {
-      "sha256": "088caf23b50b36abb11a6f381489948f8cb03f4d9f87f99a5668b423d0001aec",
+      "sha256": "8b35d2a7d34d8bf0672e005f56781391e61121d1935dc1b360aa54b0344a51da",
       "activities": {
         "preflight": "80863190b1c2cd396952d26d1aa3caeb49f9ea993227797b8ba981fb195ab159",
         "dedup": "8128c3a4483cef58000c8dda31b0072fd411688edfd515c8ebe11ba6859ec45e",
-        "qualification": "a71c253e3d05af2507573ab8b1a6a96a8fda23ca3781d4b863cef2e3778baeaa",
-        "collection": "d13da4f938fb051ad7a095f45d82502aa8ba51d03330c8b4539bb2660e78acb6",
+        "qualification": "bafc34e0cfcb605438aad1663317361fef15fb03fc54a1598f9b0628a97c650a",
+        "collection": "779390d94ee0f64adb0c84a582b9a8b06a7a8a6145588173ed09c921730e80f7",
         "cleanup": "9d0ab6801c05768bd8602c814a5b989522c7eda6b943187c1de083aa9b170fc7"
       }
     },

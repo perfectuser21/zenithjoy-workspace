@@ -9,6 +9,7 @@ import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,
 import { bindRun,readBinding } from './runtime-binding.mjs';
 import {readCollectionPhoneScopeInput,defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
 import {defaultDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
+import {readQualificationIdentitySnapshot} from './qualification-identity-snapshot.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
 const SHA256=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -28,22 +29,13 @@ export function qualificationIdentityEvidence({dir,frozen,binding}){
     const facts=progress.videos.filter(q=>q.video_id===video_id);
     if(facts.length!==1||facts[0].settled!==true||!Number.isSafeInteger(facts[0].recordingsRequired)
       ||facts[0].recordingsRequired<0)throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
-    const identityFile=join(dir,`${sample.run_tag}-identity-${video_id}.json`),identityStat=lstatSync(identityFile);
-    if(!identityStat.isFile()||identityStat.isSymbolicLink()||(identityStat.mode&0o077)!==0
-      ||identityStat.size>1000000)throw Error('SAMPLING_ADMISSION_IDENTITY_INVALID');
-    const bytes=readFileSync(identityFile),identity=JSON.parse(bytes.toString('utf8'));
-    const evidencePrefix=`${sample.run_tag}-v${video_id}-`;
-    if(identity.verified!==true||identity.expected_video_id!==video_id
-      ||identity.observed_video_id!==video_id||identity.content_type!=='video'
-      ||identity.excluded_non_video!==false||typeof identity.evidence_id!=='string'
-      ||!identity.evidence_id.startsWith(evidencePrefix)
-      ||!/^(?:identity|qualification)(?:-recovery[1-9]\d*)?-identity$/.test(identity.evidence_id.slice(evidencePrefix.length)))
-      throw Error('SAMPLING_ADMISSION_IDENTITY_INVALID');
+    const identitySha=facts[0].identity_snapshot_sha256;
+    const {sha256}=readQualificationIdentitySnapshot({dir,run:sample.run_tag,videoId:video_id,sha256:identitySha});
     const cached=facts[0].recordingsRequired===0;
     if(cached?!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(facts[0].cached_judgment_run||'')
       :facts[0].cached_judgment_run!==null)throw Error('SAMPLING_ADMISSION_QUALIFICATION_INVALID');
     return {video_id,mode:cached?'cached':'fresh',prior_judgment_run:cached?facts[0].cached_judgment_run:sample.run_tag,
-      identity_verified:true,identity_sha256:createHash('sha256').update(bytes).digest('hex')};
+      identity_verified:true,identity_sha256:sha256};
   });
   return {run_id:binding.run_id,run_binding_id:binding.id,source_commit:frozen.deployment.source_commit,
     source_run:sample.source_run,line:sample.line,videos};
