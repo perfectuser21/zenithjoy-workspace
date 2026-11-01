@@ -65,7 +65,7 @@ source "$D/deployment-functions.sh"
 
 
 MMV_JS_FILES=(
-  capture-strategy.mjs
+  qualification-identity-snapshot.mjs capture-strategy.mjs
   push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
   discovery-cleanup-readback.mjs discovery-metrics.js discovery-metrics-queue.js leadgen-db-lib.js company-config-lib.js company-config-sync-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
   judge-video-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
