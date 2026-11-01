@@ -39,6 +39,62 @@ api_suite:
 
 tests:
 
+- id: phone-maintenance-reopen-proof
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-proof.test.py
+  type: unit
+  ci: L1
+  status: active
+  product: AI员工
+  note: 旧101f六份原生回执、重启后终止与只读安全桌面证据。
+
+- id: phone-maintenance-reopen-lock
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-lock.test.py
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 单机双根精确退休、断电重放与其他 review/claim 保留。
+
+- id: phone-maintenance-reopen-roots
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-roots.test.py
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 旧候选根永封存，新 SHA 空根原子交换与中断重放。
+
+- id: phone-maintenance-reopen-gate
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-gate.test.py
+  type: unit
+  ci: L1
+  status: active
+  product: AI员工
+  note: Brain 当前 release、observation 与本机候选全文件哈希一致。
+
+- id: phone-maintenance-reopen-host
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-host.test.py
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 统一准入严格先证据后精确解锁，任一证据失败不解锁。
+
+- id: phone-maintenance-reopen-integration
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-integration.test.py
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 完整隔离文件系统演练保留旧 frozen、其他两 review 和生产 manifest。
+
+- id: phone-maintenance-reopen-workflow
+  path: services/phone-adb-controller/__tests__/maintenance-reopen-workflow.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI员工
+  note: 正式入口仅人工两阶段，Pilot 固定 SHA，旧候选不解封。
+
 - id: phone-maintenance-install-window
   path: services/phone-adb-controller/__tests__/maintenance-install-window.test.py
   type: unit
