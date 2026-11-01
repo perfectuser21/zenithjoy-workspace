@@ -130,11 +130,8 @@ if [[ "${DOUYIN_PHONE_LOCK_TEST_MODE:-}" == 1 ]]; then
     || die 'PHONE_LOCK_ROOT_UNSAFE: test lock root is restricted to isolated controller fixtures'
   LOCK_ROOT="${DOUYIN_PHONE_LOCK_ROOT:-$PHONE_TMP_ROOT/locks}"
 else
-  LOCK_ROOT="$("$PYTHON_BIN" "${0:A:h}/phone-lock-root.py" trusted-root)" \
-    || die 'PHONE_LOCK_ROOT_UNSAFE: system account home unavailable'
-  [[ -z "${DOUYIN_PHONE_LOCK_ROOT:-}" || "$DOUYIN_PHONE_LOCK_ROOT" == "$LOCK_ROOT" ]] \
-    || die 'PHONE_LOCK_ROOT_UNSAFE: lock root override differs from system account'
-  "$PYTHON_BIN" "${0:A:h}/phone-lock-root.py" verify "$LOCK_ROOT" >/dev/null \
+  LOCK_ROOT="${DOUYIN_PHONE_LOCK_ROOT:-${HOME:-}/.local/share/zenithjoy/phone-locks}"
+  "$PYTHON_BIN" "${0:A:h}/phone-lock-root.py" verify-root "$LOCK_ROOT" >/dev/null \
     || die 'PHONE_LOCK_ROOT_UNSAFE: persistent phone lock root is not verified'
 fi
 LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"

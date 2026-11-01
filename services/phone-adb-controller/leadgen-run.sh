@@ -118,9 +118,11 @@ source "$WF_PLAN_PATH"
 export WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_STEP_SPEC
 if [[ "$WFR_HOSTKEY" != mmv && "$SERIAL" != none ]]; then
   unset DOUYIN_PHONE_LOCK_TEST_MODE
-  DOUYIN_PHONE_LOCK_ROOT="$(/opt/homebrew/bin/python3 "$WF_HOME/phone-lock-root.py" trusted-root)" \
-    || { print -u2 'PHONE_LOCK_ROOT_UNSAFE: system account home unavailable'; exit 1; }
+  DOUYIN_PHONE_LOCK_ROOT="${DOUYIN_PHONE_LOCK_ROOT:-${HOME:-}/.local/share/zenithjoy/phone-locks}"
   export DOUYIN_PHONE_LOCK_ROOT
+  /opt/homebrew/bin/python3 "$WF_HOME/phone-lock-root.py" verify-root \
+    "$DOUYIN_PHONE_LOCK_ROOT" >/dev/null \
+    || { print -u2 'PHONE_LOCK_ROOT_UNSAFE: formal runner root differs from system account or is unverified'; exit 1; }
   /opt/homebrew/bin/python3 "$WF_HOME/phone-lock-root.py" check-serial \
     "$DOUYIN_PHONE_LOCK_ROOT" "$SERIAL" >/dev/null \
     || { print -u2 'PHONE_LOCK_ROOT_UNSAFE: formal runner refused before prepare'; exit 1; }

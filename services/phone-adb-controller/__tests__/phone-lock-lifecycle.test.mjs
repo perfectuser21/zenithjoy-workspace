@@ -9,10 +9,23 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const script = new URL('../douyin-phone-adb', import.meta.url).pathname;
+const rootScript = new URL('../phone-lock-root.py', import.meta.url).pathname;
 const python = spawnSync('sh', ['-c', 'command -v python3'], {encoding:'utf8'}).stdout.trim();
 test('受控测试夹具拒绝仓库路径或非测试目录冒充手机锁根',()=>{
  assert.throws(()=>phoneLockFixtureEnv('/Users/jinnuoshengyuan/profiles.tsv','/tmp/fixture-phone'),/PHONE_LOCK_FIXTURE_UNSAFE/);
  assert.throws(()=>phoneLockFixtureEnv('/tmp/fixture-profiles.tsv','/Users/jinnuoshengyuan/.local/share/zenithjoy/phone-locks'),/PHONE_LOCK_FIXTURE_UNSAFE/);
+});
+test('生产锁根验证只返回状态并拒绝伪造路径，不输出系统账户 home',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'phone-root-verify-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const home=realpathSync(dir),otherHome=join(home,'other-account'),root=join(home,'.local','share','zenithjoy','phone-locks');
+ mkdirSync(otherHome);
+ mkdirSync(root,{recursive:true,mode:0o700});
+ writeFileSync(join(root,'.migration-complete.json'),JSON.stringify({schema_version:1,state:'complete',source_sha256:'a'.repeat(64),legacy_root:'/private/tmp/openclaw-phone/locks'}));
+ const probe=`import importlib.util, runpy, sys, types\nspec=importlib.util.spec_from_file_location('phone_lock_root',${JSON.stringify(rootScript)})\nmod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)\nmod.pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=${JSON.stringify(home)})\nmod.verify_root(${JSON.stringify(root)})\ntry: mod.verify_root(${JSON.stringify(join(home,'forged-locks'))})\nexcept ValueError: pass\nelse: raise AssertionError('forged root admitted')\nmod.pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=${JSON.stringify(otherHome)})\ntry: mod.verify_root(${JSON.stringify(root)})\nexcept ValueError: pass\nelse: raise AssertionError('wrong system account admitted')\nmod.pwd.getpwuid=lambda uid:types.SimpleNamespace(pw_dir=${JSON.stringify(home)})\nsys.argv=[${JSON.stringify(rootScript)},'verify-root',${JSON.stringify(root)}]\nrunpy.run_path(${JSON.stringify(rootScript)},run_name='__main__')\n`;
+ const result=spawnSync(python,['-c',probe],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);assert.equal(result.stdout,'');
+ const legacy=spawnSync(python,[rootScript,'trusted-root'],{encoding:'utf8'});
+ assert.notEqual(legacy.status,0,'旧命令不得输出系统账户 home');assert.equal(legacy.stdout,'');
 });
 function setup(t) {
   const dir=mkdtempSync(join(tmpdir(),'phone-lock-')); t.after(()=>rmSync(dir,{recursive:true,force:true}));
@@ -185,11 +198,15 @@ test('正式部署先核持久迁移，再使用持久锁根；启动器先于�
  const base=new URL('../',import.meta.url);
  const deploy=readFileSync(new URL('deploy.sh',base),'utf8');
  const runner=readFileSync(new URL('leadgen-run.sh',base),'utf8');
+ const controller=readFileSync(new URL('douyin-phone-adb',base),'utf8');
  assert.ok(deploy.indexOf('PHONE_LOCK_MIGRATION_PREFLIGHT')>=0);
  assert.ok(deploy.indexOf('PHONE_LOCK_MIGRATION_PREFLIGHT')<deploy.indexOf('deploy_m4_payload "$host"'));
  assert.match(deploy,/input-runtime-release\.py install-maintenance[^\n]*phone-locks/);
  assert.match(deploy,/DEVICE_CTL_FILES=\([\s\S]*phone-lock-root\.py[\s\S]*?\)/);
+ assert.ok(runner.includes('phone-lock-root.py" verify-root'));
+ assert.ok(runner.indexOf('phone-lock-root.py" verify-root')<runner.indexOf('phone-lock-root.py" check-serial'));
  assert.ok(runner.indexOf('phone-lock-root.py" check-serial')<runner.indexOf('runtime-receipts.mjs" prepare'));
+ assert.match(controller,/phone-lock-root\.py" verify-root/);
 });
 test('lock-reap 已明确属于另一手机的任务不阻止本机回收（短profile不误匹配priority P1）',t=>{
  const c=setup(t);c.stale();writeFileSync(join(c.dir,'tasks.json'),JSON.stringify([{id:'other',status:'in_progress',task_type:'qiumi_task',priority:'P1',payload:{phone:{serial:'OTHER',profile:'other-profile'}}}]));

@@ -82,6 +82,11 @@ def trusted_root():
     return home / '.local/share/zenithjoy/phone-locks'
 
 
+def verify_root(root):
+    require(Path(root) == trusted_root(), 'caller root differs from system account home')
+    verify(root)
+
+
 def check_serial(root, serial):
     require(re.fullmatch(r'[A-Za-z0-9._-]{1,80}', serial) is not None, 'invalid serial')
     record = verify(root)
@@ -166,8 +171,8 @@ def migrate(old, durable):
 
 if __name__ == '__main__':
     try:
-        if len(sys.argv) == 2 and sys.argv[1] == 'trusted-root':
-            print(trusted_root())
+        if len(sys.argv) == 3 and sys.argv[1] == 'verify-root':
+            verify_root(sys.argv[2])
         elif len(sys.argv) == 2 and sys.argv[1] == 'verify-production':
             print(json.dumps(verify(trusted_root()), sort_keys=True))
         elif len(sys.argv) == 2 and sys.argv[1] == 'migrate-production':
@@ -179,7 +184,7 @@ if __name__ == '__main__':
         elif len(sys.argv) == 4 and sys.argv[1] == 'migrate':
             print(json.dumps(migrate(sys.argv[2], sys.argv[3]), sort_keys=True))
         else:
-            raise ValueError('usage: phone-lock-root.py trusted-root | verify-production | migrate-production | verify ROOT | check-serial ROOT SERIAL | migrate OLD_ROOT DURABLE_ROOT')
+            raise ValueError('usage: phone-lock-root.py verify-root ROOT | verify-production | migrate-production | verify ROOT | check-serial ROOT SERIAL | migrate OLD_ROOT DURABLE_ROOT')
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(2)
