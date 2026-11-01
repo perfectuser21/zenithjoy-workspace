@@ -21,16 +21,7 @@ export function createControllerBridge(config, dependencies = {}) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000 || !config.runId) throw new Error('INVALID_COMMAND_BUDGET');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const statePath = join(directory, 'controller-session.json');
-  let resumed = false;
-  if (existsSync(statePath)) {
-    if (config.resumeSession !== true) throw new Error('EXISTING_SESSION_REQUIRES_RECOVERY');
-    const saved = JSON.parse(readFileSync(statePath, 'utf8'));
-    if (JSON.stringify(saved.binding) !== JSON.stringify(binding) || saved.runId !== config.runId || !/^[0-9a-f-]{36}$/.test(saved.id) || saved.owner !== `manual-pdd-native-${saved.id}` || saved.profile !== `pdd${saved.id.replaceAll('-', '')}` || saved.remoteRoot !== `/private/tmp/pdd-native-${saved.id}` || saved.lockReleased || !saved.brainHeld || !saved.controllerHeld) throw new Error('SESSION_RECOVERY_IDENTITY_CONFLICT');
-    const alive = dependencies.isProcessAlive || (pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } });
-    if (alive(saved.processPid)) throw new Error('SESSION_PROCESS_STILL_ACTIVE');
-    state = { ...saved, processPid: process.pid }; resumed = true;
-    state.trace.push({ action: 'resume-session', at: new Date().toISOString(), priorPid: saved.processPid });
-  }
+  if (existsSync(statePath)) throw new Error('EXISTING_SESSION_REQUIRES_RECOVERY');
   function persist() {
     const temporary = statePath + '.pending-' + randomUUID();
     const fd = openSync(temporary, 'wx', 0o600); try { writeFileSync(fd, JSON.stringify(state, null, 2)); fsyncSync(fd); } finally { closeSync(fd); }
@@ -86,7 +77,6 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
   const api = {
     get state() { return structuredClone(state); }, statePath, binding,
     async begin() {
-      if (resumed) { await lease(); await controllerStatus(); return state; }
       try {
         const acquired = await brain.acquire(binding.serial, state.owner);
         if (acquired.acquired !== true) throw new Error('DEVICE_BUSY');
@@ -98,7 +88,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
         state.controllerAcquireAttempted = true; persist();
         const lock = await send('controller', { command: 'lock-acquire-new', args: [state.owner] });
         if (!lock.stdout.includes(`lock=acquired owner=${state.owner}`)) throw new Error('CONTROLLER_ACQUIRE_UNCONFIRMED');
-        state.controllerHeld = true; persist(); await controllerStatus(); return state;
+        state.controllerHeld = true; persist(); await controllerStatus(); return structuredClone(state);
       } catch (error) {
         if (!state.brainHeld) { try { state.brainHeld = (await brain.lease(binding.serial)).locked_by === state.owner; } catch { state.brainOwnershipUnconfirmed = true; } persist(); }
         if (state.controllerAcquireAttempted && !state.controllerHeld && !state.remoteUnknown) {
@@ -131,7 +121,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       state.controllerHeld = false; persist();
       const released = await brain.release(binding.serial, state.owner);
       if (released.success !== true || (await brain.lease(binding.serial)).locked_by !== null) throw new Error('BRAIN_RELEASE_UNCONFIRMED');
-      state.brainHeld = false; state.lockReleased = true; persist(); return state;
+      state.brainHeld = false; state.lockReleased = true; persist(); return structuredClone(state);
     },
   };
   let busy = false;
