@@ -25,3 +25,5 @@ test('phone readback binds the exact MediaStore identity and persists verified o
  h.adb=adb;result=h.phone_readback(c);print(json.dumps({'result':result,'verified':c['ownedMedia'][0].get('phoneVerified')}))`);
  assert.equal(r.verified,true);assert.equal(r.result.media[0].mediaId,'42');
 });
+
+test('remote public controller route cannot bypass native text field guard',()=>{const r=spawnSync('python3',[helper],{input:JSON.stringify({action:'controller',command:'text-input',args:['x']}),encoding:'utf8'});assert.equal(JSON.parse(r.stdout).error,'FORBIDDEN_CONTROLLER_COMMAND');});
