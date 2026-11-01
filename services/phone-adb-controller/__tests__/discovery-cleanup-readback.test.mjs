@@ -22,7 +22,8 @@ function rig(t,{missing=false,foreign=false,healthWidget=false,launcher='com.hih
   }
   return {code:0,stdout,stderr:''};
  };
- return {dir,scope,calls,h:createHandlers({root:dir,env,execute,sourceCommit:scope.source_commit,rpc:async()=>{throw Error('unexpected RPC');}})};
+ const centralLease={held:false,async verifyTask(){},async acquire(){this.held=true;},async ensure(){},async release(){this.held=false;return true;}};
+ return {dir,scope,calls,h:createHandlers({root:dir,env,execute,sourceCommit:scope.source_commit,taskId:'fixture-task',centralLease,rpc:async()=>{throw Error('unexpected RPC');}})};
 }
 test('101 cleanup必须保留同run原生stdout与桌面原件并独立核验',async t=>{
  const r=rig(t);await r.h.preflight();const result=await r.h.cleanup();
