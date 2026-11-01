@@ -16,7 +16,8 @@ async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',rece
  const dir=mkdtempSync(join(tmpdir(),'mmv-company-')),calls=[],requests=[];
  const registry=join(dir,'accounts.tsv');if(localRegistry)writeFileSync(registry,profile+'\t'+observed+'\n');
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_HOSTKEY:host,LEADGEN_MMV_DEVICE_RUNTIME:flag,WF_BRAIN_WORKFLOW:flow,P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/approved/adb'};
- const h=createHandlers({root:dir,env,rpc:async body=>{const {request}=body;if(request)requests.push(request);if(rpcImpl)return rpcImpl(body);if(body.kind==='keywords')return {result:['AI']};if(receipt instanceof Error)throw receipt;return {result:receipt};},execute:async(command,args)=>{
+ const centralLease={held:false,attempted:false,async verifyTask(){},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;}};
+ const h=createHandlers({root:dir,env,taskId:'7037d210-2af1-4af9-8635-f93a805e58b6',centralLease,rpc:async body=>{const {request}=body;if(request)requests.push(request);if(rpcImpl)return rpcImpl(body);if(body.kind==='keywords')return {result:['AI']};if(receipt instanceof Error)throw receipt;return {result:receipt};},execute:async(command,args)=>{
   calls.push({command,args});let stdout='';
   if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
   if(command==='adb'||command==='/approved/adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';

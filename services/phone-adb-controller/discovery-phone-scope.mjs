@@ -16,7 +16,7 @@ export const discoveryTapBudgetMs=discoveryCommandBudgetMs('tap-evidence')+3000+
 // 无重定位正常单遍的名义cap和；额外核验/PG/启动时间仍消费原绝对截止。
 export const discoveryCaptureBudgetMs=4*discoveryCommandBudgetMs('lock-refresh')+discoveryCommandBudgetMs('search-video-cards')+discoveryCommandBudgetMs('search-kw-matches')+discoveryTapBudgetMs-discoveryCommandBudgetMs('lock-refresh');
 const digest=result=>{const {cleanup_phone_scope,execution_stopped,...body}=result||{};return hash(JSON.stringify(body));};
-const required=['leadgen-discovery-action.mjs','leadgen-phone-action.mjs','leadgen-handlers.mjs','qualification-identity-snapshot.mjs','leadgen-workflow.mjs','leadgen-discovery.mjs','activity-commander.mjs','discovery-phone-scope.mjs','collection-leaf-producer.mjs','adb-managed-client.py','adb-existing-route.py','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','search-video-tab.py','discovery-cleanup-readback.mjs','discovery-metrics.js'];
+const required=['leadgen-discovery-action.mjs','leadgen-phone-action.mjs','leadgen-handlers.mjs','qualification-identity-snapshot.mjs','central-device-lease.mjs','leadgen-workflow.mjs','leadgen-discovery.mjs','activity-commander.mjs','discovery-phone-scope.mjs','collection-leaf-producer.mjs','adb-managed-client.py','adb-existing-route.py','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','search-video-tab.py','discovery-cleanup-readback.mjs','discovery-metrics.js'];
 export function defaultDiscoveryPhoneScope({root,env}){
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_discovery')return undefined;
  try{return readFrozen(env.WFR_RUN_DIR).discovery_phone_scope;}catch(error){if(error.code!=='ENOENT')throw error;}

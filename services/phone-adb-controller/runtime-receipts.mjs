@@ -13,6 +13,22 @@ import {readQualificationIdentitySnapshot} from './qualification-identity-snapsh
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
 const SHA256=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function centralDeviceLockEvidence({dir,stage,artifact,binding,frozen,env=e}){
+  if(!['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)||!['preflight','cleanup'].includes(stage))return null;
+  const taskId=artifact.result?.central_lock_task_id;
+  if(!taskId)return null;
+  const runId=artifact.result?.central_lock_run_id,sourceCommit=frozen.deployment.source_commit;
+  if(runId!==binding.run_id||taskId!==env.WF_BRAIN_TASK_ID&&taskId!==env.BRAIN_TASK_ID&&taskId!==env.WFR_BRAIN_TASK_ID&&taskId!==binding.task_id)
+    throw Error('CENTRAL_LOCK_SPAN_IDENTITY_INVALID');
+  const file=join(dir,'central-lock-events.jsonl'),stat=lstatSync(file);
+  if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o777)!==0o600||stat.size>10000)throw Error('CENTRAL_LOCK_SPAN_EVENTS_INVALID');
+  const events=readFileSync(file,'utf8').trim().split('\n').map(line=>JSON.parse(line));
+  const acquired=events.filter(x=>x.event==='acquired'&&x.task_id===taskId&&x.run_id===runId&&x.device_name===env.SERIAL&&x.source_commit===sourceCommit);
+  const released=events.filter(x=>x.event==='released'&&x.task_id===taskId&&x.run_id===runId&&x.device_name===env.SERIAL);
+  if(acquired.length!==1||released.length>1||stage==='cleanup'&&Boolean(released.length)!==Boolean(artifact.result?.central_lock_released))
+    throw Error('CENTRAL_LOCK_SPAN_EVENTS_INVALID');
+  return {version:1,task_id:taskId,run_id:runId,device_name:env.SERIAL,source_commit:sourceCommit,acquired:true,released:stage==='cleanup'&&released.length===1};
+}
 export function qualificationIdentityEvidence({dir,frozen,binding}){
   const sample=frozen.sampling_input;
   if(!sample)return null;
@@ -187,7 +203,8 @@ export async function run(args){
       ?samplingAdmissionEvidence({dir,artifact,frozen,binding}):null;
     const qualificationIdentity=stage==='qualification'&&status==='completed'&&frozen.sampling_input
       ?qualificationIdentityEvidence({dir,frozen,binding}):null;
-    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(qualificationIdentity?{qualification_identity_v1:qualificationIdentity}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
+    const centralLock=centralDeviceLockEvidence({dir,stage,artifact,binding,frozen,env:e});
+    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(qualificationIdentity?{qualification_identity_v1:qualificationIdentity}:{}),...(centralLock?{central_device_lock_v1:centralLock}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
     for(const step of (artifact.verification?.step_dod||[]).flatMap(check=>check.steps||[])){
       const owner=frozen.activities.find(owner=>owner.reference.slot_key===step.activity);
       const definition=owner?.version.payload.steps?.find(s=>step.key?.endsWith(`.${s.locator?.step_key}`));

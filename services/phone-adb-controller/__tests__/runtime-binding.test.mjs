@@ -50,7 +50,7 @@ test('public ACK 显式空task经真实createHandlers保留空身份，缺键不
   assert.equal(controllerCalls,1);
  }
 });
-test('真实public缺task键ACK经原main调用点归一空绑定，原响应保留且native上下文仍严格',async t=>{
+test('真实public缺task键ACK经原main调用点归一空绑定，101在设备动作前拒绝无任务来源',async t=>{
  const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const {snapshot_sha256,...body}=JSON.parse(readFileSync(join(dir,'run-definition.json'),'utf8'));
  body.deployment.source_commit='a'.repeat(40);body.activities[0].reference.slot_key='preflight';body.activities[0].version.payload.contract={budget:{max_duration_s:120}};
@@ -100,9 +100,8 @@ const folder=path.join(dir,'native-operations');result.proofs=fs.existsSync(fold
 console.log(JSON.stringify(result));`,{mode:0o600});
  const child=spawnSync(process.execPath,['--experimental-vm-modules',script],{encoding:'utf8',timeout:15000});
  assert.equal(child.status,0,child.stderr);const observed=JSON.parse(child.stdout);
- assert.equal(observed.error,'EXECUTION_START_FAILED');assert.equal(observed.task_own,true);assert.equal(observed.task_is_null,true);
- assert.deepEqual(observed.calls,['adb-read-state','controller']);assert.equal(observed.proofs.length,1);
- assert.equal(observed.proofs[0].task_id,null);assert.equal(observed.proofs[0].status,'not_started');assert.equal(observed.proofs[0].execution_stopped,true);
+ assert.equal(observed.error,'CENTRAL_LOCK_TASK_REQUIRED');assert.equal(observed.task_own,true);assert.equal(observed.task_is_null,true);
+ assert.deepEqual(observed.calls,[]);assert.equal(observed.proofs.length,0);
  assert.equal(readFileSync(join(dir,'run-bindings/a1.ack.json'),'utf8'),originalAck);
 });
 test('public归一不隐藏关联任务/其他来源/显式undefined，也不改原ACK',async t=>{
