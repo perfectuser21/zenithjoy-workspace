@@ -92,9 +92,9 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       } catch (error) {
         if (!state.brainHeld) { try { state.brainHeld = (await brain.lease(binding.serial)).locked_by === state.owner; } catch { state.brainOwnershipUnconfirmed = true; } persist(); }
         if (state.controllerAcquireAttempted && !state.controllerHeld && !state.remoteUnknown) {
-          try { const status = await send('controller', { command: 'lock-status', args: [] }); state.controllerHeld = status.stdout.includes('owner=' + state.owner); } catch { state.remoteUnknown = true; } persist();
+          try { const status = await send('controller', { command: 'lock-status', args: [] }); state.controllerHeld = status.stdout.includes('owner=' + state.owner + ' '); state.controllerOwnershipUnconfirmed = !state.controllerHeld && status.stdout.trim() !== 'lock=free'; } catch { state.remoteUnknown = true; } persist();
         }
-        if (!state.remoteUnknown && state.brainHeld && !state.controllerHeld) { await brain.release(binding.serial, state.owner); state.brainHeld = false; persist(); }
+        if (!state.remoteUnknown && state.brainHeld && !state.controllerHeld && !state.controllerOwnershipUnconfirmed) { await brain.release(binding.serial, state.owner); state.brainHeld = false; persist(); }
         throw error;
       }
     },
