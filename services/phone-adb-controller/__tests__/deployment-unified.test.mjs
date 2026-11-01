@@ -89,6 +89,8 @@ test('持久 review 安装必须先禁用旧 daemon 和封存候选，任一文�
 test('child 安装入口必须独立读回旧 daemon 已禁用和候选已封存',()=>{
  const backend=readFileSync(new URL('../deployment-backend.mjs',import.meta.url),'utf8');
  const child=backend.slice(backend.indexOf('export function verifyChildTransaction'),backend.indexOf('export async function runPackageTransaction'));
+ assert.match(child,/admission\.verified===true&&\['review-preserve','exclusive'\]\.includes\(admission\.mode\)/,
+              '未知 maintenance 模式或空读回不得跳过 review 守卫');
  assert.match(child,/deployment-service\.py','verify-suspended-if-review'/);
  assert.match(child,/deployment-candidate-fence\.py','verify-if-review'/);
  assert.ok(child.indexOf('deployment-service.py')<child.indexOf('deployment-candidate-fence.py'));

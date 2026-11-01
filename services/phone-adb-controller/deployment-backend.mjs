@@ -79,6 +79,8 @@ export function verifyChildTransaction(sha,transaction){
   need(record?.phase==='prepared'&&record.identity.source_commit===sha&&record.identity.release_id===descriptor.plan.release_ids[host],'安装journal身份不符');
  }
  const admission=transport.call('xian-m4','deployment-maintenance.py','verify',transaction);
+ need(admission.verified===true&&['review-preserve','exclusive'].includes(admission.mode),
+  '维护准入模式或读回未知');
  if(admission.mode==='review-preserve'){
   const service=transport.call('xian-m4','deployment-service.py','verify-suspended-if-review',transaction);
   const fence=transport.call('xian-m4','deployment-candidate-fence.py','verify-if-review',transaction);
