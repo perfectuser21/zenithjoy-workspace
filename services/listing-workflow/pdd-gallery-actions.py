@@ -17,8 +17,17 @@ def gallery_candidates(config, picker, png):
     if len(images) != len(config['ownedMedia']): raise ValueError('OWNED_GALLERY_IMAGE_COUNT_UNVERIFIED')
     raw = base64.b64decode(png['bytesBase64'])
     for image in images:
+        image['contentSha256'] = png_crop_sha(raw,image['bounds'],[image['checkbox']],expected_size=[config['binding']['width'],config['binding']['height']])
+        image['imageSize'] = [image['bounds'][2]-image['bounds'][0],image['bounds'][3]-image['bounds'][1]]
         image['imageSha256'] = png_crop_sha(raw,image['bounds'],expected_size=[config['binding']['width'],config['binding']['height']])
     return images
+
+
+def verify_gallery_selection(selection, images):
+    if sorted(x['selectedNumber'] for x in images if x['selectedNumber'] is not None) != list(range(1,len(selection)+1)): raise ValueError('GALLERY_PRIOR_IMAGE_ORDER_CHANGED')
+    for item in selection:
+        matches = [x for x in images if x.get('contentSha256') == item.get('contentSha256') and x.get('imageSize') == item.get('imageSize')]
+        if len(matches) != 1 or not item.get('contentSha256') or matches[0]['selectedNumber'] != item['selectedNumber']: raise ValueError('GALLERY_PRIOR_IMAGE_ORDER_CHANGED')
 
 
 def gallery_action(config,request):
@@ -42,11 +51,12 @@ def gallery_action(config,request):
         selection = config.setdefault('gallerySelection',[])
         if len(media) != 1 or len(matches) != 1 or binding.get('approvedScreenSha256') != png['sha256'] or media[0]['mediaId'] in [x['mediaId'] for x in selection]: raise ValueError('EXACT_TRUSTED_VISUAL_BINDING_REQUIRED')
         if matches[0]['selectedNumber'] is not None: raise ValueError('GALLERY_IMAGE_ALREADY_SELECTED')
-        if sorted(x['selectedNumber'] for x in images if x['selectedNumber'] is not None) != list(range(1,len(selection)+1)): raise ValueError('GALLERY_SELECTION_CONFLICT')
+        verify_gallery_selection(selection,images)
         point = {'bounds':matches[0]['checkbox']}
     elif action == 'gallery-upload':
         images = gallery_candidates(config,picker,png)
         selection = config.get('gallerySelection',[])
+        verify_gallery_selection(selection,images)
         if [x['mediaId'] for x in selection] != [x['mediaId'] for x in config['ownedMedia']] or sorted(x['selectedNumber'] for x in images if x['selectedNumber'] is not None) != list(range(1,len(selection)+1)) or not selection: raise ValueError('EXACT_ORDERED_OWNED_SELECTION_REQUIRED')
         if config.get('galleryUploadIntent'): raise ValueError('GALLERY_UPLOAD_REQUIRES_READBACK')
         config['galleryUploadIntent'] = {'jobId':request['jobId'],'orderedMedia':selection,'at':time.time()}
@@ -60,10 +70,11 @@ def gallery_action(config,request):
         result=observe(config,dict(request,jobId=request['jobId']+'-selected'))
         if result['package'] != MERCHANT or 'MultiGraphSelectorNewActivity' not in config['lastForegroundRaw']: raise ValueError('GALLERY_SELECTION_DESTINATION_UNVERIFIED')
         after=PickerTree(base64.b64decode(result['tree']['bytesBase64']).decode(),config['binding']['width'],config['binding']['height'])
-        current=after.gallery_images(config['phoneAlbum']['name'])
-        exact=[x for x in current if x['bounds']==matches[0]['bounds'] and x['selectedNumber']==len(selection)+1]
+        current=gallery_candidates(config,after,result['picture'])
+        exact=[x for x in current if x['contentSha256']==matches[0]['contentSha256'] and x['imageSize']==matches[0]['imageSize'] and x['selectedNumber']==len(selection)+1]
         if len(exact)!=1 or sorted(x['selectedNumber'] for x in current if x['selectedNumber'] is not None)!=list(range(1,len(selection)+2)): raise ValueError('GALLERY_SELECTION_NATIVE_ORDER_UNVERIFIED')
-        selection.append({'mediaId':media[0]['mediaId'],'sourceSha256':media[0]['sha256'],'visualBinding':binding,'selectedNumber':len(selection)+1})
+        if len(exact)==1: verify_gallery_selection(selection,[x for x in current if x is not exact[0]])
+        selection.append({'mediaId':media[0]['mediaId'],'sourceSha256':media[0]['sha256'],'visualBinding':binding,'selectedNumber':len(selection)+1,'contentSha256':exact[0]['contentSha256'],'imageSize':exact[0]['imageSize']})
     if action == 'gallery-back':
         config['abandonedPickerAction']=config.get('pendingPicker')
         config['gallerySelection']=[]
