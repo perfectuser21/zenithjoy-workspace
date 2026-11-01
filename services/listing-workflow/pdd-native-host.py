@@ -131,8 +131,8 @@ def native_action(config, request):
         mask = screen.homepage_animation_mask(target)
         approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
         bounds = [0, 0, config['binding']['width'], config['binding']['height']]
-        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask])
-        actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask])
+        expected_digest = png_crop_sha(base64.b64decode(approved_png['bytesBase64']), bounds, [mask], expected_size=bounds[2:])
+        actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask], expected_size=bounds[2:])
         if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
         comparison = {'mode': 'whole-screen-except-unique-marketing-icon', 'mask': mask, 'sha256': actual_digest, 'evidence': current_png['path']}
     if action == 'approve-draft':
@@ -146,6 +146,7 @@ def native_action(config, request):
         if label in {'上传图片', '从手机相册选择', '图片空间', '取消'} and not config.get('draft', {}).get('owned'):
             raise ValueError('OWNED_DRAFT_REQUIRED')
         point = screen.navigate(label, [x['name'] for x in config['ownedMedia'] if x.get('phoneVerified')])
+        if label == '商品管理': screen.homepage_animation_mask(point)
         if label == '发布商品':
             config['baselineCounts'] = screen.facts()['counts']
             config['expectNewForm'] = True
@@ -155,7 +156,7 @@ def native_action(config, request):
         if label == '商品管理':
             destination, destination_evidence = fresh_xml(config, job_id + '-destination')
             if not destination.labels('商品管理') or not destination.facts()['counts']: raise ValueError('NAVIGATION_DESTINATION_UNVERIFIED')
-        return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']]}
+        return {'ok': True, 'label': label, 'candidate': point, 'visualComparison': comparison, 'evidence': [before['path']] + ([destination_evidence['path']] if label == '商品管理' else [])}
     if action == 'set-field':
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'):
             raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
