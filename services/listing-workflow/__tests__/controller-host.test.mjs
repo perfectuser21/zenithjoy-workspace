@@ -36,3 +36,10 @@ test('existing phone path is refused before recording ownership or invoking medi
  except ValueError as e:print(json.dumps({'error':str(e),'planned':item['phonePlanned']}))`);
  assert.equal(r.error,'PHONE_MEDIA_ALREADY_EXISTS_OR_UNKNOWN');assert.equal(r.planned,false);
 });
+
+test('cannot add new files after the isolated album plan has been frozen',()=>{
+ const r=run(`with tempfile.TemporaryDirectory() as t:
+ c={'remoteRoot':t,'ownedMedia':[],'albumMoveAttempted':True};raw=b'\\xff\\xd8\\xffimage'
+ try:h.stage_media(c,{'name':'IMG_20261101_101600_1.jpg','sha256':hashlib.sha256(raw).hexdigest(),'bytesBase64':base64.b64encode(raw).decode()})
+ except ValueError as e:print(json.dumps({'error':str(e),'files':len(list(pathlib.Path(t).iterdir()))}))`);assert.equal(r.error,'ALBUM_PLAN_ALREADY_FIXED');assert.equal(r.files,0);
+});
