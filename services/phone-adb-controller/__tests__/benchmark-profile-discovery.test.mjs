@@ -35,7 +35,7 @@ function ctl(args, extraEnv = {}) {
   const { dir, reg } = registry();
   const r = spawnSync("zsh", [SCRIPT, "--profile", "legacy", ...args], {
     encoding: "utf8",
-    env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), ...extraEnv },
+    env: { ...process.env, ...fixturePythonEnv(), DOUYIN_PHONE_REGISTRY: reg, DOUYIN_PHONE_TMP_ROOT: join(dir, "phone"), DOUYIN_PHONE_LOCK_TEST_MODE: '1', ...extraEnv },
   });
   return { code: r.status, out: r.stdout.replace(/\n+$/, ""), err: r.stderr.trim(), dir };
 }
