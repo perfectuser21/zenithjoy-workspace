@@ -97,7 +97,7 @@ export function discoveryFiniteStopEvidence(evidence,context){
   return proof;
  }catch{return null;}
 }
-export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld,purpose='collect',evidence}){
+export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld,purpose='collect',evidence,verifyPhoneAssociation}){
  const frozen=readFrozen(env.WFR_RUN_DIR),spec=frozen.discovery_phone_scope;
  if(!spec)fail('SCOPE_REQUIRED');
  if(!['collect','cleanup'].includes(purpose))fail('PURPOSE_INVALID');
@@ -105,7 +105,11 @@ export async function startDiscoveryPhoneScope({root,env,state,sourceCommit,task
  const identity={purpose:'cleanup_only',task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collect_videos',owner:env.WFR_TAG,target:frozen.deployment.target,account:state.account,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id,work_deadline_ms:state.discoveryWorkDeadline??state.budgetDeadline,global_deadline_ms:globalDeadline,route:spec.policy?.endpoint,client_sha256:spec.policy?.adb_sha256};
  if(!lockHeld||state.executionUnknown||state.currentActivity!==(purpose==='collect'?'collect_videos':'cleanup')||!Number.isSafeInteger(globalDeadline)||Date.now()>=globalDeadline||!Number.isSafeInteger(identity.work_deadline_ms)||identity.work_deadline_ms>=globalDeadline)fail('IDENTITY_INVALID');
  for(const k of ['task_id','run_id','attempt','source_commit','profile','serial','target'])if(spec[k]!==identity[k])fail('IDENTITY_INVALID');
- if(binding.run_id!==identity.run_id||binding.task_id!==identity.task_id||frozen.deployment.source_commit!==sourceCommit||!spec.expected_account||spec.expected_account!==state.account)fail('IDENTITY_INVALID');
+ if(binding.run_id!==identity.run_id||frozen.deployment.source_commit!==sourceCommit||!spec.expected_account||spec.expected_account!==state.account)fail('IDENTITY_INVALID');
+ if(binding.task_id===null&&identity.task_id){
+  if(!verifyPhoneAssociation)fail('TASK_ASSOCIATION_REQUIRED');
+  await verifyPhoneAssociation({frozen,binding,scope:spec});
+ }else if(binding.task_id!==identity.task_id)fail('IDENTITY_INVALID');
  if(realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||env.DOUYIN_PHONE_ADB!==join(root,'douyin-phone-adb')||!sourceStable(root,frozen))fail('SOURCE_INVALID');
  if(Object.entries(env).some(([k,v])=>v&&(/^(DYLD_|LD_)/.test(k)||['PYTHONPATH','PYTHONHOME','PYTHONSTARTUP','PYTHONINSPECT','NODE_OPTIONS','NODE_PATH','DOUYIN_BYPASS_REPORT_BIN','OWN_ACCOUNTS_CONF'].includes(k))))fail('AMBIENT_OVERRIDE_REFUSED');
  for(const [k,v] of [['DOUYIN_CURL_BIN','/usr/bin/curl'],['DOUYIN_SIPS_BIN','/usr/bin/sips'],['DOUYIN_LOCATE_SCRIPT',join(root,'locate-element.py')]])if(env[k]&&env[k]!==v)fail('TOOL_OVERRIDE_REFUSED');

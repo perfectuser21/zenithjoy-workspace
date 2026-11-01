@@ -66,7 +66,7 @@ function returnedFresh(r,{active=false}={}){
   return !s.executionUnknown&&s.account===r.account&&!s.remainingVideoIds?.length
    &&s.run_id===i.run_id&&s.task_id===i.task_id&&s.source_commit===i.source_commit&&s.run===i.owner&&s.profile===i.profile
    &&e.WFR_RUN_DIR===r.runDir&&`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT}`===i.run_id&&e.WFR_ATTEMPT===i.attempt&&e.WFR_TAG===i.owner&&e.P===i.profile&&e.SERIAL===i.serial
-   &&binding.id===i.binding_id&&binding.task_id===i.task_id&&binding.run_id===i.run_id
+   &&binding.id===i.binding_id&&(binding.task_id===i.task_id||binding.task_id===null&&r.taskAssociation?.task_id===i.task_id&&r.taskAssociation.binding_id===i.binding_id)&&binding.run_id===i.run_id
    &&(active||r.generation===(generations.get(s)||0))&&Date.now()<r.globalDeadline
    &&frozen.snapshot_sha256===i.snapshot_sha256&&evidenceStillQuiet(r.evidence,r.specification)
    &&!readdirSync(join(r.runDir,'native-operations')).some(x=>x.endsWith('.unknown'));
@@ -84,6 +84,7 @@ export async function startCollectionReturnedScope({evidence,context,purpose}){
  const keys=identityKeys.filter(k=>k!=='deadline_ms');
  if(!r||!keys.every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!['readback','cleanup'].includes(purpose)
   ||purpose==='readback'&&r.phase!=='available'||r.state.currentActivity!==(purpose==='cleanup'?'cleanup':'collection'))throw Error('COLLECTION_RETURNED_AUTHORITY_INVALID');
+ if(r.taskAssociation)await r.verifyPhoneAssociation({frozen:readFrozen(r.runDir),binding:readBinding(r.runDir,r.env.WFR_ATTEMPT),scope:r.specification});
  const deadline=Math.min(r.state.budgetDeadline,purpose==='readback'?r.identity.deadline_ms:r.globalDeadline);
  if(!Number.isSafeInteger(deadline)||Date.now()>=deadline)throw Error('COLLECTION_RETURNED_DEADLINE');
  r.phase=purpose+'_active';
@@ -141,7 +142,9 @@ export function defaultCollectionPhoneScope({root,env,workflowKey=env.WF_BRAIN_W
   &&(!x.workflow_keys||Array.isArray(x.workflow_keys)&&x.workflow_keys.includes(workflowKey)));
  if(!matches.length)return undefined;if(matches[0].acceptance_probe)throw Error('COLLECTION_ACCEPTANCE_PROBE_EXPLICIT_INPUT_REQUIRED');
  if(matches.length!==1||!matches[0].expected_account)throw Error('COLLECTION_DEFAULT_TEMPLATE_INVALID');
- const specification={...structuredClone(matches[0]),version:1,task_id:null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};
+ const taskIds=[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID].filter(Boolean);
+ if(new Set(taskIds).size>1)throw Error('COLLECTION_DEFAULT_TASK_CONFLICT');
+ const specification={...structuredClone(matches[0]),version:1,task_id:taskIds[0]||null,attempt:'a1',run_id:env.WFR_RUN_ID+'__a1',source_commit:manifest.source_commit};
  if(specification.evidence_alias)specification.evidence_identity=evidenceIdentity(specification);
  else if(specification.evidence_identity)throw Error('COLLECTION_EVIDENCE_ALIAS_INVALID');
  return specification;
@@ -152,13 +155,18 @@ function pinnedTool(tool){
  if(!stat.isFile()||(stat.mode&0o022)||sha(readFileSync(path))!==tool.sha256)throw Error('COLLECTION_INTERPRETER_PIN_MISMATCH');
  return path;
 }
-export async function startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds}){
+export async function startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds,verifyPhoneAssociation}){
  let frozen;try{frozen=readFrozen(env.WFR_RUN_DIR);}catch(error){if(error.code==='ENOENT')return null;throw error;}
  if(!frozen.collection_phone_scope)return null;
  const specification=structuredClone(frozen.collection_phone_scope),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);
  const identity={task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile:env.P,serial:env.SERIAL,activity:'collection',owner:env.WFR_TAG,target:frozen.deployment.target,deadline_ms:state.budgetDeadline,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};
- if(specification.version!==1||binding.run_id!==identity.run_id||binding.task_id!==identity.task_id||frozen.deployment.source_commit!==sourceCommit||state.currentActivity!=='collection'||!Number.isSafeInteger(identity.deadline_ms)||Date.now()>=identity.deadline_ms||state.executionUnknown)throw Error('COLLECTION_PHONE_SCOPE_IDENTITY_INVALID');
+ if(specification.version!==1||binding.run_id!==identity.run_id||frozen.deployment.source_commit!==sourceCommit||state.currentActivity!=='collection'||!Number.isSafeInteger(identity.deadline_ms)||Date.now()>=identity.deadline_ms||state.executionUnknown)throw Error('COLLECTION_PHONE_SCOPE_IDENTITY_INVALID');
  for(const key of ['task_id','run_id','attempt','source_commit','profile','serial','target'])if(specification[key]!==identity[key])throw Error('COLLECTION_PHONE_SCOPE_IDENTITY_INVALID');
+ let taskAssociation=null;
+ if(binding.task_id===null&&identity.task_id){
+  if(!verifyPhoneAssociation)throw Error('COLLECTION_TASK_ASSOCIATION_REQUIRED');
+  taskAssociation=await verifyPhoneAssociation({frozen,binding,scope:specification});
+ }else if(binding.task_id!==identity.task_id)throw Error('COLLECTION_PHONE_SCOPE_IDENTITY_INVALID');
  if(specification.expected_account&&String(state.account)!==specification.expected_account)throw Error('COLLECTION_PHONE_ACCOUNT_INVALID');
  if(realpathSync(root)!==realpathSync(join(env.WFR_RUN_DIR,'runtime'))||env.DOUYIN_PHONE_ADB!==join(root,'douyin-phone-adb'))throw Error('COLLECTION_PHONE_SOURCE_INVALID');
  for(const file of required)if(!frozen.files['runtime/'+file]||sha(readFileSync(join(root,file)))!==frozen.files['runtime/'+file])throw Error('COLLECTION_PHONE_SOURCE_INVALID');
@@ -189,7 +197,7 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
     &&Date.now()<identity.deadline_ms&&!state.remainingVideoIds?.length&&!['partial','failed','paused'].includes(result.status)&&Array.isArray(result.failures)&&result.failures.length===0&&result.videos_processed>0){
     const originalGlobal=(Number(env.WF_RUN_START_TS)+Number(env.WF_RUN_MAX_SECONDS))*1000;
     const proof=Object.freeze({protocol:'collection-returned-phone-v1',scope_id:randomUUID()});
-    returnedRecords.set(proof,{identity,state,account:state.account,resultDigest:failureDigest(result),runDir:env.WFR_RUN_DIR,evidence,specification,
+    returnedRecords.set(proof,{identity,state,account:state.account,resultDigest:failureDigest(result),runDir:env.WFR_RUN_DIR,evidence,specification,taskAssociation,verifyPhoneAssociation,
      generation:generations.get(state)||0,phase:'available',globalDeadline:Number.isSafeInteger(originalGlobal)&&originalGlobal>=identity.deadline_ms?originalGlobal:identity.deadline_ms,env,scopedEnv});
     return {...result,returned_phone_scope:proof};
    }

@@ -8080,6 +8080,14 @@ agent_suite:
   product: AI员工
   note: 当前模板固定Git字节与真实manifest进入默认101/102 scope对齐单5037；旧5042冻结/pins/显式错端点原guard保持，证据目录元数据为synthetic。
 
+- id: central-device-lease
+  path: services/phone-adb-controller/__tests__/central-device-lease.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: Brain Task、官方无 Task 字段的 run binding 与实时中心租约三方精确关联；错 Task、错 run、空锁、异主 fail closed。
+
 - id: producer-pending-handoff
   path: services/phone-adb-controller/__tests__/producer-pending-handoff.test.mjs
   type: integration

@@ -108,6 +108,7 @@ test('split smoke executes every original complete test file once in one ordinar
  const files=full[0].args.filter(x=>x.endsWith('.test.mjs')||x.endsWith('.test.js'));
  assert.equal(new Set(files).size,files.length,'ordinary complete suite repeats a file');
  assert.deepEqual([...files].sort(),[...originalFiles,'services/phone-adb-controller/__tests__/leadgen-sampled-admission.test.mjs',
+  'services/phone-adb-controller/__tests__/central-device-lease.test.mjs',
   'services/phone-adb-controller/__tests__/split-smoke-budget-wiring.test.mjs'].sort(),'complete suite file set changed');
  for(const file of originalFiles)assert.ok(files.includes(file),'lost original complete test coverage: '+file);
  assert.ok(files.includes('services/phone-adb-controller/__tests__/split-smoke-budget-wiring.test.mjs'));

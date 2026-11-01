@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -66,14 +66,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -192,7 +192,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -286,13 +286,13 @@
           "sha256": "a6b0300f1c359931604836e181204afbfd9c5113fc9bc0ff9892930815ca8b37"
         }
       ],
-      "code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20",
+      "code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "c225cd074ad1eb9ce252a4b8f0c1aa13410a44f276afd24e8e8b61c479533fb4",
-        "current_code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "bf18a75e6c8763868439bbd75494f018c5cc8a17928d925ff024c861b864ae20",
+        "current_code_digest": "81d333540e28ec981b568220787d0217c30dfed93a3094ef6c6810be6a758c36"
       }
     },
     "douyin_video_processing.preflight": {
@@ -325,7 +325,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -367,14 +367,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -504,7 +504,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -570,13 +570,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff",
+      "code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "d331b61b986c0d8f4bc3129e5ffbb89013ff3e025c22fed2e80ca24e1a05559e",
-        "current_code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "5b09e83d183285627c0a0b98987f65976a6089ec65c96d7f59ce5a26c4fecaff",
+        "current_code_digest": "52ca56dd1e72a46c698af1f4c4a988edbccf6847f34c4e7a83c23b5f846af3f3"
       }
     },
     "douyin_video_processing.dedup": {
@@ -609,7 +609,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -651,14 +651,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -777,7 +777,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -857,13 +857,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4",
+      "code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "f3ccb7807f5e1e08d1176a17386924e09d1a8735e956ba7cbc2c84d9be10a330",
-        "current_code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "dfce2431a621ca4b49cb54a0ab7a8f755fc12e99019948bc34a0ede5d1e3bdb4",
+        "current_code_digest": "5313b671d53d73b3f55a8c6254979f7e7ca81a5a72cea8f8a31826a862c926a8"
       }
     },
     "douyin_video_processing.qualification": {
@@ -924,7 +924,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -966,14 +966,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -1092,7 +1092,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -1228,13 +1228,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa",
+      "code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "3322a7bdd53b68fb487154586fc653aa468af29233055c294e86683e6362032b",
-        "current_code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "c05fa4bcec46712dcbf7b0b0a429217459fe8e3dd8ab9a6e456feb64fefa25fa",
+        "current_code_digest": "263aa2edb5ff1f42f83312f8f1795fa18ee8ce5310ccf57016a7b89af8019227"
       }
     },
     "douyin_video_processing.collection": {
@@ -1267,14 +1267,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "cdb1ff6c963cc04ef01d23af6537a7f3de105415c156a383cb89426605c14fb0"
+          "sha256": "22c12610307bafebb1b31fb12ec4a7920910174e1bf4c3fad9fb559bff3678b4"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -1316,14 +1316,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -1450,7 +1450,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -1544,13 +1544,13 @@
           "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
         }
       ],
-      "code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44",
+      "code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "d339268a4c37bfdc68934eba31cb64ac6220d7eadd506c350f87b093b9e0e798",
-        "current_code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "767bfb33b33f6e5fa287380cb2a0e273df24dfde82df9782b5da0b3464033d44",
+        "current_code_digest": "f5887f1d67d523bbf35642d7c9601a0e1e07e9d5500fee3a44626b313d6ded27"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1576,7 +1576,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -1618,14 +1618,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -1747,7 +1747,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -1820,13 +1820,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6",
+      "code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "cbe90d2f2cb9f2f99135f3047e729fe239579553a66dfcc4be256b5af6c365ca",
-        "current_code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "a4722826a88e8d63320dddef8c50261e2eb1ce8564d23466794e8326da2269a6",
+        "current_code_digest": "e604ad3ceb2a57400a64729c5afdaf569f60f0fa0d2c15ed0f4b328c8ae0c1b8"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1852,7 +1852,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -1894,14 +1894,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -1992,7 +1992,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -2107,13 +2107,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5",
+      "code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "f24f10187ace4aee0182278f44a00a8e53a74bd3216b75f932f92fcf54ca2aad",
-        "current_code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "4e678030b14c917bdfe7f1c44f785e46ec61b967f3f597fc3b232811733c05b5",
+        "current_code_digest": "d1d1f315199561799c541a193a9ec88bafd03b836cfba02ae0b72d541f8bf897"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2146,7 +2146,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -2188,14 +2188,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -2286,7 +2286,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -2436,13 +2436,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef",
+      "code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "6e7d3662a6a710df3a691df0207bd46720a60d4cf8989225430fff30b56ce4a4",
-        "current_code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "3ee9665963bf98bdd863ef5a354c20a394d8ce2e3624691c45c80516c7b91cef",
+        "current_code_digest": "d21decdd4e30c19e60f24b12e3a0df49125adf5db4e133a10404979dafdff2c3"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2468,7 +2468,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -2510,14 +2510,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -2654,7 +2654,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -2748,13 +2748,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84",
+      "code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "eba30cad119f06334b095cdefab3c5ea19989492c983835577643bb50c01a4a5",
-        "current_code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "9c3f8129d2fdc6555a0e1c7fbc89b581a3d5779f29a0f5db717f28af9f090b84",
+        "current_code_digest": "6ef1c1b3b57b1f9ab701b778125a322ffaa236481e241eed4236495bee7f273a"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2780,7 +2780,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -2822,14 +2822,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -2955,7 +2955,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -3035,13 +3035,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f",
+      "code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "78056805e3d2f0ffc6d96bb886563dc37374f7ac284491e6a7f9601bfd55582b",
-        "current_code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "2531639c0c0460800ff384f5ef189d3008f5b3a75a6bcc7c7b70e361f3e2bb6f",
+        "current_code_digest": "e67bd66d924469b5c37ac9bcbb4ded912af2b9d22d20f65b68d26ec808d2d986"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3067,7 +3067,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -3109,14 +3109,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -3242,7 +3242,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -3315,13 +3315,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902",
+      "code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "4af0fc0916224115b4888180dc5605183fac1278c076fb3bbf396c63640494e8",
-        "current_code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "11729dc673f82e350ef1c429b335e013f5581d75c191cac3485d4c3df6f0c902",
+        "current_code_digest": "853ccbb706d6508172386db3333a342f96c58fb0f588478b9796bc5c36a63691"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3347,7 +3347,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/activity-skill-recovery.mjs",
           "revision": "contract",
-          "sha256": "8cc23d7c3a3cec53764baead5a10170b97af341b6944b672e5a2593bccc41f26"
+          "sha256": "25faac1b022b17dad474f043a1d411e314e7b7995e6db3f61cb137885827bcd1"
         },
         {
           "kind": "code",
@@ -3389,14 +3389,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "19855f0f83412b4608cd552e50799a3001d4c491f23dfbd8f9bcb900d2567ba6"
+          "sha256": "08cf7ad5133464cdfa448fd03547886e970103912c118c67f28956b5739ecf86"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-acceptance-probe.mjs",
           "revision": "contract",
-          "sha256": "0bc040be7708f374ed284cda71a1fad8ac44f5741763b3f2dd0b99fb13c0377c"
+          "sha256": "90974d4fbfe76ec63199cc82716cbeabfcc82735dd79a2f43728889f74b16fa5"
         },
         {
           "kind": "code",
@@ -3525,7 +3525,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "6513f38e84291c933d9b5e0058abf02959d579a3a34ca5b4d0497dae7b5ffded"
+          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
         },
         {
           "kind": "code",
@@ -3605,13 +3605,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb",
+      "code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "在已合并的102资格身份冻结及双主span恢复基线上，补齐101/102中央设备锁与本地锁；Activity输入输出合同不变，缺Brain Task的旧执行明确拒绝。",
-        "reviewed_by": "codex:leadgen-central-lock-integration",
-        "previous_code_digest": "0b8772187b09dc560daf214bbbb488d74ba375ca4f7b88f87d253e63cc89990e",
-        "current_code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb"
+        "reason": "Corrects external Brain Task association and verifies live device lease before phone scope; Activity business inputs and outputs remain unchanged.",
+        "reviewed_by": "codex:leadgen-task-binding-fix",
+        "previous_code_digest": "7eb541335a3c9d0e66c290221fc1010b9944cc02e3bb8bc01037348371ff80cb",
+        "current_code_digest": "d3eee8a07cf1c149309a9c9c99510d1434c9719498ba99b99e6e5d1dcad8c8a4"
       }
     }
   },

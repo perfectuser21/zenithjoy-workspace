@@ -163,6 +163,12 @@ export async function run(args){
     const discoveryPhoneScope=e.WF_DEPLOYMENT_ROOT||e.WF_HOME?defaultDiscoveryPhoneScope({root:e.WF_DEPLOYMENT_ROOT||e.WF_HOME,env:e}):undefined;
     if(e.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&!discoveryPhoneScope)throw Error('DISCOVERY_PHONE_SCOPE_REQUIRED');
     if(collectionPhoneScope&&(e.WF_BRAIN_WORKFLOW!=='douyin_video_processing'||collectionPhoneScope.profile!==e.P||collectionPhoneScope.serial!==e.SERIAL||collectionPhoneScope.run_id!==`${e.WFR_RUN_ID}__${collectionPhoneScope.attempt}`))throw Error('COLLECTION_SCOPE_INPUT_IDENTITY_INVALID');
+    if(['douyin_video_discovery','douyin_video_processing'].includes(e.WF_BRAIN_WORKFLOW)){
+      const taskIds=[e.WF_BRAIN_TASK_ID,e.BRAIN_TASK_ID,e.WFR_BRAIN_TASK_ID].filter(Boolean);
+      if(taskIds.length===0||new Set(taskIds).size!==1)throw Error('CENTRAL_TASK_INPUT_INVALID');
+      const scope=e.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?discoveryPhoneScope:collectionPhoneScope;
+      if(scope&&scope.task_id!==taskIds[0])throw Error('CENTRAL_TASK_FROZEN_SCOPE_MISMATCH');
+    }
     const samplingInput=commentSamplingInput(e),fixedDiscoveryInput=discoveryInput(e),outreachScope=outreachScopeInput(e);
     const producerDescriptor=e.LEADGEN_PRODUCER_DESCRIPTOR_FILE?readProducerDescriptor(e.LEADGEN_PRODUCER_DESCRIPTOR_FILE):undefined;
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;

@@ -19,7 +19,7 @@ import {freezeQualificationIdentity} from './qualification-identity-snapshot.mjs
 import {createVideoAction} from './leadgen-video-action.mjs';
 import {startCollectionPhoneScope,startCollectionReturnedScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
 import {startDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
-import {createCentralDeviceLease} from './central-device-lease.mjs';
+import {createCentralDeviceLease,verifyCentralTaskAssociation,persistCentralTaskAssociation} from './central-device-lease.mjs';
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
   if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
@@ -70,6 +70,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const getCentral=()=>central??=createCentralDeviceLease({brainUrl:env.BRAIN_URL,token:env.BRAIN_INTERNAL_TOKEN,
     deviceName:serial,taskId,runId:state.run_id,expectedProjectId:env.WF_BRAIN_PROJECT_ID,
     runSeconds:Number(env.WF_RUN_MAX_SECONDS||1800)});
+  const verifyPhoneAssociation=async({frozen,binding,scope})=>{
+    if(!needsCentralLock)throw Error('CENTRAL_TASK_ASSOCIATION_UNAVAILABLE');
+    const receipt=await verifyCentralTaskAssociation({lease:getCentral(),workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,
+      sourceCommit,runTag:run,taskId,projectId:env.WF_BRAIN_PROJECT_ID,deviceName:serial,runId:state.run_id,
+      binding,scope,snapshotSha256:frozen.snapshot_sha256});
+    return persistCentralTaskAssociation(env.WFR_RUN_DIR,receipt);
+  };
   let collectionScope=null,discoveryScope=null,discoveryClosed=false;const collectionProgress=new Map();
   let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{
@@ -196,7 +203,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,
       ...(needsCentralLock?{central_lock_task_id:taskId,central_lock_run_id:state.run_id}:{}),...outreachProof};
   };
-  const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;}});
+  const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;},verifyPhoneAssociation});
   const getDiscovery=discoveryAction.getDiscovery;
   const intake=async()=>{
     state.companyConfig=await queue('company_config',{step:'102'});
@@ -454,7 +461,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsUnverified?null:recordingsRequired>mediaVerified?recordingsRequired-mediaVerified:0,recordings_unverified:recordingsUnverified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,avatarRecoveries=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
-      collectionScope=qualified.length?await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id)}):null;
+      collectionScope=qualified.length?await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation}):null;
       const counts=()=>[comments,collected,sampled,rescans,avatarRecoveries,inserted,historyVerified,coverage,historyConsumed,historyScoped];
       const add=values=>{[comments,collected,sampled,rescans,avatarRecoveries,inserted,historyVerified,coverage,historyConsumed,historyScoped]=counts().map((v,i)=>v+values[i]);};
       try{
@@ -533,7 +540,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     send_dm:outreach.send_dm,write_back:outreach.write_back,
     cleanup:async()=>{const failures=[];let closed=false,desktop=false,released=false,cleanupProof;
       if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
-      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence});
+      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
       try{
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}

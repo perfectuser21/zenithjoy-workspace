@@ -1,4 +1,34 @@
+import {openSync,closeSync,writeFileSync,readFileSync,fstatSync,constants} from 'node:fs';
+import {join} from 'node:path';
 const TASK_ID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+
+export function persistCentralTaskAssociation(dir,receipt){
+  const path=join(dir,'central-task-association.json'),bytes=JSON.stringify(receipt);
+  if(receipt?.kind!=='verified_external_task_association'||Buffer.byteLength(bytes)>4096)throw Error('CENTRAL_TASK_ASSOCIATION_INVALID');
+  let fd;
+  try{fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_WRONLY|constants.O_NOFOLLOW,0o600);writeFileSync(fd,bytes);return receipt;}
+  catch(error){if(error.code!=='EEXIST')throw error;}
+  finally{if(fd!==undefined)closeSync(fd);}
+  fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW);
+  try{const st=fstatSync(fd);if(!st.isFile()||st.uid!==process.getuid()||(st.mode&0o777)!==0o600||st.size>4096||readFileSync(fd,'utf8')!==bytes)throw Error('CENTRAL_TASK_ASSOCIATION_CHANGED');}
+  finally{closeSync(fd);}
+  return receipt;
+}
+
+// Brain external run bindings have no task_id field. This derived receipt keeps
+// that public binding intact while requiring the actual Task and live lease.
+export async function verifyCentralTaskAssociation({lease,workflowKey,companyLine,sourceCommit,runTag,taskId,projectId,deviceName,runId,binding,scope,snapshotSha256}){
+  if(!TASK_ID.test(taskId||'')||projectId&&!TASK_ID.test(projectId)||!binding?.id||binding.run_id!==runId
+    ||binding.task_id!==null||scope?.task_id!==taskId||scope.run_id!==runId||scope.serial!==deviceName
+    ||scope.source_commit!==sourceCommit||lease?.taskId!==taskId||lease.runId!==runId||lease.deviceName!==deviceName
+    ||!/^[a-f0-9]{64}$/.test(snapshotSha256||''))throw Error('CENTRAL_TASK_ASSOCIATION_MISMATCH');
+  const task=await lease.verifyTask({workflowKey,companyLine,sourceCommit,runTag});
+  if(task.id!==taskId||!TASK_ID.test(task.project_id||'')||projectId&&task.project_id!==projectId)throw Error('CENTRAL_TASK_ASSOCIATION_MISMATCH');
+  await lease.verifyHeld();
+  return {version:1,kind:'verified_external_task_association',task_id:taskId,project_id:task.project_id,run_id:runId,
+    binding_id:binding.id,source_commit:sourceCommit,device_name:deviceName,workflow_key:workflowKey,
+    runtime_snapshot_sha256:snapshotSha256,central_owner:taskId};
+}
 
 export function createCentralDeviceLease({brainUrl,token,deviceName,taskId,runId,expectedProjectId,fetcher=globalThis.fetch,now=Date.now,runSeconds=1800}){
   if(!TASK_ID.test(taskId||'')||!runId)throw Error('CENTRAL_LOCK_TASK_REQUIRED');
@@ -45,6 +75,10 @@ export function createCentralDeviceLease({brainUrl,token,deviceName,taskId,runId
     if(!held)throw Error('CENTRAL_LOCK_NOT_HELD');
     if(now()-lastVerified>=60000||expiresAt<=now()+120000)await renew();
   }
+  async function verifyHeld(){
+    if(!held)throw Error('CENTRAL_LOCK_NOT_HELD');
+    return readback(taskId);
+  }
   async function release(){
     if(!held&&!attempted)return false;
     if(!held){const current=await readback(taskId);if(!current)throw Error('CENTRAL_LOCK_UNKNOWN');held=true;}
@@ -61,5 +95,5 @@ export function createCentralDeviceLease({brainUrl,token,deviceName,taskId,runId
       ||p.source_commit!==sourceCommit||p.run_tag!==runTag)throw Error('CENTRAL_LOCK_TASK_MISMATCH');
     return task;
   }
-  return {verifyTask,acquire,renew,ensure,release,get held(){return held;},get attempted(){return attempted;},taskId,runId,deviceName};
+  return {verifyTask,acquire,renew,ensure,verifyHeld,release,get held(){return held;},get attempted(){return attempted;},taskId,runId,deviceName};
 }

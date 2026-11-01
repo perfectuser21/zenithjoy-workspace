@@ -23,8 +23,16 @@ export function validateCollectionAcceptanceProbe(probe){
 }
 function identity(frozen,binding,env){
  const scope=frozen.collection_phone_scope,probe=validateCollectionAcceptanceProbe(scope?.acceptance_probe);
- if(binding.task_id!==scope.task_id||binding.run_id!==scope.run_id||scope.run_id!==env.WFR_RUN_ID+'__'+env.WFR_ATTEMPT||scope.attempt!==env.WFR_ATTEMPT||scope.profile!==env.P||scope.serial!==env.SERIAL||scope.source_commit!==frozen.deployment.source_commit||scope.target!==frozen.deployment.target||!env.WFR_TAG)throw Error('COLLECTION_ACCEPTANCE_PROBE_BINDING_INVALID');
- return {version:1,kind:probe.kind,video_id:probe.video_id,task_id:binding.task_id,run_id:binding.run_id,attempt:scope.attempt,source_commit:scope.source_commit,profile:scope.profile,serial:scope.serial,target:scope.target,owner:env.WFR_TAG,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};
+ if(binding.task_id===null&&scope.task_id){
+  const file=join(env.WFR_RUN_DIR,'central-task-association.json'),fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);
+  let bytes;try{const st=fstatSync(fd);if(!st.isFile()||st.uid!==process.getuid()||(st.mode&0o777)!==0o600||st.size>4096)throw Error('COLLECTION_ACCEPTANCE_PROBE_TASK_ASSOCIATION_INVALID');bytes=readFileSync(fd,'utf8');}finally{closeSync(fd);}
+  const association=JSON.parse(bytes);
+  if(association.kind!=='verified_external_task_association'||association.task_id!==scope.task_id||association.binding_id!==binding.id
+    ||association.run_id!==binding.run_id||association.device_name!==scope.serial||association.source_commit!==scope.source_commit
+    ||association.runtime_snapshot_sha256!==frozen.snapshot_sha256)throw Error('COLLECTION_ACCEPTANCE_PROBE_TASK_ASSOCIATION_INVALID');
+ }else if(binding.task_id!==scope.task_id)throw Error('COLLECTION_ACCEPTANCE_PROBE_BINDING_INVALID');
+ if(binding.run_id!==scope.run_id||scope.run_id!==env.WFR_RUN_ID+'__'+env.WFR_ATTEMPT||scope.attempt!==env.WFR_ATTEMPT||scope.profile!==env.P||scope.serial!==env.SERIAL||scope.source_commit!==frozen.deployment.source_commit||scope.target!==frozen.deployment.target||!env.WFR_TAG)throw Error('COLLECTION_ACCEPTANCE_PROBE_BINDING_INVALID');
+ return {version:1,kind:probe.kind,video_id:probe.video_id,task_id:scope.task_id,run_id:binding.run_id,attempt:scope.attempt,source_commit:scope.source_commit,profile:scope.profile,serial:scope.serial,target:scope.target,owner:env.WFR_TAG,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};
 }
 function verifiedArtifact(path,digest,root){
  const actual=realpathSync(path);if(actual!==path||dirname(actual)!==realpathSync(root))throw Error('COLLECTION_ACCEPTANCE_PROBE_EVIDENCE_INVALID');

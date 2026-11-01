@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {readFrozen,assertDiscoveryInput,canonical} from './runtime-definition.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
 import {startDiscoveryPhoneScope,discoveryCaptureBudgetMs} from './discovery-phone-scope.mjs';
-export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked,isClosed,setClosed,setScope}){
+export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked,isClosed,setClosed,setScope,verifyPhoneAssociation}){
  let discovery,scope;const line=env.LEADGEN_LINE;
  const fixedInput=()=>{const fixed=Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_CANDIDATES')||Object.hasOwn(env,'LEADGEN_DISCOVERY_MAX_ATTEMPTS')||existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))?assertDiscoveryInput(readFrozen(env.WFR_RUN_DIR),env):null;if(fixed&&existsSync(join(env.WFR_RUN_DIR,'discovery-progress.json')))throw Error('DISCOVERY_INPUT_ALREADY_USED');return fixed;};
   const getDiscovery=async()=>{
@@ -22,7 +22,7 @@ export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,
   const collect=async()=>{
       if(isClosed())throw Error('DISCOVERY_PHONE_COLLECT_CLOSED');
       fixedInput();
-      if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')scope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:isLocked()});setScope(scope);
+      if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')scope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:isLocked(),verifyPhoneAssociation});setScope?.(scope);
       try{const discovery=await getDiscovery();const result=scope&&state.budgetDeadline-Date.now()<discoveryCaptureBudgetMs?discovery.stopForBudget():await discovery.collect_videos();
       // A PG manifest readback can fail after every native leaf has returned.
       // Keep the business evidence unverified, then seal the live phone scope
@@ -37,6 +37,6 @@ export function createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,
         ...(readbackFailures?{status:'partial'}:{}),
         ...(result.failures.length||result.known_gaps.some(g=>g.kind!=='candidate_disappeared'||result.stop_reason!=='limit_reached')?{status:'partial'}:{})};
       const finished=scope?await scope.finish(outcome):outcome;state.discoveryCleanupEvidence=finished;return finished;
-      }finally{if(scope){setClosed(true);await scope.close();scope=null;setScope(null);}}};
+      }finally{if(scope){setClosed(true);await scope.close();scope=null;setScope?.(null);}}};
  return {getDiscovery,collect};
 }
