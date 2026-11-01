@@ -42,6 +42,7 @@ export function createNativeTransport(config,bridge){
    return{status:'staged-to-device',pddUploadVerified:false,...actual};
   },
   async picker(action,proof){draftWrites();if(!['more','permission','select','confirm'].includes(action))throw new Error('FORBIDDEN_PICKER_ACTION');return bridge.host('picker-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{mediaId:String(proof.mediaId)}:{})});},
+  async gallery(action,proof){draftWrites();if(!['state','menu','album','select','upload','back'].includes(action))throw new Error('FORBIDDEN_GALLERY_ACTION');return bridge.host('gallery-'+action,{approvedScreenSha256:approval(proof),...(action==='select'?{visualBinding:structuredClone(proof.visualBinding)}:{})});},
   async organizeMedia(){draftWrites();return bridge.host('organize-media');},
   async discardDraft(proof){draftWrites();return bridge.host('discard-draft',{approvedScreenSha256:approval(proof)});},
   async back(){return bridge.host('back');},

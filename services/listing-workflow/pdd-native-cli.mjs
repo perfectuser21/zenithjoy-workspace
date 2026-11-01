@@ -26,6 +26,7 @@ if(file==='--help'){
      case'stage-image':result=await native.stageImage(q);break;
      case'organize-media':result=await native.organizeMedia();break;
      case'discard-draft':result=await native.discardDraft(q);break;
+     case'gallery':result=await native.gallery(q.action,q);break;
      case'picker':result=await native.picker(q.action,q);break;
      case'back':result=await native.back();break;
      case'finish':result=await native.finish();output({command:q.command,result});process.exit(0);break;

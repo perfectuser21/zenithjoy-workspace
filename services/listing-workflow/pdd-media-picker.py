@@ -51,7 +51,27 @@ class PickerTree:
         if len(nodes) != 1: raise ValueError('GALLERY_CONTROL_NOT_UNIQUE')
         node = nodes[0]
         # Only the explicit add-more tile was observed with a non-clickable label.
-        if label == '添加更多可访问照片':
+        if label in {'添加更多可访问照片', '返回'}:
             parents = {c:p for p in self.root.iter() for c in p}
             while node in parents and node.get('clickable') != 'true': node = parents[node]
         return self.point([node], 'GALLERY_CONTROL_NOT_CLICKABLE')
+
+    def gallery_images(self, album):
+        if not re.fullmatch(r'PDD_pdd[0-9a-f]{32}', album) or len([n for n in self.nodes if n.get('package') == MERCHANT and n.get('text') == album and self.eligible(n)]) != 1: raise ValueError('OWNED_GALLERY_ALBUM_UNVERIFIED')
+        previews = [n for n in self.nodes if n.get('package') == MERCHANT and n.get('text') == '预览' and self.eligible(n)]
+        if len(previews) != 1: raise ValueError('GALLERY_PAGE_UNVERIFIED')
+        bottom = self.bounds(previews[0])[1]
+        photos = [n for n in self.nodes if n.get('package') == MERCHANT and n.get('class') == 'android.widget.ImageView' and self.eligible(n) and n.get('clickable') == 'true' and self.bounds(n)[3] < bottom and self.bounds(n)[2]-self.bounds(n)[0] == self.bounds(n)[3]-self.bounds(n)[1]]
+        result = []
+        for photo in photos:
+            box = self.bounds(photo)
+            checks = [n for n in self.nodes if n.get('package') == MERCHANT and n.get('class') == 'android.widget.FrameLayout' and self.eligible(n) and n.get('clickable') == 'true' and box[0] < self.bounds(n)[0] < self.bounds(n)[2] == box[2] and box[1] == self.bounds(n)[1] < self.bounds(n)[3] < box[3] and self.bounds(n)[2]-self.bounds(n)[0] < (box[2]-box[0])/2]
+            if len(checks) != 1: raise ValueError('GALLERY_CHECKBOX_NOT_UNIQUE')
+            numbers = [n.get('text') for n in checks[0].iter('node') if re.fullmatch(r'[1-9]\d?',n.get('text',''))]
+            if len(numbers) > 1: raise ValueError('GALLERY_SELECTION_ORDER_AMBIGUOUS')
+            result.append({'bounds':box,'checkbox':self.bounds(checks[0]),'selectedNumber':int(numbers[0]) if numbers else None})
+        if len({tuple(x['bounds']) for x in result}) != len(result): raise ValueError('GALLERY_IMAGES_AMBIGUOUS')
+        return result
+
+    def gallery_upload(self, count):
+        return self.point([n for n in self.nodes if n.get('package') == MERCHANT and n.get('text') in {'上传('+str(count)+')','上传 ('+str(count)+')'} and n.get('class') == 'android.widget.TextView'], 'GALLERY_UPLOAD_COUNT_UNVERIFIED')

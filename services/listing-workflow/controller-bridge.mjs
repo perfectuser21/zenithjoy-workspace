@@ -36,6 +36,7 @@ export function createControllerBridge(config, dependencies = {}) {
   const albumSource = dependencies.remote ? '' : readFileSync(new URL('./owned-album.py', import.meta.url));
   const mediaCleanupSource = dependencies.remote ? '' : readFileSync(new URL('./owned-media-cleanup.py', import.meta.url));
   const pickerSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-picker.py', import.meta.url));
+  const gallerySource = dependencies.remote ? '' : readFileSync(new URL('./pdd-gallery-actions.py', import.meta.url));
   const pickerActionsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-actions.py', import.meta.url));
   const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
   const script = `import base64,json,sys
@@ -49,10 +50,12 @@ exec(base64.b64decode('${albumSource ? albumSource.toString('base64') : ''}'),_h
 exec(base64.b64decode('${mediaCleanupSource ? mediaCleanupSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${pickerSource ? pickerSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${pickerActionsSource ? pickerActionsSource.toString('base64') : ''}'),_host)
+exec(base64.b64decode('${gallerySource ? gallerySource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.gallerySha256 = createHash('sha256').update(gallerySource).digest('hex');
   state.pickerSha256 = createHash('sha256').update(pickerSource).digest('hex'); state.pickerActionsSha256 = createHash('sha256').update(pickerActionsSource).digest('hex');
   state.albumSha256 = createHash('sha256').update(albumSource).digest('hex'); state.mediaCleanupSha256 = createHash('sha256').update(mediaCleanupSource).digest('hex');
   state.pixelsSha256 = createHash('sha256').update(pixelsSource).digest('hex');
@@ -125,7 +128,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'discard-draft', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'discard-draft', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); await lease(); return send(action, data);
     },
     async finish() {
