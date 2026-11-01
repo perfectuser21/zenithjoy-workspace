@@ -21,6 +21,7 @@ test('受控 reopen 只有人工 dispatch，Pilot 同 SHA 来源和独立两阶�
 test('远端仅向 M4 安装固定源码工具，正式 Host 读回后才返回，不恢复旧候选',()=>{
  assert.match(remote,/git -C "\$REPO" archive "\$SHA"/);
  assert.match(remote,/git -C .* rev-parse/);
+ assert.match(remote,/merge-base --is-ancestor "\$SHA"/);
  assert.match(remote,/xian-m4/);
  assert.match(remote,/maintenance-reopen-host\.py/);
  assert.match(remote,/<\/dev\/null/);

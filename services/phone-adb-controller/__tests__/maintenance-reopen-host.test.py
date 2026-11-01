@@ -65,6 +65,20 @@ class ReopenHostTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'gate failed'):
                 self.finalize()
         self.assertNotIn('retire_exact_review', self.calls)
+
+    def test_brain_gate_drift_after_phone_probe_prevents_release(self):
+        seen = 0
+        def changed(path):
+            nonlocal seen
+            if path.endswith('/gate'):
+                seen += 1
+                return {'current_observation_id': 'obs' if seen == 1 else 'new-observation'}
+            return self.brain(path)
+        with self.assertRaisesRegex(ValueError, 'BRAIN_GATE_DRIFT'):
+            MODULE.finalize_reopen(self.home, self.safety_tx, self.sha,
+                self.release_id, self.observed, brain_request=changed,
+                phone_read=self.phone, boot_seconds=1793499700)
+        self.assertNotIn('retire_exact_review', self.calls)
         self.calls.clear()
         with patch.object(MODULE.proof, 'verify_native_termination', side_effect=ValueError('boot old')):
             with self.assertRaisesRegex(ValueError, 'boot old'):

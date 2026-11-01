@@ -155,6 +155,10 @@ def finalize_reopen(home, safety_tx, candidate_sha, release_id, observed, *,
         boot_seconds=boot_epoch() if boot_seconds is None else boot_seconds,
         process_table=observed['process_table'])
     desktop = proof.verify_safe_desktop(OLD_SERIAL, phone_read('home'), phone_read('focus'))
+    require(brain_request(endpoint + '/gate') == current_gate, 'BRAIN_GATE_DRIFT')
+    require(gate.verify_candidate_gate(home, candidate_sha, release,
+                                       current_gate, observation) == candidate,
+            'CANDIDATE_DRIFT')
     admission = {'schema_version': 1, 'safety_transaction': safety_tx,
                  'candidate': candidate, 'old_native': native, 'desktop': desktop,
                  'old_run_id': OLD_RUN, 'old_owner': OLD_OWNER,

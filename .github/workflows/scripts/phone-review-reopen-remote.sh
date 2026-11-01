@@ -24,7 +24,8 @@ case "$(git -C "$REPO" remote get-url origin)" in
   *) echo 'untrusted source repository' >&2; exit 1 ;;
 esac
 git -C "$REPO" fetch --force origin refs/heads/main:refs/remotes/origin/main
-[[ "$(git -C "$REPO" rev-parse refs/remotes/origin/main)" == "$SHA" ]]
+git -C "$REPO" cat-file -e "${SHA}^{commit}"
+git -C "$REPO" merge-base --is-ancestor "$SHA" "$(git -C "$REPO" rev-parse refs/remotes/origin/main)"
 
 TOOL_DIR="/Users/jinnuoshengyuan/.config/zenithjoy/phone-reopen-tools/${SHA}-${RUN_ID}"
 REMOTE="xian-m4"
