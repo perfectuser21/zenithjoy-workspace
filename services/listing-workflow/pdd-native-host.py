@@ -153,11 +153,14 @@ def native_action(config, request):
         call_idle(config)
         adb(config, ['shell', 'monkey', '-p', 'com.xunmeng.merchant', '-c', 'android.intent.category.LAUNCHER', '1'])
         return {'ok': True}
+    if action=='navigate' and request.get('label')=='发布商品' and config.get('newFormEntryIntent'): raise ValueError('NEW_FORM_ALREADY_ATTEMPTED')
     context(config, job_id, cleanup=(action in {'back', 'discard-draft'}))
     if action == 'back':
         screen, before = fresh_xml(config, job_id)
         facts = screen.facts()
         empty = facts['form'] and not config.get('draft') and config.get('expectNewForm') and not config['ownedMedia'] and screen.field('title')['value']=='' and screen.field('groupPrice')['value']=='' and screen.field('inventory')['value']=='1'
+        if empty and config.get('emptyFormBackIntent'): raise ValueError('EMPTY_FORM_EXIT_REQUIRES_READBACK')
+        if facts['form'] and config.get('draft',{}).get('backIntent'): raise ValueError('OWNED_FORM_EXIT_REQUIRES_READBACK')
         if not empty and not (facts['form'] and config.get('draft', {}).get('owned')) and not facts['counts'] and not facts['storeName']:
             raise ValueError('UNOWNED_FORM_BACK_REFUSED')
         final_window_guard(config,job_id,before['sha256'])
@@ -240,11 +243,14 @@ def native_action(config, request):
             raise ValueError('OWNED_DRAFT_REQUIRED')
         point = screen.navigate(label, [x['name'] for x in config['ownedMedia'] if x.get('phoneVerified')])
         if label == '商品管理': screen.homepage_animation_mask(point)
+        final_window_guard(config,job_id,before['sha256'],list_entry=screen if list_entry else None)
         if label == '发布商品':
+            config['newFormEntryIntent']={'jobId':job_id,'at':time.time()}
             config['baselineCounts'] = screen.facts()['counts']
             config['expectNewForm'] = True
+            config['emptyFormExitedVerified']=False
+            config.pop('emptyFormBackIntent',None)
         store(Path(config['remoteRoot']) / 'config.json', config)
-        final_window_guard(config,job_id,before['sha256'],list_entry=screen if list_entry else None)
         rect = point['bounds']
         control_ok(config, 'tap', [str((rect[0] + rect[2]) // 2), str((rect[1] + rect[3]) // 2)], job_id + '-tap', native_tap=True)
         if label in {'商品管理', '发布商品'}:
