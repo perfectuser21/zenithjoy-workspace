@@ -118,7 +118,7 @@ test('控制SSH运输绑定候选和门禁工具SHA，两者必须是已合并�
  assert.match(text,/merge-base --is-ancestor "\$DEPLOY_SHA" origin\/main/);
  assert.match(text,/merge-base --is-ancestor "\$TOOL_SHA" origin\/main/);
  assert.match(text,/show "\$TOOL_SHA:\.github\/workflows\/scripts\/deploy-phone-adb-remote-lib\.sh"/);
- assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$IMPLEMENTATION_RUN_ID" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT"/);
+ assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT" "\$DEPLOY_MODE" "\$\(git rev-parse HEAD\)" "\$IMPLEMENTATION_RUN_ID"/);
  assert.doesNotMatch(text,/upload-artifact|CECELIA_INTERNAL_TOKEN=/);
 });
 
@@ -126,4 +126,14 @@ test('正式拓扑文案与通知只声明M4手机和MMV，不要求零手机M1'
  const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
  assert.doesNotMatch(text,/xian-m1|推三机|部署三机|三台物理/);
  assert.match(text,/已部署到mmv\+xian-m4并通过drift-check/);
+});
+
+test('恢复模式 Pilot run ID 为空时，SSH 远端参数仍保留固定工具 SHA',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ // OpenSSH 会把远端 argv 拼成命令文本；中间空参数在远端 shell 中消失。
+ // 因此唯一可空的 implementation_run_id 必须放在末尾，并以 ${6:-} 读取。
+ assert.match(text,/DEPLOY_ATTEMPT="github:\$\{6:-\}:\$2:\$3"/);
+ assert.match(text,/DEPLOY_MODE="\$4"/);
+ assert.match(text,/TOOL_SHA="\$5"/);
+ assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT" "\$DEPLOY_MODE" "\$\(git rev-parse HEAD\)" "\$IMPLEMENTATION_RUN_ID"/);
 });
