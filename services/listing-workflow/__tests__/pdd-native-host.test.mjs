@@ -11,7 +11,7 @@ test('owned draft does not authorize back from an unrelated or unknown page',()=
  const r=run(`g['context']=lambda *a,**kw:None\nclass Screen:\n def facts(self):return {'form':False,'counts':{},'storeName':None}\ng['fresh_xml']=lambda *a:(Screen(),{'path':'before'})\ntry:g['native_action']({'draft':{'owned':True}},{'action':'back','jobId':'job'})\nexcept ValueError as e:print(json.dumps({'error':str(e)}))`);assert.equal(r.error,'UNOWNED_FORM_BACK_REFUSED');
 });
 test('device ADB timeout is unknown and never becomes a retryable ordinary failure',()=>{
- const r=run(`g['subprocess'].run=lambda args,**kw:type('R',(),{'stdout':'5037'})() if 'adb-existing-route.py' in str(args) else (_ for _ in ()).throw(g['subprocess'].TimeoutExpired('adb',40))\ntry:g['adb']({'binding':{'controllerPath':'/trusted/controller','serial':'S'}},['shell','monkey'])\nexcept Exception as e:print(json.dumps({'error':str(e),'unknown':getattr(e,'remoteUnknown',False)}))`);assert.equal(r.unknown,true);
+ const r=run(`g['subprocess'].run=lambda args,**kw:type('R',(),{'stdout':'5037'})() if 'adb-existing-route.py' in str(args) else (_ for _ in ()).throw(g['subprocess'].TimeoutExpired('adb',40))\ntry:g['adb']({'binding':{'controllerPath':'/trusted/controller','serial':'S'},'deadline':g['time'].monotonic()+120},['shell','monkey'])\nexcept Exception as e:print(json.dumps({'error':str(e),'unknown':getattr(e,'remoteUnknown',False)}))`);assert.equal(r.unknown,true);
 });
 
 test('an unchanged full screenshot still cannot authorize an overlapped homepage target',()=>{

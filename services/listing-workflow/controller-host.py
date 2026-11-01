@@ -10,6 +10,7 @@ import shlex
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 COMMANDS = {'lock-acquire-new', 'lock-status', 'lock-refresh', 'lock-release-exact', 'preflight', 'foreground', 'snapshot-evidence', 'ui-evidence', 'text-input', 'media-push'}
 
@@ -107,18 +108,44 @@ def held(config):
 
 
 def adb(config, args, check=True):
+    deadline = config.get('deadline', 0)
+    if deadline - time.monotonic() < 65: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
     directory = Path(config['binding']['controllerPath']).parent
     binary = str(directory / 'adb-managed-client.py') if (Path.home() / '.config/zenithjoy/adb-service.json').exists() else '/opt/homebrew/bin/adb'
     route = subprocess.run(['/opt/homebrew/bin/python3', str(directory / 'adb-existing-route.py'), config['binding']['serial'], binary], capture_output=True, text=True, timeout=20, check=True).stdout.strip()
-    if not route.isdigit():
-        raise ValueError('ADB_ROUTE_UNVERIFIED')
+    if not route.isdigit(): raise ValueError('ADB_ROUTE_UNVERIFIED')
+    if deadline - time.monotonic() < 45: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
     env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + route)
+    nonce = uuid4().hex
+    marker = '__PDD_EXIT_' + nonce + '__:'
+    safe_args = args
+    if args and args[0] == 'shell':
+        script = '(' + shlex.join(args[1:]) + '); _pdd_status=$?; printf "\\n' + marker + '%s\\n" "$_pdd_status"; exit 0'
+        safe_args = ['shell', 'sh -c ' + shlex.quote(script)]
+    trace = {'args': args, 'nonce': nonce, 'startedAt': time.time(), 'remoteExitConfirmed': False}
+    config.setdefault('adbTrace', []).append(trace)
+    def persist_trace():
+        if config.get('remoteRoot') and Path(config['remoteRoot']).is_dir(): store(Path(config['remoteRoot']) / 'config.json', config)
+    persist_trace()
     try:
-        safe_args = ['shell', shlex.join(args[1:])] if args and args[0] == 'shell' else args
         result = subprocess.run([binary, '-s', config['binding']['serial']] + safe_args, capture_output=True, timeout=40, env=env)
     except subprocess.TimeoutExpired as cause:
+        trace['error'] = 'ADB_TIMEOUT'; persist_trace()
         error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
         raise error from cause
+    trace['localReturncode'] = result.returncode
+    proof = re.search(rb'\n' + marker.encode() + rb'([0-9]+)\n$', result.stdout) if args and args[0] == 'shell' else None
+    if result.returncode != 0 or (args and args[0] == 'shell' and not proof):
+        trace['error'] = 'ADB_TRANSPORT_OR_RECEIPT_UNKNOWN'; persist_trace()
+        error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
+        raise error
+    if proof:
+        result.returncode = int(proof.group(1))
+        result.stdout = result.stdout[:proof.start()]
+        trace['remoteExitConfirmed'] = True
+    result.remoteExitConfirmed = trace['remoteExitConfirmed']
+    trace.update(remoteReturncode=result.returncode, finishedAt=time.time(), stdoutSha256=sha(result.stdout))
+    persist_trace()
     if check and result.returncode:
         raise ValueError('ADB_READ_OR_CLEANUP_FAILED:' + result.stderr.decode(errors='replace')[:300])
     return result
@@ -152,12 +179,12 @@ def execute_controller(config, command, args, job_id, native_tap=False):
         raise ValueError('INVALID_EVIDENCE_ID')
     job = Path(config['remoteRoot']) / ('job-' + job_id + '.json')
     env = dict(os.environ, DOUYIN_PHONE_REGISTRY=str(Path(config['remoteRoot']) / 'profiles.tsv'))
+    remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
+    if remaining < 1: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
     process = subprocess.Popen(prefix + [command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
     store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': time.time()})
     timed_out = False
     try:
-        remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
-        if remaining < 1: raise subprocess.TimeoutExpired(prefix, remaining)
         stdout, stderr = process.communicate(timeout=remaining)
     except subprocess.TimeoutExpired:
         timed_out = True
@@ -167,7 +194,7 @@ def execute_controller(config, command, args, job_id, native_tap=False):
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             stdout, stderr = process.communicate()
-    result = {'status': 'finished', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'exitCode': process.returncode, 'stdout': stdout.decode(errors='replace'), 'stderr': stderr.decode(errors='replace'), 'remoteUnknown': timed_out}
+    result = {'status': 'finished', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'exitCode': process.returncode, 'stdout': stdout.decode(errors='replace'), 'stderr': stderr.decode(errors='replace'), 'remoteUnknown': timed_out or (process.returncode != 0 and not lock_command)}
     store(job, result)
     if timed_out:
         result['error'] = 'REMOTE_COMMAND_TIMED_OUT'
@@ -217,22 +244,8 @@ def phone_cleanup(config):
     held(config)
     if config.get('draft', {}).get('owned') and not config['draft'].get('exitedVerified'):
         raise ValueError('DRAFT_CLEANUP_REQUIRED')
-    if config.get('albumMoveAttempted') or any(x.get('moveIntent') for x in config['ownedMedia']):
-        cleanup_owned_media(config)
+    if any(x.get('phonePlanned') for x in config['ownedMedia']): cleanup_owned_media(config)
     for item in config['ownedMedia']:
-        if item['phonePlanned'] and not item.get('phoneRemoved'):
-            if not item.get('absenceProvedAt'): raise ValueError('OWNED_CREATION_UNPROVEN')
-            result = adb(config, ['shell', 'test', '-e', item['phonePath']], check=False)
-            if result.returncode == 0:
-                actual = adb(config, ['shell', 'sha256sum', item['phonePath']]).stdout.decode().split()[0]
-                if actual != item['sha256']:
-                    raise ValueError('REFUSE_DELETE_CHANGED_MEDIA')
-                media_id = media_identity(config, item)
-                if item.get('mediaId') and media_id != item['mediaId']: raise ValueError('REFUSE_DELETE_CHANGED_MEDIA_ID')
-                adb(config, ['shell', 'content', 'delete', '--uri', 'content://media/external/images/media/' + media_id])
-                adb(config, ['shell', 'rm', '-f', '--', item['phonePath']])
-            adb(config, ['shell', 'test', '!', '-e', item['phonePath']])
-            adb(config, ['shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', 'file://' + item['phonePath']])
         path = Path(item['path'])
         if path.exists():
             if sha(path.read_bytes()) != item['sha256']:

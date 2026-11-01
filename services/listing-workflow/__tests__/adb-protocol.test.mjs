@@ -6,3 +6,8 @@ test('offline ADB cannot masquerade as a device file absence even for check=fals
 test('only a nonce-bound device exit receipt makes shell exit 1 an ordinary absence',()=>{assert.deepEqual(run('1'),{code:1,stdout:'payload',confirmed:true});});
 test('a proven device-side failure is completed rather than an unknown transport result',()=>{const r=run('1',true);assert.equal(r.unknown,false);assert.match(r.error,/ADB_READ_OR_CLEANUP_FAILED/);});
 test('an exhausted total operation budget cannot start even the route subprocess',()=>{const r=run('0',false,1);assert.match(r.error,/REMOTE_ACTION_BUDGET_EXHAUSTED/);assert.equal(r.calls,0);});
+
+test('the generated receipt wrapper works in a real POSIX shell without fabricating its nonce output',()=>{
+ const script=`import pathlib,subprocess,types,json,time\nh={'__name__':'test'};exec(pathlib.Path(${JSON.stringify(source)}).read_text(),h);real_run=subprocess.run\ndef process(args,**kw):\n if 'adb-existing-route.py' in str(args):return types.SimpleNamespace(stdout='5037')\n return real_run(['/bin/sh','-c',args[-1]],capture_output=True)\nh['subprocess'].run=process\nr=h['adb']({'binding':{'controllerPath':'/trusted/controller','serial':'S'},'deadline':time.monotonic()+120},['shell','sh','-c','printf payload; exit 1'],check=False);print(json.dumps({'code':r.returncode,'out':r.stdout.decode(),'confirmed':r.remoteExitConfirmed}))`;
+ const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{code:1,out:'payload',confirmed:true});
+});
