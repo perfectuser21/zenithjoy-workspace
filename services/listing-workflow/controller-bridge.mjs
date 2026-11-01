@@ -29,8 +29,17 @@ export function createControllerBridge(config, dependencies = {}) {
   persist();
   const helperSource = dependencies.remote ? '' : readFileSync(new URL('./controller-host.py', import.meta.url), 'utf8');
   const uiSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-ui.py', import.meta.url));
-  const script = `import base64\n_ui={'__name__':'pdd_native_embedded'}\nexec(base64.b64decode('${uiSource ? uiSource.toString('base64') : ''}'),_ui)\nScreen=_ui['Screen']\n` + helperSource;
-  state.helperSha256 = createHash('sha256').update(helperSource).digest('hex'); state.uiSha256 = createHash('sha256').update(uiSource).digest('hex'); persist();
+  const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
+  const script = `import base64,json,sys
+_ui={'__name__':'pdd_native_ui'}
+exec(base64.b64decode('${uiSource ? uiSource.toString('base64') : ''}'),_ui)
+_host={'__name__':'pdd_host_bundle','Screen':_ui['Screen']}
+exec(base64.b64decode('${Buffer.from(helperSource).toString('base64')}'),_host)
+exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
+try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
+except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
+`;
+  state.nativeSha256 = createHash('sha256').update(nativeSource).digest('hex'); state.helperSha256 = createHash('sha256').update(helperSource).digest('hex'); state.uiSha256 = createHash('sha256').update(uiSource).digest('hex'); persist();
   const remote = dependencies.remote || (async request => {
     let tokens = ['python3', '-c', script];
     for (let i = binding.route.length - 1; i > 0; i--) tokens = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '--', binding.route[i], tokens.map(quote).join(' ')];
@@ -38,11 +47,12 @@ export function createControllerBridge(config, dependencies = {}) {
     const reply = spawnSync(invocation.command, invocation.args, { input: JSON.stringify(request), encoding: 'utf8', timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, shell: false });
     if (reply.error || reply.signal || reply.status === 255) throw Object.assign(new Error(`SSH_UNKNOWN:${reply.error?.code || reply.signal || reply.status}`), { remoteUnknown: true });
     if (reply.status !== 0) throw new Error(`REMOTE_HELPER_FAILED:${reply.stderr.slice(0, 2000)}`);
-    const result = JSON.parse(reply.stdout);
+    let result; try { result = JSON.parse(reply.stdout); } catch { throw Object.assign(new Error('REMOTE_REPLY_UNPARSABLE'), { remoteUnknown: true }); }
     if (result.error) throw Object.assign(new Error(result.error), { remoteUnknown: result.remoteUnknown === true });
     return result;
   });
   async function send(action, extra = {}) {
+    if (Object.keys(extra).some(key => ['action','binding','owner','profile','remoteRoot','jobId','operationBudgetMs'].includes(key))) throw new Error('RESERVED_REQUEST_FIELD');
     const request = { action, binding, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, operationBudgetMs: timeoutMs - 15000, ...extra };
     const item = { action, command: extra.command, at: new Date().toISOString(), jobId: randomUUID() }; state.trace.push(item); persist();
     try { const result = await remote({ ...request, jobId: item.jobId }); item.finishedAt = new Date().toISOString(); persist(); return result; }

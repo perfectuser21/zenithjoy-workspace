@@ -173,6 +173,16 @@ def read_evidence(config, path):
     return {'path': str(path), 'bytesBase64': base64.b64encode(raw).decode(), 'sha256': sha(raw)}
 
 
+def media_identity(config, item):
+    where = "_display_name='" + item['name'] + "'"
+    raw = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media', '--projection', '_id:_data', '--where', where]).stdout.decode()
+    matches = re.findall(r'_id=(\d+), _data=(/[^\r\n]+)', raw)
+    expected = '/storage/emulated/0/DCIM/Camera/' + item['name']
+    if len(matches) != 1 or matches[0][1].strip() != expected:
+        raise ValueError('PHONE_MEDIASTORE_IDENTITY_UNCONFIRMED')
+    return matches[0][0]
+
+
 def phone_readback(config):
     held(config)
     result = []
@@ -182,12 +192,17 @@ def phone_readback(config):
         digest = adb(config, ['shell', 'sha256sum', item['phonePath']]).stdout.decode().split()[0]
         if digest != item['sha256']:
             raise ValueError('PHONE_MEDIA_HASH_MISMATCH')
+        item['mediaId'] = media_identity(config, item)
+        item['phoneVerified'] = True
         result.append(dict(item, phoneSha256=digest))
+    store(Path(config['remoteRoot']) / 'config.json', config)
     return {'media': result}
 
 
 def phone_cleanup(config):
     held(config)
+    if config.get('draft', {}).get('owned') and not config['draft'].get('exitedVerified'):
+        raise ValueError('DRAFT_CLEANUP_REQUIRED')
     for item in config['ownedMedia']:
         if item['phonePlanned']:
             result = adb(config, ['shell', 'test', '-e', item['phonePath']], check=False)
@@ -195,6 +210,9 @@ def phone_cleanup(config):
                 actual = adb(config, ['shell', 'sha256sum', item['phonePath']]).stdout.decode().split()[0]
                 if actual != item['sha256']:
                     raise ValueError('REFUSE_DELETE_CHANGED_MEDIA')
+                media_id = media_identity(config, item)
+                if item.get('mediaId') and media_id != item['mediaId']: raise ValueError('REFUSE_DELETE_CHANGED_MEDIA_ID')
+                adb(config, ['shell', 'content', 'delete', '--uri', 'content://media/external/images/media/' + media_id])
                 adb(config, ['shell', 'rm', '-f', '--', item['phonePath']])
             adb(config, ['shell', 'test', '!', '-e', item['phonePath']])
             adb(config, ['shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', 'file://' + item['phonePath']])
@@ -221,6 +239,9 @@ def dispatch(request):
         actual = inspect(request)
         if actual['controllerSha256'] != request['binding']['controllerSha256'] or actual['focusSha256'] != request['binding']['focusSha256']:
             raise ValueError('CONTROLLER_BINDING_MISMATCH')
+        expected = {k: request['binding'][k] for k in ['serial', 'model', 'width', 'height']}
+        expected['enabled'] = True
+        if actual['profile'] != expected: raise ValueError('PROFILE_CHANGED_BEFORE_INITIALIZE')
         root.mkdir(mode=0o700)
         private_profile(root, request['profile'], actual['profile'])
         config = {**request, 'ownedMedia': []}
