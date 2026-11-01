@@ -110,6 +110,9 @@ def native_action(config, request):
             raise ValueError('UNOWNED_FORM_BACK_REFUSED')
         result = control_ok(config, 'back', [], job_id + '-back', native_tap=True)
         return {'ok': True, 'evidence': [before['path']]}
+    if action == 'organize-media':
+        if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
+        return organize_owned_album(config)
     if action == 'push-owned-media':
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
         matches = [x for x in config['ownedMedia'] if x['name'] == request.get('name')]

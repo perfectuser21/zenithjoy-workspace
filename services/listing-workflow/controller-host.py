@@ -55,6 +55,7 @@ def private_profile(root, alias, row):
 
 
 def stage_media(config, request):
+    if config.get('albumMoveAttempted'): raise ValueError('ALBUM_PLAN_ALREADY_FIXED')
     name = request.get('name', '')
     if not re.fullmatch(r'IMG_\d{8}_\d{6}_\d{1,3}\.(?:jpg|png)', name):
         raise ValueError('INVALID_MEDIA_NAME')
@@ -188,7 +189,9 @@ def media_identity(config, item):
     where = "_display_name='" + item['name'] + "'"
     raw = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media', '--projection', '_id:_data', '--where', where]).stdout.decode()
     matches = re.findall(r'_id=(\d+), _data=(/[^\r\n]+)', raw)
-    expected = '/storage/emulated/0/DCIM/Camera/' + item['name']
+    expected = item['phonePath'].replace('/sdcard/', '/storage/emulated/0/', 1)
+    allowed = ['/sdcard/DCIM/Camera/' + item['name'], '/sdcard/DCIM/PDD_' + config.get('profile', '') + '/' + item['name']]
+    if item['phonePath'] not in allowed: raise ValueError('UNOWNED_PHONE_PATH')
     if len(matches) != 1 or matches[0][1].strip() != expected:
         raise ValueError('PHONE_MEDIASTORE_IDENTITY_UNCONFIRMED')
     return matches[0][0]
@@ -214,8 +217,10 @@ def phone_cleanup(config):
     held(config)
     if config.get('draft', {}).get('owned') and not config['draft'].get('exitedVerified'):
         raise ValueError('DRAFT_CLEANUP_REQUIRED')
+    if config.get('albumMoveAttempted') or any(x.get('moveIntent') for x in config['ownedMedia']):
+        cleanup_owned_media(config)
     for item in config['ownedMedia']:
-        if item['phonePlanned']:
+        if item['phonePlanned'] and not item.get('phoneRemoved'):
             if not item.get('absenceProvedAt'): raise ValueError('OWNED_CREATION_UNPROVEN')
             result = adb(config, ['shell', 'test', '-e', item['phonePath']], check=False)
             if result.returncode == 0:
@@ -279,7 +284,7 @@ def dispatch(request):
             return phone_readback(config)
         if action == 'phone-cleanup':
             return phone_cleanup(config)
-        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'back', 'launch'}:
+        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'back', 'launch'}:
             return native_action(config, request)
         raise ValueError('FORBIDDEN_HOST_OPERATION')
 

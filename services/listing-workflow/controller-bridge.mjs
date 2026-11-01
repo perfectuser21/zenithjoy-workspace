@@ -31,6 +31,8 @@ export function createControllerBridge(config, dependencies = {}) {
   const helperSource = dependencies.remote ? '' : readFileSync(new URL('./controller-host.py', import.meta.url), 'utf8');
   const uiSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-ui.py', import.meta.url));
   const pixelsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-pixels.py', import.meta.url));
+  const albumSource = dependencies.remote ? '' : readFileSync(new URL('./owned-album.py', import.meta.url));
+  const mediaCleanupSource = dependencies.remote ? '' : readFileSync(new URL('./owned-media-cleanup.py', import.meta.url));
   const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
   const script = `import base64,json,sys
 _ui={'__name__':'pdd_native_ui'}
@@ -39,10 +41,13 @@ _pixels={'__name__':'pdd_pixels'}
 exec(base64.b64decode('${pixelsSource ? pixelsSource.toString('base64') : ''}'),_pixels)
 _host={'__name__':'pdd_host_bundle','Screen':_ui['Screen'],'png_crop_sha':_pixels['png_crop_sha']}
 exec(base64.b64decode('${Buffer.from(helperSource).toString('base64')}'),_host)
+exec(base64.b64decode('${albumSource ? albumSource.toString('base64') : ''}'),_host)
+exec(base64.b64decode('${mediaCleanupSource ? mediaCleanupSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.albumSha256 = createHash('sha256').update(albumSource).digest('hex'); state.mediaCleanupSha256 = createHash('sha256').update(mediaCleanupSource).digest('hex');
   state.pixelsSha256 = createHash('sha256').update(pixelsSource).digest('hex');
   state.nativeSha256 = createHash('sha256').update(nativeSource).digest('hex'); state.helperSha256 = createHash('sha256').update(helperSource).digest('hex'); state.uiSha256 = createHash('sha256').update(uiSource).digest('hex'); persist();
   const remote = dependencies.remote || (async request => {
@@ -113,7 +118,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'organize-media', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); await lease(); return send(action, data);
     },
     async finish() {

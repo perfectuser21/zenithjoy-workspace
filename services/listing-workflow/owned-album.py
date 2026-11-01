@@ -27,7 +27,15 @@ def organize_owned_album(config):
         destination = path + '/' + item['name']
         item['moveIntent'] = {'source': item['phonePath'], 'destination': destination, 'mediaId': item['mediaId']}
         store(Path(config['remoteRoot']) / 'config.json', config)
-        result = adb(config, ['shell', 'content', 'update', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--bind', 'relative_path:s:' + relative]).stdout.decode().strip()
+        try:
+            result = adb(config, ['shell', 'content', 'update', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--bind', 'relative_path:s:' + relative]).stdout.decode().strip()
+        except Exception as error:
+            if not getattr(error, 'remoteUnknown', False):
+                item['moveCommandFinished'] = True
+                store(Path(config['remoteRoot']) / 'config.json', config)
+            raise
+        item['moveCommandFinished'] = True
+        store(Path(config['remoteRoot']) / 'config.json', config)
         if result != 'Updated 1 rows.': raise ValueError('ALBUM_MOVE_RECEIPT_UNCONFIRMED')
         raw = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media/' + item['mediaId'], '--projection', '_id:_data']).stdout.decode()
         expected = '/storage/emulated/0/DCIM/' + album + '/' + item['name']
@@ -37,6 +45,7 @@ def organize_owned_album(config):
         if adb(config, ['shell', 'test', '-e', item['phonePath']], check=False).returncode != 1: raise ValueError('ALBUM_SOURCE_REMAINS_OR_UNKNOWN')
         item['phonePath'] = destination
         item['albumVerified'] = True
+        item['moveResolved'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
     config['phoneAlbum']['verified'] = True
     store(Path(config['remoteRoot']) / 'config.json', config)

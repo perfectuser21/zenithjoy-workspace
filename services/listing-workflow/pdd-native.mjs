@@ -40,6 +40,7 @@ export function createNativeTransport(config,bridge){
    if(!actual||actual.phoneSha256!==image.sha256)throw new Error('PHONE_MEDIA_HASH_MISMATCH');
    return{status:'staged-to-device',pddUploadVerified:false,...actual};
   },
+  async organizeMedia(){draftWrites();return bridge.host('organize-media');},
   async back(){return bridge.host('back');},
   async submit(){throw new Error('PRODUCTION_GATE_CLOSED');},
   async finish(){return bridge.finish();},

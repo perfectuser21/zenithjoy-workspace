@@ -6,7 +6,7 @@ import{createControllerBridge}from'./controller-bridge.mjs';
 import{createNativeTransport}from'./pdd-native.mjs';
 const[file]=process.argv.slice(2);
 if(file==='--help'){
- process.stdout.write('原生草稿验证：node pdd-native-cli.mjs 受信任配置.json\n每行JSON命令：capture、launch、navigate(label,approvedScreenSha256)、approve-draft、set-field(field,value)、stage-image(path,sha256,name)、back、finish。\n只允许本任务新建未提交表单，不能保存/发布/发送消息。输入上传须独立实屏批准与双锁。\n');
+ process.stdout.write('原生草稿验证：node pdd-native-cli.mjs 受信任配置.json\n每行JSON命令：capture、launch、navigate(label,approvedScreenSha256)、approve-draft、set-field(field,value)、stage-image(path,sha256,name)、organize-media（先暂存全部素材，随后固定本run相册）、back、finish。\n只允许本任务新建未提交表单，不能保存/发布/发送消息。输入上传须独立实屏批准与双锁。\n');
 }else{
  const config=JSON.parse(readFileSync(file,'utf8'));
  const bridge=createControllerBridge(config),native=createNativeTransport(config,bridge);
@@ -24,6 +24,7 @@ if(file==='--help'){
      case'approve-draft':result=await native.approveDraft(q);break;
      case'set-field':result=await native.setField(q.field,q.value,q);break;
      case'stage-image':result=await native.stageImage(q);break;
+     case'organize-media':result=await native.organizeMedia();break;
      case'back':result=await native.back();break;
      case'finish':result=await native.finish();output({command:q.command,result});process.exit(0);break;
      default:throw new Error('FORBIDDEN_NATIVE_COMMAND');
