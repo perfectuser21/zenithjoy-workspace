@@ -34,7 +34,9 @@ function fixture(t,{verdict='rejected',claimUnknown=false,qualificationFails=fal
   if(args[0]===join(dir,'process-queued-video.sh')){
    if(args[1]==='qualification'){
     if(qualificationFails)throw Error('EXECUTION_DEADLINE');
-    writeFileSync(join(dir,`${run}-identity-${selected}.json`),JSON.stringify({verified:true,observed_video_id:selected,content_type:'video'}));
+    writeFileSync(join(dir,`${run}-identity-${selected}.json`),JSON.stringify({verified:true,
+     expected_video_id:selected,observed_video_id:selected,content_type:'video',excluded_non_video:false,
+     evidence_id:`${run}-v${selected}-qualification-identity`}),{mode:0o600});
     writeFileSync(join(dir,`${run}-recording-${selected}.json`),JSON.stringify(actual.recording));
     return {code:0,stdout:`QUAL\t${selected}\t${verdict}\t${actual.reason}\n`,stderr:''};
    }
@@ -62,7 +64,12 @@ test('570b空批正常0=0后走原本人cleanup，不把它计为正向评论采
  assert.equal(result.status,'completed');assert.equal(cleanup,1);assert.equal(result.results[0].result.comments,0);assert.equal(result.results[1].result.lock_released,1);assert.equal(f.calls.filter(q=>q.op==='claim_videos').length,1);assert.ok(f.actions.some(x=>x.args.includes('close-app')));assert.ok(f.actions.some(x=>x.args.includes('lock-release')));
 });
 test('已领取唯一合格VID实际完成，不因旁未领输入变partial',async t=>{
- const f=fixture(t,{verdict:'matched'});assert.equal((await prepare(f)).matched,1);f.h.state.currentActivity='collection';const out=await invokeNativeActivity(()=>f.h.collection(),f.h.state);assert.deepEqual(f.stored,[selected]);assert.equal(out.videos_processed,1);assert.equal(out.status,undefined);assert.deepEqual(out.failures,[]);assert.notEqual(f.h.state.executionUnknown,true);assert.equal(f.calls.filter(q=>q.op==='claim_videos').length,1);
+ const f=fixture(t,{verdict:'matched'});assert.equal((await prepare(f)).matched,1);
+ const progress=JSON.parse(readFileSync(join(f.dir,`${run}-qualification-progress.json`)));
+ const sha256=progress.videos.find(v=>v.video_id===selected)?.identity_snapshot_sha256;
+ const {readQualificationIdentitySnapshot}=await import('../qualification-identity-snapshot.mjs');
+ assert.equal(readQualificationIdentitySnapshot({dir:f.dir,run,videoId:selected,sha256}).identity.observed_video_id,selected);
+ f.h.state.currentActivity='collection';const out=await invokeNativeActivity(()=>f.h.collection(),f.h.state);assert.deepEqual(f.stored,[selected]);assert.equal(out.videos_processed,1);assert.equal(out.status,undefined);assert.deepEqual(out.failures,[]);assert.notEqual(f.h.state.executionUnknown,true);assert.equal(f.calls.filter(q=>q.op==='claim_videos').length,1);
 });
 for(const kind of ['claim_unknown','qualification_deadline','claimed_collection_deadline'])test('真正本run未完成仍拒：'+kind,async t=>{
  const f=fixture(t,{verdict:'matched',claimUnknown:kind==='claim_unknown',qualificationFails:kind==='qualification_deadline',collectionFails:kind==='claimed_collection_deadline'});f.h.state.currentActivity='preflight';await f.h.preflight();await f.h.dedup();let collection=0;
