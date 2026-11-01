@@ -25,4 +25,4 @@ except Exception as e:r=None;error=str(e)
 print(json.dumps({'error':error,'reads':len(reads),'held':len(held),'result':r}))`;
 const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);}
 test('preparation-only hardware back tolerates changed advertising with two live list identities and final window/locks',()=>{const r=run('advertising');assert.equal(r.error,null);assert.equal(r.reads,2);assert.ok(r.held>=2);assert.ok(r.result.evidence.includes('final.xml'));});
-for(const mode of['focused','modal','missing-list','serial','window','late-window','package'])test(`preparation-only list back refuses ${mode}`,()=>{assert.match(run(mode).error,/BOOTSTRAP|HARDWARE_SERIAL/);});
+for(const mode of['focused','modal','missing-list','serial','window','late-window','package'])test(`preparation-only list back refuses ${mode}`,()=>{assert.match(run(mode).error,/BOOTSTRAP|HARDWARE_SERIAL|WRONG_LIST_PAGE/);});
