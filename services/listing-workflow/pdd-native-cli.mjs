@@ -6,7 +6,7 @@ import{createControllerBridge}from'./controller-bridge.mjs';
 import{createNativeTransport}from'./pdd-native.mjs';
 const[file]=process.argv.slice(2);
 if(file==='--help'){
- process.stdout.write('原生草稿验证：node pdd-native-cli.mjs 受信任配置.json\n每行JSON命令：capture、launch、navigate(label,approvedScreenSha256)、approve-draft、set-field(field,value)、stage-image(path,sha256,name)、organize-media（先暂存全部素材，随后固定本run相册）、back、finish。\n只允许本任务新建未提交表单，不能保存/发布/发送消息。输入上传须独立实屏批准与双锁。\n');
+ process.stdout.write('原生草稿验证：node pdd-native-cli.mjs 受信任配置.json\n每行JSON命令：capture、launch、navigate(label,approvedScreenSha256)、approve-draft、set-field(field,value)、stage-image(path,sha256,name)、organize-media（先暂存全部素材，随后固定本run相册）、picker(action=more/permission/select/confirm)、gallery(action=menu/album/state/select/upload/back)、discard-draft、back、finish。\n只允许本任务新建未提交表单，不能保存/发布/发送消息。输入上传须独立实屏批准与双锁；stage-image只表示手机暂存，gallery upload仅把图片送入本任务未提交表单。图库身份需要当前帧可信视觉绑定和逐项原生序号读回；未知即停止，不能把连续序号当图片身份。\n');
 }else{
  const config=JSON.parse(readFileSync(file,'utf8'));
  const bridge=createControllerBridge(config),native=createNativeTransport(config,bridge);
