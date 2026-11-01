@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
@@ -49,6 +49,14 @@ export default function CreativeCanvasPage() {
       try { await canvasContainerRef.current.requestFullscreen(); } catch { /* Use viewport-sized fallback. */ }
     }
   }, [expanded]);
+
+  useLayoutEffect(() => {
+    // Set the scale before mounting the iframe. WebKit keeps the iframe's
+    // initial zoom after entering fullscreen if this is changed later.
+    const alreadySet = document.body.classList.contains('creative-canvas-natural-zoom');
+    document.body.classList.add('creative-canvas-natural-zoom');
+    return () => { if (!alreadySet) document.body.classList.remove('creative-canvas-natural-zoom'); };
+  }, []);
 
   useEffect(() => {
     const onFullscreenChange = () => {
