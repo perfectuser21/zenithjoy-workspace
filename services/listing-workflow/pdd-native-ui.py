@@ -83,10 +83,23 @@ class Screen:
         point, old = self.navigate('发布商品', []), approved.navigate('发布商品', [])
         if point['bounds'] != old['bounds']: raise ValueError('LIST_ENTRY_CHANGED')
         rect = point['bounds']; cx, cy = (rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2
+        target = self.labels('发布商品')[0]
+        def ancestor(node, resource):
+            while node in self.parents:
+                node = self.parents[node]
+                if node.get('resource-id') == resource: return node
+            return None
+        footer = ancestor(target, 'bottomButtonId')
+        if footer is None: raise ValueError('FIXED_NEW_FORM_FOOTER_UNVERIFIED')
+        old_footer = approved.labels('发布商品')[0]
+        while old_footer in approved.parents and old_footer.get('resource-id') != 'bottomButtonId': old_footer = approved.parents[old_footer]
+        if old_footer.get('resource-id') != 'bottomButtonId' or self.bounds(footer) != approved.bounds(old_footer): raise ValueError('FIXED_NEW_FORM_FOOTER_CHANGED')
+        box = self.bounds(footer)
+        if not box or box[0] != 0 or box[2:] != [self.width,self.height] or box[3] - box[1] >= self.height // 4 or not box[1] <= rect[1] < rect[3] <= box[3]: raise ValueError('FIXED_NEW_FORM_FOOTER_UNVERIFIED')
         for text in FORBIDDEN:
             for node in self.labels(text):
-                box = self.bounds(node)
-                if box[0] <= cx < box[2] and box[1] <= cy < box[3]: raise ValueError('DANGEROUS_CONTROL_OVERLAP')
+                bounds = self.bounds(node)
+                if bounds[0] <= cx < bounds[2] and bounds[1] <= cy < bounds[3] and ancestor(node, 'scrollNode0') is None: raise ValueError('DANGEROUS_CONTROL_OVERLAP')
         return point
 
     def homepage_animation_mask(self, target):
