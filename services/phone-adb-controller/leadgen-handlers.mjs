@@ -19,6 +19,7 @@ import {freezeQualificationIdentity} from './qualification-identity-snapshot.mjs
 import {createVideoAction} from './leadgen-video-action.mjs';
 import {startCollectionPhoneScope,startCollectionReturnedScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
 import {startDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
+import {createCentralDeviceLease} from './central-device-lease.mjs';
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
   if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
@@ -53,7 +54,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
@@ -64,6 +65,11 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const adbClient=managedAdb?join(root,'adb-managed-client.py'):(env.DOUYIN_ADB_BIN||(mmvDeviceRuntime?'/opt/homebrew/bin/adb':'adb'));
   let locked=false,leased=[],qualified=[],historyScoped=0;
   const state={profile,line,run,source_commit:sourceCommit,task_id:taskId??null,run_id:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,outreach_scope:outreachScope};
+  const needsCentralLock=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+  let central=centralLease||null;
+  const getCentral=()=>central??=createCentralDeviceLease({brainUrl:env.BRAIN_URL,token:env.BRAIN_INTERNAL_TOKEN,
+    deviceName:serial,taskId,runId:state.run_id,expectedProjectId:env.WF_BRAIN_PROJECT_ID,
+    runSeconds:Number(env.WF_RUN_MAX_SECONDS||1800)});
   let collectionScope=null,discoveryScope=null,discoveryClosed=false;const collectionProgress=new Map();
   let qualificationClaimed=false,nativeSkillReads=0;const qualificationProgress=new Map(),qualificationAttempts=new Map();
   const recordDiagnostic=value=>{
@@ -78,6 +84,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const unknownFile=opts.receipt?join(env.WFR_RUN_DIR,'native-operations',opts.receipt.operationId+'.unknown'):null;
     if(opts.receipt)state.nativeStopProof=null;
     try {
+      if(central?.held)await central.ensure();
       collectionScope?.assertEvidence();
       discoveryScope?.assert();
       if(opts.discoveryMinimumRemainingMs&&state.budgetDeadline-Date.now()<opts.discoveryMinimumRemainingMs){dispatchBudgetRejected=true;throw Error('budget_exhausted');}
@@ -141,6 +148,13 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       state.company_config.expected_sender=account.douyin_id;
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     }
+    if(needsCentralLock){
+      const lease=getCentral();
+      await lease.verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
+      await lease.acquire();
+      appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'acquired',task_id:taskId,run_id:state.run_id,
+        device_name:serial,source_commit:sourceCommit,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
+    }
     const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
     if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');
     env.ADB_SERVER_SOCKET=`tcp:127.0.0.1:${route}`;env.DOUYIN_ADB_PORT=route;
@@ -179,7 +193,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       state.recipientCompanyBindingFile=file;state.recipientCompanyBindingSha=createHash('sha256').update(bytes).digest('hex');
     }
     const outreachProof=env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'?await outreach.preflight():{};
-    return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,...outreachProof};
+    return {device_verified:true,lock_acquired:true,call_state_idle:true,account_verified:true,douyin_id:id,
+      ...(needsCentralLock?{central_lock_task_id:taskId,central_lock_run_id:state.run_id}:{}),...outreachProof};
   };
   const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;}});
   const getDiscovery=discoveryAction.getDiscovery;
@@ -522,7 +537,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       try{
       try{await outreach.cleanup();}catch(error){failures.push({reason:error.message});}
       for(const v of leased)try{await queue('release_video',{video_id:v.video_id});}catch(error){failures.push({video_id:v.video_id,reason:error.message});}
-      if(!locked&&failures.length===0)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
+      if(!locked&&failures.length===0&&!central?.attempted)return {status:'skipped',reason:'本批没有取得设备锁，无需清场',no_lock:true};
       if(locked){try{const refreshed=await phone('lock-refresh',run);if(!refreshed.startsWith('lock=refreshed'))throw Error('锁所有权不可确认');
         const close_stdout=await phone('close-app');closed=true;const desktop_stdout=await phone('return-safe-desktop');
         if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'){
@@ -535,7 +550,14 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
         await discoveryScope?.seal();
         const result=await phone('lock-release',run);if(!result.startsWith('lock=released'))throw Error('锁释放未确认');released=true;locked=false;
       }catch(error){failures.push({reason:error.message});}}
+      let centralReleased=false;
+      if(!locked&&central?.attempted)try{
+        centralReleased=await central.release();
+        if(centralReleased)appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'released',task_id:taskId,
+          run_id:state.run_id,device_name:serial,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
+      }catch(error){failures.push({reason:error.message});}
       return {close_app:closed,close_app_attempts:Number(closed),safe_desktop:desktop,safe_desktop_visible:Number(desktop),lock_released:Number(released),no_lock:!locked,failures,
+        ...(central?{central_lock_released:Number(centralReleased),central_lock_task_id:taskId,central_lock_run_id:state.run_id}:{}),
         ...(cleanupProof?{cleanup_readback_verified:Number(desktop),cleanup_readback_digest:cleanupProof.digest}:{}),
         ...(failures.length?{status:'partial'}:{})};
       }finally{try{await discoveryScope?.close();}finally{discoveryScope=null;await collectionScope?.close();collectionScope=null;}}},

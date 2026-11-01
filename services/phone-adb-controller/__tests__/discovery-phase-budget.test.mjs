@@ -82,7 +82,8 @@ test('真实handler执行器收到收紧后的phase timeout，已有unknown不�
  const dir=mkdtempSync(join(tmpdir(),'discovery-bounded-')),calls=[];let fail=false;
  try{
   mkdirSync(join(dir,'.config/openclaw'),{recursive:true});writeFileSync(join(dir,'.config/openclaw/douyin-account-routes.tsv'),'legacy\taccount\n');
-  const h=createHandlers({root:new URL('../',import.meta.url).pathname,sourceCommit:'a'.repeat(40),taskId:'task',env:{HOME:dir,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',WFR_TAG:'owner',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_video_discovery'},rpc:async()=>({result:{}}),execute:async(command,args,opts)=>{
+  const centralLease={held:false,async verifyTask(){},async acquire(){this.held=true;},async ensure(){},async release(){this.held=false;return true;}};
+  const h=createHandlers({root:new URL('../',import.meta.url).pathname,sourceCommit:'a'.repeat(40),taskId:'task',centralLease,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',WFR_TAG:'owner',P:'legacy',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_video_discovery'},rpc:async()=>({result:{}}),execute:async(command,args,opts)=>{
    const action=args.find(x=>['preflight','lock-acquire','lock-refresh','account-current','tap-evidence','current-video-link','search-kw-matches'].includes(x));calls.push({action,timeout:opts.timeoutMs});
    if(fail&&action==='tap-evidence')throw Error('EXECUTION_DEADLINE');
    return {code:0,stderr:'',stdout:args.includes('telephony.registry')?'mCallState=0\n':String(args[0]).endsWith('adb-existing-route.py')?'5042\n':action==='preflight'?'serial=SERIAL\n':action==='lock-acquire'?'lock=acquired\n':action==='lock-refresh'?'lock=refreshed owner=owner ttl=300s\n':action==='account-current'?'douyin_id=account\n':'device\n'};

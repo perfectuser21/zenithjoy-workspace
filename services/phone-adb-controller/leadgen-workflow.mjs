@@ -48,12 +48,16 @@ async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);const binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
   if(binding.run_id!==`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`)throw Error('运行绑定身份不符');
+  const centralWorkflow=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+  const taskIds=(centralWorkflow?[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID,binding.task_id]:[binding.task_id]).filter(Boolean);
+  if(new Set(taskIds).size>1)throw Error('CENTRAL_LOCK_TASK_CONFLICT');
+  const taskId=taskIds[0]||null;
   const root=resolve(dir,'runtime');
   env.DOUYIN_PHONE_ADB=join(root,'douyin-phone-adb');
   if(resolve(env.WF_HOME)!==root||resolve(fileURLToPath(import.meta.url))!==join(root,'leadgen-workflow.mjs'))throw Error('执行器必须来自本批冻结字节');
   if(frozen.runtime_transport){env.LEADGEN_MMV_HOSTNAME=frozen.runtime_transport.ssh_hostname;env.LEADGEN_MMV_HOSTKEY_ALIAS=frozen.runtime_transport.ssh_hostkey_alias;}
   const rpc=createRpc({frozen,local:env.LEADGEN_LOCAL_RPC==='1',runContext:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,line:env.LEADGEN_LINE}});
-  const context={sampling_input:frozen.sampling_input||null,run_id:binding.run_id,binding_id:binding.id,task_id:binding.task_id??null,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:frozen.deployment.source_commit};
+  const context={sampling_input:frozen.sampling_input||null,run_id:binding.run_id,binding_id:binding.id,task_id:taskId,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:frozen.deployment.source_commit};
   writeFileSync(join(dir,'activity.log'),'');
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
@@ -96,7 +100,7 @@ async function main(){
     const verified=probes.length>0&&probes.every(p=>p.pass===true)&&local.every(r=>r.steps.length===expected.length&&r.steps.every(s=>s.pass===true));
     return {verified,metrics,probes,step_dod:local};
   };
-  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId:binding.task_id,outreachScope:frozen.outreach_scope||null});
+  const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
   const activityDeadlines=new Map();
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
     const cleanupReserveMs=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?Number(activities.find(a=>a.key==='cleanup')?.budget?.max_duration_s||120)*1000:0;

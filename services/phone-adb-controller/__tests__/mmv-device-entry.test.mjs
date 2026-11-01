@@ -52,7 +52,7 @@ test('MMV默认仍拒手机；原mmv-scoring/none不要求手机配置',t=>{
 
 test('显式MMV设备入口核已启用唯一registry+既有端口后仍要求原正式冻结plan',async t=>{
   const f=fixture(t),route=await bridge(t);
-  const out=launch(f,route);
+  const out=launch(f,{...route,WF_BRAIN_TASK_ID:'7037d210-2af1-4af9-8635-f93a805e58b6'});
   assert.equal(out.status,1,out.stderr);
   assert.match(out.stderr,/正式发布计划缺失/,'必须越过技术入口，但不能伪造正式业务前置');
   assert.equal(out.stdout.trim(),'');

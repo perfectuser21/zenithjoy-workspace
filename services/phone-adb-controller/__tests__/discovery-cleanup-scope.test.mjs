@@ -25,7 +25,8 @@ test('101当前取链余量不足既有300秒预算时拒绝启动原生命令',
  const d=mkdtempSync(join(tmpdir(),'discovery-command-admission-')),calls=[];
  try{
   mkdirSync(join(d,'.config/openclaw'),{recursive:true});writeFileSync(join(d,'.config/openclaw/douyin-account-routes.tsv'),'p\taccount\n');
-  const h=createHandlers({root:source,sourceCommit:'a'.repeat(40),taskId:'task',env:{HOME:d,WFR_RUN_DIR:d,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',WFR_TAG:'owner',P:'p',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_video_discovery'},rpc:async()=>({result:{}}),execute:async(command,args)=>{
+  const centralLease={held:false,attempted:false,async verifyTask(){},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;return true;}};
+  const h=createHandlers({root:source,sourceCommit:'a'.repeat(40),taskId:'task',centralLease,env:{HOME:d,WFR_RUN_DIR:d,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',WFR_TAG:'owner',P:'p',SERIAL:'SERIAL',LEADGEN_LINE:'jinuo',WF_BRAIN_WORKFLOW:'douyin_video_discovery'},rpc:async()=>({result:{}}),execute:async(command,args)=>{
    calls.push({command,args});const c=args.find(a=>['preflight','lock-acquire','lock-refresh','account-current'].includes(a));
    return {code:0,stderr:'',stdout:args.includes('telephony.registry')?'mCallState=0\n':args[0]===join(source,'adb-existing-route.py')?'5042\n':c==='preflight'?'serial=SERIAL\n':c==='lock-acquire'?'lock=acquired\n':c==='lock-refresh'?'lock=refreshed owner=owner ttl=300s\n':c==='account-current'?'douyin_id=account\n':'device\n'};
   }});

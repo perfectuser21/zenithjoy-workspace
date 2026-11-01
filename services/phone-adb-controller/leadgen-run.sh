@@ -102,6 +102,15 @@ if [[ -r "$HOME/.credentials/brain.env" ]]; then
   set -a; source "$HOME/.credentials/brain.env"; set +a
 fi
 if [[ -n "$requested_brain_url" ]]; then export BRAIN_URL="$requested_brain_url"; fi
+if [[ "$WF_ARG_CAP" == douyin_video_discovery || "$WF_ARG_CAP" == douyin_video_processing ]]; then
+  task_id="${WF_BRAIN_TASK_ID:-${BRAIN_TASK_ID:-${WFR_BRAIN_TASK_ID:-}}}"
+  [[ "$task_id" =~ "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" ]] \
+    || { print -u2 'CENTRAL_LOCK_TASK_REQUIRED: 101/102必须先关联Brain任务'; exit 1; }
+  for candidate in "${WF_BRAIN_TASK_ID:-}" "${BRAIN_TASK_ID:-}" "${WFR_BRAIN_TASK_ID:-}"; do
+    [[ -z "$candidate" || "$candidate" == "$task_id" ]] || { print -u2 'CENTRAL_LOCK_TASK_CONFLICT'; exit 1; }
+  done
+  export WF_BRAIN_TASK_ID="$task_id"
+fi
 export WF_PLAN_PATH="$WF_HOME/plans/$WF_ARG_CAP.plan"
 [[ -r "$WF_PLAN_PATH" ]] || { print -u2 '正式发布计划缺失'; exit 1; }
 source "$WF_PLAN_PATH"
