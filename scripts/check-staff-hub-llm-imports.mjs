@@ -14,7 +14,7 @@ function walk(dir) {
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules' || entry.name === 'dist') continue;
       files.push(...walk(full));
-    } else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) {
+    } else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry.name)) {
       files.push(full);
     }
   }
