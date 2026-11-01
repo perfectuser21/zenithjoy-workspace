@@ -179,7 +179,7 @@ def native_action(config, request):
         field, value = request['field'], request['value']
         if field not in {'title', 'groupPrice', 'inventory'} or not isinstance(value, str):
             raise ValueError('FORBIDDEN_FIELD')
-        if (field == 'title' and (not value.strip() or len(value) > 60 or any(ord(x) < 32 for x in value))) or (field == 'inventory' and not re.fullmatch(r'\d{1,7}', value)) or (field == 'groupPrice' and (not re.fullmatch(r'(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?', value) or float(value) <= 0)):
+        if (field == 'title' and (not value.strip() or sum(2 if ord(x) > 127 else 1 for x in value) > 60 or any(ord(x) < 32 for x in value))) or (field == 'inventory' and not re.fullmatch(r'\d{1,7}', value)) or (field == 'groupPrice' and (not re.fullmatch(r'(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?', value) or float(value) <= 0)):
             raise ValueError('INVALID_FIELD_VALUE')
         candidate = screen.field(field)
         config['pendingAction'] = {'field': field, 'value': value, 'before': before, 'jobId': job_id}

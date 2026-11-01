@@ -29,7 +29,7 @@ export function createNativeTransport(config,bridge){
   async setField(field,value,proof){
    draftWrites();if(!['title','groupPrice','inventory'].includes(field))throw new Error('FORBIDDEN_FIELD');
    value=String(value);
-   if((field==='title'&&(!value.trim()||Array.from(value).length>60||/[\u0000-\u001f]/.test(value)))||(field==='inventory'&&!/^\d{1,7}$/.test(value))||(field==='groupPrice'&&(!/^(0|[1-9]\d{0,7})(\.\d{1,2})?$/.test(value)||Number(value)<=0)))throw new Error('INVALID_FIELD_VALUE');
+   if((field==='title'&&(!value.trim()||Array.from(value).reduce((n,c)=>n+(c.codePointAt(0)>127?2:1),0)>60||/[\u0000-\u001f]/.test(value)))||(field==='inventory'&&!/^\d{1,7}$/.test(value))||(field==='groupPrice'&&(!/^(0|[1-9]\d{0,7})(\.\d{1,2})?$/.test(value)||Number(value)<=0)))throw new Error('INVALID_FIELD_VALUE');
    const result=await bridge.host('set-field',{field,value,approvedScreenSha256:approval(proof)});
    if(result.ok!==true||result.value!==value||!result.evidence?.length)throw new Error('NATIVE_READBACK_MISMATCH');return result;
   },
