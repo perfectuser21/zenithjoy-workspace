@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shlex
 import subprocess
 import sys
 import time
@@ -111,7 +112,12 @@ def adb(config, args, check=True):
     if not route.isdigit():
         raise ValueError('ADB_ROUTE_UNVERIFIED')
     env = dict(os.environ, ADB_SERVER_SOCKET='tcp:127.0.0.1:' + route)
-    result = subprocess.run([binary, '-s', config['binding']['serial']] + args, capture_output=True, timeout=40, env=env)
+    try:
+        safe_args = ['shell', shlex.join(args[1:])] if args and args[0] == 'shell' else args
+        result = subprocess.run([binary, '-s', config['binding']['serial']] + safe_args, capture_output=True, timeout=40, env=env)
+    except subprocess.TimeoutExpired as cause:
+        error = ValueError('ADB_REMOTE_TERMINATION_UNCONFIRMED'); error.remoteUnknown = True
+        raise error from cause
     if check and result.returncode:
         raise ValueError('ADB_READ_OR_CLEANUP_FAILED:' + result.stderr.decode(errors='replace')[:300])
     return result
@@ -119,7 +125,7 @@ def adb(config, args, check=True):
 
 def execute_controller(config, command, args, job_id, native_tap=False):
     verify_files(config)
-    if command not in COMMANDS and not (native_tap and command in {'tap', 'back'}):
+    if (command in {'text-input','media-push'} and not native_tap) or (command not in COMMANDS and not (native_tap and command in {'tap', 'back'})):
         raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
     lock_command = command.startswith('lock-')
     if not lock_command:
@@ -130,7 +136,12 @@ def execute_controller(config, command, args, job_id, native_tap=False):
         matches = [x for x in config['ownedMedia'] if args == [x['path'], '--name', x['name']]]
         if len(matches) != 1 or sha(Path(matches[0]['path']).read_bytes()) != matches[0]['sha256']:
             raise ValueError('UNOWNED_MEDIA_PUSH')
-        matches[0]['phonePlanned'] = True
+        item = matches[0]
+        exists = adb(config, ['shell', 'test', '-e', item['phonePath']], check=False)
+        raw = adb(config, ['shell', 'content', 'query', '--uri', 'content://media/external/images/media', '--projection', '_id:_data', '--where', "_display_name='" + item['name'] + "'"]).stdout.decode()
+        if exists.returncode != 1 or raw.strip() != 'No result found.': raise ValueError('PHONE_MEDIA_ALREADY_EXISTS_OR_UNKNOWN')
+        item['absenceProvedAt'] = time.time()
+        item['phonePlanned'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
     prefix = [config['binding']['controllerPath'], '--profile', config['profile']]
     if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence', 'tap'}:
@@ -205,6 +216,7 @@ def phone_cleanup(config):
         raise ValueError('DRAFT_CLEANUP_REQUIRED')
     for item in config['ownedMedia']:
         if item['phonePlanned']:
+            if not item.get('absenceProvedAt'): raise ValueError('OWNED_CREATION_UNPROVEN')
             result = adb(config, ['shell', 'test', '-e', item['phonePath']], check=False)
             if result.returncode == 0:
                 actual = adb(config, ['shell', 'sha256sum', item['phonePath']]).stdout.decode().split()[0]
@@ -230,7 +242,7 @@ def phone_cleanup(config):
 
 def dispatch(request):
     action = request.get('action')
-    if action == 'controller' and request.get('command') not in COMMANDS:
+    if action == 'controller' and (request.get('command') not in COMMANDS or request.get('command') in {'text-input','media-push'}):
         raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
     if action == 'inspect':
         return inspect(request)
@@ -267,7 +279,7 @@ def dispatch(request):
             return phone_readback(config)
         if action == 'phone-cleanup':
             return phone_cleanup(config)
-        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'back', 'launch'}:
+        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'back', 'launch'}:
             return native_action(config, request)
         raise ValueError('FORBIDDEN_HOST_OPERATION')
 

@@ -49,12 +49,13 @@ def approval(config, request):
         raise ValueError('FRESH_VISUAL_APPROVAL_REQUIRED')
 
 
-def context(config, job_id):
+def context(config, job_id, cleanup=False):
     held(config)
     call_idle(config)
     if current_package(config, job_id) != 'com.xunmeng.merchant':
         raise ValueError('WRONG_FOREGROUND')
-    require_store(config)
+    if not cleanup: require_store(config)
+    elif config.get('storeProof', {}).get('owner') != config['owner']: raise ValueError('STORE_CLEANUP_CONTEXT_UNPROVEN')
 
 
 def observe(config, request):
@@ -97,16 +98,28 @@ def native_action(config, request):
         call_idle(config)
         adb(config, ['shell', 'monkey', '-p', 'com.xunmeng.merchant', '-c', 'android.intent.category.LAUNCHER', '1'])
         return {'ok': True}
-    context(config, job_id)
+    context(config, job_id, cleanup=(action == 'back'))
     if action == 'back':
         screen, before = fresh_xml(config, job_id)
         facts = screen.facts()
-        if not config.get('draft', {}).get('owned') and not facts['counts'] and not facts['storeName']:
+        if not (facts['form'] and config.get('draft', {}).get('owned')) and not facts['counts'] and not facts['storeName']:
             raise ValueError('UNOWNED_FORM_BACK_REFUSED')
         result = control_ok(config, 'back', [], job_id + '-back', native_tap=True)
         return {'ok': True, 'evidence': [before['path']]}
+    if action == 'push-owned-media':
+        if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')
+        matches = [x for x in config['ownedMedia'] if x['name'] == request.get('name')]
+        if len(matches) != 1 or matches[0].get('phonePlanned'): raise ValueError('OWNED_UNPUSHED_MEDIA_REQUIRED')
+        item = matches[0]
+        control_ok(config, 'media-push', [item['path'], '--name', item['name']], job_id + '-push', native_tap=True)
+        return phone_readback(config)
     approval(config, request)
+    eid = 'native-' + job_id + '-approved'
+    control_ok(config, 'snapshot-evidence', [eid], job_id + '-approved-image')
+    current_png = read_evidence(config, '/private/tmp/openclaw-phone/evidence/' + config['profile'] + '/' + eid + '.png')
+    if current_png['sha256'] != config['lastFrame']['screenSha256']: raise ValueError('APPROVED_SCREEN_CHANGED')
     screen, before = fresh_xml(config, job_id)
+    if before['sha256'] != config['lastFrame']['xmlSha256']: raise ValueError('APPROVED_UI_CHANGED')
     if action == 'approve-draft':
         if not config.get('expectNewForm') or not screen.form() or screen.field('title')['value'] or screen.field('groupPrice')['value'] or screen.field('inventory')['value'] != '1':
             raise ValueError('NEW_EMPTY_FORM_UNVERIFIED')
@@ -141,7 +154,7 @@ def native_action(config, request):
         focused, focus_evidence = fresh_xml(config, job_id + '-focused')
         if not focused.field(field)['focused']:
             raise ValueError('EXPECTED_NATIVE_FIELD_NOT_FOCUSED')
-        typed = control_ok(config, 'text-input', [value], job_id + '-typed')
+        typed = control_ok(config, 'text-input', [value], job_id + '-typed', native_tap=True)
         if 'text_input=ok' not in typed['stdout']:
             raise ValueError('NATIVE_INPUT_ACK_UNCONFIRMED')
         after, after_evidence = fresh_xml(config, job_id + '-after')

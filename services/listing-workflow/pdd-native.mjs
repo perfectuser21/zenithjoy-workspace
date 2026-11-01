@@ -36,8 +36,7 @@ export function createNativeTransport(config,bridge){
    draftWrites();const bytes=image.bytesBase64?Buffer.from(image.bytesBase64,'base64'):readFileSync(image.path);
    if(hash(bytes)!==image.sha256)throw new Error('MEDIA_HASH_MISMATCH');
    const staged=await bridge.host('stage-media',{name:image.name,bytesBase64:bytes.toString('base64'),sha256:image.sha256});
-   await bridge.command('media-push',[staged.path,'--name',staged.name]);
-   const readback=await bridge.host('phone-readback');const actual=readback.media.find(x=>x.name===image.name);
+   const readback=await bridge.host('push-owned-media',{name:staged.name});const actual=readback.media.find(x=>x.name===image.name);
    if(!actual||actual.phoneSha256!==image.sha256)throw new Error('PHONE_MEDIA_HASH_MISMATCH');
    return{status:'staged-to-device',pddUploadVerified:false,...actual};
   },

@@ -5,22 +5,32 @@ import { spawnSync } from 'node:child_process';
 import { createBrainClient, readOnlyInvocation } from './phone-probe.mjs';
 
 const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
-const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence', 'text-input', 'media-push']);
+const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
 export function createControllerBridge(config, dependencies = {}) {
-  const binding = Object.freeze(structuredClone(config.binding));
+  const clonedBinding = structuredClone(config.binding);
+  Object.freeze(clonedBinding.route); const binding = Object.freeze(clonedBinding);
   readOnlyInvocation({ serial: binding.serial, route: binding.route }, 'online');
   if (!/^[a-f0-9]{64}$/.test(binding.controllerSha256 || '') || !/^[a-f0-9]{64}$/.test(binding.focusSha256 || '') ||
       !/^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') ||
       !/^[a-zA-Z0-9_-]+$/.test(binding.baseProfile || '') || !binding.authority) throw new Error('INVALID_CONTROLLER_BINDING');
   const id = randomUUID(), directory = resolve(config.root);
-  const state = { id, runId: config.runId, owner: `manual-pdd-native-${id}`, profile: `pdd${id.replaceAll('-', '')}`, remoteRoot: `/private/tmp/pdd-native-${id}`,
+  let state = { processPid: process.pid, binding, id, runId: config.runId, owner: `manual-pdd-native-${id}`, profile: `pdd${id.replaceAll('-', '')}`, remoteRoot: `/private/tmp/pdd-native-${id}`,
     brainHeld: false, controllerHeld: false, remoteUnknown: false, lockReleased: false, trace: [] };
   const brain = dependencies.brain || createBrainClient(binding.brainBaseUrl);
   const timeoutMs = config.commandTimeoutMs ?? 300000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000 || !config.runId) throw new Error('INVALID_COMMAND_BUDGET');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const statePath = join(directory, 'controller-session.json');
-  if (existsSync(statePath)) throw new Error('EXISTING_SESSION_REQUIRES_RECOVERY');
+  let resumed = false;
+  if (existsSync(statePath)) {
+    if (config.resumeSession !== true) throw new Error('EXISTING_SESSION_REQUIRES_RECOVERY');
+    const saved = JSON.parse(readFileSync(statePath, 'utf8'));
+    if (JSON.stringify(saved.binding) !== JSON.stringify(binding) || saved.runId !== config.runId || !/^[0-9a-f-]{36}$/.test(saved.id) || saved.owner !== `manual-pdd-native-${saved.id}` || saved.profile !== `pdd${saved.id.replaceAll('-', '')}` || saved.remoteRoot !== `/private/tmp/pdd-native-${saved.id}` || saved.lockReleased || !saved.brainHeld || !saved.controllerHeld) throw new Error('SESSION_RECOVERY_IDENTITY_CONFLICT');
+    const alive = dependencies.isProcessAlive || (pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } });
+    if (alive(saved.processPid)) throw new Error('SESSION_PROCESS_STILL_ACTIVE');
+    state = { ...saved, processPid: process.pid }; resumed = true;
+    state.trace.push({ action: 'resume-session', at: new Date().toISOString(), priorPid: saved.processPid });
+  }
   function persist() {
     const temporary = statePath + '.pending-' + randomUUID();
     const fd = openSync(temporary, 'wx', 0o600); try { writeFileSync(fd, JSON.stringify(state, null, 2)); fsyncSync(fd); } finally { closeSync(fd); }
@@ -73,9 +83,10 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
     if ((Number(match[3]) - Number(match[2])) * 1000 < Math.max(timeoutMs + 10000, 1010000)) throw new Error('CONTROLLER_LEASE_UNSAFE');
     return result;
   }
-  return {
-    state, statePath, binding,
+  const api = {
+    get state() { return structuredClone(state); }, statePath, binding,
     async begin() {
+      if (resumed) { await lease(); await controllerStatus(); return state; }
       try {
         const acquired = await brain.acquire(binding.serial, state.owner);
         if (acquired.acquired !== true) throw new Error('DEVICE_BUSY');
@@ -102,13 +113,14 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       if (!state.brainHeld || !state.controllerHeld) throw new Error('DUAL_LOCK_REQUIRED');
       await lease(); await controllerStatus();
       await send('controller', { command: 'lock-refresh', args: [state.owner] });
+      await lease();
       const result = await send('controller', { command, args });
       if (/accepted fresh|\b137\b|ERROR:/.test(result.stderr || '')) throw new Error('UI_PRODUCER_UNTRUSTED');
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
-      await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); return send(action, data);
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); await lease(); return send(action, data);
     },
     async finish() {
       await lease(); await controllerStatus();
@@ -122,4 +134,14 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       state.brainHeld = false; state.lockReleased = true; persist(); return state;
     },
   };
+  let busy = false;
+  for (const name of ['begin','command','host','finish']) {
+    const action = api[name];
+    api[name] = async (...args) => {
+      if (busy) throw new Error('SESSION_OPERATION_BUSY');
+      busy = true;
+      try { return await action(...args); } finally { busy = false; }
+    };
+  }
+  return api;
 }
