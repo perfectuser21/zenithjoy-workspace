@@ -27,8 +27,11 @@ export function createControllerBridge(config, dependencies = {}) {
     renameSync(temporary, statePath); const dir = openSync(directory, 'r'); try { fsyncSync(dir); } finally { closeSync(dir); }
   }
   persist();
+  const helperSource = dependencies.remote ? '' : readFileSync(new URL('./controller-host.py', import.meta.url), 'utf8');
+  const uiSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-ui.py', import.meta.url));
+  const script = `import base64\n_ui={'__name__':'pdd_native_embedded'}\nexec(base64.b64decode('${uiSource ? uiSource.toString('base64') : ''}'),_ui)\nScreen=_ui['Screen']\n` + helperSource;
+  state.helperSha256 = createHash('sha256').update(helperSource).digest('hex'); state.uiSha256 = createHash('sha256').update(uiSource).digest('hex'); persist();
   const remote = dependencies.remote || (async request => {
-    const script = readFileSync(new URL('./controller-host.py', import.meta.url), 'utf8');
     let tokens = ['python3', '-c', script];
     for (let i = binding.route.length - 1; i > 0; i--) tokens = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '--', binding.route[i], tokens.map(quote).join(' ')];
     const invocation = binding.route.length ? { command: 'ssh', args: ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '--', binding.route[0], tokens.map(quote).join(' ')] } : { command: tokens[0], args: tokens.slice(1) };
@@ -40,7 +43,7 @@ export function createControllerBridge(config, dependencies = {}) {
     return result;
   });
   async function send(action, extra = {}) {
-    const request = { action, binding, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, ...extra };
+    const request = { action, binding, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, operationBudgetMs: timeoutMs - 15000, ...extra };
     const item = { action, command: extra.command, at: new Date().toISOString(), jobId: randomUUID() }; state.trace.push(item); persist();
     try { const result = await remote({ ...request, jobId: item.jobId }); item.finishedAt = new Date().toISOString(); persist(); return result; }
     catch (error) { item.error = error.message; if (error.remoteUnknown) state.remoteUnknown = true; persist(); throw error; }
@@ -94,8 +97,8 @@ export function createControllerBridge(config, dependencies = {}) {
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'navigate', 'tap-field'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
-      await lease(); await controllerStatus(); return send(action, data);
+      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      await lease(); await controllerStatus(); await send('controller', { command: 'lock-refresh', args: [state.owner] }); return send(action, data);
     },
     async finish() {
       await lease(); await controllerStatus();

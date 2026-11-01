@@ -117,9 +117,9 @@ def adb(config, args, check=True):
     return result
 
 
-def execute_controller(config, command, args, job_id):
+def execute_controller(config, command, args, job_id, native_tap=False):
     verify_files(config)
-    if command not in COMMANDS:
+    if command not in COMMANDS and not (native_tap and command in {'tap', 'back'}):
         raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
     lock_command = command.startswith('lock-')
     if not lock_command:
@@ -133,7 +133,8 @@ def execute_controller(config, command, args, job_id):
         matches[0]['phonePlanned'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
     prefix = [config['binding']['controllerPath'], '--profile', config['profile']]
-    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence'}:
+    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence', 'tap'}:
+
         prefix += ['--lock-owner', config['owner']]
     if command in {'snapshot-evidence', 'ui-evidence'} and (len(args) != 1 or not re.fullmatch(r'native-[a-zA-Z0-9_-]+', args[0])):
         raise ValueError('INVALID_EVIDENCE_ID')
@@ -143,7 +144,9 @@ def execute_controller(config, command, args, job_id):
     store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': time.time()})
     timed_out = False
     try:
-        stdout, stderr = process.communicate(timeout=240)
+        remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
+        if remaining < 1: raise subprocess.TimeoutExpired(prefix, remaining)
+        stdout, stderr = process.communicate(timeout=remaining)
     except subprocess.TimeoutExpired:
         timed_out = True
         os.killpg(process.pid, signal.SIGTERM)
@@ -224,6 +227,7 @@ def dispatch(request):
         store(root / 'config.json', config)
         return {'ok': True}
     config = json.loads((root / 'config.json').read_text())
+    config['deadline'] = time.monotonic() + min(285, max(1, request.get('operationBudgetMs', 285000) / 1000))
     if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding']:
         raise ValueError('SESSION_IDENTITY_CONFLICT')
     with (root / 'operation.guard').open('a') as guard:
@@ -242,6 +246,8 @@ def dispatch(request):
             return phone_readback(config)
         if action == 'phone-cleanup':
             return phone_cleanup(config)
+        if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'back', 'launch'}:
+            return native_action(config, request)
         raise ValueError('FORBIDDEN_HOST_OPERATION')
 
 
