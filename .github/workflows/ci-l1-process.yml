@@ -653,6 +653,13 @@ jobs:
           python3 services/phone-adb-controller/__tests__/maintenance-install-window.test.py
           python3 services/phone-adb-controller/__tests__/maintenance-install-transaction.test.py
           python3 services/phone-adb-controller/__tests__/maintenance-install-host.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-reopen-proof.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-reopen-lock.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-reopen-roots.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-reopen-gate.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-reopen-host.test.py
+          python3 services/phone-adb-controller/__tests__/maintenance-reopen-integration.test.py
+          node --test services/phone-adb-controller/__tests__/maintenance-reopen-workflow.test.mjs
           node --test scripts/release-gate/__tests__/*.test.mjs scripts/deploy/__tests__/*.test.mjs \
             services/phone-adb-controller/__tests__/deployment-coordinator.test.mjs services/phone-adb-controller/__tests__/deployment-rehearsal.test.mjs services/phone-adb-controller/__tests__/deployment-protocol.test.mjs services/phone-adb-controller/__tests__/deployment-drift.test.mjs \
             services/phone-adb-controller/__tests__/deployment-write-set.test.mjs \

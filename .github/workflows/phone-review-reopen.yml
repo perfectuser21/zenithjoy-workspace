@@ -1,0 +1,88 @@
+name: Controlled phone review reopen
+
+# Explicitly dispatched only after the separate safety installation and approval.
+# This workflow never promotes the production release or starts business work.
+on:
+  workflow_dispatch:
+    inputs:
+      implementation_run_id:
+        description: Successful main-only Pilot run for the fixed candidate SHA
+        required: true
+        type: string
+      candidate_sha:
+        description: Fixed merged main SHA to prepare and admit
+        required: true
+        type: string
+      safety_transaction:
+        description: Completed phone-safety transaction ID
+        required: true
+        type: string
+      phase:
+        description: Prepare empty roots, then after a separate candidate deploy finalize one phone
+        required: true
+        type: choice
+        options: [prepare, finalize]
+      release_id:
+        description: Brain M4 staging release UUID; required only for finalize
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-phone-adb-controller
+  cancel-in-progress: false
+
+jobs:
+  reopen:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify main-only Pilot artifacts for this exact SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PILOT_RUN: ${{ inputs.implementation_run_id }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: node .github/workflows/scripts/phone-deploy-evidence.mjs "$PILOT_RUN" phone-review-source.json "$CANDIDATE_SHA" candidate
+      - name: Connect Tailnet
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+      - name: Stage fixed tool and execute one controlled phase on M4
+        env:
+          SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.US_MAC_USER }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SAFETY_TX: ${{ inputs.safety_transaction }}
+          REOPEN_PHASE: ${{ inputs.phase }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SAFETY_TX" =~ ^phone-safety-[a-f0-9]{24}$ ]]
+          [[ "$REOPEN_PHASE" == prepare || "$REOPEN_PHASE" == finalize ]]
+          if [[ "$REOPEN_PHASE" == finalize ]]; then
+            [[ "$RELEASE_ID" =~ ^[a-f0-9-]{36}$ ]]
+          else
+            [[ -z "$RELEASE_ID" ]]
+          fi
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          ssh -o BatchMode=yes -o ConnectTimeout=30 -i "$KEY_FILE" -p 22 \
+            "${SSH_USER}@${SSH_HOST}" bash -s -- \
+            "$CANDIDATE_SHA" "$REOPEN_PHASE" "$SAFETY_TX" "$RELEASE_ID" "$GITHUB_RUN_ID" \
+            < .github/workflows/scripts/phone-review-reopen-remote.sh
