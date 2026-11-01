@@ -23,3 +23,10 @@ test('a remote command timeout freezes subsequent effects and preserves both loc
 test('expired Brain lease rejects writes and no generic shell or publish operation is callable',async()=>{
  const {createControllerBridge}=await api();assert.equal(typeof createControllerBridge,'function');const f=fixture();const b=createControllerBridge(f.config,{brain:f.brain,remote:f.remote});await b.begin();await assert.rejects(b.command('shell',['input','tap','1','1']),/FORBIDDEN_CONTROLLER_COMMAND/);f.brain.lease=async()=>({locked_by:b.state.owner,expired:true,expires_at:new Date().toISOString(),serverTimeMs:Date.now(),networkElapsedMs:1});await assert.rejects(b.command('text-input',['x']),/LEASE_UNSAFE/);assert.equal(f.calls.includes('text-input'),false);
 });
+
+test('a lost acquire receipt is reconciled without acquiring twice',async()=>{
+ const {createControllerBridge}=await api();const f=fixture(),acquire=f.brain.acquire;f.brain.acquire=async(...a)=>{await acquire(...a);throw new Error('HTTP_REPLY_LOST');};const b=createControllerBridge(f.config,{brain:f.brain,remote:f.remote});await assert.rejects(b.begin(),/HTTP_REPLY_LOST/);assert.equal(f.calls.filter(x=>x==='brain-acquire').length,1);assert.ok(f.calls.includes('brain-release'));
+});
+test('an existing unfinished local session cannot be silently overwritten by a new owner',async()=>{
+ const {createControllerBridge}=await api();const f=fixture();const one=createControllerBridge(f.config,{brain:f.brain,remote:f.remote});await one.begin();assert.throws(()=>createControllerBridge(f.config,{brain:f.brain,remote:f.remote}),/EXISTING_SESSION/);await one.finish();
+});
