@@ -65,6 +65,8 @@ def stage_media(config, request):
         raise ValueError('MEDIA_HASH_MISMATCH')
     if not 0 < len(raw) <= 20 * 1024 * 1024 or not (raw.startswith(b'\xff\xd8\xff') or raw.startswith(b'\x89PNG\r\n\x1a\n')):
         raise ValueError('INVALID_MEDIA_BYTES')
+    policy = config.get('materialPolicy') or {}
+    if sha(raw) not in policy.get('allowedDigests', []): raise ValueError('MATERIAL_NOT_AUTHORIZED')
     path = Path(config['remoteRoot']) / name
     if path.exists():
         raise ValueError('STAGED_MEDIA_ALREADY_EXISTS')
@@ -279,7 +281,7 @@ def dispatch(request):
         return {'ok': True}
     config = json.loads((root / 'config.json').read_text())
     config['deadline'] = time.monotonic() + min(285, max(1, request.get('operationBudgetMs', 285000) / 1000))
-    if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding']:
+    if config['owner'] != request['owner'] or config['profile'] != request['profile'] or config['binding'] != request['binding'] or config.get('materialPolicy') != request.get('materialPolicy'):
         raise ValueError('SESSION_IDENTITY_CONFLICT')
     with (root / 'operation.guard').open('a') as guard:
         fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)

@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, openSync, writeFileSync, fsyncSync, closeSync,
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createBrainClient, readOnlyInvocation } from './phone-probe.mjs';
+import { materialPolicy as authorizeMaterials } from './authorized-media.mjs';
 
 const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
 const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
@@ -13,8 +14,9 @@ export function createControllerBridge(config, dependencies = {}) {
   if (!/^[a-f0-9]{64}$/.test(binding.controllerSha256 || '') || !/^[a-f0-9]{64}$/.test(binding.focusSha256 || '') ||
       !/^\/Users\/[A-Za-z0-9_-]+\/(?:bin-harvest|\.local\/bin)\/douyin-phone-adb$/.test(binding.controllerPath || '') ||
       !/^[a-zA-Z0-9_-]+$/.test(binding.baseProfile || '') || !binding.authority) throw new Error('INVALID_CONTROLLER_BINDING');
+  const materialPolicy = config.materials ? authorizeMaterials(config) : null;
   const id = randomUUID(), directory = resolve(config.root);
-  let state = { processPid: process.pid, binding, id, runId: config.runId, owner: `manual-pdd-native-${id.replaceAll('-', '')}`, profile: `pdd${id.replaceAll('-', '')}`, remoteRoot: `/private/tmp/pdd-native-${id}`,
+  let state = { processPid: process.pid, binding, materialPolicy, id, runId: config.runId, owner: `manual-pdd-native-${id.replaceAll('-', '')}`, profile: `pdd${id.replaceAll('-', '')}`, remoteRoot: `/private/tmp/pdd-native-${id}`,
     brainHeld: false, controllerHeld: false, remoteUnknown: false, lockReleased: false, trace: [] };
   const brain = dependencies.brain || createBrainClient(binding.brainBaseUrl);
   const timeoutMs = config.commandTimeoutMs ?? 300000;
@@ -62,8 +64,8 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
     return result;
   });
   async function send(action, extra = {}) {
-    if (Object.keys(extra).some(key => ['action','binding','owner','profile','remoteRoot','jobId','operationBudgetMs'].includes(key))) throw new Error('RESERVED_REQUEST_FIELD');
-    const request = { action, binding, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, operationBudgetMs: timeoutMs - 15000, ...extra };
+    if (Object.keys(extra).some(key => ['action','binding','owner','profile','remoteRoot','jobId','operationBudgetMs','materialPolicy'].includes(key))) throw new Error('RESERVED_REQUEST_FIELD');
+    const request = { action, binding, materialPolicy, owner: state.owner, profile: state.profile, remoteRoot: state.remoteRoot, operationBudgetMs: timeoutMs - 15000, ...extra };
     const item = { action, command: extra.command, at: new Date().toISOString(), jobId: randomUUID() }; state.trace.push(item); persist();
     try { const result = await remote({ ...request, jobId: item.jobId }); item.finishedAt = new Date().toISOString(); persist(); return result; }
     catch (error) { item.error = error.message; if (error.remoteUnknown) state.remoteUnknown = true; persist(); throw error; }

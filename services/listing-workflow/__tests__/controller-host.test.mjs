@@ -9,7 +9,7 @@ test('creates an isolated truthful profile without changing the central registry
  assert.equal(result.same,true);assert.equal(result.row.serial,'SERIAL');assert.match(result.private,/pddrun\tSERIAL\tMODEL\t1200\t2664/);
 });
 test('stages only expected immutable bytes and rejects changed bytes or traversal names',()=>{
- const result=run(`with tempfile.TemporaryDirectory() as t:\n c={'remoteRoot':t,'ownedMedia':[]};b=b'\\xff\\xd8\\xffimage';q={'bytesBase64':base64.b64encode(b).decode(),'sha256':hashlib.sha256(b).hexdigest(),'name':'IMG_20261101_070000_1.jpg'};first=h.stage_media(c,q);errors=[]\n for changed in [dict(q,sha256='0'*64),dict(q,name='../escape.jpg')]:\n  try:h.stage_media(c,changed)\n  except ValueError as e:errors.append(str(e))\n print(json.dumps({'first':first,'count':len(c['ownedMedia']),'errors':errors}))`);
+ const result=run(`with tempfile.TemporaryDirectory() as t:\n c={'remoteRoot':t,'ownedMedia':[]};b=b'\\xff\\xd8\\xffimage';q={'bytesBase64':base64.b64encode(b).decode(),'sha256':hashlib.sha256(b).hexdigest(),'name':'IMG_20261101_070000_1.jpg'};c['materialPolicy']={'allowedDigests':[q['sha256']]};first=h.stage_media(c,q);errors=[]\n for changed in [dict(q,sha256='0'*64),dict(q,name='../escape.jpg')]:\n  try:h.stage_media(c,changed)\n  except ValueError as e:errors.append(str(e))\n print(json.dumps({'first':first,'count':len(c['ownedMedia']),'errors':errors}))`);
  assert.equal(result.count,1);assert.match(result.first.path,/IMG_20261101_070000_1.jpg$/);assert.deepEqual(result.errors,['MEDIA_HASH_MISMATCH','INVALID_MEDIA_NAME']);
 });
 test('host executable rejects arbitrary controller commands before reading profiles or touching a device',()=>{
@@ -30,7 +30,7 @@ test('remote public controller route cannot bypass native text field guard',()=>
 
 test('existing phone path is refused before recording ownership or invoking media-push',()=>{
  const r=run(`with tempfile.TemporaryDirectory() as t:
- c={'remoteRoot':t,'owner':'owner','binding':{'controllerPath':'/trusted/controller'},'profile':'pddrun','ownedMedia':[]};b=b'\\xff\\xd8\\xffimage';item=h.stage_media(c,{'name':'IMG_20261101_070000_1.jpg','bytesBase64':base64.b64encode(b).decode(),'sha256':hashlib.sha256(b).hexdigest()});h.verify_files=lambda c:None;h.held=lambda c:None
+ c={'remoteRoot':t,'owner':'owner','binding':{'controllerPath':'/trusted/controller'},'profile':'pddrun','ownedMedia':[]};b=b'\\xff\\xd8\\xffimage';c['materialPolicy']={'allowedDigests':[hashlib.sha256(b).hexdigest()]};item=h.stage_media(c,{'name':'IMG_20261101_070000_1.jpg','bytesBase64':base64.b64encode(b).decode(),'sha256':hashlib.sha256(b).hexdigest()});h.verify_files=lambda c:None;h.held=lambda c:None
  h.adb=lambda c,args,check=True:type('R',(),{'returncode':0,'stdout':b'No result found.'})()
  try:h.execute_controller(c,'media-push',[item['path'],'--name',item['name']],'job',native_tap=True)
  except ValueError as e:print(json.dumps({'error':str(e),'planned':item['phonePlanned']}))`);

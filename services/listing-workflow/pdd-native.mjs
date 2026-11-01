@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
-import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
+import{authorizedImageBytes}from'./authorized-media.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const denied=new Set(['保存草稿','提交并上架','编辑','下架','改库存','改价','发送','聊天','全选','立即复制','添加账号','管理']);
 
@@ -33,7 +34,7 @@ export function createNativeTransport(config,bridge){
    if(result.ok!==true||result.value!==value||!result.evidence?.length)throw new Error('NATIVE_READBACK_MISMATCH');return result;
   },
   async stageImage(image){
-   draftWrites();const bytes=image.bytesBase64?Buffer.from(image.bytesBase64,'base64'):readFileSync(image.path);
+   draftWrites();const bytes=authorizedImageBytes(config,image);
    if(hash(bytes)!==image.sha256)throw new Error('MEDIA_HASH_MISMATCH');
    const staged=await bridge.host('stage-media',{name:image.name,bytesBase64:bytes.toString('base64'),sha256:image.sha256});
    const readback=await bridge.host('push-owned-media',{name:staged.name});const actual=readback.media.find(x=>x.name===image.name);
