@@ -10,6 +10,8 @@ def organize_owned_album(config):
     if config.get('albumMoveAttempted'): raise ValueError('ALBUM_MOVE_REQUIRES_READBACK')
     items = config['ownedMedia']
     if not items or any(not x.get('phoneVerified') or not re.fullmatch(r'\d+', x.get('mediaId', '')) for x in items): raise ValueError('VERIFIED_MEDIA_REQUIRED')
+    if len({x['mediaId'] for x in items}) != len(items) or len({x['name'] for x in items}) != len(items): raise ValueError('DUPLICATE_MEDIA_IDENTITY')
+    if any(x['phonePath'] != '/sdcard/DCIM/Camera/' + x['name'] for x in items): raise ValueError('UNEXPECTED_MEDIA_SOURCE')
     album = 'PDD_' + profile
     path = '/sdcard/DCIM/' + album
     relative = 'DCIM/' + album + '/'
