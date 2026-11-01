@@ -119,8 +119,12 @@ def audit_navigation(config,request,screen,before,comparison):
         owned,owned_proof=current_owned_form(config,request['jobId'])
         if owned_proof['sha256']!=before['sha256']: raise ValueError('AUDIT_OWNED_FORM_CHANGED')
         point=audit_more_plan(screen)
-    final_window_guard(config,request['jobId'],before['sha256'])
-    intent={'jobId':request['jobId'],'owner':config['owner'],'window':config['lastForegroundRaw'],'before':before['path'],'sourceTreeSha256':before['sha256'],'approvedFrame':{k:config['lastFrame'][k] for k in ['xmlSha256','screenSha256','windowRaw']},'point':point,'commandFinished':False,'at':time.time()}
+    source,source_tree=audit_tab_source(config) if key=='tabs' else (screen,before)
+    if key=='tabs':
+        audit_agree_tabs(screen,source)
+        final_window_guard(config,request['jobId'],source_tree['sha256'],audit_tabs=source)
+    else: final_window_guard(config,request['jobId'],before['sha256'])
+    intent={'jobId':request['jobId'],'owner':config['owner'],'window':config['lastForegroundRaw'],'before':source_tree['path'],'observedBefore':before['path'],'sourceTreeSha256':source_tree['sha256'],'approvedFrame':{k:config['lastFrame'][k] for k in ['xmlSha256','screenSha256','windowRaw']},'point':point,'commandFinished':False,'at':time.time()}
     config.setdefault('auditIntents',{})[key]=intent
     store(Path(config['remoteRoot'])/'config.json',config)
     if key=='tabs':
@@ -148,4 +152,53 @@ def audit_swipe_args(config,args,job_id):
     if hashlib.sha256(raw).hexdigest()!=intent['sourceTreeSha256'] or proof['sha256']!=intent['sourceTreeSha256']: raise ValueError('AUDIT_SWIPE_SOURCE_CHANGED')
     source=Screen(raw.decode(),config['binding']['width'],config['binding']['height'])
     if audit_tab_plan(source)!=point: raise ValueError('AUDIT_SWIPE_PLAN_CHANGED')
-    final_window_guard(config,job_id+'-source-bound',intent['sourceTreeSha256'])
+    final_window_guard(config,job_id+'-source-bound',intent['sourceTreeSha256'],audit_tabs=source)
+
+
+def audit_tab_signature(screen):
+    plan=audit_tab_plan(screen)
+    bar=next(n for n in screen.nodes if n.get('resource-id')=='tabWrapId')
+    ancestors=[];node=bar
+    while node in screen.parents:
+        node=screen.parents[node]
+        ancestors.append({'tag':node.tag,'attributes':dict(node.attrib)})
+    import xml.etree.ElementTree as ET
+    return {'plan':plan,'subtreeSha256':hashlib.sha256(ET.tostring(bar,encoding='utf-8')).hexdigest(),'ancestors':ancestors}
+
+
+def audit_agree_tabs(current,approved):
+    # Both complete trees are checked for modal/focus/foreign or unknown path coverage.
+    left,right=audit_tab_signature(current),audit_tab_signature(approved)
+    if left!=right: raise ValueError('AUDIT_TAB_APPROVAL_CHANGED')
+    return left
+
+
+def audit_tab_source(config):
+    frame=config['lastFrame'];proof=read_evidence(config,frame['evidence'][1])
+    raw=base64.b64decode(proof['bytesBase64'],validate=True)
+    if proof['sha256']!=frame['xmlSha256'] or hashlib.sha256(raw).hexdigest()!=frame['xmlSha256']: raise ValueError('AUDIT_TAB_APPROVED_SOURCE_CHANGED')
+    return Screen(raw.decode(),config['binding']['width'],config['binding']['height']),proof
+
+
+def audit_tab_pixels(config,current_png,screen,job_id):
+    approved,tree=audit_tab_source(config)
+    signature=audit_agree_tabs(screen,approved)
+    approved_png=read_evidence(config,config['lastFrame']['evidence'][0])
+    raw=base64.b64decode(approved_png['bytesBase64'],validate=True)
+    now=base64.b64decode(current_png['bytesBase64'],validate=True)
+    if hashlib.sha256(raw).hexdigest()!=config['lastFrame']['screenSha256'] or approved_png['sha256']!=config['lastFrame']['screenSha256']: raise ValueError('AUDIT_TAB_APPROVED_PIXELS_CHANGED')
+    box=signature['plan']['visibleClip'];size=[screen.width,screen.height]
+    expected=png_crop_sha(raw,box,expected_size=size)
+    if png_crop_sha(now,box,expected_size=size)!=expected: raise ValueError('AUDIT_TAB_TARGET_PIXELS_CHANGED')
+    return {'mode':'audit-tabs-native-visible-clip','bounds':box,'sha256':expected,'signature':signature,'approvedTree':tree['path'],'currentImage':current_png['path'],'outsideTargetPixelsNotCompared':True,'destinationVerified':False}
+
+
+def audit_final_tab_proof(config,job_id,screen,approved):
+    approval(config,{'approvedScreenSha256':config['lastFrame']['screenSha256']})
+    require_store(config)
+    if adb(config,['shell','getprop','ro.serialno']).stdout.decode().strip()!=config['binding']['serial']: raise ValueError('HARDWARE_SERIAL_MISMATCH')
+    audit_agree_tabs(screen,approved)
+    eid='native-'+job_id+'-final-tab-pixels'
+    control_ok(config,'snapshot-evidence',[eid],job_id+'-final-tab-image')
+    png=read_evidence(config,'/private/tmp/openclaw-phone/evidence/'+config['profile']+'/'+eid+'.png')
+    return audit_tab_pixels(config,png,screen,job_id)

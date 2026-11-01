@@ -200,11 +200,13 @@ def observe(config, request):
     return {'ok': True, 'package': package, 'hardwareSerialRaw': actual_serial, 'foregroundRaw': config['lastForegroundRaw'], 'callStatesRaw': config['lastCallStatesRaw'], 'picture': png, 'tree': tree, 'statusBarRaw': read_evidence(config,status_bar['path']) if status_bar else None, 'facts': facts, 'storeProof': config.get('storeProof'), 'closedContext':config.get('closedContext'), 'draft': config.get('draft'), 'frame': config['lastFrame']}
 
 
-def final_window_guard(config, job_id, xml_sha, package='com.xunmeng.merchant', list_entry=None):
+def final_window_guard(config, job_id, xml_sha, package='com.xunmeng.merchant', list_entry=None, audit_tabs=None):
     held(config)
     if current_package(config,job_id+'-final-window') != package or config.get('lastForegroundRaw') != config.get('lastFrame',{}).get('windowRaw'): raise ValueError('FINAL_WINDOW_CHANGED')
     final, proof=fresh_xml(config,job_id+'-final-tree')
-    if proof['sha256'] != xml_sha:
+    if audit_tabs is not None:
+        audit_final_tab_proof(config,job_id,final,audit_tabs)
+    elif proof['sha256'] != xml_sha:
         if list_entry is None: raise ValueError('FINAL_UI_CHANGED')
         final.agree_list_entry(list_entry)
     held(config)
@@ -307,7 +309,10 @@ def native_action(config, request):
     approval(config, request)
     screen, before = preflight
     list_entry = action == 'navigate' and request.get('label') == '发布商品'
-    if list_entry:
+    if action=='audit-tabs':
+        approved_tabs,_=audit_tab_source(config)
+        audit_agree_tabs(screen,approved_tabs)
+    elif list_entry:
         approved_tree = read_evidence(config, config['lastFrame']['evidence'][1])
         approved_screen = Screen(base64.b64decode(approved_tree['bytesBase64']).decode(), config['binding']['width'], config['binding']['height'])
         entry_point = screen.agree_list_entry(approved_screen)
@@ -317,7 +322,9 @@ def native_action(config, request):
     control_ok(config, 'snapshot-evidence', [eid], job_id + '-approved-image')
     current_png = read_evidence(config, '/private/tmp/openclaw-phone/evidence/' + config['profile'] + '/' + eid + '.png')
     comparison = {'mode': 'full-png-sha256', 'evidence': current_png['path']}
-    if list_entry:
+    if action=='audit-tabs':
+        comparison=audit_tab_pixels(config,current_png,screen,job_id)
+    elif list_entry:
         approved_png = read_evidence(config, config['lastFrame']['evidence'][0])
         size = [config['binding']['width'], config['binding']['height']]
         bounds = entry_point['bounds']
