@@ -48,6 +48,7 @@ export function createControllerBridge(config, dependencies = {}) {
   const insetsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-window-insets.py', import.meta.url));
   const gallerySource = dependencies.remote ? '' : readFileSync(new URL('./pdd-gallery-actions.py', import.meta.url));
   const pickerActionsSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-media-actions.py', import.meta.url));
+  const auditSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-audit-navigation.py', import.meta.url));
   const nativeSource = dependencies.remote ? '' : readFileSync(new URL('./pdd-native-host.py', import.meta.url));
   const script = `import base64,json,sys
 _ui={'__name__':'pdd_native_ui'}
@@ -65,10 +66,12 @@ exec(base64.b64decode('${gallerySource ? gallerySource.toString('base64') : ''}'
 exec(base64.b64decode('${insetsSource ? insetsSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${sessionContextSource ? sessionContextSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${cleanupNavigationSource?cleanupNavigationSource.toString('base64'):''}'),_host)
+exec(base64.b64decode('${auditSource ? auditSource.toString('base64') : ''}'),_host)
 exec(base64.b64decode('${nativeSource ? nativeSource.toString('base64') : ''}'),_host)
 try: print(json.dumps(_host['dispatch'](json.load(sys.stdin)),ensure_ascii=False))
 except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(e,'remoteUnknown',False)}))
 `;
+  state.auditNavigationSha256=createHash('sha256').update(auditSource).digest('hex');
   state.cleanupNavigationSha256=createHash('sha256').update(cleanupNavigationSource).digest('hex');
   state.sessionContextSha256=createHash('sha256').update(sessionContextSource).digest('hex');
   state.leaseGateSha256=createHash('sha256').update(leaseGateSource).digest('hex');
@@ -149,7 +152,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['prepare-media', 'prepare-album', 'stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['prepare-media', 'prepare-album', 'stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'audit-tabs', 'audit-more', 'audit-draft-tab', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); return send(action,data);
     },
     async finish() {

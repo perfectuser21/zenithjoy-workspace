@@ -161,7 +161,7 @@ def adb(config, args, check=True):
 
 def execute_controller(config, command, args, job_id, native_tap=False):
     verify_files(config)
-    if (command in {'text-input','media-push'} and not native_tap) or (command not in COMMANDS and not (native_tap and command in {'tap', 'back'})):
+    if (command in {'text-input','media-push'} and not native_tap) or (command not in COMMANDS and not (native_tap and command in {'tap', 'back', 'audit-tabs-swipe'})):
         raise ValueError('FORBIDDEN_CONTROLLER_COMMAND')
     lock_command = command.startswith('lock-')
     if not lock_command:
@@ -179,8 +179,9 @@ def execute_controller(config, command, args, job_id, native_tap=False):
         item['absenceProvedAt'] = time.time()
         item['phonePlanned'] = True
         store(Path(config['remoteRoot']) / 'config.json', config)
+    if command == 'audit-tabs-swipe': audit_swipe_args(config,args,job_id)
     prefix = [config['binding']['controllerPath'], '--profile', config['profile']]
-    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence', 'tap'}:
+    if command in {'text-input', 'media-push', 'snapshot-evidence', 'ui-evidence', 'tap', 'audit-tabs-swipe'}:
 
         prefix += ['--lock-owner', config['owner']]
     if command in {'snapshot-evidence', 'ui-evidence'} and (len(args) != 1 or not re.fullmatch(r'native-[a-zA-Z0-9_-]+', args[0])):
@@ -190,7 +191,7 @@ def execute_controller(config, command, args, job_id, native_tap=False):
     remaining = min(240, config.get('deadline', time.monotonic() + 240) - time.monotonic())
     if remaining < 1: raise ValueError('REMOTE_ACTION_BUDGET_EXHAUSTED')
     started_at = time.time()
-    process = subprocess.Popen(prefix + [command] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
+    process = subprocess.Popen(prefix + [('swipe' if command=='audit-tabs-swipe' else command)] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
     store(job, {'status': 'running', 'pid': process.pid, 'owner': config['owner'], 'command': command, 'startedAt': started_at})
     timed_out = False
     try:
@@ -284,7 +285,7 @@ def dispatch_host_operation(config,request):
         return gallery_action(config, request)
     if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
         return picker_action(config, request)
-    if action in {'prepare-media', 'prepare-album', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'}:
+    if action in {'prepare-media', 'prepare-album', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'audit-tabs', 'audit-more', 'audit-draft-tab', 'back', 'launch'}:
         return native_action(config, request)
     raise ValueError('FORBIDDEN_HOST_OPERATION')
 

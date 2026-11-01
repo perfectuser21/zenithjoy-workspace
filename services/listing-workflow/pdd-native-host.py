@@ -339,6 +339,7 @@ def native_action(config, request):
             actual_digest = png_crop_sha(base64.b64decode(current_png['bytesBase64']), bounds, [mask,status_mask], expected_size=bounds[2:])
             if expected_digest != actual_digest: raise ValueError('APPROVED_SCREEN_CHANGED_OUTSIDE_ANIMATION')
             comparison = {'mode': 'homepage-except-native-status-bar-and-unique-marketing-icon', 'mask': mask, 'statusBarMask':status_mask, 'statusBarProof':{'approved':approved_bar,'current':current_bar}, 'sha256': actual_digest, 'evidence': current_png['path'],'transparentOverlayAbsenceProven':False}
+    if action in {'audit-tabs','audit-more','audit-draft-tab'}: return audit_navigation(config,request,screen,before,comparison)
     if action=='resolve-back': return resolve_known_back(config,request,screen,before)
     if action == 'discard-draft':
         draft = config.get('draft', {})

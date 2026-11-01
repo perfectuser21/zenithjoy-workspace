@@ -30,6 +30,7 @@ export function createNativeTransport(config,bridge){
    if(denied.has(label)||typeof label!=='string')throw new Error('FORBIDDEN_CONTROL');
    return bridge.host('navigate',{label,approvedScreenSha256:approval(proof)});
   },
+  async audit(action,proof){if(!['tabs','more','draft-tab'].includes(action))throw new Error('FORBIDDEN_AUDIT_ACTION');if(action==='more')draftWrites();return saveObserved(await bridge.host('audit-'+action,{approvedScreenSha256:approval(proof)}));},
   async approveDraft(proof){draftWrites();return bridge.host('approve-draft',{approvedScreenSha256:approval(proof)});},
   async setField(field,value,proof){
    draftWrites();if(!['title','groupPrice','inventory'].includes(field))throw new Error('FORBIDDEN_FIELD');
