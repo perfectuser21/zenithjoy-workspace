@@ -12,6 +12,11 @@ def audit_clear(screen):
             raise ValueError('AUDIT_MODAL_OR_INPUT')
 
 
+def audit_ancestor(screen,node):
+    if node.tag=='node' and (node.get('package')!=PACKAGE or node.get('enabled')!='true' or node.get('visible-to-user')=='false' or not screen.bounds(node)):
+        raise ValueError('AUDIT_ANCESTOR_UNSAFE')
+
+
 def audit_overlap(screen, rect, allowed, prefix):
     for n in screen.tree.iter('node'):
         box=screen.bounds(n)
@@ -41,6 +46,7 @@ def audit_tab_plan(screen):
     allowed=set(bar.iter('node'));parent=bar;clip=box[:]
     while parent in screen.parents:
         parent=screen.parents[parent]
+        audit_ancestor(screen,parent)
         if parent.get('clickable')=='true': raise ValueError('AUDIT_TAB_ANCESTOR_INTERCEPTS')
         allowed.add(parent)
         outer=screen.bounds(parent)
@@ -87,6 +93,7 @@ def audit_more_plan(screen):
     allowed=set(children);allowed.add(parent)
     while parent in screen.parents:
         parent=screen.parents[parent]
+        audit_ancestor(screen,parent)
         if parent.get('clickable')=='true': raise ValueError('AUDIT_MORE_ANCESTOR_INTERCEPTS')
         allowed.add(parent)
     if any(screen.bounds(n) and not audit_contains(screen.bounds(n),box) for n in allowed if n not in children): raise ValueError('AUDIT_MORE_CLIPPED_BUTTON')
