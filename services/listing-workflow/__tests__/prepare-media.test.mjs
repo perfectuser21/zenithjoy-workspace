@@ -10,7 +10,7 @@ with tempfile.TemporaryDirectory() as t:
  if mode=='after-context':c['closedContext']={'startedAt':1}
  q={'action':'prepare-media','jobId':'job','name':'IMG_20261101_120000_1.jpg','sha256':digest,'bytesBase64':base64.b64encode(b).decode()}
  h['context']=lambda *a,**kw:(_ for _ in ()).throw(ValueError('BUSINESS_CONTEXT_MUST_NOT_RUN'))
- h['held']=lambda c:None;h['call_idle']=lambda c:None
+ h['held']=lambda c:None;h['call_idle']=lambda c:None;h['verify_files']=lambda c:None
  def package(c,job):
   c['lastForegroundRaw']='foreground=  mCurrentFocus=Window{abc u0 com.xunmeng.merchant/com.xunmeng.merchant.goods_management.GoodsManagementActivity}\\n'
   if mode=='wrong-activity':c['lastForegroundRaw']='foreground=  mCurrentFocus=Window{abc u0 com.xunmeng.merchant/com.xunmeng.merchant.ui.NewPageActivity}\\n'
@@ -42,6 +42,6 @@ with tempfile.TemporaryDirectory() as t:
  print(json.dumps({'effects':effects,'errors':errors,'businessProofCreated':bool(c.get('storeProof') or c.get('closedContext'))}))
 `;
 const r=spawnSync('python3',['-c',script],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);}
-test('authorized material preparation persists push intent and organizes before any business context exists',()=>{const r=run('ok');assert.deepEqual(r.effects,['push','organize']);assert.equal(r.businessProofCreated,false);assert.equal(r.errors.at(-1).message,'STAGED_MEDIA_ALREADY_EXISTS');});
+test('authorized material preparation persists push intent and organizes before any business context exists',()=>{const r=run('ok');assert.deepEqual(r.effects,['push','organize'],JSON.stringify(r));assert.equal(r.businessProofCreated,false);assert.equal(r.errors.at(-1).message,'STAGED_MEDIA_ALREADY_EXISTS');});
 for(const[mode,message]of[['unauthorized','MATERIAL_PREPARATION_NOT_AUTHORIZED'],['after-form','MATERIAL_PREPARATION_PHASE_CLOSED'],['after-context','MATERIAL_PREPARATION_PHASE_CLOSED'],['private-package','MATERIAL_PREPARATION_FOREGROUND_UNSAFE'],['wrong-activity','MATERIAL_PREPARATION_FOREGROUND_UNSAFE'],['wrong-serial','HARDWARE_SERIAL_MISMATCH'],['wrong-store','WRONG_STORE']])test(`preparation refuses ${mode} without any device push`,()=>{const r=run(mode);assert.deepEqual(r.effects,[]);assert.equal(r.errors[0].message,message);});
-test('pre-context push with a lost response stays unknown and cannot replay',()=>{const r=run('lost-response');assert.deepEqual(r.effects,['push']);assert.equal(r.errors[0].unknown,true);assert.equal(r.errors.at(-1).message,'STAGED_MEDIA_ALREADY_EXISTS');});
+test('pre-context push with a lost response stays unknown and cannot replay',()=>{const r=run('lost-response');assert.deepEqual(r.effects,['push'],JSON.stringify(r));assert.equal(r.errors[0].unknown,true);assert.equal(r.errors.at(-1).message,'STAGED_MEDIA_ALREADY_EXISTS');});

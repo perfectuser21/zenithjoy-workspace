@@ -9,6 +9,7 @@ const quote = x => `'${String(x).replaceAll("'", "'\\''")}'`;
 const commands = new Set(['preflight', 'foreground', 'snapshot-evidence', 'ui-evidence']);
 export function createControllerBridge(config, dependencies = {}) {
   const clonedBinding = structuredClone(config.binding);
+  clonedBinding.materialPreparationAuthorized=config.allowMaterialPreparation===true;
   clonedBinding.draftWritesAuthorized=config.allowDraftWrites===true;
   clonedBinding.draftContextMaxSeconds ??= 900;
   if(!Number.isInteger(clonedBinding.draftContextMaxSeconds)||clonedBinding.draftContextMaxSeconds<120||clonedBinding.draftContextMaxSeconds>1800||(clonedBinding.draftContextMaxSeconds>900&&!clonedBinding.draftWritesAuthorized))throw new Error('INVALID_DRAFT_CONTEXT_POLICY');
@@ -148,7 +149,7 @@ except Exception as e: print(json.dumps({'error':str(e),'remoteUnknown':getattr(
       return result;
     },
     async host(action, data = {}) {
-      if (!['stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
+      if (!['prepare-media', 'prepare-album', 'stage-media', 'read-evidence', 'phone-readback', 'phone-cleanup', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'picker-more', 'picker-permission', 'picker-select', 'picker-confirm', 'gallery-state', 'gallery-menu', 'gallery-album', 'gallery-select', 'gallery-upload', 'gallery-back', 'gallery-refresh', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'].includes(action)) throw new Error('FORBIDDEN_HOST_OPERATION');
       await lease(); return send(action,data);
     },
     async finish() {

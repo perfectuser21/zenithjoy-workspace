@@ -284,7 +284,7 @@ def dispatch_host_operation(config,request):
         return gallery_action(config, request)
     if action in {'picker-more', 'picker-permission', 'picker-select', 'picker-confirm'}:
         return picker_action(config, request)
-    if action in {'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'}:
+    if action in {'prepare-media', 'prepare-album', 'observe', 'navigate', 'approve-draft', 'set-field', 'push-owned-media', 'stage-and-push-media', 'organize-media', 'discard-draft', 'resolve-back', 'bootstrap-back', 'back', 'launch'}:
         return native_action(config, request)
     raise ValueError('FORBIDDEN_HOST_OPERATION')
 

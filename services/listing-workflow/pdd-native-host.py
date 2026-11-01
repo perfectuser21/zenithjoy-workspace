@@ -230,10 +230,37 @@ def current_owned_form(config,job_id):
     return screen,proof
 
 
+def stage_push_material(config, request):
+    item=stage_media(config,request)
+    store(Path(config['remoteRoot'])/'config.json',config)
+    control_ok(config,'media-push',[item['path'],'--name',item['name']],request['jobId']+'-push',native_tap=True)
+    return phone_readback(config)
+
+
+def prepare_material(config, request):
+    if config['binding'].get('materialPreparationAuthorized') is not True: raise ValueError('MATERIAL_PREPARATION_NOT_AUTHORIZED')
+    if any(config.get(key) for key in ('storeProof','closedContext','draft','newFormEntryIntent','expectNewForm','pendingAction','pendingPicker','gallerySelection','galleryUploadIntent')): raise ValueError('MATERIAL_PREPARATION_PHASE_CLOSED')
+    call_idle(config)
+    if adb(config,['shell','getprop','ro.serialno']).stdout.decode().strip()!=config['binding']['serial']: raise ValueError('HARDWARE_SERIAL_MISMATCH')
+    package=current_package(config,request['jobId'])
+    activities=('com.xunmeng.merchant.ui.MainFrameTabActivity','com.xunmeng.merchant.goods_management.GoodsManagementActivity')
+    if package!='com.xunmeng.merchant' or not any(re.search(r'\bu\d+ com\.xunmeng\.merchant/'+re.escape(activity)+r'\}',config['lastForegroundRaw']) for activity in activities): raise ValueError('MATERIAL_PREPARATION_FOREGROUND_UNSAFE')
+    screen,tree=fresh_xml(config,request['jobId']+'-prepare')
+    facts=screen.facts()
+    if screen.form() or not (facts.get('counts') or facts.get('storeName')): raise ValueError('MATERIAL_PREPARATION_FOREGROUND_UNSAFE')
+    if facts.get('storeName') is not None and facts['storeName']!=config['binding']['storeName']: raise ValueError('WRONG_STORE')
+    config.setdefault('materialPreparation',{'owner':config['owner'],'startedAt':time.time()})
+    config['materialPreparation']['lastPreflight']={'hardwareSerial':config['binding']['serial'],'window':config['lastForegroundRaw'],'tree':tree,'at':time.time()}
+    store(Path(config['remoteRoot'])/'config.json',config)
+    result=stage_push_material(config,request) if request['action']=='prepare-media' else organize_owned_album(config)
+    return {**result,'phase':'material-preparation','businessContextCreated':False,'pddUploadVerified':False}
+
+
 def native_action(config, request):
     action, job_id = request['action'], request['jobId']
     if action == 'observe':
         return observe(config, request)
+    if action in {'prepare-media','prepare-album'}: return prepare_material(config,request)
     if action == 'launch':
         invalidate_context(config,'APP_LAUNCH_OR_RESTART')
         call_idle(config)
@@ -264,10 +291,7 @@ def native_action(config, request):
         return {'ok': True, 'evidence': [before['path']]}
     if action == 'stage-and-push-media':
         current_owned_form(config,job_id)
-        item=stage_media(config,request)
-        store(Path(config['remoteRoot'])/'config.json',config)
-        control_ok(config,'media-push',[item['path'],'--name',item['name']],job_id+'-push',native_tap=True)
-        return phone_readback(config)
+        return stage_push_material(config,request)
     if action == 'organize-media':
         current_owned_form(config,job_id)
         if not config.get('draft', {}).get('owned') or config.get('pendingAction'): raise ValueError('OWNED_DRAFT_AND_RESOLVED_ACTION_REQUIRED')

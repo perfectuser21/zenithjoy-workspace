@@ -11,6 +11,8 @@ def ime_proven_hidden(manager,windows):
 
 
 def bootstrap_back(config,request):
+    if request.get('preparationOnly') is True and config['binding'].get('materialPreparationAuthorized') is not True: raise ValueError('MATERIAL_PREPARATION_NOT_AUTHORIZED')
+    if request.get('preparationOnly') is True and (config.get('storeProof') or config.get('closedContext')): raise ValueError('BOOTSTRAP_UNSAFE_STATE')
     if config.get('draft') or config.get('newFormEntryIntent') or config.get('bootstrapBackIntent') or config.get('ownedMedia'): raise ValueError('BOOTSTRAP_UNSAFE_STATE')
     held(config);call_idle(config);approval(config,request)
     job=request['jobId'];package=current_package(config,job)
@@ -28,6 +30,8 @@ def bootstrap_back(config,request):
         facts=home.facts()
         if facts['storeName'] is not None and facts['storeName']!=config['binding']['storeName']: raise ValueError('WRONG_STORE')
         if context_role(package,config['lastForegroundRaw'],home)=='home' and facts['storeName']==config['binding']['storeName']:
+            if request.get('preparationOnly') is True:
+                return {'ok':True,'status':'bootstrap-preparation-home','businessContextCreated':False,'evidence':[tree['path'],proof['path']]}
             config['storeProof']={'name':facts['storeName'],'owner':config['owner'],'runId':config['runId'],'at':time.time(),'evidence':proof['path']}
             remember_context(config,'home',config['lastForegroundRaw'],proof['path'])
             store(Path(config['remoteRoot'])/'config.json',config)
