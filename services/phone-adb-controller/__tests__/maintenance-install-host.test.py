@@ -20,6 +20,20 @@ host_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host_module)
 
 
+class HostCommandTextTests(unittest.TestCase):
+    def test_real_read_paths_return_text_without_stdin(self):
+        def run(argv, *, input, text, capture_output, check, timeout):
+            self.assertTrue(capture_output)
+            raw = '342 /usr/bin/python3 adb-host-service.py run --config x\n' if argv[0] == '/bin/ps' else '15 2 * * * harvest-cron.sh\n'
+            return types.SimpleNamespace(stdout=raw if text else raw.encode(),
+                                         stderr='' if text else b'', returncode=0)
+
+        with patch.object(host_module.subprocess, 'run', side_effect=run):
+            self.assertIsInstance(host_module.cron_raw(), str)
+            self.assertIsInstance(host_module.process_table(), str)
+            self.assertIsInstance(host_module.launch('print', 'system/com.zenithjoy.adb-host').stderr, str)
+
+
 class SafetyHostTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
