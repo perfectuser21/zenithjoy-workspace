@@ -53,9 +53,32 @@ def execute(phase, manifest, value):
         if not envelope['definition'].get('expected_path') or not envelope['activity_bindings']:
             raise ValueError('frozen activity and step identities required')
         class SupervisedPhone(phone_module.Phone):
-            transport_unknown = False
+            def __init__(self, *args):
+                super().__init__(*args)
+                self.quarantine = self.directory / 'native-transport-unknown.json'
+                # Existence is a sticky deny, including a damaged latch: only an
+                # independent stop/readback protocol may ever clear isolation.
+                self.transport_unknown = self.quarantine.exists()
+                self.lock_readback = False
+
+            def evidence(self):
+                return ([str(self.quarantine)] if self.quarantine.exists() else []) + [
+                    str(p) for p in self.control_receipts if p.is_file()]
+
+            def ctl(self, *args):
+                if self.transport_unknown and args != ('lock-status',):
+                    raise ValueError('native transport unknown: readback only')
+                self.lock_readback = args == ('lock-status',)
+                try:
+                    return super().ctl(*args)
+                finally:
+                    self.lock_readback = False
 
             def ssh(self, command):
+                # Block direct ssh paths too; only ctl's exact lock-status call
+                # can cross this gate after an uncertain remote execution.
+                if self.transport_unknown and not self.lock_readback:
+                    raise ValueError('native transport unknown: readback only')
                 try:
                     return super().ssh(command)
                 except Exception as error:
@@ -70,6 +93,9 @@ def execute(phase, manifest, value):
                     code = meta.get('returncode')
                     if isinstance(error, subprocess.TimeoutExpired) or code == 255 or isinstance(code, int) and code < 0:
                         self.transport_unknown = True
+                        if not self.quarantine.exists():
+                            io.write(self.quarantine, dict(self.identity(), boundary='remote-execution-unknown',
+                                     evidence=[str(p) for p in self.control_receipts if p.is_file()]))
                     raise
 
         phone = SupervisedPhone(directory, envelope)
@@ -77,13 +103,13 @@ def execute(phase, manifest, value):
             receipt = phone.prepare() if phase == 'preflight' else phone.cleanup()
         except Exception as error:
             error.native_transport_unknown = phone.transport_unknown
-            error.native_evidence = [str(p) for p in phone.control_receipts if p.is_file()]
+            error.native_evidence = phone.evidence()
             raise
         # cleanup catches controller exceptions internally; keep the same transport
         # boundary even if a later native readback returns another receipt.
         if phone.transport_unknown:
             return dict(schema_version=1, run_tag=run_id, status='needs_review', failure_class='needs_human',
-                        outputs={}, metrics={}, evidence=[str(p) for p in phone.control_receipts if p.is_file()],
+                        outputs={}, metrics={}, evidence=phone.evidence(),
                         reason_code='publish_native_unconfirmed', execution_stopped=False, external_effect='unknown')
         completed = phase == 'preflight' or receipt.get('completed') is True
         return dict(schema_version=1, run_tag=run_id, status='completed' if completed else 'needs_review',

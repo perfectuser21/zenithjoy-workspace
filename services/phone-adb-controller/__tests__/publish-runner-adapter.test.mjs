@@ -73,3 +73,30 @@ test('native SSH255 after remote acceptance retains unknown execution and origin
   const value=JSON.parse(result.stdout);assert.equal(fs.readFileSync(path.join(root,'accepted'),'utf8'),'accepted');assert.equal(value.execution_stopped,false);assert.equal(value.external_effect,'unknown');assert.ok(value.evidence.some(p=>p.endsWith('.stderr')&&fs.readFileSync(p,'utf8').includes('connection lost after acceptance')));
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+test('cleanup disconnect enters persistent readback-only isolation before native finally can release the phone',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'publish-cleanup-isolated-')),bin=path.join(root,'bin');fs.mkdirSync(bin);
+ const ownerFile=path.join(root,'owner'),callsFile=path.join(root,'calls');fs.writeFileSync(ownerFile,'free');
+ fs.writeFileSync(path.join(bin,'ssh'),`#!/usr/bin/env node
+const fs=require('fs'),command=process.argv.at(-1),ownerFile=process.env.FIXTURE_PHONE_OWNER;
+fs.appendFileSync(process.env.FIXTURE_CALLS,command+'\\n');
+if(command.includes('lock-status')){const owner=fs.readFileSync(ownerFile,'utf8');console.log(owner==='free'?'lock=free':'lock=held owner='+owner);}
+else if(command.includes('lock-acquire')){fs.writeFileSync(ownerFile,command.split(' ').at(-1));console.log('acquired');}
+else if(command.includes('lock-release')){fs.writeFileSync(ownerFile,'free');console.log('released');}
+else if(command.includes('account-current'))console.log('nickname=人工智能小诺考评');
+else if(command.includes('close-app')){fs.writeFileSync(process.env.FIXTURE_ACCEPTED,'accepted');console.error('disconnect after close accepted');process.exit(255);}
+else if(command.includes('preflight'))console.log('serial=ANGYVB4402004137 state=device');
+else console.log('native receipt');
+`,{mode:0o700});
+ const run=randomUUID(),task=randomUUID(),ids=['preflight','cleanup'].map(key=>({key,reference_id:randomUUID(),activity_id:randomUUID(),activity_definition_version_id:randomUUID(),steps:[]}));
+ const manifest={state_root:path.join(root,'runs'),contract:{resources:{machine:'xian-m4',profile:'legacy',device_serial:'ANGYVB4402004137',account_ref:'人工智能小诺考评'}},definition:{expected_path:ids.map(({key,steps,...rest})=>rest)},activity_bindings:ids};
+ const file=path.join(root,'manifest.json');fs.writeFileSync(file,JSON.stringify(manifest));
+ const invoke=phase=>JSON.parse(spawnSync('python3',['services/phone-adb-controller/commander/publish-native-activity.py',phase,file],{input:JSON.stringify({run_tag:run,task_id:task}),encoding:'utf8',env:{...process.env,PATH:bin+path.delimiter+process.env.PATH,FIXTURE_PHONE_OWNER:ownerFile,FIXTURE_CALLS:callsFile,FIXTURE_ACCEPTED:path.join(root,'accepted')}}).stdout);
+ try{
+  assert.equal(invoke('preflight').status,'completed');fs.writeFileSync(callsFile,'');
+  const first=invoke('cleanup');assert.equal(first.execution_stopped,false);assert.equal(first.external_effect,'unknown');assert.equal(fs.readFileSync(path.join(root,'accepted'),'utf8'),'accepted');assert.equal(fs.readFileSync(ownerFile,'utf8'),run);
+  const firstCalls=fs.readFileSync(callsFile,'utf8').trim().split('\n');const index=firstCalls.findIndex(c=>c.includes('close-app'));assert.ok(index>=0);assert.ok(firstCalls.slice(index+1).every(c=>c.includes('lock-status')));assert.ok(firstCalls.every(c=>!c.includes('lock-release')));
+  const latch=JSON.parse(fs.readFileSync(path.join(root,'runs',run,'native-transport-unknown.json'),'utf8'));assert.equal(latch.run_id,run);assert.equal(latch.task_id,task);
+  fs.writeFileSync(callsFile,'');const second=invoke('cleanup');assert.equal(second.execution_stopped,false);assert.equal(second.external_effect,'unknown');assert.equal(fs.readFileSync(ownerFile,'utf8'),run);
+  assert.ok(fs.readFileSync(callsFile,'utf8').trim().split('\n').filter(Boolean).every(c=>c.includes('lock-status')));
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
