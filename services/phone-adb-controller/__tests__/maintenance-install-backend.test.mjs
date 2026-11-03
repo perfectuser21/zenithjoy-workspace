@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {gunzipSync} from 'node:zlib';
 import {runMaintenanceInstall,guardChannel} from '../maintenance-install-backend.mjs';
 import {TOOLS} from '../deployment-transport.mjs';
 
@@ -89,5 +90,48 @@ test('跨来源恢复若非原3fe事务或其他工具也变化，任何远端�
     (path.endsWith('/maintenance-install-host.py')||(changed&&path.endsWith('/deployment-service.py')))?'changed':'original'),
    guardFn:action=>actions.push(action),stageToolsFn:()=>actions.push('stage'),transportFn:()=>{throw Error('transport must not run');}}),/工具|来源/);
   assert.deepEqual(actions,[]);
+ }
+});
+
+// Original public repository bytes, frozen at 3fe, keep this test independent of
+// shallow CI Git history. The production profile verifies their SHA256 values.
+const originalGuardSources=JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/review-guard-3fe-source.json.gz',import.meta.url))));
+function guardRecoveryFixture(mutate=()=>{}){
+ const original='3fe8783b021fd9fa1a8cd4242d79a3c703c6c21b',toolSha='b'.repeat(40),actions=[];
+ const before={},after={};
+ for(const name of TOOLS){
+  before[name]=Buffer.from(originalGuardSources[name]??('original:'+name));
+  after[name]=['maintenance-install-host.py','deployment-maintenance.py','input-runtime-release.py'].includes(name)
+   ?readFileSync(new URL('../'+name,import.meta.url)):before[name];
+ }
+ mutate({before,after});
+ const args={root:'/original',sha:original,toolRoot:'/reviewed',toolSha,action:'recover',
+  transaction:'phone-safety-'+original.slice(0,24),request,
+  readSourceFn:(_root,revision,path)=>(revision===original?before:after)[path.split('/').at(-1)],
+  guardFn:action=>actions.push(action),stageToolsFn:()=>actions.push('stage'),
+  transportFn:()=>({call:()=>({transaction:'phone-safety-'+original.slice(0,24),source_commit:original,secured:true})})};
+ return{args,actions};
+}
+test('原3fe可通过精确受审三文件profile恢复，保留原事务和来源',async()=>{
+ const f=guardRecoveryFixture();const result=await runMaintenanceInstall(f.args);
+ assert.equal(result.recovery_compatibility,'review-guard-snapshot-v1');
+ assert.equal(result.source_commit,f.args.sha);
+ assert.deepEqual(f.actions,['check','stage','admit','complete']);
+});
+for(const [label,mutate]of [
+ ['旧maintenance摘要',x=>x.before['deployment-maintenance.py']=Buffer.from('unapproved original')],
+ ['新maintenance摘要',x=>x.after['deployment-maintenance.py']=Buffer.concat([x.after['deployment-maintenance.py'],Buffer.from('\n# foreign')])],
+ ['旧input摘要',x=>x.before['input-runtime-release.py']=Buffer.from('unapproved original')],
+ ['新input摘要',x=>x.after['input-runtime-release.py']=Buffer.concat([x.after['input-runtime-release.py'],Buffer.from('\n# foreign')])],
+ ['新host摘要',x=>x.after['maintenance-install-host.py']=Buffer.concat([x.after['maintenance-install-host.py'],Buffer.from('\n# foreign')])],
+ ['第四个TOOLS成员',x=>x.after['deployment-service.py']=Buffer.from('foreign tool')],
+])test('精确guard恢复profile拒绝'+label+'漂移且无远端动作',async()=>{
+ const f=guardRecoveryFixture(mutate);await assert.rejects(runMaintenanceInstall(f.args),/闭包|profile|摘要/);
+ assert.deepEqual(f.actions,[]);
+});
+test('guard profile仍拒绝其他source/install/transaction',async()=>{
+ for(const change of [{sha:'c'.repeat(40)},{action:'install'},{transaction:'phone-safety-'+'c'.repeat(24)}]){
+  const f=guardRecoveryFixture();await assert.rejects(runMaintenanceInstall({...f.args,...change}));
+  assert.deepEqual(f.actions,[]);
  }
 });
