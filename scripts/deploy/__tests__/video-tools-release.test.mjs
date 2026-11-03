@@ -8,7 +8,8 @@ import {createPlan, validateReadback, writePrepared, mergeImage, inheritPrepared
 
 const sha='a'.repeat(40), image='sha256:'+'b'.repeat(64);
 function roster(){return {schema_version:1,source_commit:sha,origin:'https://zenithjoy.tech',
-  providers:{DASHSCOPE_API_KEY:'wan-secret',ALIYUN_ACCESS_KEY_ID:'ali-id',ALIYUN_ACCESS_KEY_SECRET:'ali-secret'},
+  providers:{DASHSCOPE_API_KEY:'wan-secret',ALIYUN_ACCESS_KEY_ID:'ali-id',ALIYUN_ACCESS_KEY_SECRET:'ali-secret',
+    COS_SECRET_ID:'cos-id',COS_SECRET_KEY:'cos-key',COS_BUCKET:'private-materials-12345',COS_REGION:'ap-guangzhou'},
   users:[{id:'staff-one',email:'one@example.com',token:'a'.repeat(40)},{id:'staff-two',email:'two@example.com',token:'b'.repeat(40)}]};}
 test('每人独立网络、实例、卷和token；API overlay绑定用户身份',()=>{
   const p=createPlan(roster(),{sha,image});
@@ -29,6 +30,12 @@ test('缺生产provider凭据、重复用户/token或未知来源不能生成就
     const r=roster();mutate(r);assert.throws(()=>createPlan(r,{sha,image}));
   }
   assert.throws(()=>createPlan(roster(),{sha,image:'canvas:latest'}));
+});
+test('素材存储缺项不能误报视频工具可用，私有存储配置随同版本激活和回退',()=>{
+  const keys=['COS_SECRET_ID','COS_SECRET_KEY','COS_BUCKET','COS_REGION'];
+  for(const key of keys){const r=roster();delete r.providers[key];assert.throws(()=>createPlan(r,{sha,image}));}
+  const env=createPlan(roster(),{sha,image}).apiOverlay.services['zenithjoy-api-prod'].environment;
+  for(const key of keys)assert.equal(env[key],roster().providers[key]);
 });
 test('独立读回拒绝共享网络、错误镜像、身份或缺失健康检查',()=>{
   const p=createPlan(roster(),{sha,image});

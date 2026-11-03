@@ -87,7 +87,15 @@ for (const kind of ['wan', 'upscale'] as const) {
       const input = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,width,height:format=duration', '-of', 'json', fixture], { encoding: 'utf8' }));
       expect(input.streams).toEqual([{ codec_type: 'video', width: 480, height: 480 }]);
       expect(Number(input.format.duration)).toBeCloseTo(2, 1);
+      const uploaded = page.waitForResponse(r => r.url().startsWith(`${STAGING}/api/video-tools/uploads/`) && r.url().endsWith('/complete') && r.request().method() === 'POST');
       await page.getByLabel('上传待超分视频').setInputFiles(fixture);
+      const receipt = await uploaded;
+      expect(receipt.status()).toBe(200);
+      const asset = await receipt.json(), privateUrl = new URL(asset.url);
+      expect(privateUrl.protocol).toBe('https:');
+      expect(privateUrl.hostname.endsWith('.myqcloud.com')).toBe(true);
+      privateUrl.search = ''; privateUrl.hash = '';
+      expect((await page.request.get(privateUrl.href)).status()).toBe(403);
     }
     const button = page.getByRole('button', { name: kind === 'wan' ? '生成视频' : '开始超分', exact: true });
     await expect(button).toBeEnabled({ timeout: 120_000 });

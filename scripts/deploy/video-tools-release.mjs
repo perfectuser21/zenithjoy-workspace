@@ -7,7 +7,8 @@ import {execFileSync} from 'node:child_process';
 
 const need=(ok,message)=>{if(!ok)throw Error('Video tools release refused: '+message);};
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const credentials=['DASHSCOPE_API_KEY','ALIYUN_ACCESS_KEY_ID','ALIYUN_ACCESS_KEY_SECRET'];
+const credentials=['DASHSCOPE_API_KEY','ALIYUN_ACCESS_KEY_ID','ALIYUN_ACCESS_KEY_SECRET',
+  'COS_SECRET_ID','COS_SECRET_KEY','COS_BUCKET','COS_REGION'];
 export function createPlan(roster,{sha,image,base}){
   need(/^[a-f0-9]{40}$/.test(sha)&&roster?.source_commit===sha&&roster.schema_version===1,'fixed source mismatch');
   need(/^sha256:[a-f0-9]{64}$/.test(image),'immutable canvas image required');

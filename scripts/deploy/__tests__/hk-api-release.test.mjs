@@ -209,7 +209,7 @@ test('同SHA重试失败恢复旧有效环境与私有网络，不引用已覆�
 });
 test('普通API跨版本发布及回退都保留已激活的provider与个人画布',t=>{
  const f=fixture(t),rosterPath=join(f.root,'roster.json');
- const roster={schema_version:1,source_commit:f.old,origin:'https://zenithjoy.tech',providers:{DASHSCOPE_API_KEY:'wan-private',ALIYUN_ACCESS_KEY_ID:'ali-id',ALIYUN_ACCESS_KEY_SECRET:'ali-secret'},users:[{id:'employee',email:'employee@example.com',token:'k'.repeat(40)}]};
+ const roster={schema_version:1,source_commit:f.old,origin:'https://zenithjoy.tech',providers:{DASHSCOPE_API_KEY:'wan-private',ALIYUN_ACCESS_KEY_ID:'ali-id',ALIYUN_ACCESS_KEY_SECRET:'ali-secret',COS_SECRET_ID:'cos-id',COS_SECRET_KEY:'cos-key',COS_BUCKET:'private-materials-12345',COS_REGION:'ap-guangzhou'},users:[{id:'employee',email:'employee@example.com',token:'k'.repeat(40)}]};
  writeFileSync(rosterPath,JSON.stringify(roster),{mode:0o600});
  const plan=createPlan(roster,{sha:f.old,image:'sha256:'+'f'.repeat(64)});
  writePrepared(f.env.ZJ_HK_RELEASES,rosterPath,plan);
@@ -219,7 +219,7 @@ test('普通API跨版本发布及回退都保留已激活的provider与个人画
  const oldPlan=join(f.env.ZJ_HK_RELEASES,f.old,'canvas-plan.json');
  const result=f.run(['promote',f.next],{FAKE_CANVAS_PLAN:oldPlan});assert.equal(result.status,0,result.stderr);
  const fresh=JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,f.next,'image.json'))).services['zenithjoy-api-prod'];
- assert.equal(fresh.environment.DASHSCOPE_API_KEY,'wan-private');assert.deepEqual(fresh.networks,plan.apiOverlay.services['zenithjoy-api-prod'].networks);
+ assert.equal(fresh.environment.DASHSCOPE_API_KEY,'wan-private');assert.equal(fresh.environment.COS_BUCKET,'private-materials-12345');assert.equal(fresh.environment.COS_SECRET_KEY,'cos-key');assert.deepEqual(fresh.networks,plan.apiOverlay.services['zenithjoy-api-prod'].networks);
  const rollback=f.run(['rollback',f.old],{FAKE_CANVAS_PLAN:oldPlan});assert.equal(rollback.status,0,rollback.stderr);
  const restored=JSON.parse(readFileSync(join(f.env.ZJ_HK_RELEASES,f.old,'image.json'))).services['zenithjoy-api-prod'];
  assert.deepEqual(restored.environment,fresh.environment);assert.deepEqual(restored.networks,fresh.networks);

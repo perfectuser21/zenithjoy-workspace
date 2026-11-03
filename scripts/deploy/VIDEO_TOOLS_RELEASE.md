@@ -24,7 +24,11 @@
   "providers": {
     "DASHSCOPE_API_KEY": "从1Password取",
     "ALIYUN_ACCESS_KEY_ID": "从1Password取",
-    "ALIYUN_ACCESS_KEY_SECRET": "从1Password取"
+    "ALIYUN_ACCESS_KEY_SECRET": "从1Password取",
+    "COS_SECRET_ID": "从1Password取",
+    "COS_SECRET_KEY": "从1Password取",
+    "COS_BUCKET": "已核验的私有素材桶",
+    "COS_REGION": "私有素材桶实际地域"
   },
   "users": [{"id": "目标环境真实user.id", "email": "员工邮箱小写", "token": "独立服务token至少32字符"}]
 }
@@ -34,6 +38,7 @@
 可在 providers 显式填写 `DASHSCOPE_BASE_URL`、`DASHSCOPE_WORKSPACE_ID`、`ALI_VIDEO_HTTPS_PROXY`。
 生产不会更改 STAFF_EMAILS 或超管名单；staging 只将名册中的真实测试账号加入当前员工名单，
 同时保留现有 staging 测试账号的实例、token 和网络。所有生成配置均为 600，不打印内容。
+素材存储四项同样必需，不能仅开通模型却让视频上传保持禁用；必须使用私有素材桶，不能改为公共读。
 
 ## 固定候选与验收
 
