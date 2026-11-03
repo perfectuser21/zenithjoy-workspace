@@ -94,14 +94,15 @@ test('阶段执行必须带真实Commander回执，模型不可达不能冒充�
   });
   assert.equal(executed, 1);
   assert.equal(result.status, 'completed');
-  assert.ok(events.some(e => e.phase === 'before'));
-  assert.ok(events.some(e => e.phase === 'after'));
-  await assert.rejects(runActivity({
+  assert.equal(events.some(e=>['before','after'].includes(e.phase)),false);
+  assert.ok(events.some(e=>e.phase==='commander_exchange'));
+  const unavailable=await runActivity({
     activity: { key: 'source', budget: { max_duration_s: 5 } }, context: {},
     execute: async () => { executed++; }, commander: async () => { throw Error('AUTH_UNAVAILABLE'); },
     record: async () => {},
-  }), /AUTH_UNAVAILABLE/);
-  assert.equal(executed, 1);
+  });
+  assert.equal(unavailable.commander_status,'unavailable');assert.equal(unavailable.status,'completed');
+  assert.equal(executed,2);
   let cleaned = false;
   const cleanup = await runActivity({
     activity: { key: 'cleanup', budget: { max_duration_s: 5 } }, context: {},

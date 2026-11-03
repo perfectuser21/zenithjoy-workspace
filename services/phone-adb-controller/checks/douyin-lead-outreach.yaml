@@ -60,19 +60,6 @@ probes:
     note: >
       拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0 （锁在
       harvest-keyword.sh 按词拿），判红直到 6b133a81。
-  - key: preflight_commander_verified
-    stage: preflight
-    journey_cell: stage:preflight
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: out_zero_send_while_paused
     stage: send_dm
     journey_cell: stage:send_dm
@@ -112,19 +99,6 @@ probes:
     failure_class: needs_human
     on_fail: fail_stage
     note: order_selection_verified=1仅表示本次成功订单按选定模式过了资格门；company_queue核公司资格队列及排序，exact额外核冻结record/comment/公司/来源和旁单零领取，不把普通队列冒称精确核验。
-  - key: send_dm_commander_verified
-    stage: send_dm
-    journey_cell: stage:send_dm
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: out_no_stuck_inflight
     stage: write_back
     journey_cell: stage:write_back
@@ -134,19 +108,6 @@ probes:
     expect:
       op: <=
       value: 0
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
-  - key: write_back_commander_verified
-    stage: write_back
-    journey_cell: stage:write_back
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
     severity: error
     failure_class: retryable
     on_fail: fail_stage

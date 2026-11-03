@@ -60,19 +60,6 @@ probes:
     note: >
       拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0 （锁在
       harvest-keyword.sh 按词拿），判红直到 6b133a81。
-  - key: preflight_commander_verified
-    stage: preflight
-    journey_cell: stage:preflight
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: qual_none_pending
     stage: qualification
     journey_cell: stage:qualification
@@ -111,19 +98,6 @@ probes:
     on_fail: fail_stage
     note: |
       判过的视频必须带理由（leadgen-db-lib.js:54 同时写 judgment_reason），无理由的判定不可审计。
-  - key: qualification_commander_verified
-    stage: qualification
-    journey_cell: stage:qualification
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: coll_only_matched
     stage: collection
     journey_cell: stage:collection
@@ -208,19 +182,6 @@ probes:
     failure_class: needs_human
     on_fail: stop_run
     note: 保留评论落库读回门槛，真身改为PG；比较已提交的评论数，不能只读执行者自报。
-  - key: collection_commander_verified
-    stage: collection
-    journey_cell: stage:collection
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: sampling_readback_verified
     stage: collection
     journey_cell: stage:collection
@@ -348,19 +309,6 @@ probes:
     probe:
       type: metric
       ref: metrics.run_dedup_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
-  - key: dedup_commander_verified
-    stage: dedup
-    journey_cell: stage:dedup
-    probe:
-      type: metric
-      ref: metrics.commander_verified
     expect:
       op: ==
       value: 1

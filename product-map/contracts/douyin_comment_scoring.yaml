@@ -4,7 +4,7 @@ capability: keyword_acquisition
 contract_key: douyin_comment_scoring
 commander_skill:
   name: wf-douyin_comment_scoring
-  version: 0.12.1
+  version: 0.12.2
 name: 抖音评论评分
 workflow: douyin-comment-scoring
 brain_workflow_key: douyin_comment_scoring
@@ -15,12 +15,17 @@ dod_promotion:
 runner:
   entry: leadgen-workflow.mjs
   queue: pending_comments
+on_status:
+  done: next
+  retry: retry
+  failed: stop
+  empty: next
+  partial: stop
+  needs_review: pause
+always_run: []
 trigger_inputs:
   - Comment
   - Video
-known_gaps:
-  - gap: Workflow 的 on_status/always_run 路由尚未在本合同及 Runner 中形成可验证接线；Activity 字段齐全不代表端到端自动编排验收通过。
-    task: bdd9fb75
 activities:
   - key: scoring
     name: 评分
@@ -33,7 +38,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 2.7.1
+    version: 2.7.2
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -78,8 +83,6 @@ activities:
         asserts: 认领评论 ID 的 relevance、intent_grade 与两份不同模型回执的政策证据在 PG 独立读回；两审一致后原子提交，任一审失败不得写分；本活动只交评分，完成状态由后续 mark_leads 核资格和配送后决定
       - probe: exclusion_readback
         asserts: 两份不同模型身份均判缺个人意向或受众主题证据且原因一致时，PG原子写已排除及安全双审摘要，relevance/intent_grade清空，原评论与冻结来源哈希、理由及无outbox独立读回；纯排除批次为完成，不以零评分误报partial
-      - probe: scoring_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
       primary_kind: code
       location: mmv
@@ -115,14 +118,22 @@ activities:
       phase: batch_end
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-scoring/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-scoring
-        version: 0.10.1
+        version: 0.10.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -353,7 +364,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 3.8.1
+    version: 3.8.2
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -440,8 +451,6 @@ activities:
     postconditions:
       - probe: pool_advanced
         asserts: 认领ID在PG独立读回，评论完成必须以线索已落实为前提
-      - probe: mark_leads_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
       - probe: bridge_readback
         asserts: 本run实际outbox IDs及同事务comment→lead映射独立PG读回；confirmed还须真实Feishu
           marker/UID/全payload与持久字段SHA，unknown POST不重发
@@ -489,8 +498,16 @@ activities:
       phase: batch_end
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/company-config-lib.js
@@ -500,7 +517,7 @@ activities:
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-103-mark-leads/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-103-mark-leads
-        version: 0.10.1
+        version: 0.10.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

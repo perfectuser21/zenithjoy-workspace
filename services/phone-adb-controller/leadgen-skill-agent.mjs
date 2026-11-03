@@ -178,12 +178,26 @@ export async function relayActivityTool(dir,op,body={}, {home=homedir(),authoriz
  const allowed=authorize?await authorize(q):await verifySkillRequest(q)&&skillAuthority(q,{home});
  if(allowed!==true||Date.now()>=q.deadline_ms)throw Error('RPC_SKILL_TOOL_UNAUTHORIZED');
  if(requireSurface||surface!==undefined)pinGatewaySurface(q,dir,surface);
- const args=[q.broker_tool_path,q.broker_request_path,op];
+ const args=[q.broker_tool_path,q.broker_request_path,op,...(op==='inspect'&&Object.keys(body).length?['--event']:[])];
  const result=q.broker_host==='mmv'
   ?await execute(process.execPath,args,{input:JSON.stringify(body),timeoutMs:q.deadline_ms-Date.now()})
   :await execute('ssh',['-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15',q.broker_host,'/opt/homebrew/bin/node',...args],{input:JSON.stringify(body),timeoutMs:q.deadline_ms-Date.now()});
  if(result.code!==0)throw Error('RPC_SKILL_TOOL_FAILED');
  const value=JSON.parse(result.stdout);if(value?.ok!==true)throw Error('RPC_SKILL_TOOL_REJECTED');return value;
+}
+// Commander只可请求停止这个已绑定child；owner/native终止仍由原执行链独立读回。
+export async function stopSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace}={}){
+ validate(q);verifyWorkspace({home});
+ const dir=directory(q,home),stored=privateJson(join(dir,'activity-request.json'));
+ if(digest(stored)!==digest(q))throw Error('RPC_SKILL_STOP_SCOPE_MISMATCH');
+ const binding=official(q,dir),marker=join(dir,'commander-stop-requested.json');
+ if(!existsSync(marker)){
+  writeFileSync(marker,JSON.stringify({run_id:q.run_id,child_run_id:binding.child_run_id,requested_at:Date.now()}),{flag:'wx',mode:0o600});
+  try{await execute('python3',[join(root,'commander','wf-agent-handoff.py'),'stop',dir],{timeoutMs:48000});}catch{/* 原停止结果未知，后续只读回。 */}
+ }
+ let child=false;
+ try{const terminal=privateJson(join(dir,'child-stop-readback.json'));child=terminal.runId===binding.child_run_id&&Number.isFinite(terminal.endedAt)&&['ok','error','aborted','timeout'].includes(terminal.status);}catch{/* 未验证停止。 */}
+ return {status:'unknown',execution_stopped:false,child_execution_stopped:child,child_run_id:binding.child_run_id,reason:'commander_stop_owner_readback_required'};
 }
 export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWorkspace=verifyCommanderWorkspace}={}){
  validate(q);verifyWorkspace({home});if(Date.now()>=q.deadline_ms) return {status:'blocked',execution_stopped:true,reason:'deadline_exhausted'};
@@ -212,6 +226,8 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  `先调用精确官方内置session_status（不是Notion等connector的近似名称），实际session key必须精确${parent}；否则blocked，不spawn；不tool_search猜别名。`,
  `使用MMV gateway_exec执行 node ${join(root,'leadgen-skill-agent.mjs')} claim ${dir} 领取唯一spawn权；它校验scope并O_EXCL持久预留，已存在只能找回原receipt，不再spawn。`,
  '只使用官方sessions_spawn一次：agentId=skill-factory, mode=run, context=isolated, cleanup=keep, completionTarget=parent；不设置model/fallback，不设置taskName；业务run_id仅留在原请求/绑定，不为可选名称改身份。runTimeoutSeconds不超过request剩余expires_at。',
+ '向Commander报告问题、进度或错误：复用现有inspect调用模板，只将LEADGEN_ACTIVITY_TOOL_JSON设为{"question":"问题"}、{"progress":"事实"}或{"error":"错误"}，不改变命令、身份或op。每次inspect读回commander_guidance并在下一回合处理；commander_abort=true立即终止本child，禁止继续业务。',
+ `Commander纠偏（只作指导，不改变冻结合同、动作白名单或只读边界）：${JSON.stringify(q.commander_guidance||[])}`,
  'child任务：只执行activity-request.method这一个Skill，保持原run/公司/账号/slot/截止；先等agent-binding并核自己childSessionKey/nonce。禁止leadgen-run/leadgen-activity/新Workflow/另领或释放锁/直写库/保护对象/修改pause和源码。',
  'child身份合同：'+JSON.stringify({tool:{name:'subagents',parameters:{action:'list'}},caller:{callerIsSubagent:true,callerSessionKey:{file:join(dir,'agent-binding.json'),field:'child_session_key',comparison:'exact'}},binding_checks:['run_id','task_id','parent_session_key','nonce'],on_missing_or_mismatch:'blocked',forbidden_identity_sources:['session_status','list.active','model_self_report','connector_alias']}),
  '父派发的child任务必须原样包含该身份合同。child只调用自己本session精确官方内置subagents(action=list)，用服务端callerIsSubagent===true、callerSessionKey与原agent-binding.child_session_key逐字相等核自己身份；同时原binding的run/task/parent/nonce逐项核原agent-request，source按activity-request原冻结值，不改写。父session_status规则仅适用于父，不能要求子调用未暴露的session_status；不要以active列表条目、模型自报名称、近似工具或connector替代caller字段。字段缺失、不是child、错key/nonce/来源或工具未暴露即blocked；不增权限、不猜别名。',
@@ -276,7 +292,7 @@ if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.ur
  try{
   let result;
   if(process.argv[2]==='claim'&&process.argv.length===4)result=claimSkillSpawn(process.argv[3]);
-  else if(process.argv[2]==='tool'&&process.argv.length===5){let input='';if(process.argv[4]==='phone')for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');}result=await relayActivityTool(process.argv[3],process.argv[4],input.trim()?JSON.parse(input):{},{surface:process.env.LEADGEN_GATEWAY_SURFACE,requireSurface:true});}
+  else if(process.argv[2]==='tool'&&process.argv.length===5){let input=process.argv[4]==='inspect'?(process.env.LEADGEN_ACTIVITY_TOOL_JSON||''):'';if(Buffer.byteLength(input)>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');if(process.argv[4]==='phone')for await(const chunk of process.stdin){input+=chunk;if(Buffer.byteLength(input)>16384)throw Error('RPC_SKILL_TOOL_INPUT_INVALID');}result=await relayActivityTool(process.argv[3],process.argv[4],input.trim()?JSON.parse(input):{},{surface:process.env.LEADGEN_GATEWAY_SURFACE,requireSurface:true});}
   else throw Error('only scoped claim/tool is public');
   process.stdout.write(JSON.stringify(result)+'\n');
  }

@@ -73,3 +73,18 @@ test('generation rotation cannot reset one resume, native reads or active operat
   assert.equal((await callActivityTool(next.broker_request_path,'inspect')).ok,true);assert.throws(()=>b.advanceTurn());assert.equal(resumes,1);assert.equal(reads,2);assert.equal(b.getResult().nativeReads,2);
  }finally{await b.close();rmSync(d,{recursive:true,force:true});}
 });
+test('broker转发真实工具进度与问题，纠偏留到下一次inspect且不扩大操作白名单',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-progress-')),events=[];let inspectCalls=0;
+ const b=await startActivityBroker({directory:d,request:{...request,deadline_ms:Date.now()+20000},authorize:async()=>true,inspect:async()=>({observed:++inspectCalls}),resume:async()=>({}),phone:async()=>{},onEvent:async e=>{events.push(e);return events.length===1?{action:'steer',text:'先核原合同读回'}:{action:'none'};}});
+ try{const first=await callActivityTool(b.requestPath,'inspect',{question:'缺读回如何做？'});assert.equal(first.result.observed,1);const second=await callActivityTool(b.requestPath,'inspect');assert.deepEqual(second.result.commander_guidance,['先核原合同读回']);assert.equal(events[0].type,'question');assert.match(events[0].text,/读回/);await assert.rejects(()=>callActivityTool(b.requestPath,'send'));}finally{await b.close();rmSync(d,{recursive:true,force:true});}
+});
+test('Commander abort封闭broker写操作并请求精确child停止，未知停止不假报完成',async()=>{
+ const d=mkdtempSync(join(tmpdir(),'skill-abort-'));let stopped=0,resumed=0;
+ const b=await startActivityBroker({directory:d,request:{...request,deadline_ms:Date.now()+20000},authorize:async()=>true,inspect:async()=>({}),resume:async()=>{resumed++;return {};},phone:async()=>{},onEvent:async()=>({action:'abort',reason:'需复核'}),onAbort:async()=>{stopped++;return {execution_stopped:false};}});
+ try{await callActivityTool(b.requestPath,'inspect');assert.equal(stopped,1);await assert.rejects(()=>callActivityTool(b.requestPath,'resume'));assert.equal(resumed,0);assert.equal(b.getResult().execution_unknown,true);}finally{await b.close();rmSync(d,{recursive:true,force:true});}
+});
+test('真实inspect事件CLI通过既有op转发Agent问题，无新业务操作',async()=>{
+ const {spawn}=await import('node:child_process'),d=mkdtempSync(join(tmpdir(),'skill-question-cli-')),events=[];
+ const b=await startActivityBroker({directory:d,request:{...request,deadline_ms:Date.now()+20000},authorize:async()=>true,inspect:async()=>({}),resume:async()=>({}),phone:async()=>{},onEvent:async e=>{events.push(e);return {action:'none'};}});
+ try{await new Promise((yes,no)=>{const child=spawn(process.execPath,[tool,b.requestPath,'inspect','--event'],{stdio:['pipe','pipe','pipe']});let err='';child.stderr.on('data',x=>err+=x);child.on('error',no);child.on('close',code=>code===0?yes():no(Error(err)));child.stdin.end(JSON.stringify({question:'完成标准需要哪份独立证据？'}));});assert.equal(events[0].type,'question');assert.match(events[0].text,/独立证据/);}finally{await b.close();rmSync(d,{recursive:true,force:true});}
+});

@@ -6,11 +6,14 @@ const invalid=()=>{throw Error('COMMANDER_MODEL_RECEIPT_INVALID');};
 export function commanderModelReceipt(raw,scope){
  if(typeof raw!=='string'||Buffer.byteLength(raw)>1024*1024)invalid();
  const body=JSON.parse(raw),meta=(body.result??body).meta?.agentMeta,terminal=meta?.terminalReceipt;
- if(scope.workflow_key!=='douyin_video_discovery'||!text(scope.run_id)||!text(scope.binding_id)||! /^[a-f0-9]{40}$/.test(scope.source_commit||'')||!text(scope.activity)||!['before','after'].includes(scope.phase))invalid();
+ const observer=scope.commander_role==='observer';
+ const phaseValid=observer?['wake','event','recovery','sleep'].includes(scope.phase):['before','after'].includes(scope.phase);
+ const activityValid=observer&&['wake','sleep'].includes(scope.phase)?scope.activity===null:text(scope.activity);
+ if(scope.workflow_key!=='douyin_video_discovery'||!text(scope.run_id)||!text(scope.binding_id)||! /^[a-f0-9]{40}$/.test(scope.source_commit||'')||!activityValid||!phaseValid)invalid();
  if(!meta||!text(meta.provider)||!text(meta.model)||!terminal||!text(terminal.runId)||!text(terminal.sessionId)||!text(terminal.turnId)||meta.sessionId!==terminal.sessionId||terminal.effective?.provider!==meta.provider||terminal.effective?.model!==meta.model||body.runId!==undefined&&body.runId!==terminal.runId)invalid();
  if(body.status&&!['ok','completed','success'].includes(body.status)||body.error||body.ok===false)invalid();
  // OpenClaw 2026.9.8正式CLI未公开供应商responseId。runId/turnId保持原身份，不作为替代。
- return {version:1,scope:Object.fromEntries(scopeKeys.map(k=>[k,scope[k]??null])),provider:meta.provider,model:meta.model,
+ return {version:1,scope:{...Object.fromEntries(scopeKeys.map(k=>[k,scope[k]??null])),...(observer?{commander_role:'observer'}:{})},provider:meta.provider,model:meta.model,
   response_id:null,response_id_reason:'provider_not_exposed',openclaw:{run_id:terminal.runId,session_id:terminal.sessionId,turn_id:terminal.turnId},
   assistant_turns:Number.isSafeInteger(meta.assistantTurns)&&meta.assistantTurns>0?meta.assistantTurns:null,
   provider_call_count:null,provider_call_count_reason:'complete_provider_call_coverage_not_exposed',
@@ -20,9 +23,9 @@ export function verifyCommanderModelReceipt(receipt,scope){
  try{return JSON.stringify(commanderModelReceipt(receipt.raw_response,scope))===JSON.stringify(receipt);}catch{return false;}
 }
 export function summarizeCommanderEvidence(events,scope){
- const calls=events.filter(e=>['before','after'].includes(e.phase)),counts=new Map();
- for(const e of calls){const p=e.decision?.model_receipt;if(e.commander_status==='available'&&verifyCommanderModelReceipt(p,{...scope,activity:e.activity,phase:e.phase})){const key=JSON.stringify(p.openclaw);counts.set(key,(counts.get(key)||0)+1);}}
- const valid=calls.filter(e=>e.commander_status==='available'&&verifyCommanderModelReceipt(e.decision?.model_receipt,{...scope,activity:e.activity,phase:e.phase})&&counts.get(JSON.stringify(e.decision.model_receipt.openclaw))===1).map(e=>e.decision.model_receipt);
+ const calls=events.filter(e=>['before','after','commander_exchange'].includes(e.phase)||e.phase==='commander_unavailable'&&e.error!=='commander_unavailable_for_run').map(e=>['commander_exchange','commander_unavailable'].includes(e.phase)?{...e,phase:e.commander_phase??e.reply?.model_receipt?.scope?.phase,commander_role:'observer',decision:e.reply}:e),counts=new Map();
+ for(const e of calls){const p=e.decision?.model_receipt;if(e.commander_status==='available'&&verifyCommanderModelReceipt(p,{...scope,activity:e.activity,phase:e.phase,...(e.commander_role?{commander_role:e.commander_role}:{})})){const key=JSON.stringify(p.openclaw);counts.set(key,(counts.get(key)||0)+1);}}
+ const valid=calls.filter(e=>e.commander_status==='available'&&verifyCommanderModelReceipt(e.decision?.model_receipt,{...scope,activity:e.activity,phase:e.phase,...(e.commander_role?{commander_role:e.commander_role}:{})})&&counts.get(JSON.stringify(e.decision.model_receipt.openclaw))===1).map(e=>e.decision.model_receipt);
  const turns=valid.filter(p=>p.assistant_turns!==null);
  return {consultations:calls.length,verified_cli_receipts:valid.length,failed_consultations:calls.filter(e=>e.commander_status!=='available').length,
   missing_or_invalid_receipts:calls.length-valid.length,assistant_turns:turns.length?turns.reduce((sum,p)=>sum+p.assistant_turns,0):null,

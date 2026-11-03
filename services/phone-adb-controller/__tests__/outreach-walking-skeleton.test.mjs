@@ -63,7 +63,7 @@ test('104授权新流程通过预检、永久预留、唯一一次真sender调�
  const sends=f.events.filter(e=>e.args?.includes('private-message-send'));assert.equal(sends.length,1);
  assert.ok(f.events.findIndex(e=>e.request?.op==='prepare_outreach')<f.events.findIndex(e=>e.args?.includes('private-message-send')));
  assert.ok(ops.includes('write_outreach')&&ops.includes('outreach_readback'));
- assert.equal(receipts.filter(r=>r.phase==='after').length,4);
+ assert.equal(receipts.filter(r=>r.phase==='after').length,0);assert.ok(receipts.some(r=>r.phase==='wake'));
  }finally{f.clean();}
 });
 test('104冻结目标订单不存在时失败且零发送，不伪造发送结果探针',async()=>{
@@ -95,7 +95,7 @@ test('104已尝试发送却缺独立结果指标时 Activity 失败并阻断写�
     return {verified:probes.probes.every(probe=>probe.pass===true),probes:probes.probes};
    }});
   assert.notEqual(out.status,'completed');
-  assert.equal(out.results.find(result=>result.activity==='send_dm').status,'failed');
+  assert.equal(out.results.find(result=>result.activity==='send_dm').status,'needs_review');
   assert.equal(f.events.filter(event=>event.args?.includes('private-message-send')).length,1);
   assert.ok(!f.events.some(event=>event.request?.op==='write_outreach'));
  }finally{f.clean();}

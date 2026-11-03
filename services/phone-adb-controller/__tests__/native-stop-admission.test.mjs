@@ -19,7 +19,7 @@ function setup(execute){
 }
 async function outer(handlers){
  const calls={recovered:0,cleaned:0,quarantined:0};
- const result=await runWorkflow({activities:[{key:'preflight'},{key:'cleanup'}],context:{run_id:'run__a1',task_id:'task',source_commit:'a'.repeat(40)},handlers:{preflight:()=>handlers.preflight(),cleanup:async()=>{calls.cleaned++;return {}; }},commander:async()=>({action:'continue'}),record:async()=>{},recover:async()=>{calls.recovered++;return {status:'completed',execution_stopped:true};},quarantine:async()=>{calls.quarantined++;return {verified:true};}});
+ const result=await runWorkflow({activities:[{key:'preflight'},{key:'cleanup'}],context:{run_id:'run__a1',task_id:'task',source_commit:'a'.repeat(40)},handlers:{preflight:()=>handlers.preflight(),cleanup:async()=>{calls.cleaned++;return {}; }},commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同读回'}:{action:'none'},record:async()=>{},recover:async()=>{calls.recovered++;return {status:'completed',execution_stopped:true};},quarantine:async()=>{calls.quarantined++;return {verified:true};}});
  return {result,calls};
 }
 
@@ -102,7 +102,7 @@ test('恢复门核对真实未启动能力的全部身份，磁盘副本和旧op
  }finally{f.close();}
 });
 
-for(const boundary of ['verify-throw','verify-false','after-throw','after-finish','record-throw'])test('原生覆盖未知时后置边界失败仍隔离且不清场：'+boundary,async()=>{
+for(const boundary of ['verify-throw','verify-false','record-throw'])test('原生覆盖未知时后置边界失败仍隔离且不清场：'+boundary,async()=>{
  const state={nativeStopUnproven:true};let cleaned=0,quarantined=0;
  const result=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},
   handlers:{collection:()=>workflow.invokeNativeActivity(async()=>({comments_saved:1}),state),cleanup:async()=>{cleaned++;return {};}},
@@ -114,6 +114,6 @@ for(const boundary of ['verify-throw','verify-false','after-throw','after-finish
  assert.equal(cleaned,0);assert.equal(quarantined,1);assert.notEqual(result.status,'completed');
 });
 test('原生正常产出及后置验证通过仍可清场，不把覆盖未知当业务失败',async()=>{
- let cleaned=0;const result=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},handlers:{collection:async()=>({comments_saved:1}),cleanup:async()=>{cleaned++;return {};}},terminationUnverified:()=>true,commander:async()=>({action:'continue'}),record:async()=>{},verify:async()=>({verified:true}),quarantine:async()=>{throw Error('unexpected quarantine');}});
+ let cleaned=0;const result=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},handlers:{collection:async()=>({comments_saved:1}),cleanup:async()=>{cleaned++;return {};}},terminationUnverified:()=>true,commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同读回'}:{action:'none'},record:async()=>{},verify:async()=>({verified:true}),quarantine:async()=>{throw Error('unexpected quarantine');}});
  assert.equal(result.status,'completed');assert.equal(cleaned,1);
 });

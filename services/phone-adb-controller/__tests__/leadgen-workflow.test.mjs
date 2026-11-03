@@ -97,7 +97,7 @@ test('全部业务与清场验收通过后，清场after的正常finish应汇总
   commander:async q=>({action:q.activity==='cleanup'&&q.phase==='after'?'finish':'continue',reason:'本批收尾完成'}),
   record:async q=>records.push(q),verify:async()=>({verified:true})});
  assert.equal(r.status,'completed');assert.ok(r.results.every(a=>a.status==='completed'&&a.verification.verified));
- assert.equal(records.filter(q=>['before','after'].includes(q.phase)).length,4);
+ assert.equal(records.filter(q=>['before','after'].includes(q.phase)).length,0);assert.ok(records.some(q=>q.phase==='commander_exchange'));
 });
 
 test('无锁清场skipped后的finish属于正常结束，不能把已完成评分标为partial',async()=>{
@@ -117,7 +117,7 @@ test('正常清场finish不能掩盖业务失败、清场验收失败、partial�
     cleanup:async()=>scenario==='cleanup_partial'?{status:'partial',failures:[{reason:'未释放锁'}]}:{}},
    commander:async q=>({action:q.activity==='cleanup'&&q.phase==='after'?(scenario==='cleanup_escalate'?'escalate':'finish'):'continue',reason:'保留实际失败'}),
    record:async()=>{},verify:async a=>({verified:!(scenario==='cleanup_failure'&&a.key==='cleanup')})});
-  assert.equal(r.status,['business_failure','cleanup_failure'].includes(scenario)?'failed':'partial');
+  assert.equal(r.status,scenario==='cleanup_escalate'?'completed':scenario==='business_failure'?'failed':scenario==='cleanup_failure'?'needs_review':'partial');
  }
 });
 
@@ -267,7 +267,7 @@ for(const bad of ['none','pg_missing','wrong_quota','wrong_source','failed_activ
 for(const verified of [true,false])test('采样collection partial仍执行原独立verify，不把失败回执兑现 '+verified,async()=>{
  const {runWorkflow}=await import('../leadgen-workflow.mjs');let called=0;
  const out=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},handlers:{collection:async()=>({status:'partial',sampling_receipts:[{video_id:'7646309328911907195',coverage:5}],remaining_video_ids:['other']}),cleanup:async()=>({status:'skipped'})},commander:async()=>({action:'continue'}),record:async()=>{},verify:async(a)=>{assert.equal(a.key,'collection');called++;return {verified};}});
- assert.equal(called,1);assert.equal(out.status,verified?'partial':'failed');assert.equal(out.results[0].verification.verified,verified);assert.equal(out.results[0].status,verified?'partial':'failed');
+ assert.equal(called,1);assert.equal(out.status,verified?'partial':'needs_review');assert.equal(out.results[0].verification.verified,verified);assert.equal(out.results[0].status,verified?'partial':'needs_review');
 });
 for(const config of [{budget:undefined,max:960},{budget:'1620',max:2100},{budget:'6720',max:7200},{budget:'1620',max:2100,globalNear:true}])test('逐视频collection显式预算真实作用且保持全局截止 '+JSON.stringify(config),async()=>{
  const {createHandlers:rawCreateHandlers}=await import('../leadgen-workflow.mjs');const createHandlers=withCompanyFixture(rawCreateHandlers),{digest}=await import('../runtime-definition.mjs');const dir=mkdtempSync(join(tmpdir(),'collection-explicit-budget-'));

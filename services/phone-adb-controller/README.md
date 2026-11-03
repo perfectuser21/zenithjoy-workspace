@@ -196,3 +196,13 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 `search-video-tab EID` 的成功证据固定为 `${EID}-aftertab.xml`，供原步骤checkpoint读取。
 若首次点击后重定位成功，先保首点为 `${EID}-aftertab-first.xml`，保留重试原件，再原子提交最终严格selected树。
 保存或提交失败不会返回 `video_tab=1`；诊断/重试文件不增加成功来源计数。该说明不代表真机验收已完成。
+
+### Runner vs Commander
+
+获客入口复用 Cecelia 公共 Activity Runner 的固定源副本；同步工具及 `common-runner/source.json` 记录来源与摘要。`leadgen-runner-adapter.mjs` 只连接业务执行、独立读回与手机安全证据，顺序、恢复次数和状态路由统一由公共 Runner 执行。
+
+Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和请求中止 Agent。不可达只记录 `commander_status=unavailable`；它的回复不能判定状态、改变顺序或批准发送。旧 `*_commander_verified` 可用性硬闸已移除，身份、来源、业务读回及发送安全闸保留。检查失败可在原预算内指导一次 Skill 接手，仍由独立检查再次判定；失败进入 `needs_review`。原代码失败与 Skill 救回分别记录，接手不覆盖失败事实。
+
+`checkpoint` 在步骤裁判和工作流读回中统一只记录；`hard` 缺失、未知或失败均不能通过。正常异常与中止仍进入清场；旧执行是否停止未知时禁止重放和清场，持久隔离手机。未知发送效果只读回，不重发。104 的发送实现、账号与审批行为不变。
+
+101 在原生 XML 证实评论为 0 后只将证据写入本 run 的 `zero_comment_candidates`，不调用业务入队；远端 discover 入口独立重算原件并在任何 SQL 前拒绝 confirmed 0。未知评论数保持 unknown，不冒充 0。这条入队守卫由 101 原生 XML→发现执行→队列调用的专项回归验证，与 102 的零评论采集结局分开。

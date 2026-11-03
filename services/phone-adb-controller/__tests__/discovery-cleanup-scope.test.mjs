@@ -146,7 +146,7 @@ test('101 有限停止的业务验收失败仍如实失败，并仅归位原设�
    handlers:{collect_videos:()=>invokeNativeActivity(()=>f.h.collect_videos(),f.h.state),cleanup:async()=>{cleaned++;f.h.state.currentActivity='cleanup';f.h.state.budgetDeadline=(Number(f.env.WF_RUN_START_TS)+Number(f.env.WF_RUN_MAX_SECONDS))*1000;return invokeNativeActivity(()=>f.h.cleanup(),f.h.state);}},
    commander:async()=>({action:'continue'}),record:async()=>{},verify:async(a)=>{if(a.key==='collect_videos'){verified++;return {verified:false};}return {verified:true};},
    recover:async()=>{recovered++;throw Error('不得重跑');},terminationUnverified:()=>f.h.state.nativeStopUnproven});
-  assert.equal(out.status,'failed');assert.equal(verified,1);assert.equal(cleaned,1);assert.equal(recovered,0);
+  assert.equal(out.status,'needs_review');assert.equal(verified,1);assert.equal(cleaned,1);assert.equal(recovered,0);
   assert.equal(out.results.at(-1).result.cleanup_readback_verified,1);assert.equal(out.results.at(-1).result.lock_released,1);
   assert.equal(existsSync(f.ownerFile),false);
  }finally{rmSync(f.d,{recursive:true,force:true});}

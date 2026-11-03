@@ -104,6 +104,11 @@ export function judgeSteps({ spec, stage, ctx = {}, remote = [] }) {
   return { steps, hard_failed: steps.filter((x) => x.mode === "hard" && x.pass === false).map((x) => x.key) };
 }
 
+// checkpoint在所有调用路径均只记录；hard缺失、未知或失败均不通过。
+export function workflowReadbackPassed({probes,steps,expected}) {
+  return probes.length>0&&probes.every(p=>p.pass===true)&&steps.length===expected.length&&steps.every(s=>s.mode==='checkpoint'||s.pass===true);
+}
+
 function parseArgs(argv) {
   const a = {};
   for (let i = 0; i < argv.length; i++) if (argv[i].startsWith("--")) a[argv[i].slice(2)] = argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") ? argv[++i] : "";

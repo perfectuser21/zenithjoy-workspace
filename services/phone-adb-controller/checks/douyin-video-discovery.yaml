@@ -86,38 +86,12 @@ probes:
     note: >
       拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0 （锁在
       harvest-keyword.sh 按词拿），判红直到 6b133a81。
-  - key: preflight_commander_verified
-    stage: preflight
-    journey_cell: stage:preflight
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: source_completed
     stage: collect_videos
     journey_cell: stage:collect_videos
     probe:
       type: metric
       ref: metrics.source_completed
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
-  - key: collect_videos_commander_verified
-    stage: collect_videos
-    journey_cell: stage:collect_videos
-    probe:
-      type: metric
-      ref: metrics.commander_verified
     expect:
       op: ==
       value: 1

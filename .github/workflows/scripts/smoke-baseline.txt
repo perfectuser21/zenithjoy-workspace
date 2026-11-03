@@ -163,3 +163,5 @@ customer-workspace-http-smoke.sh
 video-tools-smoke.sh
 publish-recovery-core-smoke.sh
 pdd-listing-driver-smoke.sh
+
+common-runner-source-smoke.sh
