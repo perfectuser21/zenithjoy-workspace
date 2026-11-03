@@ -60,10 +60,10 @@ test('采集返回partial时，Commander收到真实部分状态而不是脚本�
  const {runWorkflow}=await import('../leadgen-workflow.mjs');const receipts=[];
  const result=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:{},
   handlers:{collect_videos:async()=>({status:'partial',stop_reason:'capture_failed',counts:{persisted:11,failed:1}}),cleanup:async()=>({released:true})},
-  commander:async receipt=>{receipts.push(receipt);return {action:'continue',reason:'依据真实状态'};},record:async()=>{}});
+  commander:async()=>({action:'none'}),record:async receipt=>receipts.push(receipt)});
  assert.equal(result.status,'partial');
- assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.status,'partial');
- assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.result.counts.persisted,11);
+ assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='execution').evidence.status,'partial');
+ assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='execution').evidence.result.counts.persisted,11);
 });
 
 test('活动返回阻塞、待复核或未知状态时，不得继续业务或记为完成',async()=>{
@@ -77,20 +77,20 @@ test('活动返回阻塞、待复核或未知状态时，不得继续业务或�
   assert.notEqual(result.results[0].status,'completed',returnedStatus);
   assert.equal(result.results[1].status,'blocked',returnedStatus);
   assert.equal(next,0,returnedStatus);assert.equal(cleaned,1,returnedStatus);
-  assert.notEqual(receipts.find(r=>r.activity==='source'&&r.phase==='after').evidence.status,'completed',returnedStatus);
+  assert.equal(result.results[0].status,'needs_review',returnedStatus);
  }
 });
 
-test('Commander叫停后不执行下一活动，锁内清场仍有前后Commander回执', async () => {
+test('Commander中止Agent后由Runner待复核，锁内清场仍留观察记录', async () => {
   const {runWorkflow} = await import('../leadgen-workflow.mjs');
   const executed=[],records=[];
-  const result=await runWorkflow({activities:['source','dedup','cleanup'].map(key=>({key})),
+  const result=await runWorkflow({activities:['source','dedup','cleanup'].map(key=>({key,executor_kind:key==='source'?'agent':'code'})),
     context:{run_id:'r'},handlers:Object.fromEntries(['source','dedup','cleanup'].map(k=>[k,async()=>{executed.push(k);return {ok:true};}])),
-    commander:async r=>({action:r.activity==='source'&&r.phase==='after'?'finish':'continue',reason:'实际证据'}),
+    commander:async r=>({action:r.activity==='source'&&r.phase==='event'&&r.evidence?.type==='check_result'&&r.evidence.phase==='end'?'abort':'none',reason:'实际证据'}),
     record:async r=>records.push(r)});
   assert.deepEqual(executed,['source','cleanup']);
-  assert.equal(result.status,'partial');
-  assert.equal(records.filter(r=>r.activity==='cleanup'&&['before','after'].includes(r.phase)).length,2);
+  assert.equal(result.status,'needs_review');
+  assert.ok(records.some(r=>r.activity==='cleanup'&&r.phase==='commander_exchange'));
 });
 
 test('独立读回未知或失败不能让执行exit0成为活动成功',async()=>{
@@ -99,7 +99,7 @@ test('独立读回未知或失败不能让执行exit0成为活动成功',async()
     handlers:{source:async()=>({cards:2}),dedup:async()=>{throw Error('不应执行');},cleanup:async()=>{cleaned++;return {};}},
     commander:async()=>({action:'continue',reason:'检查证据'}),record:async()=>{},
     verify:async()=>({verified:false,reason:'必需步骤读不到'})});
-  assert.equal(r.status,'failed');assert.equal(cleaned,1);
+  assert.equal(r.status,'needs_review');assert.equal(cleaned,1);
   assert.equal(r.results.find(a=>a.activity==='dedup').status,'blocked');
 });
 

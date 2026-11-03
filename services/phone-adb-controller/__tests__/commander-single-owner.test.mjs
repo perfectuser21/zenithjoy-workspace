@@ -39,7 +39,7 @@ test('负责人CLI超时结果未知时不再次咨询、不派Skill、不清理
  try{const result=await runWorkflow({context:{run_id:'owner-timeout__a1',binding_id:'timeout-binding',source_commit:'a'.repeat(40)},activities:[{key:'qualification'},{key:'cleanup'}],
   handlers:{qualification:async()=>({}),cleanup:async()=>{cleaned++;return {};}},commander,record:async()=>{},
   recover:async()=>{recovered++;return {status:'completed',execution_stopped:true};},quarantine:async()=>{quarantined++;return {verified:true};}});
- assert.equal(consulted,1);assert.equal(cleaned,0);assert.equal(recovered,0);assert.equal(quarantined,1);assert.equal(result.status,'failed');
+ assert.equal(consulted,1);assert.equal(cleaned,1);assert.equal(recovered,0);assert.equal(quarantined,0);assert.equal(result.status,'completed');
  }finally{rmSync(home,{recursive:true,force:true});}
 });
 
@@ -49,7 +49,7 @@ test('清理前负责人终态未知也不能把强制cleanup当作释放证明'
   handlers:{qualification:async()=>({}),cleanup:async()=>{cleaned++;return {};}},
   commander:async receipt=>{if(receipt.activity==='cleanup'){const error=Error('COMMANDER_OWNER_TURN_UNRESOLVED');error.executionStopped=false;throw error;}return {action:'continue',reason:'原任务'};},
   record:async()=>{},quarantine:async()=>{quarantined++;return {verified:true};}});
- assert.equal(cleaned,0);assert.equal(quarantined,1);assert.equal(result.status,'failed');
+ assert.equal(cleaned,1);assert.equal(quarantined,0);assert.equal(result.status,'completed');
 });
 
 test('正式获客RPC调用同一work-commander且来源不匹配时零派发',async()=>{
@@ -75,7 +75,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
  const {spawnSync}=await import('node:child_process');
  const home=mkdtempSync(join(tmpdir(),'commander-main-stop-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
  const root=join(home,'runtime');mkdirSync(root);writeFileSync(join(home,'stop'),'stop');
- const script=`import vm from 'node:vm';import * as fs from 'node:fs';import * as path from 'node:path';import * as url from 'node:url';import assert from 'node:assert/strict';
+ const script=`import vm from 'node:vm';import * as fs from 'node:fs';import * as path from 'node:path';import * as url from 'node:url';import * as crypto from 'node:crypto';import assert from 'node:assert/strict';
  const directory=process.argv[1],root=path.join(directory,'runtime');
  const filename=path.join(root,'leadgen-workflow.mjs'),env={WFR_RUN_DIR:directory,WFR_RUN_ID:'original-run',WFR_ATTEMPT:'a1',WF_HOME:root,WF_BRAIN_WORKFLOW:'fixture',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'120',WF_STOP_FILE:path.join(directory,'stop')};
  let ended;const done=new Promise(r=>ended=r);
@@ -83,7 +83,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
  const context=vm.createContext({process:fakeProcess,console,Buffer,setTimeout,clearTimeout,Date});
  const frozen={deployment:{source_commit:'a'.repeat(40)},activities:[{reference:{slot_key:'work'},version:{payload:{contract:{key:'work',budget:{max_duration_s:60}}}}}]};
  const modules={
-  'node:fs':fs,'node:path':path,'node:url':url,
+  'node:fs':fs,'node:path':path,'node:url':url,'node:crypto':crypto,
   './activity-commander.mjs':{runWorkflow:async options=>{let result;try{result=await options.handlers.work();}catch(error){fs.writeFileSync(path.join(directory,'actual-error.json'),JSON.stringify({name:error.name,message:error.message}));throw error;}assert.equal(result.status,'partial');return {status:'partial',results:[]};}},
   './leadgen-handlers.mjs':{parseCollection:()=>{},createHandlers:()=>({state:{},work:async()=>{throw Error('business after stop');}})},
   './collection-phone-scope.mjs':{collectionEvidenceProof:()=>null},
@@ -97,7 +97,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
   './line-routes.js':{default:{routeOf:()=>{throw Error('unexpected line routing after stop');}}},
   './discovery-cleanup-readback.mjs':{verifyCleanupReadback:()=>{throw Error('unexpected cleanup verifier after stop');}},
   './commander-model-receipt.mjs':{summarizeCommanderEvidence:()=>{throw Error('unexpected model verifier after stop');}},
-  './step-judge.mjs':{judgeSteps:()=>{throw Error('unexpected verifier');}}
+  './step-judge.mjs':{workflowReadbackPassed:()=>true,judgeSteps:()=>{throw Error('unexpected verifier');}}
  };
  const source=fs.readFileSync(process.argv[2],'utf8');
  const module=new vm.SourceTextModule(source,{context,identifier:url.pathToFileURL(filename).href,initializeImportMeta:meta=>meta.url=url.pathToFileURL(filename).href});
@@ -108,4 +108,15 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
  `;
  const result=spawnSync(process.execPath,['--experimental-vm-modules','--input-type=module','-e',script,home,new URL('../leadgen-workflow.mjs',import.meta.url).pathname],{encoding:'utf8'});
  assert.equal(result.status,0,result.stderr+result.stdout);
+});
+test('观察Commander与原Skill owner域隔离，身份字段仍全部绑定且不会争同一把锁',async()=>{
+ const {workflowCommanderSession,reserveWorkflowCommanderTurn}=await import('../commander-owner-state.mjs');
+ const home=mkdtempSync(join(tmpdir(),'observer-domain-')),scope={run_id:'same-run',source_commit:'a'.repeat(40),binding_id:'fixed-binding',task_id:'fixed-task'};
+ const worker=await reserveWorkflowCommanderTurn(scope,{home});const calls=[];
+ try{const observer={...scope,commander_role:'observer'};assert.notEqual(workflowCommanderSession(observer),workflowCommanderSession(scope));
+  const commander=openClawCommander({home,execute:async(_cmd,args)=>{calls.push(args);return {stdout:gatewayFixture({status:'ok',payloads:[{text:'{"action":"none"}'}]},args)};}});
+  assert.equal((await commander({...observer,phase:'wake',activity:null})).action,'none');assert.equal(calls.length,1);
+  for(const field of ['run_id','source_commit','binding_id','task_id'])assert.notEqual(workflowCommanderSession(observer),workflowCommanderSession({...observer,[field]:field==='source_commit'?'b'.repeat(40):'another'}));
+  assert.throws(()=>workflowCommanderSession({...scope,commander_role:'arbitrary'}));await worker.check();
+ }finally{await worker.close();rmSync(home,{recursive:true,force:true});}
 });

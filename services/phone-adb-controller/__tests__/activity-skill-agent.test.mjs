@@ -205,3 +205,14 @@ for(const terminalCase of ['valid','missing','wrongRun'])test(`父传输截止�
  assert.equal(existsSync(join(dir,'agent-returned.json')),false,'owner unknown must not publish returned receipt');
  assert.deepEqual([launches,awaits,stops],[1,1,1]);
 });
+test('Commander stop只停止原官方child并独立读回；child终止不冒充owner终止',async()=>{
+ const api=await import('../leadgen-skill-agent.mjs');assert.equal(typeof api.stopSkillAgent,'function');
+ const home=mkdtempSync(join(tmpdir(),'skill-stop-'));let stops=0;
+ const q={protocol:'leadgen-activity-v1',run_id:'fixture__a1',binding_id:'fixture-binding',task_id:null,activity_key:'scoring',nonce:'f'.repeat(48),source_commit:'a'.repeat(40),deadline_ms:Date.now()+20000,broker_host:'mmv',broker_request_path:'/private/tmp/fixture/request.json',broker_tool_path:'/private/tmp/fixture/tool.mjs',mode:'repair',method:{name:'fixture',version:'0.1.1',text:'fixture'}};
+ const dir=join(home,'.openclaw','leadgen-activity-runs',api.skillRunKey(q));mkdirSync(dir,{recursive:true});
+ const request={run_id:q.run_id,task_id:null,parent_session_key:'agent:work-commander:fixture',nonce:q.nonce,expires_at:q.deadline_ms/1000};
+ const receipt={runId:'11111111-1111-4111-8111-111111111111',childSessionKey:'agent:skill-factory:subagent:fixture',resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'};
+ for(const [name,value]of Object.entries({'activity-request.json':q,'agent-request.json':request,'spawn-claimed.json':{...request,source_commit:q.source_commit},'spawn-receipt.json':receipt,'agent-binding.json':{...request,child_run_id:receipt.runId,child_session_key:receipt.childSessionKey}}))writeFileSync(join(dir,name),JSON.stringify(value),{mode:0o600});
+ const deps={home,verifyWorkspace:()=>true,execute:async(command,args)=>{assert.equal(command,'python3');assert.equal(args[1],'stop');assert.equal(args[2],dir);stops++;writeFileSync(join(dir,'child-stop-readback.json'),JSON.stringify({runId:receipt.runId,status:'aborted',endedAt:Date.now()}),{mode:0o600});return {code:0,stdout:'',stderr:''};}};
+ try{const actual=await api.stopSkillAgent(q,deps);assert.equal(actual.child_execution_stopped,true);assert.equal(actual.execution_stopped,false);assert.equal(stops,1);await api.stopSkillAgent(q,deps);assert.equal(stops,1);await assert.rejects(()=>api.stopSkillAgent({...q,source_commit:'b'.repeat(40)},deps));assert.equal(stops,1);}finally{rmSync(home,{recursive:true,force:true});}
+});

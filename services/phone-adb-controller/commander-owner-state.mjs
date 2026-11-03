@@ -8,7 +8,9 @@ import {commanderModelReceipt} from './commander-model-receipt.mjs';
 export function workflowCommanderSession(receipt) {
   if(!/^\w[\w.-]{0,150}$/.test(receipt?.run_id||'')||!/^[a-f0-9]{40}$/.test(receipt?.source_commit||''))throw Error('COMMANDER_WORKFLOW_IDENTITY_INVALID');
   if(typeof receipt.binding_id!=='string'||!receipt.binding_id||receipt.binding_id.length>160)throw Error('COMMANDER_BINDING_IDENTITY_INVALID');
-  const key=createHash('sha256').update(JSON.stringify([receipt.run_id,receipt.source_commit,receipt.binding_id,receipt.task_id??null])).digest('hex').slice(0,32);
+  if(receipt.commander_role!==undefined&&receipt.commander_role!=='observer')throw Error('COMMANDER_ROLE_INVALID');
+ const identity=[receipt.run_id,receipt.source_commit,receipt.binding_id,receipt.task_id??null];
+ const key=createHash('sha256').update(JSON.stringify(receipt.commander_role==='observer'?['runner-observer/v1',...identity]:identity)).digest('hex').slice(0,32);
   return `agent:work-commander:workflow-${key}`;
 }
 

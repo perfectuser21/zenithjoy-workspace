@@ -9,7 +9,7 @@ import {createDiscoveryHandlers as rawCreateDiscoveryHandlers} from '../leadgen-
 import {withDiscoveryMetricsFixture} from './helpers/discovery-metrics-fixture.mjs';
 const createDiscoveryHandlers=withDiscoveryMetricsFixture(rawCreateDiscoveryHandlers);
 const exec=promisify(execFile),root=resolve('services/phone-adb-controller');
-function rig({rejectWrite=false,copyFails=false,benchmark=false,multi=false,wrongSearch=false,expireAfterWrite=false,limit=0}={}){
+function rig({rejectWrite=false,copyFails=false,benchmark=false,multi=false,wrongSearch=false,expireAfterWrite=false,limit=0,commentRaw=4}={}){
  const dir=mkdtempSync(join(tmpdir(),'stream-cli-discovery-')),log=join(dir,'calls'),ctl=join(dir,'ctl');
  writeFileSync(ctl,`#!/bin/zsh
 print -r -- "$3 $4 $5" >> "$CALLS"
@@ -38,7 +38,7 @@ esac
  async function execute(command,args,opts={}){if(command==='/bin/sleep')return {code:0,stdout:'',stderr:''};try{return {code:0,...await exec(command,args,{env:{...env,...opts.env},timeout:5000})};}catch(e){return {code:typeof e.code==='number'?e.code:1,stdout:e.stdout||'',stderr:e.stderr||e.message};}}
  const phone=async(command,...args)=>{const r=await execute('zsh',[ctl,'--profile','jinoshengyuan-work',command,...args]);if(r.code){const e=new Error(r.stderr);e.stderr=r.stderr;throw e;}return r.stdout;};
  const writes=[];const queue=async(op,fields)=>{assert.equal(op,'discover','101不得查询历史或按标题筛视频');if(rejectWrite)throw Error('PG failed');writes.push(fields.video);if(expireAfterWrite){env.WF_RUN_START_TS=String(Math.floor(Date.now()/1000)-100);env.WF_RUN_MAX_SECONDS='1';}return {status:'pending',inserted:true};};
- const h=createDiscoveryHandlers({phone,execute,queue,profile:'jinoshengyuan-work',run:'stream-cli',root,limit,sourceKind:benchmark?'benchmark':'keyword',sources:multi?['人工智能训练师','AI训练师']:['人工智能训练师'],env});
+ const h=createDiscoveryHandlers({phone,execute,queue,profile:'jinoshengyuan-work',run:'stream-cli',root,limit,fixtureCommentRaw:commentRaw,sourceKind:benchmark?'benchmark':'keyword',sources:multi?['人工智能训练师','AI训练师']:['人工智能训练师'],env});
  return {h,writes,calls:()=>readFileSync(log,'utf8'),receipt:()=>JSON.parse(readFileSync(join(dir,'run','stream-cli-source-1-readback.json'),'utf8')),progress:()=>JSON.parse(readFileSync(join(dir,'run','discovery-progress.json'),'utf8')),clean:()=>rmSync(dir,{recursive:true,force:true})};
 }
 test('101原子取链前重读坐标，不按历史、自家或同标题跳过真实视频',async()=>{const r=rig();try{await r.h.source();const out=await r.h.write_videos();assert.equal(r.writes.length,4);assert.equal(new Set(r.writes.map(v=>v.videoId)).size,4);assert.match(r.calls(),/tap-evidence 340 540/);assert.equal(r.receipt().verified,true);assert.equal(out.all_results_scanned,true);}finally{r.clean();}});
@@ -49,3 +49,5 @@ test('对标身份缺口保留明确gap，无旧坐标取链回退',async()=>{co
 test('PG失败停止而不是计成功，保留真实失败交接证据',async()=>{const r=rig({rejectWrite:true});try{await r.h.source();const out=await r.h.write_videos();assert.equal(out.counts.persisted,0);assert.equal(out.status,'partial');assert.equal(out.counts.failed,1);assert.match(JSON.stringify(r.progress()),/PG failed/);}finally{r.clean();}});
 test('复制失败保留控制器原因，没有任何PG discover写入',async()=>{const r=rig({copyFails:true});try{await r.h.source();const out=await r.h.write_videos();assert.equal(r.writes.length,0);assert.match(JSON.stringify(out.failures),/COPY_STALE/);assert.equal(r.progress().counts.persisted,0);}finally{r.clean();}});
 test('101无需读取自家号配置，作者筛选由102执行',()=>{const r=rig();r.clean();});
+
+for(const [commentRaw,queued]of [['0',0],['',4],['4',4]])test('101真实原生评论'+JSON.stringify(commentRaw)+'：confirmed0不入队，unknown不冒充0',async()=>{const r=rig({commentRaw});try{await r.h.source();const out=await r.h.write_videos();assert.equal(r.writes.length,queued);assert.equal(out.counts.persisted,queued);if(commentRaw==='0'){assert.equal(out.counts.zero_comments,4);assert.equal(r.progress().zero_comment_candidates.length,4);assert.ok(r.progress().zero_comment_candidates.every(v=>v.metrics.comment_total.value===0));}}finally{r.clean();}});

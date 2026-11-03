@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_video_discovery
 commander_skill:
   name: wf-douyin_video_discovery
-  version: 0.5.0
+  version: 0.5.1
 name: 抖音视频发现
 workflow: douyin-video-discovery
 brain_workflow_key: douyin_video_discovery
@@ -14,6 +14,14 @@ dod_promotion:
 runner:
   entry: leadgen-workflow.mjs
   queue: discovery_sources
+on_status:
+  done: next
+  retry: retry
+  failed: stop
+  empty: next
+  partial: stop
+  needs_review: pause
+always_run: [cleanup]
 trigger_inputs:
   - Keyword
   - Account
@@ -22,8 +30,6 @@ trigger_inputs:
 known_gaps:
   - gap: 对标主页网格当前不提供标题与作者，缺稳定身份时拒绝取链；旧对标流程退役后不得回退。
     task: dffd5885
-  - gap: Workflow 的 on_status/always_run 路由尚未在本合同及 Runner 中形成可验证接线；Activity 字段齐全不代表端到端自动编排验收通过。
-    task: bdd9fb75
 activities:
   - ref: douyin_video_processing.preflight
   - key: collect_videos
@@ -37,7 +43,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 5.1.0
+    version: 5.1.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -104,8 +110,6 @@ activities:
         asserts: 每个实际视频的同次原生详情XML、VID、run及attempt、公司和固定来源一致；指标重算与持久化完整观测独立读回相符，unknown保留null，不冒充0
       - probe: source_completed
         asserts: 来源读取实际成功且无旧入口回退
-      - probe: collect_videos_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
       - probe: disc_candidates_persisted
         asserts: 本批候选视频在 zenithjoy.leadgen_videos 独立读回条数不少于 metrics.persisted
       - probe: videos_readback
@@ -155,14 +159,22 @@ activities:
       phase: source
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-101-collect-videos/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-101-collect-videos
-        version: 0.4.0
+        version: 0.4.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

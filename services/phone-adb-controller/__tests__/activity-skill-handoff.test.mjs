@@ -12,29 +12,29 @@ test('isolated fixture: failed Code hands exactly one Activity to Skill then ind
  const events=[];let code=0,skill=0;
  const result=await runWorkflow({activities:[{key:'scoring',retry_safe:true},{key:'mark_leads'}],context:{run_id:'fixture__a1'},
   handlers:{scoring:async()=>{code++;throw Error('fixture operation failed');},mark_leads:async()=>{events.push('mark');return {marked:1};}},
-  commander:async r=>({action:r.phase==='after'&&r.evidence.status==='failed'?'retry':'continue',reason:'fixture evidence'}),record:async r=>events.push(r),
+  commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同修复'}:{action:'none'},record:async r=>events.push(r),
   recover:async({activity,failure})=>{assert.equal(activity.key,'scoring');assert.equal(failure.status,'failed');skill++;return {status:'completed',result:{scored:1},execution_stopped:true};},
   verify:async(a,r)=>{events.push('verify:'+a.key);return {verified:a.key!=='scoring'||r.result.scored===1};}});
- assert.equal(code,2);assert.equal(skill,1);assert.equal(result.status,'completed');
+ assert.equal(code,1);assert.equal(skill,1);assert.equal(result.status,'completed');
  assert.ok(events.indexOf('verify:scoring')<events.indexOf('mark'));
- assert.equal(events.filter(e=>e?.phase==='execution'&&e.evidence.status==='failed').length,2);
+ assert.equal(events.filter(e=>e?.phase==='execution'&&e.evidence.status==='failed').length,1);
 });
 
 test('Skill prose cannot override independent verification; later business stays blocked',async()=>{
  let later=0;
- const r=await runWorkflow({activities:[{key:'scoring'},{key:'mark_leads'}],context:{},handlers:{scoring:async()=>{throw Error('fixture failed');},mark_leads:async()=>{later++;}},commander:async()=>({action:'continue',reason:'fixture'}),record:async()=>{},recover:async()=>({status:'completed',result:{scored:9},execution_stopped:true}),verify:async()=>({verified:false})});
- assert.equal(r.status,'failed');assert.equal(later,0);
+ const r=await runWorkflow({activities:[{key:'scoring'},{key:'mark_leads'}],context:{},handlers:{scoring:async()=>{throw Error('fixture failed');},mark_leads:async()=>{later++;}},commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同修复'}:{action:'none'},record:async()=>{},recover:async()=>({status:'completed',result:{scored:9},execution_stopped:true}),verify:async()=>({verified:false})});
+ assert.equal(r.status,'needs_review');assert.equal(later,0);
 });
 for(const throwUnknown of [false,true])test('unknown child keeps resources; no cleanup or next activity '+throwUnknown,async()=>{
  let cleaned=0,later=0;
- const r=await runWorkflow({activities:[{key:'scoring'},{key:'mark_leads'},{key:'cleanup'}],context:{},handlers:{scoring:async()=>{throw Error('fixture failed');},mark_leads:async()=>{later++;},cleanup:async()=>{cleaned++;}},commander:async()=>({action:'continue',reason:'fixture'}),record:async()=>{},recover:async()=>{if(throwUnknown)throw Error('fixture transport reply lost');return {status:'failed',execution_stopped:false};}});
+ const r=await runWorkflow({activities:[{key:'scoring'},{key:'mark_leads'},{key:'cleanup'}],context:{},handlers:{scoring:async()=>{throw Error('fixture failed');},mark_leads:async()=>{later++;},cleanup:async()=>{cleaned++;}},commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同修复'}:{action:'none'},record:async()=>{},recover:async()=>{if(throwUnknown)throw Error('fixture transport reply lost');return {status:'failed',execution_stopped:false};}});
  assert.equal(r.status,'failed');assert.equal(cleaned,0);assert.equal(later,0);assert.equal(r.results.at(-1).status,'blocked');
 });
 const layouts=[['preflight','collect_videos','cleanup'],['preflight','dedup','qualification','collection','cleanup'],['scoring','mark_leads'],['preflight','send_dm','write_back','cleanup']];
 for(let flow=0;flow<4;flow++)for(const target of layouts[flow])test(`isolated layout ${101+flow}/${target} never replays earlier Activity`,async()=>{
  const called=[],recovered=[];
- const r=await runWorkflow({activities:layouts[flow].map(key=>({key})),context:{},handlers:Object.fromEntries(layouts[flow].map(key=>[key,async()=>{called.push(key);if(key===target)throw Error('fixture transient');return {done:true};}])),record:async()=>{},commander:async()=>({action:'continue',reason:'fixture'}),recover:async({activity})=>{recovered.push(activity.key);return {status:'completed',result:{done:true},execution_stopped:true};},verify:async()=>({verified:true})});
- assert.equal(r.status,'completed');assert.deepEqual(called,layouts[flow]);assert.deepEqual(recovered,[target]);
+ const r=await runWorkflow({activities:layouts[flow].map(key=>({key})),context:{},handlers:Object.fromEntries(layouts[flow].map(key=>[key,async()=>{called.push(key);if(key===target)throw Error('fixture transient');return {done:true};}])),record:async()=>{},commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同修复'}:{action:'none'},recover:async({activity})=>{recovered.push(activity.key);return {status:'completed',result:{done:true},execution_stopped:true};},verify:async()=>({verified:true})});
+ assert.equal(r.status,target==='cleanup'?'needs_review':'completed');assert.deepEqual(called,layouts[flow]);assert.deepEqual(recovered,target==='cleanup'?[]:[target]);
 });
 
 test('actual frozen Activity budget clips workflow remaining time and never resets after Code use',async()=>{
@@ -55,7 +55,7 @@ test('同一次受控停止正证仅放行一次原 Skill 接手，外部效果�
  let code=0,skill=0,cleaned=0;const records=[];
  const r=await runWorkflow({activities:[{key:'collect_videos',retry_safe:true},{key:'cleanup'}],context:{run_id:'current__a1'},
   handlers:{collect_videos:async()=>{code++;const e=Error('EXECUTION_DEADLINE');e.executionStopped=true;e.externalEffect='unknown';e.operationId='current-operation';throw e;},cleanup:async()=>{cleaned++;return {safe:true};}},
-  commander:async()=>({action:'retry',reason:'原运行内接手'}),record:async x=>records.push(x),
+  commander:async r=>r.phase==='recovery'?{action:'steer',text:'原运行内只读接手'}:{action:'none'},record:async x=>records.push(x),
   recover:async({failure})=>{skill++;assert.equal(failure.execution_stopped,true);assert.equal(failure.external_effect,'unknown');assert.equal(failure.operation_id,'current-operation');return {status:'completed',execution_stopped:true,result:{collected:1}};},verify:async()=>({verified:true})});
  assert.equal(code,1);assert.equal(skill,1);assert.equal(cleaned,1);assert.equal(r.status,'completed');
  assert.equal(r.results[0].external_effect,'unknown');
@@ -72,7 +72,7 @@ test('旧 422 未知收据或跨 owner 收据不能伪解原隔离',async()=>{
 
 for(const ok of [true,false])test('unknown execution invokes persistent quarantine and records actual acknowledgment '+ok,async()=>{
  let called=0,cleaned=0;
- const r=await runWorkflow({activities:[{key:'qualification'},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{throw Error('EXECUTION_OUTPUT_LIMIT');},cleanup:async()=>{cleaned++;}},commander:async()=>({action:'continue',reason:'fixture'}),record:async()=>{},quarantine:async()=>{called++;if(!ok)throw Error('fixture quarantine receipt lost');return {verified:true,device:{verified:true},videos:[]};}});
+ const r=await runWorkflow({activities:[{key:'qualification'},{key:'cleanup'}],context:{},handlers:{qualification:async()=>{throw Error('EXECUTION_OUTPUT_LIMIT');},cleanup:async()=>{cleaned++;}},commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同修复'}:{action:'none'},record:async()=>{},quarantine:async()=>{called++;if(!ok)throw Error('fixture quarantine receipt lost');return {verified:true,device:{verified:true},videos:[]};}});
  assert.equal(called,1);assert.equal(cleaned,0);assert.equal(r.status,'failed');assert.equal(r.resource_quarantine.verified,ok);if(!ok)assert.match(r.resource_quarantine.reason,/lost/);
 });
 
@@ -94,7 +94,7 @@ test('failed Code hands partial Skill delivery to the real ledger without a seco
  const ledger=fileURLToPath(new URL('../ledger.mjs',import.meta.url));
  const fixtures=[
   [{status:'partial',reason:'Skill未交付当前Activity实际执行结果',execution_stopped:true,skill_receipt:{status:'ok',tool_calls:0}},'blocked'],
-  [{status:'paused'},'blocked'],[{status:'skipped'},'blocked'],
+  [{status:'paused'},'blocked'],[{status:'skipped'},'blocked'],[{status:'needs_review'},'blocked'],
   [{status:'completed',result:{status:'partial',failures:['original recording failure']}},'blocked'],
   [{status:'failed',error:'original recording failure'},'failed'],
   [{status:'failed',result:{status:'partial',failures:['original recorder failure']}},'failed'],

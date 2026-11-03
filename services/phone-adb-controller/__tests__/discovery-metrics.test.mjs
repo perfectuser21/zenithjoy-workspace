@@ -44,3 +44,5 @@ test('成功取链原件封存与最终逐VID读回，路径/原件/权限/ACK�
   rmSync(file);writeFileSync(file,'x'.repeat(1024*1024+1));assert.throws(()=>captureObservation({...scope,file,evidenceRoot:dir,runDir:dir}),/METRICS_EVIDENCE_PATH_INVALID/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('远端discover拒绝原生证实0评论，且在任何SQL或排队之前拒绝',async()=>{const {discoverMetricsRequest}=require('../discovery-metrics-queue.js');let queries=0;const observation=metricsFixture({xml:tree('67','0')});await assert.rejects(()=>discoverMetricsRequest({query:async()=>{queries++;return {rows:[]};}},{op:'discover',run:scope.run,line:'jinuo',video:{videoId:scope.video_id,videoUrl:scope.video_url,metrics:observation}},{sourceCommit:scope.source_commit,execution:{run:scope.run,run_id:scope.run_id,profile:scope.profile,line:'jinuo'}}),/DISCOVERY_CONFIRMED_ZERO_COMMENTS/);assert.equal(queries,0);});

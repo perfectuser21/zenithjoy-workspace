@@ -39,8 +39,8 @@ for(const verdict of [true,false])test('real single-slot broker CLI → parent t
    }})};
   };
   const recover=createActivityRecovery({runDir:d,frozen,binding:{id:'fixture-binding',run_id:'fixture__a1'},env:{},handlers,rpc});
-  const result=await runWorkflow({activities:[{key:'scoring',retry_safe:true},{key:'mark_leads'}],context:{},handlers:{scoring:async()=>{calls++;if(calls<3)throw Error('fixture recoverable Code failure');return {scored:1};},mark_leads:async()=>{next++;return {marked:1};}},record:async()=>{},commander:async r=>({action:r.evidence?.status==='failed'?'retry':'continue',reason:'fixture'}),recover,verify:async(a,r)=>{if(a.key!=='scoring')return {verified:true};verified++;assert.equal(r.result.scored,1);return {verified:verdict};}});
-  assert.equal(calls,3);assert.equal(launches,1);assert.ok(verified>=1);assert.equal(next,verdict?1:0);assert.equal(result.status,verdict?'completed':'failed');
+  const result=await runWorkflow({activities:[{key:'scoring',retry_safe:true},{key:'mark_leads'}],context:{},handlers:{scoring:async()=>{calls++;if(calls<2)throw Error('fixture recoverable Code failure');return {scored:1};},mark_leads:async()=>{next++;return {marked:1};}},record:async()=>{},commander:async r=>r.phase==='recovery'?{action:'steer',text:'按原合同修复读回'}:{action:'none'},recover,verify:async(a,r)=>{if(a.key!=='scoring')return {verified:true};verified++;assert.equal(r.result.scored,1);return {verified:verdict};}});
+  assert.equal(calls,2);assert.equal(launches,1);assert.ok(verified>=1);assert.equal(next,verdict?1:0);assert.equal(result.status,verdict?'completed':'needs_review');
  }finally{rmSync(d,{recursive:true,force:true});}
 });
 
@@ -89,7 +89,7 @@ async function continuationFixture({policy={max_additional_turns:1},activityKey=
   let originalCalls=0;
   const result=workflow?await runWorkflow({activities:[{key:activityKey,retry_safe:false},{key:'next'},{key:'cleanup'}],context:{},
    handlers:{[activityKey]:async()=>{if(++originalCalls===1)throw Error('temporary application fault');return resume();},next:async()=>{followed++;return {};},cleanup:async()=>{cleaned++;return {};}},
-   commander:async()=>({action:'continue',reason:'isolated owner'}),record:async()=>{},verify,recover,quarantine:async()=>{quarantined++;return {verified:true};}})
+   commander:async r=>r.phase==='recovery'?{action:'steer',text:'按冻结合同检查原操作'}:{action:'none'},record:async()=>{},verify,recover,quarantine:async()=>{quarantined++;return {verified:true};}})
    :await recover({activity:{key:activityKey},failure:{status:'failed',execution_stopped:true,error:'temporary application fault'},execute:resume});
   return {result,launches,resumes,turns,directories,cleaned,quarantined,followed,owner_pending:readdirSync(join(d,'.openclaw','leadgen-owner-turns')).some(p=>p.endsWith('.pending.json'))};
  }finally{rmSync(d,{recursive:true,force:true});}

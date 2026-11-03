@@ -3,7 +3,7 @@ capability: keyword_acquisition
 contract_key: douyin_lead_outreach
 commander_skill:
   name: wf-douyin_lead_outreach
-  version: 0.7.1
+  version: 0.7.2
 name: 抖音线索触达
 workflow: douyin-lead-outreach
 brain_workflow_key: douyin_lead_outreach
@@ -14,6 +14,14 @@ dod_promotion:
 runner:
   entry: leadgen-workflow.mjs
   queue: pending_leads
+on_status:
+  done: next
+  retry: retry
+  failed: stop
+  empty: next
+  partial: stop
+  needs_review: pause
+always_run: [cleanup]
 trigger_inputs:
   - Lead
   - Account
@@ -21,9 +29,6 @@ trigger_inputs:
   - RecipientQualification
   - OutreachOrder
   - OutreachScope
-known_gaps:
-  - gap: Workflow 的 on_status/always_run 路由尚未在本合同及 Runner 中形成可验证接线；Activity 字段齐全不代表端到端自动编排验收通过。
-    task: bdd9fb75
 activities:
   - key: preflight
     name: 预检
@@ -36,7 +41,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 1
-    version: 5.0.0
+    version: 5.0.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -96,8 +101,6 @@ activities:
         asserts: 手机不在通话中，metrics.call_state_idle 等于 1
       - probe: pf_lock_acquired
         asserts: 本轮执行者实际持有设备锁，metrics.lock_acquired 等于 1
-      - probe: preflight_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
       primary_kind: code
       location: phone
@@ -133,14 +136,22 @@ activities:
       phase: setup
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-preflight/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-preflight
-        version: 1.0.0
+        version: 1.0.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -493,7 +504,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 2
-    version: 6.0.1
+    version: 6.0.2
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -583,8 +594,6 @@ activities:
         asserts: 普通模式由原公司资格队列选单；exact模式本run冻结的飞书record_id、comment_id、公司及102/103来源与原出站映射和订单精确相符，旁单零领取
       - probe: out_delivery_result_verified
         asserts: 原生发送前后 XML、目标和发送账号身份、批准话术及限制结果独立核验通过；未知结果不算发送，亦不宣称对方送达
-      - probe: send_dm_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
       primary_kind: code
       location: phone
@@ -633,14 +642,22 @@ activities:
       phase: batch_end
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-send-dm/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-send-dm
-        version: 1.2.1
+        version: 1.2.2
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -872,7 +889,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 3
-    version: 4.0.0
+    version: 4.0.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: breaking
@@ -941,8 +958,6 @@ activities:
     postconditions:
       - probe: out_no_stuck_inflight
         asserts: 本run认领原Feishu订单回读真实终态；未知保持永久prepared，不自动重排；未发送不造成功
-      - probe: write_back_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
     execution:
       primary_kind: code
       location: phone
@@ -991,14 +1006,22 @@ activities:
       phase: batch_end
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-write-back/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-write-back
-        version: 1.0.0
+        version: 1.0.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs
@@ -1183,7 +1206,7 @@ activities:
       owner_labeled: false
       current_skill_verified: false
     order: 4
-    version: 3.2.0
+    version: 3.2.1
     agent_recovery:
       max_additional_turns: 1
     compatibility: backward
@@ -1256,14 +1279,22 @@ activities:
       phase: finalize
       entry: leadgen-activity.sh
       args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE
-        RUN_TAG（队列持久化交接，每活动Commander前后核验）
+        RUN_TAG（队列持久化交接，公共Runner独立核验，Commander观察与纠偏）
     implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-runner-adapter.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/common-runner/source.json
+        revision: contract
       - kind: skill
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/skills/douyin-leadgen-activity-104-cleanup/SKILL.md
         revision: contract
         name: douyin-leadgen-activity-104-cleanup
-        version: 0.3.0
+        version: 0.3.1
       - kind: code
         repo: perfectuser21/zenithjoy-workspace
         path: services/phone-adb-controller/activity-skill-recovery.mjs

@@ -1,0 +1,13 @@
+{
+  "repository": "perfectuser21/cecelia",
+  "revision": "0a003295a80deb9a9467d6f8cd188649669002a0",
+  "source_path": "packages/brain/src/orchestrator/",
+  "files": {
+    "activity-contract.js": "37d8b6a9b73b9825126da25974291db125feb2380b3e1cf4b45afe7e266ab6c5",
+    "activity-judgment.js": "8ad5f117f9e400e97b5abf48b49485392be6825b3bcad9374970d320a4151cfa",
+    "activity-process.js": "68f337b9f8f73dcd3a052f677236c8587aca6398ea47bf25146924d23becb879",
+    "activity-runtime.js": "be753499bf30cce6db4704200ce72cbea3f69c01883859f8b0e59f75e353595b",
+    "package.json": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae",
+    "runner-commander-bridge.js": "3f633c919ece66d69f818c3af96b2811c0942de923d8d7a8ad037b90fd9f8ec1"
+  }
+}

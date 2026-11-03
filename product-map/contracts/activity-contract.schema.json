@@ -7,6 +7,18 @@
   "additionalProperties": false,
   "required": ["version", "capability", "name", "workflow", "brain_workflow_key", "source_repo", "checks", "trigger_inputs", "activities"],
   "properties": {
+    "on_status": { "type": "object", "additionalProperties": false,
+      "required": ["done", "retry", "failed", "empty", "partial", "needs_review"],
+      "properties": {
+        "done": { "enum": ["next", "retry", "stop", "pause"] },
+        "retry": { "enum": ["next", "retry", "stop", "pause"] },
+        "failed": { "enum": ["next", "retry", "stop", "pause"] },
+        "empty": { "enum": ["next", "retry", "stop", "pause"] },
+        "partial": { "enum": ["next", "retry", "stop", "pause"] },
+        "needs_review": { "const": "pause" }
+      }
+    },
+    "always_run": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/key" } },
     "agent": { "type": "string", "enum": ["skill-factory"] },
     "skill": { "type": "string", "minLength": 1 },
     "input_schema": { "type": "object" },

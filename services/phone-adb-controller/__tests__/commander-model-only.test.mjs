@@ -52,8 +52,9 @@ test('原失败仅保固定诊断字段不泄漏原stderr/argv，且写入Activi
  assert.deepEqual(Object.keys(r.error.diagnostic).sort(),['activity','elapsed_ms','gateway_run_id','phase','run_id','status','timeout_ms']);
  const {runActivity}=await import('../activity-commander.mjs');const events=[];
  const e=Error('COMMANDER_UNAVAILABLE');e.executionStopped=false;e.commanderDiagnostic=r.error.diagnostic;
- await assert.rejects(runActivity({activity:{key:'cleanup'},context:scope,commander:async()=>{throw e;},execute:async()=>assert.fail('must not start'),record:async e=>events.push(e)}));
- assert.deepEqual(events[0].commander_diagnostic,r.error.diagnostic);
+ let cleaned=0;const out=await runActivity({activity:{key:'cleanup'},context:scope,commander:async()=>{throw e;},execute:async()=>{cleaned++;return {};},record:async e=>events.push(e)});
+ assert.equal(cleaned,1);assert.equal(out.status,'completed');assert.ok(events.some(e=>e.commander_status==='unavailable'));
+ assert.doesNotMatch(JSON.stringify(events),/sensitive-sentinel/);
 });
 
 test('跨RPC通用错误仍在原owner账本留下本次固定诊断旁证，绝不作为returned',t=>{
