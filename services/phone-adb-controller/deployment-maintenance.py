@@ -39,7 +39,7 @@ LEGACY_ALIAS = Path('/private/tmp/openclaw-phone')
 
 def legacy_binding(home, logical):
     home, logical = Path(home), Path(logical)
-    if logical != LEGACY_ALIAS / 'locks':
+    if logical != LEGACY_ALIAS / 'locks' or not LEGACY_ALIAS.is_symlink():
         return canonical_path(logical), None
     require(home == Path(pwd.getpwuid(os.getuid()).pw_dir), 'legacy alias authoritative home mismatch')
     target = home / 'Library/Application Support/ZenithJoy/phone-runtime-20261011'
