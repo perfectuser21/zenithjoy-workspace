@@ -3,6 +3,10 @@ import fcntl
 import base64
 import importlib.util
 import json
+import io
+import pwd
+import runpy
+import types
 import os
 from pathlib import Path
 import subprocess
@@ -177,7 +181,7 @@ class MaintenanceTest(unittest.TestCase):
             for name, value in [('owner', serial + '-original'),
                                 ('standalone_review_required', serial + '-original'), ('acquired_at', '1')]:
                 (owner / name).write_text(value + '\n')
-        durable = self.home / 'historical-durable'
+        durable = self.home / '.local/share/zenithjoy/phone-locks'
         self.module.lock_root_tool.migrate(old, durable)
         return old, durable, historical
 
@@ -265,6 +269,50 @@ class MaintenanceTest(unittest.TestCase):
             guard.touch()
             with self.assertRaisesRegex(ValueError, 'identity|guard'):
                 verify()
+
+    def test_service_and_fence_actual_clis_consume_the_same_full_snapshot_record(self):
+        old, durable, historical = self.historical_review()
+        self.module.acquire(self.home, 't1', self.registry, durable)
+        tx = self.module.transaction
+        folder = tx.transaction_directory(self.home, 't1')
+        body = {'schema_version': 1, 'transaction': 't1', 'home': str(self.home),
+                'phase': 'prepared', 'identity': {'target': 'xian-m4'},
+                'entries': [{'path': '.local/bin/unwritten-fixture',
+                             'before': {'kind': 'missing'}, 'after': {'kind': 'missing'}}]}
+        tx.atomic_bytes(folder / 'journal.json', tx.canonical({**body, 'sha256': tx.digest(tx.canonical(body))}))
+        spec = importlib.util.spec_from_file_location('service_snapshot_fixture', SERVICE / 'deployment-service.py')
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        file = {'kind': 'file', 'bytes': 'ZnJvemVuIHNlcnZpY2U=', 'mode': 0o644, 'uid': 0, 'gid': 0}
+        service.prepare(folder / 'service.json', file,
+                        lambda: {'file': file, 'loaded': False, 'disabled': True})
+        original_pwd = pwd.getpwuid
+        def cli(name, action, stdin=''):
+            first = True
+            def target_home(uid):
+                nonlocal first
+                if first:
+                    first = False
+                    return types.SimpleNamespace(pw_dir=str(self.home))
+                # Only sandbox the CLI home lookup. Keep lock-root's separate
+                # authoritative-home policy untouched; it must not target real files.
+                return original_pwd(uid)
+            output = io.StringIO()
+            with patch.object(pwd, 'getpwuid', side_effect=target_home), \
+                 patch.object(sys, 'argv', [name, action, 't1']), \
+                 patch.object(sys, 'stdin', io.StringIO(stdin)), \
+                 patch.object(sys, 'stdout', output), \
+                 patch.object(subprocess, 'run', side_effect=AssertionError('no external commands in sandbox CLI')):
+                runpy.run_path(str(SERVICE / name), run_name='__main__')
+            return json.loads(output.getvalue())
+        before = [self.module.lock_root_tool.inventory(root) for root in (old, durable)]
+        intent = (folder / 'maintenance.json').read_bytes()
+        self.assertTrue(cli('deployment-service.py', 'prepare', json.dumps({'file': file}))['verified'])
+        for name in ('phone-candidates', 'phone-candidate-runs'):
+            (self.home / '.local/share/zenithjoy' / name).mkdir()
+        self.assertTrue(cli('deployment-candidate-fence.py', 'seal-if-review')['verified'])
+        self.assertEqual([self.module.lock_root_tool.inventory(root) for root in (old, durable)], before)
+        self.assertEqual((folder / 'maintenance.json').read_bytes(), intent)
 
     def test_code_only_review_admission_preserves_old_and_durable_owners(self):
         spec = importlib.util.spec_from_file_location('phone_lock_root', SERVICE / 'phone-lock-root.py')

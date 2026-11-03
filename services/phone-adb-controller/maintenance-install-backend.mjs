@@ -10,6 +10,13 @@ import {digest} from './runtime-definition.mjs';
 const HERE=dirname(fileURLToPath(import.meta.url));
 const need=(value,message)=>{if(!value)throw Error('安全安装: '+message);};
 const RECOVERY_SOURCE='3fe8783b021fd9fa1a8cd4242d79a3c703c6c21b';
+// A reviewed byte-exact recovery profile, not an extensible helper allowlist.
+// Reapproving changed source requires reviewing and updating these digests.
+const REVIEW_GUARD_PROFILE={
+ 'maintenance-install-host.py':{after:'e9db70745b8fe3dd645f8a924e29e5d59375f42a93892757d6ef40cdeb1ff7a9'},
+ 'deployment-maintenance.py':{before:'e5faeea7ea13ac09b45fbaa3e5ab2787ff99650243d8e4a1ca6f21257da88217',after:'038e9b3dad76f70bce6dedae4acde7468ae3a7d4d660a3dec101ee00934a6197'},
+ 'input-runtime-release.py':{before:'6d9dd3418de2c037e293284958eb822650fdb7c7895075d5c66b6c38da461939',after:'f93c05e7b7b62eff73bafaee4fa0ad38298299332c270cecc46b492533e12541'},
+};
 export const guardChannel=(action,{env=process.env,exec=execFileSync}={})=>
  exec('python3',[join(HERE,'deployment-guard.py'),action],
   {stdio:inheritedDeploymentStdio(env),timeout:120000});
@@ -19,13 +26,23 @@ export async function runMaintenanceInstall({root,sha,attemptKey,request,candida
  guardFn=guardChannel,stageToolsFn=stageTools,transportFn=deploymentTransport}){
  need(/^[a-f0-9]{40}$/.test(sha)&&['install','recover'].includes(action),'固定来源或操作无效');
  need(/^[a-f0-9]{40}$/.test(toolSha),'工具来源无效');
+ let recoveryCompatibility;
  if(toolSha!==sha){
   need(action==='recover'&&sha===RECOVERY_SOURCE,'跨来源工具仅限原3fe事务恢复');
-  const changed=TOOLS.filter(name=>{
+  const files=TOOLS.map(name=>{
    const path='services/phone-adb-controller/'+name;
-   return !readSourceFn(root,sha,path).equals(readSourceFn(toolRoot,toolSha,path));
+   return{name,before:readSourceFn(root,sha,path),after:readSourceFn(toolRoot,toolSha,path)};
   });
-  need(changed.length===1&&changed[0]==='maintenance-install-host.py','恢复工具闭包变化超出ADB健康修复');
+  const changed=files.filter(file=>!file.before.equals(file.after));
+  if(changed.length===1&&changed[0].name==='maintenance-install-host.py'){
+   recoveryCompatibility='adb-host-only';
+  }else{
+   need(changed.length===Object.keys(REVIEW_GUARD_PROFILE).length&&changed.every(file=>{
+    const expected=REVIEW_GUARD_PROFILE[file.name];
+    return expected&&(!expected.before||digest(file.before)===expected.before)&&digest(file.after)===expected.after;
+   }),'恢复工具闭包/profile摘要不符');
+   recoveryCompatibility='review-guard-snapshot-v1';
+  }
  }
  if(action==='install'){
   need(candidate?.source_commit===sha&&candidate.environment===`staging:${sha}`&&candidate.business_runtime_status==='not_evaluated',
@@ -52,7 +69,8 @@ export async function runMaintenanceInstall({root,sha,attemptKey,request,candida
    'M4安全围栏未完整读回');
   guardFn('complete');
   return {mode:'maintenance-install',transaction,source_commit:sha,secured:true,
-   production_release_unchanged:true,business_runtime_status:'not_evaluated',evidence_digest:digest(result)};
+   production_release_unchanged:true,business_runtime_status:'not_evaluated',
+   ...(recoveryCompatibility?{recovery_compatibility:recoveryCompatibility}:{}),evidence_digest:digest(result)};
  }catch(error){
   // M4已开始后的未知结果保持同事务和Commander屏障，原事务可精确恢复。
   if(!began)guardFn('complete');
