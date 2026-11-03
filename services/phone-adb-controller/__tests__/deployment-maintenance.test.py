@@ -419,5 +419,189 @@ class MaintenanceTest(unittest.TestCase):
         self.assertEqual(fence.verify(self.home, 't1')['state'], 'sealed')
 
 
+
+class LegacyAliasTest(unittest.TestCase):
+    """真实文件/内核锁，唯一沙箱；仅隔离机器特定路径及权限元数据。"""
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.base = Path(temp.name).resolve()
+        self.home = self.base / 'home'
+        self.home.mkdir()
+        self.shared = self.base / 'shared-tmp'
+        self.shared.mkdir(mode=0o1777)
+        self.runtime = self.home / 'Library/Application Support/ZenithJoy/phone-runtime-20261011'
+        self.physical = self.runtime / 'locks'
+        self.physical.mkdir(parents=True)
+        self.alias = self.shared / 'openclaw-phone'
+        self.alias.symlink_to(self.runtime)
+        self.logical = self.alias / 'locks'
+        self.durable = self.home / 'durable-locks'
+        self.registry = self.home / 'profiles.tsv'
+        self.registry.write_text('#profile\tserial\tenabled\np1\tSERIAL1\ttrue\np2\tSERIAL2\ttrue\n')
+        for serial in ['SERIAL1', 'SERIAL2', '47.100.213.173:10001']:
+            (self.physical / (serial + '.guard')).touch()
+        for serial in ['SERIAL1', 'SERIAL2']:
+            owner = self.physical / (serial + '.lock')
+            owner.mkdir()
+            for name in ('owner', 'standalone_review_required', 'acquired_at'):
+                (owner / name).write_text('1\n' if name == 'acquired_at' else serial + '-original\n')
+        folder = self.home / '.local/share/zenithjoy/phone-transactions/t1'
+        folder.mkdir(parents=True)
+        (folder.parent / 'active.json').write_text('{"transaction":"t1"}')
+        spec = importlib.util.spec_from_file_location('alias_maintenance', SERVICE / 'deployment-maintenance.py')
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+        self.module.lock_root_tool.migrate(self.logical, self.durable)
+        # Actual symlink inodes/readlink/flock, no real /private/tmp paths are touched.
+        self.original_spec = importlib.util.spec_from_file_location
+        def spec_fixture(name, location, *args, **kwargs):
+            result = self.original_spec(name, location, *args, **kwargs)
+            if Path(location).name == 'deployment-maintenance.py':
+                execute = result.loader.exec_module
+                def load(module):
+                    execute(module)
+                    module.LEGACY_ALIAS = self.alias
+                result.loader.exec_module = load
+            return result
+        self.addCleanup(patch.stopall)
+        patch.object(self.module, 'LEGACY_ALIAS', self.alias, create=True).start()
+        patch('importlib.util.spec_from_file_location', spec_fixture).start()
+        original_pwd = pwd.getpwuid
+        patch('pwd.getpwuid', lambda uid: types.SimpleNamespace(pw_dir=str(self.home)) if uid == os.getuid() else original_pwd(uid)).start()
+        original_lstat = Path.lstat
+        self.bad_metadata = {}
+        def metadata(path, *args, **kwargs):
+            info = original_lstat(path, *args, **kwargs)
+            overrides = {}
+            if path == self.shared:
+                overrides = {'st_uid': 0, 'st_mode': 0o41777}
+            elif path == self.alias:
+                overrides = {'st_uid': os.getuid(), 'st_gid': 0, 'st_mode': 0o120755}
+            overrides.update(self.bad_metadata.get(path, {}))
+            if not overrides:
+                return info
+            return types.SimpleNamespace(**{**{key: getattr(info, key) for key in dir(info) if key.startswith('st_')}, **overrides})
+        patch.object(Path, 'lstat', metadata).start()
+
+    def acquire(self):
+        return self.module.acquire(self.home, 't1', self.registry, self.durable)
+
+    def replace_alias(self, target=None):
+        self.alias.rename(self.shared / ('previous-' + str(time.time_ns())))
+        self.alias.symlink_to(target or self.runtime)
+
+    def assert_guards_free(self):
+        for root in (self.physical, self.durable):
+            for path in root.glob('*.guard'):
+                with path.open('r+') as file:
+                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def input_tool(self):
+        spec = self.original_spec('alias_input', SERVICE / 'input-runtime-release.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_known_alias_keeps_logical_marker_but_locks_physical_full_snapshot(self):
+        before = [self.module.lock_root_tool.inventory(root) for root in (self.logical, self.durable)]
+        record = self.acquire()
+        self.assertEqual(record['legacy_root'], str(self.logical))
+        self.assertIn(str(self.physical / '47.100.213.173:10001.guard'), record['guard_identity'])
+        with self.module.guards(record):
+            for path in record['guard_identity']:
+                with Path(path).open('r+') as file:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.module.verify(self.home, 't1', self.registry, self.durable)
+        self.module.release(self.home, 't1', self.registry, self.durable)
+        self.assertEqual(before, [self.module.lock_root_tool.inventory(root) for root in (self.logical, self.durable)])
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            self.module.canonical_path(self.logical)
+
+    def test_changed_alias_before_all_locks_is_rejected(self):
+        record = self.acquire()
+        self.replace_alias()
+        with self.assertRaisesRegex(ValueError, 'binding|alias|identity'):
+            with self.module.guards(record):
+                self.fail('changed alias entered barrier')
+        self.assert_guards_free()
+
+    def test_alias_change_during_locks_is_rejected_by_check(self):
+        record = self.acquire()
+        with self.assertRaisesRegex(ValueError, 'binding|alias|identity'):
+            with self.module.guards(record) as verify:
+                self.replace_alias()
+                verify()
+        self.assert_guards_free()
+
+    def test_normal_and_exception_exit_recheck_binding_and_close_all_fds(self):
+        record = self.acquire()
+        for failure in (False, True):
+            with self.subTest(exception=failure):
+                if failure:
+                    # Freeze the current alias identity for this independent context.
+                    intent = self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json'
+                    intent.unlink()
+                    record = self.acquire()
+                with self.assertRaisesRegex(ValueError, 'binding|alias|identity'):
+                    with self.module.guards(record):
+                        self.replace_alias()
+                        if failure:
+                            raise RuntimeError('caller failed')
+                self.assert_guards_free()
+
+    def test_input_normal_and_exception_exit_recheck_without_manual_verify(self):
+        self.acquire()
+        for failure in (False, True):
+            with self.subTest(exception=failure):
+                if failure:
+                    (self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json').unlink()
+                    self.acquire()
+                with self.assertRaisesRegex(ValueError, 'binding|alias|identity'):
+                    with self.input_tool().device_barrier(self.registry, self.durable, (self.home, 't1')):
+                        self.replace_alias()
+                        if failure:
+                            raise RuntimeError('caller failed')
+                self.assert_guards_free()
+
+    def test_shared_tmp_ctime_is_not_a_frozen_identity(self):
+        self.acquire()
+        (self.shared / 'unrelated-app').touch()
+        self.module.verify(self.home, 't1', self.registry, self.durable)
+
+    def test_wrong_metadata_or_target_is_rejected_without_intent(self):
+        for path, values in ((self.alias, {'st_uid': os.getuid() + 1}),
+                             (self.alias, {'st_gid': 1}),
+                             (self.alias, {'st_mode': 0o120777}),
+                             (self.shared, {'st_mode': 0o40777}),
+                             (self.runtime, {'st_mode': 0o40777})):
+            with self.subTest(path=path, values=values):
+                self.bad_metadata[path] = values
+                with self.assertRaises(ValueError):
+                    self.acquire()
+                self.bad_metadata.clear()
+        other = self.home / 'other-runtime'
+        other.mkdir()
+        self.replace_alias(other)
+        with self.assertRaises(ValueError):
+            self.acquire()
+        self.assertFalse((self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json').exists())
+
+    def test_physical_root_or_guard_symlink_is_rejected(self):
+        self.acquire()
+        self.physical.rename(self.runtime / 'previous-locks')
+        self.physical.symlink_to(self.runtime / 'previous-locks')
+        with self.assertRaisesRegex(ValueError, 'symlink|binding|identity'):
+            self.module.verify(self.home, 't1', self.registry, self.durable)
+
+    def test_unknown_intent_is_never_rewritten(self):
+        intent = self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json'
+        intent.write_text('{"unknown":"preserve me"}')
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            self.acquire()
+        self.assertEqual(intent.read_text(), '{"unknown":"preserve me"}')
+
+
 if __name__ == '__main__':
     unittest.main()
