@@ -9500,3 +9500,4 @@ tests:
   - {"id":"inventory-ceb72eb649593329","path":"docs/database/migrations/test_002_migration.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-f47e8db3e7adad5d","path":"scripts/__tests__/test_publish_by_content_id.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-07e2861a581802c5","path":"scripts/__tests__/test_sync_scraper_to_works.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-4dc63e7c509a8b75","path":"services/phone-adb-controller/__tests__/honor-hosted-news-widget.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}

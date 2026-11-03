@@ -54,4 +54,3 @@ export function createProductMapFixture() {
   }
   return root;
 }
-
