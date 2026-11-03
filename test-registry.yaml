@@ -8653,3 +8653,11 @@ agent_suite:
   status: pending-ci
   product: AI视频
   note: 明确授权后opt-in的真实staging员工登录、画布和两秒Wan/超分；产生费用。尚未执行；默认跳过不能当业务通过。
+
+- id: canvas-employee-verification
+  path: scripts/deploy/__tests__/canvas-employee-verification.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI视频
+  note: 执行真实shell内Node核验器，覆盖认证schema解析、精确员工身份、生产staff及只读事务。
