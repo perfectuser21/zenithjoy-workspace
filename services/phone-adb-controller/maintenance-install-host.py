@@ -260,8 +260,11 @@ class SafetyHost:
         config = self.home / '.config/zenithjoy/adb-service.json'
         result = command([python_bin, str(script), 'status', '--config', str(config)], timeout=timeout)
         value = json.loads(result.stdout)
-        require(value.get('port') == 5037 and isinstance(value.get('devices'), list) and
+        require(isinstance(value, dict) and value.get('port') == 5037 and isinstance(value.get('devices'), list) and
                 isinstance(value.get('host_id'), str) and value['host_id'], 'ADB_HEALTH_INVALID')
+        require(all(isinstance(row, dict) and isinstance(row.get('serial'), str) and row['serial'] and
+                    isinstance(row.get('state'), str) and row['state'] for row in value['devices']),
+                'ADB_HEALTH_DEVICES_INVALID')
         return value
 
     def _adb_process_matches(self, script):
