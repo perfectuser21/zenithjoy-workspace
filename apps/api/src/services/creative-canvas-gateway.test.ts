@@ -47,8 +47,29 @@ describe('creative canvas gateway', () => {
     const gateway = createCanvasGateway({ authenticate: async () => 'alice', instances: {}, allowedOrigins: [] });
     const server = http.createServer(gateway.handleHttp); gateway.attachWebSocket(server); const port = await listen(server);
     const base = `http://127.0.0.1:${port}/api/creative-canvas/`;
-    expect(await (await fetch(base+'status')).json()).toEqual({available:false});
+    expect(await (await fetch(base+'status')).json()).toEqual({available:false, reason:'CANVAS_NOT_PROVISIONED'});
     expect((await fetch(base)).status).toBe(503);
+  });
+  it('区分未登录、非员工、来源拒绝与实例不可达，不暴露内部地址', async () => {
+    const upstream = await listen(http.createServer((_req,res) => { res.statusCode = 503; res.end(); }));
+    const gateway = createCanvasGateway({
+      authenticate: async req => req.headers.cookie === 'session=staff' ? 'alice' : req.headers.cookie === 'session=customer' ? { status: 403 as const } : null,
+      instances: {alice:`http://127.0.0.1:${upstream}`}, allowedOrigins:['https://example.test'],
+    });
+    const port = await listen(http.createServer(gateway.handleHttp));
+    const url = `http://127.0.0.1:${port}/api/creative-canvas/status`;
+    const loggedOut = await fetch(url);
+    expect(loggedOut.status).toBe(401);
+    expect(await loggedOut.json()).toEqual({available:false, reason:'SESSION_REQUIRED'});
+    const customer = await fetch(url,{headers:{cookie:'session=customer'}});
+    expect(customer.status).toBe(403);
+    expect(await customer.json()).toEqual({available:false, reason:'STAFF_REQUIRED'});
+    const foreign = await fetch(url,{headers:{cookie:'session=staff',origin:'https://other.test'}});
+    expect(foreign.status).toBe(403);
+    expect(await foreign.json()).toEqual({available:false, reason:'ORIGIN_FORBIDDEN'});
+    const unavailable = await fetch(url,{headers:{cookie:'session=staff'}});
+    expect(unavailable.status).toBe(200);
+    expect(await unavailable.json()).toEqual({available:false, reason:'INSTANCE_UNAVAILABLE'});
   });
   it('loads dotenv before capturing instance settings', () => {
     const previous = process.env.CREATIVE_CANVAS_INSTANCES;

@@ -20,9 +20,9 @@ describe('configured creative canvas authentication', () => {
       session.user = null;
       expect((await fetch(url)).status).toBe(401);
       session.user = { id:'other', email:'other@example.com' };
-      expect((await fetch(url)).status).toBe(401);
+      expect((await fetch(url)).status).toBe(403);
       session.user = { id:'alice', email:'STAFF@example.com' };
-      expect(await (await fetch(url)).json()).toEqual({ available:false });
+      expect(await (await fetch(url)).json()).toEqual({ available:false, reason:'CANVAS_NOT_PROVISIONED' });
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); session.user = null; }
   });
 });
