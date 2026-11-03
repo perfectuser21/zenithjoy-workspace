@@ -11,6 +11,7 @@ import plistlib
 import pwd
 import re
 import stat
+import socket
 import subprocess
 import sys
 import time
@@ -52,8 +53,8 @@ def command(argv, *, input=None, check=True, timeout=30):
                           capture_output=True, check=check, timeout=timeout)
 
 
-def launch(*args, check=True):
-    return command(['sudo', '-n', '/bin/launchctl', *args], check=check)
+def launch(*args, check=True, timeout=30):
+    return command(['sudo', '-n', '/bin/launchctl', *args], check=check, timeout=timeout)
 
 
 def cron_raw():
@@ -246,11 +247,100 @@ class SafetyHost:
     def _new_adb(self):
         return base64.b64decode(self.journal['adb_plist_after_b64'], validate=True)
 
-    def _adb_loaded(self):
-        result = launch('print', 'system/' + ADB_LABEL, check=False)
+    def _adb_job(self, *, timeout=30):
+        result = launch('print', 'system/' + ADB_LABEL, check=False, timeout=timeout)
         require(result.returncode == 0 or 'Could not find service' in result.stderr,
                 'ADB_SERVICE_STATE_UNKNOWN')
-        return result.returncode == 0
+        if result.returncode != 0:
+            return {'loaded': False, 'source': None, 'state': None}
+        found = re.search(r'(?m)^\s*arguments = \{\n(.*?)^\s*\}', result.stdout, re.S)
+        arguments = [line.strip() for line in found[1].splitlines()] if found else []
+        state = re.search(r'(?m)^\s*state = ([^\n]+)', result.stdout)
+        program = re.search(r'(?m)^\s*program = ([^\n]+)', result.stdout)
+        for source, raw in (('old', self._old_adb()), ('stable', self._new_adb())):
+            expected = plistlib.loads(raw)['ProgramArguments']
+            if arguments == expected and program and program[1].strip() == expected[0]:
+                return {'loaded': True, 'source': source, 'state': state[1].strip() if state else None}
+        raise ValueError('MAINTENANCE_ONLY_ADB_SERVICE_SOURCE_UNKNOWN')
+
+    def _adb_loaded(self, *, timeout=30):
+        return self._adb_job(timeout=timeout)['loaded']
+
+    def _unload_adb(self, phase, first, started):
+        """A bootout acknowledgement is not proof the launchd job has disappeared."""
+        deadline = started + 20
+        observations = []
+
+        def remaining(limit):
+            budget = deadline - time.monotonic()
+            require(budget > 0, 'ADB_QUIESCENCE_TIMEOUT')
+            return min(limit, budget)
+
+        def record(verified, reason):
+            tx.atomic_bytes(self.folder / ('adb-quiescence-' + str(time.time_ns()) + '.json'),
+                tx.canonical({'phase': phase, 'verified': verified, 'reason': reason,
+                              'elapsed_ms': round((time.monotonic() - started) * 1000),
+                              'observations': observations}))
+
+        try:
+            observations.append({'initial_job': first})
+            if first['loaded']:
+                stopped = launch('bootout', 'system/' + ADB_LABEL, check=False, timeout=remaining(5))
+                observations.append({'bootout_returncode': stopped.returncode})
+                if stopped.returncode != 0:
+                    # A concurrent exit can win bootout; only a fresh absence
+                    # readback permits treating the specific notfound as safe.
+                    require('Could not find service' in stopped.stderr, 'ADB_QUIESCENCE_BOOTOUT_UNKNOWN')
+                    readback = self._adb_job(timeout=remaining(3))
+                    observations.append({'bootout_absence_readback': readback})
+                    require(not readback['loaded'], 'ADB_QUIESCENCE_BOOTOUT_UNKNOWN')
+            for attempt in range(1, 81):
+                observation = {'attempt': attempt}
+                observations.append(observation)
+                job = self._adb_job(timeout=remaining(3))
+                observation['job'] = job
+                if not job['loaded']:
+                    ports = {}
+                    observation['ports'] = ports
+                    # These are the fixed managed policy ports; never invoke an adb client.
+                    for port in (5037, 5041, 5042):
+                        try:
+                            with socket.create_connection(('127.0.0.1', port), timeout=remaining(1)):
+                                ports[str(port)] = 'present'
+                        except ConnectionRefusedError:
+                            ports[str(port)] = 'closed'
+                        except OSError as error:
+                            ports[str(port)] = type(error).__name__
+                    if all(state == 'closed' for state in ports.values()):
+                        record(True, 'job_unloaded_and_sockets_closed')
+                        return
+                time.sleep(remaining(.25))
+            raise ValueError('MAINTENANCE_ONLY_ADB_QUIESCENCE_TIMEOUT')
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            observations.append({'error_class': type(error).__name__, 'error': str(error)})
+            record(False, 'quiescence_failed')
+            raise
+
+    def _activate_adb(self, current, *, restore=False):
+        wanted = self._old_adb() if restore else self._new_adb()
+        source = 'old' if restore else 'stable'
+        started = time.monotonic()
+        try:
+            job = self._adb_job(timeout=3)
+            # A loaded SIGTERMed job is not a healthy replay. The caller still
+            # verifies the exact process, host and full original device set.
+            if (current == wanted and job['loaded'] and job['source'] == source
+                    and job['state'] == 'running'):
+                return
+            self._unload_adb('restore' if restore else 'relocate', job, started)
+            if current != wanted:
+                self._root_adb_change(current, restore=restore)
+            launch('bootstrap', 'system', str(ADB_PLIST), timeout=5)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            tx.atomic_bytes(self.folder / ('adb-activation-' + str(time.time_ns()) + '.json'),
+                tx.canonical({'phase': 'restore' if restore else 'relocate', 'verified': False,
+                              'error_class': type(error).__name__, 'error': str(error)}))
+            raise
 
     def _stable_sources(self):
         return {name: base64.b64decode(raw, validate=True)
@@ -334,12 +424,7 @@ class SafetyHost:
         require(state['disabled'] is False and state['loaded'] is True, 'RESTORE_RECOVERY_CHANGED')
         current = tx.regular(ADB_PLIST)[0]
         require(current in (self._old_adb(), self._new_adb()), 'RESTORE_PLIST_CONFLICT')
-        if current == self._new_adb():
-            if self._adb_loaded():
-                launch('bootout', 'system/' + ADB_LABEL)
-            self._root_adb_change(current, restore=True)
-        if not self._adb_loaded():
-            launch('bootstrap', 'system', str(ADB_PLIST))
+        self._activate_adb(current, restore=True)
         old_script = plistlib.loads(self._old_adb())['ProgramArguments'][1]
         require(tx.regular(ADB_PLIST)[0] == self._old_adb() and self._adb_loaded() and
                 self._adb_process_matches(Path(old_script)),
@@ -369,12 +454,7 @@ class SafetyHost:
                                          str(self.home / '.local/share/zenithjoy/phone-candidates'))
             current = tx.regular(ADB_PLIST)[0]
             require(current in (self._old_adb(), self._new_adb()), 'ADB_PLIST_CONFLICT')
-            if current == self._old_adb():
-                if self._adb_loaded():
-                    launch('bootout', 'system/' + ADB_LABEL)
-                self._root_adb_change(current)
-            if not self._adb_loaded():
-                launch('bootstrap', 'system', str(ADB_PLIST))
+            self._activate_adb(current)
         elif name == 'disable_recovery':
             state = recovery.service_state()
             recovery.prepare(self.service_journal, state['file'], recovery.service_state)
