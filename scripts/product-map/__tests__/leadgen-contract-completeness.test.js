@@ -60,14 +60,14 @@ test('104 订单生命周期与发送结果硬探针入合同', () => {
   const doc = parse(readFileSync(resolve(root, 'product-map/contracts/douyin_lead_outreach.yaml'), 'utf8'));
   const activity = Object.fromEntries(doc.activities.filter(a => a.key).map(a => [a.key, a]));
   assert.ok(!activity.preflight.outputs.some(output => output.type === 'OutreachOrder'));
-  assert.equal(activity.preflight.version, '5.0.0');
+  assert.equal(activity.preflight.version, '5.0.1');
   assert.equal(activity.preflight.compatibility, 'breaking');
   assert.ok(activity.send_dm.inputs.some(input => input.type === 'OutreachOrder'));
   assert.equal(activity.send_dm.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.send_dm.version, '6.0.1');
+  assert.equal(activity.send_dm.version, '6.0.2');
   assert.equal(activity.send_dm.compatibility, 'breaking');
   assert.equal(activity.write_back.outputs.find(output => output.type === 'OutreachOrder').effect, 'update');
-  assert.equal(activity.write_back.version, '4.0.0');
+  assert.equal(activity.write_back.version, '4.0.1');
   assert.equal(activity.write_back.compatibility, 'breaking');
   assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_delivery_result_verified'));
   assert.ok(activity.send_dm.postconditions.some(condition => condition.probe === 'out_order_scope_verified'));
