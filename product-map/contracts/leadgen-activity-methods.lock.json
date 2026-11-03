@@ -1845,7 +1845,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/discovery-cleanup-readback.mjs",
           "revision": "contract",
-          "sha256": "ae377711ec7036bfbb9e8593aa0122fbf3fa45a0dce40e90dd89239c66a0a79f"
+          "sha256": "68d6ea28e08817394e7ce24e0f3cc56f5431779378639752ee9daca8c3ea26c7"
         },
         {
           "kind": "code",
@@ -1904,13 +1904,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "13ae90b0feed4bf7250d03c88b25cbe2c1622aed328859b1323eb38479aabadf",
+      "code_digest": "0b15c0444bc59f45eaad3150d07442cbd41d627f4ead2aeff93ade013743bd03",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "a6f38b25a0670155a82ba7f791fbc9bf7b86e9115689ae0336daefaf7cee0dfb",
-        "current_code_digest": "13ae90b0feed4bf7250d03c88b25cbe2c1622aed328859b1323eb38479aabadf"
+        "reason": "仅为已观测荣耀工作区托管头条widget增加精确包名、祖先锚点、同launcher host及逐层边界验证；合同、方法、冻结来源与unknown隔离语义不变。独立33项及真实原件离线读回通过，旧run和隔离owner不改。",
+        "reviewed_by": "independent-review:/root/canvas_review:cleanup-widget-root-review.json",
+        "previous_code_digest": "13ae90b0feed4bf7250d03c88b25cbe2c1622aed328859b1323eb38479aabadf",
+        "current_code_digest": "0b15c0444bc59f45eaad3150d07442cbd41d627f4ead2aeff93ade013743bd03"
       }
     },
     "douyin_comment_scoring.scoring": {

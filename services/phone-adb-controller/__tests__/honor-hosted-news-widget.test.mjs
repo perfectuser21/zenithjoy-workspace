@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {captureCleanupReadback,verifyCleanupReadback} from '../discovery-cleanup-readback.mjs';
@@ -30,10 +31,27 @@ for(const [name,xml] of [
  ['有效widget旁的头条覆盖窗口',hosted.replace('</hierarchy>',`<node package="${news}" bounds="[0,0][1200,2664]"/></hierarchy>`)],
  ['伪造widget类名',hosted.replace('android.appwidget.AppWidgetHostView','android.widget.FrameLayout')],
  ['缺工作区锚',hosted.replace(':id/workspace_screen',':id/other')],
+ ['缺workspace锚',hosted.replace(':id/workspace"',':id/other"')],
  ['伪造外部host',hosted.replace(`class="android.appwidget.AppWidgetHostView" package="${launcher}"`,`class="android.appwidget.AppWidgetHostView" package="${news}"`)],
  ['越出host边界',hosted.replace('[101,2107][257,2163]','[0,0][1200,2664]')],
  ['缺host边界',hosted.replace(' bounds="[40,1877][320,2209]"','')],
  ['抖音伪装成widget',hosted.replaceAll(news,'com.ss.android.ugc.aweme')],
  ['未证第三方widget',hosted.replaceAll(news,'com.other.widget')],
  ['另一launcher借用例外',hosted.replaceAll(launcher,'com.other.launcher')],
+ ['news子树中的抖音',hosted.replace('<node class="android.widget.TextView" package="'+news+'"','<node class="android.widget.TextView" package="com.ss.android.ugc.aweme"')],
+ ['news子树中的未知包',hosted.replace('<node class="android.widget.TextView" package="'+news+'"','<node class="android.widget.TextView" package="com.other.widget"')],
+ ['头条包名后缀',hosted.replaceAll(news,news+'.evil')],
+ ['host越出工作区',hosted.replace('[40,1877][320,2209]','[40,1877][320,2400]')],
+ ['screen越出workspace',hosted.replace('[0,0][1200,2241]','[0,0][1200,2800]')],
+ ['root不属于launcher',hosted.replace(`class="android.widget.FrameLayout" package="${launcher}"`,`class="android.widget.FrameLayout" package="${news}"`)],
 ])test('托管widget例外仍拒绝'+name,t=>{const r=rig(t,xml);assert.throws(r.capture,/CLEANUP_NATIVE_READBACK_INVALID/);});
+test('独立verify仍解析结构，不能只依赖归档哈希',t=>{
+ const r=rig(t,hosted);r.capture();
+ const xml=hosted.replace('</hierarchy>',`<node package="${news}" bounds="[0,0][1200,2664]"/></hierarchy>`);
+ writeFileSync(join(r.dir,'cleanup-readback','desktop.xml'),xml);
+ const file=join(r.dir,'cleanup-readback.json'),proof=JSON.parse(readFileSync(file,'utf8'));
+ proof.xml_sha256=createHash('sha256').update(xml).digest('hex');
+ delete proof.digest;proof.digest=createHash('sha256').update(JSON.stringify(proof)).digest('hex');
+ writeFileSync(file,JSON.stringify(proof));
+ assert.equal(verifyCleanupReadback({runDir:r.dir,scope:r.scope,digest:proof.digest}),false);
+});
