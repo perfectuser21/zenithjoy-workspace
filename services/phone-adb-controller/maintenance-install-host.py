@@ -60,8 +60,8 @@ def cron_raw():
     return command(['/usr/bin/crontab', '-l']).stdout
 
 
-def process_table():
-    return command(['/bin/ps', '-axo', 'pid=,command=']).stdout
+def process_table(*, timeout=30):
+    return command(['/bin/ps', '-axo', 'pid=,command='], timeout=timeout).stdout
 
 
 def root_adb_write(restore=False):
@@ -256,32 +256,64 @@ class SafetyHost:
         return {name: base64.b64decode(raw, validate=True)
                 for name, raw in self.journal['adb_sources_b64'].items()}
 
-    def _adb_health(self, script, python_bin):
+    def _adb_health(self, script, python_bin, *, timeout=10):
         config = self.home / '.config/zenithjoy/adb-service.json'
-        result = command([python_bin, str(script), 'status', '--config', str(config)], timeout=10)
+        result = command([python_bin, str(script), 'status', '--config', str(config)], timeout=timeout)
         value = json.loads(result.stdout)
         require(value.get('port') == 5037 and isinstance(value.get('devices'), list) and
                 isinstance(value.get('host_id'), str) and value['host_id'], 'ADB_HEALTH_INVALID')
         return value
 
     def _adb_process_matches(self, script):
-        for _ in range(20):
-            rows = [line for line in process_table().splitlines()
-                    if str(script) in line and ' run ' in line]
-            if len(rows) == 1:
-                try:
-                    observed = self._adb_health(script, self.journal['adb_python'])
-                except subprocess.CalledProcessError:
-                    # The service process can appear before its ADB server answers status.
-                    time.sleep(.25)
-                    continue
-                previous = self.journal['adb_health_before']
-                before_devices = {row['serial'] for row in previous['devices'] if row.get('state') == 'device'}
-                after_devices = {row['serial'] for row in observed['devices'] if row.get('state') == 'device'}
-                return (all(observed.get(key) == previous.get(key) for key in ('host_id', 'endpoint', 'port'))
-                        and before_devices <= after_devices)
-            time.sleep(.25)
-        return False
+        started = time.monotonic()
+        deadline = started + 20
+        observations = []
+        previous = self.journal['adb_health_before']
+        before_devices = {row['serial'] for row in previous['devices'] if row.get('state') == 'device'}
+
+        def finish(verified, reason):
+            record = {'verified': verified, 'reason': reason,
+                      'stable_source': '/adb-host-stable/' in str(script),
+                      'elapsed_ms': round((time.monotonic() - started) * 1000),
+                      'expected': previous, 'observations': observations}
+            tx.atomic_bytes(self.folder / ('adb-readiness-' + str(time.time_ns()) + '.json'),
+                            tx.canonical(record))
+            return verified
+
+        # Each probe and the whole wait are bounded. Failure still requires the
+        # original service to be restored and independently checked afterwards.
+        for attempt in range(1, 81):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            observation = {'attempt': attempt}
+            observations.append(observation)
+            try:
+                rows = [line for line in process_table(timeout=min(3, remaining)).splitlines()
+                        if str(script) in line and ' run ' in line]
+                observation['process_count'] = len(rows)
+                if len(rows) == 1:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    observed = self._adb_health(script, self.journal['adb_python'], timeout=min(5, remaining))
+                    observation.update({key: observed.get(key) for key in ('host_id', 'endpoint', 'port', 'devices')})
+                    if not all(observed.get(key) == previous.get(key) for key in ('host_id', 'endpoint', 'port')):
+                        return finish(False, 'host_identity_mismatch')
+                    after_devices = {row['serial'] for row in observed['devices'] if row.get('state') == 'device'}
+                    # A successful socket response can precede USB enumeration.
+                    if before_devices <= after_devices:
+                        return finish(True, 'original_devices_verified')
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                observation['error_class'] = type(error).__name__
+            except (ValueError, KeyError, TypeError) as error:
+                observation['error_class'] = type(error).__name__
+                return finish(False, 'health_response_invalid')
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(.25, remaining))
+        return finish(False, 'readiness_exhausted')
 
     def _root_adb_change(self, current, *, restore=False):
         payload = {'old_sha256': sha(current),

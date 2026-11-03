@@ -270,8 +270,52 @@ class SafetyHostTests(unittest.TestCase):
         self.assertNotIn('harvest-cron.sh', self.state['cron'])
         self.assertIn('/phone-candidates/', plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1])
         records = [json.loads(p.read_text()) for p in host.folder.glob('adb-readiness-*.json')]
+        self.assertGreaterEqual(len(records), 2)
+        self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600
+                            for p in host.folder.glob('adb-readiness-*.json')))
         self.assertTrue(any(r['reason'] == 'readiness_exhausted' and not r['verified']
                             and r['observations'][-1]['devices'] == [] for r in records))
+
+    def test_health_timeout_consumes_remaining_budget_without_unbounded_polling(self):
+        host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
+        script = Path(plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1])
+        clock = {'now': 0.0}
+
+        def timed_out(script, python_bin, *, timeout=10):
+            clock['now'] += timeout
+            raise subprocess.TimeoutExpired('read-only status', timeout)
+
+        def advance(seconds):
+            clock['now'] += seconds
+
+        with patch.object(host_module.time, 'monotonic', side_effect=lambda: clock['now']), \
+             patch.object(host_module.time, 'sleep', side_effect=advance), \
+             patch.object(host, '_adb_health', side_effect=timed_out):
+            self.assertFalse(host._adb_process_matches(script))
+        self.assertLessEqual(clock['now'], 20)
+        records = [json.loads(p.read_text()) for p in host.folder.glob('adb-readiness-*.json')]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]['reason'], 'readiness_exhausted')
+        self.assertTrue(any(o.get('error_class') == 'TimeoutExpired' for o in records[0]['observations']))
+
+    def test_wrong_adb_host_identity_cannot_pass_with_complete_devices(self):
+        host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
+        script = Path(plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1])
+        wrong = {'host_id': 'other-host', 'endpoint': 'tcp:127.0.0.1:5037', 'port': 5037,
+                 'devices': [{'serial': 'SERIAL1', 'state': 'device'}]}
+        with patch.object(host, '_adb_health', return_value=wrong):
+            self.assertFalse(host._adb_process_matches(script))
+        records = [json.loads(p.read_text()) for p in host.folder.glob('adb-readiness-*.json')]
+        self.assertEqual(records[0]['reason'], 'host_identity_mismatch')
+
+    def test_invalid_health_response_records_failure_before_restore(self):
+        host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
+        script = Path(plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1])
+        with patch.object(host, '_adb_health', side_effect=ValueError('malformed response')):
+            self.assertFalse(host._adb_process_matches(script))
+        records = [json.loads(p.read_text()) for p in host.folder.glob('adb-readiness-*.json')]
+        self.assertEqual(records[0]['reason'], 'health_response_invalid')
+        self.assertEqual(records[0]['observations'][0]['error_class'], 'ValueError')
 
     def test_root_writer_rejects_wrong_plist_permissions_before_mutation(self):
         host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
