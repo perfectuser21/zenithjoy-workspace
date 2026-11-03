@@ -6,8 +6,14 @@ export function judgeActivityCheck(value) {
   const checks = value?.checks ?? value?.steps;
   if (Array.isArray(checks)) {
     const hard = checks.filter(check => check.mode !== 'checkpoint');
-    return { ...value, checks, verdict: hard.some(check => check.pass === false) ? 'fail'
-      : hard.some(check => check.pass !== true) ? 'unknown' : 'pass' };
+    const aggregate = hard.some(check => check.pass === false) ? 'fail'
+      : hard.some(check => check.pass !== true) ? 'unknown' : 'pass';
+    // checks只补充独立质量判词，不能把质量否决或未知升级为通过。
+    const independent = Object.hasOwn(value ?? {}, 'verdict')
+      ? ['pass', 'fail', 'unknown'].includes(value.verdict) ? value.verdict : 'unknown' : 'pass';
+    const verdict = [independent, aggregate].includes('fail') ? 'fail'
+      : [independent, aggregate].includes('unknown') ? 'unknown' : 'pass';
+    return { ...value, checks, verdict };
   }
   return { ...value, verdict: ['pass', 'fail', 'unknown'].includes(value?.verdict) ? value.verdict : 'unknown' };
 }
