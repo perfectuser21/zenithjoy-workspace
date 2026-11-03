@@ -667,6 +667,30 @@ class LegacyAliasTest(unittest.TestCase):
                 self.assertTrue(changed[0])
                 self.assert_guards_free()
 
+    def test_exact_legacy_path_as_real_directory_preserves_canonical_layout(self):
+        self.alias.unlink()
+        self.runtime.rename(self.alias)
+        # Remove only the symlink permission fixture; model this real directory.
+        self.bad_metadata[self.alias] = {'st_mode': 0o40755}
+        before = [self.module.lock_root_tool.inventory(root) for root in (self.logical, self.durable)]
+        record = self.acquire()
+        self.assertNotIn('legacy_binding', record)
+        self.assertIn(str(self.logical / 'SERIAL1.guard'), record['guard_identity'])
+        self.module.verify(self.home, 't1', self.registry, self.durable)
+        self.module.release(self.home, 't1', self.registry, self.durable)
+        self.assertEqual(before, [self.module.lock_root_tool.inventory(root) for root in (self.logical, self.durable)])
+
+    def test_existing_bound_alias_replaced_by_real_directory_is_rejected(self):
+        import shutil
+        record = self.acquire()
+        self.alias.unlink()
+        shutil.copytree(self.runtime, self.alias)
+        self.bad_metadata[self.alias] = {'st_mode': 0o40755}
+        with self.assertRaisesRegex(ValueError, 'binding|alias|identity'):
+            with self.module.guards(record):
+                self.fail('bound alias cannot downgrade to canonical directory')
+        self.assert_guards_free()
+
     def test_unknown_intent_is_never_rewritten(self):
         intent = self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json'
         intent.write_text('{"unknown":"preserve me"}')
