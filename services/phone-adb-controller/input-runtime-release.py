@@ -111,7 +111,9 @@ def device_barrier(registry, lock_root, maintenance=None):
         module.read_intent(maintenance[0], maintenance[1], review)
     paths = [root / (serial + '.guard') for serial in serials]
     if review is not None and review['mode'] == 'review-preserve':
-        paths.extend(Path(review['legacy_root']) / (serial + '.guard') for serial in serials)
+        # Same frozen full dual-root barrier as maintenance.guards, including
+        # historical guards; only then may verify claim guards_held=True.
+        paths = [Path(path) for path in review['guard_identity']]
     descriptors = []
     try:
         for path in sorted(paths):

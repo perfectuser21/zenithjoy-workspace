@@ -70,13 +70,13 @@ jobs:
           RELEASE_ID: ${{ inputs.release_id }}
         run: |
           set -euo pipefail
-          [[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
-          [[ "$SAFETY_TX" =~ ^phone-safety-[a-f0-9]{24}$ ]]
-          [[ "$REOPEN_PHASE" == prepare || "$REOPEN_PHASE" == finalize ]]
+          [[ "$CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 1
+          [[ "$SAFETY_TX" =~ ^phone-safety-[a-f0-9]{24}$ ]] || exit 1
+          [[ "$REOPEN_PHASE" == prepare || "$REOPEN_PHASE" == finalize ]] || exit 1
           if [[ "$REOPEN_PHASE" == finalize ]]; then
-            [[ "$RELEASE_ID" =~ ^[a-f0-9-]{36}$ ]]
+            [[ "$RELEASE_ID" =~ ^[a-f0-9-]{36}$ ]] || exit 1
           else
-            [[ -z "$RELEASE_ID" ]]
+            [[ -z "$RELEASE_ID" ]] || exit 1
           fi
           KEY_FILE=$(mktemp)
           trap 'rm -f "$KEY_FILE"' EXIT
@@ -84,5 +84,5 @@ jobs:
           chmod 600 "$KEY_FILE"
           ssh -o BatchMode=yes -o ConnectTimeout=30 -i "$KEY_FILE" -p 22 \
             "${SSH_USER}@${SSH_HOST}" bash -s -- \
-            "$CANDIDATE_SHA" "$REOPEN_PHASE" "$SAFETY_TX" "$RELEASE_ID" "$GITHUB_RUN_ID" \
+            "$CANDIDATE_SHA" "$REOPEN_PHASE" "$SAFETY_TX" "'$RELEASE_ID'" "$GITHUB_RUN_ID" \
             < .github/workflows/scripts/phone-review-reopen-remote.sh

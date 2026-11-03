@@ -206,3 +206,11 @@ Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和�
 `checkpoint` 在步骤裁判和工作流读回中统一只记录；`hard` 缺失、未知或失败均不能通过。正常异常与中止仍进入清场；旧执行是否停止未知时禁止重放和清场，持久隔离手机。未知发送效果只读回，不重发。104 的发送实现、账号与审批行为不变。
 
 101 在原生 XML 证实评论为 0 后只将证据写入本 run 的 `zero_comment_candidates`，不调用业务入队；远端 discover 入口独立重算原件并在任何 SQL 前拒绝 confirmed 0。未知评论数保持 unknown，不冒充 0。这条入队守卫由 101 原生 XML→发现执行→队列调用的专项回归验证，与 102 的零评论采集结局分开。
+
+### 原安全事务的历史 guard 兼容
+
+`review-preserve` 保持当前 registry 的业务设备集合不变，允许其 guard 是原迁移快照的子集。旧、新根的全部 guard 都必须互锁，并核对完整 inventory、摘要、owner 原件和每个 guard 的 inode/ctime；registry 外的 owner、忙 guard 或任一漂移仍拒绝。历史 TCP guard 只保留原件，不增加业务设备，也不删除旧 owner。
+
+`maintenance-install-backend.mjs` 的 `review-guard-snapshot-v1` 仅用于固定原 3fe 事务的恢复：变更集合恰为 host、maintenance、input 三文件，host 新摘要及后两文件新旧摘要均固定，其他工具字节不得变化。原 host-only 条件保留；不得把新增文件泛化加入恢复白名单。测试的 `review-guard-3fe-source.json.gz` 是该原提交两份公开源码的压缩原文，供浅克隆 CI 核对摘要。
+
+候选重开入口为 SSH 远端 shell 显式保留空 release 参数；输入断言显式失败退出，不依赖 Bash 版本的隐式 `errexit` 行为。安全事务完成不代表候选业务验收通过，现有生产业务准入不变。

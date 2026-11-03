@@ -78,16 +78,24 @@ def context(home, tx, registry, root):
         require(type(migration.get('review_owners')) is int and migration['review_owners'] >= 0,
                 'migration review count invalid')
     review_mode = bool(migration and migration['review_owners'])
+    guard_names = {serial + '.guard' for serial in serials}
     if review_mode:
-        expected_guards = {serial + '.guard' for serial in serials}
-        require({path.name for path in root.glob('*.guard')} == expected_guards and
-                {path.name for path in Path(migration['legacy_root']).glob('*.guard')} == expected_guards,
-                'review guard set differs from registry')
+        old = canonical_path(migration['legacy_root'])
+        frozen_guards = {path.name for path in root.glob('*.guard')}
+        require(guard_names <= frozen_guards and
+                {path.name for path in old.glob('*.guard')} == frozen_guards,
+                'review guard set differs from registry or frozen roots')
+        # Historical guards remain inert inventory, never new business devices.
+        # Their original bytes are checked under the full guard set below.
+        expected_owners = {serial + '.lock' for serial in serials}
+        require(all({path.name for path in parent.glob('*.lock')} <= expected_owners
+                    for parent in (root, old)), 'review owner outside current registry')
+        guard_names = frozen_guards
     guard_identity = {}
     if review_mode:
         for parent in (root, Path(migration['legacy_root'])):
-            for serial in serials:
-                path = canonical_path(parent / (serial + '.guard'))
+            for name in sorted(guard_names):
+                path = canonical_path(parent / name)
                 info = path.lstat()
                 require(stat.S_ISREG(info.st_mode), 'review guard not regular')
                 guard_identity[str(path)] = [info.st_dev, info.st_ino, info.st_ctime_ns]
@@ -108,8 +116,7 @@ def guards(record):
     try:
         paths = [root / (serial + '.guard') for serial in record['serials']]
         if record['mode'] == 'review-preserve':
-            old = canonical_path(record['legacy_root'])
-            paths.extend(old / (serial + '.guard') for serial in record['serials'])
+            paths = [canonical_path(path) for path in record['guard_identity']]
         for path in sorted(paths):
             path = canonical_path(path)
             fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)

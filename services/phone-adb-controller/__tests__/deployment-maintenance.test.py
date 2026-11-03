@@ -3,6 +3,10 @@ import fcntl
 import base64
 import importlib.util
 import json
+import io
+import pwd
+import runpy
+import types
 import os
 from pathlib import Path
 import subprocess
@@ -161,6 +165,154 @@ class MaintenanceTest(unittest.TestCase):
             self.module.release(self.home, 't1', self.registry, self.locks)
         self.assertEqual(len(list(self.locks.glob('*.lock'))), 2)
         self.assertEqual((retired / 'owner').read_text(), 'someone-else')
+
+    def historical_review(self, *, unknown_owner=False):
+        serials = ['SERIAL1', 'SERIAL2', 'e6c7ef34', 'FREE4']
+        self.registry.write_text('#profile\tserial\tenabled\n' + ''.join(
+            f'p{i}\t{serial}\ttrue\n' for i, serial in enumerate(serials)))
+        old = self.home / 'historical-locks'
+        old.mkdir()
+        historical = '47.100.213.173:10001'
+        for serial in [*serials, historical]:
+            (old / (serial + '.guard')).touch()
+        for serial in ['SERIAL1', 'SERIAL2', *([historical] if unknown_owner else [])]:
+            owner = old / (serial + '.lock')
+            owner.mkdir()
+            for name, value in [('owner', serial + '-original'),
+                                ('standalone_review_required', serial + '-original'), ('acquired_at', '1')]:
+                (owner / name).write_text(value + '\n')
+        durable = self.home / '.local/share/zenithjoy/phone-locks'
+        self.module.lock_root_tool.migrate(old, durable)
+        return old, durable, historical
+
+    def test_historical_guard_snapshot_is_preserved_and_all_guards_are_locked(self):
+        old, durable, historical = self.historical_review()
+        before = [self.module.lock_root_tool.inventory(root) for root in (old, durable)]
+        record = self.module.acquire(self.home, 't1', self.registry, durable)
+        self.assertEqual(record['serials'], sorted(['SERIAL1', 'SERIAL2', 'e6c7ef34', 'FREE4']))
+        self.assertEqual(len(record['guard_identity']), 10)
+        with self.module.guards(record):
+            for root in (old, durable):
+                with (root / (historical + '.guard')).open('r+') as probe:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.module.verify(self.home, 't1', self.registry, durable)
+        self.module.release(self.home, 't1', self.registry, durable)
+        self.assertEqual([self.module.lock_root_tool.inventory(root) for root in (old, durable)], before)
+
+    def test_busy_historical_guard_blocks_admission_without_writing_intent(self):
+        old, durable, historical = self.historical_review()
+        for root in (old, durable):
+            with (root / (historical + '.guard')).open('r+') as held:
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with self.assertRaisesRegex(ValueError, 'busy'):
+                    self.module.acquire(self.home, 't1', self.registry, durable)
+        self.assertFalse((self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json').exists())
+
+    def test_historical_guard_identity_replacement_refuses_saved_intent(self):
+        old, durable, historical = self.historical_review()
+        self.module.acquire(self.home, 't1', self.registry, durable)
+        guard = old / (historical + '.guard')
+        guard.rename(old / 'previous-guard')
+        guard.touch()
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            self.module.verify(self.home, 't1', self.registry, durable)
+
+    def test_historical_snapshot_guard_drift_or_extra_owner_is_rejected(self):
+        old, durable, historical = self.historical_review(unknown_owner=True)
+        with self.assertRaisesRegex(ValueError, 'owner'):
+            self.module.acquire(self.home, 't1', self.registry, durable)
+
+    def test_historical_snapshot_bytes_drift_is_rejected(self):
+        old, durable, historical = self.historical_review()
+        (old / (historical + '.guard')).write_text('changed')
+        (durable / (historical + '.guard')).write_text('changed')
+        with self.assertRaisesRegex(ValueError, 'inventory|digest'):
+            self.module.acquire(self.home, 't1', self.registry, durable)
+
+    def test_current_registry_still_requires_every_guard_in_both_roots(self):
+        old, durable, historical = self.historical_review()
+        self.registry.write_text(self.registry.read_text() + 'new\tNEW_SERIAL\ttrue\n')
+        with self.assertRaisesRegex(ValueError, 'registry'):
+            self.module.acquire(self.home, 't1', self.registry, durable)
+
+    def input_tool(self):
+        spec = importlib.util.spec_from_file_location('input_review_snapshot', SERVICE / 'input-runtime-release.py')
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        return tool
+
+    def test_input_barrier_locks_full_snapshot_and_keeps_other_owners(self):
+        old, durable, historical = self.historical_review()
+        before = [self.module.lock_root_tool.inventory(root) for root in (old, durable)]
+        self.module.acquire(self.home, 't1', self.registry, durable)
+        with self.input_tool().device_barrier(self.registry, durable, maintenance=(self.home, 't1')) as verify:
+            verify()
+            for root in (old, durable):
+                with (root / (historical + '.guard')).open('r+') as probe:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertEqual([self.module.lock_root_tool.inventory(root) for root in (old, durable)], before)
+
+    def test_input_barrier_rejects_busy_or_replaced_historical_guard(self):
+        old, durable, historical = self.historical_review()
+        self.module.acquire(self.home, 't1', self.registry, durable)
+        tool = self.input_tool()
+        with (old / (historical + '.guard')).open('r+') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(ValueError, 'busy'):
+                with tool.device_barrier(self.registry, durable, maintenance=(self.home, 't1')):
+                    self.fail('partial external barrier cannot enter')
+        with tool.device_barrier(self.registry, durable, maintenance=(self.home, 't1')) as verify:
+            guard = durable / (historical + '.guard')
+            guard.rename(durable / 'previous-guard')
+            guard.touch()
+            with self.assertRaisesRegex(ValueError, 'identity|guard'):
+                verify()
+
+    def test_service_and_fence_actual_clis_consume_the_same_full_snapshot_record(self):
+        old, durable, historical = self.historical_review()
+        self.module.acquire(self.home, 't1', self.registry, durable)
+        tx = self.module.transaction
+        folder = tx.transaction_directory(self.home, 't1')
+        body = {'schema_version': 1, 'transaction': 't1', 'home': str(self.home),
+                'phase': 'prepared', 'identity': {'target': 'xian-m4'},
+                'entries': [{'path': '.local/bin/unwritten-fixture',
+                             'before': {'kind': 'missing'}, 'after': {'kind': 'missing'}}]}
+        tx.atomic_bytes(folder / 'journal.json', tx.canonical({**body, 'sha256': tx.digest(tx.canonical(body))}))
+        spec = importlib.util.spec_from_file_location('service_snapshot_fixture', SERVICE / 'deployment-service.py')
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        file = {'kind': 'file', 'bytes': 'ZnJvemVuIHNlcnZpY2U=', 'mode': 0o644, 'uid': 0, 'gid': 0}
+        service.prepare(folder / 'service.json', file,
+                        lambda: {'file': file, 'loaded': False, 'disabled': True})
+        original_pwd = pwd.getpwuid
+        def cli(name, action, stdin=''):
+            first = True
+            def target_home(uid):
+                nonlocal first
+                if first:
+                    first = False
+                    return types.SimpleNamespace(pw_dir=str(self.home))
+                # Only sandbox the CLI home lookup. Keep lock-root's separate
+                # authoritative-home policy untouched; it must not target real files.
+                return original_pwd(uid)
+            output = io.StringIO()
+            with patch.object(pwd, 'getpwuid', side_effect=target_home), \
+                 patch.object(sys, 'argv', [name, action, 't1']), \
+                 patch.object(sys, 'stdin', io.StringIO(stdin)), \
+                 patch.object(sys, 'stdout', output), \
+                 patch.object(subprocess, 'run', side_effect=AssertionError('no external commands in sandbox CLI')):
+                runpy.run_path(str(SERVICE / name), run_name='__main__')
+            return json.loads(output.getvalue())
+        before = [self.module.lock_root_tool.inventory(root) for root in (old, durable)]
+        intent = (folder / 'maintenance.json').read_bytes()
+        self.assertTrue(cli('deployment-service.py', 'prepare', json.dumps({'file': file}))['verified'])
+        for name in ('phone-candidates', 'phone-candidate-runs'):
+            (self.home / '.local/share/zenithjoy' / name).mkdir()
+        self.assertTrue(cli('deployment-candidate-fence.py', 'seal-if-review')['verified'])
+        self.assertEqual([self.module.lock_root_tool.inventory(root) for root in (old, durable)], before)
+        self.assertEqual((folder / 'maintenance.json').read_bytes(), intent)
 
     def test_code_only_review_admission_preserves_old_and_durable_owners(self):
         spec = importlib.util.spec_from_file_location('phone_lock_root', SERVICE / 'phone-lock-root.py')

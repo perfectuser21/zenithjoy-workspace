@@ -8,14 +8,14 @@ PHASE=${2:?phase}
 SAFETY_TX=${3:?safety transaction}
 RELEASE_ID=${4-}
 RUN_ID=${5:?workflow run}
-[[ "$SHA" =~ ^[a-f0-9]{40}$ ]]
-[[ "$SAFETY_TX" =~ ^phone-safety-[a-f0-9]{24}$ ]]
-[[ "$RUN_ID" =~ ^[1-9][0-9]{0,15}$ ]]
-[[ "$PHASE" == prepare || "$PHASE" == finalize ]]
+[[ "$SHA" =~ ^[a-f0-9]{40}$ ]] || exit 1
+[[ "$SAFETY_TX" =~ ^phone-safety-[a-f0-9]{24}$ ]] || exit 1
+[[ "$RUN_ID" =~ ^[1-9][0-9]{0,15}$ ]] || exit 1
+[[ "$PHASE" == prepare || "$PHASE" == finalize ]] || exit 1
 if [[ "$PHASE" == finalize ]]; then
-  [[ "$RELEASE_ID" =~ ^[a-f0-9-]{36}$ ]]
+  [[ "$RELEASE_ID" =~ ^[a-f0-9-]{36}$ ]] || exit 1
 else
-  [[ -z "$RELEASE_ID" ]]
+  [[ -z "$RELEASE_ID" ]] || exit 1
 fi
 
 REPO="$HOME/perfect21/zenithjoy-workspace"
