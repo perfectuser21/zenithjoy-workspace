@@ -102,6 +102,18 @@ describe('创作画布', () => {
     expect(await screen.findByText('创作画布暂时不可用，请联系管理员。')).toBeInTheDocument();
     expect(screen.queryByTitle('视频创作画布')).not.toBeInTheDocument();
   });
+  it.each([
+    [401, 'SESSION_REQUIRED', '登录已失效，请重新登录后打开画布。'],
+    [403, 'STAFF_REQUIRED', '当前账号未开通员工功能，请联系管理员核对登录账号。'],
+    [200, 'CANVAS_NOT_PROVISIONED', '你的独立画布尚未开通，请联系管理员完成配置。'],
+    [200, 'INSTANCE_UNAVAILABLE', '你的画布服务暂时无法连接，请重试或联系管理员。'],
+  ])('准确说明不可用原因（%s/%s），不加载画布', async (status, reason, message) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({available:false,reason}), {status})));
+    render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByTitle('视频创作画布')).not.toBeInTheDocument();
+    if (status === 401) expect(screen.getByRole('link',{name:'重新登录'})).toHaveAttribute('href','/login');
+  });
   it('网络失败时提示并可重试', async () => {
     const fetchMock = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(new Response(JSON.stringify({ available: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

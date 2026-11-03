@@ -10,7 +10,7 @@ function build() {
       const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
       if (!session?.user?.id) return null;
       const staff = parseFlatDirectory(process.env);
-      if (!staff.has(session.user.id) && !staff.has(session.user.email.toLowerCase())) return null;
+      if (!staff.has(session.user.id) && !staff.has(session.user.email.toLowerCase())) return { status: 403 as const };
       return session.user.id;
     } });
   } catch {

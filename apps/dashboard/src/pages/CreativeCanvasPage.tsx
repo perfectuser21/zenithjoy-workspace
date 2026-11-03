@@ -3,10 +3,21 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 type CanvasStatus = 'checking' | 'available' | 'unavailable';
+const unavailableFallback = '创作画布暂时不可用，请联系管理员。';
+function unavailableMessage(status: number, reason: unknown): string {
+  if (status === 401) return '登录已失效，请重新登录后打开画布。';
+  if (reason === 'ORIGIN_FORBIDDEN') return '请从本站打开画布后重试。';
+  if (status === 403) return '当前账号未开通员工功能，请联系管理员核对登录账号。';
+  if (reason === 'CANVAS_NOT_PROVISIONED') return '你的独立画布尚未开通，请联系管理员完成配置。';
+  if (reason === 'INSTANCE_UNAVAILABLE') return '你的画布服务暂时无法连接，请重试或联系管理员。';
+  return unavailableFallback;
+}
 
 export default function CreativeCanvasPage() {
   const [status, setStatus] = useState<CanvasStatus>('checking');
   const [attempt, setAttempt] = useState(0);
+  const [availabilityMessage, setAvailabilityMessage] = useState(unavailableFallback);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -112,9 +123,14 @@ export default function CreativeCanvasPage() {
     let mounted = true;
     const timeout = window.setTimeout(() => controller.abort(), 10000);
     fetch('/api/creative-canvas/status', { credentials: 'include', signal: controller.signal })
-      .then(async response => response.ok && (await response.json()).available === true)
-      .then(available => { if (mounted) setStatus(available ? 'available' : 'unavailable'); })
-      .catch(() => { if (mounted) setStatus('unavailable'); });
+      .then(async response => {
+        const body = await response.json().catch(() => null) as { available?: boolean; reason?: unknown } | null;
+        if (!mounted) return;
+        setSessionExpired(response.status === 401);
+        setAvailabilityMessage(unavailableMessage(response.status, body?.reason));
+        setStatus(response.ok && body?.available === true ? 'available' : 'unavailable');
+      })
+      .catch(() => { if (mounted) { setSessionExpired(false); setAvailabilityMessage(unavailableFallback); setStatus('unavailable'); } });
     return () => { mounted = false; controller.abort(); window.clearTimeout(timeout); };
   }, [attempt]);
 
@@ -130,7 +146,8 @@ export default function CreativeCanvasPage() {
       </div>
       {status === 'checking' && <p role="status" className="text-sm text-slate-500">正在连接画布…</p>}
       {status === 'unavailable' && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-        <p>创作画布暂时不可用，请联系管理员。</p>
+        <p>{availabilityMessage}</p>
+        {sessionExpired && <a href="/login" className="mt-3 mr-3 inline-block underline">重新登录</a>}
         <button type="button" onClick={retry} className="mt-3 rounded-lg border border-amber-500 px-3 py-1.5">重新连接</button>
       </div>}
       {status === 'available' && <div ref={canvasContainerRef} className={expanded ? 'fixed inset-0 z-[9999] overflow-hidden bg-slate-950' : 'flex flex-1 flex-col gap-3'}>

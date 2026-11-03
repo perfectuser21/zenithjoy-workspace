@@ -37,10 +37,31 @@ source_for() {
   fi
 }
 override() {
+  # An ordinary API update preserves the already-enabled private capability.
+  # Freeze a per-target copy from the verified predecessor, never a live symlink.
+  if [[ "$ACTION" == promote && "$1" != "${CURRENT:-}" && ! -e "$RELEASES/$1/video-tools.json" && -f "$RELEASES/${CURRENT:-}/canvas-plan.json" ]]; then
+    node "$RELEASES/$1/source/scripts/deploy/video-tools-release.mjs" inherit "$RELEASES" "$CURRENT" "$1"
+  fi
   python3 - "$RELEASES/$1/image.json" "$2" <<'PY'
-import json,sys,os
+import json,sys,os,hashlib,stat
 p,image=sys.argv[1:]
-with open(p+'.tmp','w') as f: json.dump({'services':{'zenithjoy-api-prod':{'image':image}}},f)
+root=os.path.dirname(p); result={'services':{'zenithjoy-api-prod':{'image':image}}}
+overlay=root+'/video-tools.json'
+if os.path.lexists(overlay):
+    st=os.lstat(overlay)
+    assert stat.S_ISREG(st.st_mode) and not stat.S_ISLNK(st.st_mode) and stat.S_IMODE(st.st_mode)==0o600 and st.st_uid==os.geteuid(), 'unsafe private video overlay'
+    value=json.load(open(overlay)); prepared=json.load(open(root+'/video-tools-prepared.json'))
+    actual=hashlib.sha256(json.dumps(value,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+    assert prepared.get('api_source_commit',prepared['source_commit'])==os.path.basename(root) and prepared['overlay_sha256']==actual, 'prepared overlay source or hash changed'
+    manifest=root+'/release.json'
+    if os.path.exists(manifest):
+        saved=json.load(open(manifest))
+        assert saved.get('video_tools_sha256')==actual, 'retained video configuration changed'
+    assert set(value)=={'services','networks'} and set(value['services'])=={'zenithjoy-api-prod'}, 'unexpected video overlay scope'
+    assert set(value['services']['zenithjoy-api-prod'])=={'environment','networks'}, 'unexpected API override'
+    result['services']['zenithjoy-api-prod'].update(value['services']['zenithjoy-api-prod'])
+    result['networks']=value['networks']
+with open(p+'.tmp','w') as f: json.dump(result,f)
 os.replace(p+'.tmp',p)
 PY
 }
@@ -48,7 +69,10 @@ record() {
   python3 - "$RELEASES/$1/release.json" "$1" "$2" "$PROJECT" "$3" <<'PY'
 import json,sys,os
 p,sha,image,project,verified=sys.argv[1:]
-with open(p+'.tmp','w') as f: json.dump(dict(sha=sha,image=image,project=project,verified=verified=='true'),f)
+data=dict(sha=sha,image=image,project=project,verified=verified=='true')
+prepared=os.path.dirname(p)+'/video-tools-prepared.json'
+if os.path.exists(prepared): data['video_tools_sha256']=json.load(open(prepared))['overlay_sha256']
+with open(p+'.tmp','w') as f: json.dump(data,f)
 os.replace(p+'.tmp',p)
 PY
 }
@@ -61,7 +85,12 @@ verify() {
   local sha=$1 status i
   for ((i=0; i<${ZJ_HEALTH_ATTEMPTS:-30}; i++)); do
     status=$(docker inspect "$SERVICE" --format '{{.State.Health.Status}}' 2>/dev/null || true)
-    if [[ "$status" == healthy ]] && [[ "$(health_sha 2>/dev/null || true)" == "$sha" ]]; then return 0; fi
+    if [[ "$status" == healthy ]] && [[ "$(health_sha 2>/dev/null || true)" == "$sha" ]]; then
+      if [[ -f "$RELEASES/$sha/canvas-plan.json" ]]; then
+        node "$RELEASES/$sha/source/scripts/deploy/video-tools-release.mjs" verify "$RELEASES/$sha/canvas-plan.json" || return 1
+      fi
+      return 0
+    fi
     sleep "${ZJ_HEALTH_INTERVAL:-5}"
   done
   echo "health/build.sha verification failed for $sha" >&2
@@ -175,6 +204,9 @@ else
   source_for "$TARGET"
   IMAGE="zenithjoy-api-prod:candidate-$TARGET"
   override "$TARGET" "$IMAGE"
+  if [[ -f "$RELEASES/$TARGET/canvas-plan.json" ]]; then
+    node "$RELEASES/$TARGET/source/scripts/deploy/video-tools-release.mjs" verify-instances "$RELEASES/$TARGET/canvas-plan.json" || fail 'private employee canvases are not ready'
+  fi
   BUILD_SHA="$TARGET" compose "$TARGET" build "$SERVICE"
   IMAGE=$(docker image inspect "$IMAGE" --format '{{.Id}}')
   override "$TARGET" "$IMAGE"

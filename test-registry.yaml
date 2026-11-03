@@ -8637,3 +8637,19 @@ agent_suite:
   status: active
   product: AI员工
   note: 102 正式配额采样在待判定视频上的 103 评分与标记接纳、冻结来源核验及失败拒绝。
+
+- id: video-tools-private-release
+  path: scripts/deploy/__tests__/video-tools-release.test.mjs
+  type: integration
+  ci: L1
+  status: active
+  product: AI视频
+  note: 私人画布、模型配置、固定来源、员工隔离、后续API配置保留与回退的行为回归。
+
+- id: video-tools-live-staging
+  path: apps/dashboard/e2e/video-tools-live.spec.ts
+  type: e2e
+  ci: L4
+  status: pending-ci
+  product: AI视频
+  note: 明确授权后opt-in的真实staging员工登录、画布和两秒Wan/超分；产生费用。尚未执行；默认跳过不能当业务通过。
