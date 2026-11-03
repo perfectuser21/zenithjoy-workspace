@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import type { Duplex } from 'node:stream';
 
 const PREFIX = '/api/creative-canvas/';
-type Options = { authenticate: (request: IncomingMessage) => Promise<string | null>; instances: Record<string, string>; allowedOrigins: string[]; staticTimeoutMs?: number };
+type Options = { authenticate: (request: IncomingMessage) => Promise<string | null | { status: 403 }>; instances: Record<string, string>; allowedOrigins: string[]; staticTimeoutMs?: number };
 export function createCanvasGateway(options: Options) {
   const targets = new Map<string, URL>();
   const used = new Set<string>();
@@ -17,12 +17,13 @@ export function createCanvasGateway(options: Options) {
     if (!origin) return !ws && (req.method === 'GET' || req.method === 'HEAD');
     return options.allowedOrigins.includes(origin);
   };
-  async function authorize(req: IncomingMessage, ws = false): Promise<{ target?: URL; status: number }> {
-    if (!allowOrigin(req, ws)) return { status: 403 };
+  async function authorize(req: IncomingMessage, ws = false): Promise<{ target?: URL; status: number; reason?: string }> {
+    if (!allowOrigin(req, ws)) return { status: 403, reason: 'ORIGIN_FORBIDDEN' };
     const user = await options.authenticate(req);
-    if (!user) return { status: 401 };
+    if (!user) return { status: 401, reason: 'SESSION_REQUIRED' };
+    if (typeof user !== 'string') return { status: 403, reason: 'STAFF_REQUIRED' };
     const target = targets.get(user);
-    return target ? { target, status: 200 } : { status: 503 };
+    return target ? { target, status: 200 } : { status: 503, reason: 'CANVAS_NOT_PROVISIONED' };
   }
   function request(req: IncomingMessage, target: URL) {
     const headers = { ...req.headers };
@@ -32,16 +33,16 @@ export function createCanvasGateway(options: Options) {
   async function handleHttp(req: IncomingMessage, res: ServerResponse) {
     if (!(req.url || '').startsWith(PREFIX)) { res.writeHead(404).end(); return; }
     try {
-      const { target, status } = await authorize(req);
+      const { target, status, reason } = await authorize(req);
       if (req.aborted || res.destroyed) return;
       if (req.method === 'GET' && req.url === `${PREFIX}status`) {
-        if (status === 401 || status === 403) { res.writeHead(status).end(); return; }
-        if (!target) { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: false })); return; }
+        if (status === 401 || status === 403) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: false, reason })); return; }
+        if (!target) { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: false, reason })); return; }
         const probe = http.get({ hostname: target.hostname, port: target.port || 80, path: '/system_stats', timeout: 2000 }, reply => {
-          reply.resume(); res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: reply.statusCode === 200 }));
+          reply.resume(); res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(reply.statusCode === 200 ? { available: true } : { available: false, reason: 'INSTANCE_UNAVAILABLE' }));
         });
         probe.on('timeout', () => probe.destroy());
-        probe.on('error', () => { if (!res.headersSent) res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: false })); });
+        probe.on('error', () => { if (!res.headersSent) res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ available: false, reason: 'INSTANCE_UNAVAILABLE' })); });
         return;
       }
       if (!target) { res.writeHead(status).end(); return; }

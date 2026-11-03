@@ -19,7 +19,13 @@ on:
       - 'deploy/docker-compose.staging-api.yml'
       - 'scripts/deploy/hk-api-staging.sh'
       - '.github/workflows/deploy-staging-hk.yml'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      video_tools:
+        description: 配置已登记的独立测试员工画布（仅staging，不加入生产）
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-staging-hk
@@ -62,6 +68,23 @@ jobs:
         env:
           DEPLOY_SHA: ${{ github.sha }}
         run: bash scripts/deploy/staging-ci-migration-proof.sh "$DEPLOY_SHA"
+
+      - name: Prepare same-source private staging video tools
+        if: inputs.video_tools
+        env:
+          SSH_KEY: ${{ secrets.CREATIVE_CANVAS_HK_SSH_KEY }}
+          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          OPTS=(-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -i "$KEY_FILE")
+          ssh "${OPTS[@]}" "root@${SSH_HOST}" bash -s -- deploy "$DEPLOY_SHA" < scripts/deploy/hk-canvas-staging.sh
+          ssh "${OPTS[@]}" "root@${SSH_HOST}" bash -s -- prepare-staging "$DEPLOY_SHA" < scripts/deploy/hk-canvas-production.sh
 
       - name: Stream candidate to HK staging and run migrations
         env:

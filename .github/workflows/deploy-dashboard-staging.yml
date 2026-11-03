@@ -38,7 +38,7 @@ jobs:
           VITE_FEISHU_APP_ID: cli_a937a808ca395bd6
           VITE_SKIP_AUTH: 'false'
           VITE_SUPER_ADMIN_EMAILS: xuxiao21xx@icloud.com,alexperfectapi01@gmail.com
-          VITE_STAFF_EMAILS: 408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com
+          VITE_STAFF_EMAILS: 408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com,ai-acceptance@zenithjoy.test
           VITE_DEPLOY_ENV: staging
           VITE_BUILD_SHA: ${{ github.sha }}
         run: |

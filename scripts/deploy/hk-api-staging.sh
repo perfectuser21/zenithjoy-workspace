@@ -43,7 +43,6 @@ PROJECT=$(docker inspect "$SERVICE" --format '{{index .Config.Labels "com.docker
 PROJECT=${PROJECT:-repo}
 [[ "$PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo 'Invalid compose project' >&2; exit 1; }
 IMAGE="zenithjoy-api-staging:$SHA"
-printf '{"services":{"zenithjoy-api-staging":{"image":"%s"}}}\n' "$IMAGE" > "$RELEASES/$SHA/image.json"
 compose() {
   docker compose -p "$PROJECT" -f "$SOURCE/deploy/docker-compose.staging-api.yml" \
     -f "$RELEASES/$SHA/image.json" "$@"
@@ -59,6 +58,21 @@ PREVIOUS_FILES=$(docker inspect "$SERVICE" --format '{{index .Config.Labels "com
 IFS=',' read -r -a PREVIOUS_CONFIG <<< "$PREVIOUS_FILES"
 [[ ${#PREVIOUS_CONFIG[@]} -gt 0 ]] || { echo 'Previous compose configuration unavailable' >&2; exit 1; }
 for file in "${PREVIOUS_CONFIG[@]}"; do [[ -f "$file" ]] || { echo 'Previous compose file unavailable' >&2; exit 1; }; done
+# Container labels may reference this same SHA's image.json. Snapshot the fully
+# resolved predecessor before changing any selector, including environment and
+# private networks; retain the snapshot because a restored container references it.
+PREVIOUS_SNAPSHOT=$(mktemp "$RELEASES/.previous-config.XXXXXX")
+PREVIOUS_FLAGS=()
+for file in "${PREVIOUS_CONFIG[@]}"; do PREVIOUS_FLAGS+=(-f "$file"); done
+docker compose -p "$PROJECT" "${PREVIOUS_FLAGS[@]}" config --format json > "$PREVIOUS_SNAPSHOT"
+python3 - "$PREVIOUS_SNAPSHOT" "$PREVIOUS_IMAGE" <<'PY'
+import json,sys
+p,image=sys.argv[1:];d=json.load(open(p));assert 'zenithjoy-api-staging' in d.get('services',{}), 'previous staging configuration missing'
+d['services']['zenithjoy-api-staging']['image']=image
+with open(p,'w') as f:json.dump(d,f)
+PY
+PREVIOUS_CONFIG=("$PREVIOUS_SNAPSHOT")
+printf '{"services":{"zenithjoy-api-staging":{"image":"%s"}}}\n' "$IMAGE" > "$RELEASES/$SHA/image.json"
 ROLLBACK_OVERRIDE=$(mktemp "$RELEASES/.rollback.XXXXXX")
 printf '{"services":{"zenithjoy-api-staging":{"image":"%s"}}}\n' "$PREVIOUS_IMAGE" > "$ROLLBACK_OVERRIDE"
 docker tag "$PREVIOUS_IMAGE" "zenithjoy-api-staging:rollback-$SHA"
@@ -80,6 +94,10 @@ INSPECT_LAYERS_HASH=$(docker image inspect "$IMAGE" --format '{{json .RootFS.Lay
 [[ "$INSPECT_LAYERS_HASH" == "$EXPECTED_LAYERS_HASH" ]] || { echo 'Loaded image layers mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}') == linux/amd64 ]] || { echo 'Image platform mismatch' >&2; exit 1; }
 [[ $(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}') == "$SHA" ]] || { echo 'Image SHA label mismatch' >&2; exit 1; }
+if [[ -f "$RELEASES/$SHA/canvas-plan.json" ]]; then
+  node "$SOURCE/scripts/deploy/video-tools-release.mjs" verify-instances "$RELEASES/$SHA/canvas-plan.json"
+  node "$SOURCE/scripts/deploy/video-tools-release.mjs" merge-image "$RELEASES" "$SHA" "$LOADED_IMAGE" "$SERVICE"
+fi
 AVAILABLE_KB=$(df -Pk "$RELEASES" | awk 'NR==2 {print $4}')
 [[ "$AVAILABLE_KB" =~ ^[0-9]+$ && "$AVAILABLE_KB" -ge 524288 ]] || { echo 'Insufficient staging disk space after build: require 512 MiB free' >&2; exit 1; }
 # Archive only the migration sources and TypeScript configuration from the
@@ -107,7 +125,6 @@ docker run --rm --network zenithjoy-net --env-file /opt/zenithjoy/staging-api/.e
 rollback_previous() {
   local -a flags=()
   for file in "${PREVIOUS_CONFIG[@]}"; do flags+=(-f "$file"); done
-  flags+=(-f "$ROLLBACK_OVERRIDE")
   if ! docker compose -p "$PROJECT" "${flags[@]}" up -d --no-build --pull never "$SERVICE"; then
     echo 'Previous staging restore failed' >&2; return 1
   fi
@@ -133,6 +150,10 @@ for ((i=0; i<${ZJ_HEALTH_ATTEMPTS:-30}; i++)); do
     python3 -c "import json,sys; print(json.load(sys.stdin).get('build',{}).get('sha',''))" 2>/dev/null || true)
   CURRENT_IMAGE=$(docker inspect "$SERVICE" --format '{{.Image}}' 2>/dev/null || true)
   if [[ "$STATUS" == healthy && "$GOT_SHA" == "$SHA" && "$CURRENT_IMAGE" == "$LOADED_IMAGE" ]]; then
+    if [[ -f "$RELEASES/$SHA/canvas-plan.json" ]] && ! node "$SOURCE/scripts/deploy/video-tools-release.mjs" verify "$RELEASES/$SHA/canvas-plan.json"; then
+      rollback_previous || true
+      exit 1
+    fi
     printf '{"target":"api","environment":"staging","sha":"%s","health":"healthy"}\n' "$SHA"
     exit 0
   fi
