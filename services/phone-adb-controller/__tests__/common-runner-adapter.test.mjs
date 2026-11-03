@@ -70,3 +70,7 @@ test('Commander收到当前冻结Activity的完成标准和边界，不能只看
  await runWorkflow(base({activities:[contract,{key:'cleanup'}],commander:async request=>{seen.push(request);return {action:'none'};}}));
  const event=seen.find(r=>r.activity==='work');assert.equal(event.brief.purpose,contract.promise);assert.deepEqual(event.brief.done_criteria,contract.postconditions);assert.deepEqual(event.activity_contract,contract);assert.ok(event.rules.some(rule=>JSON.stringify(rule).includes('来源身份已冻结')));
 });
+test('每次Commander交换保留wake/event/recovery/sleep原phase，不被事件分类覆盖',async()=>{
+ const records=[];await runWorkflow(base({commander:async()=>({action:'none'}),record:async e=>records.push(e)}));
+ const exchanges=records.filter(e=>e.phase==='commander_exchange');assert.ok(exchanges.some(e=>e.commander_phase==='wake'));assert.ok(exchanges.some(e=>e.commander_phase==='event'));assert.ok(exchanges.some(e=>e.commander_phase==='sleep'));
+});

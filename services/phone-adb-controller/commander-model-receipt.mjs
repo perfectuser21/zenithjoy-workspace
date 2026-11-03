@@ -23,7 +23,7 @@ export function verifyCommanderModelReceipt(receipt,scope){
  try{return JSON.stringify(commanderModelReceipt(receipt.raw_response,scope))===JSON.stringify(receipt);}catch{return false;}
 }
 export function summarizeCommanderEvidence(events,scope){
- const calls=events.filter(e=>['before','after','commander_exchange'].includes(e.phase)).map(e=>e.phase==='commander_exchange'?{...e,phase:e.reply?.model_receipt?.scope?.phase,commander_role:'observer',decision:e.reply}:e),counts=new Map();
+ const calls=events.filter(e=>['before','after','commander_exchange'].includes(e.phase)||e.phase==='commander_unavailable'&&e.error!=='commander_unavailable_for_run').map(e=>['commander_exchange','commander_unavailable'].includes(e.phase)?{...e,phase:e.commander_phase??e.reply?.model_receipt?.scope?.phase,commander_role:'observer',decision:e.reply}:e),counts=new Map();
  for(const e of calls){const p=e.decision?.model_receipt;if(e.commander_status==='available'&&verifyCommanderModelReceipt(p,{...scope,activity:e.activity,phase:e.phase,...(e.commander_role?{commander_role:e.commander_role}:{})})){const key=JSON.stringify(p.openclaw);counts.set(key,(counts.get(key)||0)+1);}}
  const valid=calls.filter(e=>e.commander_status==='available'&&verifyCommanderModelReceipt(e.decision?.model_receipt,{...scope,activity:e.activity,phase:e.phase,...(e.commander_role?{commander_role:e.commander_role}:{})})&&counts.get(JSON.stringify(e.decision.model_receipt.openclaw))===1).map(e=>e.decision.model_receipt);
  const turns=valid.filter(p=>p.assistant_turns!==null);

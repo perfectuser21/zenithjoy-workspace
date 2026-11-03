@@ -5,6 +5,7 @@ import {mkdtempSync,rmSync,readdirSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {openClawCommander} from '../activity-commander.mjs';
+import {summarizeCommanderEvidence} from '../commander-model-receipt.mjs';
 const scope={workflow_key:'douyin_video_discovery',run_id:'douyin_video_discovery-proof__a1',binding_id:'binding-proof',task_id:null,source_commit:'a'.repeat(40),activity:'collect_videos',phase:'before'};
 function raw(overrides={}){return {status:'ok',runId:'official-run',result:{payloads:[{text:JSON.stringify({action:'continue',reason:'实际回执'})}],meta:{agentMeta:{provider:'openai',model:'gpt-6.1-sol',sessionId:'official-session',assistantTurns:2,terminalReceipt:{runId:'official-run',sessionId:'official-session',turnId:'official-turn',effective:{provider:'openai',model:'gpt-6.1-sol',responseModel:'gpt-6.1-sol'}},...overrides}}}};}
 function home(t){const p=mkdtempSync(join(tmpdir(),'commander-model-proof-'));t.after(()=>rmSync(p,{recursive:true,force:true}));return p;}
@@ -31,4 +32,10 @@ test('调用统计区分可核咨询、失败与unknown，不把缺失供应商�
  const events=[{...scope,commander_status:'available',decision:{model_receipt:proof}},{...scope,phase:'after',commander_status:'unavailable',error:'timeout'}];
  assert.deepEqual(summarizeCommanderEvidence(events,scope),{consultations:2,verified_cli_receipts:1,failed_consultations:1,missing_or_invalid_receipts:1,assistant_turns:2,assistant_turns_coverage:'partial',provider_call_count:null,provider_call_count_status:'unknown',response_ids_verified:0,response_ids_unavailable:1});
  const duplicate=summarizeCommanderEvidence([events[0],events[0]],scope);assert.equal(duplicate.verified_cli_receipts,0);assert.equal(duplicate.assistant_turns,null);assert.equal(duplicate.missing_or_invalid_receipts,2);
+});
+test('observer统计实际不可达调用，sticky不可达跳过不冒充额外模型调用',()=>{
+ const actual={phase:'commander_unavailable',commander_phase:'wake',activity:null,commander_status:'unavailable',error:'commander_timeout'};
+ const skipped={phase:'commander_unavailable',commander_phase:'event',activity:'scoring',commander_status:'unavailable',error:'commander_unavailable_for_run'};
+ const summary=summarizeCommanderEvidence([actual,skipped,{...skipped,activity:'cleanup'}],{});
+ assert.equal(summary.consultations,1);assert.equal(summary.failed_consultations,1);assert.equal(summary.verified_cli_receipts,0);assert.equal(summary.missing_or_invalid_receipts,1);assert.equal(summary.provider_call_count,null);
 });
