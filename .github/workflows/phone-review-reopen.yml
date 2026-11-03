@@ -79,10 +79,15 @@ jobs:
             [[ -z "$RELEASE_ID" ]] || exit 1
           fi
           KEY_FILE=$(mktemp)
-          trap 'rm -f "$KEY_FILE"' EXIT
+          KNOWN_HOSTS_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE" "$KNOWN_HOSTS_FILE"' EXIT
+          install -m 600 .github/ssh/zenithjoy-mmv.known_hosts "$KNOWN_HOSTS_FILE"
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           ssh -o BatchMode=yes -o ConnectTimeout=30 -i "$KEY_FILE" -p 22 \
+            -o HostKeyAlias=zenithjoy-mmv -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE" -o GlobalKnownHostsFile=/dev/null \
+            -o HostKeyAlgorithms=ssh-ed25519 -o UpdateHostKeys=no \
             "${SSH_USER}@${SSH_HOST}" bash -s -- \
             "$CANDIDATE_SHA" "$REOPEN_PHASE" "$SAFETY_TX" "'$RELEASE_ID'" "$GITHUB_RUN_ID" \
             < .github/workflows/scripts/phone-review-reopen-remote.sh
