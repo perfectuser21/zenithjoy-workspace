@@ -26,6 +26,7 @@ run-name: ${{ inputs.attempt_marker || github.workflow }}
 on:
   push:
     branches: [main]
+  merge_group:
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -55,35 +56,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Detect changed files
         id: filter
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            BEFORE="${{ github.event.before }}"
-            AFTER="${{ github.event.after }}"
-            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              echo "orphan=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          else
-            BASE_REF="${{ github.base_ref }}"
-            CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || echo "")
-          fi
-          echo "── changed files ──"
-          echo "$CHANGED"
-          echo "───────────────────"
-          # 触发重活的条件：8 个 orphan spec 之一 / dashboard src / 本 workflow / 守卫脚本
-          if echo "$CHANGED" | grep -qE '^apps/dashboard/e2e/(acquisition-android-entry|content-judgment-gate|customer-admin-backend|line04-preflight-card|module-health|module-health-access|video-remake|wechat-cs-config)\.spec\.ts$' \
-             || echo "$CHANGED" | grep -qE '^apps/dashboard/src/' \
-             || echo "$CHANGED" | grep -qxF '.github/workflows/e2e-orphan-consolidation-windows.yml' \
-             || echo "$CHANGED" | grep -qxF '.github/workflows/scripts/lint-orphan-gate-alwayson.sh'; then
-            echo "orphan=true" >> $GITHUB_OUTPUT
-            echo "→ orphan=true(运行 8 spec)"
-          else
-            echo "orphan=false" >> $GITHUB_OUTPUT
-            echo "→ orphan=false(gate 直接 N/A 通过,不烧 windows runner)"
-          fi
+        run: node scripts/ci/detect-changes.mjs orphan
 
   # ── 重活:8 spec 全绿(仅在 orphan=true 时跑)────────────────────────────────
   playwright-orphan-consolidation:
@@ -299,23 +277,10 @@ jobs:
       - name: 回归守卫 — orphan workflow 必须无条件触发
         run: bash .github/workflows/scripts/lint-orphan-gate-alwayson.sh
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Gate 判定
-        run: |
-          ORPHAN="${{ needs.changes.outputs.orphan }}"
-          RESULT="${{ needs.playwright-orphan-consolidation.result }}"
-          echo "orphan=$ORPHAN  playwright.result=$RESULT"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          if [ "$ORPHAN" != "true" ]; then
-            echo "  本 PR 未触及 orphan spec / dashboard src / 本 workflow"
-            echo "  → 无需运行 orphan specs → Gate PASS (N/A)"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            exit 0
-          fi
-          if [ "$RESULT" = "success" ]; then
-            echo "  8 个 orphan spec 全绿 → Gate PASS"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            exit 0
-          fi
-          echo "::error::orphan specs job 结果=$RESULT（非 success）→ Gate FAIL，阻塞合并（不留红）"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          exit 1
+        env:
+          GATE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci/required-gate.mjs orphan

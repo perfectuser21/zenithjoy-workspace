@@ -35,11 +35,12 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: 安装 yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-          yq --version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked regression parser
+        run: npm ci --ignore-scripts --workspaces=false
 
       - name: 跑 runner 单测
         run: bash scripts/ci/__tests__/run-core-regression.test.sh

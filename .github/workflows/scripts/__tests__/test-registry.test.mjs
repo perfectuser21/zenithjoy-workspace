@@ -11,7 +11,7 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const workflow = YAML.parse(readFileSync(join(repo, '.github/workflows/ci-l2-consistency.yml'), 'utf8'));
 const command = workflow.jobs['orphan-test-check'].steps.find(step => step.name === 'Check all test files are registered in test-registry.yaml').run;
 const entry = path => ({ id: path.replace(/[^a-z0-9]+/gi, '-').toLowerCase(), path, type: 'unit', ci: 'L3', status: 'active', product: 'test-fixture' });
-function run(files, registry) {
+function run(files, registry, links = {}) {
   const root = mkdtempSync(join(tmpdir(), 'test-registry-gate-'));
   try {
     symlinkSync(join(repo, 'scripts'), join(root, 'scripts'), 'dir');
@@ -19,6 +19,7 @@ function run(files, registry) {
       mkdirSync(dirname(join(root, file)), { recursive: true });
       writeFileSync(join(root, file), 'fixture');
     }
+    for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     if (registry !== undefined) writeFileSync(join(root, 'test-registry.yaml'), typeof registry === 'string' ? registry : YAML.stringify(registry));
     return spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], { cwd: root, encoding: 'utf8' });
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -70,3 +71,22 @@ test('superseded regression remains in inventory with explicit live replacements
   assert.equal(run(tests.map(test => test.path), { tests }).status, 0);
   reject(run(tests.map(test => test.path), { tests: [{ ...tests[0], superseded_by: ['absent'] }, tests[1]] }), /supersed|replacement/i);
 });
+
+test('a pending unverified replacement cannot retire an existing regression', () => {
+  const tests = [{ ...entry('old.test.ts'), status: 'deprecated', deprecation_reason: 'Replaced', superseded_by: ['new-test-ts'] }, { ...entry('new.test.ts'), status: 'pending-ci', ci: 'unverified' }];
+  reject(run(['old.test.ts', 'new.test.ts'], { tests }), /replacement/i);
+});
+test('a named internal test symlink must be registered', () => {
+  reject(run(['owner.mjs'], { tests: [] }, { 'alias.test.mjs': 'owner.mjs' }), /alias\.test\.mjs/);
+  const result = run(['owner.mjs'], { tests: [entry('alias.test.mjs')] }, { 'alias.test.mjs': 'owner.mjs' });
+  assert.equal(result.status, 0, output(result));
+});
+test('a named test symlink escaping the repository fails even before registration', () => {
+  reject(run([], { tests: [] }, { 'outside.test.mjs': join(repo, 'package.json') }), /escap|outside/i);
+});
+test('a dangling named test symlink fails even before registration', () => {
+  reject(run([], { tests: [] }, { 'dangling.test.mjs': 'absent.mjs' }), /dangling|missing/i);
+});
+for (const path of ['test_publish_by_content_id.sh', 'test_sync_scraper_to_works.sh', 'test_002_migration.sh']) {
+  test(`native shell executor naming ${path} cannot escape inventory`, () => reject(run([path], { tests: [] }), /Unregistered/));
+}

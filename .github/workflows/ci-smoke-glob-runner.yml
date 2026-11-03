@@ -8,13 +8,16 @@ name: Smoke Glob Gate
 #   - 基线外脚本 FAIL = 存量债，仅 ::warning:: 报告（见 docs/smoke-debt-report.md）
 #   - 基线条目在磁盘缺失 / 落入 DENYLIST → job 红（防删/挪脚本绕闸）
 #   - PR 级规则见 baseline-lint job（新脚本必进基线 / 删基线行须 BASELINE-REMOVE:）
-#   - 聚合 required check：Smoke Glob Gate Passed（仅 pull_request 事件）
+#   - 聚合 required check：Smoke Glob Gate Passed（PR 正常验收；merge_group 明确拒绝，直至元数据等价审查可证明）
 # ───────────────────────────────────────────────────────────────────────────
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
     branches: [main]
   schedule:
     - cron: '0 19 * * *'   # 每天 03:00 UTC+8 跑一次，盯 drift
@@ -476,15 +479,22 @@ jobs:
       - name: Run lint-smoke-baseline
         run: bash .github/workflows/scripts/lint-smoke-baseline.sh origin/main
 
-  # 聚合 required check（照抄 ci-l1-process.yml l1-passed 模式：PR-only，
-  # 不裸比 != success 以免把 push/schedule 下 skipped 的 baseline-lint 判红）
+  # PR 正常验收；merge_group 缺逐 PR 的 BASELINE-REMOVE 理由证明，明确拒绝。
+  # push/schedule/dispatch 保留原事件行为，不把跳过 baseline-lint 当作审批通过。
   gate:
     name: Smoke Glob Gate Passed
     needs: [smoke-glob-runner, baseline-lint]
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Reject merge queue without equivalent baseline review
+        run: |
+          if [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ]; then
+            echo "::error::merge_group admission is closed: per-PR baseline deletion review (BASELINE-REMOVE) has no verified equivalent."
+            echo "Smoke Glob currently supports pull_request admission. Prove equivalent review before enabling merge queue."
+            exit 1
+          fi
       - name: Check gates
         run: |
           check() {

@@ -1,40 +1,19 @@
-# ============================================================================
-# Regression Contract - zenithjoy-workspace
-# ============================================================================
-# 全量回归的唯一合法定义来源
-#
-# Trigger 规则：
-#   - PR:      跑 trigger 包含 PR 的条目
-#   - Release: 跑 trigger 包含 Release 的条目
-# ============================================================================
-
-version: "1.0.1"
-updated: "2026-07-08"
-
-# ============================================================================
-# 核心功能回归契约（待补充）
-# ============================================================================
-core: []
-
-# ============================================================================
-# Golden Paths（E2E 链路）—— 自包含 must-never-break 种子
-# ============================================================================
+# Core code regressions run actual implementations in isolated local fixtures.
+# Real API/DB/LLM golden-path smokes remain in L4 and Smoke Glob; this gate does
+# not issue deployment or device acceptance from syntax checks.
+version: "1.1.0"
+updated: "2026-11-03"
+verification_scope: offline_business_regression
 golden_paths:
-  - id: SENTINEL-001
+  - id: CORE-RELEASE-ADMISSION
     trigger: [PR, Release]
     method: auto
     must_never_break: true
     priority: P0
-    test_command: "bash -n .github/workflows/scripts/smoke/golden-path-1-smoke.sh"
-  - id: SENTINEL-002
+    test_command: "node --test scripts/release-gate/__tests__/release-admission.test.mjs"
+  - id: CORE-PUBLISH-RECOVERY
     trigger: [PR, Release]
     method: auto
     must_never_break: true
     priority: P0
-    test_command: "bash -n .github/workflows/scripts/smoke/golden-path-2-smoke.sh"
-  - id: SENTINEL-003
-    trigger: [PR, Release]
-    method: auto
-    must_never_break: true
-    priority: P0
-    test_command: "bash -n scripts/ci/run-core-regression.sh"
+    test_command: "node --test services/listing-workflow/__tests__/coordinator.test.mjs"

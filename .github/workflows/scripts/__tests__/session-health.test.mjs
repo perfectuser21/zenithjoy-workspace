@@ -39,7 +39,7 @@ function get(options, callback) {
   process.nextTick(() => {
     if (typeof options === 'string') {
       appendFileSync('notifications.jsonl', JSON.stringify({ channel: 'bark' }) + '\\n');
-      callback(response(config.alertStatus ?? 200));
+      callback(response(config.barkStatus ?? config.alertStatus ?? 200));
     } else if (config.networkError) request.emit('error', new Error('fixture network error'));
     else callback(response(config.status ?? 200,
       config.body ?? '{"status_code":0,"result":1,"code":0,"success":true}',
@@ -51,19 +51,22 @@ function post(options, callback) {
   const request = new EventEmitter(); let body = '';
   request.write = chunk => { body += chunk; };
   request.end = () => process.nextTick(() => {
-    if (options.hostname === 'fixture-db.invalid') appendFileSync('db-updates.jsonl', body + '\\n');
+    if (options.hostname === 'fixture-db.invalid') {
+      appendFileSync('db-updates.jsonl', body + '\\n');
+      if (config.dbNetworkError) { request.emit('error', new Error('fixture DB network error')); return; }
+    }
     else appendFileSync('notifications.jsonl', JSON.stringify({ channel: 'feishu' }) + '\\n');
-    callback(response(options.hostname === 'fixture-db.invalid' ? 200 : config.alertStatus ?? 200));
+    callback(response(options.hostname === 'fixture-db.invalid' ? config.dbStatus ?? 200 : config.feishuStatus ?? config.alertStatus ?? 200));
   });
   return request;
 }
 http.get = https.get = get;
 http.request = https.request = post;
 `);
-    const cookies = JSON.stringify([{ name: 'sessionid', value: 'fixture', expires: Math.floor(Date.now() / 1000) + 86400 }]);
+    const cookies = options.cookieJson ?? JSON.stringify([{ name: 'sessionid', value: 'fixture', expires: Math.floor(Date.now() / 1000) + 86400 }]);
     const env = { ...process.env, ...Object.fromEntries(cookieEnvs.map(name => [name, cookies])),
       FEISHU_API_KEY: 'fixture', NOTION_API_KEY: 'fixture', WECOM_API_KEY: 'fixture',
-      BARK_URL: 'https://fixture-alert.invalid/bark', FEISHU_BOT_WEBHOOK: '',
+      BARK_URL: 'https://fixture-alert.invalid/bark', FEISHU_BOT_WEBHOOK: options.feishu ? 'https://fixture-feishu.invalid/webhook' : '',
       OPERATOR_API_URL: 'http://fixture-db.invalid', INTERNAL_API_SECRET: 'fixture',
       FORCE_NOTIFY: String(options.forceNotify ?? false), SKIP_HTTP_CHECK: 'false',
       HEALTH_FIXTURE: JSON.stringify(options) };
@@ -75,7 +78,10 @@ http.request = https.request = post;
       try { return readFileSync(join(root, file), 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse); }
       catch (error) { if (error.code === 'ENOENT') return []; throw error; }
     };
-    return { ...result, report: JSON.parse(readFileSync(join(root, 'session-health-report.json'), 'utf8')),
+    let report;
+    try { report = JSON.parse(readFileSync(join(root, 'session-health-report.json'), 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; report = null; }
+    return { ...result, report,
       updates: readJsonl('db-updates.jsonl').flatMap(row => row.updates),
       notifications: readJsonl('notifications.jsonl') };
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -125,3 +131,54 @@ test('session patrol fails when a required alert receives HTTP 500', () => {
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /告警|通知/);
 });
+
+for (const [name, options] of [
+  ['HTTP 500', { dbStatus: 500 }], ['HTTP 401', { dbStatus: 401 }],
+  ['HTTP redirect', { dbStatus: 302 }], ['network error', { dbNetworkError: true }],
+]) test(`session patrol fails when status writeback receives ${name}`, () => {
+  const result = runHealth(options);
+  assert.equal(result.report.filter(row => row.status === 'ok').length, 35);
+  assert.equal(result.updates.length, 35);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /回写/);
+  assert.doesNotMatch(result.stdout, /全部正常/);
+  assert.equal(result.notifications.length, 0, 'writeback failure does not expand notification policy');
+});
+
+test('status writeback failure still preserves expired-session alert delivery', () => {
+  const result = runHealth({ status: 401, dbStatus: 500 });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /回写/);
+  assert.equal(result.report.filter(row => row.status === 'expired').length, 32);
+  assert.ok(result.notifications.length > 0);
+});
+
+test('session patrol accepts producer Playwright storageState cookies without losing valid health', () => {
+  const cookieJson = JSON.stringify({ cookies: [{ name: 'sessionid', value: 'fixture' }],
+    origins: [{ origin: 'https://fixture.invalid', localStorage: [{ name: 'state', value: 'keep-me' }] }] });
+  const result = runHealth({ cookieJson });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.report?.filter(row => row.status === 'ok').length, 35);
+  assert.equal(result.updates.length, 35);
+  assert.equal(result.notifications.length, 0);
+});
+
+for (const cookieJson of ['null', '{}', '[null]', '["cookie"]', '[{}]',
+  '[{"name":"","value":"fixture"}]', '[{"name":"sessionid","value":1}]',
+  '{"cookies":[null],"origins":[]}', '[{"name":"sessionid","value":"fixture"},null]']) {
+  test(`session patrol reports malformed cookie entries as invalid: ${cookieJson}`, () => {
+    const result = runHealth({ cookieJson });
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.equal(result.report?.filter(row => row.status === 'invalid').length, 32);
+    assert.equal(result.updates.filter(row => !row.platform.endsWith('API Key')).length, 0);
+    assert.ok(result.notifications.length > 0);
+  });
+}
+
+for (const [feishuStatus, expectedExit] of [[500, 1], [200, 0]]) {
+  test(`session patrol preserves Feishu ${feishuStatus} delivery result when Bark succeeds`, () => {
+    const result = runHealth({ forceNotify: true, feishu: true, barkStatus: 200, feishuStatus });
+    assert.equal(result.status, expectedExit, result.stdout + result.stderr);
+    assert.deepEqual(result.notifications.map(row => row.channel).sort(), ['bark', 'feishu']);
+  });
+}

@@ -6,6 +6,9 @@ name: L1 Process Gate
 on:
   pull_request:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
+    branches: [main]
   # push 覆盖：merge 进 main 后仍跑安全类检查（secrets-scan 等）；
   # PR 专属检查（标题/分支名/diff 类 lint）用 if 条件限定在 pull_request 事件
   push:
@@ -686,10 +689,20 @@ jobs:
             lint-nightly-sparse-checkout-deps,
             lint-contract-test-immutability, lint-workflow-yaml-parse,
             test-deploy-lib, test-install-pack-ascii, release-admission-regression]
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # A merge-group event has no per-PR branch/title/body/labels. Existing PR-only
+      # jobs must not be treated as successful when skipped on this event.
+      # Keep queue admission closed until equivalent metadata review is proven.
+      - name: Reject merge queue without equivalent PR process evidence
+        run: |
+          if [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ]; then
+            echo "::error::merge_group admission is closed: equivalent PR branch/title/body/label evidence is not implemented."
+            echo "L1 currently supports pull_request admission. Prove equivalent review before enabling merge queue."
+            exit 1
+          fi
       - name: L1 Process Gate
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

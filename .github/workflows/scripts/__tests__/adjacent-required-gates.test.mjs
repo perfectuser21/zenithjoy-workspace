@@ -9,7 +9,7 @@ import {parse} from 'yaml';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../../..');
 const profiles=[
  {name:'wechat',file:'wechat-cs-e2e.yml',gate:'wechat-cs-gate',routes:['agent_or_api','agent'],paths:[['apps/api/src/routes/wechat.ts','agent_or_api'],['services/agent/runtime.py','agent'],['services/agent/package-lock.json','agent'],['package-lock.json','agent_or_api'],['apps/creator/package.json','agent_or_api'],['scripts/ci/detect-changes.mjs','agent_or_api']],neighbor:'services/agent-old/runtime.py',manual:true},
- {name:'lead',file:'e2e-line02-lead-human-handoff-windows.yml',gate:'lead-gate',routes:['lead'],paths:[['apps/api/src/routes/acquisition.ts','lead'],['apps/api/src/services/tenant.service.ts','lead'],['apps/dashboard/src/components/LeadsTable.tsx','lead'],['apps/dashboard/vite.config.ts','lead'],['services/agent/src/line02/reply-poller.ts','lead'],['package-lock.json','lead'],['scripts/ci/detect-changes.mjs','lead']],neighbor:'apps/dashboard-old/src/page.tsx',manual:true},
+ {name:'lead',file:'e2e-line02-lead-human-handoff-windows.yml',gate:'lead-gate',routes:['lead','lead_windows'],paths:[['apps/api/src/routes/acquisition.ts','lead'],['apps/api/src/services/tenant.service.ts','lead'],['apps/dashboard/src/components/LeadsTable.tsx','lead'],['apps/dashboard/vite.config.ts','lead'],['services/agent/src/line02/reply-poller.ts','lead'],['package-lock.json','lead'],['scripts/ci/detect-changes.mjs','lead']],neighbor:'apps/dashboard-old/src/page.tsx',manual:true},
  {name:'orphan',file:'e2e-orphan-consolidation-windows.yml',gate:'orphan-e2e-gate',routes:['orphan'],paths:[['apps/dashboard/e2e/module-health.spec.ts','orphan'],['apps/dashboard/src/pages/Page.tsx','orphan'],['apps/dashboard/playwright.config.ts','orphan'],['apps/api/src/routes/agent.ts','orphan'],['package-lock.json','orphan'],['scripts/ci/detect-changes.mjs','orphan']],neighbor:'apps/dashboard-old/src/page.tsx',manual:true},
  {name:'android',file:'android-agent-ci.yml',gate:'android-ci-gate',routes:['android'],paths:[['services/agent-android/app/build.gradle.kts','android'],['services/agent-android/gradle.properties','android'],['.skills-source.json','android'],['scripts/ci/detect-changes.mjs','android']],neighbor:'services/agent-android-old/app/build.gradle.kts'},
 ];
@@ -36,7 +36,7 @@ for(const p of profiles){
   for(const result of ['failure','cancelled'])test(`${p.name}: unselected ${job} ${result} cannot hide behind false route`,()=>assert.notEqual(aggregate(p,{jobs:{[job]:result}}).status,0));
  }
  for(const route of p.routes)test(`${p.name}: ${route} selects actual job conditions and rejects selected skips`,()=>{
-  const w=workflow(p),outputs=Object.fromEntries(p.routes.map(key=>[key,key===route?'true':'false'])),needs={changes:{outputs}},jobs=Object.fromEntries(w.jobs[p.gate].needs.filter(key=>key!=='changes').map(key=>[key,Function('needs',`return (${w.jobs[key].if})`)(needs)?'success':'skipped']));
+  const w=workflow(p),outputs=Object.fromEntries(p.routes.map(key=>[key,key===route?'true':'false'])),needs={changes:{outputs}},jobs=Object.fromEntries(w.jobs[p.gate].needs.filter(key=>key!=='changes').map(key=>[key,Function('needs','github',`return (${w.jobs[key].if})`)(needs,{event_name:route==='lead_windows'?'workflow_dispatch':'pull_request'})?'success':'skipped']));
   assert.equal(aggregate(p,{outputs,jobs}).status,0);
   for(const[key,result]of Object.entries(jobs))if(result==='success')for(const invalid of ['failure','cancelled','skipped',''])assert.notEqual(aggregate(p,{outputs,jobs:{...jobs,[key]:invalid}}).status,0,`${key}=${invalid}`);
  });
@@ -49,5 +49,12 @@ for(const p of profiles){
   for(const invalid of ['', '0'.repeat(40), 'f'.repeat(40)])test(`${p.name}: ${name} missing/unreadable head ${invalid} fails instead of empty diff`,()=>temp(dir=>{const{base,head}=fixture(dir,p.paths[0][0]),r=detect(p,dir,name,event(base,invalid),head);assert.notEqual(r.status,0,r.stdout+r.stderr);}));
  }
  test(`${p.name}: neighboring path stays unselected`,()=>temp(dir=>{const{base,head}=fixture(dir,p.neighbor),r=detect(p,dir,'pull_request',event(base,head),head);assert.equal(r.status,0,r.stderr);for(const key of p.routes)assert.equal(r.outputs[key],'false');}));
+ if(p.name==='lead')test('lead: manual Windows evaluator must succeed only when dispatched',()=>{
+  const outputs={lead:'true',lead_windows:'true'};
+  assert.equal(aggregate(p,{outputs,jobs:{e2e:'success','e2e-windows':'success'}}).status,0);
+  for(const result of ['failure','cancelled','skipped',''])assert.notEqual(aggregate(p,{outputs,jobs:{e2e:'success','e2e-windows':result}}).status,0,result);
+  assert.equal(workflow(p).jobs['e2e-windows'].if,"github.event_name == 'workflow_dispatch'");
+  assert.equal(aggregate(p,{outputs:{lead:'true',lead_windows:'false'},jobs:{e2e:'success','e2e-windows':'skipped'}}).status,0);
+ });
  if(p.manual)test(`${p.name}: manual dispatch explicitly runs all checks`,()=>temp(dir=>{const{head}=fixture(dir,'docs/unrelated.md'),r=detect(p,dir,'workflow_dispatch',{},head);assert.equal(r.status,0,r.stderr);for(const key of p.routes)assert.equal(r.outputs[key],'true');}));
 }
