@@ -30,11 +30,12 @@ function runStep(step, context, cwd, extraEnv = {}) {
   for (const [key, value] of Object.entries(step.env ?? {})) env[key] = render(String(value), context);
   return spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', render(step.run, context)], { cwd, env, encoding: 'utf8' });
 }
-function gate(p, { result = 'success', outputs = Object.fromEntries(p.routes.map(k => [k, 'false'])), jobs = {} } = {}) {
+function gate(p, { result = 'success', outputs = Object.fromEntries(p.routes.map(k => [k, 'false'])), jobs = {}, absentJobs = [] } = {}) {
   const w = workflow(p);
   const needs = Object.fromEntries(w.jobs[p.gate].needs.map(k => [k, { result: p.always.includes(k) ? 'success' : 'skipped' }]));
   needs.changes = { result, outputs };
   for (const [key, value] of Object.entries(jobs)) needs[key] = { result: value };
+  for (const key of absentJobs) delete needs[key];
   const step = w.jobs[p.gate].steps.find(s => s.run);
   return runStep(step, { needs }, root);
 }
@@ -76,6 +77,17 @@ for (const p of profiles) {
   for (const result of ['failure', 'cancelled', 'skipped', '']) {
     test(`${p.name}: changes ${result || 'empty'} must close the gate`, () => assert.notEqual(gate(p, { result }).status, 0));
   }
+  for (const job of workflow(p).jobs[p.gate].needs.filter(key => workflow(p).jobs[key]?.if)) {
+    for (const result of ['failure', 'cancelled']) {
+      test(`${p.name}: unselected ${job} ${result} still rejects the gate`, () => {
+        assert.notEqual(gate(p, { jobs: { [job]: result } }).status, 0);
+      });
+    }
+    test(`${p.name}: unselected ${job} may be skipped or absent`, () => {
+      assert.equal(gate(p, { jobs: { [job]: 'skipped' } }).status, 0);
+      assert.equal(gate(p, { absentJobs: [job] }).status, 0);
+    });
+  }
   for (const route of p.routes) {
     for (const invalid of [undefined, '', 'TRUE', 'unexpected']) {
       test(`${p.name}: reject ${route} output ${String(invalid)}`, () => {
@@ -113,11 +125,12 @@ for (const p of profiles) {
   });
   for (const [path, route] of [
     ['apps/api/src/a.ts', 'api'], ['package-lock.json', 'api'], ['package.json', 'api'], ['.npmrc', 'api'], ['.skills-source.json', 'api'], ['apps/creator/package.json', 'api'], ['.github/workflows/ci-l4-integration.yml', 'api'], ['scripts/ci/detect-changes.mjs', 'api'],
+    ...(p.name !== 'integration' ? [['package-lock.json', 'dashboard'], ['apps/creator/package.json', 'dashboard']] : []),
     ...(p.name === 'code' ? [['apps/geoai/astro.config.mjs', 'geoai'], ['package-lock.json', 'geoai'], ['apps/creator/package.json', 'geoai'], ['services/agent/package-lock.json', 'agent_modules'], ['services/agent/package.json', 'agent_modules'], ['services/agent/tsconfig.build.json', 'agent_modules']] : []),
     ...(p.name === 'runtime' ? [['apps/staff-hub/src/pages/HomePage.tsx', 'staff_hub'], ['package-lock.json', 'staff_hub'], ['services/agent/package-lock.json', 'agent'], ['apps/api/src/services/walking-skeleton.service.ts', 'agent']] : []),
   ]) {
     for (const eventName of ['push', 'pull_request', 'merge_group']) {
-      test(`${p.name}: ${eventName} routes real diff ${path}`, () => temp(dir => {
+      test(`${p.name}: ${eventName} routes real diff ${path} -> ${route}`, () => temp(dir => {
         const { base, head } = fixture(dir, path);
         const event = { before: base, after: head, pull_request: { base: { sha: base }, head: { sha: head } }, merge_group: { base_sha: base, head_sha: head } };
         const result = detect(p, dir, eventName, event, eventName === 'merge_group' ? '' : 'main');
