@@ -120,8 +120,7 @@ def verify_safety_barrier(home, safety_tx, observed, *, allow_partial=False):
     require(marker['legacy_root'] == '/private/tmp/openclaw-phone/locks' or
             marker['legacy_root'].startswith(str(home) + '/'), 'LEGACY_ROOT')
     if not allow_partial:
-        require(locks.verify_review(marker['legacy_root'], durable)['review_owners'] == 3,
-                'REVIEW_SCOPE')
+        roots.verify_review_scope(home, safety)
     return safety
 
 

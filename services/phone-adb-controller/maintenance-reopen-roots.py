@@ -42,11 +42,26 @@ def _safety_journal(home, safety_tx):
             safety_tx == 'phone-safety-' + value.get('source_commit', '')[:24] and
             re.fullmatch(r'[a-f0-9]{40}', value.get('source_commit', '')),
             'SAFETY_JOURNAL')
-    require(isinstance(value.get('review_serials'), list) and len(value['review_serials']) == 3,
-            'REVIEW_SCOPE')
+    serials = value.get('review_serials')
+    require(isinstance(serials, list) and serials and
+            all(isinstance(serial, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', serial)
+                for serial in serials) and len(set(serials)) == len(serials), 'REVIEW_SCOPE')
     require(tx.digest(tx.regular(home / 'bin-harvest/deployment-manifest.json')[0]) ==
             value.get('manifest_sha256'), 'MANIFEST_DRIFT')
     return value
+
+
+def verify_review_scope(home, safety):
+    """The original safety journal defines scope; a count alone cannot identify it."""
+    durable = Path(home) / '.local/share/zenithjoy/phone-locks'
+    marker = locks.verify(durable)
+    legacy = Path(marker['legacy_root'])
+    verified = locks.verify_review(legacy, durable)
+    expected = set(safety['review_serials'])
+    require(verified['review_owners'] == len(expected) and
+            {owner.stem for owner in legacy.glob('*.lock')} == expected and
+            {owner.stem for owner in durable.glob('*.lock')} == expected, 'REVIEW_DRIFT')
+    return verified
 
 
 def _check_safety(home, safety_tx, observed):
@@ -60,10 +75,7 @@ def _check_safety(home, safety_tx, observed):
                                         recovery_disabled=observed['recovery_disabled'],
                                         recovery_loaded=observed['recovery_loaded'],
                                         process_table=observed['process_table'])
-    durable = home / '.local/share/zenithjoy/phone-locks'
-    marker = locks.verify(durable)
-    require(locks.verify_review(marker['legacy_root'], durable)['review_owners'] == 3,
-            'REVIEW_DRIFT')
+    verify_review_scope(home, safety)
     return safety
 
 
