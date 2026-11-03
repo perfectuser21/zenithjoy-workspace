@@ -18,7 +18,45 @@ function checkNative(close_stdout,desktop_stdout,xml,png){
  if(!close.foreground||close.foreground==='unknown'||close.foreground.includes('com.ss.android.ugc.aweme')||!/^\w+(?:\.\w+)+$/.test(launcher||'')||desktop.foreground_package!==launcher||!desktop.foreground?.includes(launcher+'/'))invalid();
  if(!png.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))||!png.subarray(-8).equals(Buffer.from('49454e44ae426082','hex'))||png.length<45)invalid();
  if(!xml.length||/<!DOCTYPE|<!ENTITY/i.test(xml))invalid();
- const p=spawnSync('python3',['-c',`import sys,json,xml.etree.ElementTree as E\nr=E.fromstring(sys.stdin.read())\nassert r.tag=='hierarchy'\nprint(json.dumps(sorted(set(n.get('package','') for n in r.iter('node')))))`],{input:xml,encoding:'utf8',timeout:2000,maxBuffer:1024*1024});
+ // 今日头条桌面小组件的节点属于应用包；仅接受本次已观测的
+ // HONOR workspace -> workspace_screen -> AppWidgetHostView 托管关系。
+ // 独立窗口、未知组件及越出 host 的节点仍保留原 foreign-package 拒绝。
+ const p=spawnSync('python3',['-c',`import sys,json,re,xml.etree.ElementTree as E
+r=E.fromstring(sys.stdin.read())
+assert r.tag=='hierarchy'
+launcher=sys.argv[1]
+parents={c:p for p in r.iter() for c in p}
+def bounds(n):
+ m=re.fullmatch(r'\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]',n.get('bounds',''))
+ if not m:return None
+ b=tuple(map(int,m.groups()))
+ return b if b[0]<b[2] and b[1]<b[3] else None
+def inside(child,parent):
+ a,b=bounds(child),bounds(parent)
+ return a is not None and b is not None and b[0]<=a[0]<a[2]<=b[2] and b[1]<=a[1]<a[3]<=b[3]
+def hosted_news(n):
+ if launcher!='com.hihonor.android.launcher' or n.get('package')!='com.ss.android.article.news':return False
+ child=n
+ while child in parents:
+  parent=parents[child]
+  if parent.tag!='node' or not inside(child,parent):return False
+  if parent.get('class')=='android.appwidget.AppWidgetHostView':
+   screen=parents.get(parent)
+   workspace=parents.get(screen)
+   if screen is None or workspace is None:return False
+   if screen.get('resource-id')!=launcher+':id/workspace_screen' or workspace.get('resource-id')!=launcher+':id/workspace':return False
+   if not inside(parent,screen) or not inside(screen,workspace):return False
+   current=parent
+   while current is not r:
+    if current.tag!='node' or current.get('package')!=launcher:return False
+    above=parents.get(current)
+    if above is None or above is not r and not inside(current,above):return False
+    current=above
+   return True
+  if parent.get('package')!='com.ss.android.article.news':return False
+  child=parent
+ return False
+print(json.dumps(sorted(set(n.get('package','') for n in r.iter('node') if not hosted_news(n)))))`,launcher],{input:xml,encoding:'utf8',timeout:2000,maxBuffer:1024*1024});
  if(p.status!==0)invalid();const packages=JSON.parse(p.stdout);
  const allowed=['android','com.android.systemui',launcher,...(launcher==='com.hihonor.android.launcher'?['com.hihonor.android.totemweather','com.hihonor.assistant','com.hihonor.health']:[])];
  if(!packages.includes(launcher)||packages.some(p=>p&&!allowed.includes(p)))invalid();
