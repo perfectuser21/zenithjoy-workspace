@@ -317,6 +317,22 @@ class SafetyHostTests(unittest.TestCase):
         self.assertEqual(records[0]['reason'], 'health_response_invalid')
         self.assertEqual(records[0]['observations'][0]['error_class'], 'ValueError')
 
+    def test_invalid_json_shapes_from_real_status_handler_are_recorded(self):
+        host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
+        script = Path(plistlib.loads(self.plist.read_bytes())['ProgramArguments'][1])
+        for value in (None, [], {'host_id': 'm4', 'endpoint': 'tcp:127.0.0.1:5037',
+                                'port': 5037, 'devices': [None]}):
+            with self.subTest(value=value):
+                def boundary(args, **kwargs):
+                    if 'status' in args:
+                        return types.SimpleNamespace(stdout=json.dumps(value))
+                    return self.command(args, **kwargs)
+                with patch.object(host_module, 'command', side_effect=boundary):
+                    self.assertFalse(host._adb_process_matches(script))
+        records = [json.loads(p.read_text()) for p in host.folder.glob('adb-readiness-*.json')]
+        self.assertEqual(len(records), 3)
+        self.assertTrue(all(r['reason'] == 'health_response_invalid' for r in records))
+
     def test_root_writer_rejects_wrong_plist_permissions_before_mutation(self):
         host = host_module.SafetyHost(self.home, self.transaction, self.sha, legacy_root=self.old)
         stable = Path(host.journal['adb_stable_dir'])
