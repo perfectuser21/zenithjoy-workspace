@@ -30,6 +30,8 @@ def digest(value):
 
 
 class ReopenIntegrationTest(unittest.TestCase):
+    OTHER_REVIEWS = (('YELLOW2', 'other-review'), ('THIRD3', 'third-review'))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -61,7 +63,7 @@ class ReopenIntegrationTest(unittest.TestCase):
         legacy = self.home / 'legacy-locks'
         legacy.mkdir()
         for serial, owner in [(host.OLD_SERIAL, host.OLD_OWNER),
-                              ('YELLOW2', 'other-review'), ('THIRD3', 'third-review')]:
+                              *self.OTHER_REVIEWS]:
             (legacy / (serial + '.guard')).touch()
             lock = legacy / (serial + '.lock')
             lock.mkdir()
@@ -80,7 +82,7 @@ class ReopenIntegrationTest(unittest.TestCase):
                   'completed': ['close_review_cron', 'relocate_adb', 'disable_recovery',
                                 'migrate_review', 'seal_candidates'],
                   'manifest_sha256': hashlib.sha256(manifest.read_bytes()).hexdigest(),
-                  'review_serials': [host.OLD_SERIAL, 'YELLOW2', 'THIRD3'],
+                  'review_serials': [host.OLD_SERIAL, *(serial for serial, _ in self.OTHER_REVIEWS)],
                   'cron_after': '# review closed\n'}
         journal = self.home / '.config/zenithjoy/maintenance-only' / self.safety_tx / 'journal.json'
         tx.atomic_bytes(journal, tx.canonical({**safety, 'sha256': tx.digest(tx.canonical(safety))}))
@@ -151,22 +153,42 @@ class ReopenIntegrationTest(unittest.TestCase):
 
     def test_full_rehearsal_preserves_old_bytes_other_reviews_and_manifest(self):
         before = (self.home / 'bin-harvest/deployment-manifest.json').read_bytes()
+        owners_before = {str(p): p.read_bytes() for root in (self.home / 'legacy-locks', self.parent / 'phone-locks')
+                         for serial, _ in self.OTHER_REVIEWS for p in (root / (serial + '.lock')).iterdir()}
         result = self.finalize()
+        self.assertEqual({name: Path(name).read_bytes() for name in owners_before}, owners_before)
+        self.assertEqual(result['serial'], host.OLD_SERIAL)
+        self.assertEqual(self.finalize(), result)
         self.assertTrue(result['released'])
         self.assertTrue((self.parent / ('phone-candidates.sealed.' + self.safety_tx) /
                          host.OLD_SOURCE / 'run.sh').is_file())
         self.assertFalse((self.parent / 'phone-candidates' / host.OLD_SOURCE).exists())
         self.assertEqual((self.home / 'bin-harvest/deployment-manifest.json').read_bytes(), before)
         self.assertEqual(locks.verify_review(self.home / 'legacy-locks',
-                                             self.parent / 'phone-locks')['review_owners'], 2)
+                                             self.parent / 'phone-locks')['review_owners'], len(self.OTHER_REVIEWS))
         self.assertTrue((self.home / 'legacy-locks/standalone-claims' /
                          host.OLD_SERIAL / host.OLD_OWNER).is_file())
 
-    def test_pre_reboot_evidence_keeps_all_three_reviews(self):
+    def test_pre_reboot_evidence_keeps_all_original_reviews(self):
         with self.assertRaisesRegex(ValueError, 'BOOT_NOT_AFTER_NATIVE'):
             self.finalize(boot=1793499500)
         self.assertEqual(locks.verify_review(self.home / 'legacy-locks',
-                                             self.parent / 'phone-locks')['review_owners'], 3)
+                                             self.parent / 'phone-locks')['review_owners'], 1 + len(self.OTHER_REVIEWS))
+
+
+class TwoOwnerReopenIntegrationTest(ReopenIntegrationTest):
+    OTHER_REVIEWS = (('YELLOW2', 'other-review'),)
+
+
+class LastOwnerReopenIntegrationTest(ReopenIntegrationTest):
+    OTHER_REVIEWS = ()
+
+    def test_full_rehearsal_preserves_old_bytes_other_reviews_and_manifest(self):
+        before = locks.inventory(self.home / 'legacy-locks')
+        with self.assertRaisesRegex(ValueError, 'LAST_REVIEW_UNSUPPORTED'):
+            self.finalize()
+        self.assertEqual(locks.inventory(self.home / 'legacy-locks'), before)
+        self.assertTrue((self.parent / 'phone-locks' / (host.OLD_SERIAL + '.lock')).is_dir())
 
 
 if __name__ == '__main__':
