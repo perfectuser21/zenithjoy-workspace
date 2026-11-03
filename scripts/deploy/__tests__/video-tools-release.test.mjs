@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, writeFileSync, chmodSync, readFileSync, lstatSync, rmSync, realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import YAML from 'yaml';
+import {execFileSync} from 'node:child_process';
 import {createPlan, validateReadback, writePrepared, mergeImage, inheritPrepared} from '../video-tools-release.mjs';
 
 const sha='a'.repeat(40), image='sha256:'+'b'.repeat(64);
@@ -97,7 +97,10 @@ test('真实AI验收身份仅进入staging前端名单，生产名单不扩展',
   const prod=readFileSync('.github/workflows/promote-dashboard-prod.yml','utf8');
   assert.ok(stage.includes('VITE_STAFF_EMAILS:')&&stage.includes('ai-acceptance@zenithjoy.test'));
   assert.ok(!prod.includes('ai-acceptance@zenithjoy.test'));
-  const workflow=YAML.parse(readFileSync('.github/workflows/promote-prod-hk.yml','utf8'));
+  // Match the release job's pinned PyYAML parser; that job intentionally does
+  // not install the application npm workspaces.
+  const workflow=JSON.parse(execFileSync('python3',['-c','import json,sys,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))',
+    '.github/workflows/promote-prod-hk.yml'],{encoding:'utf8'}));
   assert.deepEqual(workflow.jobs['promote-prod-hk'].needs,['admission']);
   assert.ok(workflow.jobs['promote-prod-hk'].steps.some(s=>s.if==='inputs.video_tools'&&s.run.includes('hk-canvas-production.sh')));
 });
