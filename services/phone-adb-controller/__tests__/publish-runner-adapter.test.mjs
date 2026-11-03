@@ -26,7 +26,7 @@ test('rejects filesystem replacement after source was frozen',()=>{const x=fixtu
 test('rejects worker self-validation',()=>{const x=fixture();try{x.implementations.publish.validator=x.implementations.publish.executor;assert.throws(()=>buildPublishProfile(x),/independent/);}finally{fs.rmSync(x.cwd,{recursive:true,force:true});}});
 test('native phase CLI rejects command injection and performs no SSH action',()=>{
  const result=spawnSync('python3',['services/phone-adb-controller/commander/publish-native-activity.py','publish;echo wrong','/missing/manifest.json'],{input:JSON.stringify({run_tag:randomUUID()}),encoding:'utf8'});
- assert.equal(result.status,0);const parsed=JSON.parse(result.stdout);assert.equal(parsed.status,'needs_review');assert.equal(parsed.reason_code,'publish_native_unconfirmed');
+ assert.equal(result.status,0);const parsed=JSON.parse(result.stdout);assert.equal(parsed.status,'needs_review');assert.equal(parsed.reason_code,'publish_native_unconfirmed');assert.equal(parsed.execution_stopped,undefined);assert.equal(parsed.external_effect,undefined);
 });
 test('real native Activity processes preserve phone owner, native receipts and exact cleanup boundary',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'publish-native-')),bin=path.join(root,'bin');fs.mkdirSync(bin);
@@ -61,4 +61,15 @@ test('native SSH timeout preserves unknown remote execution so core cannot run c
  const manifest={state_root:path.join(root,'runs'),contract:{resources:{machine:'xian-m4',profile:'legacy',device_serial:'ANGYVB4402004137',account_ref:'人工智能小诺考评'},recovery:{total_timeout_sec:1,cleanup_timeout_sec:1}},definition:{expected_path:[{reference_id:b.reference_id,activity_id:b.activity_id,activity_definition_version_id:b.activity_definition_version_id}]},activity_bindings:[b]};
  const file=path.join(root,'manifest.json');fs.writeFileSync(file,JSON.stringify(manifest));
  try{const result=spawnSync('python3',['services/phone-adb-controller/commander/publish-native-activity.py','preflight',file],{input:JSON.stringify({run_tag:randomUUID(),task_id:randomUUID()}),encoding:'utf8',env:{...process.env,PATH:bin+path.delimiter+process.env.PATH}});const value=JSON.parse(result.stdout);assert.equal(value.execution_stopped,false);assert.equal(value.external_effect,'unknown');}finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+test('native SSH255 after remote acceptance retains unknown execution and original transport evidence',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'publish-disconnected-')),bin=path.join(root,'bin');fs.mkdirSync(bin);
+ fs.writeFileSync(path.join(bin,'ssh'),'#!/bin/sh\nprintf accepted > "$FIXTURE_ACCEPTED"\nprintf "connection lost after acceptance\\n" >&2\nexit 255\n',{mode:0o700});
+ const b={key:'preflight',reference_id:randomUUID(),activity_id:randomUUID(),activity_definition_version_id:randomUUID(),steps:[]};
+ const manifest={state_root:path.join(root,'runs'),contract:{resources:{machine:'xian-m4',profile:'legacy',device_serial:'ANGYVB4402004137',account_ref:'人工智能小诺考评'}},definition:{expected_path:[{reference_id:b.reference_id,activity_id:b.activity_id,activity_definition_version_id:b.activity_definition_version_id}]},activity_bindings:[b]};
+ const file=path.join(root,'manifest.json');fs.writeFileSync(file,JSON.stringify(manifest));
+ try{
+  const result=spawnSync('python3',['services/phone-adb-controller/commander/publish-native-activity.py','preflight',file],{input:JSON.stringify({run_tag:randomUUID(),task_id:randomUUID()}),encoding:'utf8',env:{...process.env,PATH:bin+path.delimiter+process.env.PATH,FIXTURE_ACCEPTED:path.join(root,'accepted')}});
+  const value=JSON.parse(result.stdout);assert.equal(fs.readFileSync(path.join(root,'accepted'),'utf8'),'accepted');assert.equal(value.execution_stopped,false);assert.equal(value.external_effect,'unknown');assert.ok(value.evidence.some(p=>p.endsWith('.stderr')&&fs.readFileSync(p,'utf8').includes('connection lost after acceptance')));
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
 });

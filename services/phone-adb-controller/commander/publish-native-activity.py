@@ -52,8 +52,39 @@ def execute(phase, manifest, value):
             io.write(directory / 'events.json', [])
         if not envelope['definition'].get('expected_path') or not envelope['activity_bindings']:
             raise ValueError('frozen activity and step identities required')
-        phone = phone_module.Phone(directory, envelope)
-        receipt = phone.prepare() if phase == 'preflight' else phone.cleanup()
+        class SupervisedPhone(phone_module.Phone):
+            transport_unknown = False
+
+            def ssh(self, command):
+                try:
+                    return super().ssh(command)
+                except Exception as error:
+                    # SSH255 is a transport failure, not proof the accepted remote
+                    # operation stopped. Native controller stdout/stderr stay intact.
+                    meta = {}
+                    if self.control_receipts:
+                        try:
+                            meta = io.read(self.control_receipts[-1])
+                        except (OSError, ValueError):
+                            pass
+                    code = meta.get('returncode')
+                    if isinstance(error, subprocess.TimeoutExpired) or code == 255 or isinstance(code, int) and code < 0:
+                        self.transport_unknown = True
+                    raise
+
+        phone = SupervisedPhone(directory, envelope)
+        try:
+            receipt = phone.prepare() if phase == 'preflight' else phone.cleanup()
+        except Exception as error:
+            error.native_transport_unknown = phone.transport_unknown
+            error.native_evidence = [str(p) for p in phone.control_receipts if p.is_file()]
+            raise
+        # cleanup catches controller exceptions internally; keep the same transport
+        # boundary even if a later native readback returns another receipt.
+        if phone.transport_unknown:
+            return dict(schema_version=1, run_tag=run_id, status='needs_review', failure_class='needs_human',
+                        outputs={}, metrics={}, evidence=[str(p) for p in phone.control_receipts if p.is_file()],
+                        reason_code='publish_native_unconfirmed', execution_stopped=False, external_effect='unknown')
         completed = phase == 'preflight' or receipt.get('completed') is True
         return dict(schema_version=1, run_tag=run_id, status='completed' if completed else 'needs_review',
                     outputs={'publish_context': {'directory': str(directory), 'receipt': receipt}}, metrics={},
@@ -66,7 +97,7 @@ if __name__ == '__main__':
         result = execute(sys.argv[1], json.loads(Path(sys.argv[2]).read_text()), value)
     except Exception as error:
         result = dict(schema_version=1, run_tag=value.get('run_tag', ''), status='needs_review', failure_class='needs_human',
-                      outputs={}, metrics={}, evidence=[], reason_code='publish_native_unconfirmed', diagnostic=type(error).__name__)
-        if isinstance(error, subprocess.TimeoutExpired):
+                      outputs={}, metrics={}, evidence=getattr(error, 'native_evidence', []), reason_code='publish_native_unconfirmed', diagnostic=type(error).__name__)
+        if getattr(error, 'native_transport_unknown', False):
             result.update(execution_stopped=False, external_effect='unknown')
     print(json.dumps(result, ensure_ascii=False))
