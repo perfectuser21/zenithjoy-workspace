@@ -32,6 +32,69 @@ def canonical_path(path):
     return path
 
 
+
+# One historical macOS alias only. This is not a general symlink exception.
+LEGACY_ALIAS = Path('/private/tmp/openclaw-phone')
+
+
+def legacy_binding(home, logical):
+    home, logical = Path(home), Path(logical)
+    if logical != LEGACY_ALIAS / 'locks' or not LEGACY_ALIAS.is_symlink():
+        return canonical_path(logical), None
+    require(home == Path(pwd.getpwuid(os.getuid()).pw_dir), 'legacy alias authoritative home mismatch')
+    target = home / 'Library/Application Support/ZenithJoy/phone-runtime-20261011'
+    canonical_path(LEGACY_ALIAS.parent)
+    canonical_path(target / 'locks')
+    # Parent timestamps are deliberately not frozen: /private/tmp is shared.
+    parent = LEGACY_ALIAS.parent.lstat()
+    require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0 and
+            stat.S_IMODE(parent.st_mode) == 0o1777, 'legacy alias parent invalid')
+    for directory in [target / 'locks', target, *target.parents]:
+        info = directory.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, os.getuid()) and
+                not stat.S_IMODE(info.st_mode) & 0o022, 'legacy physical directory invalid')
+    for directory in (target, target / 'locks'):
+        info = directory.lstat()
+        require(info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o755,
+                'legacy physical root ownership invalid')
+    def snapshot():
+        alias = LEGACY_ALIAS.lstat()
+        require(stat.S_ISLNK(alias.st_mode) and alias.st_uid == os.getuid() and
+                alias.st_gid == 0 and stat.S_IMODE(alias.st_mode) == 0o755,
+                'legacy alias ownership invalid')
+        link = os.readlink(LEGACY_ALIAS)
+        require(link == str(target), 'legacy alias target invalid')
+        physical = (target / 'locks').lstat()
+        runtime = target.lstat()
+        return {'home': str(home), 'logical_root': str(logical),
+                'physical_root': str(target / 'locks'),
+                'alias': [alias.st_dev, alias.st_ino, alias.st_ctime_ns,
+                          alias.st_uid, alias.st_gid, alias.st_mode, link],
+                'runtime': [runtime.st_dev, runtime.st_ino, runtime.st_uid, runtime.st_gid, runtime.st_mode],
+                'root': [physical.st_dev, physical.st_ino, physical.st_uid, physical.st_gid, physical.st_mode]}
+    binding = snapshot()
+    require(LEGACY_ALIAS.joinpath('locks').resolve(strict=True) == target / 'locks',
+            'legacy alias resolution invalid')
+    canonical_path(target / 'locks')
+    require(snapshot() == binding, 'legacy alias identity changed while binding')
+    return target / 'locks', binding
+
+
+def verify_legacy_binding(record):
+    binding = record.get('legacy_binding')
+    if binding is not None:
+        _, actual = legacy_binding(binding['home'], record['legacy_root'])
+        require(actual == binding, 'legacy alias binding identity changed')
+
+
+def verify_review(record, root):
+    verify_legacy_binding(record)
+    try:
+        return lock_root_tool.verify_review(record['legacy_root'], root, guards_held=True)
+    finally:
+        verify_legacy_binding(record)
+
+
 def pinned_registry(home, registry):
     registry = Path(registry)
     canonical_path(registry.parent)
@@ -79,8 +142,9 @@ def context(home, tx, registry, root):
                 'migration review count invalid')
     review_mode = bool(migration and migration['review_owners'])
     guard_names = {serial + '.guard' for serial in serials}
+    binding = None
     if review_mode:
-        old = canonical_path(migration['legacy_root'])
+        old, binding = legacy_binding(home, migration['legacy_root'])
         frozen_guards = {path.name for path in root.glob('*.guard')}
         require(guard_names <= frozen_guards and
                 {path.name for path in old.glob('*.guard')} == frozen_guards,
@@ -93,13 +157,13 @@ def context(home, tx, registry, root):
         guard_names = frozen_guards
     guard_identity = {}
     if review_mode:
-        for parent in (root, Path(migration['legacy_root'])):
+        for parent in (root, old):
             for name in sorted(guard_names):
                 path = canonical_path(parent / name)
                 info = path.lstat()
                 require(stat.S_ISREG(info.st_mode), 'review guard not regular')
                 guard_identity[str(path)] = [info.st_dev, info.st_ino, info.st_ctime_ns]
-    return {'transaction': tx, 'owner': 'phone-deploy-' + tx,
+    record = {'transaction': tx, 'owner': 'phone-deploy-' + tx,
             'registry': str(registry), 'registry_pointer': registry_pointer,
             'registry_sha256': hashlib.sha256(raw).hexdigest(),
             'lock_root': str(root), 'serials': sorted(serials),
@@ -107,12 +171,17 @@ def context(home, tx, registry, root):
             'legacy_root': migration['legacy_root'] if review_mode else None,
             'migration_sha256': migration['source_sha256'] if review_mode else None,
             'guard_identity': guard_identity}
+    if binding is not None:
+        record['legacy_binding'] = binding
+        verify_legacy_binding(record)
+    return record
 
 
 @contextmanager
 def guards(record):
     root = canonical_path(record['lock_root'])
     descriptors = []
+    verify_legacy_binding(record)
     try:
         paths = [root / (serial + '.guard') for serial in record['serials']]
         if record['mode'] == 'review-preserve':
@@ -127,6 +196,7 @@ def guards(record):
             except BlockingIOError:
                 raise ValueError('phone maintenance: device guard busy') from None
         def check():
+            verify_legacy_binding(record)
             for fd, path in descriptors:
                 info, named = os.fstat(fd), path.lstat()
                 require(stat.S_ISREG(named.st_mode) and (info.st_dev, info.st_ino) == (named.st_dev, named.st_ino),
@@ -137,8 +207,11 @@ def guards(record):
         check()
         yield check
     finally:
-        for fd, _ in descriptors:
-            os.close(fd)
+        try:
+            verify_legacy_binding(record)
+        finally:
+            for fd, _ in descriptors:
+                os.close(fd)
 
 
 def read_intent(home, tx, current):
@@ -209,13 +282,13 @@ def acquire(home, tx, registry, root):
         if intent.exists():
             read_intent(home, tx, current)
             if current['mode'] == 'review-preserve':
-                lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+                verify_review(current, root)
             else:
                 check_owners(current, allow_missing=True)
                 clean_retired(current)
         else:
             if current['mode'] == 'review-preserve':
-                lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+                verify_review(current, root)
             else:
                 require(not list(Path(root).glob('*.lock')), 'device owner exists; deployment cannot reap')
             transaction.atomic_bytes(intent, transaction.canonical(current))
@@ -250,10 +323,10 @@ def verify(home, tx, registry, root, guards_held=False):
     read_intent(home, tx, current)
     if current['mode'] == 'review-preserve':
         if guards_held:
-            lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+            verify_review(current, root)
         else:
             with guards(current) as check:
-                lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+                verify_review(current, root)
                 check()
     else:
         check_owners(current)
@@ -265,7 +338,7 @@ def release(home, tx, registry, root):
     read_intent(home, tx, current)
     with guards(current) as check:
         if current['mode'] == 'review-preserve':
-            lock_root_tool.verify_review(current['legacy_root'], root, guards_held=True)
+            verify_review(current, root)
             check()
             return {'released': False, 'review_preserved': True, 'transaction': tx}
         # Validate all owners first; an unrelated owner never causes partial unlocking.
