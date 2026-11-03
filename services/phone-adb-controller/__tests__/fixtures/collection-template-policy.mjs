@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 const source=fileURLToPath(new URL('../../',import.meta.url)),relative='config/collection-phone-hosts.json';
 const bytes=fs.readFileSync(join(source,relative)),oldBytes=fs.readFileSync(new URL('./collection-phone-hosts-699515a5.json',import.meta.url));
-const mode=process.argv[2],template=JSON.parse(bytes),old=JSON.parse(oldBytes),host=template.hosts[['101-work','102-work'].includes(mode)?1:0];
+const mode=process.argv[2],template=JSON.parse(bytes),old=JSON.parse(oldBytes),host=mode.startsWith('xiaolongxia-')?{...template.hosts[0],profile:'xiaolongxia',serial:'ANGYVB4311010223',expected_account:'90915521618',evidence_root:'/private/tmp/openclaw-phone/evidence/xiaolongxia',workflow_keys:['douyin_video_discovery','douyin_video_processing']}:template.hosts[['101-work','102-work'].includes(mode)?1:0];
 const original={lstatSync:fs.lstatSync,readlinkSync:fs.readlinkSync,realpathSync:fs.realpathSync};
 const alias=host.evidence_alias,canonical=join(alias.target,'evidence',host.profile),paths=new Set();
 for(const root of [alias.path,canonical])for(let p=root;;p=resolve(p,'..')){paths.add(p);if(p==='/')break;}
@@ -20,7 +20,8 @@ fs.readlinkSync=(p,...args)=>String(p)===alias.path?alias.target:original.readli
 fs.realpathSync=(p,...args)=>String(p)===alias.path?alias.target:String(p)===canonical?canonical:original.realpathSync(p,...args);
 syncBuiltinESMExports();
 const {defaultCollectionPhoneScope}=await import('../../collection-phone-scope.mjs');
-const {defaultDiscoveryPhoneScope}=await import('../../discovery-phone-scope.mjs');
+const {defaultDiscoveryPhoneScope,startDiscoveryPhoneScope}=await import('../../discovery-phone-scope.mjs');
+const {startCollectionPhoneScope}=await import('../../collection-phone-scope.mjs');
 const {deploymentManifest}=await import('../../deployment-manifest.mjs');
 const {digest,freezeDefinition}=await import('../../runtime-definition.mjs');
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -37,7 +38,26 @@ function fixture(raw=bytes){
 }
 function scope(f,key){const env={...f.env,WF_BRAIN_WORKFLOW:key};return (key==='douyin_video_discovery'?defaultDiscoveryPhoneScope:defaultCollectionPhoneScope)({root:f.runtime,env});}
 try{
- if(['101','101-work','102','101-task','102-task'].includes(mode)){
+ if(mode.startsWith('xiaolongxia-')){
+  const f=fixture(),keys=['douyin_video_discovery','douyin_video_processing'];
+  if(['xiaolongxia-101','xiaolongxia-102'].includes(mode)){const key=keys[mode.endsWith('102')?1:0],value=scope(f,key);assert.ok(value,'verified xiaolongxia exact grant missing');for(const field of ['target','profile','serial','expected_account','evidence_root','policy','executables','evidence_alias','workflow_keys'])assert.deepEqual(value[field],host[field]);assert.equal(value.source_commit,f.manifest.source_commit);}
+  else if(mode==='xiaolongxia-wrong-serial'){f.env.SERIAL='ANGYVB4227006983';for(const key of keys)assert.equal(scope(f,key),undefined);}
+  else if(mode==='xiaolongxia-wrong-host'){f.manifest.target='mmv';fs.writeFileSync(join(f.runtime,'deployment-manifest.json'),JSON.stringify(f.manifest));for(const key of keys)assert.equal(scope(f,key),undefined);}
+  else if(mode==='xiaolongxia-104'){assert.equal(scope(f,'douyin_lead_outreach'),undefined);assert.equal(defaultCollectionPhoneScope({root:f.runtime,env:{...f.env,WF_BRAIN_WORKFLOW:'douyin_video_processing'},workflowKey:'douyin_lead_outreach'}),undefined);}
+  else if(mode==='xiaolongxia-wrong-source'){fs.appendFileSync(join(f.runtime,relative),' ');for(const key of keys)assert.throws(()=>scope(f,key),/COLLECTION_DEFAULT_TEMPLATE_SOURCE_INVALID/);}
+  else if(mode==='xiaolongxia-alias-changed'){fs.realpathSync=(p,...args)=>String(p)===alias.path?alias.target+'-other':original.realpathSync(p,...args);syncBuiltinESMExports();for(const key of keys)assert.throws(()=>scope(f,key),/COLLECTION_EVIDENCE_ALIAS_INVALID/);}
+  else if(mode==='xiaolongxia-wrong-account'){
+   f.env.WF_BRAIN_TASK_ID='scope-task';
+   for(const [index,key]of keys.entries()){const value=scope(f,key);assert.ok(value,'grant must exist before wrong-account check');const field=index?'collection_phone_scope':'discovery_phone_scope';
+    const runDir=f.env.WFR_RUN_DIR+'-'+index,body={files:{},deployment:{target:'xian-m4',source_commit:f.manifest.source_commit},[field]:value},frozen={...body,snapshot_sha256:digest(body)};fs.mkdirSync(join(runDir,'run-bindings'),{recursive:true});fs.mkdirSync(join(runDir,'runtime'),{recursive:true});fs.writeFileSync(join(runDir,'run-definition.json'),JSON.stringify(frozen));
+    fs.writeFileSync(join(runDir,'run-bindings/a1.request.json'),JSON.stringify({run_id:value.run_id,runtime_snapshot_sha256:frozen.snapshot_sha256,body:{task_id:'scope-task'}}));fs.writeFileSync(join(runDir,'run-bindings/a1.ack.json'),JSON.stringify({binding:{id:'binding',run_id:value.run_id,task_id:'scope-task'}}));
+    const env={...f.env,WFR_RUN_DIR:runDir,WFR_ATTEMPT:'a1',WFR_TAG:'owner',WF_RUN_START_TS:String(Math.floor(Date.now()/1000)),WF_RUN_MAX_SECONDS:'300'},state={account:'wrong-account',currentActivity:index?'collection':'collect_videos',budgetDeadline:Date.now()+60000};
+    const start=index?startCollectionPhoneScope:startDiscoveryPhoneScope,args={root:f.runtime,env,state,sourceCommit:f.manifest.source_commit,taskId:value.task_id,lockHeld:true};
+    await assert.rejects(start(args),index?/COLLECTION_PHONE_ACCOUNT_INVALID/:/DISCOVERY_PHONE_IDENTITY_INVALID/);state.account=host.expected_account;await assert.rejects(start(args),index?/COLLECTION_PHONE_SOURCE_INVALID/:/DISCOVERY_PHONE_SOURCE_INVALID/);
+   }
+  }else if(['xiaolongxia-frozen101','xiaolongxia-frozen102'].includes(mode)){const key=keys[mode.endsWith('102')?1:0],field=mode.endsWith('102')?'collection_phone_scope':'discovery_phone_scope';fs.mkdirSync(f.env.WFR_RUN_DIR,{recursive:true});const body={files:{},[field]:null},frozen={...body,snapshot_sha256:digest(body)},path=join(f.env.WFR_RUN_DIR,'run-definition.json');fs.writeFileSync(path,JSON.stringify(frozen));const before=fs.readFileSync(path);assert.equal(scope(f,key),null);assert.deepEqual(fs.readFileSync(path),before);}
+  else throw Error('unknown xiaolongxia mode');
+ }else if(['101','101-work','102','101-task','102-task'].includes(mode)){
   const f=fixture(),key=mode.startsWith('102')?'douyin_video_processing':'douyin_video_discovery';
   if(mode.endsWith('-task'))f.env.WF_BRAIN_TASK_ID='11111111-2222-4333-8444-555555555555';
   const value=scope(f,key);
@@ -49,7 +69,7 @@ try{
   const f=fixture();assert.equal(scope(f,'douyin_video_processing'),undefined,'101 精确新模板不能扩大 102 执行范围');
  }else if(mode==='pins'){
   const strip=t=>{t=structuredClone(t);delete t.hosts[0].policy.endpoint;delete t.hosts[0].policy.forbidden_ports;return t;};
-  assert.deepEqual(strip({hosts:[template.hosts[0]]}),strip({hosts:[old.hosts[0]]}));assert.equal(template.hosts.length,2);
+  assert.deepEqual(strip({hosts:[template.hosts[0]]}),strip({hosts:[old.hosts[0]]}));assert.equal(template.hosts.length,3);assert.deepEqual(template.hosts[2],{...template.hosts[0],profile:'xiaolongxia',serial:'ANGYVB4311010223',expected_account:'90915521618',evidence_root:'/private/tmp/openclaw-phone/evidence/xiaolongxia',workflow_keys:['douyin_video_discovery','douyin_video_processing']});
   const work=template.hosts[1],legacy=template.hosts[0];
   assert.deepEqual({target:work.target,profile:work.profile,serial:work.serial,expected_account:work.expected_account,evidence_root:work.evidence_root,workflow_keys:work.workflow_keys},
    {target:'xian-m4',profile:'jinoshengyuan-work',serial:'ANGYVB4227006983',expected_account:'langzi63485',evidence_root:'/private/tmp/openclaw-phone/evidence/jinoshengyuan-work',workflow_keys:['douyin_video_discovery']});
