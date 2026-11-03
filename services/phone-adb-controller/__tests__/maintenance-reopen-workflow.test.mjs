@@ -75,7 +75,7 @@ assert.ok(file.isFile()&&!file.isSymbolicLink());assert.equal(file.mode&0o777,0o
 assert.notEqual(path,process.env.REVIEW_HOST_PIN);assert.deepEqual(fs.readFileSync(path),fs.readFileSync(process.env.REVIEW_HOST_PIN));
 assert.equal(fs.readFileSync(option('-i'),'utf8'),'fixture-private-key\\n');
 fs.writeFileSync(process.env.STUB_RECEIPT,JSON.stringify({path,key:option('-i'),options}));
-process.stdin.resume();
+process.exitCode=Number(process.env.STUB_SSH_EXIT||0);process.stdin.resume();
 `,{mode:0o700});
  const body=workflow.slice(workflow.lastIndexOf('        run: |')+'        run: |'.length)
   .split('\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\n');
@@ -103,4 +103,9 @@ test('首跳非法prepare/finalize输入在任何SSH与公钥读取前拒绝',()
   {REOPEN_PHASE:'finalize',RELEASE_ID:''}]){
   const r=trustedFirstHop(values);assert.notEqual(r.status,0);assert.equal(r.data,undefined);
  }
+});
+
+test('首跳SSH拒绝仍返回原失败且清理临时私钥与pin，不执行远端重试',()=>{
+ const r=trustedFirstHop({STUB_SSH_EXIT:'255'});assert.equal(r.status,255,r.stderr);
+ assert.ok(r.data);assert.equal(r.cleaned,true);
 });
