@@ -115,6 +115,8 @@ def device_barrier(registry, lock_root, maintenance=None):
         # historical guards; only then may verify claim guards_held=True.
         paths = [Path(path) for path in review['guard_identity']]
     descriptors = []
+    if review is not None:
+        module.verify_legacy_binding(review)
     try:
         for path in sorted(paths):
             fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
@@ -142,8 +144,12 @@ def device_barrier(registry, lock_root, maintenance=None):
         verify_free()
         yield verify_free
     finally:
-        for fd, _ in descriptors:
-            os.close(fd)
+        try:
+            if review is not None:
+                module.verify_legacy_binding(review)
+        finally:
+            for fd, _ in descriptors:
+                os.close(fd)
 
 
 def path_identity(path):

@@ -464,16 +464,19 @@ class LegacyAliasTest(unittest.TestCase):
                     module.LEGACY_ALIAS = self.alias
                 result.loader.exec_module = load
             return result
-        self.addCleanup(patch.stopall)
-        patch.object(self.module, 'LEGACY_ALIAS', self.alias, create=True).start()
-        patch('importlib.util.spec_from_file_location', spec_fixture).start()
+        self.start_patch(patch.object(self.module, 'LEGACY_ALIAS', self.alias, create=True))
+        self.start_patch(patch('importlib.util.spec_from_file_location', spec_fixture))
         original_pwd = pwd.getpwuid
-        patch('pwd.getpwuid', lambda uid: types.SimpleNamespace(pw_dir=str(self.home)) if uid == os.getuid() else original_pwd(uid)).start()
+        self.start_patch(patch('pwd.getpwuid', lambda uid: types.SimpleNamespace(pw_dir=str(self.home)) if uid == os.getuid() else original_pwd(uid)))
         original_lstat = Path.lstat
         self.bad_metadata = {}
         def metadata(path, *args, **kwargs):
             info = original_lstat(path, *args, **kwargs)
             overrides = {}
+            # Model the trusted production HOME parent chain on Linux too;
+            # never chmod the host /tmp (or any ancestor of this sandbox).
+            if path in self.base.parents:
+                overrides = {'st_uid': 0, 'st_mode': 0o40755}
             if path == self.shared:
                 overrides = {'st_uid': 0, 'st_mode': 0o41777}
             elif path == self.alias:
@@ -482,10 +485,14 @@ class LegacyAliasTest(unittest.TestCase):
             if not overrides:
                 return info
             return types.SimpleNamespace(**{**{key: getattr(info, key) for key in dir(info) if key.startswith('st_')}, **overrides})
-        patch.object(Path, 'lstat', metadata).start()
+        self.start_patch(patch.object(Path, 'lstat', metadata))
 
     def acquire(self):
         return self.module.acquire(self.home, 't1', self.registry, self.durable)
+
+    def start_patch(self, patcher):
+        self.addCleanup(patcher.stop)
+        return patcher.start()
 
     def replace_alias(self, target=None):
         self.alias.rename(self.shared / ('previous-' + str(time.time_ns())))
@@ -588,12 +595,77 @@ class LegacyAliasTest(unittest.TestCase):
             self.acquire()
         self.assertFalse((self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json').exists())
 
-    def test_physical_root_or_guard_symlink_is_rejected(self):
+    def test_physical_root_symlink_is_rejected(self):
         self.acquire()
         self.physical.rename(self.runtime / 'previous-locks')
         self.physical.symlink_to(self.runtime / 'previous-locks')
         with self.assertRaisesRegex(ValueError, 'symlink|binding|identity'):
             self.module.verify(self.home, 't1', self.registry, self.durable)
+
+    def test_alias_removal_is_rejected(self):
+        record = self.acquire()
+        self.alias.unlink()
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            with self.module.guards(record):
+                self.fail('missing alias entered barrier')
+        self.assert_guards_free()
+
+    def test_same_bytes_physical_root_replacement_is_rejected(self):
+        import shutil
+        record = self.acquire()
+        original = self.runtime / 'previous-locks'
+        self.physical.rename(original)
+        shutil.copytree(original, self.physical)
+        self.assertEqual(self.module.lock_root_tool.inventory(original), self.module.lock_root_tool.inventory(self.physical))
+        with self.assertRaisesRegex(ValueError, 'binding|identity'):
+            with self.module.guards(record):
+                self.fail('replacement physical directory entered barrier')
+        self.assert_guards_free()
+
+    def test_physical_ancestor_symlink_is_rejected(self):
+        record = self.acquire()
+        library = self.home / 'Library'
+        moved = self.home / 'previous-library'
+        library.rename(moved)
+        library.symlink_to(moved)
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            with self.module.guards(record):
+                self.fail('physical ancestor symlink entered barrier')
+        self.assert_guards_free()
+
+    def test_final_guard_symlink_is_rejected(self):
+        record = self.acquire()
+        guard = self.physical / 'SERIAL1.guard'
+        guard.unlink()
+        guard.symlink_to(self.physical / 'SERIAL2.guard')
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            with self.module.guards(record):
+                self.fail('guard symlink entered barrier')
+
+    def test_change_during_partial_lock_acquisition_never_enters_either_barrier(self):
+        self.acquire()
+        original_open = os.open
+        for consumer in ('maintenance', 'input'):
+            with self.subTest(consumer=consumer):
+                if consumer == 'input':
+                    (self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json').unlink()
+                    self.acquire()
+                record = self.module.context(self.home, 't1', self.registry, self.durable)
+                changed = [False]
+                def change_after_open(path, *args, **kwargs):
+                    fd = original_open(path, *args, **kwargs)
+                    if str(path).endswith('.guard') and not changed[0]:
+                        changed[0] = True
+                        self.replace_alias()
+                    return fd
+                with self.assertRaisesRegex(ValueError, 'binding|alias|identity'):
+                    with patch('os.open', change_after_open):
+                        barrier = (self.module.guards(record) if consumer == 'maintenance' else
+                                   self.input_tool().device_barrier(self.registry, self.durable, (self.home, 't1')))
+                        with barrier:
+                            self.fail('partially frozen alias entered barrier')
+                self.assertTrue(changed[0])
+                self.assert_guards_free()
 
     def test_unknown_intent_is_never_rewritten(self):
         intent = self.home / '.local/share/zenithjoy/phone-transactions/t1/maintenance.json'

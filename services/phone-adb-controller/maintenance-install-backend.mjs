@@ -14,8 +14,8 @@ const RECOVERY_SOURCE='3fe8783b021fd9fa1a8cd4242d79a3c703c6c21b';
 // Reapproving changed source requires reviewing and updating these digests.
 const REVIEW_GUARD_PROFILE={
  'maintenance-install-host.py':{after:'e9db70745b8fe3dd645f8a924e29e5d59375f42a93892757d6ef40cdeb1ff7a9'},
- 'deployment-maintenance.py':{before:'e5faeea7ea13ac09b45fbaa3e5ab2787ff99650243d8e4a1ca6f21257da88217',after:'038e9b3dad76f70bce6dedae4acde7468ae3a7d4d660a3dec101ee00934a6197'},
- 'input-runtime-release.py':{before:'6d9dd3418de2c037e293284958eb822650fdb7c7895075d5c66b6c38da461939',after:'f93c05e7b7b62eff73bafaee4fa0ad38298299332c270cecc46b492533e12541'},
+ 'deployment-maintenance.py':{before:'e5faeea7ea13ac09b45fbaa3e5ab2787ff99650243d8e4a1ca6f21257da88217',after:'12225bc88eb55df418e99b296e7c06974a27cccaa790f066dbeff23a10f6f954'},
+ 'input-runtime-release.py':{before:'6d9dd3418de2c037e293284958eb822650fdb7c7895075d5c66b6c38da461939',after:'e99868e255a316af227e7411e930925aa467f20c3977fda2e0e0e133899a7483'},
 };
 export const guardChannel=(action,{env=process.env,exec=execFileSync}={})=>
  exec('python3',[join(HERE,'deployment-guard.py'),action],
