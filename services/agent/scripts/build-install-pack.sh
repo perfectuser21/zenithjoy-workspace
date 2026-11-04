@@ -193,7 +193,9 @@ install_embedded_pkgs() {
       # Windows self-modification protection. Execute the official zipapp instead.
       curl -fL --retry 3 -o "${PYTHON_EMBED_DIR}/pip.pyz" "$PIP_ZIPAPP_URL" || return 1
       # Record the downloaded bootstrap and real target interpreter in CI evidence.
-      shasum -a 256 "${PYTHON_EMBED_DIR}/pip.pyz" || return 1
+      "${PYTHON_EMBED_DIR}/python.exe" -c \
+        "import hashlib, pathlib, sys; p=pathlib.Path(sys.argv[1]); print('pip-zipapp-sha256', hashlib.sha256(p.read_bytes()).hexdigest())" \
+        "${PYTHON_EMBED_DIR}/pip.pyz" || return 1
       "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/pip.pyz" --version || return 1
       "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/pip.pyz" install --upgrade \
         --target "$SITE_PKGS" pip setuptools wheel || return 1
