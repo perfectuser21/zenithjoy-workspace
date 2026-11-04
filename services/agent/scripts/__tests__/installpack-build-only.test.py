@@ -9,7 +9,7 @@ class BuildOnlyTest(unittest.TestCase):
     def test_build_script_has_no_credential_lookup_or_remote_record_writes(self):
         script = (PATH.parents[2] / 'services/agent/scripts/build-install-pack.sh').read_text()
         for forbidden in ('api.notion.com', 'op item get', '.credentials/', 'gh secret set'):
-            self.assertNotIn(forbidden, script)
+            self.assertFalse(forbidden in script, f'build script contains forbidden side effect: {forbidden}')
 
     def test_default_dispatch_is_build_only_and_all_mutations_are_gated(self):
         doc = yaml.safe_load(PATH.read_text())
