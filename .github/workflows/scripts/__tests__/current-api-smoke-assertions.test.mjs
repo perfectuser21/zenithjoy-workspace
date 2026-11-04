@@ -16,7 +16,7 @@ async function smoke(t,file,handler,extra={}) {
   t.after(()=>{server.close();rmSync(dir,{recursive:true,force:true});});
   const base='http://127.0.0.1:'+server.address().port;
   return await new Promise((resolve,reject)=>{
-    const child=spawn('bash',['.github/workflows/scripts/smoke/'+file],{cwd:root,env:{...process.env,PATH:dir+':'+process.env.PATH,API_BASE:base,SMOKE_API_BASE:base,API_PORT:String(server.address().port),ZENITHJOY_INTERNAL_TOKEN:'fixture-internal',SMOKE_SCRATCH_API:'1',...extra}});
+    const child=spawn('bash',['.github/workflows/scripts/smoke/'+file],{cwd:root,env:{...process.env,PATH:dir+':'+process.env.PATH,HOME:dir,APPDATA:dir,API_BASE:base,API_URL:base,SMOKE_API_BASE:base,API_PORT:String(server.address().port),ZENITHJOY_INTERNAL_TOKEN:'fixture-internal',SMOKE_SCRATCH_API:'1',...extra}});
     let output='';child.stdout.on('data',d=>output+=d);child.stderr.on('data',d=>output+=d);child.on('error',reject);
     const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error(output));},15000);
     child.on('close',status=>{clearTimeout(timer);resolve({status,output,calls});});
@@ -108,4 +108,16 @@ test('AI video smoke checks deterministic reads/upload without issuing paid gene
 });
 for(const mode of ['bad-history','upload-auth-denied'])test('AI video smoke rejects '+mode,async t=>{
   const r=await smoke(t,'ai-video-smoke.sh',req=>mode==='bad-history'&&req.url.endsWith('/history')?[200,{data:{},total:0}]:mode==='upload-auth-denied'&&req.url.endsWith('/upload')?[401,{}]:video(req));assert.notEqual(r.status,0,r.output);
+});
+test('installer API smoke rejects server 500 instead of skipping it as a pass',async t=>{
+  const r=await smoke(t,'installer-env-reset-smoke.sh',()=>[500,{ok:false}]);assert.notEqual(r.status,0,r.output);assert.ok(r.calls.length>0);
+});
+test('installer without an explicit API runs files-only and never probes localhost',async t=>{
+  const r=await smoke(t,'installer-env-reset-smoke.sh',()=>[500,{}],{API_BASE:'',API_URL:''});assert.equal(r.status,0,r.output);assert.equal(r.calls.length,0);assert.match(r.output,/API_MODE=files-only/);assert.doesNotMatch(r.output,/A-10.*write triggered/);
+});
+for(const status of [200,202])test('installer validates exact recorded state for HTTP '+status,async t=>{
+  const r=await smoke(t,'installer-env-reset-smoke.sh',()=>[status,{ok:true,success:true,recorded:status===200}]);assert.equal(r.status,0,r.output);assert.match(r.output,/API_MODE=files\+api/);assert.equal(r.calls.length,1);
+});
+test('installer rejects a successful status with mismatched recorded body',async t=>{
+  const r=await smoke(t,'installer-env-reset-smoke.sh',()=>[200,{ok:true,success:true,recorded:false}]);assert.notEqual(r.status,0,r.output);
 });

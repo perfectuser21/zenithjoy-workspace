@@ -5,7 +5,7 @@
 #
 # Run environment: GitHub Actions windows-latest (via bash on Windows / Git Bash)
 # Usage:
-#   INSTALLPACK_DIR=/path/to/installpack API_URL=http://localhost:3001 bash installer-env-reset-smoke-contract.sh
+#   INSTALLPACK_DIR=/path/to/installpack SMOKE_SCRATCH_API=1 API_BASE=http://localhost:5200 bash installer-env-reset-smoke.sh
 #
 # Exit code 0 = all assertions passed
 # Exit code non-zero = first failed assertion
@@ -18,13 +18,25 @@ set -euo pipefail
 _SMOKE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _REPO_ROOT="$(cd "$_SMOKE_SCRIPT_DIR/../../../../" && pwd)"
 INSTALLPACK_DIR="${INSTALLPACK_DIR:-$_REPO_ROOT/services/agent/install-pack}"
-API_URL="${API_URL:-http://localhost:3001}"
+API_URL="${API_BASE:-${API_URL:-}}"
+API_MODE=files-only
+BOOT_FAIL_BODY=''
+if [ -n "$API_URL" ]; then
+  [ "${SMOKE_SCRATCH_API:-}" = 1 ] || { echo 'FAIL: explicit scratch API authorization required'; exit 1; }
+  node - "$API_URL" <<'JS'
+if(!['localhost','127.0.0.1','[::1]'].includes(new URL(process.argv[2]).hostname))throw Error('installer smoke API must be loopback');
+JS
+  API_MODE=files+api
+  BOOT_FAIL_BODY=$(mktemp)
+  trap 'rm -f "$BOOT_FAIL_BODY"' EXIT
+fi
+SKIP=0
 PASS=0
 FAIL=0
 
 ok()   { echo "  [PASS] $1"; PASS=$((PASS+1)); }
 fail() { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
-skip() { echo "  [SKIP] $1 -- $2"; }
+skip() { echo "  [SKIP] $1 -- $2"; SKIP=$((SKIP+1)); }
 
 echo "=== Contract Smoke: installer-env-reset M1 ==="
 echo "  INSTALLPACK_DIR=$INSTALLPACK_DIR"
@@ -90,9 +102,7 @@ else
   # API-layer equivalent on Linux CI
   # NOTE: True-machine equivalent assertion; TODO: run full Windows path on windows-latest
   skip "A-2 HKCU reg cleanup" "non-Windows runner detected -- real-machine assertion deferred to windows-latest job"
-  PASS=$((PASS+1))
   skip "A-2b process-kill step" "non-Windows runner detected -- real-machine assertion deferred to windows-latest job"
-  PASS=$((PASS+1))
 fi
 
 # -----------------------------------------------------------------------
@@ -133,7 +143,6 @@ elif command -v schtasks.exe &>/dev/null 2>&1 || command -v schtasks &>/dev/null
   fi
 else
   skip "A-3 schtasks" "non-Windows runner -- true-machine assertion deferred; TODO windows-latest"
-  PASS=$((PASS+1))
 fi
 
 # -----------------------------------------------------------------------
@@ -189,8 +198,7 @@ if [ -f "$INSTALLPACK_DIR/start.bat" ]; then
     fi
   else
     skip "A-5 start.bat + probe-marker" "powershell not available on this runner -- deferred to windows-latest job"
-    PASS=$((PASS+1))
-  fi
+    fi
 else
   fail "start.bat not found at $INSTALLPACK_DIR/start.bat"
 fi
@@ -329,21 +337,16 @@ fi
 # -----------------------------------------------------------------------
 echo ""
 echo "-- A-7: POST /api/agent/boot-fail reachable without bearer token"
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -X POST "$API_URL/api/agent/boot-fail" \
-  -H "Content-Type: application/json" \
-  -d '{"machine_id":"contract-noauth-001","hostname":"test-host","reason":"contract_test","timestamp":"2026-07-20T12:00:00Z"}' \
-  --max-time 10 2>/dev/null || echo "000")
-
-if [ "$HTTP_STATUS" = "000" ]; then
-  skip "A-7 boot-fail auth check" "API server not reachable (HTTP 000)"
-  PASS=$((PASS+1))
-elif [ "$HTTP_STATUS" = "401" ]; then
-  fail "POST /api/agent/boot-fail returned 401 -- endpoint requires auth but must not (N-2)"
-elif [ "$HTTP_STATUS" = "404" ]; then
-  fail "POST /api/agent/boot-fail returned 404 -- endpoint not implemented"
+if [ "$API_MODE" = files-only ]; then
+  skip 'A-7 API behavior' 'no explicit isolated API requested; files-only, no localhost probe'
 else
-  ok "POST /api/agent/boot-fail returned $HTTP_STATUS (no auth required, endpoint exists)"
+  HTTP_STATUS=$(curl -sS -o "$BOOT_FAIL_BODY" -w '%{http_code}' --max-time 10 \
+    -X POST "$API_URL/api/agent/boot-fail" -H 'Content-Type: application/json' \
+    -d "{\"machine_id\":\"installer-smoke-$$\",\"hostname\":\"scratch-installer\",\"reason\":\"license_401\"}") || HTTP_STATUS=000
+  case "$HTTP_STATUS" in
+    200|202) ok "isolated boot-fail request accepted: HTTP $HTTP_STATUS" ;;
+    *) fail "boot-fail request failed: HTTP $HTTP_STATUS (expected 200/202)" ;;
+  esac
 fi
 
 # -----------------------------------------------------------------------
@@ -389,30 +392,25 @@ fi
 # -----------------------------------------------------------------------
 echo ""
 echo "-- A-10: POST /api/agent/boot-fail writes last_boot_error (API 200 + response check)"
-BOOT_FAIL_RESP=$(curl -s -o /tmp/boot-fail-resp.json -w "%{http_code}" \
-  -X POST "$API_URL/api/agent/boot-fail" \
-  -H "Content-Type: application/json" \
-  -d '{"machine_id":"ci-test","hostname":"ci-runner","reason":"license_401","error_detail":"test run"}' \
-  --max-time 10 2>/dev/null || echo "000")
-if [ "$BOOT_FAIL_RESP" = "200" ] || [ "$BOOT_FAIL_RESP" = "201" ]; then
-  ok "POST /api/agent/boot-fail returned $BOOT_FAIL_RESP -- last_boot_error write triggered"
-elif echo "$BOOT_FAIL_RESP" | grep -qE '^0+$'; then
-  # Windows git bash: curl connection refused returns "000000" (6 zeros), not "000"
-  skip "A-10 boot-fail DB write" "API not running in this CI job -- evidence from vitest contract tests"
-  PASS=$((PASS+1))
-elif [ "$BOOT_FAIL_RESP" = "202" ]; then
-  # machine_id "ci-test" 从未在这个 smoke 环境的 license_machines 里注册过，202 = "machine not
-  # registered，未写入"，是修复 machine_id 列 bug 后的正确行为（PR #1478），不是 write 已确认；
-  # 真实"注册过的机器 → 200 + 确实写入"由 vitest boot-fail-api-contract.test.ts 覆盖
-  skip "A-10 boot-fail DB write (202)" "machine_id 'ci-test' 未预注册 -- graceful 202 符合修复后契约 -- DB write evidence from vitest boot-fail-api-contract.test.ts"
-  PASS=$((PASS+1))
-elif [ "$BOOT_FAIL_RESP" = "500" ]; then
-  # API running but 500 = endpoint exists (per A-7) but DB write unconfirmed in this runner
-  # Smoke Glob ubuntu runner may not have last_boot_error column; defer to vitest boot-fail-api-contract.test.ts
-  skip "A-10 boot-fail DB write (500)" "API returned 500 (endpoint exists per A-7) -- DB write evidence from vitest boot-fail-api-contract.test.ts"
-  PASS=$((PASS+1))
+if [ "$API_MODE" = files-only ]; then
+  skip 'A-10 API persistence' 'not requested; current isolated real-router/SQL tests cover recorded and unregistered machines'
+elif [ "$HTTP_STATUS" = 200 ] || [ "$HTTP_STATUS" = 202 ]; then
+  if node - "$BOOT_FAIL_BODY" "$HTTP_STATUS" <<'JS'
+const body=JSON.parse(require('fs').readFileSync(process.argv[2],'utf8'));
+const recorded=process.argv[3]==='200';
+if(body.ok!==true||body.success!==true||body.recorded!==recorded)throw Error('boot-fail success/recorded response mismatch');
+JS
+  then
+    if [ "$HTTP_STATUS" = 200 ]; then
+      ok 'boot-fail confirms recorded=true; exact machine DB persistence covered by isolated API tests'
+    else
+      ok 'boot-fail explicitly accepted unregistered machine with recorded=false; no write claim'
+    fi
+  else
+    fail 'boot-fail response body does not match its exact accepted/recorded state'
+  fi
 else
-  fail "POST /api/agent/boot-fail returned $BOOT_FAIL_RESP"
+  fail 'A-10 API response unavailable or failed; cannot confirm runtime behavior'
 fi
 
 # -----------------------------------------------------------------------
@@ -420,7 +418,9 @@ fi
 # -----------------------------------------------------------------------
 echo ""
 echo "=== Contract Smoke Results ==="
+echo "  API_MODE=$API_MODE"
 echo "  PASS: $PASS"
+echo "  SKIP: $SKIP (never counted as PASS)"
 echo "  FAIL: $FAIL"
 echo ""
 
