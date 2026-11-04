@@ -317,14 +317,35 @@ describe('runPreflight 跨平台行为', () => {
     }
   });
 
-  it('非 Windows 平台不崩溃且返回 ok:true', async () => {
-    if (process.platform === 'win32') return; // 仅在非 Windows 断言
-    const r = await runPreflight(os.tmpdir());
-    expect(r.ok).toBe(true);
-    expect(r.checks.wechat_version).toBe(true);
-    expect(r.checks.pywinauto).toBe(true);
-    expect(r.checks.memory).toBe(true);
-    expect(r.fixGuide).toBeUndefined();
+  it('显式 Linux fixture 不崩溃且返回 ok:true（Windows 也执行全部断言）', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    const forbidden = () => { throw new Error('Linux fixture must not install or invoke external tools'); };
+    const exec = vi.mocked(execSync);
+    const execImplementation = exec.getMockImplementation();
+    exec.mockImplementation(forbidden);
+    const spies = [
+      vi.spyOn(_repairFuncs, 'installWeChat').mockImplementation(forbidden),
+      vi.spyOn(_repairFuncs, 'installPywinauto').mockImplementation(forbidden),
+      vi.spyOn(_repairFuncs, 'installPywebview').mockImplementation(forbidden),
+      vi.spyOn(childProcessModule, 'spawn').mockImplementation(forbidden),
+      vi.spyOn(childProcessModule, 'spawnSync').mockImplementation(forbidden),
+      vi.spyOn(https, 'get').mockImplementation(forbidden),
+    ];
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    try {
+      const r = await runPreflight(os.tmpdir());
+      expect(r.ok).toBe(true);
+      expect(r.checks.wechat_version).toBe(true);
+      expect(r.checks.pywinauto).toBe(true);
+      expect(r.checks.memory).toBe(true);
+      expect(r.fixGuide).toBeUndefined();
+      for (const spy of [...spies, exec]) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      for (const spy of spies.reverse()) spy.mockRestore();
+      exec.mockReset();
+      if (execImplementation) exec.mockImplementation(execImplementation);
+    }
   });
 });
 
