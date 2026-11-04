@@ -266,6 +266,9 @@ class HostAdmissionTest(unittest.TestCase):
                 self.assertTrue(result['released']);self.assertFalse(result['execution_stopped']);self.assertFalse(result['replayed_inputs'])
                 self.assertTrue((directory/'completion.json').exists());p.assert_not_called();rename.assert_not_called()
                 self.assertEqual(host.execute('apply',home,'a'*40,'release'),result)
+                (directory/'desktop.png').write_bytes(b'changed')
+                with self.assertRaisesRegex(ValueError,'PRE_RETIREMENT_EVIDENCE'):host.execute('apply',home,'a'*40,'release')
+                (directory/'desktop.png').write_bytes(png)
                 (directory/'completion.json').unlink();g.target_identity=[1,2,3,999]
                 with self.assertRaisesRegex(ValueError,'INODE_OR_CAS'):host.execute('apply',home,'a'*40,'release')
                 p.assert_not_called();rename.assert_not_called()

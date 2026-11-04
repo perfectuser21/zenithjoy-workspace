@@ -150,10 +150,7 @@ def execute(action,home,sha,release_id):
         need(admission(home,sha,release_id)[0]==authorization,'LOCKED_ADMISSION_DRIFT')
         if not guards.verify():
             directory=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
-            if (directory/'completion.json').exists():
-                saved=json.loads(m.read(directory/'completion.json'))
-                need(saved.get('scope')==m.SCOPE and saved.get('maintenance')==m.TASK and saved.get('released') is True and saved.get('owner_inode')==guards.target_identity and saved.get('admission_sha256')==m.sha(m.canonical(authorization)),'COMPLETION_MISSING')
-                return {**saved,'replayed_inputs':False}
+            completion=json.loads(m.read(directory/'completion.json')) if (directory/'completion.json').exists() else None
             # rename已提交但最终记录前崩溃：只读原先持久化证据，不重发输入或rename。
             saved=json.loads(m.read(directory/'pre-retirement.json'))
             need(saved.get('scope')==m.SCOPE and saved.get('maintenance')==m.TASK and saved.get('execution_stopped') is False
@@ -166,7 +163,8 @@ def execute(action,home,sha,release_id):
             final={**saved,'released':True,'archive':m.ARCHIVE,'owner':m.SCOPE['owner'],'serial':m.SCOPE['serial'],
                    'other_owners_unchanged':True,'central_lease_released':False,'old_run_modified':False,'production_promoted':False,'replayed_inputs':False}
             need(guards.verify() is False and admission(home,sha,release_id)[0]==authorization,'RECONCILIATION_DRIFT')
-            if action=='apply':phone_module.atomic_new(directory/'completion.json',final)
+            if completion is not None:need(completion==final,'COMPLETION_EVIDENCE_DRIFT')
+            elif action=='apply':phone_module.atomic_new(directory/'completion.json',final)
             return final
         phone=phone_module.Phone(home,original);state=phone.home_state()
         if action=='plan':return {**authorization,'home':state,'needs_new_cleanup':not state['home'],'central_lease_released':False,'execution_stopped':False}
