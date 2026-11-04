@@ -129,7 +129,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -335,13 +335,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "b527c3913ea3f71a3fe706ac81d2c8470daad42b0998e791f9466268537d45d6",
+      "code_digest": "1e12dbb86f0097df60af6a45e3459d97babcaa680e3dc8faec95514cdd83ed35",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。101仍由服务端验证冻结关键词、原生VID与指标及PG视频回执，确认零评论不入队规则不变；仅修Agent预算、Observer等待、官方派发与同源材料分页，不新增手机或提交能力。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "19b6e9ebb306a190991ac87b89d2b91e2760720af8ed991c388fc965351093fa",
-        "current_code_digest": "b527c3913ea3f71a3fe706ac81d2c8470daad42b0998e791f9466268537d45d6"
+        "previous_code_digest": "b527c3913ea3f71a3fe706ac81d2c8470daad42b0998e791f9466268537d45d6",
+        "current_code_digest": "1e12dbb86f0097df60af6a45e3459d97babcaa680e3dc8faec95514cdd83ed35"
       }
     },
     "douyin_video_processing.preflight": {
@@ -479,7 +479,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -668,13 +668,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "6cbcc7f9bda5622b66ce6f6cda039cf3327a71eaff3aef504cf9624415454064",
+      "code_digest": "c11650b0a5bde23223b5bfb2c093057848b941c7bae77f07a53d048930d0a18f",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。101与102共享预检的公司账号、设备、Task及两层资源守卫保持；预检仍由服务端原件聚合，Agent文字不作证据；只调整Agent传输预算与派发材料。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "c91e7428b4f920f1897984d8e9be0466558bf16a6ca2fb444744f7213f91700c",
-        "current_code_digest": "6cbcc7f9bda5622b66ce6f6cda039cf3327a71eaff3aef504cf9624415454064"
+        "previous_code_digest": "6cbcc7f9bda5622b66ce6f6cda039cf3327a71eaff3aef504cf9624415454064",
+        "current_code_digest": "c11650b0a5bde23223b5bfb2c093057848b941c7bae77f07a53d048930d0a18f"
       }
     },
     "douyin_video_processing.dedup": {
@@ -812,7 +812,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -1004,13 +1004,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "12496a000f83e309f2b96e4fe979573c8d717b0c06152e23d75e0fda27d59447",
+      "code_digest": "b7b10f03ad93af27b66cc1c0fe8f1bfa9ca28f08527260d9ddf549ed5559f75d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。102来源与视频领取守卫、额度和原认领队列保持；只修Agent协议与同源材料交付，未引入handler或resume回退、重派或新来源授权。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "7459f6ba600f1d24ba7e241b2864febee9f9c86508c1f4a7bf7ebce41973abbf",
-        "current_code_digest": "12496a000f83e309f2b96e4fe979573c8d717b0c06152e23d75e0fda27d59447"
+        "previous_code_digest": "12496a000f83e309f2b96e4fe979573c8d717b0c06152e23d75e0fda27d59447",
+        "current_code_digest": "b7b10f03ad93af27b66cc1c0fe8f1bfa9ca28f08527260d9ddf549ed5559f75d"
       }
     },
     "douyin_video_processing.qualification": {
@@ -1176,7 +1176,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -1424,13 +1424,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "dec1bf15b4f85f3e25ee8f2636a5d806a64ab017e0777c65aea54082aba5e318",
+      "code_digest": "f1b9bca3fe198e80598ee58b4684102ef313062c3d823ce014a21fc04f0c89aa",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。资格政策、录音转写、VID及公司绑定原判据保持；分期仅缩短Agent截止并保留未知隔离，同一绑定停止不授予重采或资格改写权。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "49a1d68c9147dcfab2823a67d14f07650497d196e8df7c86732a7394d3023031",
-        "current_code_digest": "dec1bf15b4f85f3e25ee8f2636a5d806a64ab017e0777c65aea54082aba5e318"
+        "previous_code_digest": "dec1bf15b4f85f3e25ee8f2636a5d806a64ab017e0777c65aea54082aba5e318",
+        "current_code_digest": "f1b9bca3fe198e80598ee58b4684102ef313062c3d823ce014a21fc04f0c89aa"
       }
     },
     "douyin_video_processing.collection": {
@@ -1575,7 +1575,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -1789,13 +1789,13 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "7750a7625a1dab19b0191089fb572d34780cb17464265b4aa90c8d491704d971",
+      "code_digest": "2c881ab54f0bd4e92a508c751eceb300b3e1324ea5979984c82dd6bd5891a7a5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。原生评论身份、严格面板解析、分批持久化、配额及精确未知读回保持；新预算和派发材料不改变提交接口，缺双停或提交未知仍隔离。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "2cf164e7006dd715493005371b984c56ef84e7fcc1d3466315bb0a7130d5f84d",
-        "current_code_digest": "7750a7625a1dab19b0191089fb572d34780cb17464265b4aa90c8d491704d971"
+        "previous_code_digest": "7750a7625a1dab19b0191089fb572d34780cb17464265b4aa90c8d491704d971",
+        "current_code_digest": "2c881ab54f0bd4e92a508c751eceb300b3e1324ea5979984c82dd6bd5891a7a5"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1926,7 +1926,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -2114,13 +2114,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "494a35fa3651428bd16ffcf32891224753bbae49f8da2d39c2145de5e15e04f6",
+      "code_digest": "462326c34d98fc5912279e313ff519601f4414c60a17d35b18065b94b521c1e6",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。101与102共享收尾的原生证据、同owner和释放顺序保持；分期停止仅针对同一绑定，父子或原生终止缺证仍false，未新增清场或释放权限。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "ee3f5621cd8f23855d0186b2c4b19c76270c4971ae76ee094195ba426d48546d",
-        "current_code_digest": "494a35fa3651428bd16ffcf32891224753bbae49f8da2d39c2145de5e15e04f6"
+        "previous_code_digest": "494a35fa3651428bd16ffcf32891224753bbae49f8da2d39c2145de5e15e04f6",
+        "current_code_digest": "462326c34d98fc5912279e313ff519601f4414c60a17d35b18065b94b521c1e6"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -2251,7 +2251,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -2450,13 +2450,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "628f173d0fe740edd6bd2e2b1df4358c8e50586f52a1633e475c6cd54fff35b6",
+      "code_digest": "90433bc692c1d6db5f2b98f50e677efe00db9e5855f61c071781e8a8944884a2",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。103原公司政策、来源及评分ID范围保持，不占手机；只修Agent传输预算与材料分页，未改变评分模型或扩大候选额度。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "a3cf45fa78894b877fbd67c896eb57b43e2bc301a426503991f3d2527736df88",
-        "current_code_digest": "628f173d0fe740edd6bd2e2b1df4358c8e50586f52a1633e475c6cd54fff35b6"
+        "previous_code_digest": "628f173d0fe740edd6bd2e2b1df4358c8e50586f52a1633e475c6cd54fff35b6",
+        "current_code_digest": "90433bc692c1d6db5f2b98f50e677efe00db9e5855f61c071781e8a8944884a2"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2594,7 +2594,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -2828,13 +2828,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "d15993074fea5ca2409935c483684bac086b03cefd28971bc5e5723a6a7657ed",
+      "code_digest": "fbd7461f3dca13d8e3940b557bb90fc67f95836b0a155ee6af189b700ec45c3c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。103精确评分ID、mark及bridge范围和原队列读回保持，未增加104外发；只改变Agent传输及Observer实现，合同和方法正文未变。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。新增的是用户已授权接入的精确xian-m4/yueshengyun-work/e6c7ef34模板；工具、route和alias pins与既存只读宿主原件匹配，expected_account与原正式v26同公司/租户verified enabled账号匹配；原三条模板不变。仅补泛型Device合同的已授权设备实现，不开放任意profile/serial/host，不绕PG账号、Task、中央/local owner、原生身份或正式确认守卫。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "a1654fd0d6dad040f5c47d6b64c93cd7e943a7925ee1e919abe4226448d3bfe0",
-        "current_code_digest": "d15993074fea5ca2409935c483684bac086b03cefd28971bc5e5723a6a7657ed"
+        "previous_code_digest": "d15993074fea5ca2409935c483684bac086b03cefd28971bc5e5723a6a7657ed",
+        "current_code_digest": "fbd7461f3dca13d8e3940b557bb90fc67f95836b0a155ee6af189b700ec45c3c"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2930,7 +2930,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -3154,13 +3154,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "82b7296a5836fa372f04717005d48fb5488dba73eeec8b08ec031d41bed84716",
+      "code_digest": "4eb84dc37ba9c8a5a5bdb0e45802a9824a791b9c5da657efe8dcd85e1617db78",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。104仍走原Code及repair/readback路径，Agent首次执行入口继续排除104；共享adapter的新增截止与Observer包装只在agentPrimary生效，传输分期、分页和Python停止新截止仅execute生效；104缺省消息、原48秒停止路径、账号/原生目标/批准话术/发送及写回规则均保持。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。104仅因共享配置闭包digest变化：新增条目的workflow_keys精确只有101/102，不能匹配104；原三条模板、104控制器/Skill/合同/版本、账号/原生目标/批准话术及发送/写回行为保持。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "574864c7ba543f05cf97c7ab116eb8d088826593c34e29f5ac2c3b77ade017df",
-        "current_code_digest": "82b7296a5836fa372f04717005d48fb5488dba73eeec8b08ec031d41bed84716"
+        "previous_code_digest": "82b7296a5836fa372f04717005d48fb5488dba73eeec8b08ec031d41bed84716",
+        "current_code_digest": "4eb84dc37ba9c8a5a5bdb0e45802a9824a791b9c5da657efe8dcd85e1617db78"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -3256,7 +3256,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -3455,13 +3455,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0fbb1d1950659ee6a367313ee12ddd85c0d96850a8e30c506a2833b5563e428f",
+      "code_digest": "acffad575432fc29530eb02261ed5de3fb10e42261f96d8b34206a6900239c86",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。104仍走原Code及repair/readback路径，Agent首次执行入口继续排除104；共享adapter的新增截止与Observer包装只在agentPrimary生效，传输分期、分页和Python停止新截止仅execute生效；104缺省消息、原48秒停止路径、账号/原生目标/批准话术/发送及写回规则均保持。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。104仅因共享配置闭包digest变化：新增条目的workflow_keys精确只有101/102，不能匹配104；原三条模板、104控制器/Skill/合同/版本、账号/原生目标/批准话术及发送/写回行为保持。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "7f6f129b241c7f85bb12f3d2ce204cd6439fad4c9089ad819a5d030e6fda551e",
-        "current_code_digest": "0fbb1d1950659ee6a367313ee12ddd85c0d96850a8e30c506a2833b5563e428f"
+        "previous_code_digest": "0fbb1d1950659ee6a367313ee12ddd85c0d96850a8e30c506a2833b5563e428f",
+        "current_code_digest": "acffad575432fc29530eb02261ed5de3fb10e42261f96d8b34206a6900239c86"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3557,7 +3557,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -3749,13 +3749,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "aa9f16deb76282b8babc64917c60a1a45931953be671130411f22f56bcd6791b",
+      "code_digest": "0c727a6e138526d82f1432c68e1f2ab2b321a7316a4d8e725076e7a722e91632",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。104仍走原Code及repair/readback路径，Agent首次执行入口继续排除104；共享adapter的新增截止与Observer包装只在agentPrimary生效，传输分期、分页和Python停止新截止仅execute生效；104缺省消息、原48秒停止路径、账号/原生目标/批准话术/发送及写回规则均保持。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。104仅因共享配置闭包digest变化：新增条目的workflow_keys精确只有101/102，不能匹配104；原三条模板、104控制器/Skill/合同/版本、账号/原生目标/批准话术及发送/写回行为保持。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "83995cc9477ee95562969acfe896e6fa2ebf194e735089606b4b2d6ca1228169",
-        "current_code_digest": "aa9f16deb76282b8babc64917c60a1a45931953be671130411f22f56bcd6791b"
+        "previous_code_digest": "aa9f16deb76282b8babc64917c60a1a45931953be671130411f22f56bcd6791b",
+        "current_code_digest": "0c727a6e138526d82f1432c68e1f2ab2b321a7316a4d8e725076e7a722e91632"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3851,7 +3851,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/config/collection-phone-hosts.json",
           "revision": "contract",
-          "sha256": "e7a9e000b86d812f8e0de9d762a8b7e121234e04cbedb3acb5315bb6e8200718"
+          "sha256": "23a1c324f7ee62a9bf4a39550138df281935f7eee4c2c322e73abf2b9feba52f"
         },
         {
           "kind": "code",
@@ -4053,13 +4053,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "ea6c9b09a99a9f765a7e9486c07626422fc402d1067790f62f876720275aea3c",
+      "code_digest": "071c97f47ea92c8aa029f2fc74b2f393a9aaee8b15039232ae11b66d2a75a626",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "独立审查源0f2fc32a7753e27fc5d737804298469dc861af5f，基线4b5cb9e7448b88682c30e3319473d6cfd0fc14fb。104仍走原Code及repair/readback路径，Agent首次执行入口继续排除104；共享adapter的新增截止与Observer包装只在agentPrimary生效，传输分期、分页和Python停止新截止仅execute生效；104缺省消息、原48秒停止路径、账号/原生目标/批准话术/发送及写回规则均保持。三项实证缺口已修复并亲测；本评估仅绑定本条精确digest对，不代表实机通过或新执行授权。",
+        "reason": "独立审查源85d1bfc01c5befa003b05229d0c36d6956a58fe2、基线46ac12dd6c00ff2f0ed8fe81924b69dbe06808ec；唯一变动code path为config/collection-phone-hosts.json，方法/支持材料/业务合同/版本均相同。104仅因共享配置闭包digest变化：新增条目的workflow_keys精确只有101/102，不能匹配104；原三条模板、104控制器/Skill/合同/版本、账号/原生目标/批准话术及发送/写回行为保持。独立API64项、真实隔离PG2项、scope1项通过。此兼容评估仅绑定本条精确digest对；不证明设备在线、当前原生账号或实机通过；未来preflight闭域42e未完成前仍禁止新phone启动。",
         "reviewed_by": "/root/review_discovery_recovery",
-        "previous_code_digest": "c0c9faa5db0592a0b03e6a29d109e986eeecfeb5bd4f3fc6e1f32a8118d2fefc",
-        "current_code_digest": "ea6c9b09a99a9f765a7e9486c07626422fc402d1067790f62f876720275aea3c"
+        "previous_code_digest": "ea6c9b09a99a9f765a7e9486c07626422fc402d1067790f62f876720275aea3c",
+        "current_code_digest": "071c97f47ea92c8aa029f2fc74b2f393a9aaee8b15039232ae11b66d2a75a626"
       }
     }
   },

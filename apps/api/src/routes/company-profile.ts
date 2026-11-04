@@ -4,6 +4,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { companyAccountVerification } from './company-account-verification';
 import { companyAccountRegistration, companyAccountRegistrationSession } from './company-account-registration';
+import { companyRoutingNormalization, companyRoutingNormalizationReadback } from './company-routing-normalization';
 import { validateCompanyIdentity, validateEnabledCompany, companyRecord, companyObject, type CompanyJsonRecord } from './company-profile-validation';
 import { tenantContext } from '../middleware/tenant-context';
 import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
@@ -143,3 +144,6 @@ companyProfileRouter.put('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn
 companyProfileRouter.post('/platform-account-registrations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountRegistration({ pool, profile, snapshot }));
 
 companyProfileRouter.post('/platform-account-verifications', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyAccountVerification({ pool, profile, snapshot }));
+
+companyProfileRouter.post('/routing-profile-normalizations', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalization({ pool, snapshot }));
+companyProfileRouter.get('/routing-profile-normalizations/:requestId', simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn }), companyAccountRegistrationSession, tenantContext, companyRoutingNormalizationReadback({ pool, snapshot }));

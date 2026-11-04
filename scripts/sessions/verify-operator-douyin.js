@@ -91,14 +91,21 @@ async function main() {
     // 拦截 user/info API
     let apiStatus = null;
     let apiOk = false;
+    let apiSequence = 0;
     context.on('response', async (resp) => {
       try {
         if (resp.url().includes('/web/api/base/creator/user/info')) {
+          const observation = ++apiSequence;
           apiStatus = resp.status();
+          apiOk = false;
           try {
             const body = await resp.json();
-            apiOk = body.status_code === 0 || !!body.user_info || !!body.creator_info;
-          } catch { apiOk = resp.status() === 200; }
+            if (observation !== apiSequence) return;
+            const validBody = body !== null && typeof body === 'object' && !Array.isArray(body);
+            apiOk = apiStatus >= 200 && apiStatus < 300 && validBody &&
+              (!Object.hasOwn(body, 'status_code') || body.status_code === 0) &&
+              (body.status_code === 0 || !!body.user_info || !!body.creator_info);
+          } catch { /* apiOk was cleared when this response arrived */ }
         }
       } catch { /* 静默忽略 context 关闭等异常 */ }
     });
@@ -125,16 +132,18 @@ async function main() {
 
     // 等待 API 响应
     await page.waitForTimeout(5000);
-    await page.screenshot({ path: 'douyin-session-pass.png', fullPage: false }).catch(() => {});
 
     console.log(`[info] user/info API: status=${apiStatus ?? '未捕获'} ok=${apiOk}`);
 
-    if (apiStatus !== null && !apiOk) {
-      const msg = `user/info API 返回异常（HTTP ${apiStatus}）`;
+    if (!apiOk) {
+      await page.screenshot({ path: 'douyin-session-fail.png' }).catch(() => {});
+      const msg = apiStatus === null ? '未捕获 user/info API 成功响应' : `user/info API 返回异常（HTTP ${apiStatus}）`;
       console.error(`[FAIL] ${msg}`);
-      await sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg + '\n请重新扫码并更新 GHA secret');
+      await sendFeishuAlert('🔴 DOUYIN_OPERATOR_SESSION 验证失败', msg);
       throw new VerifyFailError(msg);
     }
+
+    await page.screenshot({ path: 'douyin-session-pass.png', fullPage: false }).catch(() => {});
 
     console.log('');
     console.log('============================================');

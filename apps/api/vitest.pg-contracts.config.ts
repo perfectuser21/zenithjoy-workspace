@@ -4,6 +4,7 @@ export default defineConfig({
     include: [
       'tests/pg-contracts/disposable-db.test.ts',
       'tests/pg-contracts/run-company-freeze.test.ts',
+      'tests/pg-contracts/routing-normalization-pg.test.ts',
       'src/routes/company-profile-scratch.test.ts',
       'tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts',
       'tests/ws1/publish-task-type.test.ts',
