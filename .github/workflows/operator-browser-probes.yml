@@ -1,0 +1,115 @@
+# Preserves both original schedules, account storageState and scripts.
+# At 16:00 UTC both session probes share one install; independent failures remain red.
+name: Operator Browser Probes (Shared Windows)
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: 0 2 * * *
+    - cron: 0 16 * * *
+permissions:
+  contents: read
+concurrency:
+  group: operator-browser-probes
+  cancel-in-progress: false
+jobs:
+  probes:
+    name: Account-specific browser and draft probes
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/agent/package-lock.json
+      - name: Install dependencies
+        working-directory: services/agent
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: services/agent
+        run: npx playwright install chromium --with-deps
+        id: browser
+      - name: Create test cover image
+        shell: pwsh
+        run: >
+          Add-Type -AssemblyName System.Drawing
+
+          $img = [System.Drawing.Bitmap]::new(300, 200)
+
+          $g = [System.Drawing.Graphics]::FromImage($img)
+
+          $g.Clear([System.Drawing.Color]::FromArgb(255, 100, 0))
+
+          $g.DrawString("ZenithJoy E2E Test",
+          [System.Drawing.SystemFonts]::DefaultFont,
+          [System.Drawing.Brushes]::White, 50, 80)
+
+          $g.Dispose()
+
+          $img.Save("$env:GITHUB_WORKSPACE\test-cover.png")
+
+          $img.Dispose()
+
+          Write-Host "test-cover.png created"
+        if: "!cancelled() && steps.browser.outcome == 'success' && (github.event_name ==
+          'workflow_dispatch' || github.event.schedule == '0 2 * * *')"
+      - name: Create queue file
+        shell: pwsh
+        run: >
+          $cover = "$env:GITHUB_WORKSPACE\test-cover.png"
+
+          $q = @{
+            title = "[DRY-RUN] E2E 自检 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+            content = "GitHub Actions E2E 自动验证。"
+            cover = $cover
+            summary = "E2E 自检"
+          } | ConvertTo-Json
+
+          $q | Out-File -FilePath "$env:GITHUB_WORKSPACE\queue.json" -Encoding
+          utf8
+
+          Write-Host "queue.json:"
+
+          Get-Content "$env:GITHUB_WORKSPACE\queue.json"
+        if: "!cancelled() && steps.browser.outcome == 'success' && (github.event_name ==
+          'workflow_dispatch' || github.event.schedule == '0 2 * * *')"
+      - name: Run dryrun publisher
+        working-directory: services/agent
+        shell: pwsh
+        env:
+          DOUYIN_COOKIES: ${{ secrets.DOUYIN_OPERATOR_SESSION }}
+          SCREENSHOT_DIR: ${{ github.workspace }}\screenshots
+        run: >
+          node publishers/douyin-publisher/publish-douyin-article-dryrun.cjs
+          "$env:GITHUB_WORKSPACE\queue.json"
+        if: "!cancelled() && steps.browser.outcome == 'success' && (github.event_name ==
+          'workflow_dispatch' || github.event.schedule == '0 2 * * *')"
+      - name: Run operator session E2E verify
+        working-directory: services/agent
+        shell: pwsh
+        env:
+          DOUYIN_OPERATOR_SESSION: ${{ secrets.DOUYIN_OPERATOR_SESSION }}
+          ZENITHJOY_FEISHU_WEBHOOK: ${{ secrets.ZENITHJOY_FEISHU_WEBHOOK }}
+        run: node ..\..\scripts\sessions\verify-operator-douyin.js
+        if: "!cancelled() && steps.browser.outcome == 'success' && (github.event_name ==
+          'workflow_dispatch' || github.event.schedule == '0 16 * * *')"
+      - name: Run 小红书 session verify
+        shell: pwsh
+        env:
+          XIAOHONGSHU_COOKIES: ${{ secrets.XIAOHONGSHU_COOKIES }}
+          ZENITHJOY_FEISHU_WEBHOOK: ${{ secrets.ZENITHJOY_FEISHU_WEBHOOK }}
+        run: node scripts/sessions/verify-operator-xiaohongshu.js
+        if: "!cancelled() && steps.browser.outcome == 'success' && (github.event_name ==
+          'workflow_dispatch' || github.event.schedule == '0 16 * * *')"
+      - name: Upload per-probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-browser-probes-${{ github.run_id }}
+          path: |-
+            screenshots/
+            services/agent/douyin-session-*.png
+            xiaohongshu-session-*.png
+          if-no-files-found: ignore
+          retention-days: 14
