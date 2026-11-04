@@ -7,6 +7,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    setupFiles: ['tests/setup-http.ts'],
     include: [
       'tests/**/*.test.ts',
       'src/**/*.test.{ts,js}',
