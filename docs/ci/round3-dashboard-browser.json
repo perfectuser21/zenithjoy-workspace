@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "scope": "Current LocalVideoPipeline SPA browser DoD and completion text contrast; this is local code/UI acceptance, not real rendering/device/production success.",
+  "source_base_commit": "957f8d2f0fdf2f947167cd92829c7e3bd6c8516f",
+  "tested_page_source_sha256": "ab5a10badfe46519c2ead7380ad5fd3a13666e77938bcba9e607cbb613c61fc0",
+  "source_was_tested_with_uncommitted_style_patch": true,
+  "actual_app": "Vite serving actual current apps/dashboard SPA + protected /local-video route + real AuthProvider; no copied component and VITE_SKIP_AUTH=false.",
+  "isolated_transport_boundaries": "Playwright local HTTP auth/license/machines/job fixtures plus actual Chromium EventSource reading terminal SSE; all unknown API calls fail, external HTTP/WS blocked before network.",
+  "browser_url": "http://127.0.0.1:15324/local-video",
+  "command": "/opt/homebrew/opt/node@20/bin/node /Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/browser-dashboard/run-browser.mjs /Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-browser-dod 15324",
+  "node_dependency_install": "PATH=/opt/homebrew/opt/node@20/bin:$PATH npm ci --workspace apps/dashboard --include-workspace-root --ignore-scripts (own worktree, no shared node_modules symlink)",
+  "result": "passed",
+  "scenarios": [
+    {
+      "name": "done-output-dir",
+      "result": "passed"
+    },
+    {
+      "name": "done-missing-dir",
+      "result": "passed"
+    },
+    {
+      "name": "failed-retry",
+      "result": "passed"
+    },
+    {
+      "name": "missing-license",
+      "result": "passed"
+    },
+    {
+      "name": "done-light",
+      "result": "passed"
+    }
+  ],
+  "boundaries_verified": [
+    "done terminal status",
+    "exact output_dir from actual browser EventSource",
+    "missing output_dir truthful fallback",
+    "failed SSE retry state",
+    "missing license prevents job POST"
+  ],
+  "additional_interactions": [
+    "Select aspect16:9 and templateR, assert exact actual POST body and fixture bearer",
+    "Process new video resets actual fields, removes prior result, disables empty submit"
+  ],
+  "contrast": {
+    "actual_before": [
+      {
+        "text": "C:\\CI-Fixture\\renders\\job-browser",
+        "foreground": [
+          0,
+          0,
+          0
+        ],
+        "composited_background": [
+          25.2,
+          48.400000000000006,
+          59
+        ],
+        "contrast": 1.5343524037363643
+      }
+    ],
+    "actual_after": [
+      {
+        "text": "C:\\CI-Fixture\\renders\\job-browser",
+        "foreground": [
+          209,
+          250,
+          229
+        ],
+        "composited_background": [
+          25.2,
+          48.400000000000006,
+          59
+        ],
+        "contrast": 12.068109828598297
+      },
+      {
+        "text": "请在执行电脑上查看输出目录。",
+        "foreground": [
+          209,
+          250,
+          229
+        ],
+        "composited_background": [
+          25.2,
+          48.400000000000006,
+          59
+        ],
+        "contrast": 12.068109828598297
+      },
+      {
+        "text": "C:\\CI-Fixture\\light-output",
+        "foreground": [
+          6,
+          78,
+          59
+        ],
+        "composited_background": [
+          236,
+          253,
+          245
+        ],
+        "contrast": 9.226471287143958
+      }
+    ],
+    "threshold": 4.5,
+    "fix": "Two foreground text classes text-emerald-900 and dark:text-emerald-100; no logic changes"
+  },
+  "artifacts": {
+    "root": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/browser-dashboard",
+    "evidence": "evidence.json",
+    "evidence_sha256": "d055fbac42e46712776cbe3668d5f59848af09bde2f7106698d303aac4cc1511",
+    "runner": "run-browser.mjs",
+    "runner_sha256": "f67276b1ab772f78c0fb43a22def3f44b48addcaef2e9dded1406b8756d70b23",
+    "red_before": "contrast-red.json",
+    "screenshots": [
+      {
+        "path": "done-light.png",
+        "sha256": "23921d01c5661bedbdb885b038717e6208c841bb3797ca38a79e7711794124fc"
+      },
+      {
+        "path": "done-missing-dir.png",
+        "sha256": "bc6afb44eda0ac5831befdfe54816ad4f198d64622136c8c5a6493194896b10e"
+      },
+      {
+        "path": "done-output-dir.png",
+        "sha256": "e07e3feb072b37a5d0505459eb24db626977c5c8d32702b292b701bde1aa8244"
+      },
+      {
+        "path": "failed-retry.png",
+        "sha256": "f37d6f49a53d2f5fcab4da46f90131233205b0a76a1178bacb0b27812fe9beb3"
+      },
+      {
+        "path": "missing-license.png",
+        "sha256": "acf6e839997f918ef1d61d3a33d5c3c12bc80444deb56f76495c9c05574ef4ee"
+      },
+      {
+        "path": "reset-interaction.png",
+        "sha256": "5e8275ea88774bb273f174fd264e95195651416e7c3c0f09ad713263fcbc9e67"
+      }
+    ]
+  },
+  "visual_review": {
+    "reviewed_at": "2026-11-04T10:23:54.790132+00:00",
+    "reviewed_screenshots": [
+      "done-light.png",
+      "done-missing-dir.png",
+      "done-output-dir.png",
+      "failed-retry.png",
+      "missing-license.png",
+      "reset-interaction.png"
+    ],
+    "findings": "Done path and missing-path fallback readable in dark/light; completed page has no broken output download links; failure/retry, disabled-license and reset controls visibly match assertions."
+  },
+  "cloud_ci": "pending; no current GitHub required success or production delivery inferred",
+  "historical_staff_browser_evidence": "Round2 Staff screenshots retained separately in .dod.md history; not evidence for this Dashboard change."
+}

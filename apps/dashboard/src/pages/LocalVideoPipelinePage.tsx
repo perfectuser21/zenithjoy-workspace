@@ -252,7 +252,7 @@ export default function LocalVideoPipelinePage() {
         )}
 
         {isDone && job && (
-          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-sm">
+          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-900 dark:text-emerald-100 text-sm">
             <p>视频已保存到执行电脑的本地文件夹。</p>
             {job.output_dir ? <p className="mt-2 font-mono break-all">{job.output_dir}</p> : <p className="mt-2">请在执行电脑上查看输出目录。</p>}
           </div>
