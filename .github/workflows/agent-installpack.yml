@@ -20,6 +20,7 @@ jobs:
     # COS 上传用 cos.accelerate.myqcloud.com（全球 CDN 加速，跨境 TCP 稳定）。
     # Dryrun verify 也在此处跑（windows-latest 是 Windows，可直接执行 embedded python.exe）。
     runs-on: windows-latest
+    timeout-minutes: 30
     outputs:
       pack_name: ${{ steps.get_pack.outputs.pack_name }}
       cos_url: ${{ steps.cos_upload.outputs.cos_url }}
@@ -227,6 +228,7 @@ jobs:
   # core.exe 轻量，Line 模块按需下载安装。
   build-line-modules:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: []   # 与 build job 并行，不依赖 core
     strategy:
       matrix:
@@ -279,6 +281,7 @@ jobs:
     if: github.event_name == 'push' || inputs.publish == true
     needs: [build, build-line-modules]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
