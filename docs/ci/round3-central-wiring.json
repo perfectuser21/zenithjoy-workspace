@@ -298,12 +298,8 @@
     "dispatch-two-step-smoke.sh",
     "brain-device-job-mirror-smoke.sh",
     "phone-account-patrol-smoke.sh",
-    "",
-    "",
     "publish-recovery-core-smoke.sh",
-    "pdd-listing-driver-smoke.sh",
-    "",
-    ""
+    "pdd-listing-driver-smoke.sh"
   ],
   "registered_tests": [
     ".github/workflows/scripts/__tests__/acquisition-sse-config.test.mjs",
@@ -565,5 +561,11 @@
     ],
     "evidence": "business required PostgreSQL session-writeback.pg.test.ts plus actual subprocess negative cases",
     "scope": "35 inspector definitions preserved; optional missing stays missing, no notification credentials introduced or delivery claimed"
+  },
+  "baseline_counts": {
+    "before": 159,
+    "after": 73,
+    "removed": 91,
+    "added": 5
   }
 }
