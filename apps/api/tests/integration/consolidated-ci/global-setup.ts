@@ -9,6 +9,7 @@ const migrations = [
   '20260416_163600_create_zenithjoy_topics.sql', '20260416_163601_create_zenithjoy_pacing_config.sql',
   '20260417_173000_add_notebook_id_to_topics.sql',
   '20260428_100000_create_tenants.sql', '20260428_100100_create_agents.sql',
+  '20260428_100200_create_tasks.sql',
   '20260428_104400_create_license_tables.sql', '20260428_120500_add_works_owner_id.sql',
   '20260428_132000_unify_tenant_isolation.sql', '20260428_205500_better_auth_schema.sql',
   '20260429_161500_licenses_allow_free_tier.sql', '20260429_161614_create_credits.sql',

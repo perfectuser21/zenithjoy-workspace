@@ -241,10 +241,10 @@ describe('API Contract — Fields', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('API Contract — Publish Logs', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => { vi.resetAllMocks(); queueTenantMember(); });
 
   it('GET /api/works/:workId/publish-logs — array shape', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [LOG_ROW] });
+    mockQuery.mockResolvedValueOnce({ rows: [WORK_ROW] }).mockResolvedValueOnce({ rows: [LOG_ROW] });
 
     const { status, body } = await request(app).get(`/api/works/${WORK_UUID}/publish-logs`).set('X-Feishu-User-Id', TEST_USER);
 
