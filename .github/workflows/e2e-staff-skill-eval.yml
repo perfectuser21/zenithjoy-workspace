@@ -1,0 +1,41 @@
+name: Staff Hub Skill Evaluation UI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/staff-hub/src/pages/SkillEvalPage*'
+      - 'apps/staff-hub/src/contexts/AuthContext.tsx'
+      - 'apps/staff-hub/src/lib/adminFetch.ts'
+      - 'apps/staff-hub/e2e/skill-eval.spec.ts'
+      - 'apps/staff-hub/playwright.skill-eval.config.ts'
+      - 'apps/api/tests/fixtures/staff-skill-eval-server.ts'
+      - 'apps/api/src/routes/staff.ts'
+      - 'apps/api/src/middleware/staff.ts'
+      - 'package-lock.json'
+      - '.github/workflows/e2e-staff-skill-eval.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staff-skill-eval-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  skill-eval-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+        working-directory: apps/staff-hub
+      - name: Current Staff Hub UI with real API guard and isolated external evaluator
+        working-directory: apps/staff-hub
+        run: npx playwright test --config playwright.skill-eval.config.ts --reporter=list
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: staff-skill-eval-ui
+          path: apps/staff-hub/test-results/

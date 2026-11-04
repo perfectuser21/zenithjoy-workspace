@@ -6,9 +6,10 @@
  * 携带这个头 —— 任何账号（包括白名单内的）点上传都会被后端 403 拒绝。
  * 前端 isStaff（侧边栏可见性）跟这里完全是两条独立检查，不能互相替代。
  */
+import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import SkillEvalPage from '../SkillEvalPage';
+import SkillEvalPage from './SkillEvalPage';
 
 const mockAuth = vi.hoisted(() => ({
   isSuperAdmin: false,
@@ -20,7 +21,7 @@ const mockAuth = vi.hoisted(() => ({
   login: vi.fn(),
   logout: vi.fn(),
 }));
-vi.mock('../../contexts/AuthContext', () => ({
+vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => mockAuth,
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -140,7 +141,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     const headers = new Headers((reportInit as RequestInit)?.headers);
     expect(headers.get('X-User-Email')).toBe('xuxiao21xx@icloud.com');
 
-    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report-frame')).toBeTruthy(), { timeout: 5000 });
     const iframe = screen.getByTestId('skill-eval-report-frame') as HTMLIFrameElement;
     expect(iframe.getAttribute('srcDoc') ?? iframe.srcdoc).toBe(fakeReportHtml);
   });
@@ -172,7 +173,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
 
     // 不应出现"轮询超时"错误，应该正常展示报告
     expect(screen.queryByTestId('skill-eval-error')).toBeNull();
-    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report-frame')).toBeTruthy(), { timeout: 5000 });
     const iframe = screen.getByTestId('skill-eval-report-frame') as HTMLIFrameElement;
     expect(iframe.getAttribute('srcDoc') ?? iframe.srcdoc).toBe(fakeReportHtml);
 
@@ -194,7 +195,7 @@ describe('SkillEvalPage — X-User-Email 鉴权头', () => {
     selectPlatformAndJourney();
     fireEvent.click(screen.getByTestId('skill-eval-submit'));
 
-    await waitFor(() => expect(screen.getByTestId('skill-eval-report')).toBeTruthy(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByTestId('skill-eval-report-frame')).toBeTruthy(), { timeout: 5000 });
     const iframe = screen.getByTestId('skill-eval-report-frame') as HTMLIFrameElement;
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-modals');
   });
