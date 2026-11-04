@@ -110,3 +110,24 @@ test('missing or duplicate shards, filters, larger timeout and detached aggregat
   w.jobs['l3-passed'].needs = w.jobs['l3-passed'].needs.filter(n => n !== 'openclaw-scripts-test');
   assert.throws(() => validate(w));
 });
+
+// Listing recovery is independent of OpenClaw's file sharding. Run its full
+// failure semantics once, inside the already required matrix aggregate.
+function validateRecovery(w) {
+  const steps = w.jobs['openclaw-scripts-test'].steps.filter(s => s.run?.includes('services/listing-workflow/__tests__/*.test.mjs'));
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].run, 'node --test services/listing-workflow/__tests__/*.test.mjs');
+  assert.equal(steps[0].if, 'matrix.shard == 1');
+  assert.equal(steps[0]['continue-on-error'], undefined);
+  assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
+}
+test('durable recovery runs its complete suite once and remains required', () => {
+  validateRecovery(workflow);
+  for (const mutate of [
+    w => {delete w.jobs['openclaw-scripts-test'].steps.find(s => s.name === 'Durable publish recovery core').if;},
+    w => {w.jobs['openclaw-scripts-test'].steps.find(s => s.name === 'Durable publish recovery core')['continue-on-error'] = true;},
+    w => {w.jobs['l3-passed'].needs = w.jobs['l3-passed'].needs.filter(n => n !== 'openclaw-scripts-test');},
+  ]) {
+    const w = structuredClone(workflow); mutate(w); assert.throws(() => validateRecovery(w));
+  }
+});
