@@ -22,7 +22,7 @@ if sum(n.get('text')==v['nickname'] and n.get('content-desc')==v['nickname']+'�
 headers=[n for n in b if n.get('class')=='android.widget.TextView' and ((n.get('resource-id')==pkg+':id/title' and re.fullmatch(r'[0-9万.]+条评论',n.get('text',''))) or (n.get('resource-id')==pkg+':id/ez-' and re.fullmatch(r'评论 [0-9万.]+',n.get('text',''))))]
 # 明确原生布局成对识别；同一唯一面板内核验，不能借全局搜索卡或混合资源拼接。
 legacy_input=[n for n in b if n.get('resource-id')==pkg+':id/ety']
-layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8')}
+layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8'),'e1b':('fod','jqh','kj+')}
 strict_input=[n for n in b if n.get('resource-id') in [pkg+':id/'+i for i in layouts]]
 comment_nodes=b;row_id='fhn';strict_layout=False
 if strict_input:
@@ -30,7 +30,7 @@ if strict_input:
  if legacy_input or len(strict_input)!=1 or strict_input[0].get('class')!='android.widget.EditText': raise ValueError('layout')
  row_id,panel_id,expand_id=layouts[strict_input[0].get('resource-id').split(':id/')[1]]
  panels=[n for n in b if n.get('resource-id')==pkg+':id/'+panel_id]
- if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq') if r!=row_id] for n in b): raise ValueError('layout')
+ if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq','fod') if r!=row_id] for n in b): raise ValueError('layout')
  comment_nodes=list(panels[0].iter('node'))
  if strict_input[0] not in comment_nodes or len(headers)!=1 or headers[0] not in comment_nodes: raise ValueError('panel')
  for rid,desc in [('back_btn','关闭'),(expand_id,'放大评论区')]:

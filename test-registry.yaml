@@ -9606,3 +9606,27 @@ tests:
     product: unclassified
     execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: collection-cleanup-only
+    path: services/phone-adb-controller/__tests__/collection-cleanup-only.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Darwin真实nofork非零叶归还仅授权本人cleanup，拒绝升级Skill/重采，保留原失败与OS unknown"
+
+  - id: recipient-honor-e1b-layout
+    path: services/phone-adb-controller/__tests__/recipient-honor-e1b-layout.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "脱敏真实Honor e1b/fod/jqh/kj+同面板UID昵称全文与跨布局/歧义拒绝"
+
+  - id: recipient-author-footer
+    path: services/phone-adb-controller/__tests__/recipient-author-footer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实作者footer脱敏树经控制器和队列原函数过滤，0入库不冒充no_comments"

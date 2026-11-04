@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {digest} from '../runtime-definition.mjs';
 import {createRequire} from 'node:module';
 import {createHandlers} from '../leadgen-workflow.mjs';
 const {queueRequest}=createRequire(import.meta.url)('../leadgen-queue.js');
@@ -12,11 +13,12 @@ const company={company_id:'company-a',tenant_id:'tenant-a',version:7,run_id:run,
 const binding={...company,profile,device_serial:serial,douyin_id:account,verification_status:'verified',enabled:true};
 delete binding.policy_id;
 
-async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',receipt={...company,device_binding:binding},observed=account,localRegistry=true,rpcImpl}={}){
+async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',receipt={...company,device_binding:binding},observed=account,localRegistry=true,rpcImpl,frozen=false,verifyTask=async()=>{}}={}){
  const dir=mkdtempSync(join(tmpdir(),'mmv-company-')),calls=[],requests=[];
+ if(frozen){const body={files:{},sampling_input:null};writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));}
  const registry=join(dir,'accounts.tsv');if(localRegistry)writeFileSync(registry,profile+'\t'+observed+'\n');
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_HOSTKEY:host,LEADGEN_MMV_DEVICE_RUNTIME:flag,WF_BRAIN_WORKFLOW:flow,P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/approved/adb'};
- const centralLease={held:false,attempted:false,async verifyTask(){},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;}};
+ const centralLease={held:false,attempted:false,async verifyTask(){await verifyTask();},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;}};
  const h=createHandlers({root:dir,env,taskId:'7037d210-2af1-4af9-8635-f93a805e58b6',centralLease,rpc:async body=>{const {request}=body;if(request)requests.push(request);if(rpcImpl)return rpcImpl(body);if(body.kind==='keywords')return {result:['AI']};if(receipt instanceof Error)throw receipt;return {result:receipt};},execute:async(command,args)=>{
   calls.push({command,args});let stdout='';
   if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
@@ -26,7 +28,8 @@ async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',rece
  }});
  try {let result,error;try{result=await h.preflight();}catch(e){error=e;}
   const evidence=(()=>{try{return readFileSync(join(dir,'company-config-receipts.jsonl'),'utf8');}catch{return '';}})();
-  return {result,error,calls,requests,evidence};
+  let recipientBinding;try{recipientBinding=JSON.parse(readFileSync(join(dir,run+'-company-binding.json'),'utf8'));}catch{}
+  return {result,error,calls,requests,evidence,recipientBinding};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
 
@@ -83,4 +86,22 @@ test('MMV已核公司PG绑定是账号真源，不要求第二份本机账号缓
 });
 test('原M4路径仍要求本机账号登记，不能借MMV条件跳过',async()=>{
  const r=await preflight({host:'xian-m4',flag:'1',localRegistry:false});assert.ok(r.error);
+});
+
+for(const host of ['xian-m4','mmv','other-host'])test('已冻结102跨host均使用本run动态绑定而非静态profile白名单 '+host,async()=>{
+ const r=await preflight({flow:'douyin_video_processing',host,flag:'',frozen:true});assert.ifError(r.error);
+ assert.equal(r.requests.length,1);assert.equal(r.requests[0].step,'102');
+ assert.deepEqual(r.recipientBinding,{...binding,line_key:'jinuo',source_run:null});
+});
+for(const [name,receipt] of Object.entries({missing:{...company},foreign_tenant:{...company,device_binding:{...binding,tenant_id:'other'}},stale_run:{...company,device_binding:{...binding,run_id:'other'}},wrong_device:{...company,device_binding:{...binding,device_serial:'other'}},disabled:{...company,device_binding:{...binding,enabled:false}}}))test('已冻结M4绑定错配在任何设备动作前拒绝 '+name,async()=>{
+ const r=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,receipt});assert.match(r.error?.message||'',/COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED/);assert.equal(r.calls.length,0);assert.equal(r.recipientBinding,undefined);
+});
+test('已冻结M4动态绑定仍核实机账号且保留本机登记守卫',async()=>{
+ const wrong=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,observed:'other-account'});assert.match(wrong.error?.message||'',/COMPANY_ACCOUNT_IDENTITY_MISMATCH/);assert.equal(wrong.recipientBinding,undefined);
+ const missing=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,localRegistry:false});assert.ok(missing.error);assert.equal(missing.recipientBinding,undefined);
+});
+
+test('公司配置await之后租约前再核task，失效任务不能acquire或触设备',async()=>{
+ let n=0;const r=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,verifyTask:async()=>{if(++n===2)throw Error('CENTRAL_TASK_CHANGED');}});
+ assert.equal(n,2);assert.match(r.error?.message||'',/CENTRAL_TASK_CHANGED/);assert.equal(r.requests.length,1);assert.equal(r.calls.length,0);assert.equal(r.recipientBinding,undefined);
 });

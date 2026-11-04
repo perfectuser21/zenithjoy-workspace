@@ -67,6 +67,7 @@ case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_
  const centralLease={held:false,attempted:false,async verifyTask(){},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;return true;}};
  const h=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',centralLease,execute:(command,args,opts)=>command==='/bin/sleep'?Promise.resolve({code:0,stdout:'',stderr:''}):execInput(command,args,opts),rpc:async(body,options)=>{
   rpcCalls.push(body);rpcOptions.push(options);if(body.kind==='keywords')return {result:['AI']};const q=body.request;
+  if(q?.op==='company_config')return {result:await f.queue(q)};
   if(q?.op==='discover'){if(rpcFailure&&stored.length===1)throw Error('EXECUTION_DEADLINE');stored.push(q.video);if(stop)writeFileSync(f.env.WF_STOP_FILE,'stop');return {result:{status:'pending',inserted:true,metrics_verified:true,metrics_digest:q.video.metrics.digest}};}
   if(q?.op==='inspect_videos'){if(rpcFailure)throw Error('RPC_RECEIPT_MISSING');return {result:q.video_ids.map(video_id=>({video_id,line_key:'jinuo'}))};}return {result:{}};
  }});
