@@ -51,12 +51,12 @@ golden_paths:
     line_id: line08
     name: 拼多多 · 图书商品上架（计划与驱动待真机验收）
     status: proposed
-    required_surfaces: [android]
+    required_surfaces: [ android ]
     steps:
       - id: step1
         name: 形成可核对的待提交商品内容和单次提交执行计划
     smoke_files:
-      - .github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh
+      - .github/workflows/scripts/smoke/product-delivery-contracts-smoke.sh
 
   # 2026-08-12 收敛（本 sprint，判定点见 contract-draft.md）：与 ability_acceptance 疑似功能重叠，
   # 决策 fc7b5dc0 重写的是"验收"（ability_acceptance 所指代的功能域），skill_acceptance 未见后续
@@ -91,7 +91,7 @@ golden_paths:
     name: GP锚定闭环
     status: active
     smoke_files:
-      - .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh
+      - .github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh
 
   # 工厂 · F1 开发闭环（cecelia kernel harness 2.0 自身的 Golden Path，journey e6f803f2）。
   # 2026-08-19 决策 109dd8eb：cecelia 流水线路径的修复必须锚到本 GP 的某一步，
@@ -123,11 +123,7 @@ golden_paths:
     name: 客户首次成功
     status: active
     smoke_files:
-      - .github/workflows/scripts/smoke/golden-path-1-smoke.sh
-      - .github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh
-      - .github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh
-      - .github/workflows/scripts/smoke/feishu-orchestrator-selfcheck-smoke.sh
-      - .github/workflows/scripts/smoke/my-works-api-smoke.sh
+      - .github/workflows/scripts/smoke/business-contracts-smoke.sh
     steps:
       - id: step1
         name: 注册自动登录（含 free license）
@@ -226,7 +222,7 @@ golden_paths:
     name: AI on-call 定位求助（RPA 碎片化失败保底，横切底座）
     status: active
     smoke_files:
-      - .github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh
+      - .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh
       - .github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh
 
   - id: customer_private_ai
@@ -298,11 +294,9 @@ golden_paths:
     smoke_files:
       - .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh
       - .github/workflows/scripts/smoke/golden-path-4-smoke.sh
-      - .github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh
       - .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
-      - .github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh
       - .github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh
-      - .github/workflows/scripts/smoke/crm-manual-history-smoke.sh
+      - .github/workflows/scripts/smoke/business-contracts-smoke.sh
     steps:
       - id: step1
         name: 消息被感知
@@ -407,7 +401,7 @@ golden_paths:
       - .github/workflows/scripts/smoke/material-tagging-smoke.sh
       - .github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh
       - .github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh
-      - .github/workflows/scripts/smoke/mashup-render-smoke.sh
+      - .github/workflows/scripts/smoke/media-contracts-smoke.sh
       - .github/workflows/scripts/smoke/mashup-history-smoke.sh
 
   - id: viral_video_remake
@@ -416,7 +410,7 @@ golden_paths:
     name: AI爆款视频翻拍
     status: active
     smoke_files:
-      - .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh
+      - .github/workflows/scripts/smoke/media-contracts-smoke.sh
 
   - id: customer_management
     app_id: staff_app

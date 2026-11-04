@@ -840,14 +840,6 @@ tests:
     product: 中台认证
     note: "Sprint 06222100 — 心跳响应下发 required_agent_version(version/sha256/size)，核心自升级单一信号；单一来源 getRequiredAgentVersion=install pack manifest.version，回退 DEFAULT_REQUIRED_AGENT_VERSION。"
 
-  - id: agent-startup-reset-smoke
-    path: .github/workflows/scripts/smoke/agent-startup-reset-smoke.sh
-    type: e2e
-    ci: L4
-    status: active
-    product: AI员工
-    note: "startup-reset 启动归零 smoke（decision 0f0368cf/391063ef，2026-07-17）——实现归一 bootstrap-convergence.ts（#1364/#1365 并发实现整合后唯一正宗）。API层断言：planConvergence 幂等/孤儿RPA（父死判据 9edc14f2，父活不杀）/微信归一/残骸+一次性ZJ任务三重判定/proven-to-fire（python-embedded缺失→报红、config不一致→报红）/CI护栏（planOnly 零副作用+plan-only(ci) 前缀）。真机操作用 injected deps 等价断言。"
-
   - id: agent-core-self-upgrade-smoke
     path: .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
     type: e2e
@@ -3013,14 +3005,6 @@ tests:
     product: AI视频本地流水线
     note: "template-c.jsx + template-r.jsx 文件存在性及 JSX 内容单测"
 
-  - id: smoke-template-c-r
-    path: .github/workflows/scripts/smoke/template-c-r-smoke.sh
-    type: e2e
-    ci: L4
-    status: active
-    product: AI视频本地流水线
-    note: "C + R 模板 compose-template E2E smoke（5-step loop）"
-
   - id: template-audio-fix
     path: services/agent/src/handlers/__tests__/template-audio-fix.test.ts
     type: unit
@@ -3104,30 +3088,6 @@ tests:
     status: active
     product: 新媒体运营
     note: "Bug C — 抖音分享短链解析：extractShareUrl/parseMediaFromUrl/resolveShareUrl 跟随302+SSRF白名单+真实video_id提取"
-
-  - id: zj1-smart-acquisition-smoke
-    path: .github/workflows/scripts/smoke/acquisition-smoke.sh
-    type: e2e
-    ci: L4
-    status: active
-    product: 新媒体运营
-    note: "ZJ1 Smart Acquisition — GET /api/acquisition/overview E2E smoke 全链路验证"
-
-  - id: brain-sprint-state-unit
-    path: apps/api/src/routes/__tests__/brain-sprint-state.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 新媒体运营
-    note: "Brain Sprint State API — POST sprint-state / journey-steps / GET journey-steps 单元测试（10 cases）"
-
-  - id: brain-sprint-state-smoke
-    path: .github/workflows/scripts/smoke/brain-sprint-state-smoke.sh
-    type: e2e
-    ci: L4
-    status: active
-    product: 新媒体运营
-    note: "Brain Sprint State API — 6 curl assertions 覆盖 3 端点、upsert、400 验证"
 
   - id: zj2-smart-acquisition-run1-ws1
     path: sprints/zj2-smart-acquisition-run1/tests/ws1/migration.test.ts
@@ -3265,14 +3225,6 @@ tests:
     status: active
     product: 新媒体运营
     note: "ZJ Ops1 Session Health WS3 — operator 页面 session 状态展示合同测试"
-
-  - id: zj-ops1-session-health-ws4
-    path: sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts
-    type: unit
-    ci: L4
-    status: active
-    product: 新媒体运营
-    note: "ZJ Ops1 Session Health WS4 — CI session 健康检查 workflow 合同测试"
 
   - id: zj10-customer-mgmt-ws1-contract
     path: sprints/zj10-customer-mgmt/tests/ws1/admin-customers-routes.test.ts
@@ -3684,14 +3636,6 @@ tests:
     product: 新媒体运营
     note: "Line 00 Session Health WS5 — Agent qr-bind-operator handler + dispatcher 注册"
 
-  - id: line00-session-health-ws6-health-check
-    path: sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts
-    type: integration
-    ci: L4
-    status: pending-ci
-    product: 新媒体运营
-    note: "Line 00 Session Health WS6 — GHA session-health-check.yml + check-health.js 修正（missing≠ok + 飞书告警）"
-
   - id: api-index-port-default
     path: apps/api/tests/index.test.ts
     type: unit
@@ -4042,14 +3986,6 @@ tests:
     status: active
     product: 客户私域AI接管
     note: "Agent v1.1.77 wechat-rpa 真实脚本接入验证（现场 build dist + 7 项静态检查，CI Linux 可跑）"
-
-  - id: agent-python-embedded-v1178
-    path: .github/workflows/scripts/smoke/agent-python-embedded-smoke.sh
-    type: smoke
-    ci: L3
-    status: active
-    product: 客户私域AI接管
-    note: "Agent v1.1.78 内置 Python embedded + wechat-rpa 零依赖安装验证（9 项静态检查，CI Linux 可跑，Path 4 Step 1 thin→medium）"
 
   - id: agent-python-embedded-tests-v1178
     path: sprints/06031608-agent-python-embedded/tests/agent-python-embedded.test.ts
@@ -4754,13 +4690,6 @@ tests:
     product: 私域运营
     note: "Line02/Agent 观测后端 — POST /api/agent/events(x-license-key 鉴权,单+批量,tenant 来自 license,kind 非法400/license无效401) / GET /api/agent/machines/:id/events(tenantContextOptional,分类logs+upgrades,tenant隔离404,limit/kind)。supertest + mock pg.Pool，9例。"
 
-  - id: line02-agent-events-smoke
-    path: .github/workflows/scripts/smoke/agent-events-smoke.sh
-    type: smoke
-    ci: L4
-    status: active
-    product: 私域运营
-    note: "Line02/Agent 观测端点 smoke(:5200+postgres)：建 tenant+license → POST events 真 license 头落库且 tenant_id 来自 license / 批量 count=2 / license 无效401 / GET machines/:id/events 无认证401。"
   - id: agent-playwright-launcher
     path: services/agent/src/shared/__tests__/playwright-launcher.test.ts
     type: unit
@@ -4818,14 +4747,6 @@ tests:
     product: 私域运营
     note: "Line02 分析+指派引擎+路由 — 引擎纯逻辑(scoreLeads启发式/buildAssignments按分降序+轮换分摊burner+(tenant,lead,label)去重+天预算闸+时段内排期/dispatchDue时段闸+per-hour上限闸/cookieHealth陈旧度分类) 用内存fakePool真跑；路由 supertest+mock pg.Pool 验 config默认/PUT范围校验400/plan/cookie-health + tenant隔离(不信query.tenant_id)/无认证401。22例。"
 
-  - id: line02-acquisition-dispatch-smoke
-    path: .github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh
-    type: unclassified
-    ci: unverified
-    status: pending-ci
-    product: unclassified
-
-  # ─── Path2 安卓 Agent 信号上报（2026-07-22 sprint）──────────────────────
   - id: p2-android-signal-account-label-unification
     path: apps/api/tests/routes/agent-burner-account-label.test.ts
     type: unit
@@ -4841,22 +4762,6 @@ tests:
     status: active
     product: 私域运营
     note: "Line02 真调度升级 TDD — buildAssignments 在线感知(last_heartbeat_at 2min阈值)+最少负载排序+dispatch_reason+pending_dispatch+queued_remap+重试+租户隔离。10例合同测试。"
-
-  - id: line02-dispatch-real-scheduling-smoke
-    path: .github/workflows/scripts/smoke/acquisition-dispatch-real-scheduling-smoke.sh
-    type: smoke
-    ci: L4
-    status: active
-    product: 私域运营
-    note: "Line02 真调度 smoke(:5200+postgres)：无认证401+NO_TENANT → 在线build验dispatch_reason=least_load+data.pending=number → 模拟掉线验queued_remap(queued→pending_dispatch) → 恢复在线验重试清零。"
-
-  - id: line02-acquisition-config-ui-smoke
-    path: .github/workflows/scripts/smoke/acquisition-config-ui-smoke.sh
-    type: smoke
-    ci: L4
-    status: active
-    product: 私域运营
-    note: "Line02 分析+指派 smoke(:5200+postgres)：建 tenant → GET config无认证401/返默认 → PUT config非法400/合法upsert落库 → 建2 active burner+3 leads → POST build(scored=3+assigned落dm_assignments) → GET plan见指派 → POST run(dispatched落dm_outreach_log) → GET cookie-health分类。X-Tenant-Id头驱动租户。"
 
   - id: line02-license-register-dedup-unit
     path: apps/api/src/services/__tests__/license-register-dedup.test.ts
@@ -8641,14 +8546,6 @@ tests:
     product: AI视频
     note: Aidge 一级入口、栏目与接口操作界面。
 
-  - id: aidge-capability-center-smoke
-    path: .github/workflows/scripts/smoke/aidge-capability-center-smoke.sh
-    type: smoke
-    ci: L3
-    status: active
-    product: AI视频
-    note: 执行 API 与 Dashboard 的 Aidge 主路径冒烟。
-
   - id: creative-canvas-upload-image-api
     path: apps/api/src/routes/__tests__/video-tools-canvas-image-upload.test.ts
     type: integration
@@ -9877,3 +9774,355 @@ tests:
     status: active
     product: AI员工
     note: "旧failed不复活；断档原件及新f107独立租约精确绑定、原claim/epoch/完整设备守恒、拒旧journal迁移"
+
+  - id: ci-closeout-3a687e50b72a
+    path: .github/workflows/scripts/__tests__/acquisition-sse-config.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-7025a349b886
+    path: .github/workflows/scripts/__tests__/android-cancel-cleanup.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-5c402b34981e
+    path: .github/workflows/scripts/__tests__/scan-failure-architecture.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-4dd26f5ec20d
+    path: .github/workflows/scripts/operator/rpa-locator-assist-probe.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-e47e01370ff8
+    path: .github/workflows/scripts/smoke/helpers/media-contracts.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-60c424c28ddd
+    path: apps/api/src/controllers/__tests__/media-provider-http.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-fabddee25bc5
+    path: apps/api/src/services/__tests__/media-render-runtime.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-0df071b5d199
+    path: apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-572e3e356b7f
+    path: apps/api/tests/integration/business-contracts/session-writeback.pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-fc2583dc3d77
+    path: apps/api/tests/integration/consolidated-ci/account-role-and-config.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-586ddd8fc81a
+    path: apps/api/tests/integration/consolidated-ci/auth-and-fleet.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-76ed94dacb46
+    path: apps/api/tests/integration/consolidated-ci/clips-output.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-091d5ea5d558
+    path: apps/api/tests/integration/consolidated-ci/comment-grading.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-d084962fb7b2
+    path: apps/api/tests/integration/consolidated-ci/cs-memory.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-6e1069f7f4d2
+    path: apps/api/tests/integration/consolidated-ci/schema-and-migrations.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-367cbe3f0470
+    path: apps/api/tests/integration/consolidated-ci/shared-crud.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-ed5ec309487a
+    path: apps/api/tests/integration/consolidated-ci/task-fleet.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-29d0dda2f6da
+    path: apps/api/tests/integration/media-extra/locator.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-0ba950d7f5fe
+    path: apps/api/tests/integration/media-extra/runtime.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-4073b1e8e1d1
+    path: apps/api/tests/integration/media/materials.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-8a0e2f54cd59
+    path: apps/api/tests/integration/media/pipeline.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-af4ed91b4eed
+    path: apps/api/tests/regression/acquisition-sse-transport.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-289b8a7e1583
+    path: apps/api/tests/regression/consolidated-pg-admission.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-1ae125797230
+    path: apps/api/tests/regression/consolidated-smoke-admission.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-51910dc3e12e
+    path: apps/api/tests/regression/retired-local-brain.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-fec664f65a9c
+    path: apps/api/tests/routes/screenshots-static.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-ff675e7379f2
+    path: apps/dashboard/src/pages/__tests__/AcquisitionHubPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-9303a62dccec
+    path: apps/dashboard/src/pages/__tests__/BusinessSurfaces.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-c82b73628e0f
+    path: apps/dashboard/src/pages/__tests__/OperatorPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-3502458f272b
+    path: apps/realtime-voice-mvp/server-local-contract.test.mjs
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-0c61c0a64882
+    path: apps/staff-hub/src/pages/QuadrantPage.test.tsx
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-3d8bed889b66
+    path: scripts/acceptance-spec/__tests__/readonly.test.js
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-074652c542f3
+    path: scripts/release-gate/__tests__/two-column-fixtures.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-793511703f6d
+    path: scripts/sessions/check-health.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-5333cac608ba
+    path: services/agent/modules/line02/__tests__/report-videos-runtime.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-6ceea23575da
+    path: services/agent/modules/line04/__tests__/cs-config-gate.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-f3218e6807c9
+    path: services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-7618f7a6f179
+    path: services/phone-adb-controller/__tests__/controller-compatibility.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-af3324ae4b75
+    path: services/wechat-moments-controller/__tests__/safety.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-f03d4e1013cb
+    path: .github/workflows/scripts/smoke/business-contracts-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-9eb0eefea523
+    path: .github/workflows/scripts/smoke/media-contracts-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-be068d82ff02
+    path: .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-357ae87ebf24
+    path: .github/workflows/scripts/smoke/product-delivery-contracts-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-9ce056ef0bc9
+    path: .github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.

@@ -4,13 +4,17 @@ import {
   listTasks,
   listSkills,
   createTask,
-  INTERNAL_TENANT_ID,
 } from '../agent.api';
 
 describe('api/agent.api', () => {
-  it('导出 INTERNAL_TENANT_ID 常量', () => {
-    expect(typeof INTERNAL_TENANT_ID).toBe('string');
-    expect(INTERNAL_TENANT_ID.length).toBeGreaterThan(0);
+  it('task list and creation use cookie identity without an internal tenant override', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ tasks: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await listTasks(); await createTask('fixture-skill', { title: 'fixture' });
+      expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/agent/tasks', { credentials: 'include' });
+      expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/agent/tasks', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skill: 'fixture-skill', params: { title: 'fixture' } }) });
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('导出 getAgentStatus 函数', () => {

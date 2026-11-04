@@ -611,6 +611,13 @@ skillDraftsInternalRouter.post('/:id/callback', async (req, res): Promise<void> 
     return;
   }
 
+  // Validate before consuming the capability: malformed callbacks must not
+  // invalidate the real worker's later completion token.
+  if (!['done', 'needs_input', 'error'].includes(event ?? '')) {
+    res.status(400).json({ success: false, error: { code: 'INVALID_EVENT', message: '未知 callback event' }, timestamp: new Date().toISOString() });
+    return;
+  }
+
   // token 单次绑定：消费后清空（I-9）
   draft.callback_token = null;
 

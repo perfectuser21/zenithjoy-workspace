@@ -1,0 +1,18 @@
+{
+  "required_runtime": "bash .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh",
+  "default_groups": "extra_api now 11 files/163 tests; extra_pg now 2 files/20 tests; bridge47 + prototype1 + ime20 + operator safety2 =253 tests, zero skips",
+  "root_action": "Keep same existing extra canonical required job; no new wrapper manifests. Root may delete the two old compatibility aliases and rewire registry/map consumers to this canonical.",
+  "aliases_to_remove_or_exclude": [
+    ".github/workflows/scripts/smoke/restore-ime-scope-smoke.sh",
+    ".github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh"
+  ],
+  "operator_path": ".github/workflows/scripts/operator/rpa-locator-assist-probe.sh",
+  "operator_excluded_by_structure": "Path is outside .github/workflows/scripts/smoke and never invoked by canonical. Only its transport-stub safety tests run in default CI.",
+  "additional_ci_dependencies": [
+    "zsh (required, no optional skip)",
+    "libxml2-utils (/usr/bin/xmllint)",
+    "Python3"
+  ],
+  "postgres_fixture_change": "Disposable initdb now explicitly --encoding=UTF8, matching real Chinese tree data; no production PostgreSQL settings changed.",
+  "source_ownership": "No app.ts, workflow, registry, selector or product-map writes in this lane."
+}

@@ -48,7 +48,7 @@ function get(options, callback) {
   return request;
 }
 function post(options, callback) {
-  const request = new EventEmitter(); let body = '';
+  const request = new EventEmitter(); let body = ''; request.setTimeout = () => request; request.destroy = () => {};
   request.write = chunk => { body += chunk; };
   request.end = () => process.nextTick(() => {
     if (options.hostname === 'fixture-db.invalid') {
@@ -56,7 +56,11 @@ function post(options, callback) {
       if (config.dbNetworkError) { request.emit('error', new Error('fixture DB network error')); return; }
     }
     else appendFileSync('notifications.jsonl', JSON.stringify({ channel: 'feishu' }) + '\\n');
-    callback(response(options.hostname === 'fixture-db.invalid' ? config.dbStatus ?? 200 : config.feishuStatus ?? config.alertStatus ?? 200));
+    if (options.hostname === 'fixture-db.invalid') {
+      const authorized = options.headers['X-Internal-Token'] === 'fixture' && !options.headers['x-internal-secret'];
+      callback(response(authorized ? config.dbStatus ?? 200 : 401,
+        config.dbBody ?? JSON.stringify({ ok: true, updated: JSON.parse(body).updates.length })));
+    } else callback(response(config.feishuStatus ?? config.alertStatus ?? 200));
   });
   return request;
 }
@@ -66,10 +70,14 @@ http.request = https.request = post;
     const cookies = options.cookieJson ?? JSON.stringify([{ name: 'sessionid', value: 'fixture', expires: Math.floor(Date.now() / 1000) + 86400 }]);
     const env = { ...process.env, ...Object.fromEntries(cookieEnvs.map(name => [name, cookies])),
       FEISHU_API_KEY: 'fixture', NOTION_API_KEY: 'fixture', WECOM_API_KEY: 'fixture',
-      BARK_URL: 'https://fixture-alert.invalid/bark', FEISHU_BOT_WEBHOOK: options.feishu ? 'https://fixture-feishu.invalid/webhook' : '',
-      OPERATOR_API_URL: options.missingApiUrl ? '' : 'http://fixture-db.invalid', INTERNAL_API_SECRET: options.missingInternalAuth ? '' : 'fixture',
+      BARK_URL: options.noAlerts ? '' : 'https://fixture-alert.invalid/bark', FEISHU_BOT_WEBHOOK: options.feishu ? 'https://fixture-feishu.invalid/webhook' : '',
+      OPERATOR_API_URL: options.missingApiUrl ? '' : 'http://fixture-db.invalid', ZENITHJOY_INTERNAL_TOKEN: options.missingInternalAuth ? '' : 'fixture',
       FORCE_NOTIFY: String(options.forceNotify ?? false), SKIP_HTTP_CHECK: 'false',
       HEALTH_FIXTURE: JSON.stringify(options) };
+    if (options.apiKeysMissing) for (const name of ['FEISHU_API_KEY','NOTION_API_KEY','WECOM_API_KEY']) env[name] = '';
+    delete env.SESSION_HEALTH_REQUIRED_ACCOUNTS;
+    if (options.required !== undefined) env.SESSION_HEALTH_REQUIRED_ACCOUNTS = options.required;
+    if (options.configuredCookies) for (const name of cookieEnvs) if (!options.configuredCookies.includes(name)) env[name] = '';
     const result = spawnSync(process.execPath, ['--import', preload, script], {
       cwd: root, env, encoding: 'utf8', timeout: 15000,
     });
@@ -95,7 +103,7 @@ for (const [name, options] of [
 ]) test(`session patrol reports and alerts ${name} without marking cookies active`, () => {
   const result = runHealth(options);
   assert.equal(result.report.filter(row => row.status === 'unknown').length, 32);
-  assert.equal(result.updates.filter(row => !row.platform.endsWith('API Key')).length, 0);
+  assert.equal(result.updates.length, 0);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.ok(result.notifications.length > 0, 'uncertain session health must trigger an alert');
   assert.doesNotMatch(result.stdout, /全部正常/);
@@ -114,8 +122,9 @@ test('session patrol keeps valid HTTP health results active', () => {
   const result = runHealth();
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(result.report.filter(row => row.status === 'ok').length, 35);
-  assert.equal(result.updates.length, 35);
+  assert.equal(result.updates.length, 8);
   assert.equal(result.notifications.length, 0);
+  assert.deepEqual(result.updates.map(row => row.platform).sort(), ['douyin','gongzhonghao','kuaishou','shipinhao','toutiao','weibo','xiaohongshu','zhihu']);
 });
 
 test('session patrol preserves expired-session failure and alert', () => {
@@ -138,7 +147,7 @@ for (const [name, options] of [
 ]) test(`session patrol fails when status writeback receives ${name}`, () => {
   const result = runHealth(options);
   assert.equal(result.report.filter(row => row.status === 'ok').length, 35);
-  assert.equal(result.updates.length, 35);
+  assert.equal(result.updates.length, 8);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /回写/);
   assert.doesNotMatch(result.stdout, /全部正常/);
@@ -159,7 +168,7 @@ test('session patrol accepts producer Playwright storageState cookies without lo
   const result = runHealth({ cookieJson });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.equal(result.report?.filter(row => row.status === 'ok').length, 35);
-  assert.equal(result.updates.length, 35);
+  assert.equal(result.updates.length, 8);
   assert.equal(result.notifications.length, 0);
 });
 
@@ -170,7 +179,7 @@ for (const cookieJson of ['null', '{}', '[null]', '["cookie"]', '[{}]',
     const result = runHealth({ cookieJson });
     assert.notEqual(result.status, 0, result.stdout + result.stderr);
     assert.equal(result.report?.filter(row => row.status === 'invalid').length, 32);
-    assert.equal(result.updates.filter(row => !row.platform.endsWith('API Key')).length, 0);
+    assert.equal(result.updates.length, 0);
     assert.ok(result.notifications.length > 0);
   });
 }
@@ -185,10 +194,51 @@ for (const [feishuStatus, expectedExit] of [[500, 1], [200, 0]]) {
 
 for (const [name, options] of [
   ['OPERATOR_API_URL', { missingApiUrl: true }],
-  ['INTERNAL_API_SECRET', { missingInternalAuth: true }],
+  ['ZENITHJOY_INTERNAL_TOKEN', { missingInternalAuth: true }],
 ]) test(`missing ${name} refuses database transport and reports configuration failure`, () => {
   const result = runHealth(options);
   assert.notEqual(result.status, 0);
   assert.equal(result.updates.length, 0, 'missing configuration must cause zero status writes');
   assert.match(result.stderr, new RegExp(`missing required writeback configuration:.*${name}`));
+});
+
+for (const dbBody of ['', '<html>wrong route</html>', '{"ok":false,"updated":8}', '{"ok":true,"updated":0}']) {
+  test('status writeback rejects incomplete or malformed HTTP 200 acknowledgement: '+dbBody, () => {
+    const result = runHealth({ dbBody });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /回写/);
+  });
+}
+
+const requiredAccounts = ['DOUYIN_COOKIES','KUAISHOU_COOKIES','TOUTIAO_COOKIES','ZHIHU_COOKIES'];
+test('explicit required accounts preserve 35-slot report and optional missing without inventing health or notifications', () => {
+ const result = runHealth({ required: requiredAccounts.join(','), configuredCookies: requiredAccounts, noAlerts: true, apiKeysMissing: true });
+ assert.equal(result.status, 0, result.stderr);
+ assert.equal(result.report.length, 35);
+ assert.equal(result.report.filter(row => row.status === 'missing').length, 31);
+ assert.equal(result.updates.length, 4);
+ assert.equal(result.notifications.length, 0);
+ assert.match(result.stdout, /optional_missing=31/);
+});
+for (const required of ['', 'UNKNOWN', 'DOUYIN_COOKIES,DOUYIN_COOKIES', 'DOUYIN_COOKIES,']) {
+ test('invalid explicit required-account profile fails before transport: '+required, () => {
+  const result = runHealth({ required, noAlerts: true });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /SESSION_HEALTH_REQUIRED_ACCOUNTS/);
+  assert.equal(result.updates.length, 0); assert.equal(result.notifications.length, 0);
+ });
+}
+test('required missing remains fatal with no configured notification channel', () => {
+ const result = runHealth({ required: requiredAccounts.join(','), configuredCookies: ['DOUYIN_COOKIES'], noAlerts: true });
+ assert.notEqual(result.status, 0); assert.equal(result.notifications.length, 0);
+ assert.equal(result.report.find(row => row.secretEnv === 'ZHIHU_COOKIES').status, 'missing');
+});
+test('API-key presence alone cannot yield a successful health patrol', () => {
+ const result = runHealth({ required: 'DOUYIN_COOKIES', configuredCookies: [], noAlerts: true });
+ assert.notEqual(result.status, 0); assert.equal(result.updates.length, 0);
+ assert.match(result.stderr, /没有任何账号/); assert.doesNotMatch(result.stdout, /全部正常/);
+});
+for (const status of [401, 500]) test('configured required profile keeps expired/uncertain fatal: '+status, () => {
+ const result = runHealth({ required: requiredAccounts.join(','), configuredCookies: requiredAccounts, noAlerts: true, status });
+ assert.notEqual(result.status, 0); assert.equal(result.notifications.length, 0);
 });

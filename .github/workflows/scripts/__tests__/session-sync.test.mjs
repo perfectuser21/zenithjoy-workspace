@@ -5,7 +5,7 @@ import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import YAML from 'yaml';
+import {PLATFORMS} from '../../../../scripts/sessions/check-health.js';
 
 const script = fileURLToPath(new URL('../../../../scripts/sessions/sync-from-xian-rog.sh', import.meta.url));
 const realCurl = spawnSync('bash', ['-c', 'command -v curl'], { encoding: 'utf8' }).stdout.trim();
@@ -77,11 +77,8 @@ test('session sync encodes Bark paths and succeeds when all writes and alert del
   assert.equal(url.searchParams.get('group'), 'ZenithJoy');
 });
 
-test('session sync writes exactly the Secret names consumed by the actual health workflow', () => {
-  const workflow = YAML.parse(readFileSync(new URL('../../session-health-check.yml', import.meta.url), 'utf8'));
-  const env = workflow.jobs['check-sessions'].steps.find(step => step.name === 'Run health check').env;
-  const expected = Object.entries(env).filter(([name]) => /^[A-Z]+_(?:COOKIES|SUB_[123])$/.test(name))
-    .map(([, value]) => value.match(/^\$\{\{\s*secrets\.([A-Z_0-9]+)\s*\}\}$/)?.[1]);
+test('optional session sync retains the exact cookie slots consumed by the local health inspector', () => {
+  const expected = PLATFORMS.map(p => p.secretEnv).filter(name => /^[A-Z]+_(?:COOKIES|SUB_[123])$/.test(name));
   assert.equal(expected.length, 32);
   assert.ok(expected.every(Boolean));
   const result = runSync();

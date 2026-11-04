@@ -17,7 +17,7 @@ class FixtureEventSource {
   close = vi.fn(() => { this.readyState = FixtureEventSource.CLOSED; });
   constructor(readonly url: string) { streams.push(this); }
   emit(status: string, error?: string) {
-    act(() => this.onmessage?.({ data: JSON.stringify({ id: 'job-123', status, progress: status === 'completed' ? 100 : 35, error }) } as MessageEvent));
+    act(() => this.onmessage?.({ data: JSON.stringify({ id: 'job-123', status, output_dir: status === 'completed' ? 'C:\\Videos\\output' : undefined, progress: status === 'completed' ? 100 : 35, error }) } as MessageEvent));
   }
 }
 beforeEach(() => {
@@ -27,28 +27,33 @@ beforeEach(() => {
   vi.mocked(axios.post).mockResolvedValue({ data: { job: { id: 'job-123' } } });
 });
 afterEach(() => { cleanup(); clients.splice(0).forEach(client => client.clear()); vi.unstubAllGlobals(); });
-async function submit() {
+async function submit(withFields=false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
   render(React.createElement(QueryClientProvider, { client }, React.createElement(LocalVideoPipelinePage)));
   fireEvent.change(screen.getByPlaceholderText(/my-video\.mp4/), { target: { value: 'C:\\Videos\\input.mp4' } });
+  if (withFields) { fireEvent.change(screen.getByPlaceholderText(/填写你录制/), { target: { value: '原始参考文案' } }); fireEvent.click(screen.getByRole('button', { name: '16:9' })); }
   await waitFor(() => expect(screen.getByRole('button', { name: '开始处理' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '开始处理' }));
   await waitFor(() => expect(streams).toHaveLength(1)); return streams[0];
 }
 describe('LocalVideoPipelinePage real job lifecycle', () => {
-  it('submits the entered file and exposes both actual download links after completion', async () => {
+  it('submits the entered file and exposes the actual local output directory after completion', async () => {
     const stream = await submit();
     expect(axios.post).toHaveBeenCalledTimes(1);
     expect(axios.post).toHaveBeenCalledWith('/api/ai-video/jobs', expect.objectContaining({ local_path: 'C:\\Videos\\input.mp4' }), { headers: { Authorization: 'Bearer fixture-license' } });
     expect(stream.url).toBe('/api/ai-video/jobs/job-123/sse');
     stream.emit('completed');
     expect(screen.getByText('处理完成')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '下载 9:16 竖屏' })).toHaveAttribute('href', '/api/ai-video/jobs/job-123/output/9_16.mp4');
-    expect(screen.getByRole('link', { name: '下载 16:9 横屏' })).toHaveAttribute('href', '/api/ai-video/jobs/job-123/output/16_9.mp4');
+    expect(screen.getByText('C:\\Videos\\output')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /下载/ })).not.toBeInTheDocument();
     expect(stream.close).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: '处理新视频' }));
     expect(screen.queryByRole('link', { name: /下载/ })).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/my-video\.mp4/)).toHaveValue('');
+  });
+  it('submits original script and selected aspect from actual form interaction', async () => {
+    await submit(true);
+    expect(axios.post).toHaveBeenCalledWith('/api/ai-video/jobs', expect.objectContaining({original_script:'原始参考文案',target_aspect:'16:9'}), expect.anything());
   });
   it('shows a failed job and its real error without offering a download', async () => {
     const stream = await submit(); stream.emit('failed', 'Fixture encoder failed');

@@ -8,6 +8,10 @@ const cli=new URL('../listing-driver-cli.mjs',import.meta.url).pathname;
 test('CLI help has no runtime loading or device side effects',()=>{
  const r=spawnSync(process.execPath,[cli,'--help'],{encoding:'utf8'});assert.equal(r.status,0);assert.match(r.stdout,/dry-run/);
 });
+test('native CLI help needs no runtime configuration, lease or device',()=>{
+ const r=spawnSync(process.execPath,[new URL('../pdd-native-cli.mjs',import.meta.url).pathname,'--help'],{encoding:'utf8',timeout:5000});
+ assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/不能保存\/发布\/发送消息/);
+});
 test('CLI loads an explicitly trusted runtime and emits refusal while preserving real readback result',()=>{
  const root=mkdtempSync(join(tmpdir(),'listing-cli-')), marker=join(root,'read.txt');
  const input=join(root,'input.json'), plugin=join(root,'runtime.mjs');

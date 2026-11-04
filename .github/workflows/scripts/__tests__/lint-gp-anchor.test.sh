@@ -20,7 +20,7 @@ esac
 GIT
 chmod +x "$TEST_ROOT/bin/git"
 export PATH="$TEST_ROOT/bin:$PATH"
-export GP_ANCHOR_TEST_CHANGED=".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh"
+export GP_ANCHOR_TEST_CHANGED=".github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh"
 cd "$TEST_ROOT"
 LINT="$TEST_ROOT/.github/workflows/scripts/lint-gp-anchor.sh"
 OUTPUT="$TEST_ROOT/result.log"
@@ -71,7 +71,7 @@ check_contains "nonexistent-id" "GP-ANCHOR-ID-NOTFOUND"
 GP_ANCHOR_TEST_CHANGED="apps/api/src/unrelated.ts"
 check "progressing-without-smoke" 1 "GP-Anchor: line00/gp_anchor_enforcement#step2"
 check_contains "progressing-without-smoke" "GP-ANCHOR-NOT-TOUCHED"
-GP_ANCHOR_TEST_CHANGED=".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh"
+GP_ANCHOR_TEST_CHANGED=".github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh"
 check "progressing-with-smoke" 0 "GP-Anchor: line00/gp_anchor_enforcement#step2"
 
 # F: 合法keep-green声明(不查diff) → PASS

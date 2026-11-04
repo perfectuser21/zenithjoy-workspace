@@ -1,0 +1,109 @@
+{
+  "task_id": "c7dbedc7-e1b8-4e6f-a507-25778a67e86e",
+  "ownership": "Root changes central registry/baseline/product-map/workflows/shared CI tools. Business lane changes only its sources/tests and dedicated config.",
+  "remove_retired_glob_paths": [
+    ".github/workflows/scripts/smoke/cs-account-workbench-smoke.sh",
+    ".github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh",
+    ".github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh",
+    ".github/workflows/scripts/smoke/account-me-smoke.sh",
+    ".github/workflows/scripts/smoke/account-scan-result-smoke.sh",
+    ".github/workflows/scripts/smoke/acquisition-collect-smoke.sh",
+    ".github/workflows/scripts/smoke/acquisition-config-ui-smoke.sh",
+    ".github/workflows/scripts/smoke/line02-machine-burner-routing-smoke.sh",
+    ".github/workflows/scripts/smoke/machines-smoke.sh",
+    ".github/workflows/scripts/smoke/acquisition-dispatch-real-scheduling-smoke.sh",
+    ".github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh",
+    ".github/workflows/scripts/smoke/acquisition-ia-redesign-smoke.sh",
+    ".github/workflows/scripts/smoke/admin-platform-sessions-pages-smoke.sh",
+    ".github/workflows/scripts/smoke/agent-events-smoke.sh",
+    ".github/workflows/scripts/smoke/machine-events-smoke.sh",
+    ".github/workflows/scripts/smoke/agent-hardening-h1-smoke.sh",
+    ".github/workflows/scripts/smoke/license-smoke.sh",
+    ".github/workflows/scripts/smoke/android-collect-protocol-v2-smoke.sh",
+    ".github/workflows/scripts/smoke/clips-smoke.sh",
+    ".github/workflows/scripts/smoke/content-judgment-gate-smoke.sh",
+    ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh",
+    ".github/workflows/scripts/smoke/crm-manual-history-smoke.sh",
+    ".github/workflows/scripts/smoke/cs-oneclick-setup-smoke.sh",
+    ".github/workflows/scripts/smoke/cs-stats-service-smoke.sh",
+    ".github/workflows/scripts/smoke/dm-dispatch-sweep-smoke.sh",
+    ".github/workflows/scripts/smoke/douyin-dm-outreach-android-smoke.sh",
+    ".github/workflows/scripts/smoke/dynamic-scenes-compose-smoke.sh",
+    ".github/workflows/scripts/smoke/free-tier-onboarding-smoke.sh",
+    ".github/workflows/scripts/smoke/h2-bug3-bug9-smoke.sh",
+    ".github/workflows/scripts/smoke/leads-reply-assignee-smoke.sh",
+    ".github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh",
+    ".github/workflows/scripts/smoke/line02-dm-dispatch-smoke.sh",
+    ".github/workflows/scripts/smoke/line02-stage2-collect-smoke.sh",
+    ".github/workflows/scripts/smoke/line04-crm-glide-smoke.sh",
+    ".github/workflows/scripts/smoke/line04-crm-scan-reconcile-smoke.sh",
+    ".github/workflows/scripts/smoke/my-works-api-smoke.sh",
+    ".github/workflows/scripts/smoke/operator-page-medium-smoke.sh",
+    ".github/workflows/scripts/smoke/path4-ws4-local-profile-smoke.sh",
+    ".github/workflows/scripts/smoke/schedule-dispatch-smoke.sh",
+    ".github/workflows/scripts/smoke/screenshots-static-smoke.sh",
+    ".github/workflows/scripts/smoke/session-health-medium-smoke.sh",
+    ".github/workflows/scripts/smoke/session-health-smoke.sh",
+    ".github/workflows/scripts/smoke/skill-registry-smoke.sh",
+    ".github/workflows/scripts/smoke/sse-smoke.sh",
+    ".github/workflows/scripts/smoke/staff-acceptance-quadrant-smoke.sh",
+    ".github/workflows/scripts/smoke/staff-hub-env-badge-smoke.sh",
+    ".github/workflows/scripts/smoke/staff-line-health-smoke.sh",
+    ".github/workflows/scripts/smoke/warmup-dispatch-smoke.sh",
+    ".github/workflows/scripts/smoke/wechat-cs-reply-smoke.sh",
+    ".github/workflows/scripts/smoke/work-performance-smoke.sh"
+  ],
+  "register_new_required_commands": [
+    {
+      "cwd": "apps/api",
+      "command": "npx vitest run --config vitest.business-pg.config.ts",
+      "environment": {
+        "BUSINESS_PG_DISPOSABLE": "1",
+        "DATABASE_HOST": "127.0.0.1",
+        "DATABASE_PORT": "explicit disposable instance port",
+        "DATABASE_USER": "explicit fixture role",
+        "DATABASE_NAME": "zenithjoy_business_contract_test"
+      },
+      "safety": "DATABASE_URL/PGOPTIONS forbidden; create database must succeed fresh; cleanup drops only successful own creation. Run once, no parallel same-name database on same instance.",
+      "scope": "Actual app with real auth cookies, HTTP/SSE and production migrations; external model transports explicit deterministic fixtures."
+    },
+    {
+      "cwd": ".",
+      "command": "node --test scripts/sessions/check-health.test.mjs scripts/acceptance-spec/__tests__/readonly.test.js",
+      "scope": "No external send, DB writeback or platform cookie access."
+    },
+    {
+      "cwd": ".",
+      "command": "SMOKE_ALLOW_WRITE=1 CRM_MANUAL_REAL_AI=0 node scripts/test/crm-manual-history-integration.mjs",
+      "scope": "Own initdb loopback instance + actual Chromium; deterministic model and explicit synthetic login; production-auth-cookie behavior covered separately by business PG."
+    }
+  ],
+  "default_suite_collected_tests": [
+    "apps/api/tests/routes/screenshots-static.test.ts",
+    "apps/api/tests/sse-endpoints.test.ts",
+    "apps/dashboard/src/pages/__tests__/BusinessSurfaces.test.tsx",
+    "apps/staff-hub/src/pages/QuadrantPage.test.tsx"
+  ],
+  "preserve_required_native_job": {
+    "workflow": ".github/workflows/android-agent-ci.yml",
+    "command": "gradle :app:testDebugUnitTest",
+    "paths": [
+      "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/AcquisitionCollectPollLoopTest.kt",
+      "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/DmOutreachRateLimiterTest.kt",
+      "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/DmOutreachSnapshotDisciplineTest.kt"
+    ],
+    "native_task_claim": "No local Java/SDK/Gradle run is inferred from backend fixture success."
+  },
+  "operator_only_probe": ".github/workflows/scripts/operator-probes/clips-ocr.sh",
+  "migration_to_include": "apps/api/db/migrations/20261104_120000_wechat_task_dual_schema_contract.sql",
+  "company_pg_contract_preserve": "apps/api/vitest.pg-contracts.config.ts remains current company-wiki/CAS/freeze SSOT; obsolete company-profile smoke shell is removed.",
+  "obsolete_static_sprint_tests_retired": [
+    "sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts",
+    "sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts"
+  ],
+  "updated_compatibility_callers": [
+    "scripts/smoke/clips-smoke.sh",
+    "sprints/07081557-wechat-cs-reply-integration/tests/e2e-verify.sh"
+  ],
+  "latest_validation": "All replacement canonical groups executed; dedicated business PostgreSQL now contains23 assertions, including separate2-unit extras and existing UUID identity helper."
+}

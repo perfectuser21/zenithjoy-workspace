@@ -1,0 +1,648 @@
+{
+  "units": [
+    {
+      "unit_id": "agent-fleet",
+      "implementation_state": "implemented_pending_central_wiring",
+      "original_review": [
+        {
+          "id": "script:.github/workflows/scripts/smoke/agent-fleet-smoke.sh",
+          "path": ".github/workflows/scripts/smoke/agent-fleet-smoke.sh",
+          "kind": "script",
+          "review_lane": "root-additional",
+          "unit_id": "agent-fleet",
+          "disposition": "insufficient_evidence",
+          "implementation_state": "critical_evidence_gap",
+          "reason": "API的旧通用task fleet路径确有DB/WS实现，但仓内没有找到今日UI/CLI调用该REST入口；现役发布走publish-tasks，客服走Android独立service。 所有tenant来自请求参数而非会话；只比较task.tenantId不证明caller身份。创建后会调用dispatchTask选真实在线agent并发送publish_request；不适合对有真实agent的库运行，无清理/curl超时。",
+          "missing_evidence": [
+            "中央当前任务/catalog是否还有该REST调用者未读回",
+            "尚未证明等价替代覆盖此旧task查询合同",
+            "不应将任意tenant参数当真实授权证明"
+          ],
+          "evidence": [
+            "smoke-additional-review-business.json",
+            "current-inventory/smoke-glob-discovery.json",
+            "current-inventory/smoke-glob-sources.json"
+          ],
+          "dimensions": {
+            "current_value": {
+              "judgment_today": "API的旧通用task fleet路径确有DB/WS实现，但仓内没有找到今日UI/CLI调用该REST入口；现役发布走publish-tasks，客服走Android独立service。",
+              "actual_consumer_source_refs": [
+                "apps/api/src/app.ts:227",
+                "apps/api/src/routes/tasks.ts:7",
+                "apps/api/src/services/task-dispatch.ts:12"
+              ],
+              "classification_ssot": "product-map/generated/product-map.md; actual caller and user authority take precedence over status-only inference",
+              "authority_override": "Current intelligent customer service is services/wechat-cs-android / Android RPA; preserve shared Windows publishing/acquisition/video duties. Voice outreach explicitly retained by user but not delivered."
+            },
+            "active_status": {
+              "independent_review": {
+                "review_source_sha": "50247d9013ed7ec40062fd836e0cabfe1a2a9fd8",
+                "input_candidate_sha": "63b11dd989572b23d51b3b78816ed825db4fc551",
+                "source_sha256": "a4598aa27323d97b4f8ef1bf03911fd8609112bbe5be19c990ad0a2d59b55135",
+                "source_same_as_input_candidate": true,
+                "source_same_as_current_readback": true,
+                "dynamic_consumer": ".github/workflows/ci-smoke-glob-runner.yml top-level selector discovery, subject to helper/deny/duplicate manifests; this alone is not a product caller",
+                "direct_workflow_name_mentions": [],
+                "historical_4dce_result": "passed",
+                "registration_or_source_existence_is_not_production_usage": true
+              },
+              "current_pinned_declaration": {
+                "type": "dynamic_top_level_glob",
+                "command_id": "command:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards/14",
+                "workflow_id": "workflow:.github/workflows/ci-smoke-glob-runner.yml",
+                "job_id": "job:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards",
+                "required_parent": "Smoke Glob Gate",
+                "selector": ".github/workflows/scripts/smoke-selection.py",
+                "top_level_ordinal": 22,
+                "ordinal": 22,
+                "shard_index": 0,
+                "shard_count": 2,
+                "excluded_helper": null,
+                "excluded_required": null,
+                "baseline": false,
+                "denylist": false,
+                "execution_policy": "debt_failure_warning_only",
+                "scope": "CI code regression only; discovery/PASS is not device or business delivery evidence"
+              },
+              "current_source_sha256": "a4598aa27323d97b4f8ef1bf03911fd8609112bbe5be19c990ad0a2d59b55135",
+              "scope": "Declaration and independent source review; not live device/business proof."
+            },
+            "real_effect": {
+              "actual_commands": [
+                {
+                  "line": 34,
+                  "text": "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"$API_URL/health\" || echo \"000\")"
+                },
+                {
+                  "line": 39,
+                  "text": "TENANT_RESP=$(curl -s -w \"\\n%{http_code}\" \\"
+                },
+                {
+                  "line": 53,
+                  "text": "TENANT_ID=$(echo \"$BODY\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4 || echo \"\")"
+                },
+                {
+                  "line": 54,
+                  "text": "LICENSE_KEY=$(echo \"$BODY\" | grep -o '\"license_key\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4 || echo \"\")"
+                },
+                {
+                  "line": 55,
+                  "text": "check \"license_key starts with ZJ-\" \"0\" \"$(echo \"$LICENSE_KEY\" | grep -v '^ZJ-' | wc -l | tr -d ' ')\""
+                },
+                {
+                  "line": 60,
+                  "text": "  TASK_RESP=$(curl -s -w \"\\n%{http_code}\" \\"
+                },
+                {
+                  "line": 68,
+                  "text": "  TASK_ID=$(echo \"$TASK_BODY\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4 || echo \"\")"
+                },
+                {
+                  "line": 73,
+                  "text": "    GET_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \\"
+                },
+                {
+                  "line": 79,
+                  "text": "    IDOR_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \\"
+                },
+                {
+                  "line": 85,
+                  "text": "    LIST_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \\"
+                },
+                {
+                  "line": 99,
+                  "text": "MISSING_STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \\"
+                }
+              ],
+              "assertion_evidence": [
+                {
+                  "line": 15,
+                  "text": "  if [ \"$actual\" = \"$expected\" ]; then"
+                },
+                {
+                  "line": 35,
+                  "text": "check \"GET /health returns 200\" \"200\" \"$STATUS\""
+                },
+                {
+                  "line": 48,
+                  "text": "  check \"POST /api/tenants returns 201 (dev mode)\" \"201\" \"$HTTP_CODE\""
+                },
+                {
+                  "line": 50,
+                  "text": "  check \"POST /api/tenants returns 201 (with auth)\" \"201\" \"$HTTP_CODE\""
+                },
+                {
+                  "line": 55,
+                  "text": "check \"license_key starts with ZJ-\" \"0\" \"$(echo \"$LICENSE_KEY\" | grep -v '^ZJ-' | wc -l | tr -d ' ')\""
+                },
+                {
+                  "line": 66,
+                  "text": "  check \"POST /api/agent/tasks returns 201\" \"201\" \"$TASK_HTTP\""
+                },
+                {
+                  "line": 75,
+                  "text": "    check \"GET /api/agent/tasks/:id with correct tenantId returns 200\" \"200\" \"$GET_STATUS\""
+                },
+                {
+                  "line": 81,
+                  "text": "    check \"GET /api/agent/tasks/:id with wrong tenantId returns 403\" \"403\" \"$IDOR_STATUS\""
+                },
+                {
+                  "line": 87,
+                  "text": "    check \"GET /api/agent/tasks?tenantId= returns 200\" \"200\" \"$LIST_STATUS\""
+                },
+                {
+                  "line": 101,
+                  "text": "check \"GET /api/agent/tasks without tenantId returns 400\" \"400\" \"$MISSING_STATUS\""
+                },
+                {
+                  "line": 106,
+                  "text": "[ \"$FAIL\" -eq 0 ] && exit 0 || exit 1"
+                }
+              ],
+              "evaluated_behavior": "创建真实tenant和wechat_draft task，GET归属/跨租户403/list及缺tenant400；有本地API+DB的8项日志。",
+              "stale_or_false_green_findings": "所有tenant来自请求参数而非会话；只比较task.tenantId不证明caller身份。创建后会调用dispatchTask选真实在线agent并发送publish_request；不适合对有真实agent的库运行，无清理/curl超时。",
+              "historical_observation": {
+                "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+                "result": "passed",
+                "raw_block": [
+                  "##[group]RUN agent-fleet-smoke.sh",
+                  "2026-11-04T06:12:52.6712950Z === Agent Fleet Smoke Test: http://localhost:5200 ===",
+                  "2026-11-04T06:12:52.6713377Z [1] API health",
+                  "2026-11-04T06:12:52.7207655Z   ✓ GET /health returns 200",
+                  "2026-11-04T06:12:52.7208230Z [2] Create tenant",
+                  "2026-11-04T06:12:52.7331196Z   ✓ POST /api/tenants returns 201 (with auth)",
+                  "2026-11-04T06:12:52.7390822Z   ✓ license_key starts with ZJ-",
+                  "2026-11-04T06:12:52.7391285Z [3] Create task",
+                  "2026-11-04T06:12:52.7509876Z   ✓ POST /api/agent/tasks returns 201",
+                  "2026-11-04T06:12:52.7527914Z [4] Fetch task by ID",
+                  "2026-11-04T06:12:52.7602778Z   ✓ GET /api/agent/tasks/:id with correct tenantId returns 200",
+                  "2026-11-04T06:12:52.7603281Z [5] IDOR guard",
+                  "2026-11-04T06:12:52.7671009Z   ✓ GET /api/agent/tasks/:id with wrong tenantId returns 403",
+                  "2026-11-04T06:12:52.7672237Z [6] List tasks",
+                  "2026-11-04T06:12:52.7740737Z   ✓ GET /api/agent/tasks?tenantId= returns 200",
+                  "2026-11-04T06:12:52.7741258Z [7] Validation",
+                  "2026-11-04T06:12:52.7800248Z   ✓ GET /api/agent/tasks without tenantId returns 400",
+                  "2026-11-04T06:12:52.7800575Z ",
+                  "2026-11-04T06:12:52.7800761Z === Results: 8 passed, 0 failed ===",
+                  "2026-11-04T06:12:52.7804103Z → PASS agent-fleet-smoke.sh",
+                  "2026-11-04T06:12:52.7805086Z "
+                ],
+                "local_log_sources": [
+                  "/private/tmp/zenithjoy-round2-smoke-shard0-4dce-failure.log",
+                  "/private/tmp/zenithjoy-round2-smoke-shard1-4dce-failure.log"
+                ]
+              },
+              "audit_execution": "Read current complete script source, underlying current callers and related test boundaries. No script, external platform, model, device or database mutation executed for this audit."
+            },
+            "test_and_blocking": {
+              "existing_real_test_paths": [
+                "apps/api/tests/tasks.test.ts"
+              ],
+              "execution_scope_limit": "isolated_legacy_api_compatibility_only",
+              "test_collection_evidence": [
+                ".github/workflows/ci-l4-runtime.yml selects default API/Dashboard/Agent/Staff suite by changed module or CI; exact include/exclude governs listed test collection"
+              ],
+              "claim_limit": "Paths above are source and collection evidence, not an assertion that every test ran at the current head. Glob PASS can contain partial/skip/static checks; detailed behavior and missing evidence govern the judgment.",
+              "current_candidate_required_result_not_inferred": true
+            },
+            "duplication_and_obsolescence": {
+              "unit_id": "agent-fleet",
+              "judgment": "所有tenant来自请求参数而非会话；只比较task.tenantId不证明caller身份。创建后会调用dispatchTask选真实在线agent并发送publish_request；不适合对有真实agent的库运行，无清理/curl超时。",
+              "replacement_source_paths": [
+                "apps/api/tests/tasks.test.ts"
+              ],
+              "retained_unique_obligations": "创建真实tenant和wechat_draft task，GET归属/跨租户403/list及缺tenant400；有本地API+DB的8项日志。",
+              "replacement_equivalence_limit": "No wholesale equivalence claimed. Private PostgreSQL, OS/device, platform receipt and app-admission obligations remain distinct from unit fixtures."
+            },
+            "runtime_and_maintenance_cost": {
+              "source_lines": 106,
+              "network_literal_urls": [
+                "http://localhost:3000)",
+                "http://localhost:3000}"
+              ],
+              "cost_and_dependency_judgment": "isolated_legacy_api_compatibility_only; 所有tenant来自请求参数而非会话；只比较task.tenantId不证明caller身份。创建后会调用dispatchTask选真实在线agent并发送publish_request；不适合对有真实agent的库运行，无清理/curl超时。",
+              "external_execution_performed_by_reviewer": false
+            },
+            "retirement_and_dependencies": {
+              "disposition": "critical_evidence_gap",
+              "proposed_action": "保兼容API及已有auth/IDOR合同；先核中央任务producer和现役调用者，再决定退旧CI壳；隔离注册表/WS边界，禁止生产任务写入。",
+              "surviving_consumers": [
+                "apps/api/src/app.ts:227",
+                "apps/api/src/routes/tasks.ts:7",
+                "apps/api/src/services/task-dispatch.ts:12"
+              ],
+              "preserve_real_test_paths": [
+                "apps/api/tests/tasks.test.ts"
+              ],
+              "missing_evidence": [
+                "中央当前任务/catalog是否还有该REST调用者未读回",
+                "尚未证明等价替代覆盖此旧task查询合同",
+                "不应将任意tenant参数当真实授权证明"
+              ],
+              "source_edits_performed_in_this_review": false,
+              "history_preservation": "Any future retirement must retain exact original blob/hash and history; this read-only review deletes no source, production data, historical receipt, package or ledger."
+            }
+          },
+          "current_reassessment": "具体职责与七维重新核实；原lane审计原文在original_lane_observation或原始ledger中保留。",
+          "integration_source": {
+            "candidate_sha": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
+            "inventory_id_present": true,
+            "path_present": true,
+            "sha256": "a4598aa27323d97b4f8ef1bf03911fd8609112bbe5be19c990ad0a2d59b55135",
+            "delivery_claim": "merged source tree verified; not proof of production deployment/device/external-account success"
+          }
+        }
+      ],
+      "action": "retain current AgentDebugPage capability; enforce real tenantContext and derive tenant from resolved membership; remove hardcoded client tenant, retire unsafe live smoke",
+      "canonical_tests": [
+        "apps/api/tests/integration/consolidated-ci/task-fleet.test.ts",
+        "apps/api/tests/tasks.test.ts",
+        "apps/dashboard/src/api/__tests__/agent.api.test.ts"
+      ],
+      "consumer_evidence": [
+        "apps/dashboard/src/config/navigation.config.ts:326 requireAuth /agent-debug",
+        "apps/dashboard/src/pages/AdminSettingsPage.tsx:34 navigation",
+        "apps/dashboard/src/pages/AgentDebugPage.tsx:339 calls createTask",
+        "apps/dashboard/src/api/agent.api.ts listTasks/createTask now sends cookies and no tenant override"
+      ],
+      "actual_verification": "PG negative before fix: anonymous POST returned201 and dispatched; after fix all 8PG files/12 tests pass, including anonymous401, spoof-body/query403 before SQL/task dispatch, current member real persisted task and dispatch boundary, foreign task404, precise owned nonempty list. Default API task+retiredBrain12 pass; dashboard client7 pass.",
+      "recovery": [
+        {
+          "path": ".github/workflows/scripts/smoke/agent-fleet-smoke.sh",
+          "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+          "blob": "0b76b0abdb282d9837142bcc534a5e051080731d",
+          "sha256": "a4598aa27323d97b4f8ef1bf03911fd8609112bbe5be19c990ad0a2d59b55135"
+        }
+      ],
+      "dimensions": {
+        "current_value": "retain current AgentDebugPage capability; enforce real tenantContext and derive tenant from resolved membership; remove hardcoded client tenant, retire unsafe live smoke",
+        "active_status": [
+          "apps/dashboard/src/config/navigation.config.ts:326 requireAuth /agent-debug",
+          "apps/dashboard/src/pages/AdminSettingsPage.tsx:34 navigation",
+          "apps/dashboard/src/pages/AgentDebugPage.tsx:339 calls createTask",
+          "apps/dashboard/src/api/agent.api.ts listTasks/createTask now sends cookies and no tenant override"
+        ],
+        "real_effect": "PG negative before fix: anonymous POST returned201 and dispatched; after fix all 8PG files/12 tests pass, including anonymous401, spoof-body/query403 before SQL/task dispatch, current member real persisted task and dispatch boundary, foreign task404, precise owned nonempty list. Default API task+retiredBrain12 pass; dashboard client7 pass.",
+        "test_and_blocking": {
+          "canonical_tests": [
+            "apps/api/tests/integration/consolidated-ci/task-fleet.test.ts",
+            "apps/api/tests/tasks.test.ts",
+            "apps/dashboard/src/api/__tests__/agent.api.test.ts"
+          ],
+          "current_required_parent": "default API/Dashboard Runtime suites; new PG config must be wired to required Integration Gate"
+        },
+        "duplication_and_obsolescence": "unsafe live smoke retired; one canonical fixture owner per behavior",
+        "runtime_and_maintenance_cost": "no live task publication or shared database writes in CI; fake dispatch transport only and owned disposable database",
+        "retirement_and_dependencies": {
+          "recovery": [
+            {
+              "path": ".github/workflows/scripts/smoke/agent-fleet-smoke.sh",
+              "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+              "blob": "0b76b0abdb282d9837142bcc534a5e051080731d",
+              "sha256": "a4598aa27323d97b4f8ef1bf03911fd8609112bbe5be19c990ad0a2d59b55135"
+            }
+          ],
+          "preserved": "data/migrations/shared agent publishing and central5221 Brain stay intact",
+          "central_wiring": "root baseline/registry/GP cleanup and integrated required status still needed"
+        }
+      }
+    },
+    {
+      "unit_id": "brain-sprint-state",
+      "implementation_state": "implemented_pending_central_wiring",
+      "original_review": [
+        {
+          "id": "script:.github/workflows/scripts/smoke/brain-sprint-state-smoke.sh",
+          "path": ".github/workflows/scripts/smoke/brain-sprint-state-smoke.sh",
+          "kind": "script",
+          "review_lane": "root-additional",
+          "unit_id": "brain-sprint-state",
+          "disposition": "insufficient_evidence",
+          "implementation_state": "critical_evidence_gap",
+          "reason": "这套Sprint snapshot/Journey step兼容API仍挂app，但今日仓内生产调用者仅router自身；不能由Brain前缀推定它是中央Brain真账本入口。 固定smoke-test/sprint-smoke-001污染共享库且无清理；无无token拒绝负例；生产nginx /api/brain/指向中央5221，不等于本5200兼容router有消费者。",
+          "missing_evidence": [
+            "中央Brain或旧hook是否仍调用5200这个特定router未读回",
+            "prod /api/brain由nginx代理5221，不能用API挂载代替生产入口事实"
+          ],
+          "evidence": [
+            "smoke-additional-review-business.json",
+            "current-inventory/smoke-glob-discovery.json",
+            "current-inventory/smoke-glob-sources.json"
+          ],
+          "dimensions": {
+            "current_value": {
+              "judgment_today": "这套Sprint snapshot/Journey step兼容API仍挂app，但今日仓内生产调用者仅router自身；不能由Brain前缀推定它是中央Brain真账本入口。",
+              "actual_consumer_source_refs": [
+                "apps/api/src/app.ts:297",
+                "apps/api/src/routes/brain-sprint-state.ts:10"
+              ],
+              "classification_ssot": "product-map/generated/product-map.md; actual caller and user authority take precedence over status-only inference",
+              "authority_override": "Current intelligent customer service is services/wechat-cs-android / Android RPA; preserve shared Windows publishing/acquisition/video duties. Voice outreach explicitly retained by user but not delivered."
+            },
+            "active_status": {
+              "independent_review": {
+                "review_source_sha": "50247d9013ed7ec40062fd836e0cabfe1a2a9fd8",
+                "input_candidate_sha": "63b11dd989572b23d51b3b78816ed825db4fc551",
+                "source_sha256": "60344059c8fd75220933f4f42f2c2c105d11802f283196a98e1d4c9a594c7485",
+                "source_same_as_input_candidate": true,
+                "source_same_as_current_readback": true,
+                "dynamic_consumer": ".github/workflows/ci-smoke-glob-runner.yml top-level selector discovery, subject to helper/deny/duplicate manifests; this alone is not a product caller",
+                "direct_workflow_name_mentions": [],
+                "historical_4dce_result": "passed",
+                "registration_or_source_existence_is_not_production_usage": true
+              },
+              "current_pinned_declaration": {
+                "type": "dynamic_top_level_glob",
+                "command_id": "command:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards/14",
+                "workflow_id": "workflow:.github/workflows/ci-smoke-glob-runner.yml",
+                "job_id": "job:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards",
+                "required_parent": "Smoke Glob Gate",
+                "selector": ".github/workflows/scripts/smoke-selection.py",
+                "top_level_ordinal": 49,
+                "ordinal": 49,
+                "shard_index": 1,
+                "shard_count": 2,
+                "excluded_helper": null,
+                "excluded_required": null,
+                "baseline": false,
+                "denylist": false,
+                "execution_policy": "debt_failure_warning_only",
+                "scope": "CI code regression only; discovery/PASS is not device or business delivery evidence"
+              },
+              "current_source_sha256": "60344059c8fd75220933f4f42f2c2c105d11802f283196a98e1d4c9a594c7485",
+              "scope": "Declaration and independent source review; not live device/business proof."
+            },
+            "real_effect": {
+              "actual_commands": [
+                {
+                  "line": 32,
+                  "text": "HTTP=$(curl -s -o \"$TMP\" -w \"%{http_code}\" --max-time 15 \\"
+                },
+                {
+                  "line": 39,
+                  "text": "echo \"$RESP\" | node --input-type=commonjs -e \""
+                },
+                {
+                  "line": 47,
+                  "text": "HTTP=$(curl -s -o \"$TMP\" -w \"%{http_code}\" --max-time 15 \\"
+                },
+                {
+                  "line": 54,
+                  "text": "echo \"$RESP\" | node --input-type=commonjs -e \""
+                },
+                {
+                  "line": 63,
+                  "text": "HTTP=$(curl -s -o \"$TMP\" -w \"%{http_code}\" --max-time 15 \\"
+                },
+                {
+                  "line": 70,
+                  "text": "echo \"$RESP\" | node --input-type=commonjs -e \""
+                },
+                {
+                  "line": 77,
+                  "text": "HTTP=$(curl -s -o \"$TMP\" -w \"%{http_code}\" --max-time 15 \\"
+                },
+                {
+                  "line": 82,
+                  "text": "echo \"$RESP\" | node --input-type=commonjs -e \""
+                },
+                {
+                  "line": 93,
+                  "text": "HTTP=$(curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 \\"
+                },
+                {
+                  "line": 100,
+                  "text": "HTTP=$(curl -s -o /dev/null -w \"%{http_code}\" --max-time 10 \\"
+                }
+              ],
+              "assertion_evidence": [
+                {
+                  "line": 37,
+                  "text": "[ \"$HTTP\" = \"201\" ] || { rm -f \"$TMP\"; fail \"POST /api/brain/sprint-state expected 201, got $HTTP — $(cat $TMP)\"; }"
+                },
+                {
+                  "line": 41,
+                  "text": "  if(!d.success){process.stderr.write('FAIL success!=true: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 42,
+                  "text": "  if(!d.data||!d.data.id){process.stderr.write('FAIL no id: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 52,
+                  "text": "[ \"$HTTP\" = \"200\" ] || { rm -f \"$TMP\"; fail \"POST /api/brain/journey-steps expected 200, got $HTTP — $(cat $TMP)\"; }"
+                },
+                {
+                  "line": 56,
+                  "text": "  if(!d.success){process.stderr.write('FAIL: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 57,
+                  "text": "  if(d.data.step_id!=='smoke-S1'){process.stderr.write('FAIL step_id: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 58,
+                  "text": "  if(d.data.status!=='passing'){process.stderr.write('FAIL status: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 68,
+                  "text": "[ \"$HTTP\" = \"200\" ] || { rm -f \"$TMP\"; fail \"upsert expected 200, got $HTTP — $(cat $TMP)\"; }"
+                },
+                {
+                  "line": 72,
+                  "text": "  if(d.data.status!=='done'){process.stderr.write('FAIL upsert status: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 80,
+                  "text": "[ \"$HTTP\" = \"200\" ] || { rm -f \"$TMP\"; fail \"GET journey-steps expected 200, got $HTTP — $(cat $TMP)\"; }"
+                },
+                {
+                  "line": 84,
+                  "text": "  if(!d.success){process.stderr.write('FAIL: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 85,
+                  "text": "  if(!Array.isArray(d.data)){process.stderr.write('FAIL not array: '+JSON.stringify(d)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 87,
+                  "text": "  if(!s1){process.stderr.write('FAIL smoke-S1 not found\\n');process.exit(1);}"
+                },
+                {
+                  "line": 88,
+                  "text": "  if(s1.status!=='done'){process.stderr.write('FAIL status: '+JSON.stringify(s1)+'\\n');process.exit(1);}"
+                },
+                {
+                  "line": 96,
+                  "text": "[ \"$HTTP\" = \"400\" ] || { rm -f \"$TMP\"; fail \"missing journey_id expected 400, got $HTTP\"; }"
+                },
+                {
+                  "line": 105,
+                  "text": "[ \"$HTTP\" = \"400\" ] || { rm -f \"$TMP\"; fail \"missing fields expected 400, got $HTTP\"; }"
+                }
+              ],
+              "evaluated_behavior": "真实内部token写snapshot、step upsert变done、GET读回及缺字段400；不是自造常量，4dce确有PG往返。",
+              "stale_or_false_green_findings": "固定smoke-test/sprint-smoke-001污染共享库且无清理；无无token拒绝负例；生产nginx /api/brain/指向中央5221，不等于本5200兼容router有消费者。",
+              "historical_observation": {
+                "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+                "result": "passed",
+                "raw_block": [
+                  "##[group]RUN brain-sprint-state-smoke.sh",
+                  "2026-11-04T06:11:27.8539798Z ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                  "2026-11-04T06:11:27.8540586Z   Brain Sprint State Smoke",
+                  "2026-11-04T06:11:27.8541246Z   API_BASE=http://localhost:5200",
+                  "2026-11-04T06:11:27.8542076Z ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                  "2026-11-04T06:11:27.8877732Z ✅ POST /api/brain/sprint-state → 201 with uuid id",
+                  "2026-11-04T06:11:27.9210444Z ✅ POST /api/brain/journey-steps → 200 with step_id+status",
+                  "2026-11-04T06:11:27.9550188Z ✅ POST journey-steps upsert → status updated to done",
+                  "2026-11-04T06:11:27.9866045Z ✅ GET /api/brain/journey-steps → 200 with sorted data including updated step",
+                  "2026-11-04T06:11:27.9940293Z ✅ GET /api/brain/journey-steps (no journey_id) → 400",
+                  "2026-11-04T06:11:28.0010446Z ✅ POST /api/brain/sprint-state (missing fields) → 400",
+                  "2026-11-04T06:11:28.0024206Z ",
+                  "2026-11-04T06:11:28.0024634Z ✅ brain-sprint-state smoke PASS",
+                  "2026-11-04T06:11:28.0029957Z → PASS brain-sprint-state-smoke.sh",
+                  "2026-11-04T06:11:28.0030954Z "
+                ],
+                "local_log_sources": [
+                  "/private/tmp/zenithjoy-round2-smoke-shard0-4dce-failure.log",
+                  "/private/tmp/zenithjoy-round2-smoke-shard1-4dce-failure.log"
+                ]
+              },
+              "audit_execution": "Read current complete script source, underlying current callers and related test boundaries. No script, external platform, model, device or database mutation executed for this audit."
+            },
+            "test_and_blocking": {
+              "existing_real_test_paths": [
+                "apps/api/src/routes/__tests__/brain-sprint-state.test.ts",
+                "deploy/nginx.staging.conf:55"
+              ],
+              "execution_scope_limit": "isolated_compatibility_api_only",
+              "test_collection_evidence": [
+                ".github/workflows/ci-l4-runtime.yml selects default API/Dashboard/Agent/Staff suite by changed module or CI; exact include/exclude governs listed test collection"
+              ],
+              "claim_limit": "Paths above are source and collection evidence, not an assertion that every test ran at the current head. Glob PASS can contain partial/skip/static checks; detailed behavior and missing evidence govern the judgment.",
+              "current_candidate_required_result_not_inferred": true
+            },
+            "duplication_and_obsolescence": {
+              "unit_id": "brain-sprint-state",
+              "judgment": "固定smoke-test/sprint-smoke-001污染共享库且无清理；无无token拒绝负例；生产nginx /api/brain/指向中央5221，不等于本5200兼容router有消费者。",
+              "replacement_source_paths": [
+                "apps/api/src/routes/__tests__/brain-sprint-state.test.ts",
+                "deploy/nginx.staging.conf:55"
+              ],
+              "retained_unique_obligations": "真实内部token写snapshot、step upsert变done、GET读回及缺字段400；不是自造常量，4dce确有PG往返。",
+              "replacement_equivalence_limit": "No wholesale equivalence claimed. Private PostgreSQL, OS/device, platform receipt and app-admission obligations remain distinct from unit fixtures."
+            },
+            "runtime_and_maintenance_cost": {
+              "source_lines": 110,
+              "network_literal_urls": [
+                "http://localhost:${API_PORT}"
+              ],
+              "cost_and_dependency_judgment": "isolated_compatibility_api_only; 固定smoke-test/sprint-smoke-001污染共享库且无清理；无无token拒绝负例；生产nginx /api/brain/指向中央5221，不等于本5200兼容router有消费者。",
+              "external_execution_performed_by_reviewer": false
+            },
+            "retirement_and_dependencies": {
+              "disposition": "critical_evidence_gap",
+              "proposed_action": "保内部auth/兼容读写测试及历史数据；只在私有库跑；读中央catalog/旧hook调用记录后判是否退壳，不能为Sprint名字自动保留或删API。",
+              "surviving_consumers": [
+                "apps/api/src/app.ts:297",
+                "apps/api/src/routes/brain-sprint-state.ts:10"
+              ],
+              "preserve_real_test_paths": [
+                "apps/api/src/routes/__tests__/brain-sprint-state.test.ts",
+                "deploy/nginx.staging.conf:55"
+              ],
+              "missing_evidence": [
+                "中央Brain或旧hook是否仍调用5200这个特定router未读回",
+                "prod /api/brain由nginx代理5221，不能用API挂载代替生产入口事实"
+              ],
+              "source_edits_performed_in_this_review": false,
+              "history_preservation": "Any future retirement must retain exact original blob/hash and history; this read-only review deletes no source, production data, historical receipt, package or ledger."
+            }
+          },
+          "current_reassessment": "具体职责与七维重新核实；原lane审计原文在original_lane_observation或原始ledger中保留。",
+          "integration_source": {
+            "candidate_sha": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
+            "inventory_id_present": true,
+            "path_present": true,
+            "sha256": "60344059c8fd75220933f4f42f2c2c105d11802f283196a98e1d4c9a594c7485",
+            "delivery_claim": "merged source tree verified; not proof of production deployment/device/external-account success"
+          }
+        }
+      ],
+      "action": "retire obsolete local5200 compatibility router, app mount, old dedicated tests and live smoke; preserve migration/history/data and central5221 nginx routing",
+      "canonical_tests": [
+        "apps/api/tests/regression/retired-local-brain.test.ts"
+      ],
+      "consumer_evidence": [
+        "Cecelia source HEAD041438e33a737b9b3c8cb941b6603a4f1899aff3: exact /api/brain/sprint-state and journey-steps routes have no current5200 caller",
+        "installed /Users/administrator/.claude/hooks: exact route searches no hits",
+        "zenithjoy-skills HEAD5be0b69294366ad962a0f664d25cab437cc6625c: only archived harness-report/references/sprint-state-sync.md defaultBASE localhost5221, journey_steps uses underscore; harness-report/SKILL.md absent",
+        "deploy/nginx.conf:24 and deploy/nginx.staging.conf:55 proxy /api/brain/ directly to central5221; files untouched"
+      ],
+      "actual_verification": "Before retirement actual-app tests returned201/200/200 instead of404; after unmount all3 actual localHTTP routes404 and query never called, both nginx central5221 assertions pass. No DB row deletion or centralBrain request performed.",
+      "recovery": [
+        {
+          "path": ".github/workflows/scripts/smoke/brain-sprint-state-smoke.sh",
+          "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+          "blob": "dcb95c339caefe0465e35271061c44b32e04e321",
+          "sha256": "60344059c8fd75220933f4f42f2c2c105d11802f283196a98e1d4c9a594c7485"
+        },
+        {
+          "path": "apps/api/src/routes/brain-sprint-state.ts",
+          "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+          "blob": "29baa4227631f36b38e7babbc388c531019e0dc2",
+          "sha256": "d632bbf314b6a92ee4cf73497e29bd2b276d8891b8c8f56bf71f1cdf3dbad888"
+        },
+        {
+          "path": "apps/api/src/routes/__tests__/brain-sprint-state.test.ts",
+          "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+          "blob": "e94d78d800568203e7cc0daaeee64d3264ae4136",
+          "sha256": "5bbbae6f135dfb279e1ce4871ceb3ca6fe52efeb2a2e4b21cc8dea7179120429"
+        }
+      ],
+      "dimensions": {
+        "current_value": "retire obsolete local5200 compatibility router, app mount, old dedicated tests and live smoke; preserve migration/history/data and central5221 nginx routing",
+        "active_status": [
+          "Cecelia source HEAD041438e33a737b9b3c8cb941b6603a4f1899aff3: exact /api/brain/sprint-state and journey-steps routes have no current5200 caller",
+          "installed /Users/administrator/.claude/hooks: exact route searches no hits",
+          "zenithjoy-skills HEAD5be0b69294366ad962a0f664d25cab437cc6625c: only archived harness-report/references/sprint-state-sync.md defaultBASE localhost5221, journey_steps uses underscore; harness-report/SKILL.md absent",
+          "deploy/nginx.conf:24 and deploy/nginx.staging.conf:55 proxy /api/brain/ directly to central5221; files untouched"
+        ],
+        "real_effect": "Before retirement actual-app tests returned201/200/200 instead of404; after unmount all3 actual localHTTP routes404 and query never called, both nginx central5221 assertions pass. No DB row deletion or centralBrain request performed.",
+        "test_and_blocking": {
+          "canonical_tests": [
+            "apps/api/tests/regression/retired-local-brain.test.ts"
+          ],
+          "current_required_parent": "default API/Dashboard Runtime suites; new PG config must be wired to required Integration Gate"
+        },
+        "duplication_and_obsolescence": "unsafe live smoke retired; one canonical fixture owner per behavior",
+        "runtime_and_maintenance_cost": "no live task publication or shared database writes in CI; fake dispatch transport only and owned disposable database",
+        "retirement_and_dependencies": {
+          "recovery": [
+            {
+              "path": ".github/workflows/scripts/smoke/brain-sprint-state-smoke.sh",
+              "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+              "blob": "dcb95c339caefe0465e35271061c44b32e04e321",
+              "sha256": "60344059c8fd75220933f4f42f2c2c105d11802f283196a98e1d4c9a594c7485"
+            },
+            {
+              "path": "apps/api/src/routes/brain-sprint-state.ts",
+              "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+              "blob": "29baa4227631f36b38e7babbc388c531019e0dc2",
+              "sha256": "d632bbf314b6a92ee4cf73497e29bd2b276d8891b8c8f56bf71f1cdf3dbad888"
+            },
+            {
+              "path": "apps/api/src/routes/__tests__/brain-sprint-state.test.ts",
+              "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+              "blob": "e94d78d800568203e7cc0daaeee64d3264ae4136",
+              "sha256": "5bbbae6f135dfb279e1ce4871ceb3ca6fe52efeb2a2e4b21cc8dea7179120429"
+            }
+          ],
+          "preserved": "data/migrations/shared agent publishing and central5221 Brain stay intact",
+          "central_wiring": "root baseline/registry/GP cleanup and integrated required status still needed"
+        }
+      }
+    }
+  ]
+}

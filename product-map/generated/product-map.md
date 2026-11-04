@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 148e6aaa7faa6eec497143026b03c1e1b7d67cc01d1eb780fa2d4c5e9bc4ab5d -->
+<!-- digest: d8f5dcef13700f626995fd3f35e207239d5aab3c90f41cc4bc99319c80ffea76 -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -31,12 +31,12 @@
 | ID | App | Line | Status | Steps | Smoke Files |
 |----|-----|------|--------|-------|-------------|
 | android_worker_publish | customer_app | line01 | active | step1:取得本人账号与同run发布上下文<br>step2:准确素材及文案形成待发布稿<br>step3:单次提交并保原outward账本<br>step4:读回准确目标及实际作品状态<br>step5:安全归位与精确双锁释放 | .github/workflows/scripts/smoke/codex-publish-contract-smoke.sh<br>.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh |
-| customer_first_success | customer_app | line01 | active | step1:注册自动登录（含 free license）<br>step2:装客户端 + Agent 自动连中台<br>step3:画像诊断（行业/受众/风格 3 字段）<br>step4:扫码绑定抖音主号（Agent 弹登录窗，session 存本地）<br>step5:AI 生成 1 条内容（接 Claude API）<br>step6:中台派任务 + dryrun 发布 + 回执 | .github/workflows/scripts/smoke/golden-path-1-smoke.sh<br>.github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh<br>.github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh<br>.github/workflows/scripts/smoke/feishu-orchestrator-selfcheck-smoke.sh<br>.github/workflows/scripts/smoke/my-works-api-smoke.sh |
+| customer_first_success | customer_app | line01 | active | step1:注册自动登录（含 free license）<br>step2:装客户端 + Agent 自动连中台<br>step3:画像诊断（行业/受众/风格 3 字段）<br>step4:扫码绑定抖音主号（Agent 弹登录窗，session 存本地）<br>step5:AI 生成 1 条内容（接 Claude API）<br>step6:中台派任务 + dryrun 发布 + 回执 | .github/workflows/scripts/smoke/business-contracts-smoke.sh |
 | benchmark_link_acquisition | customer_app | line02 | proposed | step1:客户手填对标账号链接<br>step2:读对标账号视频→抓评论区<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
 | customer_smart_acquisition | customer_app | line02 | deprecated | — | — |
 | keyword_acquisition | customer_app | line02 | active | step1:中台显示手机上有 N 个可用抖音小号<br>step2:系统按关键词替客户找到符合画像的目标视频，中台可见清单<br>step3:Lead 表出现带抖音号的潜在客户<br>step4:系统用小号给线索发出私信，客户看到每条已发出/被限流/失败/已送达 | .github/workflows/scripts/smoke/golden-path-2-smoke.sh<br>scripts/smoke/leadgen-split-smoke.sh<br>.github/workflows/scripts/smoke/keyword-return-route-smoke.sh |
 | live_acquisition | customer_app | line02 | proposed | step1:客户指定目标直播间/主播<br>step2:抓直播间互动观众<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
-| rpa_ai_oncall_locator | customer_app | line02 | active | — | .github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh<br>.github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh |
+| rpa_ai_oncall_locator | customer_app | line02 | active | — | .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh<br>.github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh |
 | video_link_acquisition | customer_app | line02 | proposed | step1:客户手填目标视频链接<br>step2:抓该视频评论区<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
 | active_voice_outreach | customer_app | line04 | active | step1:拨号触发<br>step2:接通判定<br>step3:AI实时对话<br>step4:通话记录回写 | .github/workflows/scripts/smoke/gpa-voice-outreach-smoke.sh |
 | business_report | customer_app | line04 | active | step1:数据齐备<br>step2:报告生成<br>step3:送达老板 | .github/workflows/scripts/smoke/cs-daily-report-smoke.sh |
@@ -45,14 +45,14 @@
 | group_operation | customer_app | line04 | active | step1:群动静被感知<br>step2:响应与治理<br>step3:留痕 | — |
 | moments_interaction | customer_app | line04 | active | step1:客户动态被感知<br>step2:互动决策<br>step3:互动执行与留痕 | — |
 | moments_publish | customer_app | line04 | active | step1:内容成稿<br>step2:发布上圈<br>step3:发布确认与留痕 | .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh |
-| passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh<br>.github/workflows/scripts/smoke/golden-path-4-smoke.sh<br>.github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-memory-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh<br>.github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh<br>.github/workflows/scripts/smoke/crm-manual-history-smoke.sh |
-| batch_mashup | customer_app | line05 | active | step1:客户的素材变成系统认得出内容的可用库（素材打标签）<br>step2:客户定下这批视频要按什么套路剪（槽位模板分配）<br>step3:客户刷到一屏候选方案任选（语义检索候选生成）<br>step4:客户选中的方案变成能直接发的高清成片（渲染+内容安全Gate） | .github/workflows/scripts/smoke/material-tagging-smoke.sh<br>.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh<br>.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh<br>.github/workflows/scripts/smoke/mashup-render-smoke.sh<br>.github/workflows/scripts/smoke/mashup-history-smoke.sh |
+| passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh<br>.github/workflows/scripts/smoke/golden-path-4-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-memory-smoke.sh<br>.github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh<br>.github/workflows/scripts/smoke/business-contracts-smoke.sh |
+| batch_mashup | customer_app | line05 | active | step1:客户的素材变成系统认得出内容的可用库（素材打标签）<br>step2:客户定下这批视频要按什么套路剪（槽位模板分配）<br>step3:客户刷到一屏候选方案任选（语义检索候选生成）<br>step4:客户选中的方案变成能直接发的高清成片（渲染+内容安全Gate） | .github/workflows/scripts/smoke/material-tagging-smoke.sh<br>.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh<br>.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh<br>.github/workflows/scripts/smoke/media-contracts-smoke.sh<br>.github/workflows/scripts/smoke/mashup-history-smoke.sh |
 | video_editing | customer_app | line05 | active | — | .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh |
-| viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh |
-| pdd_product_listing | customer_app | line08 | proposed | step1:形成可核对的待提交商品内容和单次提交执行计划 | .github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh |
+| viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/media-contracts-smoke.sh |
+| pdd_product_listing | customer_app | line08 | proposed | step1:形成可核对的待提交商品内容和单次提交执行计划 | .github/workflows/scripts/smoke/product-delivery-contracts-smoke.sh |
 | ability_acceptance | staff_app | line00 | active | — | — |
 | f1_dev_loop | staff_app | line00 | active | step1:接单进车间即分档<br>step2:合同即法律<br>step3:造完真验<br>step4:交付有回执<br>step5:kernel-contract-a20 | — |
-| gp_anchor_enforcement | staff_app | line00 | active | — | .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh |
+| gp_anchor_enforcement | staff_app | line00 | active | — | .github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh |
 | line_health | staff_app | line00 | active | — | — |
 | skill_acceptance | staff_app | line00 | deprecated | — | — |
 | customer_management | staff_app | line10 | active | — | .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh |

@@ -8,6 +8,14 @@ const TEST_USER = 'ou_test_works_001';
 vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn() },
 }));
+// This suite isolates controller/service behavior. Actual identity resolution and
+// cross-tenant rejection execute against PostgreSQL in consolidated-ci/shared-crud.
+vi.mock('../src/middleware/tenant-context', async () => ({
+  ...await vi.importActual('../src/middleware/tenant-context'),
+  tenantContext: (req, _res, next) => {
+    req.tenantId = 'aaaaaaaa-1111-2222-3333-444444444444'; next();
+  },
+}));
 
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 
@@ -28,7 +36,7 @@ const LOG = {
 
 describe('Publish Logs API', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockQuery.mockReset();
   });
 
   describe('POST /api/works/:workId/publish-logs', () => {
@@ -85,7 +93,7 @@ describe('Publish Logs API', () => {
 
   describe('GET /api/works/:workId/publish-logs', () => {
     it('should get publish logs for a work', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [LOG] });
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: TEST_WORK_ID }] }).mockResolvedValueOnce({ rows: [LOG] });
 
       const response = await request(app).get(`/api/works/${TEST_WORK_ID}/publish-logs`).set('X-Feishu-User-Id', TEST_USER);
 
@@ -95,8 +103,8 @@ describe('Publish Logs API', () => {
       expect(response.body[0].work_id).toBe(TEST_WORK_ID);
     });
 
-    it('should return empty array for work with no logs', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+    it('should return empty array for an owned work with no logs', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: TEST_WORK_ID }] }).mockResolvedValueOnce({ rows: [] });
 
       const fakeId = '00000000-0000-0000-0000-000000000000';
       const response = await request(app).get(`/api/works/${fakeId}/publish-logs`).set('X-Feishu-User-Id', TEST_USER);

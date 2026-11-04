@@ -50,6 +50,7 @@ export interface LicenseRow {
   tier: Tier;
   max_machines: number;
   customer_id: string | null;
+  tenant_id?: string | null;
   customer_name: string | null;
   customer_email: string | null;
   status: LicenseStatus;
@@ -167,15 +168,21 @@ export async function createLicense(
   const durationDays = input.duration_days ?? defaultDays;
   const expiresAt = new Date(Date.now() + durationDays * 86400_000);
 
+  // 一条原子语句创建租户和 license；任一约束失败都不会留下半成品。
   // 防极小概率冲突：最多重试 5 次
   for (let attempt = 0; attempt < 5; attempt++) {
     const licenseKey = generateLicenseKey(tier);
     try {
       const { rows } = await pool.query<LicenseRow>(
-        `INSERT INTO zenithjoy.licenses
+        `WITH tenant AS (
+           INSERT INTO zenithjoy.tenants (name, license_key, plan)
+           VALUES (COALESCE(NULLIF($5::text, ''), NULLIF($6::text, ''), 'License-' || $1), $1, $2)
+           RETURNING id
+         )
+         INSERT INTO zenithjoy.licenses
            (license_key, tier, max_machines, customer_id, customer_name,
-            customer_email, expires_at, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            customer_email, expires_at, notes, tenant_id)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, tenant.id FROM tenant
          RETURNING *`,
         [
           licenseKey,
@@ -267,7 +274,8 @@ export type RegisterErrorCode =
   | 'EXPIRED'
   | 'SUSPENDED'
   | 'QUOTA_EXCEEDED'
-  | 'TEST_LICENSE_IN_PRODUCTION';
+  | 'TEST_LICENSE_IN_PRODUCTION'
+  | 'LICENSE_NO_TENANT';
 
 /**
  * RegisterSuccess — 双 schema (H-1):
@@ -309,7 +317,8 @@ export interface RegisterFailure {
     | 'EXPIRED'
     | 'SUSPENDED'
     | 'LICENSE_DEVICE_LIMIT_EXCEEDED'
-    | 'TEST_LICENSE_IN_PRODUCTION';
+    | 'TEST_LICENSE_IN_PRODUCTION'
+    | 'LICENSE_NO_TENANT';
   current_count?: number;    // 仅 LICENSE_DEVICE_LIMIT_EXCEEDED 时填
   limit?: number;
 }
@@ -457,6 +466,13 @@ export async function registerAgent(
       success: false,
       error: 'EXPIRED',
     };
+  }
+
+  // Historical orphan licenses must fail before writing license_machines.
+  // Newly created licenses always carry their tenant in the same atomic statement.
+  if (license.tenant_id === null) {
+    return { ok: false, success: false, code: 'LICENSE_NO_TENANT', error: 'LICENSE_NO_TENANT',
+      message: 'License 未关联租户，请联系管理员修复绑定后重试' };
   }
 
   // 已绑定的 machine？直接续签

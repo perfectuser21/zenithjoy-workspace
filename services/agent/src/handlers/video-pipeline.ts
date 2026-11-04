@@ -244,11 +244,11 @@ async function postJson<T>(
 }
 
 // ── Stale job recovery ───────────────────────────────────────────────────────
-export async function recoverStaleJobs(apiBase: string): Promise<void> {
+export async function recoverStaleJobs(apiBase: string, licenseKey?: string): Promise<void> {
   try {
     const r = await fetchWithTimeout(
       `${apiBase}/api/ai-video/jobs?status=processing&stale_minutes=5`,
-      {}, 10_000,
+      { headers: licenseKey ? { Authorization: `Bearer ${licenseKey}` } : {} }, 10_000,
     );
     if (!r.ok) return;
     const data = await r.json() as { data?: Array<{ id: string }> };
@@ -874,7 +874,7 @@ export function startVideoPipelineLoop(apiBase: string, licenseKey?: string, int
   const tick = async () => {
     if (!_staleRecovered) {
       _staleRecovered = true;
-      await recoverStaleJobs(apiBase);
+      await recoverStaleJobs(apiBase, licenseKey);
     }
     if (_running) return;
     _running = true;

@@ -15,8 +15,10 @@
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
-const BARK_URL = process.env.BARK_URL || 'https://api.day.app/QU7ktbzPJxZbNx9pEHcstW';
+const BARK_URL = process.env.BARK_URL || '';
 const FORCE_NOTIFY = process.env.FORCE_NOTIFY === 'true';
 const SKIP_HTTP_CHECK = process.env.SKIP_HTTP_CHECK === 'true';
 const FEISHU_BOT_WEBHOOK = process.env.FEISHU_BOT_WEBHOOK || '';
@@ -36,7 +38,7 @@ const validateTrue = () => true;
 
 // ── 平台定义（8×4=32 平台账号 + 3 API key = 35 条目）────────────────
 
-const PLATFORMS = [
+export const PLATFORMS = [
   // ── 抖音（4 账号）────────────────────────────────────────────────
   { platform: '抖音主号',  secretEnv: 'DOUYIN_COOKIES',  healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
   { platform: '抖音小号1', secretEnv: 'DOUYIN_SUB_1', healthUrl: 'https://creator.douyin.com/web/api/base/creator/user/info', referer: 'https://creator.douyin.com/', keyCookies: ['sessionid', 'sid_tt', 'sid_guard'], validateResponse: validateDouyin },
@@ -112,6 +114,7 @@ async function httpGet(url, cookieStr, referer) {
 }
 
 async function barkNotify(title, body) {
+  if (!BARK_URL) return;
   const encoded = `${encodeURIComponent(title)}/${encodeURIComponent(body)}`;
   const url = `${BARK_URL}/${encoded}?group=ZenithJoy`;
   return new Promise((resolve) => {
@@ -163,11 +166,11 @@ async function sendFeishuAlert(title, content) {
 
 // ── 检查单个平台 ─────────────────────────────────────────────────
 
-async function checkPlatform(p) {
+export async function checkPlatform(p, { env = process.env, skipHttpCheck = SKIP_HTTP_CHECK, request = httpGet } = {}) {
   const checkedAt = new Date().toISOString();
 
   if (p.type === 'api_key') {
-    const raw = process.env[p.secretEnv];
+    const raw = env[p.secretEnv];
     let status = 'ok';
     if (!raw) {
       status = 'missing';
@@ -175,7 +178,7 @@ async function checkPlatform(p) {
     return { platform: p.platform, secretEnv: p.secretEnv, status, checkedAt, expiresAt: null };
   }
 
-  const raw = process.env[p.secretEnv];
+  const raw = env[p.secretEnv];
   if (!raw) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'missing', checkedAt, expiresAt: null };
   }
@@ -216,13 +219,13 @@ async function checkPlatform(p) {
 
   const expiresAt = earliestExpiry ? new Date(earliestExpiry * 1000).toISOString() : null;
 
-  if (SKIP_HTTP_CHECK) {
-    return { platform: p.platform, secretEnv: p.secretEnv, status: 'ok', checkedAt, expiresAt };
+  if (skipHttpCheck) {
+    return { platform: p.platform, secretEnv: p.secretEnv, status: 'unknown', checkedAt, expiresAt };
   }
 
   // ── 检查 2：HTTP 调用验证 ──
   const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  const resp = await httpGet(p.healthUrl, cookieStr, p.referer);
+  const resp = await request(p.healthUrl, cookieStr, p.referer);
 
   if (resp.status === 0) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'unknown', checkedAt, expiresAt };
@@ -248,14 +251,20 @@ async function checkPlatform(p) {
 
 // ── DB 回写 ──────────────────────────────────────────────────────
 
-async function postSessionStatus(results) {
-  const apiBase = process.env.OPERATOR_API_URL || '';
-  const secret = process.env.INTERNAL_API_SECRET || '';
+export async function postSessionStatus(results, { env = process.env } = {}) {
+  const apiBase = env.OPERATOR_API_URL || '';
+  const secret = env.ZENITHJOY_INTERNAL_TOKEN || '';
+  // The status API and Dashboard expose eight main accounts. Subaccounts and
+  // API-key presence remain in the 35-slot report; they cannot overwrite a main.
+  const mainPlatforms = { DOUYIN_COOKIES: 'douyin', KUAISHOU_COOKIES: 'kuaishou',
+    XIAOHONGSHU_COOKIES: 'xiaohongshu', SHIPINHAO_COOKIES: 'shipinhao',
+    TOUTIAO_COOKIES: 'toutiao', WEIBO_COOKIES: 'weibo',
+    ZHIHU_COOKIES: 'zhihu', GONGZHONGHAO_COOKIES: 'gongzhonghao' };
   const updates = results
-    .filter(r => r.status === 'ok' || r.status === 'expired')
-    .map(r => ({ platform: r.platform, status: r.status === 'ok' ? 'active' : r.status, checkedAt: r.checkedAt }));
+    .filter(r => mainPlatforms[r.secretEnv] && (r.status === 'ok' || r.status === 'expired'))
+    .map(r => ({ platform: mainPlatforms[r.secretEnv], status: r.status === 'ok' ? 'active' : r.status, checkedAt: r.checkedAt }));
   if (updates.length === 0) return;
-  const missing = [!apiBase && 'OPERATOR_API_URL', !secret && 'INTERNAL_API_SECRET'].filter(Boolean);
+  const missing = [!apiBase && 'OPERATOR_API_URL', !secret && 'ZENITHJOY_INTERNAL_TOKEN'].filter(Boolean);
   if (missing.length > 0) {
     console.error('[session-health] missing required writeback configuration: ' + missing.join(', '));
     return 0;
@@ -273,11 +282,23 @@ async function postSessionStatus(results) {
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
-          'x-internal-secret': secret,
+          'X-Internal-Token': secret,
         },
       };
       const mod = url.startsWith('https') ? https : http;
-      const req = mod.request(options, (res) => { res.resume(); resolve(res.statusCode); });
+      const req = mod.request(options, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('error', () => resolve(0));
+        res.on('end', () => {
+          if (!(res.statusCode >= 200 && res.statusCode < 300)) return resolve(res.statusCode);
+          try {
+            const acknowledgement = JSON.parse(body);
+            resolve(acknowledgement.ok === true && acknowledgement.updated === updates.length ? res.statusCode : 0);
+          } catch { resolve(0); }
+        });
+      });
+      req.setTimeout(8000, () => { req.destroy(); resolve(0); });
       req.on('error', () => resolve(0));
       req.write(payload);
       req.end();
@@ -289,7 +310,17 @@ async function postSessionStatus(results) {
 
 // ── 主逻辑 ───────────────────────────────────────────────────────
 
-async function main() {
+export async function main() {
+  const configuredRequired = process.env.SESSION_HEALTH_REQUIRED_ACCOUNTS;
+  let required = null;
+  if (configuredRequired !== undefined) {
+    const names = configuredRequired.split(',').map(name => name.trim());
+    const known = new Set(PLATFORMS.filter(p => p.type !== 'api_key').map(p => p.secretEnv));
+    if (names.some(name => !name || !known.has(name)) || new Set(names).size !== names.length) {
+      throw new Error('SESSION_HEALTH_REQUIRED_ACCOUNTS must be a nonempty unique list of known account secret names');
+    }
+    required = new Set(names);
+  }
   console.log(`[session-health] 开始巡检 @ ${new Date().toISOString()}`);
 
   const results = [];
@@ -307,9 +338,19 @@ async function main() {
   fs.writeFileSync('session-health-report.json', JSON.stringify(results, null, 2));
 
   const expired = results.filter(r => r.status === 'expired');
-  const missing = results.filter(r => r.status === 'missing');
+  const missing = results.filter(r => r.status === 'missing' && (!required || required.has(r.secretEnv)));
+  const optionalMissing = results.filter(r => r.status === 'missing' && required && !required.has(r.secretEnv));
   const uncertain = results.filter(r => r.status === 'unknown' || r.status === 'invalid');
   const ok = results.filter(r => r.status === 'ok');
+  const verifiedAccounts = ok.filter(r => PLATFORMS.some(p => p.secretEnv === r.secretEnv && p.type !== 'api_key'));
+  if (missing.length > 0) {
+    console.error(`[session-health] ${missing.length} 个必需配置缺失`);
+    process.exitCode = 1;
+  }
+  if (verifiedAccounts.length === 0) {
+    console.error('[session-health] 没有任何账号通过实际健康检查');
+    process.exitCode = 1;
+  }
 
   // missing 不等于 ok — 有 missing 的平台也需要告警
   const needNotify = FORCE_NOTIFY || expired.length > 0 || missing.length > 0 || uncertain.length > 0;
@@ -326,7 +367,7 @@ async function main() {
     if (writebackFailed) {
       console.log(`[session-health] Session检测完成（ok=${ok.length}），状态回写失败`);
     } else {
-      console.log(`[session-health] 全部正常（ok=${ok.length}），无需通知`);
+      console.log(verifiedAccounts.length ? `[session-health] 已检查账号通过（ok=${verifiedAccounts.length}, optional_missing=${optionalMissing.length}），无需通知` : '[session-health] 未验证任何账号，巡检失败');
     }
     return;
   }
@@ -371,7 +412,9 @@ async function main() {
   }
 }
 
-main().catch(e => {
-  console.error('[session-health] 崩溃:', e.message);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => {
+    console.error('[session-health] 崩溃:', e.message);
+    process.exitCode = 1;
+  });
+}
