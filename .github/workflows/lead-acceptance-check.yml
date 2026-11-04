@@ -1,4 +1,4 @@
-name: lead-acceptance-check
+name: Lead Evidence Format Lint
 
 # ⚠️ 诚实声明（假绿灯治理第一刀）：本 workflow 只在 ubuntu-latest 上 grep 校验
 #    lead-acceptance markdown 证据文件是否存在，非真机执行、不 REAL_PUBLISH、
@@ -10,6 +10,8 @@ on:
     paths:
       - '.agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md'
       - 'scripts/check-lead-acceptance.sh'
+      - '.github/workflows/scripts/check-lead-evidence-format.sh'
+      - '.github/workflows/scripts/__tests__/lead-evidence-format.test.mjs'
       - '.github/workflows/lead-acceptance-check.yml'
 
 jobs:
@@ -17,15 +19,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate lead acceptance evidence files
-        run: |
-          for f in .agent-knowledge/golden-path-1/lead-acceptance-sprint-*.md; do
-            [ -f "$f" ] || continue
-            echo ">>> Checking $f"
-            # 跳过纯占位（含 PLACEHOLDER 字眼）
-            if grep -q '^> \*\*PLACEHOLDER\*\*' "$f"; then
-              echo "  (PLACEHOLDER — skip)"
-              continue
-            fi
-            bash scripts/check-lead-acceptance.sh "$f" || exit 1
-          done
+      - name: Historical evidence format only (non-empty, no placeholder-only green)
+        run: bash .github/workflows/scripts/check-lead-evidence-format.sh

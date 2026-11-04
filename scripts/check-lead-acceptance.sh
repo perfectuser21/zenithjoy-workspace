@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Lead acceptance evidence validator
+# Historical lead evidence FORMAT validator — not device/platform acceptance
 # 用法: bash scripts/check-lead-acceptance.sh <evidence-file.md>
-# Exit 0 = 合格；非 0 = 不合格
+# Exit 0 = 格式合格；不证明真实扫码/发布/同run回执
 
 set -uo pipefail
 FILE="${1:-}"
@@ -30,11 +30,11 @@ if ! grep -qE "https?://(www\.)?(douyin|iesdouyin|kuaishou|xiaohongshu|toutiao|w
   exit 1
 fi
 
-# 必须含扫码相关字眼（证明走真扫码路径）
+# 必须含扫码相关字眼（仅文档格式，不证明发生过扫码）
 if ! grep -qE "(扫码|qr|QR|scan)" "$FILE"; then
   echo "ERROR: evidence 不含扫码字眼" >&2
   exit 1
 fi
 
-echo "OK: evidence 合格"
+echo "FORMAT_OK: evidence words/URL matched; external effects NOT_VERIFIED"
 exit 0
