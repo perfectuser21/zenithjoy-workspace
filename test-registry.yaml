@@ -269,9 +269,10 @@ tests:
     path: apps/api/src/routes/platform-data.test.ts
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 新媒体运营
     note: "平台数据 API 路由测试"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/api/src/routes/platform-data.test.ts. Self-made platform constant array had no import of implementation; current PlatformDataPage uses mounted snapshots API, current real client URL/error and app admission contracts now cover it. Current deployed nginx maps API to TypeScript app, no old unauthenticated media route was exposed."
 
   - id: platform-api-index
     path: apps/dashboard/src/api/platforms/__tests__/index.test.ts
@@ -327,19 +328,21 @@ tests:
     path: apps/dashboard/src/lib/__tests__/ab-testing.test.ts
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 中台认证
     note: "A/B 测试分流逻辑"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/dashboard/src/lib/__tests__/ab-testing.test.ts. No current entry or in-flight task consumes the AB/login experiment prototype; obsolete component/lib and two login experiment examples removed. Current login/auth tests remain."
 
   - id: ab-test-component
     path: apps/dashboard/src/components/__tests__/ABTest.test.tsx
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 中台认证
     note: "ABTest 组件渲染逻辑"
 
   # ── 私域运营 ─────────────────────────────────────────────────────────────────
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/dashboard/src/components/__tests__/ABTest.test.tsx. No current entry or in-flight task consumes the AB/login experiment prototype; obsolete component/lib and two login experiment examples removed. Current login/auth tests remain."
 
   - id: field-management-page
     path: apps/dashboard/src/pages/__tests__/FieldManagementPage.test.tsx
@@ -1899,9 +1902,10 @@ tests:
     path: apps/api/tests/ws1/publish-task-type.test.ts
     type: integration
     ci: L4-INT
-    status: pending-ci
+    status: "active"
     product: 内容发布
     note: "Sprint 2.1a WS1 RED — publish_tasks.type 字段写入 + zod 校验。需要 postgres CI service。"
+    execution: "ci-l4-integration.yml / api-integration-test / npx vitest run --config vitest.pg-contracts.config.ts; fresh disposable PostgreSQL only"
 
   - id: ws2-douyin-type-route
     path: services/agent/src/handlers/__tests__/ws2-douyin-route.test.ts
@@ -2364,6 +2368,7 @@ tests:
     status: active
     product: 私域运营
     note: "Path 2 Sprint B-1 WS3a 落点 — 6 路由 + 6 错码"
+    execution: "ci-l4-integration.yml / api-integration-test / npx vitest run --config vitest.pg-contracts.config.ts; fresh disposable PostgreSQL only"
 
   - id: p2-sprint-b1-ws3b-smoke-fake-agent-burner
     path: apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts
@@ -5398,19 +5403,21 @@ tests:
     path: apps/dashboard/src/pages/__tests__/SkillCreateTab.test.tsx
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 员工工具
     note: "sprint(07091721): 对话式创建Skill——SkillCreateTab 前端单测（创建草稿/断点续聊/SSE流式渲染/生成吧触发/错误提示/发送按钮disabled）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/dashboard/src/pages/__tests__/SkillCreateTab.test.tsx. Old unmounted Dashboard skill creation UI/workflow removed after consumer and queued task audit; persisted skill_drafts rows/IDs/status/callback/zip remain accessible via the same backend, with 46 compatibility lifecycle/tenant cases. Skill evaluation is not claimed as creation replacement."
 
   - id: skill-create-e2e
     path: apps/dashboard/e2e/skill-create.spec.ts
     type: e2e
     ci: windows_cloud
-    status: active
+    status: "deprecated"
     product: 员工工具
     note: "sprint(07091721): 对话式创建Skill E2E Playwright——Golden Path（Tab→聊天→生成吧→报告页）+ 断点续聊"
 
   # ── 后台长跑生成改造 ──────────────────────────────────────────────────────────
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/dashboard/e2e/skill-create.spec.ts. Old unmounted Dashboard skill creation UI/workflow removed after consumer and queued task audit; persisted skill_drafts rows/IDs/status/callback/zip remain accessible via the same backend, with 46 compatibility lifecycle/tenant cases. Skill evaluation is not claimed as creation replacement."
 
   - id: skill-create-longrun-unit
     path: apps/api/src/routes/__tests__/skill-drafts-longrun.test.ts
@@ -5424,9 +5431,10 @@ tests:
     path: apps/dashboard/e2e/skill-create-longrun.spec.ts
     type: e2e
     ci: windows_cloud
-    status: active
+    status: "deprecated"
     product: 员工工具
     note: "sprint(07101942): 后台长跑生成改造 E2E Playwright——B-17~B-20 前端状态展示（running/needs_input/done/error + 轮询 + answer 提交）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/dashboard/e2e/skill-create-longrun.spec.ts. Old unmounted Dashboard skill creation UI/workflow removed after consumer and queued task audit; persisted skill_drafts rows/IDs/status/callback/zip remain accessible via the same backend, with 46 compatibility lifecycle/tenant cases. Skill evaluation is not claimed as creation replacement."
 
   - id: line02-acquisition-hub-android-entry-e2e
     path: apps/dashboard/e2e/acquisition-android-entry.spec.ts
@@ -7670,10 +7678,11 @@ tests:
   - id: company-profile-scratch
     path: apps/api/src/routes/company-profile-scratch.test.ts
     type: integration
-    ci: L4
+    ci: "L4-INT"
     status: active
     product: AI员工
     note: "真实scratch公司Wiki、API、浏览器保存与冻结版本闭环"
+    execution: "ci-l4-integration.yml / api-integration-test / npx vitest run --config vitest.pg-contracts.config.ts; fresh disposable PostgreSQL only"
 
   - id: company-config-readiness
     path: services/phone-adb-controller/__tests__/company-config-readiness.test.mjs
@@ -9585,7 +9594,7 @@ tests:
     ci: L1
     status: active
     product: unclassified
-    execution: ci-l1-process.yml / test-install-pack-ascii / isolated Python unittest package/bootstrap/build-only contracts
+    execution: "ci-l1-process.yml / release-admission-regression / explicit Python 3.12 + PyYAML 6.0.3, isolated package/bootstrap/build-only contracts"
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review--github-workflows-scripts-tests-manual-e2e-inputs-test-mjs
@@ -9621,7 +9630,7 @@ tests:
     ci: L1
     status: active
     product: unclassified
-    execution: ci-l1-process.yml / test-install-pack-ascii / isolated Python unittest package/bootstrap/build-only contracts
+    execution: "ci-l1-process.yml / release-admission-regression / explicit Python 3.12 + PyYAML 6.0.3, isolated package/bootstrap/build-only contracts"
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review-services-agent-scripts-tests-installpack-build-only-test-py
@@ -9630,7 +9639,7 @@ tests:
     ci: L1
     status: active
     product: unclassified
-    execution: ci-l1-process.yml / test-install-pack-ascii / isolated Python unittest package/bootstrap/build-only contracts
+    execution: "ci-l1-process.yml / release-admission-regression / explicit Python 3.12 + PyYAML 6.0.3, isolated package/bootstrap/build-only contracts"
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review--github-workflows-scripts-tests-current-api-smoke-assertions-test-mjs
@@ -9674,3 +9683,75 @@ tests:
     product: unclassified
     execution: ci-l4-runtime.yml / agent-test / npx vitest run, current modules included
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review--github-workflows-scripts-tests-contract-test-retirements-test-mjs
+    path: .github/workflows/scripts/__tests__/contract-test-retirements.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: unclassified
+    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review--github-workflows-scripts-tests-lead-evidence-format-test-mjs
+    path: .github/workflows/scripts/__tests__/lead-evidence-format.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: unclassified
+    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-apps-api-src-tests-platform-data-admission-test-ts
+    path: apps/api/src/__tests__/platform-data-admission.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / api-test / vitest default current route/fixture contracts
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-apps-api-src-routes-wechat-draft-behavior-test-ts
+    path: apps/api/src/routes/wechat-draft-behavior.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / api-test / vitest default current route/fixture contracts
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-apps-api-tests-pg-contracts-disposable-db-test-ts
+    path: apps/api/tests/pg-contracts/disposable-db.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / api-test / vitest default current route/fixture contracts
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-apps-dashboard-src-api-platform-data-api-test-ts
+    path: apps/dashboard/src/api/platform-data.api.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / dashboard-test / vitest default current client contracts
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: ci-review-scripts-sessions-qr-notification-test-mjs
+    path: scripts/sessions/qr-notification.test.mjs
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-smoke-glob-runner.yml / smoke-glob-shards / baseline qr-notification-evidence-smoke.sh; isolated provider fixtures only
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: qr-notification-evidence-smoke
+    path: .github/workflows/scripts/smoke/qr-notification-evidence-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-smoke-glob-runner.yml / smoke-glob-shards / baseline, isolated provider fixtures; no browser or real message
+    note: Provider API acceptance contract only; external delivery remains unverified.

@@ -239,18 +239,18 @@
       "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
       "dimensions": {
         "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
-        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/ws2/feishu-token.test.ts；不把登记当实际执行。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/src/services/feishu-token.test.ts；不把登记当实际执行。",
         "real_effect": "原具体场景：Workstream 2 — feishu-token service [BEHAVIOR]；getAuthorizeUrl 返回飞书 authorize URL + state 签名；handleCallback(code, state) 正常路径写 tenant_feishu_bindings；handleCallback state 验签失败抛 INVALID_STATE。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
-        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/ws2/feishu-token.test.ts。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/src/services/feishu-token.test.ts。",
         "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
         "runtime_and_maintenance_cost": "删除原文件4669字节/127行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
-        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/ws2/feishu-token.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/src/services/feishu-token.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
       },
       "replacement_test_paths": [
-        "apps/api/tests/ws2/feishu-token.test.ts"
+        "apps/api/src/services/feishu-token.test.ts"
       ],
       "evidence_paths": [
-        "apps/api/tests/ws2/feishu-token.test.ts"
+        "apps/api/src/services/feishu-token.test.ts"
       ],
       "historical_obligation_evidence": null
     },
@@ -331,18 +331,20 @@
       "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
       "dimensions": {
         "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
-        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts；不把登记当实际执行。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/src/routes/agent-burner.test.ts；不把登记当实际执行。",
         "real_effect": "原具体场景：Workstream 3b — _smoke-fake-agent-burner [BEHAVIOR]；NODE_ENV=production → 404；NODE_ENV=test 缺 X-Smoke-Token → 403；NODE_ENV=test + 正确 SMOKE_TOKEN → 200 + 写 task response。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
-        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/src/routes/agent-burner.test.ts。",
         "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
         "runtime_and_maintenance_cost": "删除原文件1909字节/52行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
-        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/src/routes/agent-burner.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
       },
       "replacement_test_paths": [
-        "apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts"
+        "apps/api/src/routes/_smoke-fake-agent-burner.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
       ],
       "evidence_paths": [
-        "apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts"
+        "apps/api/src/routes/_smoke-fake-agent-burner.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
       ],
       "historical_obligation_evidence": null
     },

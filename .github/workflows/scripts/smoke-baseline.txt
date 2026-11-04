@@ -160,3 +160,5 @@ publish-recovery-core-smoke.sh
 pdd-listing-driver-smoke.sh
 
 common-runner-source-smoke.sh
+
+qr-notification-evidence-smoke.sh
