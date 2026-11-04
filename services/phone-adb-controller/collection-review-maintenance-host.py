@@ -142,19 +142,56 @@ def private_directory(home):
     need(p.parent.stat().st_uid==os.geteuid() and not p.parent.stat().st_mode&0o022,'JOURNAL_PARENT_OWNER');p.mkdir(mode=0o700,exist_ok=True)
     st=p.lstat();need(stat.S_ISDIR(st.st_mode) and st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o700,'JOURNAL_DIR');return p
 
+SNAPSHOT='inventory-snapshot.json'
+TOOL_FILES=('adb-existing-route.py','adb-host-service.py','adb-managed-client.py','collection-review-maintenance-contract.json','collection-review-maintenance-host.py','collection-review-maintenance-phone.py','collection-review-maintenance.py','deployment-maintenance.py','deployment-service.py','deployment-transaction.py','maintenance-install-window.py','maintenance-reopen-gate.py','maintenance-reopen-lock.py','maintenance-reopen-proof.py','phone-lock-root.py')
+
+def tool_identity():
+    # 安装目录中的source namespace与实际15文件字节同时绑定；业务candidate另存admission。
+    namespaces=[p.name for p in m.HERE.parents if re.fullmatch(r'[0-9a-f]{40}',p.name)]
+    need(len(namespaces)==1,'TOOL_SOURCE_NAMESPACE')
+    return {'source_commit':namespaces[0],'directory':str(m.HERE),
+            'files':{name:m.sha(m.read(m.HERE/name)) for name in TOOL_FILES}}
+
+def snapshot_value(guards,authorization,identity):
+    return {'version':1,'purpose':'preserve_unclassified_nontarget_422_only',
+            'scope':m.SCOPE,'maintenance':m.TASK,'admission':authorization,
+            'tool':identity,'contract_sha256':identity['files']['collection-review-maintenance-contract.json'],
+            'owner_inode':guards.target_identity,'legacy_entries':guards.legacy_snapshot,
+            'legacy_historical_diff':m.legacy_diff(guards.legacy_snapshot),
+            'durable_historical_entries':m.CONTRACT['lock_state']['durable']}
+
+def saved_snapshot(directory,authorization,identity):
+    path=directory/SNAPSHOT
+    if not os.path.lexists(path):
+        # 旧意图/结果存在但快照缺失：禁止新盘点冒充原操作的baseline。
+        need(not os.path.lexists(directory) or (directory.is_dir() and not directory.is_symlink() and not any(directory.iterdir())),'SNAPSHOT_MISSING_WITH_JOURNAL')
+        return None,None
+    st=directory.lstat();need(stat.S_ISDIR(st.st_mode) and st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o700,'JOURNAL_DIR')
+    raw=m.read(path);value=json.loads(raw)
+    need(raw==m.canonical(value) and value.get('version')==1 and value.get('scope')==m.SCOPE
+         and value.get('maintenance')==m.TASK and value.get('admission')==authorization
+         and value.get('tool')==identity,'SAVED_SNAPSHOT_BINDING')
+    return value,raw
+
 def execute(action,home,sha,release_id):
     need(action in ['plan','apply'],'ACTION')
     authorization,original=admission(home,sha,release_id)
-    with m.OwnedGuards(home) as guards:
+    directory=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
+    identity=tool_identity();saved_inventory,snapshot_raw=saved_snapshot(directory,authorization,identity)
+    with m.OwnedGuards(home,legacy_snapshot=saved_inventory['legacy_entries'] if saved_inventory else None) as guards:
         # 同一guard内二次核准，不能用锁外快照跨越owner变化。
         need(admission(home,sha,release_id)[0]==authorization,'LOCKED_ADMISSION_DRIFT')
+        inventory=snapshot_value(guards,authorization,identity)
+        if saved_inventory is not None:need(saved_inventory==inventory,'SAVED_SNAPSHOT_CONTENT')
         if not guards.verify():
+            need(snapshot_raw is not None,'RETIRED_WITHOUT_SNAPSHOT')
             directory=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
             completion=json.loads(m.read(directory/'completion.json')) if (directory/'completion.json').exists() else None
             # rename已提交但最终记录前崩溃：只读原先持久化证据，不重发输入或rename。
             saved=json.loads(m.read(directory/'pre-retirement.json'))
             need(saved.get('scope')==m.SCOPE and saved.get('maintenance')==m.TASK and saved.get('execution_stopped') is False
-                 and saved.get('original_business_status')=='failed' and saved.get('admission_sha256')==m.sha(m.canonical(authorization)),'PRE_RETIREMENT_SCOPE')
+                 and saved.get('original_business_status')=='failed' and saved.get('admission_sha256')==m.sha(m.canonical(authorization))
+                 and saved.get('inventory_snapshot_sha256')==m.sha(snapshot_raw),'PRE_RETIREMENT_SCOPE')
             need(saved.get('owner_inode')==guards.target_identity and saved.get('retirement')=={'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,'before_sha256':m.sha(m.canonical(m.CONTRACT['lock_state']['durable'])),'after_sha256':m.sha(m.canonical(m.primitives.changed_inventory(m.CONTRACT['lock_state']['durable'],m.SCOPE['serial']+'.lock',m.ARCHIVE)))},'PRE_RETIREMENT_INODE_OR_CAS')
             desktop=saved['desktop'];need(desktop['home']['home'] is True and desktop['png_sha256']==m.sha(m.read(directory/'desktop.png'))
                  and desktop['xml_sha256']==m.sha(m.read(directory/'desktop.xml')),'PRE_RETIREMENT_EVIDENCE')
@@ -162,18 +199,27 @@ def execute(action,home,sha,release_id):
                  and type(e.get('pid')) is int and e['pid']>1 and e['intent_at']<=e['started_at']<=e['ended_at'] for e in desktop['leaves']),'PRE_RETIREMENT_LEAVES')
             final={**saved,'released':True,'archive':m.ARCHIVE,'owner':m.SCOPE['owner'],'serial':m.SCOPE['serial'],
                    'other_owners_unchanged':True,'central_lease_released':False,'old_run_modified':False,'production_promoted':False,'replayed_inputs':False}
-            need(guards.verify() is False and admission(home,sha,release_id)[0]==authorization,'RECONCILIATION_DRIFT')
+            need(guards.verify() is False and admission(home,sha,release_id)[0]==authorization
+                 and m.read(directory/SNAPSHOT)==snapshot_raw and tool_identity()==identity,'RECONCILIATION_DRIFT')
             if completion is not None:need(completion==final,'COMPLETION_EVIDENCE_DRIFT')
             elif action=='apply':phone_module.atomic_new(directory/'completion.json',final)
             return final
+        if action=='apply':
+            directory=private_directory(home)
+            if snapshot_raw is None:
+                need(guards.verify(),'OWNER_NO_LONGER_ACTIVE')
+                phone_module.atomic_new(directory/SNAPSHOT,inventory);snapshot_raw=m.canonical(inventory)
+            need(m.read(directory/SNAPSHOT)==snapshot_raw,'SAVED_SNAPSHOT_DRIFT')
         phone=phone_module.Phone(home,original);state=phone.home_state()
-        if action=='plan':return {**authorization,'home':state,'needs_new_cleanup':not state['home'],'central_lease_released':False,'execution_stopped':False}
-        directory=private_directory(home)
+        if action=='plan':
+            need(guards.verify() and admission(home,sha,release_id)[0]==authorization and tool_identity()==identity,'PLAN_DRIFT')
+            return {**authorization,'inventory_snapshot':inventory,'home':state,'needs_new_cleanup':not state['home'],'central_lease_released':False,'execution_stopped':False}
         intent=directory/'admission.json'
         if intent.exists():need(m.read(intent)==m.canonical(authorization),'SAVED_ADMISSION_DRIFT')
         else:phone_module.atomic_new(intent,authorization)
         def revalidate():
             need(guards.verify(),'OWNER_NO_LONGER_ACTIVE');need(admission(home,sha,release_id)[0]==authorization,'ADMISSION_DRIFT')
+            need(m.read(directory/SNAPSHOT)==snapshot_raw and tool_identity()==identity,'SAVED_SNAPSHOT_DRIFT')
         if not state['home']:
             call=phone.command(['shell','dumpsys','telephony.registry']).decode()
             states=re.findall(r'(?m)^\s*mCallState=(\d+)\s*$',call)
@@ -186,7 +232,7 @@ def execute(action,home,sha,release_id):
         desktop=phone.capture_desktop(directory,state);revalidate()
         # 证据先持久化，再动精确owner；崩溃后可读回，不补造旧结果。
         evidence={'scope':m.SCOPE,'maintenance':m.TASK,'desktop':desktop,'admission_sha256':m.sha(m.canonical(authorization)),'execution_stopped':False,'original_business_status':'failed',
-                  'owner_inode':guards.target_identity,'retirement':{'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,
+                  'inventory_snapshot_sha256':m.sha(snapshot_raw),'owner_inode':guards.target_identity,'retirement':{'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,
                     'before_sha256':m.sha(m.canonical(m.CONTRACT['lock_state']['durable'])),
                     'after_sha256':m.sha(m.canonical(m.primitives.changed_inventory(m.CONTRACT['lock_state']['durable'],m.SCOPE['serial']+'.lock',m.ARCHIVE)))}}
         pending=directory/'pre-retirement.json'
