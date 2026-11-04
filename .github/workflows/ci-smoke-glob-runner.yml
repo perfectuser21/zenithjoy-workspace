@@ -70,6 +70,7 @@ jobs:
       PGDATABASE: cecelia
       PORT: 5200
       NODE_ENV: test
+      SMOKE_SCRATCH_API: '1'
       ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
       BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
       BETTER_AUTH_URL: http://localhost:5200
