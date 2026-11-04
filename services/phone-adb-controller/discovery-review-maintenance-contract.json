@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "original_files": {
+    "run-definition.json": "2c09c8920ca081479da03d3122f3603a7c65b4001c96d7eca40321cddf79d39d",
+    "run-bindings/a1.ack.json": "f439c10a025d01380c8c439ac268dc9121bb73ee815a82cfbfd7dad801ce75fb",
+    "run-bindings/a1.request.json": "63ee1d66b52e3c2b6a475cf14a27beede2cdc6cdc1fb456eacaf0ecccd7d1055",
+    "central-task-association.json": "4d048428797d0946ee4d9384b48d7e864f1cd2222f8afc110e87be356db7e4e0",
+    "central-lock-events.jsonl": "53aefd597dc5bbf3da2507f975f02520c24223c18f4bb2cc06efdaa2e9f9f93b",
+    "cleanup-attempt.json": "0dea9ed2223a6393e7c67060f13a920df27bc9a97d6dc14d5875f9af9cb8931f",
+    "activity-events.jsonl": "5076cf21b6cf86e7873bd787f93655522065b707cce2cfe43715629567b10a99",
+    "activity-cleanup.json": "f6d620037f2d521fe131df51092a8d5900ef7fb8e9866f95620489b995266512",
+    "activity-collect_videos.json": "cd7299e58f29f7262e3aa5d9253fd2ef8a420222b1cac64e9a7d6b2428f595a6",
+    "split-result.json": "c0071081cb0129a775e71ea1ea3b7bc3f3b44251138fd2e6bb2a3eb6760da502",
+    "resource-quarantine.json": "c18eec1ed303d32e2c12ed51c5070ced3af0ab5733033284580c049748ad8596",
+    "cleanup-readback/desktop.xml": "0f117752b4c4dd69c1da3f9b74f9cc7eb392e004c6ba3f3ba3628057a7641e1f",
+    "cleanup-readback/desktop.png": "8faa168f92e3db80216481078cd114a024521ef7a36d40be76ecd95210492e5e"
+  },
+  "leaf_files": {
+    "collect/collection-leaves-197e32919ca4e0a4.jsonl": "d6988947da76ecd432cf4a30c9c332f67550c9cfc2a088d61ddb2cb2f125324a",
+    "0319dd07-a8c3-476a-9f14-93d2f7a7cf5f/collection-leaves-2afa852289d3b78d.jsonl": "dea40054145ffcd04b27108c690b39942671156a75ac1a93d44312636501fb6d"
+  },
+  "legacy_record": {
+    "relative_path": ".local/share/zenithjoy/phone-transactions/phone-safety-3fe8783b021fd9fa1a8cd424/maintenance.json",
+    "sha256": "432a430c2e82ef5d019795128a951d01014737e8e01f92b2a72de831af142af0"
+  }
+}
