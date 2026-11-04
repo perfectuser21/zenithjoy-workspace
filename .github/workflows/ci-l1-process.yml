@@ -375,6 +375,11 @@ jobs:
         run: shellcheck services/agent/install-pack/__tests__/install-pack-ascii.test.sh
       - name: Run install-pack-ascii guard (start.bat 含中文必报红)
         run: bash services/agent/install-pack/__tests__/install-pack-ascii.test.sh
+      - name: Run isolated Line04 package and installer regressions
+        run: |
+          python3 .github/workflows/scripts/__tests__/line04-package-sync.test.py
+          python3 services/agent/scripts/__tests__/embedded-pip-bootstrap.test.py
+          python3 services/agent/scripts/__tests__/installpack-build-only.test.py
 
   lint-workflow-yaml-parse:
     name: Lint — Workflow YAML Parse
