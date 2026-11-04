@@ -261,3 +261,13 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 4小时新claim、恢复PATCH短回执、成功heartbeat和两次Task读回；每次准入再GET同一新claim
 和全部冻结payload。新claim不改写旧timestamp，不恢复旧业务。具体17文件格式、真实API
 回执及保守租约边界见 `docs/runner/collection-review-gap-evidence.md`。已有journal不能迁移。
+
+### 预检的私有 pg 依赖
+
+`preflight-pg-lock.json` 固定根 `package-lock.json` 的精确 pg 8.18.0 运行闭包（14 包，包含原有 pg-cloudflare；不扩装 pg-native）。原 Git 锁的 13 个传递包没有 tarball integrity，新描述符补齐各自精确版本的官方 registry URL/SSRI，不重新解版本范围。
+
+候选构建在 `runtime/_dependencies/preflight-pg` 私有目录解包，不调用 npm 或安装脚本。每个 tarball 先验 SSRI，再拒绝路径穿越、重复项、软硬链接和扩展路径记录。全部文件和目录落盘后，排他原子提交完成清单；半成品不自动复用或覆盖，失败不进入部署观测。
+
+中央 release 固定真实 Git 描述符的 code 组件；第三方文件保留独立的 `dependencies.preflight_pg` 观测。候选运输先核实际文件和权限，原 collector 再验归档、完整文件集合及字节；完整观测摘要进入原中央 observation。中央 code/skill gate 和第三方依赖证明分别保留。
+
+运行时 `loadPreflightPg({runtimeRoot,frozen})` 只接受服务端目录、`frozen.deployment.source_commit` 与冻结的两份锁摘要。它重新核所有归档、文件及 Unix owner/mode，禁止 NODE_PATH/native 偏移，只返回官方 Pool；缺包不能借 HOME/global 包兜底。此路径不下载、不写文件、不启动进程。当前交付仅接候选安装；传统晋级不自动安装依赖，缺依赖必须拒绝新预检入口。

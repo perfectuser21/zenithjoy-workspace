@@ -9,6 +9,7 @@ import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-so
 import {observeDeployment} from './deployment-release.mjs';
 import {commanderMap} from './deployment-targets.mjs';
 import {buildPublishRelease} from './deployment-publish-release.mjs';
+import {installPreflightPg,preflightPgDeployment,verifyPreflightPgLock} from './preflight-pg-dependencies.mjs';
 const remoteCode=readFileSync(new URL('./deployment-candidate-remote.py',import.meta.url),'utf8');
 const sshOptions=['-C','-o','BatchMode=yes','-o','ControlMaster=no','-o','ControlPath=none'];
 function ssh(host,phase,command,options){
@@ -86,6 +87,12 @@ export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}
   for(const host of ['mmv','xian-m4']){
    const directory=join(temp,host,'runtime');mkdirSync(directory,{recursive:true});
    const release=plan.releases[host],manifest=materializeCandidate({root,sha,destination:directory,release});
+   if(manifest.files.some(f=>f.deployed_path==='preflight-pg-lock.json')){
+    const fixed=verifyPreflightPgLock(readDeploymentSource(root,sha,'package-lock.json'));
+    need(release.payload.components.some(c=>c.kind==='code'&&c.path===prefix+'preflight-pg-lock.json'&&c.revision===sha&&c.digest==='sha256:'+fixed.lock_sha256),'依赖缺中央Git descriptor固定组件');
+    await installPreflightPg({runtimeRoot:directory,sourceCommit:sha});
+    manifest.dependencies={preflight_pg:preflightPgDeployment({runtimeRoot:directory,sourceCommit:sha})};
+   }
    if(host==='mmv'){
     execFileSync('python3',['-B',join(directory,'commander/wf-v2-io.py'),'manifest',join(directory,'commander'),JSON.stringify(commanderMap(release))],{stdio:['ignore','pipe','pipe'],env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
     commanderSnapshot=JSON.parse(readFileSync(join(directory,'commander/runtime-manifest.json'))).runtime_snapshot_sha256;
@@ -93,7 +100,7 @@ export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}
    const identity={source_commit:sha,release_id:release.id,manifest_sha256:release.manifest_sha256};
    writeFileSync(join(temp,host,'candidate-identity.json'),JSON.stringify(identity),{mode:0o600});
    writeFileSync(join(temp,host,'run.sh'),`#!/bin/bash\nset -euo pipefail\nunset WF_RELEASE_ID WF_DEPLOYMENT_MANIFEST\nexport WFR_HOME="$HOME/.local/share/zenithjoy/phone-candidate-runs/${sha}"\nexec zsh "$(cd "$(dirname "$0")" && pwd)/runtime/leadgen-run.sh" "$@"\n`,{mode:0o755});
-   const spec={sha,identity,files:manifest.files,wrapper_sha256:digest(readFileSync(join(temp,host,'run.sh')))};
+   const spec={sha,identity,files:manifest.files,dependency_files:manifest.dependencies?.preflight_pg.files||[],wrapper_sha256:digest(readFileSync(join(temp,host,'run.sh')))};
    if(presence(host,spec)==='absent'){
     const archive=execFileSync('tar',['-C',join(temp,host),'-cf','-','runtime','candidate-identity.json','run.sh'],{maxBuffer:128*1024*1024});
     ssh(host,'install',remoteCommand('install',spec),{input:archive,stdio:['pipe','pipe','pipe'],timeout:host==='xian-m4'?candidateInstallTimeout(archive.length):120000});

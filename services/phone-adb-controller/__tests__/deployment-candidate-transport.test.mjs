@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync,writeFileSync,mkdirSync,symlinkSync,rmSync,chmodSync} from 'node:fs';
 import {join} from 'node:path';
 import {transportFixture} from './candidate-transport-fixture.mjs';
+test('候选依赖真实安装与两端SSRI文件观测，既有包篡改后不重传不发布',t=>{
+ const f=transportFixture(t,{preflightPg:true}),result=f.run('normal');assert.equal(result.ok,true,JSON.stringify(result));
+ for(const host of ['mmv','xian-m4']){
+  const root=join(f.top,'remote-'+host,'.local/share/zenithjoy/phone-candidates',f.revision,'runtime');
+  const manifest=JSON.parse(readFileSync(join(root,'deployment-manifest.json')));assert.equal(manifest.dependencies.preflight_pg.kind,'npm-tarball');
+  assert.equal(manifest.dependencies.preflight_pg.source_commit,f.revision);assert.ok(manifest.dependencies.preflight_pg.files.length>100);
+ }
+ const path=join(f.top,'remote-mmv/.local/share/zenithjoy/phone-candidates',f.revision,'runtime/_dependencies/preflight-pg/node_modules/pg/lib/index.js');
+ writeFileSync(path,'throw Error("UNTRUSTED_DEPENDENCY_MUST_NOT_EXECUTE")');const count=f.calls().length,posts=readFileSync(join(f.top,'brain.jsonl'),'utf8');
+ assert.equal(f.run('recover').ok,false);assert.equal(f.calls().slice(count).some(c=>c.archive||c.collect||c.manifest),false);assert.equal(readFileSync(join(f.top,'brain.jsonl'),'utf8'),posts);
+});
 test('远端已提交而本地运输失败：同SHA重试不重传，仍真实逐字节采集和ACK',t=>{
  const f=transportFixture(t),first=f.run('lose-once');
  assert.equal(first.ok,false,JSON.stringify(first));assert.match(first.error,/ssh/i);

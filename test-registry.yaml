@@ -10318,3 +10318,11 @@ tests:
     status: active
     product: 基础设施
     note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.
+
+  - id: preflight-pg-private-dependencies
+    path: services/phone-adb-controller/__tests__/preflight-pg-dependencies.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Fixed official tarballs, full private-file verification, scoped Pool import, atomic completion marker and source/observation binding; no phone or business DB operation.

@@ -4,6 +4,7 @@ import { readFileSync,realpathSync } from 'node:fs';
 import { resolve,sep,basename } from 'node:path';
 import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import {createRequire} from 'node:module';
 import {readDeploymentSource,fixedSourceEnvironment} from './deployment-fixed-source.mjs';
 import { digest } from './runtime-definition.mjs';
 export function deploymentManifest(root,files,{commit,repo='perfectuser21/zenithjoy-workspace',repositoryFiles=[]}={}){
@@ -35,7 +36,15 @@ export function collectDeployment(root,manifest){
     if(content_sha256!==entry.content_sha256)throw Error(`实际文件digest不符: ${entry.path}`);
     return {...entry,content_sha256};
   });
-  return {source_repo:manifest.source_repo,source_commit:manifest.source_commit,files,observed_hostname:hostname()};
+  let dependencies;
+  if(manifest.files.some(f=>f.deployed_path==='preflight-pg-lock.json')&&manifest.dependencies===undefined)throw Error('PREFLIGHT_PG_DEPLOYMENT_MISSING');
+  if(manifest.dependencies!==undefined){
+    const {preflightPgDeployment}=createRequire(import.meta.url)('./preflight-pg-dependencies.mjs');
+    if(!manifest.dependencies||Object.keys(manifest.dependencies).join(',')!=='preflight_pg')throw Error('PREFLIGHT_PG_DEPLOYMENT_SCHEMA');
+    dependencies={preflight_pg:preflightPgDeployment({runtimeRoot:root,sourceCommit:manifest.source_commit})};
+    if(digest(dependencies)!==digest(manifest.dependencies))throw Error('PREFLIGHT_PG_DEPLOYMENT_DIGEST');
+  }
+  return {source_repo:manifest.source_repo,source_commit:manifest.source_commit,files,...(dependencies?{dependencies}:{}),observed_hostname:hostname()};
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
   try{const arguments_=process.argv.slice(3),repositoryFiles=[],files=[];
