@@ -2,7 +2,7 @@
  * License 业务服务 — v1.2 Day 1-2
  *
  * 职责：
- *  - 生成 license key（ZJ-{tierPrefix}-{random}，crypto.randomBytes 防猜）
+ *  - 生成 license key（ZJ-{tierPrefix}-{random}，crypto.randomInt 防猜）
  *  - 创建 / 列出 / 吊销 license（admin 用）
  *  - Agent 注册：校验 key + 检查 expired + 检查 quota，签发 ws_token
  *
@@ -84,16 +84,15 @@ export interface LicenseMachineRow {
  * 生成 license key：ZJ-{prefix}-{8 chars random base32-ish}
  * 例：ZJ-B-A1B2C3D4 (basic) / ZJ-M-E5F6G7H8 (matrix)
  *
- * 32^8 ≈ 1.1 万亿，crypto.randomBytes 不可预测 → 不可猜。
+ * 32^8 ≈ 1.1 万亿；crypto.randomInt 无偏选择字母表索引。
  */
 export function generateLicenseKey(tier: Tier): string {
   const prefix = TIER_PREFIX[tier];
-  const bytes = crypto.randomBytes(8);
   // base32 字母表：去掉 I O 0 1 等易混淆字符
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let suffix = '';
   for (let i = 0; i < 8; i++) {
-    suffix += ALPHA[bytes[i] % ALPHA.length];
+    suffix += ALPHA[crypto.randomInt(ALPHA.length)];
   }
   return `ZJ-${prefix}-${suffix}`;
 }
