@@ -88,7 +88,12 @@ export function companyRoutingNormalization({ pool, snapshot }: Helpers) {
       await client.query(`INSERT INTO zenithjoy.company_config_changes (company_id,version,actor,source,old_snapshot,new_snapshot,conflict)
         VALUES ($1,$2,$3,'routing_profile_normalization',$4::jsonb,$5::jsonb,$6::jsonb)`, [old.company_id, next.config_version, req.feishuUserId, JSON.stringify(before), JSON.stringify(after), JSON.stringify(meta)]);
       await client.query('COMMIT'); transaction = false; reply(res, after, false, { ...meta, actor: req.feishuUserId });
-    } catch { if (transaction && client) await client.query('ROLLBACK'); fail(res, 500, 'NORMALIZATION_FAILED', '修复未获确认，请按原请求ID只读查询'); }
+    } catch {
+      // A broken connection may also reject rollback. That cannot turn an
+      // ambiguous commit into success or prevent the safe readback response.
+      if (transaction && client) { try { await client.query('ROLLBACK'); } catch { /* outcome remains unknown */ } }
+      fail(res, 500, 'NORMALIZATION_FAILED', '修复未获确认，请按原请求ID只读查询');
+    }
     finally { client?.release(); }
   };
 }
@@ -107,7 +112,10 @@ export function companyRoutingNormalizationReadback({ pool }: Helpers) {
       if (!found) { await client.query('COMMIT'); transaction = false; fail(res, 404, 'NORMALIZATION_NOT_FOUND', '本公司没有该修复回执'); return; }
       const saved = verifiedReceipt(found, old);
       await client.query('COMMIT'); transaction = false; reply(res, saved, true, { ...companyRecord(found.conflict), actor: found.actor });
-    } catch { if (transaction && client) await client.query('ROLLBACK'); fail(res, 500, 'NORMALIZATION_READBACK_FAILED', '无法核验原修复回执'); }
+    } catch {
+      if (transaction && client) { try { await client.query('ROLLBACK'); } catch { /* readback remains unavailable */ } }
+      fail(res, 500, 'NORMALIZATION_READBACK_FAILED', '无法核验原修复回执');
+    }
     finally { client?.release(); }
   };
 }

@@ -7,18 +7,18 @@ vi.mock('../auth', () => ({ auth: { api: { getSession: db.session } } }));
 import { companyProfileRouter } from './company-profile';
 const app = express(); app.use(express.json()); app.use('/profile', companyProfileRouter);
 const initial = () => ({ company_id: 'company-a', tenant_id: 'tenant-a', company_key: 'own', company_name: 'Own', config_version: 26, config_status: 'draft', config_owner: 'owner-a', wiki: { markdown: 'keep' }, source_evidence: { keep: true }, runtime_config: { routing: { line_key: 'yuesheng', profiles: ['work', 'work', 'work', 'other'], status: 'unverified', feishu_base: 'own-base' }, policy_id: 'original-policy', platform_accounts: [{ id: 'account-a', company_id: 'company-a', tenant_id: 'tenant-a', profile: 'work', device_serial: 'own-device', enabled: true, verification_status: 'verified' }] } });
-let row = initial(), transaction = initial(), role = 'owner', tenant = 'tenant-a', failCas = false, failVersion = false;
+let row = initial(), transaction = initial(), role = 'owner', tenant = 'tenant-a', failCas = false, failVersion = false, failRollback = false;
 let changes: Record<string, unknown>[] = [], versions: unknown[] = [], auditBefore: Record<string, unknown>[] = [], versionsBefore: unknown[] = [];
 const body = () => ({ expected_version: 26, request_id: '11111111-1111-4111-8111-111111111111' });
 const post = (value: unknown = body()) => request(app).post('/profile/routing-profile-normalizations').send(value);
 beforeEach(() => {
-  vi.resetAllMocks(); row = initial(); role = 'owner'; tenant = 'tenant-a'; failCas = false; failVersion = false; changes = []; versions = [];
+  vi.resetAllMocks(); row = initial(); role = 'owner'; tenant = 'tenant-a'; failCas = false; failVersion = false; failRollback = false; changes = []; versions = [];
   db.session.mockResolvedValue({ user: { id: 'actor-a' } });
   db.connect.mockResolvedValue({ query: db.query, release: db.release });
   db.query.mockImplementation(async (sql: string, args: unknown[] = []) => {
     if (sql.includes('FROM zenithjoy.tenant_members')) return { rows: [{ tenant_id: tenant, role }] };
     if (sql === 'BEGIN' || sql === 'BEGIN READ ONLY') { transaction = structuredClone(row); auditBefore = structuredClone(changes); versionsBefore = structuredClone(versions); return { rows: [] }; }
-    if (sql === 'ROLLBACK') { row = transaction; changes = auditBefore; versions = versionsBefore; return { rows: [] }; }
+    if (sql === 'ROLLBACK') { if (failRollback) throw Error('fixture disconnected during rollback'); row = transaction; changes = auditBefore; versions = versionsBefore; return { rows: [] }; }
     if (sql === 'COMMIT') return { rows: [] };
     if (sql.includes('SELECT * FROM zenithjoy.tenant_company_profiles')) return { rows: args[0] === row.tenant_id ? [structuredClone(row)] : [] };
     if (sql.includes('FROM zenithjoy.company_config_changes')) return { rows: changes.filter(c => c.company_id === args[0] && (c.conflict as Record<string, unknown>).request_id === args[1]) };
@@ -68,6 +68,10 @@ describe('公司Profile精确重复映射修复的真实HTTP入口', () => {
   it('CAS失败或版本快照失败完整回滚，不能返回成功', async () => {
     failCas = true; expect((await post()).status).toBe(409); expect(row).toEqual(initial());
     failCas = false; failVersion = true; expect((await post()).status).toBe(500); expect(row).toEqual(initial()); expect(versions).toHaveLength(0); expect(changes).toHaveLength(0);
+  });
+  it('数据库断连导致ROLLBACK也失败，仍返回安全未知响应并释放连接', async () => {
+    row.config_status = 'enabled'; failRollback = true;
+    const r = await post().timeout({ response: 200 }); expect(r.status).toBe(500); expect(r.body.error.code).toBe('NORMALIZATION_FAILED'); expect(db.release).toHaveBeenCalled();
   });
   it('未知request只读返回404，不触发修复', async () => { const r = await request(app).get('/profile/routing-profile-normalizations/' + body().request_id); expect(r.status).toBe(404); expect(versions).toHaveLength(0); });
   it('普通PUT仍然拒绝修改routing身份', async () => { row.config_status = 'draft'; const runtime = structuredClone(row.runtime_config); runtime.routing.profiles = ['work', 'other']; const r = await request(app).put('/profile').send({ expected_version: 26, runtime_config: runtime }); expect(r.status).toBe(400); expect(r.body.error.code).toBe('IMMUTABLE_COMPANY_BINDING'); });
