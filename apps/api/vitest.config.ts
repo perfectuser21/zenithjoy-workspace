@@ -34,7 +34,8 @@ export default defineConfig({
     ],
     // 0628公司旧合同保留原文供历史审阅；认证租户/CAS安全合同已取代其空白200与无版本写入。
     // company-profile-config、company-profile-scratch及line02-account-status-regression接替全部有效验收。
-    exclude: ['../../sprints/06282255-line02-company-profile-collect/tests/company-profile-and-line02.test.ts', 'node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
+    // Real PostgreSQL company lifecycle runs without skips in vitest.pg-contracts.config.ts (L4).
+    exclude: ['src/routes/company-profile-scratch.test.ts', '../../sprints/06282255-line02-company-profile-collect/tests/company-profile-and-line02.test.ts', 'node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

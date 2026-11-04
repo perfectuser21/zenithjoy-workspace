@@ -26,7 +26,10 @@ const { freezeCompanyConfig } = require('../../../../services/phone-adb-controll
 const root = resolve(__dirname, '../../../..');
 
 describe('真实scratch公司Wiki/API/页面闭环', () => {
-  it.skipIf(!process.env.COMPANY_CONFIG_SCRATCH_URL)('两公司真实种子、版本生命周期、浏览器编辑与运行冻结不漂移', async () => {
+  it('两公司真实种子、版本生命周期、浏览器编辑与运行冻结不漂移', async () => {
+    if (!process.env.COMPANY_CONFIG_SCRATCH_URL) throw new Error('Run via vitest.pg-contracts.config.ts with an explicit disposable scratch URL');
+    const {requireDisposableDatabases}=await import('../../tests/pg-contracts/disposable-db');
+    requireDisposableDatabases();
     const pool = new pg.Pool({connectionString:process.env.COMPANY_CONFIG_SCRATCH_URL});
     const client = await pool.connect(); shared.client=client;
     let browser:Browser|undefined, vite:ViteDevServer|undefined, server:Server|undefined;

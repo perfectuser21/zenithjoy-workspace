@@ -6,13 +6,20 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { Pool } from 'pg';
-import app from '../../../src/app';
+import express from 'express';
+import agentBurnerRouter from '../../../src/routes/agent-burner';
+import runtimePool from '../../../src/db/connection';
+import { requireDisposableDatabases } from '../../pg-contracts/disposable-db';
+const app = express();
+app.use(express.json());
+app.use('/api/agent/burner', agentBurnerRouter);
 
 let pool: Pool;
 let tenantId: string;
 let agentId: string;
 
 beforeAll(async () => {
+  requireDisposableDatabases();
   pool = new Pool({
     host: process.env.DATABASE_HOST || 'localhost',
     port: parseInt(process.env.DATABASE_PORT || '5432'),
@@ -34,19 +41,16 @@ beforeAll(async () => {
   );
 
   const a = await pool.query(
-    `INSERT INTO zenithjoy.agents (tenant_id, machine_id, hostname, status) VALUES ($1, $2, 'rog-test', 'online') RETURNING id`,
+    `INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status) VALUES ($1, $2, 'rog-test', 'online') RETURNING id`,
     [tenantId, `mac-b1-${Date.now()}`]
   );
   agentId = a.rows[0].id;
+  await pool.query(`INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ($1, $2, 'owner')`, [tenantId, `pg-burner-${tenantId}`]);
 });
 
 afterAll(async () => {
-  await pool.query(`DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id=$1`, [agentId]);
-  await pool.query(`DELETE FROM zenithjoy.publish_tasks WHERE payload->>'agent_id'=$1`, [agentId]);
-  await pool.query(`DELETE FROM zenithjoy.agents WHERE id=$1`, [agentId]);
-  await pool.query(`DELETE FROM zenithjoy.tenant_feishu_bindings WHERE tenant_id=$1`, [tenantId]);
-  await pool.query(`DELETE FROM zenithjoy.tenants WHERE id=$1`, [tenantId]);
-  await pool.end();
+  await pool?.end();
+  await runtimePool.end();
 });
 
 describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
@@ -93,18 +97,22 @@ describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
     expect(r.status).toBe(200);
 
     const { rows } = await pool.query(
-      `SELECT role, status FROM zenithjoy.agent_platform_sessions WHERE agent_id=$1 AND account_label='装修小号A'`,
-      [agentId]
+      `SELECT role, status FROM zenithjoy.agent_platform_sessions WHERE agent_id=$1 AND account_label=$2`,
+      [agentId, `pending:${taskId}`]
     );
     expect(rows.length).toBe(1);
     expect(rows[0].role).toBe('burner');
     expect(rows[0].status).toBe('active');
+    const scan = await request(app).post('/api/agent/burner/account-scan-result').send({ agent_id: agentId, request_id: `scan-${Date.now()}`, ok: true, account_ids: ['小号A'] });
+    expect(scan.status, JSON.stringify(scan.body)).toBe(200);
+    expect((await pool.query(`SELECT account_label FROM zenithjoy.agent_platform_sessions WHERE agent_id=$1`, [agentId])).rows).toEqual([{account_label:'小号A'}]);
   });
 
   it('GET /api/agent/burner/sessions 返 burner 列表', async () => {
-    const r = await request(app).get('/api/agent/burner/sessions').set('X-Tenant-Id', tenantId);
+    const r = await request(app).get('/api/agent/burner/sessions').set('X-Feishu-User-Id', `pg-burner-${tenantId}`);
     expect(r.status).toBe(200);
-    expect(Array.isArray(r.body.data.sessions)).toBe(true);
+    expect(r.body.data.sessions).toHaveLength(1);
+    expect(r.body.data.sessions[0].account_label).toBe('小号A');
     expect(r.body.data.sessions.every((s: any) => s.role === 'burner')).toBe(true);
   });
 
@@ -135,9 +143,10 @@ describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
       .send({
         tenant_id: tenantId,
         agent_id: agentId,
-        account_label: '装修小号A',
+        account_label: '小号A',
         video_url: 'https://www.douyin.com/video/7000000000000000001',
       });
+    expect(c.status, JSON.stringify(c.body)).toBe(200);
     const crawlTaskId = c.body.data.task_id;
 
     const r = await request(app)
@@ -161,6 +170,8 @@ describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
     );
     expect(rows[0].status).toBe('done');
     expect(rows[0].response.comment_count).toBe(5);
+    const leads = await pool.query(`SELECT nickname, comment_text, feishu_write_status FROM zenithjoy.acquisition_leads WHERE tenant_id=$1 ORDER BY nickname`, [tenantId]);
+    expect(leads.rows).toEqual(Array.from({length:5}, (_, i) => ({nickname:`@u_${i}`, comment_text:`求联系 ${i}`, feishu_write_status:'local_only'})));
   });
 
   // ── sprint 08031620-android-scan-preconditions：failure detail 全链路透传（真 Postgres，禁 mock 边）──
