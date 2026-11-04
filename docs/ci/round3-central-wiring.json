@@ -309,8 +309,10 @@
     ".github/workflows/scripts/__tests__/scan-failure-architecture.test.mjs",
     ".github/workflows/scripts/operator/rpa-locator-assist-probe.test.mjs",
     ".github/workflows/scripts/smoke/helpers/media-contracts.test.mjs",
+    "apps/api/src/clients/toapi.client.test.ts",
     "apps/api/src/controllers/__tests__/media-provider-http.test.ts",
     "apps/api/src/routes/__tests__/ci-audit-rate-limits.test.ts",
+    "apps/api/src/services/__tests__/agent-offline-monitor-security.test.ts",
     "apps/api/src/services/__tests__/media-render-runtime.test.ts",
     "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
     "apps/api/tests/integration/business-contracts/session-writeback.pg.test.ts",
@@ -345,6 +347,7 @@
     "services/agent/modules/line02/__tests__/report-videos-runtime.test.ts",
     "services/agent/modules/line04/__tests__/cs-config-gate.test.ts",
     "services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts",
+    "services/agent/src/handlers/__tests__/video-pipeline-process.test.ts",
     "services/phone-adb-controller/__tests__/controller-compatibility.test.mjs",
     "services/wechat-moments-controller/__tests__/safety.test.mjs"
   ],

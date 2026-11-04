@@ -9823,6 +9823,14 @@ tests:
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
 
+  - id: ci-closeout-4c1b9e3d1719
+    path: apps/api/src/clients/toapi.client.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
   - id: ci-closeout-60c424c28ddd
     path: apps/api/src/controllers/__tests__/media-provider-http.test.ts
     type: unit
@@ -9833,6 +9841,14 @@ tests:
 
   - id: ci-closeout-5abe2f3d900c
     path: apps/api/src/routes/__tests__/ci-audit-rate-limits.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-39e7cea4510e
+    path: apps/api/src/services/__tests__/agent-offline-monitor-security.test.ts
     type: unit
     ci: L4
     status: active
@@ -10105,6 +10121,14 @@ tests:
 
   - id: ci-closeout-f3218e6807c9
     path: services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-5733ff18671d
+    path: services/agent/src/handlers/__tests__/video-pipeline-process.test.ts
     type: unit
     ci: L4
     status: active
