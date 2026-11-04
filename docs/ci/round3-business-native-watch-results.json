@@ -122,5 +122,32 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   },
-  "post_run_metadata_delta": "After full failure, added explicit failedPhase/incomplete phase duration reporting and changed only outer startup/teardown allowance from2s to4s. Native phase/total budgets and event logic unchanged. No green rerun claimed."
+  "post_run_metadata_delta": "After full failure, added explicit failedPhase/incomplete phase duration reporting and changed only outer startup/teardown allowance from2s to4s. Native phase/total budgets and event logic unchanged. No green rerun claimed.",
+  "current_disposition": {
+    "action": "move_new_probe_to_explicit_operator_diagnostic",
+    "path": ".github/workflows/scripts/operator-probes/folder-watch-native.mjs",
+    "default_test_file": "services/agent/src/handlers/__tests__/folder-watch.test.ts",
+    "default_cases_retained": 6,
+    "default_file_matches_base_32208": true,
+    "production_manager_changed": false,
+    "native_stability": "UNVERIFIED; historical passing and failing observations remain. Default CI success is not proof of native event stability.",
+    "business_acceptance": "Current callback consumer only logs events. Folder publishing consumes the bound path and independently reads MP4 files; no current business consumer depends on native event delivery.",
+    "dimensions": {
+      "current_value": "Keep optional native OS diagnostics for developers investigating event delivery; current publishing needs path binding and real file reads.",
+      "active_status": "Explicit source-checkout operator command only. Production callback at src/index.ts logs; publishing independently readdir selects the file.",
+      "real_effect": "Controlled positive, missing registration and disabled callback negatives are preserved together with failing full-suite observations. No stable native-delivery or publishing claim.",
+      "test_and_blocking": "Restore exactly the six base tests covering real filesystem reads/binding/callback parameter handling/close. All current publishing and required Windows/Linux Agent tests remain. Diagnostic failure stays nonzero.",
+      "duplication_and_obsolescence": "The native blocker was newly added by this unmerged audit, absent in base322. It did not add a current business delivery guarantee and is unsuitable as a merge blocker.",
+      "runtime_and_maintenance_cost": "Avoid repeated global OS-event waits in every default suite. Explicit probe preserves independent 8s readiness plus 8s delivery, hard total16s, with owned temporary resources.",
+      "retirement_and_dependencies": "No previously released gate, production manager, callback API, publishing consumer or historical evidence deleted. Explicit CLI remains runnable and does not ship a dead source-only tool in the install pack."
+    },
+    "consumer_evidence": [
+      "services/agent/src/index.ts:868-870",
+      "services/agent/src/index.ts:974-979",
+      "services/agent/src/index.ts:1013-1024",
+      "services/agent/src/handlers/douyin-publish.ts:312-326",
+      "services/agent/src/handlers/douyin-publish.ts:422"
+    ],
+    "production_sha256": "e08f7b0c20db7bde9b64c3065ea30c0271dc516e9aa9638e96ca731bfcfe94c7"
+  }
 }

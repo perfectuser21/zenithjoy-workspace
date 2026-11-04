@@ -17,3 +17,15 @@ source .github/workflows/scripts/operator-probes/line02-keyword-comment.sh --sou
 ```
 
 An expired session, missing headful Chrome, empty videos/comments or nonzero child exit remains failure. Do not call the physical launcher from Linux glob or treat a source-only diagnostic check as real keyword/comment acceptance.
+
+## Native folder event diagnostic
+
+Run explicitly from services/agent after installing the locked dependencies:
+
+    npm exec -- tsx ../../.github/workflows/scripts/operator-probes/folder-watch-native.mjs
+
+The probe owns and removes a temporary directory, calls the actual production manager and forwards real OS events. Native readiness and one target delivery each have an independent 8-second limit; the total native budget is 16 seconds. Failure exits nonzero and preserves diagnostics in stderr. Success is printed only after cleanup.
+
+This is a source-checkout operator diagnostic, outside the default Vitest include and customer install pack. The production callback in src/index.ts currently logs events. Publishing obtains the bound path and independently reads the directory in handlers/douyin-publish.ts; it does not depend on native event delivery. The six existing folder binding/read/close tests and current publishing contracts remain blocking CI coverage.
+
+macOS native event stability was not established by this audit. Historical positive and negative observations remain in docs/ci/round3-business-native-watch-results.json. This explicit probe does not establish platform login, publishing success or a cold-start delivery SLA.

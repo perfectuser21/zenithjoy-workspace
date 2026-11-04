@@ -6,13 +6,11 @@ import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
 import {performance} from 'node:perf_hooks';
-import {createFolderWatchManager} from '../../folder-watch.ts';
+import {createFolderWatchManager} from '../../../../services/agent/src/handlers/folder-watch.ts';
 
-const root = fs.realpathSync(process.argv[2]);
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'zj-native-watch-diagnostic-')));
 const watched = path.join(root, 'watched');
 const incoming = path.join(root, 'incoming');
-fs.mkdirSync(watched);
-fs.mkdirSync(incoming);
 const target = path.join(watched, 'native-event.mp4');
 const events = [], rawEvents = [];
 const started = performance.now();
@@ -72,7 +70,10 @@ const manager = createFolderWatchManager({
     if (phase === 'delivery' && file === target) resolveTarget(file);
   },
 });
+let report;
 try {
+  fs.mkdirSync(watched);
+  fs.mkdirSync(incoming);
   manager.bind(watched);
   if (!registration.registered) throw new Error('Production bind did not register a native watcher');
   // Subscription startup and subsequent delivery have separate bounded costs.
@@ -104,8 +105,12 @@ try {
   assert.equal(published, 1);
   assert.equal(fs.readFileSync(target, 'utf8'), 'native video publication');
   assert.deepEqual(manager.listMp4s(), [target]);
+  assert.ok(readinessMs <= phaseBudgetMs);
+  assert.ok(deliveryMs <= phaseBudgetMs);
+  assert.ok(elapsed() <= totalBudgetMs);
+  assert.ok(rawEvents.some(event => event.filename && path.basename(event.filename) === path.basename(target)));
   completed = true;
-  process.stdout.write(JSON.stringify({platform: process.platform, target, ...diagnostics()}) + '\n');
+  report = {platform: process.platform, target, ...diagnostics()};
 } catch (error) {
   const failedPhaseMs = Math.round(performance.now() - phaseStarted);
   if (phase === 'readiness') readinessMs = failedPhaseMs;
@@ -118,4 +123,7 @@ try {
   clearTimeout(phaseDeadline);
   clearTimeout(totalDeadline);
   manager.stop();
+  await new Promise(resolve => setImmediate(resolve));
+  fs.rmSync(root, {recursive: true, force: true});
 }
+process.stdout.write(JSON.stringify({...report, cleanupCompleted: true}) + '\n');

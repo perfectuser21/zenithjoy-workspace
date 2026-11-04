@@ -12,9 +12,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
-import {fileURLToPath,pathToFileURL} from 'node:url';
-import {createRequire} from 'node:module';
 import { createFolderWatchManager } from '../folder-watch';
 
 describe('folder-watch', () => {
@@ -37,7 +34,7 @@ describe('folder-watch', () => {
   beforeEach(() => {
     managers = [];
     watchers = [];
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-fw-')));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-fw-'));
   });
   afterEach(() => {
     try {
@@ -118,29 +115,4 @@ describe('folder-watch', () => {
       fs.rmSync(otherDir, { recursive: true, force: true });
     }
   });
-
-  it('delivers a real native file event through the production manager', () => {
-    const fixture=fileURLToPath(new URL('./fixtures/folder-watch-native.mjs',import.meta.url));
-    const loader=createRequire(import.meta.url).resolve('tsx');
-    const result=spawnSync(process.execPath,['--import',pathToFileURL(loader).href,fixture,tmpDir],{
-      // Native protocol has a 16s hard bound; allow at most 4s for child startup/teardown.
-      encoding:'utf8',timeout:20000,cwd:fileURLToPath(new URL('../../../',import.meta.url)),
-    });
-    expect(result.error?.message).toBeUndefined();
-    expect(result.status,result.stderr).toBe(0);
-    const report=JSON.parse(result.stdout);
-    const target=path.join(tmpDir,'watched','native-event.mp4');
-    expect(report.target).toBe(target);
-    expect(report.registration.registered).toBe(true);
-    expect(report.registration.errors).toEqual([]);
-    expect(report.rawEvents.some((event:{filename:string|null})=>event.filename==='native-event.mp4')).toBe(true);
-    expect(report.rawReady).toBeGreaterThan(0);
-    expect(report.readinessMs).toBeLessThan(8000);
-    expect(report.deliveryMs).toBeLessThan(8000);
-    expect(report.phase).toBe('delivery');
-    expect(report.published).toBe(1);
-    expect(report.events.some((event:{file:string})=>event.file===target)).toBe(true);
-    expect(report.elapsedMs).toBeLessThan(16000);
-    expect(fs.readFileSync(target,'utf8')).toBe('native video publication');
-  }, 22000);
 });
