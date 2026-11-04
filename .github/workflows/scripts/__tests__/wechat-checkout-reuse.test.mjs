@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
 
-for (const [file, job] of [['wechat-cs-e2e.yml','agent-windows'], ['agent-module-e2e.yml','preflight-xian-rog']]) test(`${file}: ROG历史local sparse开关不能让完整checkout漏掉微信源码测试`,()=>{
+for (const mode of ['cone', 'non-cone']) for (const [file, job] of [['wechat-cs-e2e.yml','agent-windows'], ['agent-module-e2e.yml','preflight-xian-rog'], ['agent-preflight-e2e.yml','preflight-xian-rog']]) test(`${file} (${mode}): ROG历史local sparse开关不能让完整checkout漏掉微信源码测试和build配置`,()=>{
  const root=mkdtempSync(join(tmpdir(),'zj-checkout-reuse-'));
  const required='services/agent/src/handlers/__tests__/wechat-rpa.test.ts';
  function run(cmd,args){const r=spawnSync(cmd,args,{cwd:root,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r;}
@@ -19,19 +19,24 @@ for (const [file, job] of [['wechat-cs-e2e.yml','agent-windows'], ['agent-module
   writeFileSync(join(root,required),'// real tracked test fixture\n');
   writeFileSync(join(root,'services/agent/publishers/keep.cjs'),'// publisher\n');
   mkdirSync(join(root,'services/agent/modules/line04'),{recursive:true});
+  mkdirSync(join(root,'services/agent/src/preflight'),{recursive:true});
+  writeFileSync(join(root,'services/agent/src/preflight/preflight-runner.ts'),'// tracked preflight entry\n');
   writeFileSync(join(root,'services/agent/tsconfig.build.json'),'{}');
   writeFileSync(join(root,'services/agent/modules/line04/preflight.ts'),'// preflight');
   git('add','.');git('commit','-qm','fixture');
-  git('sparse-checkout','set','services/agent/publishers');
+  if(mode==='cone')git('sparse-checkout','set','services/agent/publishers');
+  else git('sparse-checkout','set','--no-cone','/services/agent/publishers/');
   git('config','--local','core.sparseCheckout','true');
   // actions/checkout v4 disables the worktree override before removing the extension.
   git('sparse-checkout','disable');git('config','--local','--unset-all','extensions.worktreeConfig');
   git('checkout','--force','HEAD');
   assert.equal(existsSync(join(root,required)),false,'reproduce inherited sparse source omission');
+  if(mode==='non-cone')assert.equal(existsSync(join(root,'services/agent/tsconfig.build.json')),false,'reproduce inherited sparse build config omission');
   const workflow=YAML.parse(readFileSync('.github/workflows/'+file,'utf8'));
   const step=workflow.jobs[job].steps.find(s=>s.name==='Restore complete agent source after reused checkout');
   run('bash',['-e','-o','pipefail','-c',step?.run||':']);
   assert.equal(existsSync(join(root,required)),true,'actual workflow must restore required tracked source');
+  assert.equal(existsSync(join(root,'services/agent/tsconfig.build.json')),true,'actual workflow must restore tracked build config');
   const checkout=workflow.jobs[job].steps.findIndex(s=>s.uses?.startsWith('actions/checkout@'));
   assert.ok(workflow.jobs[job].steps.indexOf(step)>checkout);
  } finally {rmSync(root,{recursive:true,force:true});}

@@ -30,6 +30,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore complete agent source after reused checkout
+        shell: bash
+        run: |
+          # checkout can remove worktreeConfig and expose a legacy local sparse
+          # setting again. Restore this job's tracked inputs before npm/build.
+          git sparse-checkout disable
+          test -f services/agent/tsconfig.build.json
+          test -f services/agent/src/preflight/preflight-runner.ts
+          test -f services/agent/src/handlers/__tests__/wechat-rpa.test.ts
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
