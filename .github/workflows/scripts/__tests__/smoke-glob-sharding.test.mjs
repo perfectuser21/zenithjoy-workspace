@@ -317,3 +317,21 @@ test('real required L4 E2E shell remains fail-closed for API job success/failure
   const r=spawnSync('bash',['-e','-o','pipefail','-c',script],{encoding:'utf8'});assert.equal(r.status===0,state==='success',r.stdout+r.stderr);
  }
 });
+test('纯汇总离线执行正式ownership步骤：无key普通仓通过，mixed-case tracked Skill仍拒绝，worker继续还原固定源',t=>{
+ const jobs=parse(workflow).jobs,aggregate=jobs['smoke-glob-runner'],worker=jobs['smoke-glob-shards'];
+ const restore=worker.steps.find(s=>s.uses==='./.github/actions/skills-source');
+ assert.deepEqual(restore,{name:'Restore pinned skill sources',if:"hashFiles('.skills-source.json') != ''",uses:'./.github/actions/skills-source',with:{'ssh-key':'${{ secrets.SKILLS_SOURCE_SSH_KEY }}'}});
+ const ownership=aggregate.steps.find(s=>s.run==='python3 scripts/skill_source_ownership.py');
+ assert.ok(ownership,'纯汇总必须保留正式本地ownership守卫而不联网恢复未消费的Skill');
+ assert.equal(ownership.if,undefined);assert.equal(ownership['continue-on-error'],undefined);
+ assert.equal(aggregate.steps.some(s=>s.uses==='./.github/actions/skills-source'||s.with?.['ssh-key']),false);
+ const root=mkdtempSync(join(tmpdir(),'smoke-offline-ownership-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ mkdirSync(join(root,'scripts'));cpSync(new URL('../../../../scripts/skill_source_ownership.py',import.meta.url),join(root,'scripts/skill_source_ownership.py'));
+ const env={...process.env,HOME:root,SKILLS_SOURCE_SSH_KEY:'',SKILLS_SOURCE_DIR:'',GIT_SSH_COMMAND:'/usr/bin/false',GIT_TERMINAL_PROMPT:'0'};
+ const git=args=>{const r=spawnSync('git',args,{cwd:root,env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);};git(['init','--quiet']);writeFileSync(join(root,'business.py'),'pass\n');git(['add','business.py']);
+ const execute=()=>spawnSync('bash',['-e','-o','pipefail','-c',ownership.run],{cwd:root,env,encoding:'utf8'});
+ const ok=execute();assert.equal(ok.status,0,ok.stderr);assert.match(ok.stdout,/Skill source ownership passed/);
+ mkdirSync(join(root,'mixed'));writeFileSync(join(root,'mixed','SkIlL.Md'),'禁止业务仓维护的Skill定义');git(['add','mixed/SkIlL.Md']);
+ const denied=execute();assert.equal(denied.status,1,denied.stdout+denied.stderr);assert.match(denied.stderr,/mixed\/SkIlL\.Md/);
+ assert.equal(existsSync(join(root,'.skills-source')),false);assert.equal(existsSync(join(root,'.skills-runtime')),false);
+});
