@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "base": "421e1aab3b05d051bf4ebace1920c588bc181908",
+  "original_round3_action_unit_denominator": 172,
+  "original_round3_ledger_mutated": false,
+  "additional_unit_count": 2,
+  "source_top_level_smoke": {
+    "before_this_batch": 121,
+    "after_this_batch": 119,
+    "original300_removed_or_moved": 186,
+    "original300_added": 5,
+    "workflow_count": 75
+  },
+  "generated_at": "2026-11-04T10:38:08.689521+00:00",
+  "units": [
+    {
+      "unit_id": "post-ci-wechat-cs-config-wrapper",
+      "prior_review_unit_ids": [
+        "shared-cs-config-pg-contract"
+      ],
+      "action": "Retire duplicate shell; preserve current shared config source and exact default required API/PG tests.",
+      "implementation_state": "implemented_pending_required_ci",
+      "old_path": ".github/workflows/scripts/smoke/wechat-cs-config-smoke.sh",
+      "new_path": null,
+      "recovery": {
+        "commit": "421e1aab3b05d051bf4ebace1920c588bc181908",
+        "path": ".github/workflows/scripts/smoke/wechat-cs-config-smoke.sh",
+        "blob": "39440e5fdccf928e0e9d8a1250bac13f6084aae5",
+        "sha256": "20251f2059a13336841402521c6c3bd02e5588fef2f2c69b02e42cd45a1e9fcc",
+        "bytes": 824
+      },
+      "canonical_tests": [
+        "apps/api/src/services/wechat/__tests__/cs-config-store.test.ts",
+        "apps/api/tests/integration/p4-wechat-cs-config/wechat-config.integration.test.ts"
+      ],
+      "actual_validation": {
+        "store": "Own locked API install,1file/12 tests passed:cs-config-store-green.log",
+        "owned_postgres": "Business owned initdb default Integration24files/101 tests; exact p4 config6 passes in business-integration-default.log. Separate business contract49 passes in business-integration-contracts.log.",
+        "migration_dependency": "Root integrated business2f7047165 as bd9f73924: migration errors now stop setup. This source fix is owned by root/business.",
+        "cloud_limit": "PR2406ba1 API Integration job126513424336 was SKIPPED after changes job failed; local101 is not cloud success."
+      },
+      "required_consumers": [
+        {
+          "workflow": ".github/workflows/ci-l4-runtime.yml",
+          "job": "api-test",
+          "parent": "L4 Runtime Gate Passed",
+          "selection": "Default API Vitest includes src/**/__tests__/**/*.test.{ts,js}"
+        },
+        {
+          "workflow": ".github/workflows/ci-l4-integration.yml",
+          "job": "api-integration-test",
+          "parent": "Integration Gate Passed",
+          "command": "cd apps/api && npx vitest run --config vitest.integration.config.ts",
+          "selection": "tests/integration/**/*.integration.test.ts collects the exact six current PG route cases"
+        }
+      ],
+      "dimensions": {
+        "current_value": "Shared CS config DB-first/fallback/upsert and persona/business knowledge/A1-A5 route contracts retain value. The shell adds no behavior beyond the exact12 store and6 PG tests.",
+        "active_status": "Old shell is only a top-level glob/baseline caller. Store12 is in default API collection; PG6 is in default Integration collection with a blocking required parent.",
+        "real_effect": "This lane independently passed store12. Existing owned-initdb default Integration24files101 receipt explicitly shows the exact six PG tests passing. Applied166 after rollback on the shared seeded glob DB was not migration success.",
+        "test_and_blocking": "Keep default API and Integration assertions, actual HTTP/SQL readback and negative cases. Remove only duplicate execution; retain root migration hard-failure fix and wait for exact-candidate cloud required checks.",
+        "duplication_and_obsolescence": "Delete the824-byte thin wrapper without a fake PASS alias. Preserve all shared source, tests, schemas, data and provider-mock boundaries.",
+        "runtime_and_maintenance_cost": "Remove two redundant Vitest starts and one migration replay on the shared preseeded glob database per invocation. No guessed CPU/RSS/billing savings.",
+        "retirement_and_dependencies": "Commit/blob/SHA256 restore the original shell. Root must remove the exact baseline entry and update central retirement/source inventory. Canonical source and owned-PG evidence remain; no production or device acceptance inferred."
+      }
+    },
+    {
+      "unit_id": "post-ci-line02-headful-probe-placement",
+      "prior_review_unit_ids": [
+        "keyword-browser-operator"
+      ],
+      "action": "Move the complete original probe bytes outside automatic Linux smoke inventory; preserve the active approved Windows read-side implementation and external obligations.",
+      "implementation_state": "implemented_pending_required_ci",
+      "old_path": ".github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh",
+      "new_path": ".github/workflows/scripts/operator-probes/line02-keyword-comment.sh",
+      "recovery": {
+        "commit": "421e1aab3b05d051bf4ebace1920c588bc181908",
+        "path": ".github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh",
+        "blob": "3b6aebfc81302aec695bd0b23077b1971fa1b33f",
+        "sha256": "3791e838fc4b6b95d35f2fa642bc845194e42d827ef9302ad39dae7ac0b61acf",
+        "bytes": 7689
+      },
+      "relocated_sha256": "3791e838fc4b6b95d35f2fa642bc845194e42d827ef9302ad39dae7ac0b61acf",
+      "byte_for_byte_identical": true,
+      "updated_current_references": [
+        ".github/workflows/scripts/run-line02-candidate.ps1",
+        ".github/workflows/e2e-line02-keyword-comment.yml",
+        ".github/workflows/scripts/__tests__/line02-candidate-gate.test.mjs",
+        ".github/workflows/scripts/__tests__/line02-interactive-contract.test.mjs",
+        ".github/workflows/scripts/__tests__/line02-keyword-comment-smoke.diagnostics.test.sh",
+        ".github/workflows/scripts/__tests__/lint-shell-var-brace.test.sh"
+      ],
+      "current_consumer_chain": [
+        "nightly-real-machine-staging.yml#douyin-read -> run-line02-candidate.ps1 -> operator-probes/line02-keyword-comment.sh",
+        "e2e-line02-keyword-comment.yml#keyword-comment-smoke -> same approved interactive launcher -> same probe"
+      ],
+      "actual_validation": {
+        "red": "New candidate tests fail while the new operator source is absent; relocation-red.log retained.",
+        "green": "Two Node files15 tests, diagnostic classification6 and shell variable brace4 pass, zero skip.",
+        "behavior_scope": "Actual shared shell runs real fake-child processes inside scratch Git repos; no physical headful browser/device runs. Expired session, wrong candidate, installed source, nonzero child and successful complete outputs are checked.",
+        "merge_provenance": "GitHub run41812006069 is pull_request/headba1; actual f03f1550 commit parents are32208 andba1. Added real commit-tree synthetic merge fixture confirms GITHUB_SHA may correctly be the checkout merge rather than event head."
+      },
+      "external_evidence_gap_refs": [
+        "critical:.github/workflows/e2e-line02-keyword-comment.yml",
+        "workflow:nightly-real-machine-staging"
+      ],
+      "dimensions": {
+        "current_value": "Keyword search and comment read-side still have active nightly/dedicated E2E consumers and unique external acceptance duties. Ubuntu NO_HEADFUL_CHROME means wrong execution environment, not obsolete business.",
+        "active_status": "All7689 original bytes move to explicit operator-probes/line02-keyword-comment.sh with the same SHA256. Both workflows retain the same PowerShell launcher; E2E path filters and all current diagnostic callers use the new path.",
+        "real_effect": "No runtime logic changes: same-candidate workspace/SHA, clean publishers, nonzero child failure, expired-session refusal, nonempty videos/comments and required commenter fields remain byte-identical. Only source-only classification and scratch child fixtures run here.",
+        "test_and_blocking": "15 Node tests,6 diagnostic and4 brace checks pass. Preserve approved user/profile, interactive session, shared zj-rog-desktop mutex, timeout/process-tree cleanup and identity receipt. Real Git merge fixture prevents misreading legitimate PR merge provenance as wrong candidate.",
+        "duplication_and_obsolescence": "Remove the incorrect automatic Linux headful invocation. No denylist addition, fake PASS alias or deleted implementation. Historical sprints/designs are untouched; the original header comments stay byte-identical, with current usage documented beside the probe.",
+        "runtime_and_maintenance_cost": "Linux glob avoids one guaranteed headful-environment failure attempt. Approved Windows runtime/cleanup duties stay. Probe code bytes do not decrease and no physical-run success or timing savings are invented.",
+        "retirement_and_dependencies": "Fixed commit/blob/hash restores the old location. PS1/YAML/diagnostic/brace/candidate references are updated. Root central inventory and old falsegreen-debt location need reconciliation; existing six external gaps remain open regardless of relocation."
+      }
+    }
+  ],
+  "evidence_manifest": {
+    "relocation-green.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/relocation-green.log",
+      "sha256": "91b3731dd0b66c8bed5093e5c32b3e4146dc6eaf71948b9ff0f5f0ec76835b1e",
+      "bytes": 3608
+    },
+    "shell-brace-green.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/shell-brace-green.log",
+      "sha256": "01ac9a5f3daba86defd66827eaea10e93c1f6de6ec66f1b8c126792c49ac571d",
+      "bytes": 358
+    },
+    "business-integration-contracts.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/business-integration-contracts.log",
+      "sha256": "1b5333aea003e62305bb82983c33b6d59e35bed87e13b8fe5b3ec9a8bd7e7cc5",
+      "bytes": 3892
+    },
+    "classification-green.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/classification-green.log",
+      "sha256": "f507f0a9e05c45e8b5ca2a650c263aa4a2ce3eae84971046f05de5ba1ab8e062",
+      "bytes": 377
+    },
+    "relocation-red.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/relocation-red.log",
+      "sha256": "e9bf0ad032074465f03f8dbef2aa23bfcf9572459d8fc84fb88dd64d28e8dd9c",
+      "bytes": 7479
+    },
+    "pr-merge-commit.json": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/pr-merge-commit.json",
+      "sha256": "6116f06fe6e6f1a1cdc599f20c3527cf61341b7215f02a5a66586727193ededc",
+      "bytes": 3091
+    },
+    "cs-config-store-green.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/cs-config-store-green.log",
+      "sha256": "09640c42484ba76e36ada64149a8e2d66b2ba8e1a04f3e5a63146ba708f2017c",
+      "bytes": 6410
+    },
+    "business-integration-default.log": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/business-integration-default.log",
+      "sha256": "6ee53f5f2f70bb7ea6cacc35e5a1052d4bec35616f8223a75dac5da5bc57e7b0",
+      "bytes": 14125
+    },
+    "old-glob-run.json": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/additional-closeout/old-glob-run.json",
+      "sha256": "d41baeea4421d2110add1ec877dcb8bacd6f8248b59bceeb578c0470888c9cd0",
+      "bytes": 16279
+    }
+  },
+  "not_claimed": [
+    "Current cloud required CI success",
+    "Physical headful candidate run, device operation, login, customer message or production mutation",
+    "New false-green denylist or weakened negative test"
+  ]
+}

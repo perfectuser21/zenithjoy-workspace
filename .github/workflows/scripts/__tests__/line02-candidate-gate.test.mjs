@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from 'nod
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-const source = resolve('.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh');
+const source = resolve('.github/workflows/scripts/operator-probes/line02-keyword-comment.sh');
 function fixture(t, mode = 'success') {
   const dir = mkdtempSync(join(tmpdir(), 'line02-candidate-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -38,4 +38,17 @@ test('脚本输出ok=true但进程非零仍拒绝，不能吞子进程错误', t
 });
 test('同SHA源码真实两段进程均成功且评论字段齐全才通过', t=>{
   const {run}=fixture(t); const result=run(); assert.equal(result.status,0,result.stdout+result.stderr); assert.match(result.stdout,/smoke PASS/);
+});
+
+test('GitHub PR synthetic merge checkout is a valid same-candidate gate, distinct from event head', t=>{
+  const {dir,run,sha}=fixture(t);
+  function git(args){const r=spawnSync('git',['-c','user.name=fixture','-c','user.email=fixture@example.invalid',...args],{cwd:dir,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();}
+  const tree=git(['write-tree']);
+  const eventHead=git(['commit-tree',tree,'-p',sha,'-m','event head']);
+  const merge=git(['commit-tree',tree,'-p',sha,'-p',eventHead,'-m','synthetic merge']);
+  git(['update-ref','HEAD',merge]);
+  assert.notEqual(merge,eventHead);
+  const result=run({GITHUB_SHA:merge});
+  assert.equal(result.status,0,result.stdout+result.stderr);
+  assert.match(result.stdout,new RegExp('candidate sha='+merge));
 });
