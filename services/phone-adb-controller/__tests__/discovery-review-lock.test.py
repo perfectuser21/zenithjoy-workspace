@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -27,7 +28,8 @@ class ExactDurableTest(unittest.TestCase):
                 self.owner(root, serial, 'old-' + serial)
         self.owner(self.new, mod.SERIAL, mod.OWNER)
         (self.new / mod.locks.MARKER).write_text(json.dumps({'schema_version': 1,
-            'state': 'complete', 'source_sha256': 'a' * 64, 'legacy_root': str(self.old)}))
+            'state': 'complete', 'source_sha256': hashlib.sha256(json.dumps(mod.locks.inventory(self.old), separators=(',', ':')).encode()).hexdigest(),
+            'entries': len(mod.locks.inventory(self.old)), 'review_owners': 2, 'legacy_root': str(self.old)}))
         self.journal = self.base / 'journal.json'
         self.before = mod.locks.inventory(self.old)
         self.marker = (self.new / mod.locks.MARKER).read_bytes()
@@ -100,6 +102,21 @@ class ExactDurableTest(unittest.TestCase):
         with patch.object(mod.maintenance, 'legacy_binding', return_value=(self.old, {**binding, 'alias': ['changed-inode']})):
             with self.assertRaises(ValueError):
                 mod.retire(alias, self.new, self.journal, 'b' * 64, legacy_record=record)
+
+    def test_preexisting_historical_owner_or_marker_drift_rejected(self):
+        owner = self.old / 'ANGYVB4227006983.lock/owner'
+        raw = owner.read_bytes()
+        owner.write_text('unexpected\n')
+        with self.assertRaises(ValueError): self.retire()
+        owner.write_bytes(raw)
+        marker = self.new / mod.locks.MARKER
+        d = json.loads(marker.read_text()); d['source_sha256'] = 'd' * 64
+        marker.write_text(json.dumps(d))
+        with self.assertRaises(ValueError): self.retire()
+
+    def test_preexisting_durable_foreign_drift_rejected(self):
+        (self.new / 'ANGYVB4402004137.lock/owner').write_text('unexpected\n')
+        with self.assertRaises(ValueError): self.retire()
 
 
 if __name__ == '__main__': unittest.main()
