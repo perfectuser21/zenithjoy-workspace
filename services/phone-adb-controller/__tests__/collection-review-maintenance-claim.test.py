@@ -25,10 +25,12 @@ class MaintenanceClaimTest(unittest.TestCase):
         ack={'id':m.TASK['id'],'claimed_by':NEW,'claimed_at':self.current['claimed_at'],'executor_kind':'headed-session',
              'lease_until':'2026-11-04T13:00:00.005Z','lease_seconds':14400,'on_lease_expire':'auto'}
         self.records.update({
-          'maintenance-blocked.json':{'observed_at':'2026-11-04T08:46:34.921465+00:00','raw':{'maintenance_task':self.blocked}},
+          'maintenance-blocked.json':self.blocked,
           'maintenance-claim-request.json':{'claimer':NEW,'executor_kind':'headed-session','lease_seconds':14400},
           'maintenance-claim-ack.json':ack,
-          'maintenance-resume-request.json':{'status':'in_progress'},'maintenance-resume-ack.json':self.current,
+          'maintenance-resume-request.json':{'status':'in_progress'},
+          'maintenance-resume-ack.json':{'success':True,'task_id':m.TASK['id'],'status':'in_progress',
+              'updated_at':'2026-11-04T09:00:00.010Z','started_at':'2026-11-04T02:32:46.602Z','completed_at':None},
           'maintenance-task.json':self.current,'maintenance-task-confirm.json':self.current,
           'maintenance-heartbeat-request.json':{'claimer':NEW,'lease_seconds':14400},
           'maintenance-heartbeat-ack.json':{'ok':True,'lease_until':'2026-11-04T13:00:01.000Z','lease_seconds':14400,'heartbeat_count':1}})
@@ -59,11 +61,14 @@ class MaintenanceClaimTest(unittest.TestCase):
         with self.assertRaises(ValueError):self.verify()
     def test_original_blocked_reason_and_clear_claim_must_be_exact(self):
         for key,value in [('status','failed'),('error_message','different'),('claimed_by','still-alive'),('claimed_at',m.TASK['claimed_at'])]:
-            original=copy.deepcopy(self.records['maintenance-blocked.json']);self.records['maintenance-blocked.json']['raw']['maintenance_task'][key]=value;self.f.save()
+            original=copy.deepcopy(self.records['maintenance-blocked.json']);self.records['maintenance-blocked.json'][key]=value;self.f.save()
             with patch.object(h,'BLOCKED_SHA256',self.f.manifest['files']['maintenance-blocked.json']),self.subTest(key=key),self.assertRaises(ValueError):self.verify()
             self.records['maintenance-blocked.json']=original;self.f.save()
     def test_resume_request_or_ack_cannot_skip_active_status(self):
         self.tamper('maintenance-resume-request.json','status','queued')
+        with self.assertRaises(ValueError):self.verify()
+    def test_actual_short_resume_ack_must_report_success_not_only_http200(self):
+        self.tamper('maintenance-resume-ack.json','success',False)
         with self.assertRaises(ValueError):self.verify()
     def test_second_task_readback_must_match_first_claim_and_entire_payload(self):
         self.records['maintenance-task-confirm.json']['payload']['scope']['send']=1;self.f.save()
@@ -86,7 +91,7 @@ class MaintenanceClaimTest(unittest.TestCase):
         with self.assertRaises(ValueError):self.verify()
     def test_snapshot_claim_binding_prevents_old_journal_adoption(self):
         from types import SimpleNamespace
-        proof=self.verify();auth={'acquisition_gap':proof,'current_maintenance_claim':proof['current_maintenance_claim'],'task_lease_epoch':proof['task_lease_epoch']}
+        proof=self.verify();auth={'acquisition_gap':proof,'current_maintenance_claim':proof['current_maintenance_claim'],'task_lease_epoch':proof['task_lease_epoch'],'blocked_task_sha256':proof['blocked_task_sha256']}
         identity={'files':{'collection-review-maintenance-contract.json':'c'*64}}
         guards=SimpleNamespace(target_identity=[1,2,3,4],legacy_snapshot=m.CONTRACT['lock_state']['legacy'])
         value=h.snapshot_value(guards,auth,identity)
