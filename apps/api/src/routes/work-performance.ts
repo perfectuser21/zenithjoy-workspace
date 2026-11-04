@@ -28,13 +28,15 @@ router.get('/', tenantMiddleware, async (req: Request, res: Response) => {
          (ds.scraped_date - pl.published_at::date)::integer AS day_n,
          ds.views, ds.likes, ds.comments, ds.shares, ds.saves
        FROM zenithjoy.publish_logs pl
+       JOIN zenithjoy.works w ON w.id = pl.work_id
        JOIN zenithjoy.daily_snapshots ds
          ON ds.platform = pl.platform
          AND ds.content_id = pl.platform_post_id
        WHERE pl.work_id = $1
          AND pl.platform_post_id IS NOT NULL
+         AND ($2::boolean OR w.tenant_id = $3::uuid)
        ORDER BY pl.platform, ds.scraped_date`,
-      [id]
+      [id, req.bypassTenant === true, req.tenantId || null]
     );
 
     const platforms: Record<string, DayData[]> = {};
@@ -63,14 +65,16 @@ router.get('/:platform', tenantMiddleware, async (req: Request, res: Response) =
          (ds.scraped_date - pl.published_at::date)::integer AS day_n,
          ds.views, ds.likes, ds.comments, ds.shares, ds.saves
        FROM zenithjoy.publish_logs pl
+       JOIN zenithjoy.works w ON w.id = pl.work_id
        JOIN zenithjoy.daily_snapshots ds
          ON ds.platform = pl.platform
          AND ds.content_id = pl.platform_post_id
        WHERE pl.work_id = $1
          AND pl.platform = $2
          AND pl.platform_post_id IS NOT NULL
+         AND ($3::boolean OR w.tenant_id = $4::uuid)
        ORDER BY ds.scraped_date`,
-      [id, platform]
+      [id, platform, req.bypassTenant === true, req.tenantId || null]
     );
 
     const published_at = result.rows[0]?.published_at ?? null;
