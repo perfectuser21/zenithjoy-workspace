@@ -5,13 +5,13 @@ import * as fs from 'fs';
 
 vi.mock('fs');
 
-import { getHyperframesCmd, ensureHyperframes } from '../ensure-hyperframes';
+import { getHyperframesCmd, ensureHyperframes, getHyperframesProcess } from '../ensure-hyperframes';
 
 const ZJ_RUNTIME = path.join(os.homedir(), 'AppData', 'Roaming', 'ZenithJoy', 'runtime');
 const NODE_EXE = path.join(ZJ_RUNTIME, 'nodejs', 'node.exe');
 const HF_CLI = path.join(ZJ_RUNTIME, 'hyperframes', 'node_modules', 'hyperframes', 'dist', 'cli.js');
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('getHyperframesCmd', () => {
   it('node.exe + cli.js 都存在时返回 "node.exe" "cli.js" 组合命令', () => {
@@ -43,4 +43,22 @@ describe('ensureHyperframes', () => {
     expect(cmd).toBe(`"${NODE_EXE}" "${HF_CLI}"`);
     expect(mockExecutor).not.toHaveBeenCalled();
   });
+});
+
+describe('structured HyperFrames launch without a shell',()=>{
+ it('launches bundled external Node and CLI as distinct path arguments',()=>{
+  vi.spyOn(fs,'existsSync').mockImplementation(file=>file===NODE_EXE||file===HF_CLI);
+  expect(getHyperframesProcess('win32')).toEqual({executable:NODE_EXE,args:[HF_CLI]});
+ });
+ it('resolves system Windows npm CLI directly instead of invoking a .cmd shell',()=>{
+  const directory=path.join(os.tmpdir(),'Node & Hyperframes Fixture');vi.stubEnv('PATH',directory);
+  const node=path.join(directory,'node.exe'),cli=path.join(directory,'node_modules','hyperframes','dist','cli.js');
+  vi.spyOn(fs,'existsSync').mockImplementation(file=>file===node||file===cli);
+  expect(getHyperframesProcess('win32')).toEqual({executable:node,args:[cli]});
+ });
+ it('fails closed when Windows has only a shell shim and no actual CLI/Node',()=>{
+  vi.spyOn(fs,'existsSync').mockReturnValue(false);
+  expect(()=>getHyperframesProcess('win32')).toThrow(/refusing a shell/);
+  expect(getHyperframesProcess('linux')).toEqual({executable:'hyperframes',args:[]});
+ });
 });

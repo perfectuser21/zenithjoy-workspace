@@ -1,11 +1,9 @@
-import { execSync, exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { ensureHyperframes } from './ensure-hyperframes';
+import { ensureHyperframes, getHyperframesProcess } from './ensure-hyperframes';
 
-const execAsync = promisify(exec);
 
 // ── withRetry: retry a step up to maxAttempts times with exponential backoff ─
 async function withRetry<T>(
@@ -32,13 +30,39 @@ async function withRetry<T>(
   throw new Error(`[${stepName}] unreachable`);
 }
 
-// PKG's execFile wrapper fails with spawn UNKNOWN on Windows; shell-based exec works
-function quoteArg(a: string): string {
-  return `"${a.replace(/"/g, '\\"')}"`;
+type VideoProcessOptions = { timeout?: number; maxBuffer?: number; cwd?: string; env?: NodeJS.ProcessEnv; windowsHide?: boolean };
+// Direct spawn avoids pkg's execFile wrapper while preserving argv boundaries.
+// A video path, filter or output name is always data, never shell source.
+export function runVideoProcess(file: string, args: string[], opts: VideoProcessOptions = {}): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, args, { shell: false, windowsHide: true, cwd: opts.cwd, env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const stdout: Buffer[] = [], stderr: Buffer[] = [];
+    let bytes = 0, settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true; if (timer) clearTimeout(timer); child.kill(); reject(error);
+    };
+    const capture = (target: Buffer[], chunk: Buffer) => {
+      if (settled) return;
+      bytes += chunk.length;
+      if (bytes > (opts.maxBuffer ?? 64 * 1024 * 1024)) { fail(new Error('Video process output exceeded maxBuffer')); return; }
+      target.push(chunk);
+    };
+    child.stdout.on('data', (chunk: Buffer) => capture(stdout, chunk));
+    child.stderr.on('data', (chunk: Buffer) => capture(stderr, chunk));
+    child.once('error', fail);
+    child.once('close', (code, signal) => {
+      if (settled) return;
+      if (code !== 0) { fail(new Error(`Video process exited ${code ?? signal}: ${Buffer.concat(stderr).toString().slice(-4000)}`)); return; }
+      settled = true; if (timer) clearTimeout(timer);
+      resolve({ stdout: Buffer.concat(stdout).toString(), stderr: Buffer.concat(stderr).toString() });
+    });
+    if (opts.timeout) timer = setTimeout(() => fail(new Error(`Video process timed out after ${opts.timeout}ms`)), opts.timeout);
+  });
 }
-async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promise<void> {
-  const cmd = [findFfmpeg(), ...args].map(quoteArg).join(' ');
-  await execAsync(cmd, { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout });
+export async function runFfmpeg(args: string[], opts: { timeout?: number } = {}): Promise<void> {
+  await runVideoProcess(findFfmpeg(), args, opts);
 }
 
 // ── rotationToTranspose: map signed rotation angle → ffmpeg vf filter string ─
@@ -325,8 +349,7 @@ export async function processVideoPipelineJob(
     const ffprobePath = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) =>
       m.replace(/ffmpeg/i, 'ffprobe'));
     await withRetry('Step 1/7 ffprobe-duration', async () => {
-      const durationCmd = `${quoteArg(ffprobePath)} -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quoteArg(videoPath)}`;
-      const { stdout } = await execAsync(durationCmd, { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
+      const { stdout } = await runVideoProcess(ffprobePath, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', videoPath], { windowsHide: true, timeout: 30_000, maxBuffer: 1024 * 1024 });
       duration = parseFloat(stdout.trim());
       if (!(duration > 0)) throw new Error(`invalid duration output: "${stdout.trim()}"`);
     }, 3, 1_000);
@@ -341,8 +364,7 @@ export async function processVideoPipelineJob(
     let signedVideoRotation = 0;
     let rotationSource: 'display_matrix' | 'legacy_tag' | 'none' = 'none';
     try {
-      const rotCmd = `${quoteArg(ffprobePath)} -v error -select_streams v:0 -print_format json -show_streams ${quoteArg(videoPath)}`;
-      const { stdout: rotOut } = await execAsync(rotCmd, { windowsHide: true, timeout: 10_000, maxBuffer: 512 * 1024 });
+      const { stdout: rotOut } = await runVideoProcess(ffprobePath, ['-v', 'error', '-select_streams', 'v:0', '-print_format', 'json', '-show_streams', videoPath], { windowsHide: true, timeout: 10_000, maxBuffer: 512 * 1024 });
       interface FfprobeStream {
         width?: number;
         height?: number;
@@ -660,9 +682,10 @@ export async function processVideoPipelineJob(
       fs.mkdirSync(hfDir, { recursive: true });
       fs.writeFileSync(path.join(hfDir, 'index.html'), htmlContent, 'utf-8');
       const rendered = path.join(hfDir, 'rendered.mp4');
-      const hfCmd = await ensureHyperframes();
+      await ensureHyperframes();
+      const hfCmd = getHyperframesProcess();
       await withRetry('Step 5/7 hf-render', async () => {
-        await execAsync(hfCmd + ' render --output ' + JSON.stringify(rendered), {
+        await runVideoProcess(hfCmd.executable, [...hfCmd.args, 'render', '--output', rendered], {
           cwd: hfDir, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
           env: _hfEnv(),
         });
@@ -778,9 +801,10 @@ export async function processVideoPipelineJob(
     fs.copyFileSync(roughCutPath, path.join(hfDir2, path.basename(roughCutPath)));
     fs.writeFileSync(path.join(hfDir2, 'index.html'), htmlResult.html!, 'utf-8');
     const rendered2 = path.join(hfDir2, 'rendered.mp4');
-    const hfCmd2 = await ensureHyperframes();
+    await ensureHyperframes();
+    const hfCmd2 = getHyperframesProcess();
     await withRetry('Step 6/7 hf-render', async () => {
-      await execAsync(hfCmd2 + ' render --resolution landscape --output ' + JSON.stringify(rendered2), {
+      await runVideoProcess(hfCmd2.executable, [...hfCmd2.args, 'render', '--resolution', 'landscape', '--output', rendered2], {
         cwd: hfDir2, timeout: 600_000, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
         env: _hfEnv(),
       });
@@ -789,8 +813,7 @@ export async function processVideoPipelineJob(
     // Probe rendered2 dimensions for diagnostics
     try {
       const ffprobeExe = findFfmpeg().replace(/ffmpeg(\.exe)?$/i, (m) => m.replace(/ffmpeg/i, 'ffprobe'));
-      const probeCmd = `${quoteArg(ffprobeExe)} -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ${quoteArg(rendered2)}`;
-      const { stdout: probeOut } = await execAsync(probeCmd, { timeout: 15_000 });
+      const { stdout: probeOut } = await runVideoProcess(ffprobeExe, ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', rendered2], { timeout: 15_000 });
       console.log(`[Step 6/7] rendered2 dimensions: ${probeOut.trim()} (expected 1920,1080)`);
     } catch {
       console.warn('[Step 6/7] could not probe rendered2 dimensions');
