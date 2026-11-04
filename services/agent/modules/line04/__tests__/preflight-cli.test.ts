@@ -13,7 +13,8 @@ import { promisify } from 'node:util';
 
 const execFileP = promisify(execFile);
 
-const TSX = path.resolve(__dirname, '../../../node_modules/.bin/tsx');
+// Execute the exported CLI with Node: npm's shell shims are not native Windows executables.
+const TSX_CLI = require.resolve('tsx/cli');
 const PREFLIGHT_TS = path.resolve(__dirname, '../preflight.ts');
 
 describe('line04 preflight CLI 执行契约', () => {
@@ -21,7 +22,7 @@ describe('line04 preflight CLI 执行契约', () => {
     let stdout = '';
     let exitCode = 0;
     try {
-      const r = await execFileP(TSX, [PREFLIGHT_TS], { timeout: 60_000 });
+      const r = await execFileP(process.execPath, [TSX_CLI, PREFLIGHT_TS], { timeout: 60_000 });
       stdout = r.stdout;
     } catch (e) {
       // ok:false 时 process.exit(1) → execFile reject，但 stdout 仍带 JSON
