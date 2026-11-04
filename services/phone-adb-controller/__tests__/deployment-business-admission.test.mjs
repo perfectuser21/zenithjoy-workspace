@@ -175,3 +175,16 @@ test('真实102规范块混入子标题仍由严格发布解析器拒绝',async(
  const bad=original.replace('## 冻结来源绑定\n','## 冻结来源绑定\n\n### 未声明子标题\n');
  assert.notEqual(bad,original);assert.throws(()=>skillAcceptanceDefinition('douyin_video_processing',()=>Buffer.from(bad)),/规范段落为空或结构未知/);
 });
+
+// 新协议节属于完整验收规则，必须被抽取；不能以新增标题为由忽略规则。
+test('纯Skill执行选择精确规范节进入完整验收，近似未声明标题仍拒',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {skillAcceptanceDefinition}=await import('../deployment-skill-acceptance.mjs');
+ for(const [key,n]of Object.entries({douyin_video_discovery:101,douyin_video_processing:102,douyin_comment_scoring:103})){
+  const text=readFileSync(new URL(`../skills/douyin-leadgen-${n}/SKILL.md`,import.meta.url),'utf8');
+  assert.ok(text.includes('## 纯 Skill 执行选择\n'));
+  const d=skillAcceptanceDefinition(key,()=>Buffer.from(text));
+  assert.ok(d.checks.some(c=>c.section==='纯 Skill 执行选择'&&c.text.includes('LEADGEN_EXECUTION_MODE=agent')));
+  assert.throws(()=>skillAcceptanceDefinition(key,()=>Buffer.from(text.replace('## 纯 Skill 执行选择\n','## 纯 Skill 自行跳过验收\n'))),/未知或重复规范段落/);
+ }
+});
