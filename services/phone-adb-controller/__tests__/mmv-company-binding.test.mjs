@@ -13,12 +13,12 @@ const company={company_id:'company-a',tenant_id:'tenant-a',version:7,run_id:run,
 const binding={...company,profile,device_serial:serial,douyin_id:account,verification_status:'verified',enabled:true};
 delete binding.policy_id;
 
-async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',receipt={...company,device_binding:binding},observed=account,localRegistry=true,rpcImpl,frozen=false}={}){
+async function preflight({flow='douyin_video_discovery',host='mmv',flag='1',receipt={...company,device_binding:binding},observed=account,localRegistry=true,rpcImpl,frozen=false,verifyTask=async()=>{}}={}){
  const dir=mkdtempSync(join(tmpdir(),'mmv-company-')),calls=[],requests=[];
  if(frozen){const body={files:{},sampling_input:null};writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));}
  const registry=join(dir,'accounts.tsv');if(localRegistry)writeFileSync(registry,profile+'\t'+observed+'\n');
  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_HOSTKEY:host,LEADGEN_MMV_DEVICE_RUNTIME:flag,WF_BRAIN_WORKFLOW:flow,P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:'jinuo',DOUYIN_ACCOUNT_REGISTRY:registry,DOUYIN_PHONE_ADB:'/fixture/controller',DOUYIN_ADB_BIN:'/approved/adb'};
- const centralLease={held:false,attempted:false,async verifyTask(){},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;}};
+ const centralLease={held:false,attempted:false,async verifyTask(){await verifyTask();},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;}};
  const h=createHandlers({root:dir,env,taskId:'7037d210-2af1-4af9-8635-f93a805e58b6',centralLease,rpc:async body=>{const {request}=body;if(request)requests.push(request);if(rpcImpl)return rpcImpl(body);if(body.kind==='keywords')return {result:['AI']};if(receipt instanceof Error)throw receipt;return {result:receipt};},execute:async(command,args)=>{
   calls.push({command,args});let stdout='';
   if(args[0]===join(dir,'adb-existing-route.py'))stdout='5042\n';
@@ -99,4 +99,9 @@ for(const [name,receipt] of Object.entries({missing:{...company},foreign_tenant:
 test('已冻结M4动态绑定仍核实机账号且保留本机登记守卫',async()=>{
  const wrong=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,observed:'other-account'});assert.match(wrong.error?.message||'',/COMPANY_ACCOUNT_IDENTITY_MISMATCH/);assert.equal(wrong.recipientBinding,undefined);
  const missing=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,localRegistry:false});assert.ok(missing.error);assert.equal(missing.recipientBinding,undefined);
+});
+
+test('公司配置await之后租约前再核task，失效任务不能acquire或触设备',async()=>{
+ let n=0;const r=await preflight({flow:'douyin_video_processing',host:'xian-m4',frozen:true,verifyTask:async()=>{if(++n===2)throw Error('CENTRAL_TASK_CHANGED');}});
+ assert.equal(n,2);assert.match(r.error?.message||'',/CENTRAL_TASK_CHANGED/);assert.equal(r.requests.length,1);assert.equal(r.calls.length,0);assert.equal(r.recipientBinding,undefined);
 });
