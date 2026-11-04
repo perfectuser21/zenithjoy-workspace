@@ -1,7 +1,7 @@
 // 仅验证 smoke 编排与失败传播；实际业务回归由 smoke 调用真实 node --test 独立执行。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -19,8 +19,12 @@ test('回归入口从任意目录选择实际动态套，不混入 phone-wall，
   assert.equal(result.status, 0, result.stderr);
   const args = readFileSync(result.calls, 'utf8');
   assert.match(args, /--test\n/);
-  for (const name of ['real-contract-step-protocol', 'wf-run-retired', 'legacy-harvest-retirement', 'runtime-receipts', 'discover-keyword', 'discover-benchmark', 'harvest-keyword-judge-before-collect', 'harvest-keyword-profile-link-retry', 'pipeline-v4-integration', 'qualify-video', 'outreach-tick-guard', 'phone-lock-lifecycle', 'lease-heartbeat']) assert.ok(args.includes(`/${name}.test.mjs`), name);
-  for (const name of ['phone-actions-in-lock', 'runtime-start-e2e', 'wf-run-deadline-e2e', 'wf-run-prepare-error-log', 'wf-run']) assert.ok(!args.includes(`/${name}.test.mjs`), `退役测试不得进入现役 smoke: ${name}`);
+  for (const name of ['real-contract-step-protocol', 'wf-run-retired', 'legacy-harvest-retirement', 'runtime-receipts', 'discover-keyword', 'discover-benchmark', 'harvest-keyword-judge-before-collect', 'harvest-keyword-profile-link-retry', 'pipeline-v4-integration', 'wf-limits', 'qualify-video', 'outreach-tick-guard', 'phone-lock-lifecycle', 'lease-heartbeat']) assert.ok(args.includes(`/${name}.test.mjs`), name);
+  for (const name of ['phone-actions-in-lock', 'runtime-start-e2e', 'wf-run-deadline-e2e', 'wf-run-prepare-error-log', 'wf-run', 'batch2-activity-budget']) assert.ok(!args.includes(`/${name}.test.mjs`), `退役测试不得进入现役 smoke: ${name}`);
+  const suites = args.split('\n').filter(arg => arg.endsWith('.test.mjs'));
+  assert.equal(suites.length, 18, 'retain every other current/SDK suite while wiring the shared budget suite');
+  assert.equal(new Set(suites).size, suites.length, 'do not run duplicate suite entries');
+  for (const suite of suites) assert.ok(existsSync(suite), 'selected suite must exist: '+suite);
   assert.doesNotMatch(args, /phone-wall-push|wall-lib|wall-report\.test/);
   assert.match(result.stdout, /PASS capability-phone-regression-smoke/);
   assert.match(result.stdout, /regression_only/);
