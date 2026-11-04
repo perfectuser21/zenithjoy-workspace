@@ -161,3 +161,4 @@ pdd-listing-driver-smoke.sh
 common-runner-source-smoke.sh
 
 qr-notification-evidence-smoke.sh
+agent-first-leadgen-smoke.sh
