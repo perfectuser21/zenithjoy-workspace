@@ -1,7 +1,7 @@
 // 业务适配只转换输入、结果和读回；执行顺序、恢复次数与路由来自同一公共Runner。
 import {runActivityContract} from './common-runner/activity-runtime.js';
 import {createCommanderBridge} from './common-runner/runner-commander-bridge.js';
-import {collectionEvidenceProof,collectionReturnedEvidence} from './collection-phone-scope.mjs';
+import {collectionEvidenceProof,collectionReturnedEvidence,collectionCleanupEvidence} from './collection-phone-scope.mjs';
 import {discoveryCleanupEvidence,discoveryFiniteStopEvidence} from './discovery-phone-scope.mjs';
 
 const safeError=error=>String(error?.message||error).replace(/Bearer\s+[^\s"']+/gi,'Bearer ***').replace(/(?:api[_-]?key|token|password)\s*[=:]\s*[^\s"']+/gi,'凭据=***').slice(0,400);
@@ -15,7 +15,7 @@ export async function runWorkflow({activities,context={},handlers,commander,reco
  const run_tag=context.run_id||'leadgen-run',byKey=new Map(activities.map(a=>[a.key,a]));
  const native=new Map(),commanderStatuses=new Map();let unsafe=false,lastEvidence;
  const scope=key=>({run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:key});
- const returned=(key,evidence)=>discoveryCleanupEvidence(evidence,scope(key))||collectionReturnedEvidence(evidence,scope(key));
+ const returned=(key,evidence)=>discoveryCleanupEvidence(evidence,scope(key))||collectionCleanupEvidence(evidence,scope(key));
  const progress=key=>({completed_activity_keys:[...native].filter(([,e])=>['completed','skipped'].includes(e.status)).map(([k])=>k),remaining_activity_keys:activities.slice(activities.findIndex(a=>a.key===key)+1).map(a=>a.key)});
  const bridge=createCommanderBridge({run_id:run_tag,brief:context.brief||{purpose:context.workflow_key},rules:context.rules||[],budget:context.commander_budget||{},skill:context.commander_skill,
   transport:typeof commander==='function'?async request=>{
@@ -27,7 +27,7 @@ export async function runWorkflow({activities,context={},handlers,commander,reco
  function standard(activity,evidence){
   if(evidence.result?.external_effect==='unknown')evidence.external_effect='unknown';
   native.set(activity.key,evidence);lastEvidence={key:activity.key,evidence};
-  const phoneProof=collectionEvidenceProof(evidence,scope(activity.key)),cleanupProof=discoveryCleanupEvidence(evidence,scope(activity.key));
+  const phoneProof=collectionEvidenceProof(evidence,scope(activity.key)),cleanupProof=discoveryCleanupEvidence(evidence,scope(activity.key))||collectionCleanupEvidence(evidence,scope(activity.key));
   const unknown=!phoneProof&&!cleanupProof&&(evidence.execution_stopped===false||evidence.result?.execution_stopped===false||(evidence.execution_stopped!==true&&/\b(?:EXECUTION_OUTPUT_LIMIT|EXECUTION_DEADLINE|RECORD_CAPTURE_EXIT_UNVERIFIED)\b/.test(JSON.stringify(evidence))));
   if(unknown){unsafe=true;evidence.execution_stopped=false;}
   return {schema_version:1,run_tag,status:evidence.status==='skipped'?'completed':evidence.status,outputs:{},metrics:{},evidence:[],adapter_result:evidence,
@@ -38,7 +38,7 @@ export async function runWorkflow({activities,context={},handlers,commander,reco
   const activity=byKey.get(a.key);let evidence;
   if(typeof handlers[activity.key]!=='function')throw Error(`活动缺实现: ${activity.key}`);
   try{const result=await handlers[activity.key]({guidance:input.commander_guidance||[],signal:opts.signal,onEvent:opts.onAgentEvent});evidence={status:statusOf(result?.status),attempt:input.attempt,result};}
-  catch(error){evidence={status:'failed',attempt:input.attempt,error:safeError(error),...(typeof error.executionStopped==='boolean'?{execution_stopped:error.executionStopped}:{}),...(error.externalEffect==='unknown'?{external_effect:'unknown'}:{}),...(error.operationId?{operation_id:error.operationId}:{})};}
+  catch(error){evidence={status:'failed',attempt:input.attempt,error:safeError(error),...(error.activityResult?{result:error.activityResult}:{}),...(typeof error.executionStopped==='boolean'?{execution_stopped:error.executionStopped}:{}),...(error.externalEffect==='unknown'?{external_effect:'unknown'}:{}),...(error.operationId?{operation_id:error.operationId}:{})};}
   const result=standard(activity,evidence);
   await record({...context,activity:activity.key,phase:'execution',evidence:structuredClone(evidence)});
   return result;
@@ -63,7 +63,7 @@ export async function runWorkflow({activities,context={},handlers,commander,reco
    },
    recoverActivity:recover?async(a,input,{failure,guidance,...opts})=>{
     const activity=byKey.get(a.key);let original=failure.adapter_result||native.get(a.key);
-    if(captureFailure(original)||discoveryCleanupEvidence(original,scope(a.key)))throw Object.assign(Error('SKILL_HANDOFF_POLICY_BLOCKED'),{executionStopped:true});
+    if(captureFailure(original)||discoveryCleanupEvidence(original,scope(a.key))||collectionCleanupEvidence(original,scope(a.key))&&!collectionReturnedEvidence(original,scope(a.key)))throw Object.assign(Error('SKILL_HANDOFF_POLICY_BLOCKED'),{executionStopped:true});
     if(original.verification?.verified===false)original={...original,status:'failed'};
     let candidate;try{candidate=await recover({activity,failure:original,context:{...context,workflow_progress:progress(a.key)},execute:()=>handlers[a.key](),guidance,recovery_mode:input.recovery_mode,runner_managed:true,signal:opts.signal,onAgentEvent:opts.onAgentEvent});}catch(error){if(error.executionStopped!==true){unsafe=true;error.executionStopped=false;}throw error;}
     if(original.external_effect==='unknown')candidate={...candidate,external_effect:'unknown'};

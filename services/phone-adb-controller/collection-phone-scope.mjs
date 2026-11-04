@@ -9,7 +9,7 @@ import {startCollectionLeafProducer} from './collection-leaf-producer.mjs';
 const proofRecords=new WeakMap(),returnedRecords=new WeakMap(),generations=new WeakMap();
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const required=['process-queued-video.sh','queued-video-lib.sh','wf-limits.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','adb-managed-client.py','adb-existing-route.py','leadgen-handlers.mjs','qualification-identity-snapshot.mjs','central-device-lease.mjs','leadgen-video-action.mjs','leadgen-client.mjs','collection-phone-scope.mjs','collection-leaf-producer.mjs','collection-acceptance-probe.mjs','queued-comment-history.js','queued-recipient-evidence.js','own-accounts-lib.js','nickname-match-lib.js','line-routes.js','leadgen-db-lib.js','lead-fields-lib.js','config/own-accounts.json','locate-element.py'];
-function failureDigest(result){const {recovery_phone_scope,returned_phone_scope,execution_stopped,...body}=result||{};return sha(JSON.stringify(body));}
+function failureDigest(result){const {recovery_phone_scope,returned_phone_scope,cleanup_phone_scope,execution_stopped,...body}=result||{};return sha(JSON.stringify(body));}
 const semantic=new Set(['COLLECTION_COMMENT_PANEL_READBACK_FAILED','COLLECTION_VIDEO_IDENTITY_READBACK_FAILED','缺同视频采集完成标记','缺实际重扫计数，不能宣称采集通过','缺实际头像恢复计数，不能宣称采集通过']);
 export const collectionSemanticReason=reason=>semantic.has(reason);
 export function invalidateCollectionPhoneProof(state){generations.set(state,(generations.get(state)||0)+1);}
@@ -74,13 +74,20 @@ function returnedFresh(r,{active=false}={}){
 }
 // Only the original in-process issuer can supply this capability. Saved JSON is not authority.
 export function collectionReturnedEvidence(evidence,context){
- const value=evidence?.code_failure??evidence,body=value?.result??value,proof=body?.returned_phone_scope,r=proof&&returnedRecords.get(proof);
- if(!r||!['available','readback_done'].includes(r.phase)||failureDigest(body)!==r.resultDigest||!context
+ return returnedEvidence(evidence,context,'returned_phone_scope');
+}
+// 清场能力与Skill只读/恢复能力分离，失败本身不能被解释为采集权限。
+export function collectionCleanupEvidence(evidence,context){
+ return returnedEvidence(evidence,context,'cleanup_phone_scope')||collectionReturnedEvidence(evidence,context);
+}
+function returnedEvidence(evidence,context,key){
+ const value=evidence?.code_failure??evidence,body=value?.result??value,proof=body?.[key],r=proof&&returnedRecords.get(proof);
+ if(!r||Boolean(r.cleanupOnly)!==(key==='cleanup_phone_scope')||!['available','readback_done'].includes(r.phase)||failureDigest(body)!==r.resultDigest||!context
   ||!['run_id','task_id','source_commit','activity'].every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!returnedFresh(r))return null;
  return proof;
 }
 export async function startCollectionReturnedScope({evidence,context,purpose}){
- const proof=collectionReturnedEvidence(evidence,context),r=proof&&returnedRecords.get(proof);
+ const proof=purpose==='cleanup'?collectionCleanupEvidence(evidence,context):collectionReturnedEvidence(evidence,context),r=proof&&returnedRecords.get(proof);
  const keys=identityKeys.filter(k=>k!=='deadline_ms');
  if(!r||!keys.every(k=>Object.hasOwn(context,k)&&context[k]===r.identity[k])||!['readback','cleanup'].includes(purpose)
   ||purpose==='readback'&&r.phase!=='available'||r.state.currentActivity!==(purpose==='cleanup'?'cleanup':'collection'))throw Error('COLLECTION_RETURNED_AUTHORITY_INVALID');
@@ -201,8 +208,19 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
      generation:generations.get(state)||0,phase:'available',globalDeadline:Number.isSafeInteger(originalGlobal)&&originalGlobal>=identity.deadline_ms?originalGlobal:identity.deadline_ms,env,scopedEnv});
     return {...result,returned_phone_scope:proof};
    }
-   if(!status.complete||state.executionUnknown||current.snapshot_sha256!==frozen.snapshot_sha256||!evidenceStillQuiet(evidence,specification)||Date.now()>=identity.deadline_ms)return result;
-   if(result.status!=='partial'||!result.failures?.length||!result.failures.every(x=>collectionSemanticReason(x.reason))||state.remainingVideoIds?.length)return result;
+   const semanticFailure=status.complete&&result.status==='partial'&&result.failures?.length&&result.failures.every(x=>collectionSemanticReason(x.reason));
+   if(!semanticFailure&&status.requests_returned&&!state.executionUnknown&&current.snapshot_sha256===frozen.snapshot_sha256&&evidenceStillQuiet(evidence,specification)
+    &&!state.remainingVideoIds?.length&&['partial','failed'].includes(result.status)&&Array.isArray(result.failures)&&result.failures.length>0){
+    const originalGlobal=(Number(env.WF_RUN_START_TS)+Number(env.WF_RUN_MAX_SECONDS))*1000;
+    const globalDeadline=Number.isSafeInteger(originalGlobal)&&originalGlobal>=identity.deadline_ms?originalGlobal:identity.deadline_ms;
+    if(Date.now()<globalDeadline){
+     const proof=Object.freeze({protocol:'collection-cleanup-phone-v1',scope_id:randomUUID()});
+     returnedRecords.set(proof,{identity,state,cleanupOnly:true,account:state.account,resultDigest:failureDigest(result),runDir:env.WFR_RUN_DIR,evidence,specification,taskAssociation,verifyPhoneAssociation,
+      generation:generations.get(state)||0,phase:'available',globalDeadline,env,scopedEnv});
+     return {...result,cleanup_phone_scope:proof};
+    }
+   }
+   if(!semanticFailure||state.executionUnknown||current.snapshot_sha256!==frozen.snapshot_sha256||!evidenceStillQuiet(evidence,specification)||Date.now()>=identity.deadline_ms||state.remainingVideoIds?.length)return result;
    const proof=Object.freeze({protocol:'collection-phone-scope-v1',scope_id:randomUUID()});
    proofRecords.set(proof,{identity,state,failure_digest:failureDigest(result),runDir:env.WFR_RUN_DIR,evidence,specification,generation:generations.get(state)||0,consumed:false});
    return {...result,recovery_phone_scope:proof};
