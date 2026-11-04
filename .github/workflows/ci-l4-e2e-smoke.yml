@@ -120,6 +120,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
+      - name: Install shell used by controller safety contracts
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - name: Install apps/api deps
         run: npm ci --workspace=apps/api
 
