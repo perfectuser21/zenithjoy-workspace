@@ -7,9 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Agent version to test (e.g. 1.1.58)'
-        required: false
-        default: '1.1.58'
+        description: 'Explicit candidate install-pack version (no historical default)'
+        required: true
 
 jobs:
   windows-real-publish:
@@ -19,8 +18,11 @@ jobs:
     steps:
       - name: Download install pack from COS
         shell: powershell
+        env:
+          CANDIDATE_VERSION: ${{ inputs.version }}
         run: |
-          $version = "${{ github.event.inputs.version }}"
+          $version = $env:CANDIDATE_VERSION
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Explicit semantic candidate version required' }
           $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v${version}.tar.gz"
           Write-Host "[sandbox] downloading zenithjoy-agent-v${version}.tar.gz ..."
           Invoke-WebRequest -Uri $url -OutFile "agent.tar.gz" -UseBasicParsing
