@@ -10,6 +10,7 @@ on:
     paths:
       - 'services/agent/src/handlers/keyword-search-douyin.ts'
       - 'services/agent/publishers/keyword-search-douyin.cjs'
+      - 'services/agent/publishers/douyin-cookie-admission.cjs'
       - 'services/agent/publishers/crawl-comments-douyin.cjs'
       - 'services/agent/src/index.ts'
       - '.github/workflows/e2e-line02-keyword-comment.yml'
@@ -21,6 +22,7 @@ on:
     paths:
       - 'services/agent/src/handlers/keyword-search-douyin.ts'
       - 'services/agent/publishers/keyword-search-douyin.cjs'
+      - 'services/agent/publishers/douyin-cookie-admission.cjs'
       - 'services/agent/publishers/crawl-comments-douyin.cjs'
       - 'services/agent/src/index.ts'
       - '.github/workflows/e2e-line02-keyword-comment.yml'

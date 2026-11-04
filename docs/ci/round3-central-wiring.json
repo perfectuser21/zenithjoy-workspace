@@ -355,6 +355,7 @@
     "scripts/sessions/check-health.test.mjs",
     "services/agent/modules/line02/__tests__/report-videos-runtime.test.ts",
     "services/agent/modules/line04/__tests__/cs-config-gate.test.ts",
+    "services/agent/publishers/__tests__/douyin-cookie-admission.test.ts",
     "services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts",
     "services/agent/src/handlers/__tests__/video-pipeline-process.test.ts",
     "services/phone-adb-controller/__tests__/controller-compatibility.test.mjs",

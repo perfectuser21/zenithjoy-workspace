@@ -49,9 +49,11 @@ describe('[BEHAVIOR-03] sendOfflineAlert fetch 失败时 throw 不 warn（INV-01
     vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network fail')));
     const warnSpy = vi.spyOn(console, 'warn');
+    const errorSpy = vi.spyOn(console, 'error');
 
     await expect(sendOfflineAlert(staleAgent)).rejects.toThrow('network fail');
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it('未配 FEISHU_ALERT_WEBHOOK 时不 throw，fetch 不被调用', async () => {
@@ -85,6 +87,7 @@ describe('[BEHAVIOR-05] 告警 payload 含 hostname/offline_duration_minutes/age
     await sendOfflineAlert(staleAgent);
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.msg_type).toBe('text');
     const text: string = JSON.stringify(body);
     expect(text).toContain('unit-test-host');
   });

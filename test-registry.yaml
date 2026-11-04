@@ -10111,6 +10111,14 @@ tests:
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
 
+  - id: ci-closeout-6962fdbe6aea
+    path: services/agent/publishers/__tests__/douyin-cookie-admission.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
   - id: ci-closeout-f3218e6807c9
     path: services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts
     type: unit

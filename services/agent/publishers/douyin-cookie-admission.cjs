@@ -1,7 +1,7 @@
 'use strict';
 
 // Shape admission only. The platform must still validate the session during navigation.
-// sid_tt is a visitor tracker and cannot establish authenticated session readiness.
+// sid_tt alone is outside the established QR producer readiness contract.
 function isDouyinDomain(domain) {
   return typeof domain === 'string' &&
     /^(?:\.)?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*douyin\.com$/i.test(domain);
