@@ -31,6 +31,10 @@ if __name__ == '__main__':
     source = root / 'services/agent/wechat-rpa'
     target = root / 'services/agent/build-modules/line04/wechat-rpa'
     errors = check(source, target)
+    # The checked-in modules tree is a runtime mirror too, never a second test home.
+    module = root / 'services/agent/modules/line04/wechat-rpa'
+    errors += ['module mirror tests directory: ' + p.relative_to(module).as_posix()
+               for p in module.rglob('tests') if p.is_dir()]
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         print('Rebuild with: cd services/agent && bash scripts/build-line-module.sh line04', file=sys.stderr)
