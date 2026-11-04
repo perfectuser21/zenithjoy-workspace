@@ -131,9 +131,11 @@ jobs:
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
       # 同时声明两个 workspace。
       # video-tools-smoke executes Dashboard interaction tests as well as API contracts.
-      # Install all three together so npm ci does not remove a previous workspace's dependencies.
-      - name: Install apps/api + apps/agent-panel + apps/dashboard deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root --workspace=apps/dashboard
+      # Staff's environment-badge smoke builds the current editor, including its
+      # collaboration dependencies. Install all four together: a later workspace
+      # npm ci would remove dependencies installed for the previous consumers.
+      - name: Install API, Agent Panel, Dashboard and Staff Hub deps together
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root --workspace=apps/dashboard --workspace=apps/staff-hub
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序

@@ -94,7 +94,7 @@ export async function loadAndValidateProductMap(yamlPath = YAML_PATH) {
  * 校验 GP 条目声明的 smoke_files：存在性 + 非空占位质量判据。
  * 只校验声明了 smoke_files 字段的条目（天然 grandfather 未声明该字段的历史条目）。
  * 质量判据与 lint-feature-has-smoke.sh 同款：非注释非空行 ≥5 且含 ≥1 条真实命令
- * （curl/psql/docker/node/npm/npx），防止 touch 空文件骗过存在性校验。
+ * （curl/psql/docker/node/npm/npx/python/python3），防止 touch 空文件骗过存在性校验。
  *
  * @returns { ok: boolean, errors: string[] }
  */
@@ -111,9 +111,9 @@ export function validateSmokeFiles(map, repoRoot) {
       const content = readFileSync(absPath, 'utf8');
       const realLines = content.split('\n')
         .filter(l => !/^\s*#/.test(l) && l.trim() !== '').length;
-      const realCmds = (content.match(/(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx)[ \t]/gm) || []).length;
+      const realCmds = (content.match(/(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx|python3?)[ \t]/gm) || []).length;
       if (realLines < 5 || realCmds < 1) {
-        errors.push(`::error::GP-SMOKE-EMPTY gp=${gp.id} path=${relPath} — 疑似空占位（非空行=${realLines}，真实命令数=${realCmds}，需≥5行且≥1条curl/psql/docker/node/npm/npx命令）。`);
+        errors.push(`::error::GP-SMOKE-EMPTY gp=${gp.id} path=${relPath} — 疑似空占位（非空行=${realLines}，真实命令数=${realCmds}，需≥5行且≥1条curl/psql/docker/node/npm/npx/python/python3命令）。`);
       }
     }
   }

@@ -9824,3 +9824,12 @@ tests:
     product: unclassified
     execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
     note: Real Git push/PR/merge-group changes select required Integration for company config lib/readiness/sync/PG test/import consumers; selected missing/skip/failure/cancel reject, unrelated skip remains legal, other profiles unchanged.
+
+  - id: ci-review-wechat-cs-android-smoke
+    path: .github/workflows/scripts/__tests__/wechat-cs-android-smoke.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: unclassified
+    execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
+    note: Actual Python discovery fixtures reject empty, skip, expected failure, assertion failure and import failure; offline contracts do not prove phone delivery.

@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 485fcc93fbe8fdb9bebbf3ee54d6ed3dff5057eaec0784977106a42d3ac86282 -->
+<!-- digest: 148e6aaa7faa6eec497143026b03c1e1b7d67cc01d1eb780fa2d4c5e9bc4ab5d -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -40,12 +40,12 @@
 | video_link_acquisition | customer_app | line02 | proposed | step1:客户手填目标视频链接<br>step2:抓该视频评论区<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
 | active_voice_outreach | customer_app | line04 | active | step1:拨号触发<br>step2:接通判定<br>step3:AI实时对话<br>step4:通话记录回写 | .github/workflows/scripts/smoke/gpa-voice-outreach-smoke.sh |
 | business_report | customer_app | line04 | active | step1:数据齐备<br>step2:报告生成<br>step3:送达老板 | .github/workflows/scripts/smoke/cs-daily-report-smoke.sh |
-| cs_shared_binding | customer_app | line04 | active | step1:注册自动登录<br>step2:装客户端 + Agent 连中台<br>step3:扫码绑定微信号 | .github/workflows/scripts/smoke/golden-path-4-smoke.sh |
+| cs_shared_binding | customer_app | line04 | active | step1:注册自动登录<br>step2:装客户端 + Agent 连中台<br>step3:扫码绑定微信号 | .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh<br>.github/workflows/scripts/smoke/golden-path-4-smoke.sh |
 | customer_private_ai | customer_app | line04 | deprecated | step1:中台扫码绑个微干净测试号<br>step2:飞书 Bitable 自动建 3 张表（客户档案 / 营销画像 / 内容排期）<br>step3:名单内客户私聊进来 → DeepSeek拼对话历史写回复草稿 → 写飞书互动记录表（待审）<br>step4:中台定时触发"今日朋友圈" → DeepSeek拼营销画像写文案草稿 → 写飞书内容排期表（待审）<br>step5:用户在飞书审批 → 批准后系统spawn wechat_rpa.py真发（强制频控）<br>step6:发布回执（成功/失败+原因）回写飞书内容排期+互动记录表 | .github/workflows/scripts/smoke/golden-path-4-smoke.sh |
 | group_operation | customer_app | line04 | active | step1:群动静被感知<br>step2:响应与治理<br>step3:留痕 | — |
 | moments_interaction | customer_app | line04 | active | step1:客户动态被感知<br>step2:互动决策<br>step3:互动执行与留痕 | — |
 | moments_publish | customer_app | line04 | active | step1:内容成稿<br>step2:发布上圈<br>step3:发布确认与留痕 | .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh |
-| passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | .github/workflows/scripts/smoke/golden-path-4-smoke.sh<br>.github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-memory-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh<br>.github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh<br>.github/workflows/scripts/smoke/crm-manual-history-smoke.sh |
+| passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh<br>.github/workflows/scripts/smoke/golden-path-4-smoke.sh<br>.github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-memory-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh<br>.github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh<br>.github/workflows/scripts/smoke/crm-manual-history-smoke.sh |
 | batch_mashup | customer_app | line05 | active | step1:客户的素材变成系统认得出内容的可用库（素材打标签）<br>step2:客户定下这批视频要按什么套路剪（槽位模板分配）<br>step3:客户刷到一屏候选方案任选（语义检索候选生成）<br>step4:客户选中的方案变成能直接发的高清成片（渲染+内容安全Gate） | .github/workflows/scripts/smoke/material-tagging-smoke.sh<br>.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh<br>.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh<br>.github/workflows/scripts/smoke/mashup-render-smoke.sh<br>.github/workflows/scripts/smoke/mashup-history-smoke.sh |
 | video_editing | customer_app | line05 | active | — | .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh |
 | viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh |
