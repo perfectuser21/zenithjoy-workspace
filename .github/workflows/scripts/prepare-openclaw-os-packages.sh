@@ -25,6 +25,10 @@ allowed={'mirror+file:/etc/apt/apt-mirrors.txt':'https://archive.ubuntu.com/ubun
  'https://archive.ubuntu.com/ubuntu/':'https://archive.ubuntu.com/ubuntu/',
  'http://security.ubuntu.com/ubuntu/':'https://security.ubuntu.com/ubuntu/',
  'https://security.ubuntu.com/ubuntu/':'https://security.ubuntu.com/ubuntu/'}
+# Ubuntu runner images use both forms of these exact official repository roots.
+# Only add the slash-free aliases; do not normalize hosts, paths, ports or queries.
+allowed.update({uri[:-1]:target for uri,target in tuple(allowed.items())
+ if uri.startswith(('http://','https://')) and uri.endswith('/')})
 blocks=[]
 for block in re.split(r'\n\s*\n',text.strip()):
  fields={}
