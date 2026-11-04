@@ -114,6 +114,53 @@ class ExactLockTest(unittest.TestCase):
         self.owner(self.durable/'foreign.lock','foreign')
         with self.assertRaisesRegex(ValueError,'LOCK_INVENTORY'):
             with m.OwnedGuards(self.home):pass
+    def test_only_exact_legacy422_namespaces_may_drift_then_freeze(self):
+        changed=self.old/'ANGYVB4227006983.lock'/'owner';changed.write_text('external-new-owner\n')
+        claims=self.old/'standalone-claims'/'ANGYVB4227006983';claims.mkdir(parents=True)
+        # shared parent is an existing historical directory in production.
+        m.CONTRACT['lock_state']['legacy'].append(['standalone-claims','dir',0o755])
+        m.CONTRACT['lock_state']['legacy'].sort()
+        (claims/'external').write_text('external-new-owner\n')
+        with m.OwnedGuards(self.home) as g:
+            self.assertTrue(g.verify());self.assertEqual(g.legacy_snapshot,m.locks.inventory(self.old))
+            changed.write_text('another-owner\n')
+            with self.assertRaisesRegex(ValueError,'LEGACY_SNAPSHOT_DRIFT'):g.verify()
+    def test_nonallowlisted_legacy_and_prefix_collisions_rejected(self):
+        for name in ['ANGYVB4227006983.lock-evil','ANGYVB4311010223.lock','ANGYVB4402004137.lock/extra','standalone-claims-evil']:
+            p=self.old/name
+            if not p.parent.exists():p.parent.mkdir()
+            p.write_text('unknown')
+            try:
+                with self.subTest(name=name),self.assertRaisesRegex(ValueError,'LOCK_INVENTORY'):
+                    with m.OwnedGuards(self.home):pass
+            finally:p.unlink()
+    def test_target_claim_and_422_component_prefix_changes_still_rejected(self):
+        parent=self.old/'standalone-claims';parent.mkdir()
+        m.CONTRACT['lock_state']['legacy'].append(['standalone-claims','dir',0o755]);m.CONTRACT['lock_state']['legacy'].sort()
+        for serial in ['ANGYVB4227006983-evil','ANGYVB4311010223']:
+            d=parent/serial;d.mkdir();(d/'new-claim').write_text('foreign')
+            try:
+                with self.subTest(serial=serial),self.assertRaisesRegex(ValueError,'LOCK_INVENTORY'):
+                    with m.OwnedGuards(self.home):pass
+            finally:shutil.rmtree(d)
+        with m.OwnedGuards(self.home) as g:self.assertTrue(g.verify())
+
+    def test_saved_snapshot_mismatch_and_unstable_double_read_rejected(self):
+        baseline=m.locks.inventory(self.old)
+        (self.old/'ANGYVB4227006983.lock'/'owner').write_text('changed')
+        with self.assertRaisesRegex(ValueError,'LEGACY_SNAPSHOT_DRIFT'):
+            with m.OwnedGuards(self.home,legacy_snapshot=baseline):pass
+        inventory=m.locks.inventory;count=0
+        def unstable(root):
+            nonlocal count
+            result=inventory(root)
+            if root==self.old:
+                count+=1
+                if count==2:result=[*result,['ANGYVB4227006983.lock/late','file',0o600,'a'*64]]
+            return result
+        with patch.object(m.locks,'inventory',side_effect=unstable),self.assertRaisesRegex(ValueError,'LEGACY_SNAPSHOT_UNSTABLE'):
+            with m.OwnedGuards(self.home):pass
+
     def test_replaced_guard_and_target_directory_denied(self):
         with m.OwnedGuards(self.home) as g:
             target=g.target
@@ -231,6 +278,9 @@ class DesktopAdmissionTest(unittest.TestCase):
 host_spec=importlib.util.spec_from_file_location('collection_review_host',HERE/'collection-review-maintenance-host.py')
 host=importlib.util.module_from_spec(host_spec);host_spec.loader.exec_module(host)
 class HostAdmissionTest(unittest.TestCase):
+    def setUp(self):
+        self.identity={'source_commit':'b'*40,'directory':'/fixed/tools','files':{'collection-review-maintenance-contract.json':'c'*64}}
+        ctx=patch.object(host,'tool_identity',return_value=self.identity);ctx.start();self.addCleanup(ctx.stop)
     def test_unknown_action_rejects_before_any_observation(self):
         with patch.object(host,'admission') as admission:
             with self.assertRaises(ValueError):host.execute('release-any',Path('/home/service'),'a'*40,'release')
@@ -244,9 +294,65 @@ class HostAdmissionTest(unittest.TestCase):
             home=Path(td).resolve();authorization={'scope':m.SCOPE}
             with patch.object(host,'admission',return_value=(authorization,home)),patch.object(host.m,'OwnedGuards') as factory,patch.object(host.phone_module,'Phone') as p,patch.object(host,'private_directory') as private:
                 factory.return_value.__enter__.return_value.verify.return_value=True
+                factory.return_value.__enter__.return_value.target_identity=[1,2,3,4]
+                factory.return_value.__enter__.return_value.legacy_snapshot=m.CONTRACT['lock_state']['legacy']
                 p.return_value.home_state.return_value={'home':False}
                 self.assertTrue(host.execute('plan',home,'a'*40,'release')['needs_new_cleanup'])
                 p.return_value.cleanup.assert_not_called();p.return_value.command.assert_not_called();private.assert_not_called()
+
+    def test_missing_snapshot_with_any_prior_journal_denied_before_guards_or_phone(self):
+        for name in ['admission.json','cleanup-intent.json','cleanup-result.json','pre-retirement.json','completion.json','desktop.png']:
+            with tempfile.TemporaryDirectory() as td:
+                home=Path(td).resolve();d=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id']);d.mkdir(parents=True,mode=0o700)
+                (d/name).write_bytes(b'unknown')
+                with patch.object(host,'admission',return_value=({'scope':m.SCOPE},home)),patch.object(host.m,'OwnedGuards') as g,patch.object(host.phone_module,'Phone') as p:
+                    with self.subTest(name=name),self.assertRaisesRegex(ValueError,'SNAPSHOT_MISSING_WITH_JOURNAL'):host.execute('apply',home,'a'*40,'release')
+                    g.assert_not_called();p.assert_not_called()
+    def test_apply_persists_snapshot_before_phone_and_rechecks_raw_bytes(self):
+        from types import SimpleNamespace
+        for tamper in [False,True]:
+            with tempfile.TemporaryDirectory() as td:
+                home=Path(td).resolve();(home/'.config/zenithjoy').mkdir(parents=True,mode=0o700)
+                d=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
+                authorization={'scope':m.SCOPE};g=SimpleNamespace(target_identity=[1,2,3,4],legacy_snapshot=m.CONTRACT['lock_state']['legacy'],verify=lambda:True)
+                retired={'released':True,'archive':m.ARCHIVE,'owner':m.SCOPE['owner'],'serial':m.SCOPE['serial'],'other_owners_unchanged':True,'central_lease_released':False}
+                g.retire=lambda check:(check() or retired)
+                def make_phone(*args):
+                    self.assertTrue((d/host.SNAPSHOT).is_file())
+                    snapshot=json.loads(m.read(d/host.SNAPSHOT));self.assertEqual(snapshot['admission'],authorization)
+                    p=SimpleNamespace(home_state=lambda:{'home':True})
+                    def capture(*args):
+                        if tamper:(d/host.SNAPSHOT).write_bytes(b'changed')
+                        return {'home':{'home':True}}
+                    p.capture_desktop=capture;return p
+                with patch.object(host,'admission',return_value=(authorization,home)),patch.object(host.m,'OwnedGuards') as factory,patch.object(host.phone_module,'Phone',side_effect=make_phone):
+                    factory.return_value.__enter__.return_value=g
+                    if tamper:
+                        with self.assertRaisesRegex(ValueError,'SAVED_SNAPSHOT_DRIFT'):host.execute('apply',home,'a'*40,'release')
+                        self.assertFalse((d/'pre-retirement.json').exists())
+                    else:
+                        result=host.execute('apply',home,'a'*40,'release')
+                        self.assertEqual(result['inventory_snapshot_sha256'],m.sha(m.read(d/host.SNAPSHOT)))
+    def test_snapshot_exclusive_write_failure_prevents_phone(self):
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td).resolve();(home/'.config/zenithjoy').mkdir(parents=True,mode=0o700)
+            with patch.object(host,'admission',return_value=({'scope':m.SCOPE},home)),patch.object(host.m,'OwnedGuards') as factory,patch.object(host.phone_module,'Phone') as p,patch.object(host.phone_module,'atomic_new',side_effect=FileExistsError('raced snapshot')):
+                g=factory.return_value.__enter__.return_value;g.verify.return_value=True;g.target_identity=[1,2,3,4];g.legacy_snapshot=m.CONTRACT['lock_state']['legacy']
+                with self.assertRaises(FileExistsError):host.execute('apply',home,'a'*40,'release')
+                p.assert_not_called()
+
+    def test_snapshot_binds_entire_live_admission_tool_and_canonical_bytes(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as td:
+            d=Path(td).resolve();d.chmod(0o700);authorization={'central_lease':{'locked_at':'now','owner':'old'},'candidate':{'source_commit':'a'*40}}
+            value=host.snapshot_value(SimpleNamespace(target_identity=[1,2,3,4],legacy_snapshot=m.CONTRACT['lock_state']['legacy']),authorization,self.identity)
+            phone.atomic_new(d/host.SNAPSHOT,value)
+            self.assertEqual(host.saved_snapshot(d,authorization,self.identity)[0],value)
+            for changed in [{**authorization,'central_lease':{'locked_at':'renewed'}},{**authorization,'candidate':{'source_commit':'z'*40}}]:
+                with self.assertRaisesRegex(ValueError,'SAVED_SNAPSHOT_BINDING'):host.saved_snapshot(d,changed,self.identity)
+            with self.assertRaisesRegex(ValueError,'SAVED_SNAPSHOT_BINDING'):host.saved_snapshot(d,authorization,{**self.identity,'source_commit':'d'*40})
+            (d/host.SNAPSHOT).write_bytes(json.dumps(value,indent=2).encode())
+            with self.assertRaisesRegex(ValueError,'SAVED_SNAPSHOT_BINDING'):host.saved_snapshot(d,authorization,self.identity)
 
     def test_crash_after_rename_reconciles_from_exact_prerecord_without_phone_or_second_rename(self):
         with tempfile.TemporaryDirectory() as td:
@@ -259,9 +365,13 @@ class HostAdmissionTest(unittest.TestCase):
             retirement={'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,'before_sha256':m.sha(m.canonical(m.CONTRACT['lock_state']['durable'])),'after_sha256':m.sha(m.canonical(m.primitives.changed_inventory(m.CONTRACT['lock_state']['durable'],m.SCOPE['serial']+'.lock',m.ARCHIVE)))}
             saved={'scope':m.SCOPE,'maintenance':m.TASK,'owner_inode':inode,'retirement':retirement,'admission_sha256':m.sha(m.canonical(authorization)),'execution_stopped':False,'original_business_status':'failed',
                    'desktop':{'home':{'home':True},'png_sha256':m.sha(png),'xml_sha256':m.sha(xml),'leaves':[{'code':0,'boundary':'darwin-sandbox-deny-process-fork-v1','pid':321,'intent_at':1,'started_at':2,'ended_at':3}]}}
+            from types import SimpleNamespace
+            snapshot=host.snapshot_value(SimpleNamespace(target_identity=inode,legacy_snapshot=m.CONTRACT['lock_state']['legacy']),authorization,self.identity)
+            phone.atomic_new(directory/host.SNAPSHOT,snapshot)
+            saved['inventory_snapshot_sha256']=m.sha(m.canonical(snapshot))
             phone.atomic_new(directory/'pre-retirement.json',saved)
             with patch.object(host,'admission',return_value=(authorization,home)),patch.object(host.m,'OwnedGuards') as factory,patch.object(host.phone_module,'Phone') as p,patch.object(os,'rename') as rename:
-                g=factory.return_value.__enter__.return_value;g.verify.return_value=False;g.target_identity=inode
+                g=factory.return_value.__enter__.return_value;g.verify.return_value=False;g.target_identity=inode;g.legacy_snapshot=m.CONTRACT['lock_state']['legacy']
                 result=host.execute('apply',home,'a'*40,'release')
                 self.assertTrue(result['released']);self.assertFalse(result['execution_stopped']);self.assertFalse(result['replayed_inputs'])
                 self.assertTrue((directory/'completion.json').exists());p.assert_not_called();rename.assert_not_called()
@@ -270,7 +380,7 @@ class HostAdmissionTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'PRE_RETIREMENT_EVIDENCE'):host.execute('apply',home,'a'*40,'release')
                 (directory/'desktop.png').write_bytes(png)
                 (directory/'completion.json').unlink();g.target_identity=[1,2,3,999]
-                with self.assertRaisesRegex(ValueError,'INODE_OR_CAS'):host.execute('apply',home,'a'*40,'release')
+                with self.assertRaisesRegex(ValueError,'SAVED_SNAPSHOT_CONTENT|INODE_OR_CAS'):host.execute('apply',home,'a'*40,'release')
                 p.assert_not_called();rename.assert_not_called()
 
 class RecorderGateTest(unittest.TestCase):
