@@ -18,6 +18,20 @@ function fixture(){
  const body={schema_version:2,release:{id:'release',target:actualHost},deployment:{observation_id:'observation',target:actualHost},workflow_version:{id:'wv',payload_sha256:'a'.repeat(64),payload:{workflow_id:'workflow'}},activities:[{reference:{reference_id:'ref',slot_key:'run',activity_id:'activity',activity_version_id:'av'},version:{id:'av',payload:{steps:[{step_id:'step',locator:{step_key:'execute'},contract:{key:'execute'}}]}}}],files:{'step-dod.json':digest(steps)}};
  writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));return dir;
 }
+test('纯Skill执行声明与冻结摘要共同进入真实POST及GET绑定；不能接受Code ACK替代',async t=>{
+ for(const mismatch of [false,true]){
+  const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const {snapshot_sha256,...body}=JSON.parse(readFileSync(join(dir,'run-definition.json'),'utf8'));body.execution_mode='agent';
+  body.workflow_version.payload.key='douyin_video_discovery';writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
+  let posted;
+  const action=bindRun({dir,runId:'pure-skill-run',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{
+   if(input)posted=input;
+   return {binding:{id:'agent-binding',run_id:'pure-skill-run__a1',...posted,...(mismatch?{actor:'runtime:phone-adb-controller'}:{})}};
+  }});
+  if(mismatch){await assert.rejects(action,/ACK内容不匹配: actor/);assert.equal(existsSync(join(dir,'run-bindings/a1.ack.json')),false);}
+  else{const result=await action;assert.equal(posted.actor,'runtime:phone-adb-controller:agent-v1');assert.equal(posted.runtime_snapshot_sha256,digest(body));assert.equal(result.binding.actor,posted.actor);assert.equal(readBinding(dir,'a1').actor,posted.actor);}
+ }
+});
 test('public ACK 显式空task经真实createHandlers保留空身份，缺键不得冒充空绑定',async t=>{
  for(const task of [null,undefined]){
   const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));let posted;

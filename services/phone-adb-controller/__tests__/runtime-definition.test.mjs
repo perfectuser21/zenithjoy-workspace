@@ -22,6 +22,46 @@ function fixture() {
   writeFileSync(join(dir,'deployment-manifest.json'),JSON.stringify({source_repo:source.repo,source_commit:sha,files:[{path:ap.implementation_bindings[0].path,deployed_path:'entry.sh',content_sha256:ap.implementation_bindings[0].content_sha256},...['workflow.plan','steps.json'].map(name=>({path:`services/phone-adb-controller/${name}`,deployed_path:name,content_sha256:hash(readFileSync(join(dir,name),'utf8'))}))]}));
   return {dir,routes,options:{runDir:join(dir,'run'),planPath:join(dir,'workflow.plan'),stepSpecPath:join(dir,'steps.json'),deploymentRoot:dir,workflowKey:'brain-test',rawContractSha256:hash(contract),runtimeFiles:[{path:'services/phone-adb-controller/entry.sh',content_sha256:ap.implementation_bindings[0].content_sha256}],get:async path=>structuredClone(routes[path])}};
 }
+test('执行模式只接受显式agent或code；104不可变成Agent发送路径',async()=>{
+ const {executionModeInput}=await import('../runtime-definition.mjs');
+ assert.equal(executionModeInput({}),'code');
+ for(const workflow of ['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'])assert.equal(executionModeInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:workflow}),'agent');
+ for(const mode of ['', 'skill', 'AGENT', 'unknown'])assert.throws(()=>executionModeInput({LEADGEN_EXECUTION_MODE:mode,WF_BRAIN_WORKFLOW:'douyin_video_discovery'}),/EXECUTION_MODE/);
+ assert.throws(()=>executionModeInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'}),/EXECUTION_MODE/);
+});
+test('旧快照缺执行模式仍为Code，不能把已冻结Code静默改成Agent或反向切回',async()=>{
+ const {assertExecutionMode}=await import('../runtime-definition.mjs');
+ const env={WF_BRAIN_WORKFLOW:'douyin_video_discovery'};
+ const agent={execution_mode:'agent',workflow_version:{payload:{key:env.WF_BRAIN_WORKFLOW}}};
+ assert.equal(assertExecutionMode({},env),'code');
+ assert.equal(assertExecutionMode(agent,{...env,LEADGEN_EXECUTION_MODE:'agent'}),'agent');
+ assert.throws(()=>assertExecutionMode({}, {...env,LEADGEN_EXECUTION_MODE:'agent'}),/EXECUTION_MODE/);
+ assert.throws(()=>assertExecutionMode(agent,env),/EXECUTION_MODE/);
+ assert.throws(()=>assertExecutionMode({execution_mode:'invalid'},env),/EXECUTION_MODE/);
+});
+function primaryFixture({skill=true}={}){
+ const f=fixture(),workflow='douyin_video_discovery';f.options.workflowKey=workflow;f.routes['/api/brain/workflows'][0].key=workflow;
+ const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;
+ w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
+ if(skill){
+  const name='skills/douyin-leadgen-activity-101-collect-videos/SKILL.md',path=join(f.dir,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'---\nname: douyin-leadgen-activity-101-collect-videos\nmetadata:\n  version: 0.1.0\n---\n按合同交付视频。\n');
+  const sha=hash(readFileSync(path,'utf8')),av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;
+  av.payload.implementation_bindings.push({kind:'skill',name:'douyin-leadgen-activity-101-collect-videos',version:'0.1.0',status:'verified',repo:av.source_repo,path:'services/phone-adb-controller/'+name,revision:av.source_commit,content_sha256:sha});
+  av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
+  const manifest=join(f.dir,'deployment-manifest.json'),body=JSON.parse(readFileSync(manifest));body.files.push({path:'services/phone-adb-controller/'+name,deployed_path:name,content_sha256:sha});writeFileSync(manifest,JSON.stringify(body));
+ }
+ return f;
+}
+test('Agent执行模式进入真实冻结摘要；原Code及Agent运行都不能续跑换模式',async()=>{
+ const f=primaryFixture();const frozen=await freezeDefinition({...f.options,executionMode:'agent'});
+ assert.equal(frozen.execution_mode,'agent');assert.equal(frozen.snapshot_sha256,hash(Object.fromEntries(Object.entries(frozen).filter(([k])=>k!=='snapshot_sha256'))));
+ await assert.rejects(freezeDefinition({...f.options,executionMode:'code'}),/EXECUTION_MODE/);
+ await assert.rejects(freezeDefinition(f.options),/EXECUTION_MODE/);
+ const code=primaryFixture();await freezeDefinition(code.options);await assert.rejects(freezeDefinition({...code.options,executionMode:'agent'}),/EXECUTION_MODE/);
+});
+test('Agent冻结缺本机已验证Skill时在起跑前拒绝，不能只凭Code binding启动',async()=>{
+ const f=primaryFixture({skill:false});await assert.rejects(freezeDefinition({...f.options,executionMode:'agent'}),/AGENT.*SKILL/);
+});
 test('起跑冻结指定Workflow/Activity版本、引用位置和真实代码，之后latest变化不改run副本', async()=>{
   const f=fixture(); const result=await freezeDefinition(f.options);
   assert.equal(result.workflow_version.id,'wv-1'); assert.equal(result.activities[0].reference.reference_id,'ref-1');
