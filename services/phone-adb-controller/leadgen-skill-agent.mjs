@@ -255,7 +255,7 @@ export async function stopSkillAgent(q,{home=homedir(),execute=execInput,verifyW
  const binding=official(q,dir),marker=join(dir,'commander-stop-requested.json');
  if(!existsSync(marker)){
   writeFileSync(marker,JSON.stringify({run_id:q.run_id,child_run_id:binding.child_run_id,requested_at:Date.now()}),{flag:'wx',mode:0o600});
-  try{await execute('python3',[join(root,'commander','wf-agent-handoff.py'),'stop',dir],{timeoutMs:48000});}catch{/* 原停止结果未知，后续只读回。 */}
+  try{const remaining=q.deadline_ms-Date.now();if(q.mode!=='execute'||remaining>0)await execute('python3',[join(root,'commander','wf-agent-handoff.py'),'stop',dir],{timeoutMs:q.mode==='execute'?Math.max(1,Math.min(48000,remaining)):48000});}catch{/* 原停止结果未知，后续只读回。 */}
  }
  let child=false;
  try{const terminal=privateJson(join(dir,'child-stop-readback.json'));child=terminal.runId===binding.child_run_id&&Number.isFinite(terminal.endedAt)&&['ok','error','aborted','timeout'].includes(terminal.status);}catch{/* 未验证停止。 */}
@@ -306,10 +306,11 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
  let parentMessage=message;
  if(q.mode==='execute'){
   const parts=(label,text)=>{
-   const paths=[];for(let index=0;index<text.length;index+=4000){
-    const path=join(dir,`${label}-${String(paths.length+1).padStart(3,'0')}.txt`);
-    writeFileSync(path,text.slice(index,index+4000),{flag:'wx',mode:0o600});paths.push(path);
-   }
+   const paths=[];let chunk='';
+   const flush=()=>{if(!chunk)return;const path=join(dir,`${label}-${String(paths.length+1).padStart(3,'0')}.txt`);writeFileSync(path,chunk,{flag:'wx',mode:0o600});paths.push(path);chunk='';};
+   for(const point of text){if(chunk.length+point.length>4000)flush();chunk+=point;}flush();
+   const reconstructed=paths.map(path=>readFileSync(path,'utf8')).join('');
+   if(reconstructed!==text)throw Error('RPC_SKILL_CHILD_PARTS_MISMATCH');
    return {parts:paths,content_sha256:createHash('sha256').update(text).digest('hex')};
   };
   const commandFiles={};for(const [surface,commands] of Object.entries(toolCommands)){
@@ -358,7 +359,7 @@ export async function runSkillAgent(q,{home=homedir(),execute=execInput,verifyWo
   return {status:terminal.status,execution_stopped:true,owner_execution_stopped:true,child_execution_stopped:true,child_run_id:binding.child_run_id,child_session_key:binding.child_session_key,terminal,source_commit:q.source_commit};
  }catch{
   if(existsSync(join(dir,'agent-binding.json'))){
-   try{const stopped=await execute('python3',[helper,'stop',dir],{timeoutMs:48000});
+   try{const remaining=q.deadline_ms-Date.now();if(q.mode==='execute'&&remaining<=0)throw Error('RPC_SKILL_STOP_BUDGET_EXHAUSTED');const stopped=await execute('python3',[helper,'stop',dir],{timeoutMs:q.mode==='execute'?Math.max(1,Math.min(48000,remaining)):48000});
     const terminal=JSON.parse(readFileSync(join(dir,'child-stop-readback.json'),'utf8'));
     const binding=official(q,dir);
     if(stopped.code===0&&terminal.runId===binding.child_run_id&&terminal.endedAt!=null){

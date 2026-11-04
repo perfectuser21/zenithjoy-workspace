@@ -129,3 +129,15 @@ test('primary在Worker截止后拒新业务，原handoff余量只用于inspect�
 test('primary不接受放宽或颠倒阶段截止，不能把额外阶段字段当延预算入口',async()=>{
  const q=request();for(const patch of [{worker_deadline_ms:q.deadline_ms+1,receipt_deadline_ms:q.deadline_ms+2},{worker_deadline_ms:q.deadline_ms-1},{worker_deadline_ms:q.deadline_ms-2,receipt_deadline_ms:q.deadline_ms-2}])await assert.rejects(()=>using(async()=>{},{request:{...q,...patch}}),/SKILL_PRIMARY_REQUEST_INVALID/);
 });
+
+test('report的Observer在seal后才返回abort只留未应用记录，不再stop或加入指导',async()=>{
+ let release,entered,stops=0,turns=0;const ready=new Promise(resolve=>{entered=resolve;});
+ await using(async b=>{
+  const pending=b.report({type:'stall',elapsed_ms:1000});await ready;
+  assert.deepEqual(b.seal(),{sealed:true,pending:0,active:0,execution_unknown:false});
+  release({action:'abort',reason:'已经晚到'});assert.equal((await pending).action,'none');
+  assert.equal(stops,0);assert.equal(b.getResult().commander_aborted,false);assert.equal(b.getResult().execution_unknown,false);
+  const row=JSON.parse(readFileSync(join(b.directory,'broker-events.jsonl'),'utf8').trim());assert.equal(row.action_applied,false);assert.equal(row.commander_action.action,'abort');
+  await b.report({type:'stall',elapsed_ms:2000});assert.equal(turns,1);
+ },{onEvent:async()=>{turns++;entered();return await new Promise(resolve=>{release=resolve;});},onAbort:async()=>{stops++;return {execution_stopped:false};}});
+});

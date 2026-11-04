@@ -117,8 +117,10 @@ export async function startPrimaryActivityBroker({directory,request,inspect,phon
   const state=()=>({sealed,pending,active,execution_unknown:executionUnknown||abortUnknown});
   return {directory,requestPath,request:fixed,abort,
     report:async event=>{
-      const {action,commanderStatus}=await observe(event);
-      appendFileSync(join(directory,'broker-events.jsonl'),JSON.stringify({at:new Date().toISOString(),run_id:request.run_id,activity:request.activity_key,event,response:null,commander_action:action,commander_status:commanderStatus})+'\n',{mode:0o600});
+      const {action,commanderStatus}=await observe(event,!sealed&&!closed);
+      const apply=!sealed&&!closed;
+      appendFileSync(join(directory,'broker-events.jsonl'),JSON.stringify({at:new Date().toISOString(),run_id:request.run_id,activity:request.activity_key,event,response:null,commander_action:action,commander_status:commanderStatus,action_applied:apply})+'\n',{mode:0o600});
+      if(!apply)return {action:'none'};
       if(['answer','steer'].includes(action?.action)&&typeof action.text==='string')guidance.push(action.text.slice(0,16000));
       if(action?.action==='abort')await abort(action.reason);
       return action;

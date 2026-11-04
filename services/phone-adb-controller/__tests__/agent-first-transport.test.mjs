@@ -127,7 +127,7 @@ test('Agent relay生成可无截断还原的冻结方法原件，parent不重复
  const home=mkdtempSync(join(tmpdir(),'primary-compact-relay-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
  const {q}=scope();Object.assign(q,{protocol:'leadgen-activity-v1',broker_tool_path:'/fixture/tool.mjs',broker_request_path:'/fixture/request.json',nonce:'d'.repeat(48)});
  q.worker_deadline_ms=Date.now()+5000;q.receipt_deadline_ms=Date.now()+7500;
- q.method.text+='业务方法原文'.repeat(3000);q.method.support.text='完整安全边界'.repeat(2000);
+ q.method.text+='a'.repeat(3999-q.method.text.length)+'😀'+'业务方法原文'.repeat(3000);q.method.support.text='b'.repeat(3999)+'😀'+'完整安全边界'.repeat(2000);q.method.contract.payload.note='c'.repeat(3999)+'😀'.repeat(3000);
  let checked=false;
  await runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
   if(command==='openclaw'){
@@ -138,7 +138,7 @@ test('Agent relay生成可无截断还原的冻结方法原件，parent不重复
    assert.ok(claimSkillSpawn(dir,{home,verifyWorkspace:()=>true}));
    const plan=JSON.parse(readFileSync(join(dir,'child-task.json'),'utf8'));
    assert.equal(plan.scope.run_id,q.run_id);assert.equal(plan.scope.source_commit,q.source_commit);
-   for(const [field,bytes] of [['method',q.method.text],['support',q.method.support.text]]){
+   for(const [field,bytes] of [['method',q.method.text],['support',q.method.support.text],['contract',JSON.stringify(q.method.contract)]]){
     const pieces=plan[field].parts.map(part=>readFileSync(part,'utf8'));
     assert.ok(pieces.every(part=>part.length<=4000));assert.equal(pieces.join(''),bytes);
    }
