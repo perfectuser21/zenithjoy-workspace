@@ -9603,7 +9603,7 @@ tests:
     ci: L3
     status: active
     product: unclassified
-    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / openclaw-scripts-test (three shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review--github-workflows-scripts-tests-publisher-registry-current-source-test-mjs
@@ -9612,7 +9612,7 @@ tests:
     ci: L3
     status: active
     product: unclassified
-    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / openclaw-scripts-test (three shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review-apps-staff-hub-e2e-skill-eval-spec-ts
@@ -9648,7 +9648,7 @@ tests:
     ci: L3
     status: active
     product: unclassified
-    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / openclaw-scripts-test (three shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: collection-cleanup-only
@@ -9690,7 +9690,7 @@ tests:
     ci: L3
     status: active
     product: unclassified
-    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / openclaw-scripts-test (three shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review--github-workflows-scripts-tests-lead-evidence-format-test-mjs
@@ -9699,7 +9699,7 @@ tests:
     ci: L3
     status: active
     product: unclassified
-    execution: ci-l3-code.yml / openclaw-regression (two shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
+    execution: ci-l3-code.yml / openclaw-scripts-test (three shards) / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
 
   - id: ci-review-apps-api-src-tests-platform-data-admission-test-ts
@@ -9773,3 +9773,19 @@ tests:
     product: unclassified
     execution: ci-l4-runtime.yml / api-test / vitest default current route/fixture contracts
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: collection-review-maintenance
+    path: services/phone-adb-controller/__tests__/collection-review-maintenance.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "仅本次失败102的新维护授权；真实Darwin nofork有限cleanup、未知意图不重发、固定原件及10guard单owner CAS守恒"
+
+  - id: collection-review-candidate
+    path: services/phone-adb-controller/__tests__/collection-review-candidate.test.py
+    type: integration
+    ci: L1
+    status: active
+    product: AI员工
+    note: "102专用维护核实际候选manifest/实测hostname/数组顺序及独立中央gate；不接受声明hostname替代观测"
