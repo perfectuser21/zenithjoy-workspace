@@ -452,6 +452,7 @@ jobs:
               assert meta["shard_count"] == 2 and meta["source_sha"] == os.environ["GITHUB_SHA"], "wrong shard/source"
               assert meta["inventory"] == inventory and set(meta["denylist"]) == denied, "changed inventory/denylist"
               assert meta["excluded_helpers"] == selection["excluded_helpers"], "changed helper exclusions"
+              assert meta["excluded_required"] == selection["excluded_required"], "changed required duplicate exclusions"
               assert meta["complete"] is True and meta["gate_fail"] == 0, "incomplete or failed shard"
               rows = [line.split("\t") for line in (path.parent / "results.tsv").read_text().splitlines()]
               assert all(len(row) == 3 for row in rows), "malformed result row"
@@ -470,6 +471,7 @@ jobs:
               f.write("# Complete Smoke Glob shard results\n\n")
               f.write("证明范围：CI代码回归；SKIP=未评估，DEBT-FAIL=失败债务；本报告不构成真实业务验收或生产晋级依据。\n\n")
               f.write("Context-only helpers excluded from automatic execution (not PASS/SKIP tests): " + ", ".join(selection["excluded_helpers"]) + "\n\n")
+              f.write("Duplicates executed by the required API Contract Smoke job: " + ", ".join(selection["excluded_required"]) + "\n\n")
               f.write("| Script | Result | Exit |\n|---|---|---|\n")
               for row in sorted(all_rows):
                   f.write("| " + " | ".join(row) + " |\n")

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import {parse} from 'yaml';
 
+const requiredDuplicates=['dashboard-license-smoke.sh','line04-crm-view-prefs-smoke.sh'];
 const helpers = ['remote-adb.sh','line02-android-accessibility-ui.sh','line02-android-cancel-candidate-setup.sh','remote-android-install.sh'];
 const workflow = readFileSync(new URL('../../ci-smoke-glob-runner.yml', import.meta.url), 'utf8');
 function step(name) {
@@ -32,7 +33,13 @@ function fixture(t, { fail = false, denied = false } = {}) {
   for(const name of helpers)writeFileSync(join(dir,name),`#!/bin/bash\nprintf '%s\n' '${name}' >> "$TRACE"\nexit 97\n`);
   const selector=new URL('../smoke-selection.py',import.meta.url);
   if(existsSync(selector))cpSync(selector,join(root,'.github/workflows/scripts/smoke-selection.py'));
+  for(const name of requiredDuplicates)writeFileSync(join(dir,name),`#!/bin/bash\nprintf '%s\n' '${name}' >> "$TRACE"\nexit 98\n`);
+  const requiredManifest=new URL('../smoke-required-duplicates.json',import.meta.url);
+  if(existsSync(requiredManifest))cpSync(requiredManifest,join(root,'.github/workflows/scripts/smoke-required-duplicates.json'));
+  else writeFileSync(join(root,'.github/workflows/scripts/smoke-required-duplicates.json'),JSON.stringify({schema_version:1,duplicates:requiredDuplicates.map(name=>({name}))}));
+  cpSync(new URL('../../ci-l4-e2e-smoke.yml',import.meta.url),join(root,'.github/workflows/ci-l4-e2e-smoke.yml'));
   return { root, names };
+
 
 }
 function run(root, index, count = 2, extraEnv = {}) {
@@ -277,4 +284,36 @@ test('explicit device workflow stays bounded and keeps all four helper consumers
  const setup=readFileSync(new URL('../smoke/line02-android-cancel-candidate-setup.sh',import.meta.url),'utf8');
  const cleanup=readFileSync(new URL('../smoke/line02-android-cancel-candidate-cleanup.sh',import.meta.url),'utf8');
  for(const caller of [setup,cleanup])assert.ok(caller.includes('line02-android-accessibility-ui.sh'));
+});
+
+for(const name of requiredDuplicates)test(`required duplicate baseline overlap is rejected without a skip exception: ${name}`,t=>{
+ const {root}=fixture(t);const baseline=join(root,'.github/workflows/scripts/smoke-baseline.txt');writeFileSync(baseline,readFileSync(baseline,'utf8')+name+'\n');
+ const r=run(root,0);assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/baseline/);assert.equal(existsSync(join(r.output,'trace')),false);
+});
+test('only two proven required duplicates excluded; both worker manifests and aggregate preserve proof',t=>{
+ const {root,names}=fixture(t),workers=[run(root,0),run(root,1)];for(const r of workers)assert.equal(r.status,0,r.stdout+r.stderr);
+ assert.deepEqual(workers.flatMap((r,i)=>rows(r.output,i)).map(r=>r[0]).sort(),names.sort());assert.equal(verify(root).status,0);
+ for(const [i,r]of workers.entries())assert.deepEqual(JSON.parse(readFileSync(join(r.output,`smoke-glob-shard-${i}/manifest.json`),'utf8')).excluded_required,requiredDuplicates.slice().sort());
+ const file=join(artifact(root,0),'manifest.json'),meta=JSON.parse(readFileSync(file,'utf8'));meta.excluded_required=[];writeFileSync(file,JSON.stringify(meta));assert.notEqual(verify(root).status,0);
+});
+for(const mode of ['unknown-exclusion','missing-script','missing-caller','conditional-step','nonblocking-step','nonblocking-job','missing-required-needs','weakened-required-gate'])test(`required duplicate consumer drift rejects before any smoke executes: ${mode}`,t=>{
+ const {root}=fixture(t),mf=join(root,'.github/workflows/scripts/smoke-required-duplicates.json'),wf=join(root,'.github/workflows/ci-l4-e2e-smoke.yml');let source=readFileSync(wf,'utf8');const data=JSON.parse(readFileSync(mf,'utf8'));
+ if(mode==='unknown-exclusion')data.duplicates.push({...data.duplicates[0],name:'a-smoke.sh'});
+ if(mode==='missing-script')rmSync(join(root,'.github/workflows/scripts/smoke',requiredDuplicates[0]));
+ if(mode==='missing-caller')source=source.replace('bash .github/workflows/scripts/smoke/dashboard-license-smoke.sh','echo lost contract');
+ if(mode==='conditional-step')source=source.replace('      - name: Smoke — Dashboard License (Sprint A)','      - name: Smoke — Dashboard License (Sprint A)\n        if: false');
+ if(mode==='nonblocking-step')source=source.replace('      - name: Smoke — Dashboard License (Sprint A)','      - name: Smoke — Dashboard License (Sprint A)\n        continue-on-error: true');
+ if(mode==='nonblocking-job')source=source.replace('  smoke-api-contract:\n','  smoke-api-contract:\n    continue-on-error: true\n');
+ if(mode==='missing-required-needs')source=source.replace('      - smoke-api-contract\n','');
+ if(mode==='weakened-required-gate')source=source.replace('if [ "$RESULT" != "success" ]; then','if false; then');
+ writeFileSync(wf,source);writeFileSync(mf,JSON.stringify(data));const r=run(root,0);assert.notEqual(r.status,0,r.stdout+r.stderr);assert.equal(existsSync(join(r.output,'trace')),false);
+});
+test('real required L4 E2E shell remains fail-closed for API job success/failure/cancel/skip/missing',()=>{
+ const w=parse(readFileSync(new URL('../../ci-l4-e2e-smoke.yml',import.meta.url),'utf8')),gate=w.jobs['l4-e2e-passed'],job=w.jobs['smoke-api-contract'];
+ assert.equal(gate.name,'L4 E2E Gate Passed');assert.equal(gate.if,'always()');assert.ok(gate.needs.includes('smoke-api-contract'));assert.equal(job.if,undefined);assert.notEqual(job['continue-on-error'],true);
+ for(const name of requiredDuplicates){const step=job.steps.find(s=>s.run?.includes('bash .github/workflows/scripts/smoke/'+name));assert.ok(step);assert.equal(step.if,undefined);assert.notEqual(step['continue-on-error'],true);}
+ for(const state of ['success','failure','cancelled','skipped','']){
+  const script=gate.steps.find(s=>s.run).run.replace(/\$\{\{ needs\.([a-z0-9-]+)\.result \}\}/g,(_,name)=>name==='smoke-api-contract'?state:'success');
+  const r=spawnSync('bash',['-e','-o','pipefail','-c',script],{encoding:'utf8'});assert.equal(r.status===0,state==='success',r.stdout+r.stderr);
+ }
 });
