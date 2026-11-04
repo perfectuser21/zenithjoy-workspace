@@ -3,7 +3,7 @@ import { app } from '../../scripts/app.js';
 app.registerExtension({
   name: 'ZenithJoy.PersistentRequestIds',
   async beforeRegisterNodeDef(nodeType, nodeData) {
-    if (!['ZenithJoyImage2', 'ZenithJoyWan'].includes(nodeData.name)) return;
+    if (!['ZenithJoyImage2', 'ZenithJoyWan', 'ZenithJoyWanRemake'].includes(nodeData.name)) return;
     const oldConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function() {
       const result = oldConfigure?.apply(this, arguments);
@@ -42,6 +42,7 @@ app.registerExtension({
     nodeType.prototype.onNodeCreated = function() {
       const result = oldCreated?.apply(this, arguments);
       const field = this.widgets?.find(w => w.name === 'request_id');
+      if (nodeData.name === 'ZenithJoyWanRemake' && field) field.label = '请求标识';
       const newId = () => {
         const bytes = new Uint8Array(16);
         crypto.getRandomValues(bytes);

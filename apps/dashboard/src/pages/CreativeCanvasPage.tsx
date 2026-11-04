@@ -24,7 +24,7 @@ export default function CreativeCanvasPage() {
   const [opening, setOpening] = useState(false);
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'slow'>('loading');
   const [workflowError, setWorkflowError] = useState('');
-  const openWorkflow = useCallback(async (kind: 'upload' | 'generate') => {
+  const openWorkflow = useCallback(async (kind: 'upload' | 'generate' | 'remake') => {
     setWorkflowError(''); setOpening(true);
     try {
       const frame = frameRef.current;
@@ -32,8 +32,8 @@ export default function CreativeCanvasPage() {
       if (!frame || frame.getAttribute('src') !== '/api/creative-canvas/' || !child || child.location.origin !== window.location.origin) throw new Error('画布尚未准备好');
       const app = (child as Window & { app?: { loadGraphData?: (graph: unknown, clear: boolean, restoreView: boolean, name: string) => Promise<unknown> } }).app;
       if (typeof app?.loadGraphData !== 'function') throw new Error('画布尚未准备好');
-      const name = kind === 'upload' ? '上传图片工作流' : '图片生成工作流';
-      const filename = kind === 'upload' ? 'upload-image-wan.json' : 'image2-select-wan.json';
+      const name = kind === 'remake' ? '视频复刻工作流' : kind === 'upload' ? '上传图片工作流' : '图片生成工作流';
+      const filename = kind === 'remake' ? 'video-remake-wan.json' : kind === 'upload' ? 'upload-image-wan.json' : 'image2-select-wan.json';
       const response = await fetch(`/api/creative-canvas/extensions/zenithjoy/${filename}`, {credentials:'include'});
       if (!response.ok) throw new Error('模板暂时不可用');
       const graph: unknown = await response.json();
@@ -156,6 +156,7 @@ export default function CreativeCanvasPage() {
           {!expanded && <>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('upload')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开上传图片工作流</button>
           <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('generate')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开图片生成工作流</button>
+          <button type="button" disabled={opening || frameState !== 'ready'} onClick={() => void openWorkflow('remake')} className="rounded-lg border border-violet-300 px-3 py-1.5 text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">打开视频复刻工作流</button>
           {frameState === 'loading' && <span role="status">画布正在加载，请稍候…</span>}
           {frameState === 'slow' && <span role="alert">画布加载时间过长，请重新连接或联系管理员。</span>}
           {frameState === 'slow' && <button type="button" onClick={retry} className="rounded-lg border border-amber-500 px-3 py-1.5">重新连接</button>}
