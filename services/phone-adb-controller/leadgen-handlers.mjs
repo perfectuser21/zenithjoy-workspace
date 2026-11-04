@@ -161,6 +161,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     }
     if(needsCentralLock){
       const lease=getCentral();
+      // 公司配置可能等待远端；取得设备租约前再次核原任务仍有效。
+      await lease.verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
       await lease.acquire();
       appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'acquired',task_id:taskId,run_id:state.run_id,
         device_name:serial,source_commit:sourceCommit,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
