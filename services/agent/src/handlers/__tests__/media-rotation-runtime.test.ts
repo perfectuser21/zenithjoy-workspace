@@ -1,11 +1,11 @@
-import {describe,it,expect,afterEach} from 'vitest';import {spawnSync} from 'node:child_process';import {mkdtempSync,rmSync} from 'node:fs';import {join} from 'node:path';import {createServer,type Server} from 'node:http';
+import {describe,it,expect,afterEach} from 'vitest';import {spawnSync} from 'node:child_process';import {mkdtempSync,rmSync} from 'node:fs';import {join} from 'node:path';import {tmpdir} from 'node:os';import {createServer,type Server} from 'node:http';
 import {rotationToTranspose,recoverStaleJobs} from '../video-pipeline';
 let dir:string;let server:Server;afterEach(async()=>{if(dir)rmSync(dir,{recursive:true,force:true});if(server)await new Promise<void>(r=>server.close(()=>r()));});
-function run(binary:string,args:string[]){const r=spawnSync(binary,args,{encoding:'utf8'});expect(r.status,r.stderr).toBe(0);return r.stdout;}
+function run(binary:string,args:string[]){const r=spawnSync(binary,args,{encoding:'utf8'});if(r.error)throw new Error(`${binary} is required for real pixel normalization: ${r.error.message}`,{cause:r.error});expect(r.status,r.stderr).toBe(0);return r.stdout;}
 describe('current orientation normalization and stale recovery runtime',()=>{
  it.each([[-90,'display_matrix','transpose=1'],[90,'display_matrix','transpose=2'],[90,'legacy_tag','transpose=1'],[270,'legacy_tag','transpose=2'],[180,'legacy_tag','hflip,vflip'],[90,'none','']])('maps signed %s %s to filter %s',(signed,source,filter)=>{expect(rotationToTranspose(signed as number,source as any)).toBe(filter);});
  it('normalizes real pixels with the production rotation filter',()=>{
-  dir=mkdtempSync('/tmp/zj-rotation-');const input=join(dir,'in.mp4'),output=join(dir,'out.mp4');
+  dir=mkdtempSync(join(tmpdir(),'zj-rotation-'));const input=join(dir,'in.mp4'),output=join(dir,'out.mp4');
   run('ffmpeg',['-f','lavfi','-i','testsrc=duration=0.3:size=96x64:rate=10','-pix_fmt','yuv420p','-y',input]);
   run('ffmpeg',['-noautorotate','-i',input,'-vf',rotationToTranspose(-90,'display_matrix'),'-metadata:s:v:0','rotate=0','-pix_fmt','yuv420p','-y',output]);
   const probe=JSON.parse(run('ffprobe',['-v','error','-show_streams','-of','json',output]));expect(probe.streams[0]).toMatchObject({width:64,height:96});
