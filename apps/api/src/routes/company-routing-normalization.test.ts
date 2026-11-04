@@ -12,12 +12,12 @@ let changes: Record<string, unknown>[] = [], versions: unknown[] = [], auditBefo
 const body = () => ({ expected_version: 26, request_id: '11111111-1111-4111-8111-111111111111' });
 const post = (value: unknown = body()) => request(app).post('/profile/routing-profile-normalizations').send(value);
 beforeEach(() => {
-  vi.clearAllMocks(); row = initial(); role = 'owner'; tenant = 'tenant-a'; failCas = false; failVersion = false; changes = []; versions = [];
+  vi.resetAllMocks(); row = initial(); role = 'owner'; tenant = 'tenant-a'; failCas = false; failVersion = false; changes = []; versions = [];
   db.session.mockResolvedValue({ user: { id: 'actor-a' } });
   db.connect.mockResolvedValue({ query: db.query, release: db.release });
   db.query.mockImplementation(async (sql: string, args: unknown[] = []) => {
     if (sql.includes('FROM zenithjoy.tenant_members')) return { rows: [{ tenant_id: tenant, role }] };
-    if (sql === 'BEGIN') { transaction = structuredClone(row); auditBefore = structuredClone(changes); versionsBefore = structuredClone(versions); return { rows: [] }; }
+    if (sql === 'BEGIN' || sql === 'BEGIN READ ONLY') { transaction = structuredClone(row); auditBefore = structuredClone(changes); versionsBefore = structuredClone(versions); return { rows: [] }; }
     if (sql === 'ROLLBACK') { row = transaction; changes = auditBefore; versions = versionsBefore; return { rows: [] }; }
     if (sql === 'COMMIT') return { rows: [] };
     if (sql.includes('SELECT * FROM zenithjoy.tenant_company_profiles')) return { rows: args[0] === row.tenant_id ? [structuredClone(row)] : [] };
@@ -43,16 +43,22 @@ describe('公司Profile精确重复映射修复的真实HTTP入口', () => {
     expect((changes[0].old_snapshot as Record<string, unknown>).runtime_config).toEqual(old.runtime_config);
     expect(db.query.mock.calls.some(([sql]) => /UPDATE.*company_config_(runs|versions)/.test(String(sql)))).toBe(false);
     const read = await request(app).get('/profile/routing-profile-normalizations/' + body().request_id); expect(read.status).toBe(200); expect(read.body.data.config_version).toBe(27);
+    expect(read.body.data.receipt).toMatchObject({ operation: 'deduplicate_exact_profiles', outcome: 'applied', actor: 'actor-a', request_id: body().request_id, expected_version: 26 });
+    expect(read.body.data.receipt.before_sha256).toMatch(/^[a-f0-9]{64}$/); expect(read.body.data.receipt.after_sha256).toMatch(/^[a-f0-9]{64}$/);
   });
   it('同request失去ACK后可读回或原样重试，只创建一个新版本', async () => {
     expect((await post()).status).toBe(201); const r = await post(); expect(r.status).toBe(200); expect(r.body.data.idempotent).toBe(true); expect(versions).toHaveLength(1); expect(row.config_version).toBe(27);
   });
   it('同request更换版本拒绝，不能复用旧回执', async () => { await post(); expect((await post({ ...body(), expected_version: 27 })).status).toBe(409); expect(versions).toHaveLength(1); });
+  it('冲突审计或被篡改的旧回执不能冒充成功', async () => {
+    await post(); (changes[0].conflict as Record<string, unknown>).outcome = 'conflict';
+    expect((await request(app).get('/profile/routing-profile-normalizations/' + body().request_id)).status).toBe(500);
+  });
   it('旧版本拒绝且不写新版本', async () => { expect((await post({ ...body(), expected_version: 25 })).status).toBe(409); expect(versions).toHaveLength(0); });
   it('已启用配置必须先经普通流程另存draft，不可隐式停用', async () => { row.config_status = 'enabled'; const r = await post(); expect(r.status).toBe(409); expect(r.body.error.code).toBe('DRAFT_REQUIRED'); expect(row.config_status).toBe('enabled'); expect(versions).toHaveLength(0); });
   it('无重复不得创建无意义版本', async () => { row.runtime_config.routing.profiles = ['work', 'other']; expect((await post()).status).toBe(409); expect(row.config_version).toBe(26); });
   it.each(['profiles', 'profile', 'tenant_id', 'runtime_config', 'config_status', 'operation'])('拒绝输入越权字段%s', async key => { expect((await post({ ...body(), [key]: ['foreign'] })).status).toBe(400); expect(db.connect).not.toHaveBeenCalled(); });
-  it.each([[], ['work', ' work'], ['work', 'WORK'], ['work', ''], ['work', null], ['work', ['work']]])('不把畸形或大小写trim变体当可修重复：%j', async profiles => { row.runtime_config.routing.profiles = profiles as string[]; expect((await post()).status).toBe(409); expect(versions).toHaveLength(0); });
+  it.each([[], ['work', ' work'], ['work', 'WORK'], ['work', ''], ['work', null], ['work', ['work']]].map(profiles => ({ profiles })))('不把畸形或大小写trim变体当可修重复：$profiles', async ({ profiles }) => { row.runtime_config.routing.profiles = profiles as string[]; expect((await post()).status).toBe(409); expect(versions).toHaveLength(0); });
   it('无真实session的header冒owner拒绝，不能走tenant fallback或bypass', async () => { db.session.mockResolvedValue(null); const r = await post().set('X-Feishu-User-Id', 'actor-a').set('X-Bypass-Tenant', 'true'); expect(r.status).toBe(401); expect(db.connect).not.toHaveBeenCalled(); });
   it('session在两层校验间失效时拒绝fallback', async () => { db.session.mockResolvedValueOnce({ user: { id: 'actor-a' } }).mockResolvedValue(null); expect((await post().set('X-Feishu-User-Id', 'actor-a')).status).toBe(401); expect(db.connect).not.toHaveBeenCalled(); });
   it('两层session主体不一致拒绝', async () => { db.session.mockResolvedValueOnce({ user: { id: 'actor-a' } }).mockResolvedValue({ user: { id: 'actor-b' } }); expect((await post()).status).toBe(403); expect(db.connect).not.toHaveBeenCalled(); });
