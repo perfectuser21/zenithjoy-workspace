@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "source_candidate": "56a123c08ee799d13858d6dd167face6b7e436b9",
+  "generated_at": "2026-11-04T10:59:14.437948+00:00",
+  "bootstrap_failures": [
+    {
+      "name": "frontend-browser",
+      "job_id": 126527346664,
+      "run_id": 41816168222,
+      "head_sha": "56a123c08ee799d13858d6dd167face6b7e436b9",
+      "failed_steps": [
+        "Restore pinned skill sources"
+      ],
+      "skipped_payload_steps": [
+        "Detect frontend changes and check browser DoD"
+      ],
+      "reason": "Same pinned skill SSH identity failed publickey authentication after three bounded attempts. Payload did not run; no DoD/policy/test failure inferred."
+    },
+    {
+      "name": "realmachine-ratchet",
+      "job_id": 126527345402,
+      "run_id": 41816168222,
+      "head_sha": "56a123c08ee799d13858d6dd167face6b7e436b9",
+      "failed_steps": [
+        "Restore pinned skill sources"
+      ],
+      "skipped_payload_steps": [
+        "Run lint-realmachine-unverified-ratchet"
+      ],
+      "reason": "Same pinned skill SSH identity failed publickey authentication after three bounded attempts. Payload did not run; no DoD/policy/test failure inferred."
+    },
+    {
+      "name": "realm-regression",
+      "job_id": 126527345795,
+      "run_id": 41816168222,
+      "head_sha": "56a123c08ee799d13858d6dd167face6b7e436b9",
+      "failed_steps": [
+        "Restore pinned skill sources"
+      ],
+      "skipped_payload_steps": [
+        "Run 真机车道 + mock-honesty 全部回归测试（proven-to-fire — 任一红即门禁红）"
+      ],
+      "reason": "Same pinned skill SSH identity failed publickey authentication after three bounded attempts. Payload did not run; no DoD/policy/test failure inferred."
+    },
+    {
+      "name": "release-admission",
+      "job_id": 126527345514,
+      "run_id": 41816168222,
+      "head_sha": "56a123c08ee799d13858d6dd167face6b7e436b9",
+      "failed_steps": [
+        "Restore pinned skill sources"
+      ],
+      "skipped_payload_steps": [
+        "Run actions/setup-node@v4",
+        "Run actions/setup-python@v5",
+        "Install workflow parser",
+        "Run isolated Line04 package and installer regressions",
+        "Run L1 and business gate behavior regressions",
+        "Run release admission and HK rollback regressions"
+      ],
+      "reason": "Same pinned skill SSH identity failed publickey authentication after three bounded attempts. Payload did not run; no DoD/policy/test failure inferred."
+    }
+  ],
+  "actual_source_failure": {
+    "run_id": 41816167984,
+    "job_id": 126527343597,
+    "job": "API Contract Smoke",
+    "failed_step": "Retired CS workbench shell chmod",
+    "error": "chmod cannot access .github/workflows/scripts/smoke/cs-account-workbench-smoke.sh: No such file or directory",
+    "further_stale_callers": [
+      "line04-crm-blacklist-ingest-onboarding-smoke.sh",
+      "line04-crm-table-identity-smoke.sh"
+    ]
+  },
+  "implementation": "Replace three dangling thin-shell invocations with exactly one existing business-contracts-smoke.sh api invocation in the same API Contract job. No continue-on-error, skip or empty alias added.",
+  "required_contracts_preserved": [
+    {
+      "unit_id": "cs-workbench",
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/dashboard/src/pages/__tests__/BusinessSurfaces.test.tsx",
+        "apps/api/src/routes/cs-machines-tenant-scope.test.ts"
+      ],
+      "contract": "Real owner cookie sees only its machine; URL visibility and five-tab CS context rendered."
+    },
+    {
+      "unit_id": "crm-blacklist-onboarding",
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm-friend-scan-reconcile.test.ts",
+        "apps/api/src/routes/__tests__/crm-partial-friend-ingest.test.ts"
+      ],
+      "contract": "License-derived CRM ingest, bot blacklist, own identity/onboarding and internal-hidden roster; no forged admin email."
+    },
+    {
+      "unit_id": "crm-identity",
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm-table-identity.test.ts",
+        "apps/api/tests/routes/crm-identity-mark.test.ts"
+      ],
+      "contract": "Current identity write persists; internal customers are deliberately absent from roster; UUID fixtures and real cookie reads."
+    }
+  ],
+  "local_validation": {
+    "red": "4-case wiring regression fails on original missing/retired callers; original red log retained.",
+    "real_canonical": "bash .github/workflows/scripts/smoke/business-contracts-smoke.sh api:62 real API files790 tests, skipped0, plus5 current session/controller safety tests pass. Own locked Node20/API worktree install; external boundaries isolated by existing canonical runner.",
+    "workflow_and_gate_regression": "41 tests pass across api-contract-retired-callers and smoke-glob-sharding; actual command preserves exit73, API/PG/UI selectors stay nonempty, required API parent remains fail-closed on failure/cancel/skip/missing.",
+    "selector": "Current smoke-selection.py passes without changing protected duplicate fingerprints or exclusions."
+  },
+  "dimensions": {
+    "current_value": "Current workbench and CRM behavior remain valid; retired shell path references are a CI wiring defect, not a request to revive old static assertions or auth bypasses.",
+    "active_status": "The same required API Contract job invokes the current strict API canonical exactly once. Its actual selectors include API tests for all three existing review units; PostgreSQL and UI contracts remain required in Integration/Runtime/Glob.",
+    "real_effect": "Fresh actual canonical execution passes790 API assertions and5 safety cases. Four other failures are bootstrap-only and cannot be reclassified as policy successes. No physical, provider or production success is claimed.",
+    "test_and_blocking": "New actual-workflow command fixture accepts success and propagates nonzero73, while existing real L4 gate behavior still blocks API failure/cancel/skip/missing. Empty/missing/skip canonical reports remain errors in the existing strict runner.",
+    "duplication_and_obsolescence": "Three dangling calls consolidate into one current API group, rather than three repeated full canonical runs or fake old aliases. No test source or required context is removed.",
+    "runtime_and_maintenance_cost": "One shared62-file invocation replaces three dead thin-shell callsites. This adds genuine execution to the formerly broken job; no speculative CPU/RSS/billing savings are asserted.",
+    "retirement_and_dependencies": "Existing source retirements and recovery anchors remain in business documentation. This patch fixes only callers and adds a regression. Cloud exact-candidate required checks, four bootstrap failures and external six gaps remain open."
+  },
+  "evidence_root": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/ci-followup-56a123c0",
+  "log_manifest": [
+    {
+      "name": "api-canonical-real.log",
+      "sha256": "dd447ca2e29bd64170f8844ec3674c03a84a1057e1f6cd35b1f595c876fae595",
+      "bytes": 1405
+    },
+    {
+      "name": "api-contract.log",
+      "sha256": "76d34b31b67f288e39c62a0ac8a7562c3aed99710add7a8900c1bcfbde8217ee",
+      "bytes": 242611
+    },
+    {
+      "name": "api-wiring-green.log",
+      "sha256": "6c2b5f7b7190013a8e597079dda72a66283accdf4002d6aac6aa96330f9f9200",
+      "bytes": 907
+    },
+    {
+      "name": "api-wiring-red.log",
+      "sha256": "9a5b7750a21aee67b91684bcd36a57e72110effc0053a0b1889ebb71c2a6e068",
+      "bytes": 4261
+    },
+    {
+      "name": "api-wiring-selector-green.log",
+      "sha256": "bbea4bd8cacfc773aafc1b29a97edd1c21efece40fc5be43703c5340502ec9b6",
+      "bytes": 9681
+    },
+    {
+      "name": "frontend-browser.log",
+      "sha256": "e01d47e761df6f1ad0d03b45fbbf922ba5e99de1c8fc7411ddcdd039ce7ddcf3",
+      "bytes": 135721
+    },
+    {
+      "name": "realm-regression.log",
+      "sha256": "eaa024ebd646336c1a377bd2d1cf9617a345c855aea67e0b8d51f6e7e316c8a9",
+      "bytes": 13081
+    },
+    {
+      "name": "realmachine-ratchet.log",
+      "sha256": "4a947d8aac1359ced8148f994befabb621bdfb835fb15ee8b38c75382996f886",
+      "bytes": 141917
+    },
+    {
+      "name": "release-admission.log",
+      "sha256": "27e81cb14358b96da101ae83b416e01935934a9233f79de38aad7bad58c92bc1",
+      "bytes": 13229
+    }
+  ],
+  "original_round3_action_unit_denominator": 172,
+  "additional_unit_denominator_changed": false,
+  "cloud_required_success_claimed": false
+}

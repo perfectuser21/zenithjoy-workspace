@@ -486,11 +486,11 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
           bash .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
 
-      # ─── 微信客服以号为中心工作台（IA 重设计刀2）smoke：前端 IA 重组静态验证（入口分诊+总览/工作台路由+5 Tab 复用+按号 scope）──
-      - name: Smoke — 微信客服以号为中心工作台 (Path 4 IA 刀2)
-        run: |
-          chmod +x .github/workflows/scripts/smoke/cs-account-workbench-smoke.sh
-          bash .github/workflows/scripts/smoke/cs-account-workbench-smoke.sh
+      # Current CS workbench and CRM API contracts (shared strict canonical).
+      - name: Contract - Current CS workbench and CRM API behavior
+        # Their SQL/UI contracts also remain blocking in Integration/Runtime.
+        # One strict shared API selector replaces three retired thin callers.
+        run: bash .github/workflows/scripts/smoke/business-contracts-smoke.sh api
 
       - name: Smoke — Step 6 Dispatch Chain WS2 (dispatchPublishTask + ackPublishTask)
         env:
@@ -562,21 +562,6 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-internal-person-binding-smoke.sh
           bash .github/workflows/scripts/smoke/line04-internal-person-binding-smoke.sh
 
-      # ─── Line04 CRM 重做：blacklist 写 / friend-scan ingest+trigger+pending / onboarding 状态机 / 403 修法（含邮箱超管） ───
-      # SMOKE_ADMIN_EMAIL 须 ∈ job-level ADMIN_EMAILS，邮箱超管旁路（修 403）smoke 才能 200。
-      - name: Smoke — Line04 CRM 重做 blacklist+ingest+onboarding+trigger
-        env:
-          API_BASE: http://localhost:5200
-          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
-          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
-          PSQL_HOST: localhost
-          PSQL_USER: cecelia
-          PSQL_DB: cecelia
-          PSQL_PASS: cecelia
-        run: |
-          chmod +x .github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh
-          bash .github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh
-
       # ─── Line04 CRM 三层下钻 层2/3 数据端点（客户画像 + 时间线 + 每日小结 + 聊天记录）───
       - name: Smoke — Line04 CRM 客户画像 profile（层2/3）
         env:
@@ -589,20 +574,6 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/line04-crm-customer-profile-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-customer-profile-smoke.sh
-
-      # ─── Line04 CRM 外层表重做：6列 + 身份三态（add_friend_time + identity 落库 / ingest 向前兼容 / internal 排除）───
-      - name: Smoke — Line04 CRM 外层表重做（identity + add_friend_time）
-        env:
-          API_BASE: http://localhost:5200
-          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
-          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
-          PSQL_HOST: localhost
-          PSQL_USER: cecelia
-          PSQL_DB: cecelia
-          PSQL_PASS: cecelia
-        run: |
-          chmod +x .github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh
-          bash .github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh
 
       # ─── Line04 CRM 身份标记端点：PUT /customers/identity（运营标 internal/blacklist/customer + config.blacklist 双向同步 + 跨租户 403）───
       - name: Smoke — Line04 CRM 身份标记端点（PUT /customers/identity）
