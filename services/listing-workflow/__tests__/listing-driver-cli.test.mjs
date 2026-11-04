@@ -8,11 +8,15 @@ const cli=new URL('../listing-driver-cli.mjs',import.meta.url).pathname;
 test('CLI help has no runtime loading or device side effects',()=>{
  const r=spawnSync(process.execPath,[cli,'--help'],{encoding:'utf8'});assert.equal(r.status,0);assert.match(r.stdout,/dry-run/);
 });
+test('native CLI help needs no runtime configuration, lease or device',()=>{
+ const r=spawnSync(process.execPath,[new URL('../pdd-native-cli.mjs',import.meta.url).pathname,'--help'],{encoding:'utf8',timeout:5000});
+ assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/不能保存\/发布\/发送消息/);
+});
 test('CLI loads an explicitly trusted runtime and emits refusal while preserving real readback result',()=>{
  const root=mkdtempSync(join(tmpdir(),'listing-cli-')), marker=join(root,'read.txt');
  const input=join(root,'input.json'), plugin=join(root,'runtime.mjs');
  writeFileSync(input,JSON.stringify({root,businessKey:'one',runId:'one',target:{storeId:'store-one'},payload:{plan:{images:[]}},productionEnabled:true}));
- writeFileSync(plugin,`import{writeFileSync}from'node:fs';export function createRuntime(){return {inspect:async()=>{writeFileSync(${JSON.stringify(marker)},'captured');return{ok:false,evidence:['capture-path'],requiresVisualReview:true}},productionEnabled:false}}`);
+ writeFileSync(plugin,`import{writeFileSync}from'node:fs';export function createRuntime(){return {inspect:async()=>{writeFileSync(new URL('./read.txt',import.meta.url),'captured');return{ok:false,evidence:['capture-path'],requiresVisualReview:true}},productionEnabled:false}}`);
  const r=spawnSync(process.execPath,[cli,input,plugin],{encoding:'utf8'});assert.equal(r.status,2,r.stderr);assert.equal(readFileSync(marker,'utf8'),'captured');const result=JSON.parse(r.stdout);assert.equal(result.mode,'dry-run');assert.equal(result.publicationAuthorized,false);assert.ok(result.reasons.includes('UI_CONTRACT_UNVERIFIED'));
 });
 test('built-in read-only runtime cannot authorize or issue UI writes and never invents store identity',async()=>{

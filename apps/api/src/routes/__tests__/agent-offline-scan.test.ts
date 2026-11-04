@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock scanAndAlert，避免真实 DB/Webhook 调用
 vi.mock('../../services/agent-offline-monitor', () => ({
   scanAndAlert: vi.fn(),
+  resolveFeishuWebhook: vi.fn(value=>value),
 }));
 
 import request from 'supertest';
@@ -11,10 +12,17 @@ import * as monitorSvc from '../../services/agent-offline-monitor';
 
 describe('POST /api/internal/agent-offline-scan', () => {
   let app: any;
+  afterEach(()=>vi.unstubAllEnvs());
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.stubEnv('ZENITHJOY_INTERNAL_TOKEN', 'fixture-offline-token');
     app = (await import('../../app')).default;
+  });
+
+  it('没有内部token或token错误均拒绝，不能触发扫描',async()=>{
+    for(const token of ['', 'wrong']){const res=await request(app).post('/api/internal/agent-offline-scan').set('X-Internal-Token',token).send({webhook_override:'http://127.0.0.1'});expect(res.status).toBe(401);}
+    expect(monitorSvc.scanAndAlert).not.toHaveBeenCalled();
   });
 
   it('扫描无告警 → 返回 200 success=true + scanned/alerted/recovered', async () => {
@@ -24,7 +32,7 @@ describe('POST /api/internal/agent-offline-scan', () => {
       recovered: 0,
     });
 
-    const res = await request(app).post('/api/internal/agent-offline-scan').send({});
+    const res = await request(app).post('/api/internal/agent-offline-scan').set('X-Internal-Token','fixture-offline-token').send({});
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data).toMatchObject({ scanned: 3, alerted: 0, recovered: 0 });
@@ -39,7 +47,7 @@ describe('POST /api/internal/agent-offline-scan', () => {
       send_errors: ['webhook timeout'],
     });
 
-    const res = await request(app).post('/api/internal/agent-offline-scan').send({});
+    const res = await request(app).post('/api/internal/agent-offline-scan').set('X-Internal-Token','fixture-offline-token').send({});
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toContain('webhook');
@@ -49,7 +57,7 @@ describe('POST /api/internal/agent-offline-scan', () => {
   it('scanAndAlert 抛出异常 → 返回 500 success=false', async () => {
     (monitorSvc.scanAndAlert as any).mockRejectedValue(new Error('DB 连接失败'));
 
-    const res = await request(app).post('/api/internal/agent-offline-scan').send({});
+    const res = await request(app).post('/api/internal/agent-offline-scan').set('X-Internal-Token','fixture-offline-token').send({});
     expect(res.status).toBe(500);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toContain('DB 连接失败');
@@ -63,7 +71,7 @@ describe('POST /api/internal/agent-offline-scan', () => {
     });
 
     await request(app)
-      .post('/api/internal/agent-offline-scan')
+      .post('/api/internal/agent-offline-scan').set('X-Internal-Token','fixture-offline-token')
       .send({ threshold_hours: 2 });
 
     expect(monitorSvc.scanAndAlert).toHaveBeenCalledWith(

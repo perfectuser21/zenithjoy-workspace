@@ -20,7 +20,8 @@ vi.mock('../../middleware/simple-rate-limit', () => ({
   ipKeyFn: () => 'ip',
 }));
 // internalAuth 是中间件本身（不是工厂），照原样替身
-vi.mock('../../middleware/internal-auth', () => ({
+vi.mock('../../middleware/internal-auth', async load => ({
+  ...await load<typeof import('../../middleware/internal-auth')>(),
   internalAuth: (req: any, res: any, next: any) => {
     if (req.headers.authorization !== 'Bearer tok-test') return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
     next();

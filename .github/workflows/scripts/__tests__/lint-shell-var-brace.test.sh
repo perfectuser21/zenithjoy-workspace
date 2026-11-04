@@ -58,7 +58,7 @@ check "好样例(含\${}与注释)不误报" "0" "$GOOD_HITS"
 # mac/pc4 之间来回跑，必须零命中——2026-08-18 就是它在 mac 上炸了才发现这个坑。
 STRICT_FILES="$ROOT/.github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
 $ROOT/.github/workflows/scripts/smoke/dm-send-realmachine-smoke.sh
-$ROOT/.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
+$ROOT/.github/workflows/scripts/operator-probes/line02-keyword-comment.sh
 $ROOT/.github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh"
 
 echo "== 严格组：跨环境真机 smoke 必须零命中 =="

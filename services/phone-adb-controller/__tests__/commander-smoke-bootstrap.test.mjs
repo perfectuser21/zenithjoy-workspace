@@ -4,6 +4,8 @@ import {mkdtempSync,realpathSync,mkdirSync,writeFileSync,readFileSync,rmSync,cop
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import YAML from 'yaml';
+import {gates} from '../../../scripts/ci/required-gate.mjs';
 const path='.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh';
 function run(fail){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'commander-bootstrap-')));
@@ -17,17 +19,17 @@ function run(fail){
   const lines=readFileSync(trace,'utf8').trim().split('\n');return {r,lines,dir};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
-test('Commander回归先执行固定Skill安装核验，再保留完整原测试链',()=>{
+test('Commander入口先安装固定Skill并核验源合同，行为回归由required L3独立执行',()=>{
  const {r,lines,dir}=run(0);assert.equal(r.status,0,r.stderr);assert.deepEqual(lines.slice(0,2),['node:scripts/ci/implementation-skill-source.mjs --install-regression-skills '+dir,'bootstrap:'+dir]);
  assert.equal(lines.filter(x=>x.startsWith('bootstrap:')).length,1);
- assert.deepEqual(lines.slice(2,6),[
+ assert.deepEqual(lines.slice(2),[
   'node:scripts/product-map/gen-commander-contracts.mjs --check',
   'node:--test scripts/product-map/__tests__/commander-skill-contracts.test.js',
-  'node:--test services/phone-adb-controller/__tests__/commander-report.test.mjs services/phone-adb-controller/__tests__/commander-v2.test.mjs services/phone-adb-controller/__tests__/commander-codex-agent.test.mjs services/phone-adb-controller/__tests__/commander-handoff.test.mjs',
-  'node:--test services/phone-adb-controller/__tests__/deployment-unified.test.mjs services/phone-adb-controller/__tests__/deployment-prepare.test.mjs',
+  'python3:-c import ast,sys; ast.parse(open(sys.argv[1]).read()) services/phone-adb-controller/commander/wf-agent-lib.py',
  ]);
- assert.equal(lines.length,7);assert.match(lines[6],/^python3:-c .*wf-agent-lib\.py$/);
- assert.ok(lines.some(x=>x.includes('commander-skill-contracts.test.js')));assert.ok(lines.some(x=>x.includes('commander-v2.test.mjs')));assert.ok(lines.some(x=>x.includes('deployment-prepare.test.mjs')));
+ assert.equal(lines.length,5);
+ assert.ok(lines.some(x=>x.includes('commander-skill-contracts.test.js')));
+ assert.ok(!r.stdout.includes('execution regressions PASS'),'source verification must not claim behavior tests ran');
 });
 test('固定Skill安装核验失败立即拒绝，不能继续测试或报PASS',()=>{
  const {r,lines}=run(23);assert.equal(r.status,23);assert.equal(lines.length,2);assert.match(lines[0],/^node:scripts\/ci\/implementation-skill-source\.mjs --install-regression-skills /);assert.match(lines[1],/^bootstrap:/);assert.ok(!r.stdout.includes('commander-codex-agent-smoke: PASS'));
@@ -48,4 +50,23 @@ test('真实Commander来源用例可消费外部无HEAD对象缓存且不依赖�
  const childEnv={...env,SKILLS_SOURCE_DIR:cache};delete childEnv.NODE_TEST_CONTEXT;
  const r=spawnSync(process.execPath,['--test','--test-name-pattern=^未还原Commander正文',target],{cwd:workspace,env:childEnv,encoding:'utf8',timeout:30000});
  assert.match(r.stdout,/未还原Commander正文/);assert.equal(r.status,0,r.stdout+'\n'+r.stderr);assert.equal(existsSync(join(workspace,'.skills-source')),false,'测试不能造默认缓存掩盖正式前提');
+});
+
+// Expand the actual required workflow command, rather than treating a comment
+// about L3 ownership as evidence that the behavior suites are still selected.
+test('实际required L3命令仍选择完整Commander执行与部署回归且每套只选择一次', t=>{
+ const dir=mkdtempSync(join(tmpdir(),'commander-required-selection-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const workflow=YAML.parse(readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8'));
+ const job=workflow.jobs['openclaw-scripts-test'];assert.ok(job);assert.ok(!job['continue-on-error']);
+ assert.ok(workflow.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
+ assert.ok(gates.code.always.includes('openclaw-scripts-test'));
+ const step=job.steps.find(step=>step.run?.startsWith('node --test'));assert.ok(step);assert.ok(!step['continue-on-error']);
+ const args=join(dir,'args');writeFileSync(join(dir,'node'),'#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE_ARGS"\n',{mode:0o755});
+ const command=step.run.replace(/\$\{\{\s*matrix.shard\s*\}\}/g,'1');
+ const result=spawnSync('bash',['-c',command],{cwd:resolve(new URL('../../..',import.meta.url).pathname),env:{...process.env,PATH:dir+':'+process.env.PATH,CAPTURE_ARGS:args},encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
+ const selected=readFileSync(args,'utf8').trim().split('\n');
+ for(const name of ['commander-report','commander-v2','commander-codex-agent','commander-handoff','deployment-unified','deployment-prepare']){
+  const file='services/phone-adb-controller/__tests__/'+name+'.test.mjs';assert.equal(selected.filter(arg=>arg===file).length,1,file);
+ }
 });

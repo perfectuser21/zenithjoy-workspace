@@ -69,11 +69,15 @@ jobs:
           # 飞书机器人双渠道告警
           FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
           # DB 回写
-          OPERATOR_API_URL: ${{ secrets.OPERATOR_API_URL || vars.OPERATOR_API_URL }}
-          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          OPERATOR_API_URL: ${{ secrets.VPS_API_URL || vars.VPS_API_URL }}
+          ZENITHJOY_INTERNAL_TOKEN: ${{ secrets.VPS_INTERNAL_TOKEN }}
           # 其他配置
           BARK_URL: ${{ secrets.BARK_DEVICE_URL }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
+          FEISHU_API_KEY: ${{ secrets.FEISHU_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          WECOM_API_KEY: ${{ secrets.WECOM_API_KEY }}
+          SESSION_HEALTH_REQUIRED_ACCOUNTS: DOUYIN_COOKIES,KUAISHOU_COOKIES,TOUTIAO_COOKIES,ZHIHU_COOKIES
         run: |
           node scripts/sessions/check-health.js
 

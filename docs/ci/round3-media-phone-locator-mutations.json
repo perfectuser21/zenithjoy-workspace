@@ -1,0 +1,16 @@
+[
+  {
+    "mutation": "production-ime-exit-trap",
+    "source": "services/phone-adb-controller/douyin-phone-adb",
+    "exit_code": 1,
+    "caught": true,
+    "failure_excerpt": "not ok 17 - actual abnormal typed readback exit restores original IME and preserves the first failure\n    Expected values to be strictly equal:\n    + actual - expected\n  name: 'AssertionError'\n  expected: 'original/.IME'\nnot ok 18 - actual enable failure invokes restore trap without hiding the denial or sending\n  name: 'AssertionError'\n  expected: true"
+  },
+  {
+    "mutation": "vision-index-bounds",
+    "source": "apps/api/src/services/locator-assist.ts",
+    "exit_code": 1,
+    "caught": true,
+    "failure_excerpt": "    status: 'failed',\n      \"AssertionError: expected { Object (status, cache_hit, ...) } to deeply equal { status: 'unavailable', …(1) }\\n\" +"
+  }
+]

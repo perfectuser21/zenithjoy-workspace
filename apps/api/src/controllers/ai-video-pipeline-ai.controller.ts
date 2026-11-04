@@ -43,6 +43,10 @@ function postJson(url: string, headers: Record<string, string>, body: unknown): 
         let data = '';
         res.on('data', (c) => { data += c; });
         res.on('end', () => {
+          if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+            reject(Object.assign(new Error(`provider HTTP ${res.statusCode}`), { status: 502 }));
+            return;
+          }
           try { resolve(JSON.parse(data)); } catch { reject(new Error(`JSON parse failed: ${data.slice(0, 200)}`)); }
         });
       },

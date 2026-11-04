@@ -115,6 +115,20 @@ jobs:
           COMPANY_CONFIG_SCRATCH_URL: postgresql://postgres:postgres@localhost:5432/cecelia_scratch
         run: npx vitest run --config vitest.pg-contracts.config.ts
 
+      - name: Run current business PostgreSQL lifecycles
+        working-directory: apps/api
+        env:
+          BUSINESS_PG_DISPOSABLE: '1'
+          DATABASE_NAME: zenithjoy_business_contract_test
+        run: npx vitest run --config vitest.business-pg.config.ts
+
+      - name: Run consolidated PostgreSQL contracts
+        working-directory: apps/api
+        env:
+          PG_CONSOLIDATION_DISPOSABLE: '1'
+          DATABASE_NAME: zenithjoy_consolidation_test
+        run: npx vitest run --config vitest.consolidated-pg.config.ts
+
   # ─── Integration Gate ─────────────────────────────────────────────────
   integration-gate:
     name: Integration Gate Passed

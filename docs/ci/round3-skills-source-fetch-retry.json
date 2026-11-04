@@ -1,0 +1,71 @@
+{
+  "task": "skills-source intermittent SSH fetch hardening",
+  "observed_ci": {
+    "runs": [
+      41811534626,
+      41811535116,
+      41811733799
+    ],
+    "head": "fbcc152d22abb371076b010ff788c0e8812b189a",
+    "remote_commit_exists": "60ba68d3d22bc27ade7d51b5178e3d1744932bff verified via GitHub API",
+    "failure": "Permission denied (publickey); git fetch exit128",
+    "negative_diagnostics": "No Load key invalid format/libcrypto/host-key error appeared in either failed-log capture.",
+    "same_head_successes": [
+      "Lint — Workflow YAML Parse",
+      "Test — Release Admission Regression",
+      "Static PR Policy Checks",
+      "Test — Deploy Lib"
+    ],
+    "scope": "Same-head successful jobs reported actual install87/verify87; intermittent SSH refusal is observed. GitHub-side rate/backend cause is not proven."
+  },
+  "change": {
+    "attempts": 3,
+    "per_attempt_process_timeout_seconds": 35,
+    "retry_delays_seconds": [
+      1,
+      2
+    ],
+    "maximum_fetch_budget_seconds": 108,
+    "ssh_options": [
+      "IdentitiesOnly=yes (preserved)",
+      "IdentityAgent=none",
+      "BatchMode=yes",
+      "ConnectTimeout=10",
+      "ConnectionAttempts=1",
+      "ServerAliveInterval=10",
+      "ServerAliveCountMax=2",
+      "StrictHostKeyChecking=yes (preserved)",
+      "fixed known_hosts (preserved)"
+    ],
+    "identity_and_revision": "Every retry uses the same temporary0600 identity file and same complete requested SHA; key removed from child env. No credential/protocol/proxy fallback.",
+    "permanent_errors": "Key format/libcrypto, host-key changes, repository not found and fixed object missing immediately fatal. Missing key on an uncached source fails before fetch. A permanently rejected public key still fails after at most3 attempts.",
+    "post_fetch": "Loader checksum/install/verify errors remain fatal and never trigger network retries. Cached fixed objects remain usable without network credentials."
+  },
+  "verification": {
+    "red_before_change": "New subprocess suite initially9 tests with3 failures, including two-fail-then-success and missing-key HTTPS fallback.",
+    "source_command": "python3 -m unittest discover -s distribution -p test*.py",
+    "source_tests": 46,
+    "business_command": "python3 scripts/__tests__/skills-source-bootstrap.test.py",
+    "business_tests": 12,
+    "business_ensure": "Actual cached pinned profile install87 and verify87 passed.",
+    "real_child_transport_cases": [
+      "first2 publickey failures then real local Git fetch success",
+      "3 auth failures exhausted with original reason",
+      "same identity path/hash/0600 and same SHA on every attempt",
+      "permanent invalid-format/repository failure not retried",
+      "missing key and malformed SHA no network",
+      "unknown complete SHA fatal after1 attempt",
+      "downstream verify failure and loader checksum failure fatal without retry",
+      "cached object needs no network key",
+      "private key body redacted from failure",
+      "real sleeping Git child killed by process deadline for each of3 bounded attempts"
+    ]
+  },
+  "source_owner": "/Users/administrator/perfect21/zenithjoy/.worktrees/cp-11041915-skills-fetch-retry",
+  "business_copy": "scripts/skills-source.py",
+  "source_copy": "distribution/bootstrap.py",
+  "copies_byte_identical": true,
+  "bootstrap_sha256": "48c402600ddd186ee7955a1925d051da8ed62291e23bc94de66e4c2eaa630403",
+  "required_wiring_request": "Run python3 scripts/__tests__/skills-source-bootstrap.test.py in an existing required source/bootstrap CI guard job. No real source credentials/network are needed for these tests.",
+  "no_sensitive_changes": "No actual credentials read or changed by this lane; no GitHub Secret/PAT/proxy/production setting change; .skills-source.json and pinned loader checksum unchanged."
+}

@@ -1,0 +1,64 @@
+{
+  "codeql_alert": 687,
+  "codeql_rule": "js/shell-command-injection-from-environment",
+  "business_base": "e2b061527eab6507b409e8ae7492fe3104adc2bc",
+  "central": {
+    "worktree": "/Users/administrator/perfect21/zenithjoy/.worktrees/cp-11041950-skills-paths",
+    "branch": "cp-11041950-ssh-paths",
+    "base": "4c1b13bf741037c47cd9cabf974cfd377a4e1cd0",
+    "commit": "5d556416529406d60273ab4abd1004c0695be089",
+    "patch": "/tmp/skills-source-ssh-paths.patch"
+  },
+  "changes": [
+    "Use constant Git SSH shell text; temporary identity/known-hosts paths expand only as quoted environment data. Escape known-hosts option separately for OpenSSH configuration syntax. Same fix in central bootstrap and exact business copy.",
+    "Separate literal Git execFileSync and literal Bash script argv in trusted installer, so Git -c config and Bash invocation no longer merge through dynamic executable/args helper. Trusted Git/blob/catalog/cache/checkout validation stays intact.",
+    "Correct publickey retry comment and central README: prior CI failures established the same Secret reference, not fingerprint identity; policy remains three attempts with fixed identity and fatal exhaustion."
+  ],
+  "verification": [
+    {
+      "cwd": "central worktree",
+      "command": "python3 -m unittest discover -s distribution -p 'test*.py'",
+      "passed": 50,
+      "log": "/tmp/bootstrap-shell-final2.log"
+    },
+    {
+      "command": "python3 scripts/__tests__/skills-source-bootstrap.test.py",
+      "passed": 16,
+      "log": "/tmp/consumer-shell-final3.log"
+    },
+    {
+      "command": "node --test scripts/ci/__tests__/implementation-skill-source.test.mjs scripts/ci/__tests__/implementation-skill-source-transport.test.mjs",
+      "node": 20,
+      "passed": 23,
+      "skipped": 0,
+      "log": "/tmp/reader-shell-final3.log"
+    },
+    {
+      "command": "python3 scripts/skill_source_ownership.py",
+      "result": "passed"
+    },
+    {
+      "command": "npm run product-map:check",
+      "result": "PASS no drift"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "injection_evidence": [
+    "Actual loader/reader subprocesses use a TMPDIR containing spaces, single/double quotes, backticks, $(), semicolon and ampersand.",
+    "Actual Git SSH shell command executes only fixture SSH; literal identity argv matches the temporary file, canary command-substitution markers stay absent.",
+    "Fixture SSH additionally invokes actual ssh -G to verify the quoted known-hosts pathname parses intact without opening a network connection.",
+    "Actual trusted offline installer runs under hostile checkout and object-cache pathnames and still performs install/verify with no canary execution; private checkout is cleaned."
+  ],
+  "cloud_codeql_status": "Next candidate scan must confirm alert removal; local CodeQL scan was not run.",
+  "unchanged": [
+    ".skills-source.json revision60ba and loader digest",
+    "three attempt transport budget",
+    "strict host key",
+    "read-only identity selection",
+    "no Secret/deploy-key/PAT/proxy change"
+  ],
+  "required_wiring": "Existing required reader/bootstrap commands discover updated tests; no workflow change needed."
+}

@@ -65,7 +65,7 @@ jobs:
           SRC_CHANGED=$(echo "$CHANGED" \
             | grep '^services/agent/wechat-rpa/' \
             | grep '\.py$' \
-            | grep -v '^services/agent/wechat-rpa/tests/' || true)
+            | grep -v '/tests/' || true)
 
           if [ -z "$SRC_CHANGED" ]; then
             echo "✅ 未改 wechat-rpa 业务 .py，逻辑单测闸门不适用"
@@ -77,7 +77,7 @@ jobs:
 
           # 必须同时改/加 tests/ 下的逻辑单测
           TEST_CHANGED=$(echo "$CHANGED" \
-            | grep '^services/agent/wechat-rpa/tests/.*\.py$' || true)
+            | grep -E '^services/agent/wechat-rpa/(.*/)?tests/.*\.py$' || true)
 
           if [ -z "$TEST_CHANGED" ]; then
             echo ""

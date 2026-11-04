@@ -1,0 +1,17 @@
+{
+  "revision": "5af2b56cd6ffd29e3a9111bc2cde813ef4f642cd",
+  "files": {
+    ".github/actions/skills-source/action.yml": {
+      "fixture": "action.yml.fixture",
+      "sha256": "90e9d125ed3346871e88d975773796d2c14ee46adf0efe23bd2b92bb2e7ae435"
+    },
+    "scripts/skills-source.py": {
+      "fixture": "skills-source.py.fixture",
+      "sha256": "500517f4b1493696062d36aa0c1c45d9b1d63f0093f96ae290aa0f5d8f022ab6"
+    },
+    "scripts/ensure-skills-source.sh": {
+      "fixture": "ensure-skills-source.sh.fixture",
+      "sha256": "d605139c61e0567e8ec0fbe94356ca63f81ece4d613dc6307814a54f20c233d0"
+    }
+  }
+}

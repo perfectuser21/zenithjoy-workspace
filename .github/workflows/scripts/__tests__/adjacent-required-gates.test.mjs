@@ -72,3 +72,18 @@ test('wechat: current Android service command runs all offline safety contracts 
 for(const path of ['services/agent/modules/line04/index.ts','services/agent-android/app/src/main/MainActivity.kt'])test(`wechat: obsolete Windows CS and generic APK paths do not impersonate Android CS: ${path}`,()=>temp(dir=>{
  const{base,head}=fixture(dir,path),r=detect(wechat,dir,'pull_request',event(base,head),head);assert.equal(r.status,0,r.stderr);assert.deepEqual(r.outputs,{cs_backend:'false',android_cs:'false'});
 }));
+
+for (const scenario of [
+  {name:'source without tests fails', paths:['voice_call/call_rpa.py'], status:1},
+  {name:'top level test alone is not source', paths:['tests/test_reset_stage.py'], status:0},
+  {name:'nested test alone is not source', paths:['voice_call/tests/test_call_rpa.py'], status:0},
+  {name:'nested source and nested tests satisfy coverage gate', paths:['voice_call/call_rpa.py','voice_call/tests/test_call_rpa.py'], status:0},
+]) test(`RPA coverage gate: ${scenario.name}`,()=>temp(dir=>{
+  fixture(dir,`services/agent/wechat-rpa/${scenario.paths[0]}`);
+  for(const path of scenario.paths.slice(1)){const full=join(dir,'services/agent/wechat-rpa',path);mkdirSync(dirname(full),{recursive:true});writeFileSync(full,'test fixture');}
+  if(scenario.paths.length>1){git(dir,['add','.']);const head=git(dir,['commit-tree',git(dir,['write-tree']),'-p',git(dir,['rev-parse','HEAD']),'-m','include tests']);git(dir,['update-ref','refs/heads/change',head]);}
+  const w=parse(readFileSync(join(root,'.github/workflows/e2e-rpa-reset-stage.yml'),'utf8'));
+  const step=w.jobs['rpa-logic-test-gate'].steps.find(step=>step.run);
+  const result=runStep(step,{github:{base_ref:'main'}},dir);
+  assert.equal(result.status,scenario.status,result.stdout+result.stderr);
+}));

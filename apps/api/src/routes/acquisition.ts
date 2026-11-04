@@ -1611,30 +1611,27 @@ acquisitionRouter.get('/collect/:task_id', async (req: Request, res: Response) =
 });
 
 // GET /api/acquisition/collect/:task_id/sse — SSE 实时状态推送
-acquisitionRouter.get('/collect/:task_id/sse', async (req: Request, res: Response) => {
+const collectSseLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+acquisitionRouter.get('/collect/:task_id/sse', collectSseLimit, tenantContext, async (req: Request, res: Response) => {
   const taskId = req.params.task_id;
-  const taskRes = await pool.query(
-    `SELECT id, status, video_count, lead_count_raw, created_at, ended_at
-       FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
-    [taskId]
-  );
-  if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
-  const t = taskRes.rows[0] as {
-    id: string;
-    status: string;
-    video_count: number;
-    lead_count_raw: number;
-    created_at: Date;
-    ended_at: Date | null;
-  };
-  sseService.subscribe(taskId, req, res, {
-    task_id: t.id,
-    status: t.status,
-    video_count: t.video_count,
-    lead_count_raw: t.lead_count_raw,
-    created_at: t.created_at ? new Date(t.created_at).toISOString() : null,
-    ended_at: t.ended_at ? new Date(t.ended_at).toISOString() : null,
-  });
+  if (!UUID_RE.test(taskId)) return fail(res, 400, 'INVALID_TASK_ID', 'task_id 必须是 UUID');
+  try {
+    const taskRes = await pool.query(
+      `SELECT id, status, video_count, lead_count_raw, created_at, ended_at
+         FROM zenithjoy.acquisition_collect_tasks WHERE id = $1 AND tenant_id = $2`,
+      [taskId, req.tenantId]
+    );
+    if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+    const t = taskRes.rows[0];
+    sseService.subscribe(taskId, req, res, {
+      task_id: t.id, status: t.status, video_count: t.video_count, lead_count_raw: t.lead_count_raw,
+      created_at: t.created_at ? new Date(t.created_at).toISOString() : null,
+      ended_at: t.ended_at ? new Date(t.ended_at).toISOString() : null,
+    });
+  } catch (error) {
+    console.error('[acquisition/sse] task lookup failed:', error);
+    return fail(res, 500, 'DB_ERROR', '采集任务查询失败');
+  }
 });
 
 // GET /api/acquisition/agent/task-stream — agent 长连 SSE，中台推新采集任务（秒级，替代 30s 轮询）

@@ -8,7 +8,7 @@
  * (creator.douyin.com/ 初始页不含 /login) → handler 没真等扫码就 success → cached cookie 复用 →
  * `account_nickname: '抖音创作者中心'` (默认页标题不是真昵称)。
  *
- * 修：换成轮询 storageState cookie 直到出现抖音 session cookie (sessionid_ss / sessionid / sid_tt)
+ * 修：换成轮询 storageState cookie 直到出现抖音 session cookie (sessionid_ss / sessionid)
  * 才算真扫码完成。timeout 仍 10 分钟。
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -38,7 +38,7 @@ describe('Workstream 2a — qr-bind-douyin-burner handler [BEHAVIOR]', () => {
     expect(parseInt(m![1], 10)).toBeGreaterThanOrEqual(600000);
   });
 
-  it('handler 真等抖音 session cookie (sessionid_ss / sessionid / sid_tt) 出现才 success', async () => {
+  it('handler 真等抖音 session cookie (sessionid_ss / sessionid) 出现才 success', async () => {
     const cookieRef: { current: Array<{ name: string; domain: string; value: string }> } = {
       current: [],
     };

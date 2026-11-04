@@ -1,0 +1,464 @@
+{
+  "lane": "media",
+  "task_id": "c7dbedc7-e1b8-4e6f-a507-25778a67e86e",
+  "base": "32208ce1855331fb356bf97d3734bb9c067906a1",
+  "worktree": "/Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout",
+  "first_commit": "f8ba77c63",
+  "units_total": 22,
+  "aliases_repaired": 27,
+  "rows": [
+    {
+      "unit_id": "video-stale-recovery-http",
+      "paths": [
+        ".github/workflows/scripts/smoke/agent-v110-stale-recovery-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "修复stale查询缺license谓词和agent恢复请求缺license；真实两license+匿名精确集合，fresh/stale负例，模块HTTP只更新返回job。",
+      "canonical_groups": [
+        "pg",
+        "agent"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/pipeline.test.ts",
+        "services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "video-pipeline-response-and-compose",
+      "paths": [
+        ".github/workflows/scripts/smoke/ai-video-checkpoint-smoke.sh",
+        ".github/workflows/scripts/smoke/ai-video-pipeline-new-fields-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "统一当前/api/ai-video/jobs及.job信封；真实SQL原文/画幅/空detected持久化，三模板router返回HTML/aspect/phoneRect及invalid400。",
+      "canonical_groups": [
+        "pg",
+        "api",
+        "dashboard"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/pipeline.test.ts",
+        "apps/api/src/controllers/__tests__/media-provider-http.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "video-api",
+      "paths": [
+        ".github/workflows/scripts/smoke/ai-video-pipeline-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "以真实当前router+SQL生命周期、HTTP provider adapter及旧source/upload-output已删除合同取代任意404/500即通过。",
+      "canonical_groups": [
+        "pg",
+        "api"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/pipeline.test.ts",
+        "apps/api/src/routes/__tests__/ai-video.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "ai-video-pipeline-ws1-original-script",
+      "paths": [
+        ".github/workflows/scripts/smoke/ai-video-pipeline-ws1-original-script-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "删除生产默认license和旧/api/ai-video-pipeline路由；当前真实创建.job原文及画幅落库读回。",
+      "canonical_groups": [
+        "pg"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/pipeline.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "video-original-script-contract",
+      "paths": [
+        ".github/workflows/scripts/smoke/ai-video-pipeline-ws1-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "三份重复WS1/fields壳归并同一SQL+HTTP原文合同，空字段/精确snake_case和禁止旧字段真实断言。",
+      "canonical_groups": [
+        "pg"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/pipeline.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "aidge-contracts",
+      "paths": [
+        ".github/workflows/scripts/smoke/aidge-capability-center-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "将aidge当前真实router/viewer/catalog/gateway/translation及真实React页面/access suite纳入统一required consumer，去重复全仓typecheck。",
+      "canonical_groups": [
+        "api",
+        "dashboard"
+      ],
+      "canonical_tests": [
+        "apps/api/src/routes/aidge.test.ts",
+        "apps/api/src/middleware/aidge-viewer.test.ts",
+        "apps/api/src/services/aidge-gateway.test.ts",
+        "apps/dashboard/src/pages/__tests__/AidgeWorkspacePage.test.tsx",
+        "apps/dashboard/src/api/aidge-access.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "analyze-transcript-smoke",
+      "paths": [
+        ".github/workflows/scripts/smoke/analyze-transcript-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "真实router发往loopback模型边界，显式keep决策保持原timing/text；空segments400、provider503→502、坏JSON500。修复postJson忽略上游HTTP状态导致假200。",
+      "canonical_groups": [
+        "api"
+      ],
+      "canonical_tests": [
+        "apps/api/src/controllers/__tests__/media-provider-http.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "dynamic-template-falsegreen-wrapper",
+      "paths": [
+        ".github/workflows/scripts/smoke/dynamic-template-compose-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "404/无HTML/无API跳过成功已移除；真实已有job+router+模型边界+HTML多scene/seek，无React/Babel CDN。",
+      "canonical_groups": [
+        "api"
+      ],
+      "canonical_tests": [
+        "apps/api/src/controllers/__tests__/media-provider-http.test.ts",
+        "apps/api/src/controllers/__tests__/compose-template.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "video-remake-schema-probe",
+      "paths": [
+        ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "退役旧9节点schema探针对成片成功的错误推断，当前 successor 是main#2402 CreativeCanvas/Wan3；required保护当前UI/API/provider全参数/asset ownership/idempotency和共享真实抽帧。旧Python/noop工作流未重新连接。",
+      "canonical_groups": [
+        "api",
+        "dashboard"
+      ],
+      "canonical_tests": [
+        "apps/api/src/services/__tests__/video-frame-extract.test.ts",
+        "apps/api/src/services/__tests__/ali-video-provider.test.ts",
+        "apps/api/src/routes/__tests__/video-tools.test.ts",
+        "apps/dashboard/src/pages/__tests__/CreativeCanvasPage.test.tsx"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "video-job-api",
+      "paths": [
+        ".github/workflows/scripts/smoke/local-video-path-ui-smoke.sh",
+        ".github/workflows/scripts/smoke/video-aspect-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "两份UI/aspect旧壳归并真实表单交互、.job创建和SQL fields/agent filter；同时修完成页指向已删除output路由，现展示SSE实际output_dir。",
+      "canonical_groups": [
+        "pg",
+        "dashboard",
+        "agent"
+      ],
+      "canonical_tests": [
+        "apps/dashboard/src/pages/__tests__/LocalVideoPipelinePage.test.ts",
+        "apps/api/tests/integration/media/pipeline.test.ts",
+        "services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "local-video-pipeline-smoke",
+      "paths": [
+        ".github/workflows/scripts/smoke/local-video-pipeline-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "从首页200/unknown404弱成功改当前真实API及React流程；当前本地pipeline输出位置有真实SSE完成事件回归，不伪造两份下载。",
+      "canonical_groups": [
+        "api",
+        "dashboard"
+      ],
+      "canonical_tests": [
+        "apps/dashboard/src/pages/__tests__/LocalVideoPipelinePage.test.ts",
+        "apps/api/src/routes/__tests__/ai-video.test.ts",
+        "apps/api/tests/integration/media/pipeline.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "mashup-render",
+      "paths": [
+        ".github/workflows/scripts/smoke/mashup-render-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "统一真实concat/renderer及fail-closed/preview queue现役实现测试；新增真音轨/裁剪/画幅及中文字幕渲染前后解码像素hash负对照，缺libass/中文字体必须失败。",
+      "canonical_groups": [
+        "api",
+        "render"
+      ],
+      "canonical_tests": [
+        "apps/api/src/services/__tests__/media-render-runtime.test.ts",
+        "apps/api/src/services/__tests__/mashup-render-ffmpeg.test.ts",
+        "apps/api/src/services/__tests__/mashup-render.test.ts",
+        "apps/api/src/services/__tests__/mashup-preview-queue.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "materials-delete-real-storage",
+      "paths": [
+        ".github/workflows/scripts/smoke/material-delete-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "真实临时PG双tenant、HTTP文件对象先上传可读/跨tenant404仍可读/published409/删除200后HTTP404且SQL无行/重复404；COS SDK真实adapter边界另测。",
+      "canonical_groups": [
+        "pg",
+        "api"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/materials.test.ts",
+        "apps/api/src/routes/__tests__/materials-delete.test.ts",
+        "apps/api/src/services/__tests__/material-storage-cos.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "material-upload",
+      "paths": [
+        ".github/workflows/scripts/smoke/material-direct-upload-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "删除未定义SIZE脚本和真实COS凭据依赖；真实presign→loopback PUT字节→HEAD→complete入库；尺寸不符400及跨tenant403负例。",
+      "canonical_groups": [
+        "pg",
+        "api"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/materials.test.ts",
+        "apps/api/src/services/__tests__/material-storage-cos.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "materials-upload-pg-isolation",
+      "paths": [
+        ".github/workflows/scripts/smoke/material-upload-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "不再依赖外部DB可用则skip；由runner创建仅Unix socket一次性PG，真实validateLicense+multer+persistMaterials+文件对象；客户端tenant忽略/双tenant dedupe与精确list/无效凭据401。",
+      "canonical_groups": [
+        "pg",
+        "api"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/materials.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "line02-report-videos-real-protocol",
+      "paths": [
+        ".github/workflows/scripts/smoke/node-agent-report-videos-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "以真实line02模块fork+IPC+临时浏览器边界可执行文件+loopbackHTTP取代复制的正则和复制server逻辑；验证去重/identity/empty/error/503重试/409不重试。",
+      "canonical_groups": [
+        "agent"
+      ],
+      "canonical_tests": [
+        "services/agent/modules/line02/__tests__/report-videos-runtime.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "orientation-model",
+      "paths": [
+        ".github/workflows/scripts/smoke/orient-dblog-smoke.sh",
+        ".github/workflows/scripts/smoke/vision-orientation-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "不实调付费视觉；multipart字节通过真实router+loopback provider，断言当前模型、方向/置信度/理由；真实PG验证同一服务字段持久化，非法方向保守none，坏JSON明确失败。",
+      "canonical_groups": [
+        "api",
+        "agent"
+      ],
+      "canonical_tests": [
+        "apps/api/src/controllers/__tests__/media-provider-http.test.ts",
+        "apps/api/tests/integration/media/pipeline.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "rotation-normalize",
+      "paths": [
+        ".github/workflows/scripts/smoke/rotation-normalize-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "移除manifest可达和grep自证，直接import生产有符号filter，真ffmpeg像素90度旋转后ffprobe宽高；display_matrix/legacy/none六方向映射。",
+      "canonical_groups": [
+        "agent"
+      ],
+      "canonical_tests": [
+        "services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "sprint-2-1b-douyin-video-real-publish",
+      "paths": [
+        ".github/workflows/scripts/smoke/sprint-2-1b-douyin-video-real-publish-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "移除real-publish命名造成的交付误导，实际执行保留Windows publisher五函数真实导入/selector adapter调用；不启动浏览器、不发布。",
+      "canonical_groups": [
+        "agent"
+      ],
+      "canonical_tests": [
+        "services/agent/publishers/douyin-publisher/__tests__/publish-douyin-video.test.cjs"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "collect-report",
+      "paths": [
+        ".github/workflows/scripts/smoke/stage1-report-videos-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "旧脚本缺task400优先假设退役，真实agent模块HTTP请求协议已接统一required；服务端current acquisition report-videos由business required suite共同负责。",
+      "canonical_groups": [
+        "agent"
+      ],
+      "canonical_tests": [
+        "services/agent/modules/line02/__tests__/report-videos-runtime.test.ts",
+        "apps/api/src/routes/acquisition.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "template-compose",
+      "paths": [
+        ".github/workflows/scripts/smoke/template-c-r-smoke.sh",
+        ".github/workflows/scripts/smoke/template-video-smoke.sh",
+        ".github/workflows/scripts/smoke/ws2-three-template-builders-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "三份C/R/WG模板壳归并当前实际router调用builder，显式HTML/多scene/seek/phoneRect/aspect和invalid模板400；去生产任意job与窗口grep。",
+      "canonical_groups": [
+        "api",
+        "pg"
+      ],
+      "canonical_tests": [
+        "apps/api/src/controllers/__tests__/media-provider-http.test.ts",
+        "apps/api/src/controllers/__tests__/compose-template.test.ts",
+        "apps/api/src/templates/__tests__/template-c-r.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    },
+    {
+      "unit_id": "video-job-isolation",
+      "paths": [
+        ".github/workflows/scripts/smoke/video-job-tenant-isolation-smoke.sh"
+      ],
+      "implementation_state": "implemented_verified_code_contract",
+      "actual_action": "当前.pending .data信封；两license各自产job+匿名unlicensed集合互斥；invalid license401，stale同样隔离。注入去license谓词变异已被真实SQL集合断言抓住。",
+      "canonical_groups": [
+        "pg"
+      ],
+      "canonical_tests": [
+        "apps/api/tests/integration/media/pipeline.test.ts"
+      ],
+      "required_consumer": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+      "integration_dependency": "root applies required blocking canonical wiring and excludes 27 aliases per round3-media-wiring-requests.json",
+      "remaining_external_delivery": "Paid model/content quality, physical device publishing and real COS account/network behavior are external acceptance; no such success is claimed."
+    }
+  ],
+  "validation": {
+    "api": {
+      "suites": 27,
+      "tests": 271,
+      "skipped": 0
+    },
+    "dashboard": {
+      "suites": 6,
+      "tests": 41,
+      "skipped": 0
+    },
+    "agent": {
+      "suites": 4,
+      "tests": 25,
+      "skipped": 0
+    },
+    "pg": {
+      "suites": 2,
+      "tests": 13,
+      "skipped": 0
+    },
+    "render": {
+      "suites": 1,
+      "tests": 3,
+      "skipped": 0
+    },
+    "runner_negative_guards": 8,
+    "api_typecheck": "pass",
+    "dashboard_typecheck": "pass",
+    "product_map_check": "pass after existing ensure-skills-source restored fixed source",
+    "mutations": "3/3 detected; sources restored; see round3-media-mutation-evidence.json"
+  },
+  "render_environment": "Host ffmpeg9 lacks libass. Actual render verification used existing local Docker image pr2220-l3-node22-complete:diagnosis with --network none, /tmp scratch mount, read-only host Heiti Chinese font, temporary ffmpeg/ffprobe/fc-list wrappers. No images downloaded and no production settings changed. CI native ffmpeg+fontconfig+fonts-noto-cjk must supply this capability.",
+  "scope": "CI code regression with real current imports, HTTP, temporary files, disposable PostgreSQL and ffmpeg. No production/device/cloud/model delivery claim."
+}

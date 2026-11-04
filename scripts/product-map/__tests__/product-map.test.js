@@ -65,7 +65,7 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
 
   const anchorGp = line00Gps.find(g => g.id === 'gp_anchor_enforcement');
   assert.equal(anchorGp.status, 'active', 'gp_anchor_enforcement 刀1-5全部合并，§8验收标准满足，须为active');
-  assert.ok(anchorGp.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh'));
+  assert.ok(anchorGp.smoke_files.includes('.github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh'));
 
   const healthGp = line00Gps.find(g => g.id === 'line_health');
   assert.equal(healthGp.status, 'active', 'line_health 本轮不受影响，须保持 active');
@@ -124,13 +124,13 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
     '.github/workflows/scripts/smoke/material-tagging-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh',
-    '.github/workflows/scripts/smoke/mashup-render-smoke.sh',
+    '.github/workflows/scripts/smoke/media-contracts-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-history-smoke.sh',
   ]);
   assert.deepEqual(batchMashup.steps.map(s => s.id), ['step1', 'step2', 'step3', 'step4']);
   const viralRemake = customerGps.find(g => g.id === 'viral_video_remake');
   assert.equal(viralRemake.status, 'active');
-  assert.deepEqual(viralRemake.smoke_files, ['.github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh']);
+  assert.deepEqual(viralRemake.smoke_files, ['.github/workflows/scripts/smoke/media-contracts-smoke.sh']);
   // 非 deprecated 的客户 GP 都必须有非空 steps（占位 proposed 的也要求写出步骤草案）；
   // deprecated 老 GP 的 steps 已迁入拆分后的子 GP，不再要求；
   // line05/line07 新增 GP 不要求 steps（PRD [ASSUMPTION] 只授权定稿 id/name，未授权编造业务步骤内容，

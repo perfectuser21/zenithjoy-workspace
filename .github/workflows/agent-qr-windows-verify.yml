@@ -33,6 +33,17 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.build.json
       - name: TypeScript test contracts (Vitest module semantics)
         run: npx tsc --noEmit --module esnext --moduleResolution bundler
+      - name: Install real Windows media tools
+        shell: powershell
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install ffmpeg --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw 'ffmpeg package installation failed' }
+          ffmpeg -version
+          if ($LASTEXITCODE -ne 0) { throw 'ffmpeg is not runnable' }
+          ffprobe -version
+          if ($LASTEXITCODE -ne 0) { throw 'ffprobe is not runnable' }
       - name: Run actual agent unit suites on Windows
         run: npm test -- --reporter=verbose
 

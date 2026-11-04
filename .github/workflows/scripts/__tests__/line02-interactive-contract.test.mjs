@@ -73,3 +73,19 @@ for(const row of [
  assert.ifError(r.error);assert.equal(r.status===0,row.pass,r.stdout+r.stderr);const body=readFileSync(summary,'utf8');assert.doesNotMatch(body,/微信/);assert.match(body,/account-scan/);
  if(row.pass)assert.equal(existsSync(calls),false);else{const observed=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);assert.equal(observed.length,2);assert.equal(observed[1][1],'create');if(row.code==='3')assert.match(observed[1].join(' '),/envfail/);}
 });
+
+test('headful operator probe stays outside automatic Linux glob with explicit candidate and workflow callers',()=>{
+ const path='.github/workflows/scripts/operator-probes/line02-keyword-comment.sh';
+ const source=read(path);
+ const runner=read('.github/workflows/scripts/run-line02-candidate.ps1');
+ assert.ok(runner.includes(path.replaceAll('/','\\')),'actual PowerShell candidate launcher must call relocated probe');
+ assert.doesNotMatch(runner,/scripts\\smoke\\line02-keyword-comment-smoke/);
+ const wf=YAML.parse(read('.github/workflows/e2e-line02-keyword-comment.yml'));
+ for(const event of ['push','pull_request']) {
+  assert.ok(wf.on[event].paths.includes(path));
+  assert.ok(!wf.on[event].paths.includes('.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh'));
+ }
+ assert.match(source,/--source-only/);
+ assert.match(source,/CANDIDATE_SHA_MISMATCH/);
+ assert.match(source,/DOUYIN_SESSION_EXPIRED/);
+});

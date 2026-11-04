@@ -15,6 +15,7 @@
 //     绕过 pkg 二进制内 require('playwright') 在 Node 18+ 的 "Invalid host defined options" 崩溃。
 //     测试路径（options.chromiumLauncher 注入）仍走内部逻辑，保持单元测试可控。
 
+import { findDouyinSessionCookie } from '../../publishers/douyin-cookie-admission.cjs';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ import { spawn } from 'node:child_process';
 
 // 各平台登录后必然出现的 Session Cookie 名（优先于 URL 检测，避免 SPA 误判）
 const PLATFORM_SESSION_COOKIES: Record<string, string[]> = {
-  douyin:       ['sessionid_ss', 'sessionid', 'sid_tt'],
+  douyin:       ['sessionid_ss', 'sessionid'],
   toutiao:      ['sessionid', 'sid_tt'],
   kuaishou:     ['userId', 'kuaishou.sid', 'passToken'],
   xiaohongshu:  ['web_session', 'galaxy_creator_session_info'],
@@ -107,6 +108,7 @@ function defaultIsSessionReady(storageState: Record<string, unknown>, platform: 
   const cookieNames = PLATFORM_SESSION_COOKIES[platform] ?? [];
   if (cookieNames.length === 0) return false;
   const cookies = ((storageState as StorageStateShape).cookies ?? []);
+  if (platform === 'douyin') return !!findDouyinSessionCookie(cookies);
   return cookies.some(
     (c) => typeof c.value === 'string' && c.value.length > 0 && cookieNames.includes(c.name),
   );

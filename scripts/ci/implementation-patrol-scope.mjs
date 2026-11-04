@@ -1,6 +1,6 @@
 /** 巡查范围分类只声明适用性；不是准入PASS，也不缩减原门禁diff。 */
 import {execFileSync,spawnSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync,appendFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync,appendFileSync,lstatSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -114,10 +114,44 @@ export function classifyPatrolDiff({repoRoot,base,head,registeredRevision=REGIST
   contract_source:{path:CONTRACT_PATH,registered_revision:registeredRevision,registered_sha256:sha(registered.bytes),base_sha256:sha(before.bytes),head_sha256:sha(after.bytes)}};
 }
 
-/** 真跑共享glob的隔离巡查消费者：成功须执行，失败须阻断。无手机、数据库或API。 */
+/** Verify the actual unconditional L3 patrol caller and run its current offline suite. */
+export function verifyPatrolRequiredConsumer(repoRoot){
+ const w=YAML.parse(readFileSync(join(repoRoot,'.github/workflows/ci-l3-code.yml'),'utf8'));
+ const job=w.jobs?.['api-scripts-test'],gate=w.jobs?.['l3-passed'];
+ const command='node --test scripts/phone-account-patrol/implementation-regression.test.mjs';
+ const matches=job?.steps?.filter(s=>s.run===command)||[],gateStep=gate?.steps?.find(s=>s.name==='L3 Code Gate');
+ const permanent=s=>s&&s.if===undefined&&s['continue-on-error']===undefined;
+ if(['pull_request','push','merge_group'].some(event=>!Object.hasOwn(w.on||{},event)||w.on[event]?.paths!==undefined||w.on[event]?.['paths-ignore']!==undefined)||
+    !permanent(job)||job.needs!==undefined||!(job['timeout-minutes']>0)||matches.length!==1||!permanent(matches[0])||
+    gate?.if!=='always()'||gate['continue-on-error']!==undefined||!gate.needs?.includes('api-scripts-test')||
+    !permanent(gateStep)||gateStep.run!=='node scripts/ci/required-gate.mjs code'||gateStep.env?.GATE_NEEDS!=='${{ toJSON(needs) }}')fail('REQUIRED_CONSUMER_DISABLED');
+ const env={...process.env,PYTHONDONTWRITEBYTECODE:'1'};delete env.NODE_TEST_CONTEXT;
+ const run=(args,extra={})=>spawnSync(process.execPath,args,{cwd:repoRoot,env:{...env,...extra},encoding:'utf8',timeout:90000,maxBuffer:2*1024*1024});
+ const result=run(['--test','--test-reporter=tap','scripts/phone-account-patrol/implementation-regression.test.mjs']);
+ if(result.error||result.signal||result.status!==0||!(Number(result.stdout.match(/^# tests ([0-9]+)$/m)?.[1])>=2)||!/^# fail 0$/m.test(result.stdout)||!/^# skipped 0$/m.test(result.stdout)||!/^# todo 0$/m.test(result.stdout))fail('REQUIRED_RUNTIME_FAILED');
+ const needs=Object.fromEntries(gate.needs.map(job=>[job,{result:'success'}]));
+ needs.changes.outputs=Object.fromEntries(['dashboard','api','geoai','ci','agent_modules'].map(key=>[key,'false']));
+ for(const state of ['success','failure','cancelled','skipped','missing']){
+  if(state==='missing')delete needs['api-scripts-test'];else needs['api-scripts-test']={result:state};
+  const r=run(['scripts/ci/required-gate.mjs','code'],{GATE_NEEDS:JSON.stringify(needs)});
+  if(r.error||r.signal||(state==='success'?r.status!==0:r.status===0))fail('REQUIRED_GATE_BYPASSED');
+ }
+ return {runtime_verified:true,gate_failure_skip_blocked:true,workflow:'.github/workflows/ci-l3-code.yml',job:'api-scripts-test',command};
+}
+
+// The original baseline alias retains its distinct full-directory compileall
+// obligation alongside the required L3 regression suite. Pin its actual commands
+// before exercising both real glob workers with isolated patrol sentinels.
+/** Shared glob consumer: execution, failure and complete shard coverage stay strict. */
 export function verifyPatrolSmokeConsumer(repoRoot){
- const name='phone-account-patrol-smoke.sh',baseline=readFileSync(join(repoRoot,'.github/workflows/scripts/smoke-baseline.txt'),'utf8');
- if(!baseline.split(/\r?\n/).includes(name))fail('SMOKE_BASELINE_REMOVED');
+ const name='phone-account-patrol-smoke.sh';
+ const alias=join(repoRoot,'.github/workflows/scripts/smoke',name);
+ try{
+  // Exact original bytes include both test_runner.py and full-directory compileall.
+  // Do not infer their execution merely from an alias/baseline filename.
+  const baseline=readFileSync(join(repoRoot,'.github/workflows/scripts/smoke-baseline.txt'),'utf8').split('\n');
+  if(!lstatSync(alias).isFile()||sha(readFileSync(alias))!=='de1eecb6d8c760c9ef72615fdc19d55f439b257e08efa54db74b418b84394b85'||baseline.filter(row=>row===name).length!==1)fail('SMOKE_ALIAS_DISABLED');
+ }catch{fail('SMOKE_ALIAS_DISABLED')}
  const w=YAML.parse(readFileSync(join(repoRoot,'.github/workflows/ci-smoke-glob-runner.yml'),'utf8'));
  const worker=w.jobs?.['smoke-glob-shards'],aggregate=w.jobs?.['smoke-glob-runner'],gate=w.jobs?.gate;
  const permanent=s=>s&&s.if===undefined&&s['continue-on-error']===undefined;

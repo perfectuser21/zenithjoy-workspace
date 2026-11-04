@@ -45,19 +45,21 @@ router.get('/active', controller.getActiveGenerations.bind(controller));
 router.get('/task/:id', controller.getGenerationById.bind(controller));
 
 // GET /api/ai-video/task/:id/sse — AI 视频生成任务实时状态推送
-router.get('/task/:id/sse', async (req, res) => {
-  const generation = await controller.getGenerationByIdRaw(req.params.id);
-  if (!generation) {
-    res.status(404).json({ error: 'Video generation not found' });
-    return;
-  }
-  const { sseService } = await import('../services/sse.service');
-  sseService.subscribe(req.params.id, req, res, {
-    id: generation.id,
-    status: generation.status,
-    progress: (generation as { progress?: number }).progress ?? 0,
-    error: (generation as { error_message?: string }).error_message ?? undefined,
-  });
+router.get('/task/:id/sse', async (req, res, next) => {
+  try {
+    const generation = await controller.getGenerationByIdRaw(req.params.id);
+    if (!generation) {
+      res.status(404).json({ error: 'Video generation not found' });
+      return;
+    }
+    const { sseService } = await import('../services/sse.service');
+    sseService.subscribe(req.params.id, req, res, {
+      id: generation.id,
+      status: generation.status,
+      progress: (generation as { progress?: number }).progress ?? 0,
+      error: (generation as { error_message?: string }).error_message ?? undefined,
+    });
+  } catch (error) { next(error); }
 });
 
 // POST /api/ai-video/generate

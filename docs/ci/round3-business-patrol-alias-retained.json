@@ -1,0 +1,82 @@
+{
+  "base_sha": "20e889e2de131fed91ace8d0022359603ccbf083",
+  "source_baseline": "d0f14535c40b17e6cb13f2be3c031a2e89fd3392",
+  "disposition": "retain original alias and baseline because its full-directory Python syntax obligation is not identical to the current required Node regression suite",
+  "alias": {
+    "path": ".github/workflows/scripts/smoke/phone-account-patrol-smoke.sh",
+    "source_blob": "f3a237035758f6f2558e596e0010e15a55b32c6c",
+    "mode": "100644",
+    "sha256": "de1eecb6d8c760c9ef72615fdc19d55f439b257e08efa54db74b418b84394b85",
+    "restored_bytes_exact": true
+  },
+  "dimensions": {
+    "current_value": "Original alias runs actual20 test_runner.py cases plus compileall for every Python source under scripts/phone-account-patrol. Retain that distinct syntax safeguard alongside the unconditional required L3 all-Python/JS regression oracle.",
+    "active_status": "Restore the original top-level smoke alias and exactly one baseline entry. Existing real glob workers/required aggregate discover and execute it; it is not a helper or reviewed required-duplicate exclusion. Root separately restores its active registry/central disposition.",
+    "real_effect": "Actual original alias ran under bash: unittest20 passed and full-directory compileall exited0. PYTHONPYCACHEPREFIX points only to a newly owned temporary directory. No device/account/HTTP/writeback action was invoked.",
+    "test_and_blocking": "The existing verifyPatrolSmokeConsumer now requires a regular original alias with exact reviewed content digest and exactly one real baseline line before running its existing real-worker/aggregate failure/coverage sentinels. New deleted-alias/missing-baseline/weakened-unittest/removed-compileall cases first failed without this guard, then reject after the fix. Existing required L3 runtime and skipped/failure/missing aggregate negatives remain unchanged.",
+    "duplication_and_obsolescence": "Retirement was corrected to retention. Required Node oracle includes all test_*.py and JS contracts, while compileall checks even unimported Python source; it is not claimed completely redundant. No new scope exception, contract auxiliary path or selective central diff is introduced.",
+    "runtime_and_maintenance_cost": "Measured original20 unit tests took0.062s; alias plus actual syntax check exited0 in one bounded local execution. Caller-related93 tests/three files took26.0s, primarily existing real glob consumer fixtures. Retain this small cost rather than create coupled classifier equivalence rules.",
+    "retirement_and_dependencies": "Original source recovered from exact d0f14535 commit/blob above. Business prefix, contract, dedicated workflow and pinned skill lock remain equal to main. Current classification algorithm is untouched; restoring its only owned diff naturally removes patrol applicability while preserving the complete mixed changed_files list and original central base/head gate. Future actual business or owned-source changes still classify applicable."
+  },
+  "verification": {
+    "red": {
+      "new_negative_cases": 4,
+      "failed": 4,
+      "other_cases_filtered": 77,
+      "scope": "Targeted red run only; filtered cases are not claimed executed."
+    },
+    "caller_related_green": {
+      "files": 3,
+      "tests": 93,
+      "passed": 93,
+      "skipped": 0
+    },
+    "original_alias": {
+      "unit_tests": 20,
+      "compileall_exit": 0,
+      "exit": 0,
+      "pycache_scope": "new owned /private/tmp/zj-patrol-alias-pycache-*"
+    },
+    "selector": {
+      "exit": 0,
+      "raw_top_level_count": 121,
+      "baseline_count": 74,
+      "selected_count": 114,
+      "alias_selected": true,
+      "helper_manifest_changed": false,
+      "required_duplicate_manifest_changed": false
+    },
+    "actual_d0_to_restoration_head_classification": {
+      "command": "node scripts/ci/implementation-patrol-scope.mjs REPO d0f14535c40b17e6cb13f2be3c031a2e89fd3392 HEAD OWNED_OUT",
+      "expected_and_checked": "not_applicable; patrol_paths empty; full changed_files retained",
+      "raw_log": "/tmp/pr2406-patrol-restored-real-scope.log",
+      "note": "Run against the committed restoration HEAD after this receipt is committed; final execution result supplied in handoff. No secret/source resolver needed because lock and owned .md paths do not change."
+    }
+  },
+  "logs": {
+    "red": {
+      "path": "/tmp/pr2406-patrol-alias-red.log",
+      "sha256": "5275a952b9221deb453e932932c28525625fd0aa7a2a148083d84774c83534a5"
+    },
+    "caller_related_green": {
+      "path": "/tmp/pr2406-patrol-alias-caller-green.log",
+      "sha256": "b07bb2608865c7bd65bb8c16925c86c07853dfb9095c2ebf4fc20c7725dbd633"
+    },
+    "original_alias": {
+      "path": "/tmp/pr2406-patrol-original-alias-runtime.log",
+      "sha256": "450d9f94213c666ff169d42087013828753c164482308df26aa577ce33f9131f"
+    },
+    "selection": {
+      "path": "/tmp/pr2406-patrol-restored-selector.json",
+      "sha256": "11b117fe0581362aa654972ec2129b0fb7ca5efeeff5e05d76923b0bce3d54f0"
+    }
+  },
+  "boundaries": [
+    "No classifier decision algorithm change",
+    "No central gate/base/head/diff slicing change",
+    "No auxiliary_paths change",
+    "No root registry/central report change in this child commit",
+    "No secret-bearing classification job runs candidate tests",
+    "No patrol runtime/business source or physical operation change"
+  ]
+}

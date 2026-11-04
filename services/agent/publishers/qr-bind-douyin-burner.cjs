@@ -77,16 +77,9 @@ function getBurnerUserDataDir() {
 
 // sid_tt 是访客级 session tracker，www.douyin.com 首次加载就会种（未登录也有）→ 不能用于检测登录完成。
 // 只认 sessionid_ss / sessionid：这两个仅在扫码登录完成后才出现。
-const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid'];
-
-function isSessionCookie(c) {
-  return (
-    typeof c?.value === 'string' &&
-    c.value.length > 20 &&  // 登录 session token 至少 20 位，排除短占位值
-    typeof c?.domain === 'string' &&
-    (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
-    SESSION_COOKIE_NAMES.includes(c.name)
-  );
+const { isDouyinSessionCookie } = require('./douyin-cookie-admission.cjs');
+function isSessionCookie(cookie) {
+  return isDouyinSessionCookie(cookie);
 }
 
 function emit(result) {
@@ -206,7 +199,9 @@ async function main() {
   process.exit(exitCode);
 }
 
-main().catch((e) => {
+if (require.main === module) main().catch((e) => {
   emit({ ok: false, sessionPath, error: String(e) });
   process.exit(1);
 });
+
+module.exports = { isSessionCookie };

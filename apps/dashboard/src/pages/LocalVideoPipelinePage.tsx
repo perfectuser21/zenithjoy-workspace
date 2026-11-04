@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FolderOpen, FileText, Play, Download, Loader2, CheckCircle, XCircle, Film } from 'lucide-react';
+import { FolderOpen, FileText, Play, Loader2, CheckCircle, XCircle, Film } from 'lucide-react';
 import axios from 'axios';
 import TemplateSelector from '../components/video-pipeline/TemplateSelector';
 import { fetchAccountMe } from '../api/account.api';
@@ -14,6 +14,7 @@ interface JobState {
   status: JobStatus;
   progress: number;
   error?: string;
+  output_dir?: string;
 }
 
 async function createJob(
@@ -34,10 +35,6 @@ async function createJob(
     headers: { Authorization: `Bearer ${licenseKey}` },
   });
   return res.data.job;
-}
-
-function downloadUrl(jobId: string, file: '9_16.mp4' | '16_9.mp4'): string {
-  return `${API_BASE}/ai-video/jobs/${jobId}/output/${file}`;
 }
 
 function ProgressBar({ progress, status }: { progress: number; status: JobStatus }) {
@@ -85,8 +82,8 @@ export default function LocalVideoPipelinePage() {
     sseRef.current = es;
     es.onmessage = (event) => {
       try {
-        const raw = JSON.parse(event.data) as { id: string; status: string; progress: number; error?: string };
-        setJob({ id: raw.id, status: raw.status as JobStatus, progress: raw.progress, error: raw.error });
+        const raw = JSON.parse(event.data) as { id: string; status: string; progress: number; error?: string; output_dir?: string };
+        setJob({ id: raw.id, status: raw.status as JobStatus, progress: raw.progress, error: raw.error, output_dir: raw.output_dir });
         if (raw.status === 'completed' || raw.status === 'failed') {
           es.close();
           sseRef.current = null;
@@ -254,25 +251,10 @@ export default function LocalVideoPipelinePage() {
           </div>
         )}
 
-        {/* 下载区 */}
         {isDone && job && (
-          <div className="grid grid-cols-2 gap-3">
-            <a
-              href={downloadUrl(job.id, '9_16.mp4')}
-              download="9_16.mp4"
-              className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-medium text-sm shadow-lg shadow-emerald-500/25 transition-all"
-            >
-              <Download className="w-4 h-4" />
-              下载 9:16 竖屏
-            </a>
-            <a
-              href={downloadUrl(job.id, '16_9.mp4')}
-              download="16_9.mp4"
-              className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-medium text-sm shadow-lg shadow-blue-500/25 transition-all"
-            >
-              <Download className="w-4 h-4" />
-              下载 16:9 横屏
-            </a>
+          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-900 dark:text-emerald-100 text-sm">
+            <p>视频已保存到执行电脑的本地文件夹。</p>
+            {job.output_dir ? <p className="mt-2 font-mono break-all">{job.output_dir}</p> : <p className="mt-2">请在执行电脑上查看输出目录。</p>}
           </div>
         )}
 

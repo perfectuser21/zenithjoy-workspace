@@ -26,6 +26,21 @@ export function getHyperframesCmd(): string {
   return getLocalHyperframesCmd() ?? 'hyperframes';
 }
 
+/** Structured renderer launch; Windows npm .cmd shims never receive job data. */
+export function getHyperframesProcess(platform: NodeJS.Platform = process.platform): { executable: string; args: string[] } {
+  if (fs.existsSync(ZJ_NODE_EXE) && fs.existsSync(ZJ_HF_MAIN)) return { executable: ZJ_NODE_EXE, args: [ZJ_HF_MAIN] };
+  if (platform !== 'win32') return { executable: 'hyperframes', args: [] };
+  const paths = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  const roots = [...new Set([path.join(APP_DATA, 'npm'), ...paths])];
+  const nodes = [ZJ_NODE_EXE, ...(path.basename(process.execPath).toLowerCase() === 'node.exe' ? [process.execPath] : []), ...paths.map(dir => path.join(dir, 'node.exe'))];
+  const node = nodes.find(file => fs.existsSync(file));
+  for (const root of roots) {
+    const cli = path.join(root, 'node_modules', 'hyperframes', 'dist', 'cli.js');
+    if (node && fs.existsSync(cli)) return { executable: node, args: [cli] };
+  }
+  throw new Error('HyperFrames requires an external Node executable and its installed CLI; refusing a shell .cmd shim');
+}
+
 export async function ensureHyperframes(
   executor: Executor = (cmd, opts) => execAsync(cmd, opts),
 ): Promise<string> {

@@ -751,19 +751,12 @@ class AgentService : Service() {
                     ?.let { AudioRecordService(it).captureAudioSnippet() }
             },
         )
-        val judgmentService = ContentJudgmentService(
-            agentId = { config.agentId },
-            httpBase = config.deriveHttpBase(),
-            // tenantId 由服务端按 agent_id 反查，设备端不持有；/judge-video 服务端兼容 header 反查
-            tenantId = { config.agentId },
-            screenCaptureService = screenCaptureService,
-            audioCaptureService = audioCaptureService,
-        )
-        collectPollLoop = AcquisitionCollectPollLoop(
+        collectPollLoop = createJudgedCollectPollLoop(
             agentId = { config.agentId },
             httpBase = config.deriveHttpBase(),
             scope = scope,
-            contentJudgmentService = judgmentService,
+            screenCaptureService = screenCaptureService,
+            audioCaptureService = audioCaptureService,
             // 判决门截图前打开视频（Brain issue 2b85b616 修复）：深链打开目标视频 +
             // 固定导航等待，保证 judgmentService 截图时屏幕上是这个视频，不是搜索结果页。
             // 复用与 DouyinCollectService.launchVideoByDeepLink 相同的 URI scheme。
@@ -1200,20 +1193,11 @@ class AgentService : Service() {
     /** cmd 指令入口：解析→入队。解析失败立即回执（不进队列）。 */
     private fun routeCommand(payload: Map<*, *>, msgId: String?) {
         val (screenW, screenH) = realScreenSize()
-        when (val parsed = CommandProtocol.parse(msgId, payload, screenW, screenH)) {
-            is ParseOutcome.Ok -> commandQueue?.submit(parsed.request)
-            is ParseOutcome.Err -> {
-                if (msgId != null) {
-                    wsClient?.sendResult(
-                        CommandProtocol.buildResult(
-                            msgId,
-                            CmdOutcome(false, parsed.code, mapOf("detail" to parsed.detail)),
-                            null,
-                        ),
-                    )
-                }
-            }
-        }
+        routeDeviceCommand(
+            payload, msgId, screenW, screenH,
+            submit = { commandQueue?.submit(it) },
+            sendResult = { wsClient?.sendResult(it) ?: false },
+        )
     }
 
     private fun routeCollectTask(payload: Map<*, *>) {
@@ -1497,6 +1481,49 @@ class AgentService : Service() {
     }
 
     companion object {
+        /** Production assembly shared by initAgent and isolated JVM HTTP tests. */
+        internal fun createJudgedCollectPollLoop(
+            agentId: () -> String,
+            httpBase: String,
+            scope: kotlinx.coroutines.CoroutineScope,
+            screenCaptureService: ScreenCaptureService,
+            audioCaptureService: AudioCaptureService? = null,
+            httpClient: okhttp3.OkHttpClient = AcquisitionCollectPollLoop.defaultClient(),
+            judgmentHttpClient: okhttp3.OkHttpClient = ContentJudgmentService.defaultClient(),
+            videoOpener: ((String) -> Unit)? = null,
+            onStage1Task: ((String, String) -> Unit)? = null,
+            onStage2Task: ((String, List<String>, Map<String, Any>?) -> Unit)? = null,
+            onCancel: ((String) -> Unit)? = null,
+        ): AcquisitionCollectPollLoop {
+            // 与原 initAgent 一致：设备传 agentId，tenant 由中台按 agent 身份反查。
+            val judgment = ContentJudgmentService(
+                agentId = agentId, httpBase = httpBase, tenantId = agentId,
+                httpClient = judgmentHttpClient,
+                screenCaptureService = screenCaptureService,
+                audioCaptureService = audioCaptureService,
+            )
+            return AcquisitionCollectPollLoop(
+                agentId = agentId, httpBase = httpBase, scope = scope,
+                httpClient = httpClient, contentJudgmentService = judgment,
+                videoOpener = videoOpener, onStage1Task = onStage1Task,
+                onStage2Task = onStage2Task, onCancel = onCancel,
+            )
+        }
+
+        /** Same parse/queue/rejection path used by the live WebSocket cmd handler. */
+        internal fun routeDeviceCommand(
+            payload: Map<*, *>, msgId: String?, screenW: Int, screenH: Int,
+            submit: (com.zenithjoy.agent.command.CmdRequest) -> Unit,
+            sendResult: (Map<String, Any?>) -> Boolean,
+        ) {
+            when (val parsed = CommandProtocol.parse(msgId, payload, screenW, screenH)) {
+                is ParseOutcome.Ok -> submit(parsed.request)
+                is ParseOutcome.Err -> if (msgId != null) sendResult(
+                    CommandProtocol.buildResult(msgId, CmdOutcome(false, parsed.code, mapOf("detail" to parsed.detail)), null),
+                )
+            }
+        }
+
         private const val TAG = "AgentService"
 
         /** 单次 content-desc BFS 的节点上限，对齐 DouyinCollectService 真机验证过的取值。 */

@@ -5,7 +5,7 @@
  *   租户的人即主人，须能配自己客服机；旧 'member' 过不了 cs/setup 的 owner/admin 闸）
  * PR-B 行为（2026-04-29 主理人决策"注册即试用"）：
  *   注册不带 / 带无效 license_key → 自动创建：
- *     1. free license（tier='free', max_machines=0, customer_id=userId, 10 年有效）
+ *     1. free license（tier='free', max_machines=1, customer_id=userId, 10 年有效）
  *     2. free tenant（plan='free', license_key 同上, name='Personal-{email}'）
  *     3. tenant_members(role='owner') 把用户绑到该 tenant
  *   全程事务包裹，失败 ROLLBACK，注册主流程不被阻塞。
@@ -14,8 +14,7 @@
  *  - 复用 tenant_members.feishu_user_id 列存 better-auth user.id（UUID 字符串）
  *    避免新增 migration / 影响 PR #234 现有飞书登录通道。该列在概念上是
  *    "成员标识"——飞书 ID 或 better-auth user.id 都是字符串，业务无歧义。
- *  - free tier max_machines=0 → Agent 注册会得 QUOTA_EXCEEDED（PR #226 已实现），
- *    free 用户云端可用、本地 Agent 不可用，符合产品决策。
+ *  - free tier 配额由 TIER_QUOTA.free 统一决定（2026-05-07 注册即试用 1 台 Agent）。
  *  - DB 异常 → 不抛（注册主流程不被基础设施故障拖垮，记 console.error 日志）。
  */
 import pool from './db/connection';
@@ -64,7 +63,7 @@ export interface BridgeResult {
  *      INSERT tenant_members(role='owner')（PR-2 paid 路径，Gap4：注册自己租户即 owner）
  *   2. 否则（缺 / 无效 / 孤儿）→ 走 free fallback 事务：
  *      BEGIN
- *      INSERT licenses (tier='free', max_machines=0, customer_id=userId,
+ *      INSERT licenses (tier='free', max_machines=1, customer_id=userId,
  *                       expires_at=now()+10yr) RETURNING id, license_key
  *      INSERT tenants (name='Personal-{email}', license_key, plan='free') RETURNING id
  *      UPDATE licenses SET tenant_id=tenant.id WHERE id=license.id
@@ -149,7 +148,7 @@ async function createFreeTenantForUser(
 ): Promise<BridgeResult> {
   const tenantName = `Personal-${email ?? userId}`;
   const expiresAt = new Date(Date.now() + FREE_TIER_DURATION_DAYS * 86400_000);
-  const maxMachines = TIER_QUOTA.free; // 0
+  const maxMachines = TIER_QUOTA.free;
 
   // 防极小概率 license_key 冲突，最多 5 次重试（同 createLicense 套路）
   for (let attempt = 0; attempt < 5; attempt++) {

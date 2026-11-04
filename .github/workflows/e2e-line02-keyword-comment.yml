@@ -10,10 +10,11 @@ on:
     paths:
       - 'services/agent/src/handlers/keyword-search-douyin.ts'
       - 'services/agent/publishers/keyword-search-douyin.cjs'
+      - 'services/agent/publishers/douyin-cookie-admission.cjs'
       - 'services/agent/publishers/crawl-comments-douyin.cjs'
       - 'services/agent/src/index.ts'
       - '.github/workflows/e2e-line02-keyword-comment.yml'
-      - '.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh'
+      - '.github/workflows/scripts/operator-probes/line02-keyword-comment.sh'
       - '.github/workflows/scripts/run-line02-candidate.ps1'
       - '.github/workflows/scripts/line02-process-job.cs'
   pull_request:
@@ -21,10 +22,11 @@ on:
     paths:
       - 'services/agent/src/handlers/keyword-search-douyin.ts'
       - 'services/agent/publishers/keyword-search-douyin.cjs'
+      - 'services/agent/publishers/douyin-cookie-admission.cjs'
       - 'services/agent/publishers/crawl-comments-douyin.cjs'
       - 'services/agent/src/index.ts'
       - '.github/workflows/e2e-line02-keyword-comment.yml'
-      - '.github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh'
+      - '.github/workflows/scripts/operator-probes/line02-keyword-comment.sh'
       - '.github/workflows/scripts/run-line02-candidate.ps1'
       - '.github/workflows/scripts/line02-process-job.cs'
   workflow_dispatch:
