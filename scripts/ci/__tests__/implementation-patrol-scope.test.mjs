@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import YAML from 'yaml';
+import {createHash} from 'node:crypto';
 
 const contractPath='scripts/phone-account-patrol/implementation-contract.json';
 const sourceContract=JSON.parse(readFileSync(new URL('../../../'+contractPath,import.meta.url)));
@@ -83,8 +84,9 @@ test('caller永久执行并仅根据成功分类控制巡查；所有事件保�
  const step=scope.steps.find(s=>s.id==='scope');assert.equal(step['continue-on-error'],undefined);assert.equal(step.run,'node scripts/ci/implementation-patrol-scope.mjs "$GITHUB_WORKSPACE" "$BASE" "$HEAD" "$RUNNER_TEMP/implementation-scope"');
  assert.deepEqual(step.env,{SKILLS_SOURCE_SSH_KEY:'${{ secrets.SKILLS_SOURCE_SSH_KEY }}',BASE:'${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}',HEAD:'${{ github.event.pull_request.head.sha || github.sha }}'});
 });
-test('共享smoke真实隔离消费者守卫：正常执行且巡查失败必非零',async()=>{
- const {verifyPatrolSmokeConsumer}=await api();const root=new URL('../../../',import.meta.url).pathname;
+test('现役required巡查真实执行与共享glob消费者：失败均阻断',async()=>{
+ const {verifyPatrolSmokeConsumer,verifyPatrolRequiredConsumer}=await api();const root=new URL('../../../',import.meta.url).pathname;
+ const required=verifyPatrolRequiredConsumer(root);assert.equal(required.runtime_verified,true);assert.equal(required.gate_failure_skip_blocked,true);
  const r=verifyPatrolSmokeConsumer(root);assert.equal(r.verified,true);assert.equal(r.shards_executed,2);assert.equal(r.aggregate_verified,true);assert.equal(r.coverage_source_failure_blocked,true);
 });
 for(const dependency of ['smoke-selection.py','smoke-helpers.json','smoke-required-duplicates.json'])test('隔离消费者必须包含现役发现依赖：'+dependency,async t=>{
@@ -94,10 +96,9 @@ for(const dependency of ['smoke-selection.py','smoke-helpers.json','smoke-requir
  rmSync(join(f.root,'.github/workflows/scripts',dependency));
  assert.throws(()=>verifyPatrolSmokeConsumer(f.root),/PATROL_SCOPE_SMOKE_SELECTION_DEPENDENCY_INVALID/);
 });
-test('共享baseline删巡查、deny巡查不得通过消费者守卫',async t=>{
+test('共享glob deny巡查隔离哨兵不得通过消费者守卫',async t=>{
  const {verifyPatrolSmokeConsumer}=await api(),f=fixture(t);const base='.github/workflows/scripts/smoke-baseline.txt',runner='.github/workflows/ci-smoke-glob-runner.yml';
  f.put(base,'phone-account-patrol-smoke.sh\n');f.put(runner,readFileSync(new URL('../../../'+runner,import.meta.url),'utf8'));
- f.put(base,'other.sh\n');assert.throws(()=>verifyPatrolSmokeConsumer(f.root),/PATROL_SCOPE_/);
  f.put(base,'phone-account-patrol-smoke.sh\n');const y=readFileSync(join(f.root,runner),'utf8');f.put(runner,y.replace('DENYLIST="','DENYLIST="\n          phone-account-patrol-smoke.sh'));assert.throws(()=>verifyPatrolSmokeConsumer(f.root),/PATROL_SCOPE_/);
 });
 test('真实共享glob paths-ignore不能伪装永久执行',async t=>{
@@ -173,9 +174,12 @@ test('固定catalog已映射RUNBOOK迁移与正文具有相同证明边界',asyn
  assert.throws(()=>classifyPatrolDiff({...args,resolveSkill:()=>{throw Error('not in catalog')}}),/PATROL_SCOPE_SKILL_READ_FAILED/);
  assert.equal(classifyPatrolDiff({...args,resolveSkill:()=>Buffer.from('changed')}).classification,'applicable');
 });
-for(const mode of ['same','changed-run','removed-test','disabled-restore','extra-permission','extra-path','tampered-action','tampered-loader','tampered-ensure'])test('专属CI仅固定依赖加载等价变换：'+mode,async t=>{
+for(const mode of ['same','changed-run','removed-test','disabled-restore','extra-permission','extra-path','tampered-action','tampered-loader','tampered-ensure','current-loader'])test('专属CI仅固定依赖加载等价变换：'+mode,async t=>{
  const f=fixture(t),{classifyPatrolDiff}=await api(),path='.github/workflows/phone-account-patrol.yml';
- for(const p of ['.github/actions/skills-source/action.yml','scripts/skills-source.py','scripts/ensure-skills-source.sh'])f.put(p,readFileSync(new URL('../../../'+p,import.meta.url)));
+ const reviewed=new URL('./fixtures/reviewed-skill-loading/',import.meta.url);
+ const manifest=JSON.parse(readFileSync(new URL('manifest.json',reviewed)));
+ // Exercise the immutable reviewed bytes, not whichever loader HEAD currently ships.
+ for(const [p,entry] of Object.entries(manifest.files)){const bytes=readFileSync(new URL(entry.fixture,reviewed));assert.equal(createHash('sha256').update(bytes).digest('hex'),entry.sha256);f.put(p,bytes);}
  const before={on:{pull_request:{paths:['scripts/phone-account-patrol/**']},push:{branches:['main'],paths:['scripts/phone-account-patrol/**']}},permissions:{contents:'read'},jobs:{contract:{steps:[{uses:'actions/checkout@v4'},{run:'python3 -m unittest discover'},{run:'node --test real.test.mjs'}]}}};
  f.put(path,YAML.stringify(before));f.base=f.commit();
  const after=structuredClone(before);for(const event of ['pull_request','push'])after.on[event].paths.unshift('.skills-source.json');
@@ -187,8 +191,24 @@ for(const mode of ['same','changed-run','removed-test','disabled-restore','extra
  if(mode==='extra-path')after.on.pull_request.paths.push('unrelated/**');
  const tamper={'tampered-action':'.github/actions/skills-source/action.yml','tampered-loader':'scripts/skills-source.py','tampered-ensure':'scripts/ensure-skills-source.sh'};
  if(tamper[mode])f.put(tamper[mode],'tampered dependency loader');
+ if(mode==='current-loader')f.put('scripts/skills-source.py',readFileSync(new URL('../../../scripts/skills-source.py',import.meta.url)));
  f.put(path,YAML.stringify(after));rmSync(join(f.root,patrolSkill));f.put('.skills-source.json','pinned');
  const r=classifyPatrolDiff({repoRoot:f.root,base:f.base,head:f.commit(),registeredRevision:f.registeredRevision,resolveSkill:()=>Buffer.from('fixture\n')});
  assert.equal(r.classification,mode==='same'?'not_applicable':'applicable');
  if(mode==='same'){assert.equal(r.reason,'verified_unchanged_skill_relocation');assert.ok(r.proof.owned_paths.some(p=>p.equivalence==='pinned_skill_dependency_loading'));assert.equal(r.verdict,undefined);}
+});
+
+for(const target of ['events','paths','job-if','job-continue','job-needs','step-if','step-continue','run','gate-needs','gate-if','gate-run','gate-env'])test('现役L3 required巡查消费者不可弱化：'+target,async t=>{
+ const f=fixture(t),{verifyPatrolRequiredConsumer}=await api(),path='.github/workflows/ci-l3-code.yml';
+ const w=YAML.parse(readFileSync(new URL('../../../'+path,import.meta.url),'utf8')),job=w.jobs['api-scripts-test'],step=job.steps.find(s=>s.run==='node --test scripts/phone-account-patrol/implementation-regression.test.mjs'),gate=w.jobs['l3-passed'],gateStep=gate.steps.find(s=>s.name==='L3 Code Gate');
+ if(target==='events')delete w.on.merge_group;if(target==='paths')w.on.pull_request.paths=['scripts/phone-account-patrol/**'];
+ if(target==='job-needs')job.needs='changes';if(target==='job-if')job.if='false';if(target==='job-continue')job['continue-on-error']=true;
+ if(target==='step-if')step.if='false';if(target==='step-continue')step['continue-on-error']=true;if(target==='run')step.run='exit 0';
+ if(target==='gate-needs')gate.needs=gate.needs.filter(n=>n!=='api-scripts-test');if(target==='gate-if')gate.if='success()';if(target==='gate-run')gateStep.run='exit 0';if(target==='gate-env')gateStep.env.GATE_NEEDS='{}';
+ f.put(path,YAML.stringify(w));assert.throws(()=>verifyPatrolRequiredConsumer(f.root),/PATROL_SCOPE_REQUIRED_CONSUMER_DISABLED/);
+});
+for(const mode of ['failed','empty','skipped'])test('现役L3巡查实际子进程失败/空/skip不得假绿：'+mode,async t=>{
+ const f=fixture(t),{verifyPatrolRequiredConsumer}=await api();f.put('.github/workflows/ci-l3-code.yml',readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url)));
+ const code=mode==='empty'?'':"import {test} from 'node:test';test('one',"+(mode==='skipped'?'{skip:true},':'')+"()=>{"+(mode==='failed'?"throw Error('controlled patrol failure');":'')+"});";
+ f.put('scripts/phone-account-patrol/implementation-regression.test.mjs',code);assert.throws(()=>verifyPatrolRequiredConsumer(f.root),/PATROL_SCOPE_REQUIRED_RUNTIME_FAILED/);
 });

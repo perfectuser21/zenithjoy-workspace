@@ -1,0 +1,1 @@
+Exact reviewed dependency-loading blobs from the manifest revision, for byte-allowlist fixtures only. Never execute these historical loaders. Current candidate loading changes must remain applicable until separately reviewed.

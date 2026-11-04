@@ -1,0 +1,26 @@
+{
+  "base": "e84cd6084317883a662816700b3d74a1adccdd21",
+  "failures": {
+    "test19": "Retired patrol alias was removed from glob inventory; actual required caller is unconditional L3 api-scripts-test.",
+    "test53": "Positive fixture copied current bootstrap f1503a6d instead of explicitly reviewed #2200 blob SHA256 500517f4; classifier correctly remained applicable."
+  },
+  "changes": [
+    "Preserve production reviewed-byte allowlist. Positive fixture reads immutable original #2200 bytes; current bootstrap and tampered loader remain applicable. Historical fixture loaders are never executed.",
+    "Verify current unconditional L3 patrol command and aggregate gate configuration, execute actual current canonical regression, and prove actual gate blocks failing/cancelled/skipped/missing patrol job even when every change route is false.",
+    "Retain actual two-worker shared glob/aggregate execution and all existing failure/coverage/source mutation assertions using isolated fixture patrol sentinels. Do not restore retired alias.",
+    "New real subprocess negatives reject empty, skipped or failed canonical test runs; configuration negatives cover omitted events, path filters, job dependencies, disabled/continued steps and bypassed aggregate."
+  ],
+  "validation": {
+    "command": "node --test scripts/ci/__tests__/implementation-patrol-scope.test.mjs scripts/ci/__tests__/implementation-impact-workflow.test.mjs scripts/ci/__tests__/pilot-release-workflow.test.mjs",
+    "node": 20,
+    "tests": 89,
+    "passed": 89,
+    "failed": 0,
+    "skipped": 0,
+    "raw_log": "/tmp/patrol-scope-final.log",
+    "locked_dependency_install": "npm ci --ignore-scripts --workspaces=false",
+    "pinned_source": "install87/verify87 from local exact pinned Git cache",
+    "product_map": "PASS no drift"
+  },
+  "credentials_or_external_device_actions": false
+}
