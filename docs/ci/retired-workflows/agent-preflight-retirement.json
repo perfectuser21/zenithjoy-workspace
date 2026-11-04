@@ -4,11 +4,11 @@
   "decision": "delete_archive",
   "reviewed_candidate": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
   "dimensions": {
-    "current_value": "Current product activation uses ModuleManager and the downloaded Line04 module preflight.js. Legacy core runner has no current product/manual caller; Line01/02/05 are empty success stubs.",
+    "current_value": "Windows compatibility activation uses ModuleManager and the downloaded module preflight.js. Legacy core runner has no product/manual caller; Line01/02/05 are empty success stubs. Current customer service instead uses services/wechat-cs-android.",
     "active_status": "Full tracked-repository search finds only the retiring standalone workflow/self-tests for src/preflight. Compilation via src glob is not an execution entry. Current index.ts imports ModuleManager.",
-    "real_effect": "Legacy registry-only >=4.1.8 check rejected current ROG while canonical exe-first ==4.1.8 actually passed on this candidate, alongside Python and 4GiB memory checks.",
-    "test_and_blocking": "Keep canonical ModuleManager/module preflight tests, Windows required contracts and WeChat required gate. Remove only obsolete runner tests and sole-target workflow helpers.",
-    "duplication_and_obsolescence": "Legacy core runner predates module architecture and permits >=4.1.9 rejected by current product. Canonical owns both DWORD encodings, exe-first detection, repair, exact-version policy and CLI contracts.",
+    "real_effect": "Legacy registry-only >=4.1.8 rejected ROG while the module exe-first ==4.1.8 check passed at the cited SHA, alongside Python/memory checks. This is Windows compatibility evidence only; no current Android device delivery claim.",
+    "test_and_blocking": "Keep shared ModuleManager/module compatibility contracts and other active Windows Lines. Current required WeChat CS Gate Passed selects standalone Android safety contracts plus shared HTTP/config/draft/receipt tests. Retire only the unconsumed core runner lane.",
+    "duplication_and_obsolescence": "Legacy core runner predates module architecture. The retained Windows compatibility module handles DWORD encodings and exact-version/CLI checks; current Android CS has a separate service and gate.",
     "runtime_and_maintenance_cost": "Retire one independent self-hosted workflow (push/PR/manual), six dead implementation/type files, one dead-code test and two candidate-only helpers. No unmeasured CPU/RSS/time savings claimed.",
     "retirement_and_dependencies": "Ten source paths anchored by commit/blob/SHA256; main workflow archived byte-for-byte. Remove sole Windows proxy-test call and third checkout tuple; retain both current consumers. No deployment/data/ledger/UI changes."
   },
@@ -145,5 +145,7 @@
       "retirement_cases": 17,
       "checkout_cases": 4
     }
-  }
+  },
+  "authority_correction": "User confirms smart customer service currently uses Android RPA (services/wechat-cs-android). Windows Line04/module preflight is compatibility evidence only, not current customer-service delivery.",
+  "current_consumers_scope": "Listed consumers are retained Windows SDK compatibility consumers, not evidence that Windows customer service is current."
 }
