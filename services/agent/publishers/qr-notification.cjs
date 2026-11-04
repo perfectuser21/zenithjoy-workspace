@@ -9,13 +9,13 @@ async function sendFeishuQrCard(platform, screenshotBuffer, { fetchFn = fetch, e
       if (!response.ok) throw new Error(`provider HTTP ${response.status}`);
       return response.json();
     };
-    const token = await post('https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal', {
+    const token = await post('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
     });
-    if (token.code !== 0 || !token.app_access_token) throw new Error('provider token rejected');
+    if (token.code !== 0 || !token.tenant_access_token) throw new Error('provider token rejected');
     const form = new FormData(); form.append('image_type', 'message');
     form.append('image', new Blob([screenshotBuffer], { type: 'image/png' }), 'qr.png');
-    const image = await post('https://open.feishu.cn/open-apis/im/v1/images', { method: 'POST', headers: { Authorization: `Bearer ${token.app_access_token}` }, body: form });
+    const image = await post('https://open.feishu.cn/open-apis/im/v1/images', { method: 'POST', headers: { Authorization: `Bearer ${token.tenant_access_token}` }, body: form });
     const imageKey = image.data?.image_key;
     if (image.code !== 0 || !imageKey) throw new Error('provider image rejected');
     const display = { douyin: '抖音', kuaishou: '快手', xiaohongshu: '小红书', shipinhao: '视频号', toutiao: '头条', weibo: '微博', zhihu: '知乎', gongzhonghao: '公众号' }[platform] || platform;
