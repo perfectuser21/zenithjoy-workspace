@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: 设置 Node.js
         uses: actions/setup-node@v4
@@ -31,15 +32,14 @@ jobs:
           node-version: '20'
 
       - name: 验证审查请求参数（防推理耗尽最终输出）
-        run: node --test scripts/ci/__tests__/pr-review-thinking.test.mjs
+        run: node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs
 
       - name: 获取 PR diff
         id: get-diff
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # 大单行XML不能进入GITHUB_ENV：完整diff保留为文件，失败立即终止。
-          gh pr diff ${{ github.event.pull_request.number }} > "$RUNNER_TEMP/pr-review.diff"
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci/pr-review-diff.mjs
 
       - name: 调用 OpenRouter API 进行代码审查（含重试，fail-closed）
         id: ai-review

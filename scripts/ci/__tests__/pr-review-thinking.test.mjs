@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,rmSync,existsSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {spawnSync,execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -59,13 +59,20 @@ test('真实workflow保留大单行XML diff于文件，正文不进入环境或�
  const folder=mkdtempSync(join(tmpdir(),'pr-review-large-diff-'));
  try{
   const bin=join(folder,'bin');mkdirSync(bin);
-  const diff='diff --git a/fixture.xml b/fixture.xml\n+'+'<node text="真实fixture"/>'.repeat(18000)+'\n';
-  const fixture=join(folder,'source.diff'),envFile=join(folder,'github.env'),calls=join(folder,'calls.jsonl');
-  writeFileSync(fixture,diff);writeFileSync(envFile,'');
-  writeFileSync(join(bin,'gh'),'#!'+process.execPath+'\n'+`process.stdout.write(require('node:fs').readFileSync(process.env.FIXTURE_DIFF));\n`,{mode:0o755});
+  const xml='<node text="真实fixture"/>'.repeat(18000)+'\n';
+  const git=(...args)=>execFileSync('git',args,{cwd:folder,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  git('init','-q');mkdirSync(join(folder,'hooks'));git('config','core.hooksPath',join(folder,'hooks'));git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');git('remote','add','origin','https://github.com/fixture/repository.git');
+  writeFileSync(join(folder,'base.txt'),'base');git('add','.');git('commit','-qm','base');const base=git('rev-parse','HEAD');
+  writeFileSync(join(folder,'fixture.xml'),xml);git('add','.');git('commit','-qm','large XML');const head=git('rev-parse','HEAD');
+  const diff=execFileSync('git',['diff','--binary','--full-index',base+'...'+head],{cwd:folder,encoding:'utf8'});
+  mkdirSync(join(folder,'scripts','ci'),{recursive:true});writeFileSync(join(folder,'scripts','ci','pr-review-diff.mjs'),readFileSync(new URL('../pr-review-diff.mjs',import.meta.url)));
+  const eventPath=join(folder,'event.json');writeFileSync(eventPath,JSON.stringify({pull_request:{base:{sha:base,repo:{full_name:'fixture/repository'}},head:{sha:head}}}));
+  const envFile=join(folder,'github.env'),calls=join(folder,'calls.jsonl');
+  writeFileSync(envFile,'');
+  writeFileSync(join(bin,'gh'),'#!'+process.execPath+'\n'+`console.error('API diff is capped at 300 files; local Git must be used');process.exit(1);\n`,{mode:0o755});
   writeFileSync(join(bin,'curl'),'#!'+process.execPath+'\n'+`const fs=require('node:fs'),args=process.argv.slice(2),i=args.indexOf('--data-binary');fs.appendFileSync(process.env.FIXTURE_CALLS,JSON.stringify({args,request:i<0?null:JSON.parse(fs.readFileSync(args[i+1].slice(1)))})+'\\n');process.stdout.write(JSON.stringify({choices:[{message:{content:'fixture final review'}}]}));\n`,{mode:0o755});
-  const env={...process.env,PATH:bin+':'+process.env.PATH,RUNNER_TEMP:folder,GITHUB_ENV:envFile,FIXTURE_DIFF:fixture,FIXTURE_CALLS:calls,OPENROUTER_API_KEY:'fixture-key'};
-  const get=source.match(/id: get-diff[\s\S]*?run: \|([\s\S]*?)(?=\n      - name:|$)/)[1].replace(/^          /gm,'').replaceAll('${{ github.event.pull_request.number }}','2374');
+  const env={...process.env,PATH:bin+':'+process.env.PATH,RUNNER_TEMP:folder,GITHUB_ENV:envFile,FIXTURE_CALLS:calls,OPENROUTER_API_KEY:'fixture-key',GITHUB_EVENT_PATH:eventPath,GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'fixture/repository',GITHUB_SERVER_URL:'https://github.com',PR_BASE_SHA:base,PR_HEAD_SHA:head};
+  const get=source.match(/id: get-diff[\s\S]*?run: ([^\n]+)/)[1];
   const captured=spawnSync('bash',['-e','-o','pipefail','-c',get],{encoding:'utf8',env,cwd:folder});assert.equal(captured.status,0,captured.stderr);
   assert.equal(readFileSync(envFile,'utf8'),'','diff正文不得写入GITHUB_ENV，单行XML会触发Linux单变量上限');
   assert.equal(readFileSync(join(folder,'pr-review.diff'),'utf8'),diff,'真实diff完整保留，不按行或字节截断');
