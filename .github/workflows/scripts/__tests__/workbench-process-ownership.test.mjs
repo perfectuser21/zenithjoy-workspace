@@ -14,13 +14,52 @@ const helper=fileURLToPath(new URL('../smoke/lib/workbench-api-process.sh',impor
 const startFunction='source "'+helper+'"';
 const alive=pid=>{try{process.kill(pid,0);return true;}catch{return false;}};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
+function systemEphemeralRange(){
+ let values;
+ if(process.platform==='linux')values=readFileSync('/proc/sys/net/ipv4/ip_local_port_range','utf8').trim().split(/\s+/).map(Number);
+ else if(process.platform==='darwin')values=execFileSync('/usr/sbin/sysctl',['-n','net.inet.ip.portrange.first','net.inet.ip.portrange.last'],{encoding:'utf8'}).trim().split(/\s+/).map(Number);
+ else throw Error('WORKBENCH_FIXTURE_EPHEMERAL_RANGE_UNKNOWN platform='+process.platform);
+ assert.ok(values.length===2&&values.every(Number.isInteger)&&values[0]>0&&values[0]<=values[1]&&values[1]<=65535,'invalid system ephemeral range: '+values);
+ return values;
+}
+
+const portTool=fileURLToPath(new URL('../smoke/lib/workbench-port.mjs',import.meta.url));
+let allocationCursor=process.pid;
+function allocateFixtureBase(preferred){
+ const ephemeral=systemEphemeralRange(),pool=[];
+ // A kernel-selected port and its unchecked successor can overlap the source
+ // ports of our own health curls or parallel listen(0) fixtures. Keep all three
+ // targets outside the actual OS automatic range instead of guessing its default.
+ for(let port=1024;port<=65532;port+=3)if(port+2<ephemeral[0]||port>ephemeral[1])pool.push(port);
+ assert.ok(pool.length,'WORKBENCH_FIXTURE_NO_NON_EPHEMERAL_TRIPLE');
+ const candidates=preferred===undefined?[]:[preferred];
+ for(let count=0;count<32;count++)candidates.push(pool[allocationCursor++%pool.length]);
+ const attempts=[];
+ for(const port of candidates){
+  if(!(port+2<ephemeral[0]||port>ephemeral[1]))continue;
+  let free=true;
+  // Use the real production probe: wildcard IPv4/IPv6, then localhost IPv4/IPv6.
+  // Its separate address groups also preserve BSD's wildcard/specific semantics.
+  for(const [mode,value] of [['check-pair',port],['check',port+2]]){
+   const probe=spawnSync(process.execPath,[portTool,mode,String(value)],{encoding:'utf8',timeout:3000});
+   if(probe.error||probe.signal)throw Error('WORKBENCH_FIXTURE_PROBE_UNKNOWN '+JSON.stringify({port,mode,error:probe.error?.message,signal:probe.signal}));
+   if(probe.status!==0){
+    attempts.push({port,mode,stderr:probe.stderr.trim()});
+    assert.match(probe.stderr,/WORKBENCH_PORT_BUSY/,'unexpected address-family/probe failure');free=false;break;
+   }
+  }
+  if(free)return {port,ephemeral,attempts};
+ }
+ throw Error('WORKBENCH_FIXTURE_ALLOCATION_FAILED '+JSON.stringify({ephemeral,attempts}));
+}
 async function fixture(t,{foreign=false,http=false,healthy=false,drift='',ignoreTerm=false,hanging=false,adjacentExtra=false,transientMs=0}={}){
  const top=mkdtempSync(join(tmpdir(),'workbench-owner-')),bin=join(top,'bin'),app=join(top,'owned-api.cjs'),pidFile=join(top,'child.pid');mkdirSync(bin);
- const server=http?createHTTPServer((q,r)=>r.end('healthy')):createServer(()=>{});server.listen(0,'127.0.0.1');await once(server,'listening');const port=server.address().port;
- if(!foreign)await new Promise(r=>server.close(r));
+ const allocation=allocateFixtureBase(),port=allocation.port;
+ const server=http?createHTTPServer((q,r)=>r.end('healthy')):createServer(()=>{});
+ if(foreign){server.listen(port,'127.0.0.1');await once(server,'listening');}
  const transientHolder=transientMs?await occupiedPortFor(transientMs,port):null;
  const extra=adjacentExtra?createServer():null;if(extra){extra.listen(port+2,'127.0.0.1');await once(extra,'listening');}
- writeFileSync(app,`const fs=require('fs'),http=require('http');fs.writeFileSync(process.env.TEST_CHILD_PID,String(process.pid));if(process.env.TEST_IGNORE_TERM==='1')process.on('SIGTERM',()=>fs.writeFileSync(process.env.TEST_CHILD_PID+'.term','seen'));const s=http.createServer((q,r)=>{if(process.env.TEST_HEALTH_HANG==='1')return;r.statusCode=process.env.TEST_CHILD_HEALTHY==='1'?200:503;r.end('health');});s.on('error',e=>fs.writeFileSync(process.env.TEST_CHILD_PID+'.error',e.code));s.listen(Number(process.env.PORT),()=>console.log('Works Management API + Agent WS running on port '+process.env.PORT));setInterval(()=>{},1000);`);
+ writeFileSync(app,`const fs=require('fs'),http=require('http');fs.writeFileSync(process.env.TEST_CHILD_PID,String(process.pid));if(process.env.TEST_IGNORE_TERM==='1')process.on('SIGTERM',()=>fs.writeFileSync(process.env.TEST_CHILD_PID+'.term','seen'));const s=http.createServer((q,r)=>{fs.appendFileSync(process.env.TEST_CHILD_PID+'.peers',String(q.socket.remotePort)+',');if(process.env.TEST_HEALTH_HANG==='1')return;r.statusCode=process.env.TEST_CHILD_HEALTHY==='1'?200:503;r.end('health');});s.on('error',e=>fs.writeFileSync(process.env.TEST_CHILD_PID+'.error',e.code));s.listen(Number(process.env.PORT),()=>console.log('Works Management API + Agent WS running on port '+process.env.PORT));setInterval(()=>{},1000);`);
  writeFileSync(join(bin,'node'),'#!/bin/sh\ncase "$1" in apps/api/dist/index.js) exec "$TEST_REAL_NODE" "$TEST_CHILD_APP" "$@";; *) exec "$TEST_REAL_NODE" "$@";; esac\n',{mode:0o755});
  writeFileSync(join(bin,'curl'),'#!/bin/sh\nexec /usr/bin/curl --max-time 1 "$@"\n',{mode:0o755});
  writeFileSync(join(bin,'sleep'),'#!/bin/sh\nexec /bin/sleep 0.03\n',{mode:0o755});
@@ -28,12 +67,14 @@ async function fixture(t,{foreign=false,http=false,healthy=false,drift='',ignore
  try{
   const trap="trap '"+'printf "%s" "${API_PID:-}" > "$TEST_STARTED_PID"'+"' EXIT";
   const mutation=drift==='birth'?'API_START_ID=changed':drift==='parent'?'API_OWNER_PID=0':':';
-  const command=[failFunction,startFunction,trap,'start_api "$1" "$2"',mutation,'workbench_stop_started_child',adjacentExtra?'start_api "$3" "$4"; workbench_stop_started_child':''].filter(Boolean).join('\n');
+  const command=[failFunction,startFunction,trap,"printf primary > \"$TEST_PHASE\"",'start_api "$1" "$2"',mutation,'workbench_stop_started_child',adjacentExtra?'printf adjacent > "$TEST_PHASE"; start_api "$3" "$4"; workbench_stop_started_child':''].filter(Boolean).join('\n');
   const startedAt=performance.now();
-  const r=spawnSync('/bin/bash',['-c',command,'fixture',String(port),join(top,'api.log'),String(port+1),join(top,'mutation.log')],{encoding:'utf8',timeout:hanging?45000:5000,env:{...process.env,PATH:bin+':'+process.env.PATH,TEST_REAL_NODE:process.execPath,TEST_CHILD_APP:app,TEST_CHILD_PID:pidFile,TEST_STARTED_PID:join(top,'started.pid'),TEST_CHILD_HEALTHY:healthy?'1':'0',TEST_IGNORE_TERM:ignoreTerm?'1':'0',TEST_HEALTH_HANG:hanging?'1':'0'}});
+  const r=spawnSync('/bin/bash',['-c',command,'fixture',String(port),join(top,'api.log'),String(port+1),join(top,'mutation.log')],{encoding:'utf8',timeout:hanging?45000:5000,env:{...process.env,PATH:bin+':'+process.env.PATH,TEST_REAL_NODE:process.execPath,TEST_CHILD_APP:app,TEST_CHILD_PID:pidFile,TEST_STARTED_PID:join(top,'started.pid'),TEST_PHASE:join(top,'phase'),TEST_CHILD_HEALTHY:healthy?'1':'0',TEST_IGNORE_TERM:ignoreTerm?'1':'0',TEST_HEALTH_HANG:hanging?'1':'0'}});
   for(let n=0;n<100&&!existsSync(pidFile);n++)await pause(10);
   const started=readFileSync(join(top,'started.pid'),'utf8');if(started)pid=Number(started);
-  return {duration:performance.now()-startedAt,error:r.error,extraListening:extra?.listening,status:r.status,stderr:r.stderr,launched:!!pid,childAlive:!!pid&&alive(pid),foreignListening:foreign&&server.listening,termSeen:existsSync(pidFile+'.term')};
+  const read=name=>existsSync(join(top,name))?readFileSync(join(top,name),'utf8'):null;
+  const diagnostics={ports:[port,port+1,port+2],platform:process.platform,ephemeral:allocation.ephemeral,allocationAttempts:allocation.attempts,phase:read('phase'),primaryLog:read('api.log'),adjacentLog:read('mutation.log'),childError:read('child.pid.error')};
+  return {port,clientPorts:(read('child.pid.peers')||'').split(',').filter(Boolean).map(Number),duration:performance.now()-startedAt,error:r.error,extraListening:extra?.listening,status:r.status,stderr:r.stderr+(r.status!==0?'\nWORKBENCH_FIXTURE_DIAGNOSTICS '+JSON.stringify(diagnostics):''),launched:!!pid,childAlive:!!pid&&alive(pid),foreignListening:foreign&&server.listening,termSeen:existsSync(pidFile+'.term')};
  }finally{
   if(pid&&alive(pid)){
    // Only this test's exact fixture executable may be cleaned; never kill by port.
@@ -74,4 +115,24 @@ test('外来 listener 长占端口仍须在两秒内明确失败，不清理外�
  const r=spawnSync('/bin/bash',['-c',failFunction+'\n'+startFunction+'\nworkbench_wait_port_available "$1"','fixture',String(port)],{encoding:'utf8',timeout:5000});
  assert.equal(r.status,1,r.stderr);assert.match(r.stderr,/WORKBENCH_PORT_STILL_BUSY/);
  assert.ok(performance.now()-started<3000,'端口占用不能无界等待');assert.equal(holder.exitCode,null,'不得杀外来进程');
+});
+
+test('夹具三个目标端口必须避开内核自动临时端口范围',async t=>{
+ const r=await fixture(t,{healthy:true,adjacentExtra:true});
+ assert.equal(r.status,0,r.stderr);
+ const [first,last]=systemEphemeralRange();
+ assert.ok(r.port+2<first||r.port>last,JSON.stringify({selected:[r.port,r.port+1,r.port+2],systemEphemeral:[first,last]}));
+ assert.ok(r.clientPorts.length>=2,'两次真实health请求必须实际发生');
+ assert.ok(r.clientPorts.every(port=>port>=first&&port<=last),JSON.stringify({automaticClientPorts:r.clientPorts,targets:[r.port,r.port+1,r.port+2]}));
+});
+
+test('夹具分配发现真实相邻外来listener占用时只换分配目标，不杀外来listener',async()=>{
+ const first=allocateFixtureBase(),foreign=createServer();
+ foreign.listen(first.port+1,'127.0.0.1');await once(foreign,'listening');
+ try{
+  const selected=allocateFixtureBase(first.port);
+  assert.notEqual(selected.port,first.port);
+  assert.ok(selected.attempts.some(row=>row.port===first.port&&row.mode==='check-pair'));
+  assert.equal(foreign.listening,true);
+ }finally{await new Promise(resolve=>foreign.close(resolve));}
 });

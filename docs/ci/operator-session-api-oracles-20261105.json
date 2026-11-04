@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-11-04T21:56:43.721207+00:00",
+  "task_id": "0344bfdf-2809-4afa-9d9e-51347754b285",
+  "claimed_by": "zenithjoy-session-oracles-20261105",
+  "project_id": "548d7bf7-4e14-4c08-9a51-a85e2d2c4c25",
+  "base_sha": "4b5cb9e7448b88682c30e3319473d6cfd0fc14fb",
+  "branch": "cp-1105-session-oracles",
+  "gp_anchor": "none(infra)",
+  "scope": "New independent infrastructure followup: response acceptance in two existing operator session CLIs; not a physical/business acceptance receipt and not an increase to the original172-unit denominator.",
+  "bugs_reproduced": [
+    "Douyin could PASS with no user/info response or HTTP200 JSON parse failure.",
+    "Xiaohongshu never required apiOk, so missing response, malformed JSON, business errors and HTTP errors could still PASS.",
+    "A slower earlier successful response could overwrite a later failed account response.",
+    "Success-named screenshots were created before the API acceptance gate."
+  ],
+  "fix": [
+    "Require an observed HTTP2xx parsed JSON object and the existing affirmative provider business fields. HTTP200 alone is insufficient.",
+    "Explicit nonzero status_code/code and explicit success:false cannot be overridden by positive-looking body fields.",
+    "Arrival sequence protects the newest account response against older asynchronous body completion.",
+    "Missing/failed API receipt exits nonzero, writes only failure screenshot, and does not claim the session expired or ask to rescan merely because API acceptance is missing.",
+    "Create success screenshot/PASS only after the response gate. Existing browser cleanup, input names and valid business-success variants remain."
+  ],
+  "proof": {
+    "baseline_red": {
+      "new_CLI_cases": 21,
+      "false_PASS_regressions": 13,
+      "already_rejecting_negative_cases": 3,
+      "valid_positive_controls": 5,
+      "other_preexisting_cases_filtered": 40
+    },
+    "race_red": {
+      "failed": 2,
+      "reason": "A slower earlier successful response finished after the newer failure and incorrectly restored PASS before the sequence fix."
+    },
+    "targeted_final": {
+      "new_CLI_cases": 23,
+      "valid_success_controls": 5,
+      "negative_cases": 18,
+      "passed": 23
+    },
+    "session_and_QR_surrounding_suite": {
+      "files": 4,
+      "tests": 96,
+      "passed": 96,
+      "skipped": 0,
+      "duration_seconds": 43.07,
+      "command": "PATH=/opt/homebrew/opt/node@20/bin:$PATH node --test .github/workflows/scripts/__tests__/session-health.test.mjs .github/workflows/scripts/__tests__/session-sync.test.mjs scripts/sessions/check-health.test.mjs scripts/sessions/qr-notification.test.mjs"
+    },
+    "product_map_check": {
+      "exit": 0,
+      "fixed_skills_source_restored_from_local_cache": true
+    }
+  },
+  "fixture_boundary": "Each actual Node CLI is copied byte-for-byte into owned scratch and executed as a child. Only Playwright browser transport is synthetic. Child environment contains only fixture storageState values, no inherited secrets; HTTP/HTTPS/fetch hard-reject. No real browser, account profile/cookie, device, QR, platform call, draft creation or alert is executed. Temporary JSON files are synthetic and stay under owned scratch.",
+  "unchanged_boundary": "The original response URL includes(path) matcher remains. This change does not establish exact provider-origin/path identity; that preexisting limitation was identified by independent review and is not described as fixed. No guessed Xiaohongshu API-host restriction is introduced.",
+  "independent_review": {
+    "reviewer": "/root/final_security_review",
+    "result": "No blocking issue in this response-acceptance/sequence/cleanup increment; existing origin matching boundary remains explicitly unclaimed."
+  },
+  "CI_consumer": {
+    "path": ".github/workflows/scripts/__tests__/session-health.test.mjs",
+    "existing_required_command": "ci-l3-code.yml OpenClaw node --test shards include .github/workflows/scripts/__tests__/*.test.mjs",
+    "new_test_file": false,
+    "registry_or_workflow_change": false
+  },
+  "external_evidence": "Six external acceptance gaps remain open. These96 offline tests prove the script predicate/regression contract, not a current authenticated session or physical success.",
+  "logs": {
+    "red": {
+      "path": "/private/tmp/zj-session-oracles-red.log",
+      "sha256": "093a4e6e6c04fb988a35a84d94127825e6afa4bb4254e2c7cf4376235c47f795"
+    },
+    "race_red": {
+      "path": "/private/tmp/zj-session-oracles-race-red.log",
+      "sha256": "965dc2315d2700919dd2e35edce2309a530696ed7b80c7fa789ddacf4faf64e3"
+    },
+    "targeted_final": {
+      "path": "/private/tmp/zj-session-oracles-final-targeted.log",
+      "sha256": "0de1d49770a24a60700f207468f64f8527e6bdca9b96c860022155f436731aa0"
+    },
+    "surrounding_suite": {
+      "path": "/private/tmp/zj-session-oracles-final-suite.log",
+      "sha256": "4210f3986faa3d1cf29cd3500a2f657b9be9a19d908e616cf9f0d193804cc3ce"
+    },
+    "skills_restore": {
+      "path": "/private/tmp/zj-session-oracles-skills.log",
+      "sha256": "8bce1856cbe4aec9d7b4964fb387a53215cd3b2fda65994388a49bd92518d604"
+    },
+    "locked_root_dependencies": {
+      "path": "/private/tmp/zj-session-oracles-npm-ci.log",
+      "sha256": "573fe4445696d833ec4ceb47cf439e8dcfe5a965519530235cd44c779584252d"
+    }
+  }
+}

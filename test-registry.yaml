@@ -10286,3 +10286,11 @@ tests:
     status: active
     product: 基础设施
     note: Retained original unittest and unique compileall; blocking Smoke Glob baseline, alongside current unconditional L3 full patrol oracle. No physical-device admission claimed.
+
+  - id: payment-public-check-contract
+    path: .github/workflows/scripts/__tests__/payment-public-check.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.

@@ -75,11 +75,21 @@ async function main() {
     });
 
     let apiOk = false;
+    let apiSequence = 0;
+    let apiStatus = null;
     context.on('response', async (resp) => {
       try {
         if (resp.url().includes('/api/galaxy/creator/home/cre_info')) {
-          const body = await resp.json().catch(() => ({}));
-          apiOk = body.code === 0 || body.success === true || resp.status() === 200;
+          const observation = ++apiSequence;
+          apiStatus = resp.status();
+          apiOk = false;
+          const body = await resp.json();
+          if (observation !== apiSequence) return;
+          const validBody = body !== null && typeof body === 'object' && !Array.isArray(body);
+          apiOk = apiStatus >= 200 && apiStatus < 300 && validBody &&
+            (!Object.hasOwn(body, 'code') || body.code === 0) &&
+            (!Object.hasOwn(body, 'success') || body.success === true) &&
+            (body.code === 0 || body.success === true);
         }
       } catch { /* ignore */ }
     });
@@ -103,8 +113,16 @@ async function main() {
     }
 
     await page.waitForTimeout(3000);
-    await page.screenshot({ path: 'xiaohongshu-session-pass.png' }).catch(() => {});
     console.log(`[info] cre_info API ok=${apiOk}`);
+    if (!apiOk) {
+      await page.screenshot({ path: 'xiaohongshu-session-fail.png' }).catch(() => {});
+      const msg = apiStatus === null ? '未捕获 cre_info API 成功响应' : `cre_info API 返回异常（HTTP ${apiStatus}）`;
+      console.error(`[FAIL] ${msg}`);
+      await sendFeishuAlert('🔴 XIAOHONGSHU_COOKIES 验证失败', msg);
+      throw new VerifyFailError(msg);
+    }
+
+    await page.screenshot({ path: 'xiaohongshu-session-pass.png' }).catch(() => {});
 
     console.log('');
     console.log('============================================');
