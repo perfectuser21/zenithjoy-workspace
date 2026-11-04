@@ -137,7 +137,7 @@ done
 echo ""
 echo "[4] Python 单元测试 test_call_rpa（mock UIA，CI 可达）"
 
-TEST_FILE="$VOICE_CALL_DIR/tests/test_call_rpa.py"
+TEST_FILE="$WORKSPACE/services/agent/wechat-rpa/voice_call/tests/test_call_rpa.py"
 
 if [ ! -f "$TEST_FILE" ]; then
   log_fail "test_call_rpa.py 不存在: $TEST_FILE"
