@@ -11,6 +11,8 @@ import os
 import sys
 import time
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from overlay.overlay_window import EventTailConsumer, PositionLoop  # noqa: E402
@@ -450,3 +452,79 @@ def test_open_customer_page_calls_webbrowser_open(tmp_path, monkeypatch):
 
     assert len(opened_urls) == 1
     assert "wxid_test123" in opened_urls[0]
+
+
+# Win32 API / pywebview are isolated boundaries; the helper and production callback
+# below are real code. These are style/call contracts, not foreground UI evidence.
+def _isolated_noactivate_user32(monkeypatch, original_style):
+    import ctypes
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    user32 = SimpleNamespace(
+        GetWindowLongW=Mock(return_value=original_style),
+        SetWindowLongW=Mock(return_value=original_style),
+    )
+    monkeypatch.setattr(
+        ctypes, "windll", SimpleNamespace(user32=user32), raising=False,
+    )
+    return user32
+
+
+@pytest.mark.parametrize("handle_shape", ["native_handle", "nested_hwnd"])
+def test_noactivate_helper_sets_style_on_exact_overlay_hwnd(monkeypatch, handle_shape):
+    from types import SimpleNamespace
+    from overlay.overlay_window import _apply_no_activate_win32
+
+    hwnd = 0x123456
+    original_style = 0x00040020
+    user32 = _isolated_noactivate_user32(monkeypatch, original_style)
+    window = (
+        SimpleNamespace(native_handle=hwnd)
+        if handle_shape == "native_handle"
+        else SimpleNamespace(_window=SimpleNamespace(hwnd=hwnd))
+    )
+
+    _apply_no_activate_win32(window)
+
+    user32.GetWindowLongW.assert_called_once_with(hwnd, -20)
+    # Preserve existing flags and require NOACTIVATE | TOOLWINDOW | LAYERED.
+    user32.SetWindowLongW.assert_called_once_with(
+        hwnd, -20, original_style | 0x08000000 | 0x00000080 | 0x00080000,
+    )
+
+
+def test_production_webview_start_callback_applies_noactivate(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    import overlay.overlay_window as overlay
+
+    hwnd = 0x654321
+    original_style = 0x00040020
+    user32 = _isolated_noactivate_user32(monkeypatch, original_style)
+    window = SimpleNamespace(native_handle=hwnd)
+    create_window = Mock(return_value=window)
+    callbacks = []
+
+    def start(callback, **kwargs):
+        callbacks.append(callback)
+        callback()
+
+    monkeypatch.setitem(
+        sys.modules, "webview",
+        SimpleNamespace(create_window=create_window, start=start),
+    )
+    # Replace only the module's platform boundary, not the process-wide sys module.
+    monkeypatch.setattr(overlay, "sys", SimpleNamespace(platform="win32"))
+    app = overlay.OverlayApp(state_dir=str(tmp_path), probe_mode=False)
+    app._position_loop = None  # No discovery thread or real desktop in this contract.
+
+    app.run()
+
+    assert len(callbacks) == 1
+    assert app._window is window
+    assert create_window.call_args.kwargs["js_api"] is app
+    user32.GetWindowLongW.assert_called_once_with(hwnd, -20)
+    user32.SetWindowLongW.assert_called_once_with(
+        hwnd, -20, original_style | 0x08000000 | 0x00000080 | 0x00080000,
+    )
