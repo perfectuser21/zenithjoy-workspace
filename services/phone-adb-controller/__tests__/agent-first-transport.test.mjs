@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {startPrimaryActivityBroker} from '../activity-skill-primary-broker.mjs';
 import {createHash} from 'node:crypto';
-import {verifySkillRequest,relayActivityTool,skillRunKey,runSkillAgent} from '../leadgen-skill-agent.mjs';
+import {verifySkillRequest,relayActivityTool,skillRunKey,runSkillAgent,claimSkillSpawn} from '../leadgen-skill-agent.mjs';
 
 const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 const sha=x=>createHash('sha256').update(canonical(x)).digest('hex');
@@ -98,4 +100,56 @@ test('Primary官方transport不能用父CLI普通成功文本冒双方停止证�
  }});
  assert.equal(actual.execution_stopped,false);assert.equal(actual.owner_execution_stopped,false);assert.equal(actual.child_execution_stopped,true);
  const message=readFileSync(join(dir,'parent-message.txt'),'utf8');assert.match(message,/Agent-first/);assert.match(message,/business/);
+});
+
+for(const kind of ['question','progress','error'])test(`真实relay→工具CLI→primary socket将inspect ${kind}交Commander并保下一轮指导`,async t=>{
+ const home=mkdtempSync(join(tmpdir(),'primary-cli-event-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const q={protocol:'leadgen-activity-v1',mode:'execute',run_id:'primary_cli__a1',task_id:'11111111-1111-4111-8111-111111111111',binding_id:'22222222-2222-4222-8222-222222222222',activity_key:'preflight',nonce:'a'.repeat(48),source_commit:'b'.repeat(40),runtime_snapshot_sha256:'c'.repeat(64),deadline_ms:Date.now()+10000,broker_host:'mmv',method:{name:'fixture',version:'0.1.0',text:'fixture'}};
+ const dir=join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));mkdirSync(dir,{recursive:true});
+ const seen=[];const broker=await startPrimaryActivityBroker({directory:join(home,'broker'),request:q,authorize:async()=>true,inspect:async()=>({pending_write_readbacks:[]}),phone:async()=>({}),business:async()=>({}),onEvent:async event=>{seen.push(event);return {action:'steer',text:'核对原生登录账号'};}});
+ t.after(()=>broker.close());Object.assign(q,{broker_request_path:broker.requestPath,broker_tool_path:fileURLToPath(new URL('../activity-skill-tool.mjs',import.meta.url))});
+ writeFileSync(join(dir,'activity-request.json'),JSON.stringify(q));
+ const deps={home,authorize:async()=>true};
+ const first=await relayActivityTool(dir,'inspect',{[kind]:'实际预检事件'},deps);
+ assert.equal(first.ok,true);assert.equal(seen[0].type,kind);assert.equal(seen[0].text,'实际预检事件');
+ const next=await relayActivityTool(dir,'inspect',{},deps);assert.deepEqual(next.result.commander_guidance,['核对原生登录账号']);
+ assert.deepEqual(first.result.pending_write_readbacks,[]);
+});
+
+test('真实relay保留受限工具错误码诊断，不泄露子进程stderr正文',async t=>{
+ const home=mkdtempSync(join(tmpdir(),'primary-cli-error-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const q={protocol:'leadgen-activity-v1',mode:'execute',run_id:'primary_cli__a1',activity_key:'preflight',nonce:'a'.repeat(48),source_commit:'b'.repeat(40),deadline_ms:Date.now()+10000,broker_host:'mmv',broker_tool_path:'/fixture/tool.mjs',broker_request_path:'/fixture/request.json',method:{name:'fixture',version:'0.1.0',text:'fixture'}};
+ const dir=join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'activity-request.json'),JSON.stringify(q));
+ await assert.rejects(()=>relayActivityTool(dir,'inspect',{question:'如何处理？'},{home,authorize:async()=>true,execute:async()=>({code:1,stdout:'',stderr:'SKILL_PRIMARY_EXPIRED\nprivate Bearer secret-token'})}),error=>error.message==='RPC_SKILL_TOOL_FAILED'&&error.toolErrorCode==='SKILL_PRIMARY_EXPIRED');
+});
+
+test('Agent relay生成可无截断还原的冻结方法原件，parent不重复搬运业务大payload',async t=>{
+ const home=mkdtempSync(join(tmpdir(),'primary-compact-relay-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const {q}=scope();Object.assign(q,{protocol:'leadgen-activity-v1',broker_tool_path:'/fixture/tool.mjs',broker_request_path:'/fixture/request.json',nonce:'d'.repeat(48)});
+ q.worker_deadline_ms=Date.now()+5000;q.receipt_deadline_ms=Date.now()+7500;
+ q.method.text+='业务方法原文'.repeat(3000);q.method.support.text='完整安全边界'.repeat(2000);
+ let checked=false;
+ await runSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args)=>{
+  if(command==='openclaw'){
+   const path=args[args.indexOf('--message-file')+1],dir=path.replace(/\/parent-message\.txt$/,'');
+   const request=JSON.parse(readFileSync(join(dir,'agent-request.json'),'utf8'));
+   assert.equal(request.expires_at,q.deadline_ms/1000,'handoff读回/停止授权不能随worker提前过期');
+   assert.equal(request.worker_expires_at,q.worker_deadline_ms/1000);
+   assert.ok(claimSkillSpawn(dir,{home,verifyWorkspace:()=>true}));
+   const plan=JSON.parse(readFileSync(join(dir,'child-task.json'),'utf8'));
+   assert.equal(plan.scope.run_id,q.run_id);assert.equal(plan.scope.source_commit,q.source_commit);
+   for(const [field,bytes] of [['method',q.method.text],['support',q.method.support.text]]){
+    const pieces=plan[field].parts.map(part=>readFileSync(part,'utf8'));
+    assert.ok(pieces.every(part=>part.length<=4000));assert.equal(pieces.join(''),bytes);
+   }
+   assert.deepEqual(JSON.parse(readFileSync(plan.contract_path,'utf8')),q.method.contract);
+   assert.deepEqual(plan.identity_contract.binding_checks,['run_id','task_id','parent_session_key','nonce']);
+   assert.equal(plan.inspect_contract.pending_write_readbacks,'unconfirmed_write_operations');
+   assert.deepEqual(plan.inspect_contract.defaults,{commander_guidance:[],commander_abort:false});
+   assert.ok(readFileSync(path,'utf8').length<6000);assert.ok(!readFileSync(path,'utf8').includes(q.method.text));
+   checked=true;return {code:0,stdout:'{}',stderr:''};
+  }
+  return {code:1,stdout:'',stderr:''};
+ }});
+ assert.equal(checked,true);
 });
