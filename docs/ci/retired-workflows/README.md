@@ -33,3 +33,11 @@ AI 专用兼容接口保留。截图判官/AI 列自动回写未完成，不能�
 | 255256704 | cleanup-merged-artifacts.yml | 原来删除的是跟踪的 .prd-*/.task-* 源文件，并非 Actions artifact；无未履行的 artifact 清理义务。当前开发审阅/历史合同保留，不恢复自动向 main 删除与推送的旧壳 |
 
 历史源码 refs（顺序按表）：`2a860739bc983c776fe351ecb02d245aaa6e7122`、`e39f14737d1cd53a73d1a80b1ea14c813f6145d7`、`9f53e53bc152047a8dccedfe32d1ec98f7caf939`、`9feba26207cc80578f44276db2d407a3aacea5fe`、`0521cd43fab860246ad17813486f181e7ed55959`、`9519991224f250c95fb743cbd848bdf31796e994`、`b441c5def8350619c3880dfedd5b58dd95c3b76e^`。详情及 API 读回保存在本次 CI 审计证据目录。
+
+旧 Dashboard `SkillCreateTab` 及 `/staff/skill-create` 浏览器合同/工作流已退出：
+当前 Dashboard 导航和 Staff Hub 路由均无该入口，也无当前 queued/in_progress/pending
+任务要求这份旧视图。此前 UI 只保存 `localStorage.skill_draft_id`；真实草稿内容、
+状态、callback_token、zip_path 保存在 `zenithjoy.skill_drafts`，本次完全不删除或迁移。
+同一 `/api/staff/skill-drafts/:id` 后端继续按原 ID 恢复历史草稿，当前 API/default unit
+合同覆盖状态互斥、异步生成、输入回答、回调与租户隔离。退出无消费者的旧视图，
+不把 `/skill-eval` 的 zip 上传视为草稿创建等价产品。
