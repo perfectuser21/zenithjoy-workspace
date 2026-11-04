@@ -15,8 +15,8 @@ class BuildOnlyTest(unittest.TestCase):
         for job in doc['jobs'].values():
             for step in job['steps']:
                 run = step.get('run', '')
-                if 'coscmd upload' in run or 'cos-upload.py' in run:
-                    self.assertEqual(step.get('if'), gate, step.get('name'))
+                if any(marker in run for marker in ('coscmd upload', 'cos-upload.py', 'VPS_API_URL', 'VPS_INTERNAL_TOKEN')):
+                    self.assertEqual(step.get('if', job.get('if')), gate, step.get('name'))
         steps = doc['jobs']['build']['steps']
         names = [step.get('name') for step in steps]
         self.assertLess(names.index('Dryrun verify (embedded-python import check)'),

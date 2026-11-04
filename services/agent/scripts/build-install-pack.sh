@@ -192,8 +192,13 @@ install_embedded_pkgs() {
       # get-pip.py historically called pip in-process with argv[0]=pip, tripping
       # Windows self-modification protection. Execute the official zipapp instead.
       curl -fL --retry 3 -o "${PYTHON_EMBED_DIR}/pip.pyz" "$PIP_ZIPAPP_URL" || return 1
+      # Record the downloaded bootstrap and real target interpreter in CI evidence.
+      shasum -a 256 "${PYTHON_EMBED_DIR}/pip.pyz" || return 1
+      "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/pip.pyz" --version || return 1
       "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/pip.pyz" install --upgrade \
         --target "$SITE_PKGS" pip setuptools wheel || return 1
+      "${PYTHON_EMBED_DIR}/python.exe" -c \
+        "import sys, setuptools, pip, wheel; print('embedded-bootstrap-ok', sys.executable, pip.__version__, setuptools.__version__, wheel.__version__)" || return 1
       "${PYTHON_EMBED_DIR}/python.exe" -m pip install --target "$SITE_PKGS" $WHEEL_PKGS || return 1
       ;;
     *)

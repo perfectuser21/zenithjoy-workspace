@@ -14,7 +14,7 @@ class EmbeddedPipBootstrapTest(unittest.TestCase):
             root = pathlib.Path(folder)
             (root / 'python.exe').write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALLS"\ncase "$1" in *get-pip.py) exit 99;; esac\n')
             (root / 'python.exe').chmod(0o755)
-            script = 'set -eu\nuname() { echo MINGW64_NT; }\ncurl() { :; }\n' + function + '\ninstall_embedded_pkgs\n'
+            script = 'set -eu\nuname() { echo MINGW64_NT; }\ncurl() { :; }\nshasum() { :; }\n' + function + '\ninstall_embedded_pkgs\n'
             import os
             env = dict(os.environ, PYTHON_EMBED_DIR=folder, SITE_PKGS=folder+'/Lib/site-packages',
                        GETPIP_URL='unused', PIP_ZIPAPP_URL='https://bootstrap.pypa.io/pip/pip.pyz',
@@ -22,8 +22,10 @@ class EmbeddedPipBootstrapTest(unittest.TestCase):
             result = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             calls = (root / 'calls').read_text().splitlines()
-            self.assertIn('pip.pyz install --upgrade --target', calls[0])
-            self.assertTrue(calls[1].startswith('-m pip install --target '))
-            self.assertIn('pywinauto pywin32', calls[1])
+            self.assertIn('pip.pyz --version', calls[0])
+            self.assertIn('pip.pyz install --upgrade --target', calls[1])
+            self.assertIn('import sys, setuptools, pip, wheel', calls[2])
+            self.assertTrue(calls[3].startswith('-m pip install --target '))
+            self.assertIn('pywinauto pywin32', calls[3])
 
 if __name__ == '__main__': unittest.main()
