@@ -796,6 +796,60 @@
         ".github/workflows/scripts/smoke/installer-env-reset-smoke.sh"
       ],
       "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts",
+      "source_commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+      "source_blob": "c3dc0e130fe02c9f2b787c675b3a04933170b371",
+      "source_sha256": "fd1851dc7a30a513081be79759eb723eb3b6e97ebe40ceffb709df9611eb0ba2",
+      "reason": "旧静态断言固定旧Secret名/已退役薄壳/离线模式为成功，未实际检查登录或状态回写；由现役脚本子进程、真实mounted HTTP和隔离PostgreSQL读回替代。",
+      "dimensions": {
+        "current_value": "保留现役浏览器账号健康与英文主号状态UI；不把它当Android智能客服验收。",
+        "active_status": "原合同是历史sprint静态oracle；现役Session工作流保留并修协议、4个必需账号和35槽诚实报告。",
+        "real_effect": "替代实际证实旧header401、新token200、页面英文key可读、时间戳与lastValidAt保存；SQL单行失败整批回滚500，缺必需账号/0实际健康失败。",
+        "test_and_blocking": "子进程负例由L3脚本回归/统一blocking smoke执行；session-writeback.pg.test.ts由required L4 Integration Gate执行，不用grep或可跳过空壳。",
+        "duplication_and_obsolescence": "旧静态断言固定旧Secret名/已退役薄壳/离线模式为成功，未实际检查登录或状态回写；由现役脚本子进程、真实mounted HTTP和隔离PostgreSQL读回替代。",
+        "runtime_and_maintenance_cost": "退役2228字节历史重复/过时静态维护面，替代共用现役统一入口与既有PG集群；不臆测单文件耗时。",
+        "retirement_and_dependencies": "主工作流、脚本、实际status API、生产表和旧sprint文档均保留；只清退测试副本，全部原字节有commit/blob/SHA256，可恢复，无未转移独有义务。"
+      },
+      "replacement_test_paths": [
+        "scripts/sessions/check-health.test.mjs",
+        ".github/workflows/scripts/__tests__/session-health.test.mjs",
+        ".github/workflows/scripts/__tests__/session-sync.test.mjs",
+        "apps/api/tests/integration/business-contracts/session-writeback.pg.test.ts"
+      ],
+      "evidence_paths": [
+        "docs/ci/round3-central-wiring.json",
+        "docs/ci/round3-business-results.json"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts",
+      "source_commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+      "source_blob": "1086edf6001a6a2f30dc7ed5eb467d90cd81bdca",
+      "source_sha256": "84922383e8db88faf5c2080fe827d4bb8546ecb3c4a339989bed6b0fd5963c63",
+      "reason": "旧静态断言固定旧Secret名/已退役薄壳/离线模式为成功，未实际检查登录或状态回写；由现役脚本子进程、真实mounted HTTP和隔离PostgreSQL读回替代。",
+      "dimensions": {
+        "current_value": "保留现役浏览器账号健康与英文主号状态UI；不把它当Android智能客服验收。",
+        "active_status": "原合同是历史sprint静态oracle；现役Session工作流保留并修协议、4个必需账号和35槽诚实报告。",
+        "real_effect": "替代实际证实旧header401、新token200、页面英文key可读、时间戳与lastValidAt保存；SQL单行失败整批回滚500，缺必需账号/0实际健康失败。",
+        "test_and_blocking": "子进程负例由L3脚本回归/统一blocking smoke执行；session-writeback.pg.test.ts由required L4 Integration Gate执行，不用grep或可跳过空壳。",
+        "duplication_and_obsolescence": "旧静态断言固定旧Secret名/已退役薄壳/离线模式为成功，未实际检查登录或状态回写；由现役脚本子进程、真实mounted HTTP和隔离PostgreSQL读回替代。",
+        "runtime_and_maintenance_cost": "退役2445字节历史重复/过时静态维护面，替代共用现役统一入口与既有PG集群；不臆测单文件耗时。",
+        "retirement_and_dependencies": "主工作流、脚本、实际status API、生产表和旧sprint文档均保留；只清退测试副本，全部原字节有commit/blob/SHA256，可恢复，无未转移独有义务。"
+      },
+      "replacement_test_paths": [
+        "scripts/sessions/check-health.test.mjs",
+        ".github/workflows/scripts/__tests__/session-health.test.mjs",
+        ".github/workflows/scripts/__tests__/session-sync.test.mjs",
+        "apps/api/tests/integration/business-contracts/session-writeback.pg.test.ts"
+      ],
+      "evidence_paths": [
+        "docs/ci/round3-central-wiring.json",
+        "docs/ci/round3-business-results.json"
+      ],
+      "historical_obligation_evidence": null
     }
   ]
 }
