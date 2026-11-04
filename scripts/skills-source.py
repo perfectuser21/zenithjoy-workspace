@@ -30,8 +30,8 @@ def classify_fetch_error(stderr):
     if any(reason in message for reason in permanent):
         return 'permanent', False
     if 'permission denied (publickey)' in message:
-        # The same deployed identity has succeeded and failed concurrently in CI.
-        # A genuinely invalid identity still fails after this bounded budget.
+        # Retry authentication denials within the same fixed identity budget.
+        # A permanently invalid identity remains fatal after the bounded attempts.
         return 'ssh_publickey', True
     transient = (
         'connection timed out', 'connection timeout', 'connection reset',
@@ -136,10 +136,14 @@ def bootstrap(workspace, source, command, ref="HEAD", read_path=None):
             hosts = Path(private) / "known_hosts"
             hosts.write_bytes(b"github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n")
             # No agent, alternate identity, credential helper or interactive fallback.
-            env["GIT_SSH_COMMAND"] = (f'ssh -F /dev/null -i "{keyfile}" -o IdentitiesOnly=yes '
-                f'-o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=10 '
-                f'-o ConnectionAttempts=1 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 '
-                f'-o StrictHostKeyChecking=yes -o UserKnownHostsFile="{hosts}"')
+            # Keep paths out of shell source; quoted variable expansion is data.
+            env["SKILLS_SOURCE_IDENTITY_PATH"] = str(keyfile)
+            env["SKILLS_SOURCE_HOSTS_PATH"] = str(hosts)
+            env["SKILLS_SOURCE_HOSTS_OPTION"] = 'UserKnownHostsFile="' + str(hosts).replace('\\', '\\\\').replace('"', '\\"') + '"'
+            env["GIT_SSH_COMMAND"] = ('ssh -F /dev/null -i "$SKILLS_SOURCE_IDENTITY_PATH" -o IdentitiesOnly=yes '
+                '-o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=10 '
+                '-o ConnectionAttempts=1 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 '
+                '-o StrictHostKeyChecking=yes -o "$SKILLS_SOURCE_HOSTS_OPTION"')
             remote = "git@github.com:perfectuser21/zenithjoy-skills.git"
             if not (source / ".git").exists():
                 source.mkdir(parents=True, exist_ok=True)

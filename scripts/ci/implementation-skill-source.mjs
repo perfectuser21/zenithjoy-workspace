@@ -67,7 +67,12 @@ function ensureSource(source,revision){
   const identity=join(auth,'key'),hosts=join(auth,'known_hosts');
   writeFileSync(identity,key.replace(/\r\n/g,'\n').trimEnd()+'\n',{mode:0o600});
   writeFileSync(hosts,'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n');
-  env.GIT_SSH_COMMAND=`ssh -F /dev/null -i "${identity}" -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${hosts}"`;
+  // Git evaluates this constant through a shell. Paths expand only as quoted
+  // environment data, so TMPDIR quotes/$()/backticks never become shell syntax.
+  env.SKILLS_SOURCE_IDENTITY_PATH=identity;
+  env.SKILLS_SOURCE_HOSTS_PATH=hosts;
+  env.SKILLS_SOURCE_HOSTS_OPTION='UserKnownHostsFile="'+hosts.replaceAll('\\','\\\\').replaceAll('"','\\"')+'"';
+  env.GIT_SSH_COMMAND='ssh -F /dev/null -i "$SKILLS_SOURCE_IDENTITY_PATH" -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o "$SKILLS_SOURCE_HOSTS_OPTION"';
   reportIdentity(identity,env);
   fetchPinned(source,revision,env,key);
  }finally{rmSync(auth,{recursive:true,force:true});}
@@ -106,8 +111,11 @@ export function installRegressionSkills(root,{source=process.env.SKILLS_SOURCE_D
  if(source)env.GIT_ALLOW_PROTOCOL='file';
  for(const key of ['PYTHONPATH','PYTHONHOME','NODE_OPTIONS','NODE_PATH','BASH_ENV','ENV'])delete env[key];
  delete env.SKILLS_SOURCE_DIR;
- const run=(command,args)=>{const timeout=deadline-Date.now();if(timeout<=0)fail('SKILL_REGRESSION_TIMEOUT');return execFileSync(command,args,{cwd:root,env,stdio:['ignore','pipe','pipe'],timeout,maxBuffer:32*1024*1024});};
- const local=(dir,...args)=>run('git',['--no-replace-objects','-C',dir,'-c','core.hooksPath=/dev/null',...args]);
+ const options=()=>{const timeout=deadline-Date.now();if(timeout<=0)fail('SKILL_REGRESSION_TIMEOUT');return {cwd:root,env,stdio:['ignore','pipe','pipe'],timeout,maxBuffer:32*1024*1024};};
+ // Keep Git's -c config argv separate from Bash's script-file argv. Neither
+ // operation accepts shell command text or a dynamic executable.
+ const runGit=args=>execFileSync('git',args,options());
+ const local=(dir,...args)=>runGit(['--no-replace-objects','-C',dir,'-c','core.hooksPath=/dev/null',...args]);
  const lockBytes=local(root,'show','HEAD:.skills-source.json');
  if(!readFileSync(join(root,'.skills-source.json')).equals(lockBytes))fail('SKILL_REGRESSION_LOCK_CHANGED');
  const lock=JSON.parse(lockBytes);
@@ -130,7 +138,7 @@ export function installRegressionSkills(root,{source=process.env.SKILLS_SOURCE_D
     // clone treats a shallow repository without refs as empty. Fetch the exact
     // object into a fresh repository instead; file transport copies packs and
     // never borrows objects, refs, config, hooks or a checkout from the cache.
-    run('git',['-c','core.hooksPath=/dev/null','init','--quiet','--template=',checkout]);
+    runGit(['-c','core.hooksPath=/dev/null','init','--quiet','--template=',checkout]);
     local(checkout,'fetch','--quiet','--no-tags','--depth=1',
      '--upload-pack=git -c core.hooksPath=/dev/null upload-pack',source,lock.revision);
     if(existsSync(join(checkout,'.git/objects/info/alternates')))fail('SKILL_REGRESSION_ALTERNATES');
@@ -139,7 +147,7 @@ export function installRegressionSkills(root,{source=process.env.SKILLS_SOURCE_D
    }
    env.SKILLS_SOURCE_DIR=source;
   }
-  run('bash',['scripts/ensure-skills-source.sh',root]);
+  execFileSync('bash',['scripts/ensure-skills-source.sh',root],options());
   if(Date.now()>=deadline)fail('SKILL_REGRESSION_TIMEOUT');
   return {privateCheckout:checkout||null};
  }finally{if(temporary)rmSync(temporary,{recursive:true,force:true});}

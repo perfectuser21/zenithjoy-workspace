@@ -173,3 +173,14 @@ test('真实部署prefix消费固定对象cache，不重建默认源；坏cache�
   assert.equal(git(f.business,'status','--porcelain=v1','--untracked-files=no'),'','不得改变固定业务源码');
  }finally{f.cleanup();}}
 });
+
+test('真实离线installer的checkout/cache恶意路径只作为argv，不能变成bash命令',()=>{
+ for(const target of ['business','cache']){const f=regressionFixture();try{
+  const hostile=join(f.business,'../'+target+" ' \" $(touch PWN_DOLLAR) `touch PWN_TICK` ; &");
+  renameSync(f[target],hostile);f[target]=hostile;
+  const result=sourceApi.installRegressionSkills(f.business,{source:f.cache});
+  assert.equal(readFileSync(join(f.business,'installer-phases'),'utf8'),'install\nverify\n');
+  assert.equal(existsSync(join(f.business,'PWN_DOLLAR')),false);assert.equal(existsSync(join(f.business,'PWN_TICK')),false);
+  assert.ok(result.privateCheckout);assert.equal(existsSync(result.privateCheckout),false);
+ }finally{f.cleanup();}}
+});

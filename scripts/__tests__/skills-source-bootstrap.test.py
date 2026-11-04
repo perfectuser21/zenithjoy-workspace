@@ -41,10 +41,11 @@ import hashlib,json,os,pathlib,shlex,stat,subprocess,sys,time
 args=sys.argv[1:]
 if 'fetch' not in args: os.execv(os.environ['FIXTURE_REAL_GIT'],['git',*args])
 log=pathlib.Path(os.environ['FIXTURE_FETCH_LOG']);previous=log.read_text().splitlines() if log.exists() else []
-ssh=os.environ.get('GIT_SSH_COMMAND','');parts=shlex.split(ssh);identity=parts[parts.index('-i')+1] if '-i' in parts else None
+ssh=os.environ.get('GIT_SSH_COMMAND','');parts=shlex.split(ssh);identity=os.environ.get('SKILLS_SOURCE_IDENTITY_PATH') or (parts[parts.index('-i')+1] if '-i' in parts else None)
 entry={'args':args,'ssh':ssh,'identity_sha256':hashlib.sha256(pathlib.Path(identity).read_bytes()).hexdigest() if identity else None,'identity_mode':stat.S_IMODE(pathlib.Path(identity).stat().st_mode) if identity else None,'key_env_present':'SKILLS_SOURCE_SSH_KEY' in os.environ}
 with log.open('a') as out:out.write(json.dumps(entry)+'\\n')
 time.sleep(float(os.environ.get('FIXTURE_FETCH_SLEEP','0')))
+if os.environ.get('FIXTURE_EXECUTE_SSH'):subprocess.run(ssh,shell=True,check=True,stdin=subprocess.DEVNULL)
 if len(previous)<int(os.environ['FIXTURE_FETCH_FAILURES']):
  print(os.environ['FIXTURE_FETCH_ERROR'],file=sys.stderr);sys.exit(128)
 index=args.index('fetch');args[index+3]=os.environ['FIXTURE_SOURCE']
@@ -56,13 +57,13 @@ os.execv(os.environ['FIXTURE_REAL_GIT'],['git',*args])
         self.private_lines = self.identity.read_text().splitlines()
         self.key = self.identity.read_text().replace('\n','\r\n').rstrip('\r\n')
         self.fingerprint = subprocess.check_output(['ssh-keygen','-l','-E','sha256','-f',str(self.identity)+'.pub'],text=True,timeout=5).split()[1]
-        self.env = {**os.environ,'PATH':str(self.bin)+os.pathsep+os.environ['PATH'],'SKILLS_SOURCE_SSH_KEY':self.key,'FIXTURE_REAL_GIT':self.git,'FIXTURE_SOURCE':str(self.origin),'FIXTURE_FETCH_LOG':str(self.log),'FIXTURE_FETCH_FAILURES':'0','FIXTURE_FETCH_ERROR':'git@github.com: Permission denied (publickey).'}
+        self.env = {**os.environ,'PATH':str(self.bin)+os.pathsep+os.environ['PATH'],'SKILLS_SOURCE_SSH_KEY':self.key,'FIXTURE_REAL_GIT':self.git,'FIXTURE_REAL_SSH':shutil.which('ssh'),'FIXTURE_SOURCE':str(self.origin),'FIXTURE_FETCH_LOG':str(self.log),'FIXTURE_FETCH_FAILURES':'0','FIXTURE_FETCH_ERROR':'git@github.com: Permission denied (publickey).'}
 
     def write_lock(self):
         (self.workspace / '.skills-source.json').write_text(json.dumps(self.lock))
 
     def run_bootstrap(self, command='install'):
-        return subprocess.run([sys.executable,str(BOOTSTRAP),command,'--workspace',str(self.workspace)],env=self.env,capture_output=True,text=True,timeout=25)
+        return subprocess.run([sys.executable,str(BOOTSTRAP),command,'--workspace',str(self.workspace)],env=self.env,cwd=self.root,capture_output=True,text=True,timeout=25)
 
     def attempts(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
@@ -179,6 +180,19 @@ os.execv(os.environ['FIXTURE_REAL_GIT'],['git',*args])
         self.assertEqual(len(self.attempts()),1)
         self.assertIn('identity diagnostic unavailable',result.stderr)
         self.assertIn('Repository not found.',result.stderr)
+
+    def test_hostile_temp_paths_are_literal_at_the_actual_git_ssh_shell_boundary(self):
+        directory=self.root/"temp ' \" $(touch PWN_DOLLAR) `touch PWN_TICK` ; &"
+        directory.mkdir()
+        sshlog=self.root/'ssh-argv.json'
+        self.env.update(TMPDIR=str(directory),TMP=str(directory),TEMP=str(directory),FIXTURE_EXECUTE_SSH='1',FIXTURE_SSH_LOG=str(sshlog))
+        ssh=self.bin/'ssh'
+        ssh.write_text('#!'+sys.executable+'\nimport json,os,pathlib,sys,subprocess\na=sys.argv[1:];key=pathlib.Path(a[a.index("-i")+1]);assert key.is_file()\nr=subprocess.run([os.environ["FIXTURE_REAL_SSH"],"-G",*a,"example.invalid"],stdin=subprocess.DEVNULL,capture_output=True,text=True,check=True,timeout=5)\nassert next(x for x in r.stdout.splitlines() if x.startswith("userknownhostsfile "))=="userknownhostsfile "+os.environ["SKILLS_SOURCE_HOSTS_PATH"]\npathlib.Path(os.environ["FIXTURE_SSH_LOG"]).write_text(json.dumps(a))\n')
+        ssh.chmod(0o755)
+        result=self.run_bootstrap();self.assertEqual(result.returncode,0,result.stderr)
+        args=json.loads(sshlog.read_text());self.assertIn(str(directory),args[args.index('-i')+1])
+        self.assertFalse((self.root/'PWN_DOLLAR').exists());self.assertFalse((self.root/'PWN_TICK').exists())
+        for secret_line in self.private_lines:self.assertNotIn(secret_line,result.stdout+result.stderr)
 
     def test_loader_checksum_failure_is_fatal_after_one_fetch(self):
         self.lock['loader_sha256']='0'*64;self.write_lock()
