@@ -1,157 +1,126 @@
 {
-  "base_sha": "baa31d33efd0304eda22cfc11854d6c426459420",
-  "scope": "real native folder-watch fixture; production manager unchanged",
+  "base_sha": "e032a4418",
+  "status": "NOT_CLOSED: controlled protocol checks passed once, but the single full-suite run failed native delivery",
+  "scope": "Two-stage native subscription/readiness and target delivery diagnostic candidate. Production manager unchanged. No skip, synthetic events, directory switch or retry-to-green.",
   "supersedes": {
-    "commit": "b8875dfc5",
-    "reason": "Root integration disproved stability of the readiness-then-target fixture, including a quiescent control. Prior local green receipts are historical evidence, not a current closure claim.",
-    "prior_executions": {
-      "targeted": {
-        "files": 1,
-        "tests": 7,
-        "fail": 0,
-        "native_ms": 2052
-      },
-      "full_final": {
-        "files": 101,
-        "tests": 1054,
-        "fail": 0,
-        "skipped": 0,
-        "native_ms": 2508
-      },
-      "agent_typecheck": {
-        "command": "npx tsc --noEmit --module esnext --moduleResolution bundler",
-        "exit": 0
-      },
-      "source_mutation": {
-        "control_exit": 0,
-        "control_native_ms": 681,
-        "observed_file_basenames": [
-          "watched",
-          "ready-1.txt",
-          "ready-2.txt",
-          "ready-3.txt",
-          "native-event.mp4"
-        ],
-        "published": 1,
-        "disabled_production_callback_exit": 1,
-        "negative": "actual native watcher kept; removing only production onChange delivery fails the same 8000ms deadline with zero published target and zero observed callbacks"
-      }
-    },
+    "commit": "4664bd0ef",
+    "reason": "Root and independent reviewer fixed Node20 runs also failed single-publication with rawEvents empty; its local green receipt did not establish closure.",
+    "historical_receipt": "Previous local-green/raw diagnostic receipts remain in this file at commit4664bd0ef; root subsequent failures supersede their stability claim.",
     "prior_logs": {
-      "old_full": {
-        "path": "/tmp/pr2406-native-full-red.log",
-        "sha256": "363e4ba771535c5e8a56e599b6d495d1c52882ddf8fc9a5e90c7b9cb5671418d"
+      "root_prior_handshake_no_events": {
+        "path": "/private/tmp/zenithjoy-round3-agent-security-final3.log",
+        "sha256": "3717bb3a2eeaac8b0ae9a6589c8502faf8ff3d7b4d61b2ad16844a15b7667109"
       },
-      "root_timeout": {
-        "path": "/private/tmp/zenithjoy-round3-agent-security-final2.log",
-        "sha256": "d63957be34340c1fa5e85377a3da07746cc6b1e14af7e2963c9faecee6dbb6e0"
+      "root_quiescent_handshake_second_batch_timeout": {
+        "path": "/private/tmp/zenithjoy-round3-agent-quiescent-control.log",
+        "sha256": "7ba2660e1b9f124292b66bfe3e84dbd83a131b59d86e5ff8410d192b1698362d"
       },
-      "targeted": {
-        "path": "/tmp/pr2406-native-targeted-green.log",
-        "sha256": "9b984df23c63f20d35f76a0f17e48564046b0283ea150c66b3cd885368221995"
+      "root_cwd_two_directory_registration_control": {
+        "path": "/tmp/pr2406-native-root-cwd-comparison.log",
+        "sha256": "90b7c988d4047e172ea2e4e5540b0c84f51cc8554c465dec6c443cd8c4979ee4"
       },
-      "full_after_readiness": {
-        "path": "/tmp/pr2406-native-full-green.log",
-        "sha256": "9856fd8fb43236f578d9b88ca5385816ad37aafbf6c8e35785df0e362db72783"
+      "root_cwd_two_directory_single_publication_control": {
+        "path": "/tmp/pr2406-native-one-publication-comparison.log",
+        "sha256": "0e0f2e5f90fcb0ff6ba5d3544fc547d579e0e721297e05e8d64bbcd07f05d0ae"
       },
-      "full_final_file_url_loader": {
-        "path": "/tmp/pr2406-native-full-final.log",
-        "sha256": "df5d317c4009e1fb150c2f8d2e6f93ac05db1ffc69d45ae2bb366613979b12d5"
-      },
-      "source_mutation": {
-        "path": "/tmp/pr2406-native-source-mutation.log",
-        "sha256": "186cf449a9a77fd70228e7ea215cff26657f23c3fd64e48f9bcd7ee8ca820ce2"
+      "full_single_publication": {
+        "path": "/tmp/pr2406-native-single-publication-full.log",
+        "sha256": "c62aed21d90c4d4c7d25404eaeed98b5dd53b81373073b7ac2d35da02eecd114"
       },
       "agent_typecheck": {
-        "path": "/tmp/pr2406-native-typecheck-final.log",
+        "path": "/tmp/pr2406-native-single-publication-tsc.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "real_registration_ENOENT": {
+        "path": "/tmp/pr2406-native-registration-failure.log",
+        "sha256": "b0d4c44634ae9b98c739b27019c7e5cb7eff6b706bf630455e188a2c47382823"
+      },
+      "source_mutation_inconclusive": {
+        "path": "/tmp/pr2406-native-single-publication-mutation.log",
+        "sha256": "95950a3348e6a8a1e544fc4f0e1c8f19888866f21f9dd8195753c98038df19b8"
       }
     }
   },
-  "findings": {
-    "root_quiescent_failure": "Actual readiness callback arrived at 4834ms; target was only then published and was not observed by the original shared 8000ms deadline. This test-invented handshake demands two separately delayed native batches.",
-    "directory_comparison": "Exact root Agent cwd, pinned loader, Node v20.20.2, and actual production manager registered real fs.watch successfully in both default canonical os.tmpdir and /private/tmp. Both initial batches arrived at 4224ms. No observed registration error or early close. This does not support claiming the default T directory is unsupported.",
-    "single_publication_control": "With one atomic target publication, both default T and /private/tmp delivered the actual native target filename at 1758ms; exit 0 and exact production callback/file checks passed in both.",
-    "limits": "The exact macOS/kernel scheduling cause of all prior missing/delayed events is not established. A single green suite does not guarantee all future native latency. The fixture retains the 8s bound and now reports native registration, errors, closure, raw filenames/timestamps, actual production callbacks and safe environment metadata on failure."
+  "protocol": {
+    "readiness": "After actual fs.watch registration, publish distinct owned ready files every250ms for at most8000ms; require actual production onChange readiness path. Stop probes on readiness.",
+    "delivery": "After readiness batch drains, start independent8000ms deadline and atomically rename target exactly once; assert exact native filename, production callback, bytes and production listMp4s.",
+    "budgets": {
+      "readiness_ms": 8000,
+      "delivery_ms": 8000,
+      "native_total_hard_ms": 16000,
+      "child_total_hard_ms": 20000,
+      "vitest_total_hard_ms": 22000,
+      "change": "This intentionally replaces the previous overall8s assumption. Child adds at most4s for startup/teardown (full-run observed startup/overhead about2.66s), Vitest adds2s for parent assertions/cleanup."
+    },
+    "diagnostics": "phase, failedPhase, both phase elapsed times (including incomplete phase on failure), registration/errors/close, raw filenames/times, exact production callbacks, probe/publication counts, hashes of actual fs.watch/manager and safe environment metadata."
   },
-  "fix": {
-    "loader": "Declared pinned tsx via file URL in a bounded child importing the actual production module; explicit Agent cwd.",
-    "watcher": "Observational wrapper calls actual fs.watch with the original production arguments, records raw callback, then forwards the exact callback to production. No synthetic event or replacement manager.",
-    "publication": "One atomic rename after watcher registration, followed by quiescence. The real target callback is itself the readiness evidence; no extra ready-file round.",
-    "assertions": [
-      "native registration succeeds without errors",
-      "raw filename is native-event.mp4",
-      "actual production callback equals target",
-      "one publication",
-      "exact file bytes",
-      "actual production listMp4s equals target"
+  "controlled_once": {
+    "positive": {
+      "exit": 0,
+      "readiness_ms": 257,
+      "delivery_ms": 284,
+      "total_native_ms": 543,
+      "rawReady": 2,
+      "published": 1
+    },
+    "production_onChange_disabled": {
+      "exit": 1,
+      "phase": "readiness",
+      "phase_ms": 8003,
+      "rawReady": 18,
+      "registered": true,
+      "registration_errors": [],
+      "published": 0,
+      "result": "Native readiness events arrived but disabled production callback did not forward them. The bounded readiness phase correctly rejected."
+    },
+    "actual_ENOENT": {
+      "exit": 1,
+      "phase": "registration",
+      "native_ms": 0,
+      "registered": false,
+      "code": "ENOENT",
+      "result": "Real watched directory removed immediately before actual production bind; native fs.watch ENOENT is surfaced immediately despite production catch."
+    }
+  },
+  "full_once": {
+    "files": 102,
+    "tests": 1090,
+    "passed": 1089,
+    "failed": 1,
+    "native_readiness_ms": 6543,
+    "native_delivery_ms": 8002,
+    "native_total_ms": 14545,
+    "rawReady": 2,
+    "published": 1,
+    "rawTarget": 0,
+    "registration_errors": [],
+    "early_close": false,
+    "raw_event_summary": [
+      "watched@6543ms",
+      "ready-1.txt@6543ms",
+      "ready-2.txt@12221ms"
     ],
-    "deadlines": {
-      "native_ms": 8000,
-      "parent_child_ms": 10000,
-      "vitest_test_ms": 12000,
-      "unchanged": true
-    }
+    "result": "Native target delivery failed its independent8s phase. Two-stage protocol did not establish full-suite stability. No follow-up retries were performed."
   },
-  "executions": {
-    "full_single_publication": {
-      "files": 101,
-      "tests": 1054,
-      "passed": 1054,
-      "skipped": 0,
-      "native_ms": 3200,
-      "suite_seconds": 8.2,
-      "runs": 1
-    },
-    "agent_typecheck": {
-      "command": "npx tsc --noEmit --module esnext --moduleResolution bundler",
-      "exit": 0
-    },
-    "real_registration_failure": {
-      "fault": "Remove the owned watched directory immediately before production bind; actual OS fs.watch throws ENOENT, swallowed by production catch.",
-      "result": "Fixture immediately rejects and records registered=false plus native ENOENT; no fake watcher."
-    },
-    "source_mutation": {
-      "control_exit": 0,
-      "control_raw_target_ms": 3213,
-      "disabled_production_callback_exit": 1,
-      "negative_raw_events": 0,
-      "conclusion": "Negative rejects at 8s, but native raw delivery is also absent, so this run is inconclusive for isolating callback-mutation sensitivity and is not claimed as proof."
-    }
+  "agent_typecheck": {
+    "command": "npx tsc --noEmit --module esnext --moduleResolution bundler",
+    "exit": 0
   },
+  "limits": "The macOS event backend/scheduling root cause is not established. Controlled positives and rawReady-positive mutation prove protocol assertions, not full-suite stability. This candidate must not be represented as a completed native fix or a green full suite.",
   "production_source_sha256": "e08f7b0c20db7bde9b64c3065ea30c0271dc516e9aa9638e96ca731bfcfe94c7",
   "logs": {
-    "root_prior_handshake_no_events": {
-      "path": "/private/tmp/zenithjoy-round3-agent-security-final3.log",
-      "sha256": "3717bb3a2eeaac8b0ae9a6589c8502faf8ff3d7b4d61b2ad16844a15b7667109"
+    "controlled": {
+      "path": "/tmp/pr2406-native-phases-controlled.log",
+      "sha256": "5e6391472bdb7758c545fa5892b5c1b41511f6ad4ee8b658fd3c6e467d757f2a"
     },
-    "root_quiescent_handshake_second_batch_timeout": {
-      "path": "/private/tmp/zenithjoy-round3-agent-quiescent-control.log",
-      "sha256": "7ba2660e1b9f124292b66bfe3e84dbd83a131b59d86e5ff8410d192b1698362d"
+    "full_failure": {
+      "path": "/tmp/pr2406-native-phases-full.log",
+      "sha256": "5bb0547e8214e469ff72a782fb5f063f463218b04f8804ed2165e9ae6f56d3bf"
     },
-    "root_cwd_two_directory_registration_control": {
-      "path": "/tmp/pr2406-native-root-cwd-comparison.log",
-      "sha256": "90b7c988d4047e172ea2e4e5540b0c84f51cc8554c465dec6c443cd8c4979ee4"
-    },
-    "root_cwd_two_directory_single_publication_control": {
-      "path": "/tmp/pr2406-native-one-publication-comparison.log",
-      "sha256": "0e0f2e5f90fcb0ff6ba5d3544fc547d579e0e721297e05e8d64bbcd07f05d0ae"
-    },
-    "full_single_publication": {
-      "path": "/tmp/pr2406-native-single-publication-full.log",
-      "sha256": "c62aed21d90c4d4c7d25404eaeed98b5dd53b81373073b7ac2d35da02eecd114"
-    },
-    "agent_typecheck": {
-      "path": "/tmp/pr2406-native-single-publication-tsc.log",
+    "typecheck": {
+      "path": "/tmp/pr2406-native-phases-tsc.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "real_registration_ENOENT": {
-      "path": "/tmp/pr2406-native-registration-failure.log",
-      "sha256": "b0d4c44634ae9b98c739b27019c7e5cb7eff6b706bf630455e188a2c47382823"
-    },
-    "source_mutation_inconclusive": {
-      "path": "/tmp/pr2406-native-single-publication-mutation.log",
-      "sha256": "95950a3348e6a8a1e544fc4f0e1c8f19888866f21f9dd8195753c98038df19b8"
     }
-  }
+  },
+  "post_run_metadata_delta": "After full failure, added explicit failedPhase/incomplete phase duration reporting and changed only outer startup/teardown allowance from2s to4s. Native phase/total budgets and event logic unchanged. No green rerun claimed."
 }

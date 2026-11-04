@@ -8,44 +8,114 @@ import {createHash} from 'node:crypto';
 import {performance} from 'node:perf_hooks';
 import {createFolderWatchManager} from '../../folder-watch.ts';
 
-const root=fs.realpathSync(process.argv[2]);
-const watched=path.join(root,'watched'),incoming=path.join(root,'incoming');
-fs.mkdirSync(watched);fs.mkdirSync(incoming);
-const target=path.join(watched,'native-event.mp4');
-const events=[],rawEvents=[];const started=performance.now();let published=0,completed=false;
-let publisher,deadline;let succeed,fail;
-const result=new Promise((resolve,reject)=>{succeed=resolve;fail=reject;});
-const registration={attempted:false,registered:false,closed:false,errors:[]};
-const errorInfo=error=>({code:error.code,message:error.message});
-const diagnostics=()=>({root,watched,cwd:process.cwd(),node:process.version,execPath:process.execPath,tmpdir:os.tmpdir(),TMPDIR:process.env.TMPDIR,uid:process.getuid?.(),rootStat:{uid:fs.statSync(root).uid,mode:fs.statSync(root).mode},watchFunctionHash:createHash('sha256').update(fs.watch.toString()).digest('hex'),managerFunctionHash:createHash('sha256').update(createFolderWatchManager.toString()).digest('hex'),registration,rawEvents,events,published});
-const manager=createFolderWatchManager({fsWatch:(directory,options,listener)=>{
- registration.attempted=true;
- try{
-  const watcher=fs.watch(directory,options,(event,filename)=>{
-   rawEvents.push({event,filename:filename?.toString()??null,elapsedMs:Math.round(performance.now()-started)});
-   listener(event,filename);
-  });
-  registration.registered=true;
-  watcher.on('error',error=>{registration.errors.push(errorInfo(error));fail(error);});
-  watcher.on('close',()=>{registration.closed=true;if(!completed)fail(new Error('Native watcher closed before target delivery'));});
-  return watcher;
- }catch(error){registration.errors.push(errorInfo(error));throw error;}
-},onChange:file=>{
- events.push({file,elapsedMs:Math.round(performance.now()-started)});
- if(file===target)succeed(file);
-}});
-try{
- manager.bind(watched);
- if(!registration.registered)throw new Error('Production bind did not register a native watcher');
- deadline=setTimeout(()=>fail(new Error('Native folder event was not delivered within 8000ms')),8000);
- // One publication after registration, then quiescence. Requiring a separate
- // readiness notification first adds a second delayed FSEvents batch without
- // testing an additional production promise. The target callback proves readiness.
- publisher=setImmediate(()=>{
-  try{const staged=path.join(incoming,'video.partial');fs.writeFileSync(staged,'native video publication');published++;fs.renameSync(staged,target);}catch(error){fail(error);}
- });
- assert.equal(await result,target);assert.equal(published,1);
- assert.equal(fs.readFileSync(target,'utf8'),'native video publication');
- assert.deepEqual(manager.listMp4s(),[target]);
- completed=true;process.stdout.write(JSON.stringify({platform:process.platform,target,...diagnostics(),elapsedMs:Math.round(performance.now()-started)})+'\n');
-}catch(error){console.error(JSON.stringify({error:errorInfo(error),...diagnostics()}));throw error;}finally{completed=true;clearImmediate(publisher);clearTimeout(deadline);manager.stop();}
+const root = fs.realpathSync(process.argv[2]);
+const watched = path.join(root, 'watched');
+const incoming = path.join(root, 'incoming');
+fs.mkdirSync(watched);
+fs.mkdirSync(incoming);
+const target = path.join(watched, 'native-event.mp4');
+const events = [], rawEvents = [];
+const started = performance.now();
+const phaseBudgetMs = 8000, totalBudgetMs = 16000;
+let phase = 'registration', phaseStarted = started;
+let readinessMs = null, deliveryMs = null;
+let probes = 0, published = 0, completed = false;
+let writer, phaseDeadline, totalDeadline;
+let resolveReady, resolveTarget, fail;
+const ready = new Promise(resolve => { resolveReady = resolve; });
+const delivered = new Promise(resolve => { resolveTarget = resolve; });
+const failure = new Promise((_, reject) => { fail = reject; });
+const registration = {attempted: false, registered: false, closed: false, errors: []};
+const errorInfo = error => ({code: error.code, message: error.message});
+const elapsed = () => Math.round(performance.now() - started);
+const isReadyFile = file => /^ready-\d+\.txt$/.test(path.basename(file));
+const diagnostics = () => ({
+  root, watched, cwd: process.cwd(), node: process.version, execPath: process.execPath,
+  tmpdir: os.tmpdir(), TMPDIR: process.env.TMPDIR, uid: process.getuid?.(),
+  rootStat: {uid: fs.statSync(root).uid, mode: fs.statSync(root).mode},
+  watchFunctionHash: createHash('sha256').update(fs.watch.toString()).digest('hex'),
+  managerFunctionHash: createHash('sha256').update(createFolderWatchManager.toString()).digest('hex'),
+  registration, phase, phaseElapsedMs: Math.round(performance.now() - phaseStarted),
+  phaseBudgetMs, totalBudgetMs, readinessMs, deliveryMs, elapsedMs: elapsed(),
+  rawReady: rawEvents.filter(event => event.filename && isReadyFile(event.filename)).length,
+  rawEvents, events, probes, published,
+});
+function beginPhase(name) {
+  clearTimeout(phaseDeadline);
+  phase = name;
+  phaseStarted = performance.now();
+  phaseDeadline = setTimeout(() => fail(new Error(`Native ${name} phase exceeded ${phaseBudgetMs}ms`)), phaseBudgetMs);
+}
+const manager = createFolderWatchManager({
+  fsWatch: (directory, options, listener) => {
+    registration.attempted = true;
+    try {
+      const watcher = fs.watch(directory, options, (event, filename) => {
+        rawEvents.push({event, filename: filename?.toString() ?? null, elapsedMs: elapsed()});
+        listener(event, filename);
+      });
+      registration.registered = true;
+      watcher.on('error', error => { registration.errors.push(errorInfo(error)); fail(error); });
+      watcher.on('close', () => {
+        registration.closed = true;
+        if (!completed) fail(new Error('Native watcher closed before target delivery'));
+      });
+      return watcher;
+    } catch (error) {
+      registration.errors.push(errorInfo(error));
+      throw error;
+    }
+  },
+  onChange: file => {
+    events.push({file, elapsedMs: elapsed()});
+    if (phase === 'readiness' && isReadyFile(file)) resolveReady(file);
+    if (phase === 'delivery' && file === target) resolveTarget(file);
+  },
+});
+try {
+  manager.bind(watched);
+  if (!registration.registered) throw new Error('Production bind did not register a native watcher');
+  // Subscription startup and subsequent delivery have separate bounded costs.
+  // There are no retries of the subscription or target publication.
+  totalDeadline = setTimeout(() => fail(new Error(`Native total budget exceeded ${totalBudgetMs}ms`)), totalBudgetMs);
+  beginPhase('readiness');
+  const probe = () => {
+    try {
+      const name = `ready-${++probes}.txt`, staged = path.join(incoming, 'ready.partial');
+      fs.writeFileSync(staged, name);
+      fs.renameSync(staged, path.join(watched, name));
+    } catch (error) { fail(error); }
+  };
+  writer = setInterval(probe, 250);
+  probe();
+  await Promise.race([ready, failure]);
+  readinessMs = Math.round(performance.now() - phaseStarted);
+  clearInterval(writer);
+  clearTimeout(phaseDeadline);
+  // Drain the readiness callback batch before starting the target's own clock.
+  await Promise.race([new Promise(resolve => setImmediate(resolve)), failure]);
+  beginPhase('delivery');
+  const staged = path.join(incoming, 'video.partial');
+  fs.writeFileSync(staged, 'native video publication');
+  fs.renameSync(staged, target);
+  published++;
+  assert.equal(await Promise.race([delivered, failure]), target);
+  deliveryMs = Math.round(performance.now() - phaseStarted);
+  assert.equal(published, 1);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'native video publication');
+  assert.deepEqual(manager.listMp4s(), [target]);
+  completed = true;
+  process.stdout.write(JSON.stringify({platform: process.platform, target, ...diagnostics()}) + '\n');
+} catch (error) {
+  const failedPhaseMs = Math.round(performance.now() - phaseStarted);
+  if (phase === 'readiness') readinessMs = failedPhaseMs;
+  if (phase === 'delivery') deliveryMs = failedPhaseMs;
+  console.error(JSON.stringify({error: errorInfo(error), failedPhase: phase, ...diagnostics()}));
+  throw error;
+} finally {
+  completed = true;
+  clearInterval(writer);
+  clearTimeout(phaseDeadline);
+  clearTimeout(totalDeadline);
+  manager.stop();
+}
