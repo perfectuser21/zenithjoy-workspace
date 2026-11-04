@@ -36,7 +36,6 @@ line04-scroll-wheel-source-smoke.sh
 line04-ship-version-sync-smoke.sh
 line04-version-lock-closure-smoke.sh
 line04-wheel-mousemove-source-smoke.sh
-notion-sync-smoke.sh
 offscreen-version-gate-smoke.sh
 operator-page-medium-smoke.sh
 p4-ws2-feishu-bitable-smoke.sh
@@ -114,7 +113,6 @@ trim-json-lib-smoke.sh
 dedupe-adb-devices-lib-smoke.sh
 ensure-shizuku-server-lib-smoke.sh
 staff-workbench-smoke.sh
-ai-acceptance-capture-smoke.sh
 release-gate-d5-smoke.sh
 staff-acceptance-quadrant-smoke.sh
 knowledge-hub-path1-smoke.sh

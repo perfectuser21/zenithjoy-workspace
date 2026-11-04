@@ -94,6 +94,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/api
+      - name: Install media tools required by current video contracts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Fix rollup optional deps (npm ci bug workaround)
         run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - name: Run tests with coverage
@@ -171,12 +173,7 @@ jobs:
       - name: line04 CI×监听 桌面互斥接线 smoke（CI acquire/release + 监听 loop 顶让位）
         run: bash .github/workflows/scripts/smoke/line04-ci-desktop-mutex-smoke.sh
       - name: Check build-modules/line04/wechat-rpa in sync with source
-        run: |
-          diff -r services/agent/wechat-rpa/ \
-               services/agent/build-modules/line04/wechat-rpa/ \
-               --exclude="*.pyc" --exclude="__pycache__" && \
-            echo "build-modules in sync" || \
-            (echo "build-modules diverged from source! Run: rsync -av services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rpa/" && exit 1)
+        run: python3 .github/workflows/scripts/line04-package-sync.py
 
       # 防漂移守卫（修 #817 部署 gap 的根）：line04 三个版本面必须完全一致。
       # build-line-module.sh 真读 modules/line04/manifest.json 决定 COS 包版本；
