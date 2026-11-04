@@ -67,7 +67,7 @@ http.request = https.request = post;
     const env = { ...process.env, ...Object.fromEntries(cookieEnvs.map(name => [name, cookies])),
       FEISHU_API_KEY: 'fixture', NOTION_API_KEY: 'fixture', WECOM_API_KEY: 'fixture',
       BARK_URL: 'https://fixture-alert.invalid/bark', FEISHU_BOT_WEBHOOK: options.feishu ? 'https://fixture-feishu.invalid/webhook' : '',
-      OPERATOR_API_URL: 'http://fixture-db.invalid', INTERNAL_API_SECRET: 'fixture',
+      OPERATOR_API_URL: options.missingApiUrl ? '' : 'http://fixture-db.invalid', INTERNAL_API_SECRET: options.missingInternalAuth ? '' : 'fixture',
       FORCE_NOTIFY: String(options.forceNotify ?? false), SKIP_HTTP_CHECK: 'false',
       HEALTH_FIXTURE: JSON.stringify(options) };
     const result = spawnSync(process.execPath, ['--import', preload, script], {
@@ -182,3 +182,13 @@ for (const [feishuStatus, expectedExit] of [[500, 1], [200, 0]]) {
     assert.deepEqual(result.notifications.map(row => row.channel).sort(), ['bark', 'feishu']);
   });
 }
+
+for (const [name, options] of [
+  ['OPERATOR_API_URL', { missingApiUrl: true }],
+  ['INTERNAL_API_SECRET', { missingInternalAuth: true }],
+]) test(`missing ${name} refuses database transport and reports configuration failure`, () => {
+  const result = runHealth(options);
+  assert.notEqual(result.status, 0);
+  assert.equal(result.updates.length, 0, 'missing configuration must cause zero status writes');
+  assert.match(result.stderr, new RegExp(`missing required writeback configuration:.*${name}`));
+});
