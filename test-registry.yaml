@@ -9789,3 +9789,12 @@ tests:
     status: active
     product: AI员工
     note: "102专用维护核实际候选manifest/实测hostname/数组顺序及独立中央gate；不接受声明hostname替代观测"
+
+  - id: ci-review-scripts-ci-tests-pr-review-diff-test-mjs
+    path: scripts/ci/__tests__/pr-review-diff.test.mjs
+    type: unit
+    ci: L1
+    status: active
+    product: unclassified
+    execution: pr-review.yml / review / node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs; real Git fixtures, no model calls
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
