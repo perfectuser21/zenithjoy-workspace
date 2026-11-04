@@ -195,25 +195,32 @@ test('Staff验收API启动失败必须带原始诊断，不进入业务断言', 
   assert.doesNotMatch(run.stdout,/三个验收端点无认证头/);
 });
 
-test('OpenClaw两片完整覆盖同一文件集合，失败片不能报通过',t=>{
+test('OpenClaw三片完整覆盖原两片文件集合，失败片不能报通过',t=>{
  const source=readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8');
  const job=source.split('  openclaw-scripts-test:')[1].split('  api-scripts-test:')[0];
- assert.match(job,/shard: \[1, 2\]/);assert.match(job,/fail-fast: false/);
- assert.match(job,/--test-shard=\$\{\{ matrix.shard \}\}\/2/);
+ assert.match(job,/shard: \[1, 2, 3\]/);assert.match(job,/fail-fast: false/);
+ assert.match(job,/--test-shard=\$\{\{ matrix.shard \}\}\/3/);
  assert.match(job,/timeout-minutes: 10/);
  assert.doesNotMatch(job,/continue-on-error|test-name-pattern|test-skip-pattern/);
  const {root}=fixture(t),files=Array.from({length:8},(_,i)=>join(root,`case-${i}.test.mjs`));
  const childEnv={...process.env};delete childEnv.NODE_TEST_CONTEXT;
  for(const [i,file]of files.entries())writeFileSync(file,`import {test} from 'node:test';import {appendFileSync} from 'node:fs';test('case-${i}',()=>appendFileSync(process.env.TRACE,'${i}\\n'));`);
  const sets=[];
- for(const shard of [1,2]){
+ for(const shard of [1,2,3]){
   const trace=join(root,'trace-'+shard);
-  const r=spawnSync(process.execPath,['--test',`--test-shard=${shard}/2`,...files],{env:{...childEnv,TRACE:trace},encoding:'utf8',timeout:10000});
+  const r=spawnSync(process.execPath,['--test',`--test-shard=${shard}/3`,...files],{env:{...childEnv,TRACE:trace},encoding:'utf8',timeout:10000});
   assert.equal(r.status,0,r.stderr);sets.push(readFileSync(trace,'utf8').trim().split('\n'));
  }
- assert.equal(sets[0].filter(x=>sets[1].includes(x)).length,0);
+ assert.equal(new Set(sets.flat()).size,sets.flat().length,'三片互不重叠');
  assert.deepEqual(sets.flat().sort(),['0','1','2','3','4','5','6','7']);
+ const previous=[];
+ for(const shard of [1,2]){
+  const trace=join(root,'old-trace-'+shard);
+  const r=spawnSync(process.execPath,['--test',`--test-shard=${shard}/2`,...files],{env:{...childEnv,TRACE:trace},encoding:'utf8',timeout:10000});
+  assert.equal(r.status,0,r.stderr);previous.push(...readFileSync(trace,'utf8').trim().split('\n'));
+ }
+ assert.deepEqual(sets.flat().sort(),previous.sort(),'原2片与新3片实际文件集合/总数完全相同');
  writeFileSync(files[0],"import {test} from 'node:test';test('must fail',()=>{throw Error('fixture');});");
- const codes=[1,2].map(shard=>spawnSync(process.execPath,['--test',`--test-shard=${shard}/2`,...files],{env:{...childEnv,TRACE:join(root,'failed-trace')},encoding:'utf8',timeout:10000}).status);
+ const codes=[1,2,3].map(shard=>spawnSync(process.execPath,['--test',`--test-shard=${shard}/3`,...files],{env:{...childEnv,TRACE:join(root,'failed-trace')},encoding:'utf8',timeout:10000}).status);
  assert.equal(codes.filter(x=>x!==0).length,1);
 });

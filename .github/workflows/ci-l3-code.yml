@@ -236,14 +236,15 @@ jobs:
   # 两份回归测试写了半年从未跑过，同一类误判复发 4 次）。无条件跑（纯 node --test，
   # 读取真实契约需安装已锁定根依赖），不按变更路径过滤。
   openclaw-scripts-test:
-    name: OpenClaw Scripts Test (${{ matrix.shard }}/2)
+    name: OpenClaw Scripts Test (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    # 3049项实测543秒，加准备已逼近10分钟。原生分片覆盖完整同一集合，不筛测试。
+    # 两片主集合实测494秒，加准备79秒及Durable core36秒已超10分钟。
+    # 三片覆盖完整同一文件集合，不筛用例、不延长job或生产deadline。
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     services:
       postgres:
         image: postgres:17
@@ -321,7 +322,7 @@ jobs:
           echo "PREFLIGHT_DONE pillow"
       - name: node --test scripts/openclaw + services/phone-adb-controller + deploy-phone-adb-controller workflow 契约测试
         # 正式Pilot会校验陪跑Skill固定版本；合并前同样执行，避免旧正例只在发布时暴露。
-        run: node --test --test-shard=${{ matrix.shard }}/2 scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js
+        run: node --test --test-shard=${{ matrix.shard }}/3 scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js
       - name: Durable publish recovery core
         run: node --test services/listing-workflow/__tests__/*.test.mjs
 
@@ -345,6 +346,7 @@ jobs:
       - name: Require real Darwin kernel tests
         run: |
           node -e "if(process.platform!=='darwin')process.exit(1)"
+          python3 services/phone-adb-controller/__tests__/collection-review-maintenance.test.py
           # 文件级隔离冷启动/observer重夹具，避免并行文件消耗彼此真实300ms/.4s预算。
           # 不改生产deadline、单项断言或case内部fork/IPC/race并发；原有项与新增清场项仍全部实跑。
           node --test --test-concurrency=1 services/phone-adb-controller/__tests__/adb-host-terminal.test.mjs services/phone-adb-controller/__tests__/native-operation-ipc.test.mjs services/phone-adb-controller/__tests__/native-operation-identity.test.mjs services/phone-adb-controller/__tests__/native-operation-races.test.mjs services/phone-adb-controller/__tests__/discovery-phase-budget.test.mjs services/phone-adb-controller/__tests__/discovery-cleanup-scope.test.mjs services/phone-adb-controller/__tests__/collection-leaf-returned.test.mjs services/phone-adb-controller/__tests__/uiautomator-dump-crash.test.mjs services/phone-adb-controller/__tests__/collection-returned-authority.test.mjs services/phone-adb-controller/__tests__/collection-panel-readback.test.mjs services/phone-adb-controller/__tests__/collection-leaf-scope.test.mjs services/phone-adb-controller/__tests__/collection-phone-proof.test.mjs services/phone-adb-controller/__tests__/collection-evidence-layout.test.mjs services/phone-adb-controller/__tests__/collection-cleanup-only.test.mjs
