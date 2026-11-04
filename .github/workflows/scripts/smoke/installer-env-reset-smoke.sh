@@ -403,8 +403,8 @@ elif echo "$BOOT_FAIL_RESP" | grep -qE '^0+$'; then
 elif [ "$BOOT_FAIL_RESP" = "202" ]; then
   # machine_id "ci-test" 从未在这个 smoke 环境的 license_machines 里注册过，202 = "machine not
   # registered，未写入"，是修复 machine_id 列 bug 后的正确行为（PR #1478），不是 write 已确认；
-  # 真实"注册过的机器 → 200 + 确实写入"由 vitest boot-fail-machine-id-column.test.ts 覆盖
-  skip "A-10 boot-fail DB write (202)" "machine_id 'ci-test' 未预注册 -- graceful 202 符合修复后契约 -- DB write evidence from vitest boot-fail-machine-id-column.test.ts"
+  # 真实"注册过的机器 → 200 + 确实写入"由 vitest boot-fail-api-contract.test.ts 覆盖
+  skip "A-10 boot-fail DB write (202)" "machine_id 'ci-test' 未预注册 -- graceful 202 符合修复后契约 -- DB write evidence from vitest boot-fail-api-contract.test.ts"
   PASS=$((PASS+1))
 elif [ "$BOOT_FAIL_RESP" = "500" ]; then
   # API running but 500 = endpoint exists (per A-7) but DB write unconfirmed in this runner

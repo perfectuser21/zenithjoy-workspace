@@ -1,211 +1,141 @@
+// 真实Express路由 + 隔离DB边界，无需外部API。合并machine_id列回归；后台呈现由AdminCustomersPage测试负责。
 /**
- * Contract test: POST /api/agent/boot-fail endpoint
- * task_id: 2f66a0f8-a15e-4a42-9b9c-2841fc99ba66
- * Covers: BEHAVIOR-3 (boot-fail endpoint + DB persistence), BEHAVIOR-4 (admin customer page data)
+ * 回归测试：POST /api/agent/boot-fail 的 UPDATE zenithjoy.agents ... WHERE machine_id = $2
+ * 引用了不存在的列 —— zenithjoy.agents 表（20260428_100100_create_agents.sql）没有
+ * machine_id 列，machine_id 只存在于 zenithjoy.license_machines 表。
  *
- * Run: npx vitest run sprints/07201700-installer-env-reset-m1/tests/boot-fail-api-contract.test.ts
- * Requires: API server at process.env.API_URL (default http://localhost:3001)
- *           DATABASE_URL env for DB assertions
+ * 生产 staging 直接对该 SQL 探测过：ERROR: column "machine_id" does not exist（42703）。
+ * 本测试 mock pool.query 复现同样的 schema 约束：SQL 若直接对 agents 表按 machine_id
+ * 过滤而不经 license_machines 反查，一律像真实 Postgres 一样抛 42703 —— 逼修复走
+ * license_machines JOIN 反查 agent_id 再更新。
  */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import express from 'express';
+import request from 'supertest';
 
-import { describe, it, expect, beforeAll } from 'vitest';
-
-const API_URL = process.env.API_URL ?? 'http://localhost:3001';
-
-// Helper: POST /api/agent/boot-fail without auth
-async function postBootFail(payload: Record<string, unknown>): Promise<Response> {
-  return fetch(`${API_URL}/api/agent/boot-fail`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+interface FakeLicenseMachine {
+  machine_id: string;
+  agent_id: string | null;
+}
+interface FakeAgent {
+  id: string;
+  agent_id: string;
+  last_boot_error: unknown;
 }
 
-// Helper: check if API is reachable
-async function isApiReachable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_URL}/api/agent/status`, { signal: AbortSignal.timeout(5000) });
-    return res.status < 500;
-  } catch {
-    return false;
+let licenseMachines: FakeLicenseMachine[];
+let agents: FakeAgent[];
+
+const mockQuery = vi.fn(async (sql: string, params: unknown[] = []) => {
+  const isAgentsUpdateByMachineId =
+    /UPDATE\s+zenithjoy\.agents\b/i.test(sql) && /\bmachine_id\s*=/i.test(sql);
+  const joinsLicenseMachines = /zenithjoy\.license_machines/i.test(sql);
+
+  if (isAgentsUpdateByMachineId && !joinsLicenseMachines) {
+    // 真实 Postgres 约束复现：zenithjoy.agents 没有 machine_id 列
+    const err = new Error('column "machine_id" does not exist') as Error & { code: string };
+    err.code = '42703';
+    throw err;
   }
-}
 
-describe('[CONTRACT] POST /api/agent/boot-fail -- BEHAVIOR-3', () => {
-  let apiReachable = false;
+  if (isAgentsUpdateByMachineId && joinsLicenseMachines) {
+    const [payloadJson, machineId] = params as [string, string];
+    const lm = licenseMachines.find((m) => m.machine_id === machineId && m.agent_id);
+    if (!lm) return { rows: [], rowCount: 0 };
+    const agent = agents.find((a) => a.agent_id === lm.agent_id);
+    if (!agent) return { rows: [], rowCount: 0 };
+    agent.last_boot_error = JSON.parse(payloadJson);
+    return { rows: [{ id: agent.id }], rowCount: 1 };
+  }
 
-  beforeAll(async () => {
-    apiReachable = await isApiReachable();
-    if (!apiReachable) {
-      console.warn(`[SKIP] API not reachable at ${API_URL} -- skipping live API assertions`);
-    }
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-1: Endpoint exists and does NOT require bearer token (N-2)
-  // -----------------------------------------------------------------------
-  it('B3-1: endpoint reachable without Authorization header (N-2)', async () => {
-    if (!apiReachable) return;
-
-    const res = await postBootFail({
-      machine_id: 'contract-test-b3-001',
-      hostname: 'contract-host',
-      reason: 'license_401',
-      timestamp: new Date().toISOString(),
-    });
-
-    // Must NOT return 401 (auth required) or 404 (not implemented)
-    expect(res.status).not.toBe(401);
-    expect(res.status).not.toBe(404);
-    // Accept 200, 202, 400 (bad request is fine), 429 (rate limit)
-    expect([200, 202, 400, 429]).toContain(res.status);
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-2: Valid payload returns non-error response
-  // -----------------------------------------------------------------------
-  it('B3-2: valid payload accepted (200 or 202)', async () => {
-    if (!apiReachable) return;
-
-    const payload = {
-      machine_id: `contract-b3-${Date.now()}`,
-      hostname: 'contract-test-host',
-      reason: 'license_401',
-      timestamp: new Date().toISOString(),
-    };
-
-    const res = await postBootFail(payload);
-    // 200 = recorded, 202 = accepted (machine not registered), both OK per PRD assumption
-    expect([200, 202]).toContain(res.status);
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-3: Missing machine_id returns 400 (input validation)
-  // -----------------------------------------------------------------------
-  it('B3-3: missing machine_id returns 400', async () => {
-    if (!apiReachable) return;
-
-    const res = await postBootFail({
-      hostname: 'contract-host',
-      reason: 'license_401',
-      timestamp: new Date().toISOString(),
-    });
-
-    expect(res.status).toBe(400);
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-4: Missing reason returns 400 (input validation)
-  // -----------------------------------------------------------------------
-  it('B3-4: missing reason returns 400', async () => {
-    if (!apiReachable) return;
-
-    const res = await postBootFail({
-      machine_id: 'contract-b3-004',
-      hostname: 'contract-host',
-      timestamp: new Date().toISOString(),
-    });
-
-    expect(res.status).toBe(400);
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-5: Response body has expected shape
-  // -----------------------------------------------------------------------
-  it('B3-5: response body has ok/success field', async () => {
-    if (!apiReachable) return;
-
-    const payload = {
-      machine_id: `contract-b3-005-${Date.now()}`,
-      hostname: 'contract-test-host',
-      reason: 'env_reset_test',
-      timestamp: new Date().toISOString(),
-    };
-
-    const res = await postBootFail(payload);
-    if ([200, 202].includes(res.status)) {
-      const body = await res.json() as Record<string, unknown>;
-      // Should have ok:true or success:true (consistent with rest of API schema)
-      const hasOkField = 'ok' in body || 'success' in body;
-      expect(hasOkField).toBe(true);
-    }
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-6: Rate limiting -- same machine_id more than 10 times/min returns 429
-  // (smoke equivalent: verify endpoint returns 429 after 11 rapid requests)
-  // NOTE: Skipped until rate limiting is implemented in POST /api/agent/boot-fail (NFR N-2).
-  // When implemented, remove the .skip and the endpoint MUST return 429 on the 11th request.
-  // -----------------------------------------------------------------------
-  it.skip('B3-6: rate limit: 11th request for same machine_id within 1 min returns 429 (NFR N-2 -- requires real server with rate limiting)', async () => {
-    if (!apiReachable) return;
-
-    const machineId = `contract-b3-rl-${Date.now()}`;
-    const payload = {
-      machine_id: machineId,
-      hostname: 'contract-rl-host',
-      reason: 'rate_limit_test',
-      timestamp: new Date().toISOString(),
-    };
-
-    let lastStatus = 0;
-    // Fire 11 requests rapidly
-    for (let i = 0; i < 11; i++) {
-      const res = await postBootFail(payload);
-      lastStatus = res.status;
-    }
-
-    // After 10+ requests, rate limit MUST return 429 (hard assertion -- no warn downgrade)
-    expect(lastStatus).toBe(429);
-  });
-
-  // -----------------------------------------------------------------------
-  // B3-7: Endpoint not affected by absence of bearer token when license is 401
-  // (proven-to-fire: 401 scenario must be able to reach boot-fail)
-  // -----------------------------------------------------------------------
-  it('B3-7: proven-to-fire -- 401-scenario caller (no license) can reach endpoint', async () => {
-    if (!apiReachable) return;
-
-    // Simulate what start.bat does when license check returns 401:
-    // it calls boot-fail with NO Authorization header
-    const res = await postBootFail({
-      machine_id: `contract-b3-401-${Date.now()}`,
-      hostname: 'license-401-host',
-      reason: 'license_401',
-      timestamp: new Date().toISOString(),
-    });
-
-    // The endpoint MUST be reachable in 401 scenario (no valid license available)
-    // Reject if returns 401 (auth) or 404 (not found)
-    expect(res.status).not.toBe(401);
-    expect(res.status).not.toBe(404);
-  });
+  return { rows: [], rowCount: 0 };
 });
 
-// -----------------------------------------------------------------------
-// BEHAVIOR-4: AdminCustomersPage API contract
-// Verifies the data API provides last_boot_error field for dashboard display
-// -----------------------------------------------------------------------
-describe('[CONTRACT] Admin customer API -- BEHAVIOR-4 last_boot_error field', () => {
-  // NOTE: This is an API-layer equivalent assertion.
-  // TODO: Full UI verification done in Playwright E2E (windows_cloud runner)
-  // TRUE-MACHINE-EQUIV: UI display of last_boot_error verified via AdminCustomersPage.tsx render
+vi.mock('../../db/connection', () => ({
+  default: { query: (...args: unknown[]) => mockQuery(...(args as [string, unknown[]])) },
+}));
+vi.mock('../../services/agent-ws', () => ({ sendToAgent: vi.fn() }));
+vi.mock('../../services/license.service', () => ({
+  registerAgent: vi.fn(),
+  isValidLicenseKeyFormat: vi.fn(),
+}));
 
-  it('B4-1: admin customers endpoint reachable (schema check)', async () => {
-    // This test verifies the API schema -- UI display is verified separately
-    // When implemented, GET /api/admin/customers should include last_boot_error in agent rows
-    const adminCookieHeader = process.env.ADMIN_COOKIE_HEADER ?? '';
-    if (!adminCookieHeader) {
-      console.warn('[SKIP] B4-1: ADMIN_COOKIE_HEADER not set, skipping admin API schema check');
-      return;
-    }
+import { agentRouter } from '../agent';
 
-    const res = await fetch(`${API_URL}/api/admin/customers`, {
-      headers: { Cookie: adminCookieHeader },
-    });
+function buildApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/agent', agentRouter);
+  return app;
+}
 
-    // Should be 200 or 403 (if not super admin) -- not 404
-    expect(res.status).not.toBe(404);
-    expect([200, 403]).toContain(res.status);
+describe('POST /api/agent/boot-fail — 现役安装器无鉴权上报合同', () => {
+  beforeEach(() => {
+    mockQuery.mockClear();
+    licenseMachines = [{ machine_id: 'mach-1', agent_id: 'agent-display-1' }];
+    agents = [{ id: 'uuid-1', agent_id: 'agent-display-1', last_boot_error: null }];
   });
+
+  it('已注册机器上报 boot-fail → 200 且真正写入 last_boot_error（不因不存在的列 500）', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/agent/boot-fail').send({
+      machine_id: 'mach-1',
+      hostname: 'host-1',
+      reason: 'license_401',
+      timestamp: new Date().toISOString(),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, success: true, recorded: true });
+    expect(agents[0].last_boot_error).toMatchObject({ reason: 'license_401' });
+  });
+
+  it('未注册机器 → 202（graceful，不 500）', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/agent/boot-fail').send({
+      machine_id: 'mach-unknown',
+      hostname: 'host-x',
+      reason: 'license_401',
+      timestamp: new Date().toISOString(),
+    });
+    expect(res.status).toBe(202);
+    expect(res.body).toMatchObject({ ok: true, success: true, recorded: false });
+  });
+  it.each([
+    [{ reason: 'license_401' }, 'machine_id required'],
+    [{ machine_id: 'missing-reason' }, 'reason required'],
+  ])('缺必填字段拒绝且不写DB: %j', async (payload, error) => {
+    const res = await request(buildApp()).post('/api/agent/boot-fail').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, error });
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('DB失败返回500而不假报已记录', async () => {
+    mockQuery.mockRejectedValueOnce(new Error('database unavailable'));
+    const res = await request(buildApp()).post('/api/agent/boot-fail')
+      .send({ machine_id: 'db-failure-machine', reason: 'license_401' });
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ ok: false, success: false });
+  });
+
+  it('无license的401启动失败可上报；第11次限流且不写DB，另一机器计数隔离', async () => {
+    const app = buildApp();
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app).post('/api/agent/boot-fail')
+        .send({ machine_id: 'rate-limit-machine', reason: 'license_401' });
+      expect(res.status).toBe(202);
+      expect(res.body).toMatchObject({ ok: true, recorded: false });
+    }
+    mockQuery.mockClear();
+    const blocked = await request(app).post('/api/agent/boot-fail')
+      .send({ machine_id: 'rate-limit-machine', reason: 'license_401' });
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error.code).toBe('RATE_LIMITED');
+    expect(mockQuery).not.toHaveBeenCalled();
+    const other = await request(app).post('/api/agent/boot-fail')
+      .send({ machine_id: 'another-machine', reason: 'license_401' });
+    expect(other.status).toBe(202);
+    expect(mockQuery).toHaveBeenCalledOnce();
+  });
+
 });
