@@ -188,9 +188,10 @@ for (const p of profiles) {
 
 // Execute the actual required YAML shell; optional success alone is not this edge.
 const runtime = profiles.find(p => p.name === 'runtime');
-const runtimeUi = {
+const runtimeContracts = {
   'dashboard-operations-ui': ['dashboard', 'ci'],
   'staff-skill-eval-ui': ['staff_hub', 'api', 'ci'],
+  'agent-windows-contracts': ['agent', 'ci'],
 };
 function selectedRuntimeJobs(outputs) {
   const w = workflow(runtime), needs = {changes:{outputs}};
@@ -199,9 +200,9 @@ function selectedRuntimeJobs(outputs) {
     return [k, !condition || Function('needs', 'return (' + condition + ')')(needs) ? 'success' : 'skipped'];
   }));
 }
-for (const [job, routes] of Object.entries(runtimeUi)) {
+for (const [job, routes] of Object.entries(runtimeContracts)) {
   for (const route of routes) {
-    test('runtime UI: '+route+' requires '+job+' success through actual YAML', () => {
+    test('runtime consumer: '+route+' requires '+job+' success through actual YAML', () => {
       const outputs = Object.fromEntries(runtime.routes.map(k => [k, k === route ? 'true' : 'false']));
       const jobs = {...selectedRuntimeJobs(outputs), [job]:'success'};
       assert.equal(gate(runtime,{outputs,jobs}).status,0);
@@ -212,17 +213,18 @@ for (const [job, routes] of Object.entries(runtimeUi)) {
       assert.notEqual(gate(runtime,{outputs,jobs,absentJobs:[job]}).status,0,job+' missing was accepted for '+route);
     });
   }
-  test('runtime UI: unrelated changes can skip '+job+'; detection failure closes gate', () => {
+  test('runtime consumer: unrelated changes can skip '+job+'; detection failure closes gate', () => {
     const outputs = Object.fromEntries(runtime.routes.map(k => [k,'false']));
     assert.equal(gate(runtime,{outputs,jobs:{[job]:'skipped'}}).status,0);
     for(const result of ['failure','cancelled','skipped'])assert.notEqual(gate(runtime,{outputs,jobs:{[job]:'skipped'},result}).status,0);
   });
 }
-test('runtime UI has reusable workflows and required needs edges, retaining manual entry', () => {
+test('runtime consumers have reusable workflows and required needs edges, retaining manual entry', () => {
   const w=workflow(runtime);
   const files={
     'dashboard-operations-ui':'e2e-dashboard-operations-windows.yml',
     'staff-skill-eval-ui':'e2e-staff-skill-eval.yml',
+    'agent-windows-contracts':'agent-qr-windows-verify.yml',
   };
   for(const [job,file] of Object.entries(files)){
     assert.ok(w.jobs[runtime.gate].needs.includes(job),job);
@@ -232,10 +234,11 @@ test('runtime UI has reusable workflows and required needs edges, retaining manu
     assert.ok(Object.hasOwn(called.on,'workflow_call'),file);
     assert.ok(Object.hasOwn(called.on,'workflow_dispatch'),file);
     assert.ok(!Object.hasOwn(called.on,'pull_request'),file);
+    assert.ok(!Object.hasOwn(called.on,'push'),file);
   }
 });
-for (const [job,routes] of Object.entries(runtimeUi)) {
-  test('runtime UI: removing real YAML admission reproduces skipped '+job+' false green', () => {
+for (const [job,routes] of Object.entries(runtimeContracts)) {
+  test('runtime consumer: removing real YAML admission reproduces skipped '+job+' false green', () => {
     const outputs=Object.fromEntries(runtime.routes.map(k=>[k,k===routes[0]?'true':'false']));
     const jobs={...selectedRuntimeJobs(outputs),[job]:'skipped'};
     assert.notEqual(gate(runtime,{outputs,jobs}).status,0);
@@ -245,3 +248,22 @@ for (const [job,routes] of Object.entries(runtimeUi)) {
       'control must expose the original missing-UI-admission bug');
   });
 }
+
+
+test('Windows handler reusable call runs contracts while candidate files require standalone manual version', () => {
+  const called=parse(readFileSync(join(root,'.github/workflows/agent-qr-windows-verify.yml'),'utf8'));
+  assert.ok(Object.hasOwn(called.on,'workflow_call'));
+  assert.equal(called.jobs['unit-tests-windows'].if,undefined);
+  assert.equal(called.on.workflow_dispatch.inputs.version.required,true);
+  assert.equal(called.on.workflow_dispatch.inputs.version.type,'string');
+  assert.equal(called.on.workflow_call?.inputs?.version,undefined);
+  const condition=called.jobs['sandbox-install'].if;
+  const selected=(event,inputs={})=>Boolean(Function('github','inputs','return ('+condition+')')({event_name:event},inputs));
+  for(const event of ['pull_request','push','merge_group','workflow_call']){
+    assert.equal(selected(event),false,event+' must not download candidate files');
+    assert.equal(selected(event,{version:'1.2.3'}),false,event+' must stay files-only manual');
+  }
+  assert.equal(selected('workflow_dispatch'),false,'a reusable caller with no version must not download');
+  assert.equal(selected('workflow_dispatch',{version:'1.2.3'}),true);
+  assert.equal(workflow(runtime).jobs['agent-windows-contracts'].with,undefined);
+});

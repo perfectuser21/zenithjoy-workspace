@@ -4,20 +4,13 @@ name: Agent Windows handler/session contracts + candidate files
 # 不证明生产扫码子进程、登录状态、publisher 浏览器行为或真实发布成功。
 # 人工入口另查显式候选版本的发布包文件，不执行包内代码。
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       version:
         description: 'Explicit numeric MAJOR.MINOR.PATCH candidate installpack version (files only)'
         type: string
         required: true
-  push:
-    branches: [main]
-    paths:
-      - 'services/agent/**'
-      - 'sprints/06131229-path2-douyin-dm-outreach/**'
-      - 'sprints/06220836-agent-client-encapsulation/**'
-      - 'sprints/0703-line04-desktop-lease-broker/**'
-      - '.github/workflows/agent-qr-windows-verify.yml'
 
 jobs:
   unit-tests-windows:
@@ -48,7 +41,7 @@ jobs:
     name: Windows candidate installpack file integrity
     runs-on: windows-latest
     timeout-minutes: 15
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.version
     env:
       INSTALLPACK_VERSION: ${{ inputs.version }}
     steps:
