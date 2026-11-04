@@ -180,8 +180,8 @@ export async function run(args){
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
     let runtimeTransport;
     if(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach'].includes(e.WF_BRAIN_WORKFLOW)){
-      const inventory=await request('/api/brain/machines');
-      runtimeTransport=selectMmvTransport(inventory,e.WF_MMV_SSH_ROUTE);
+      const machine=await request('/api/brain/machines/mac-mini-m4-us');
+      runtimeTransport=selectMmvTransport([machine],e.WF_MMV_SSH_ROUTE);
     }
     await freezeDefinition({executionMode,agentInput:fixedAgentInput,discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){

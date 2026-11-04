@@ -5,6 +5,8 @@ TASK_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$TASK_REPO_ROOT"
 node scripts/ci/implementation-skill-source.mjs --install-regression-skills "$TASK_REPO_ROOT"
 node --test --test-concurrency=1 \
+  services/phone-adb-controller/__tests__/runtime-definition.test.mjs \
+  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
   services/phone-adb-controller/__tests__/agent-first-input.test.mjs \
   services/phone-adb-controller/__tests__/agent-first-runtime.test.mjs \
   services/phone-adb-controller/__tests__/agent-first-executor.test.mjs \
