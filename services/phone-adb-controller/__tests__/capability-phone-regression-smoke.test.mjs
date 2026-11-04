@@ -19,7 +19,8 @@ test('回归入口从任意目录选择实际动态套，不混入 phone-wall，
   assert.equal(result.status, 0, result.stderr);
   const args = readFileSync(result.calls, 'utf8');
   assert.match(args, /--test\n/);
-  for (const name of ['real-contract-step-protocol', 'wf-run', 'discover-keyword', 'discover-benchmark', 'harvest-keyword-judge-before-collect', 'harvest-keyword-profile-link-retry', 'pipeline-v4-integration', 'qualify-video', 'outreach-tick-guard', 'phone-lock-lifecycle', 'lease-heartbeat']) assert.ok(args.includes(`/${name}.test.mjs`), name);
+  for (const name of ['real-contract-step-protocol', 'wf-run-retired', 'legacy-harvest-retirement', 'runtime-receipts', 'discover-keyword', 'discover-benchmark', 'harvest-keyword-judge-before-collect', 'harvest-keyword-profile-link-retry', 'pipeline-v4-integration', 'qualify-video', 'outreach-tick-guard', 'phone-lock-lifecycle', 'lease-heartbeat']) assert.ok(args.includes(`/${name}.test.mjs`), name);
+  for (const name of ['phone-actions-in-lock', 'runtime-start-e2e', 'wf-run-deadline-e2e', 'wf-run-prepare-error-log', 'wf-run']) assert.ok(!args.includes(`/${name}.test.mjs`), `退役测试不得进入现役 smoke: ${name}`);
   assert.doesNotMatch(args, /phone-wall-push|wall-lib|wall-report\.test/);
   assert.match(result.stdout, /PASS capability-phone-regression-smoke/);
   assert.match(result.stdout, /regression_only/);
@@ -68,7 +69,7 @@ test('OpenClaw全套执行真实YAML契约前安装已锁定根依赖，不靠�
  assert.match(job,/run: npm ci --ignore-scripts --workspaces=false/);
  assert.ok(job.indexOf('npm ci --ignore-scripts --workspaces=false')<job.indexOf('run: node --test'));
 });
-test('聚合16套真实时序回归使用180秒有界时限，普通smoke仍90秒',()=>{
+test('聚合动态回归使用180秒有界时限，普通smoke仍90秒',()=>{
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
  const fn=workflow.match(/script_timeout\(\) \{[\s\S]*?\n\s*\}/)?.[0];assert.ok(fn);
  const result=spawnSync('bash',['-c',`${fn}\nscript_timeout capability-phone-regression-smoke.sh\nscript_timeout ordinary-smoke.sh`],{encoding:'utf8'});

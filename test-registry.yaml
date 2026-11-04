@@ -3646,9 +3646,10 @@ tests:
     path: apps/api/tests/index.test.ts
     type: unit
     ci: L3
-    status: active
+    status: deprecated
     product: AI视频本地流水线
     note: "index.ts 默认端口 3000 冒烟（WS1 端口变更配套测试）"
+    retirement: "2026-11-04 CI seven-dimension retirement; original source 3aae3099636aeb63ecb461cd72b461b7665ac623:apps/api/tests/index.test.ts. Test duplicated PORT expression without importing production index; actual PORT=0 mutation still passed. Real API build/start/PORT and health remain covered by Golden Path 4 CI."
 
   - id: operator-sessions-route-unit
     path: apps/api/src/routes/operator-sessions.test.ts
@@ -9384,7 +9385,7 @@ tests:
   - {"id":"inventory-0232be81235e5c85","path":"services/phone-adb-controller/__tests__/owner-swipe-cli.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-511d603b99bc7d43","path":"services/phone-adb-controller/__tests__/peer-share-link.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-068f78f4a8230636","path":"services/phone-adb-controller/__tests__/pg-notion-mirror-lib.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-9af431e12db52c61","path":"services/phone-adb-controller/__tests__/phone-actions-in-lock.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-9af431e12db52c61","path":"services/phone-adb-controller/__tests__/phone-actions-in-lock.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 CI seven-dimension retirement; original source 3aae3099636aeb63ecb461cd72b461b7665ac623:services/phone-adb-controller/__tests__/phone-actions-in-lock.test.mjs. Retired wf-run/batch2 positive-engine fixture; keep active wf-run-retired/legacy-harvest-retirement, runtime-receipts, phone-lock-lifecycle and recovery checks. No production ledger/index/receipt/runtime package removed."}
   - {"id":"inventory-c7e84b557bf8ed3e","path":"services/phone-adb-controller/__tests__/phone-lock-lifecycle.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-f1d4368df26965e4","path":"services/phone-adb-controller/__tests__/phone-lock-profile-tsv.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-545b7b1bb3f5ea64","path":"services/phone-adb-controller/__tests__/phone-recovery.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9417,7 +9418,7 @@ tests:
   - {"id":"inventory-e7479cd07076db48","path":"services/phone-adb-controller/__tests__/runtime-release-cache.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-ea2390607c501faf","path":"services/phone-adb-controller/__tests__/runtime-release.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-4a6e9075432bfa85","path":"services/phone-adb-controller/__tests__/runtime-stage-classification.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-298f14fcc89e30fc","path":"services/phone-adb-controller/__tests__/runtime-start-e2e.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-298f14fcc89e30fc","path":"services/phone-adb-controller/__tests__/runtime-start-e2e.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 CI seven-dimension retirement; original source 3aae3099636aeb63ecb461cd72b461b7665ac623:services/phone-adb-controller/__tests__/runtime-start-e2e.test.mjs. Retired wf-run/batch2 positive-engine fixture; keep active wf-run-retired/legacy-harvest-retirement, runtime-receipts, phone-lock-lifecycle and recovery checks. No production ledger/index/receipt/runtime package removed."}
   - {"id":"inventory-ed21d50de57a636c","path":"services/phone-adb-controller/__tests__/screenshot-jpeg-sidecar.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-82db85f0d8cedfe8","path":"services/phone-adb-controller/__tests__/sdk31-native-audio.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-ebede8b52b447497","path":"services/phone-adb-controller/__tests__/sdk31-runtime.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9445,10 +9446,10 @@ tests:
   - {"id":"inventory-5509daca3233f827","path":"services/phone-adb-controller/__tests__/weibo-body-growth.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-7b87309cd2403ee0","path":"services/phone-adb-controller/__tests__/wf-limits.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-a36191db9dbdba4b","path":"services/phone-adb-controller/__tests__/wf-run-bind-retry.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-ec3f413f0e250535","path":"services/phone-adb-controller/__tests__/wf-run-deadline-e2e.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-ec3f413f0e250535","path":"services/phone-adb-controller/__tests__/wf-run-deadline-e2e.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 CI seven-dimension retirement; original source 3aae3099636aeb63ecb461cd72b461b7665ac623:services/phone-adb-controller/__tests__/wf-run-deadline-e2e.test.mjs. Retired wf-run/batch2 positive-engine fixture; keep active wf-run-retired/legacy-harvest-retirement, runtime-receipts, phone-lock-lifecycle and recovery checks. No production ledger/index/receipt/runtime package removed."}
   - {"id":"inventory-0558969140f077cb","path":"services/phone-adb-controller/__tests__/wf-run-escort-guard.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-afea3d55942cbb8b","path":"services/phone-adb-controller/__tests__/wf-run-prepare-error-log.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-69910d2e7be0fd57","path":"services/phone-adb-controller/__tests__/wf-run.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-afea3d55942cbb8b","path":"services/phone-adb-controller/__tests__/wf-run-prepare-error-log.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 CI seven-dimension retirement; original source 3aae3099636aeb63ecb461cd72b461b7665ac623:services/phone-adb-controller/__tests__/wf-run-prepare-error-log.test.mjs. Retired wf-run/batch2 positive-engine fixture; keep active wf-run-retired/legacy-harvest-retirement, runtime-receipts, phone-lock-lifecycle and recovery checks. No production ledger/index/receipt/runtime package removed."}
+  - {"id":"inventory-69910d2e7be0fd57","path":"services/phone-adb-controller/__tests__/wf-run.test.mjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 CI seven-dimension retirement; original source 3aae3099636aeb63ecb461cd72b461b7665ac623:services/phone-adb-controller/__tests__/wf-run.test.mjs. Retired wf-run/batch2 positive-engine fixture; keep active wf-run-retired/legacy-harvest-retirement, runtime-receipts, phone-lock-lifecycle and recovery checks. No production ledger/index/receipt/runtime package removed."}
   - {"id":"inventory-e483efeedcbce7e2","path":"services/phone-adb-controller/__tests__/window-force-override.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-68e4777e516da3c2","path":"services/phone-adb-controller/__tests__/workflow-result-span.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-bdda4bd52f77d71f","path":"services/phone-adb-controller/__tests__/workflow-result.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9518,6 +9519,30 @@ tests:
     status: active
     product: AI员工
     note: 真实Android15同HOME包重复字段可归一，畸形或混包与非HOME focus拒绝。
+
+  - id: collection-cleanup-only
+    path: services/phone-adb-controller/__tests__/collection-cleanup-only.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "Darwin真实nofork非零叶归还仅授权本人cleanup，拒绝升级Skill/重采，保留原失败与OS unknown"
+
+  - id: recipient-honor-e1b-layout
+    path: services/phone-adb-controller/__tests__/recipient-honor-e1b-layout.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "脱敏真实Honor e1b/fod/jqh/kj+同面板UID昵称全文与跨布局/歧义拒绝"
+
+  - id: recipient-author-footer
+    path: services/phone-adb-controller/__tests__/recipient-author-footer.test.mjs
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "真实作者footer脱敏树经控制器和队列原函数过滤，0入库不冒充no_comments"
 
   - id: collection-review-maintenance
     path: services/phone-adb-controller/__tests__/collection-review-maintenance.test.py

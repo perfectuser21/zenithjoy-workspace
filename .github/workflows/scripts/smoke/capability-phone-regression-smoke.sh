@@ -12,8 +12,9 @@ D="$ROOT/services/phone-adb-controller/__tests__"
 # 每组至少包含真实动态断言；固定清单避免引入 phone-wall 旧环境测试。
 TESTS=(
   "$D/real-contract-step-protocol.test.mjs"
-  "$D/wf-run.test.mjs"
-  "$D/runtime-start-e2e.test.mjs"
+  "$D/wf-run-retired.test.mjs"
+  "$D/legacy-harvest-retirement.test.mjs"
+  "$D/runtime-receipts.test.mjs"
   "$D/discover-keyword.test.mjs"
   "$D/discover-benchmark.test.mjs"
   "$D/benchmark-profile-discovery.test.mjs"

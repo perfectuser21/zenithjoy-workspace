@@ -32,3 +32,29 @@ test('registry paths must match exactly and a large registry does not trigger pi
  const mismatch=run(['apps/real.test.ts'],['prefix/apps/real.test.ts']);
  assert.equal(mismatch.status,1,mismatch.stdout+mismatch.stderr);
 });
+
+test('Windows orphan E2E starts runner PostgreSQL before API and stops on native DB failures',()=>{
+ const orphan=YAML.parse(readFileSync(new URL('../../../.github/workflows/e2e-orphan-consolidation-windows.yml',import.meta.url),'utf8'));
+ const job=orphan.jobs['playwright-orphan-consolidation'];
+ const dbIndex=job.steps.findIndex(s=>s.name==='Start runner PostgreSQL service');
+ const apiIndex=job.steps.findIndex(s=>s.name==='Start apps/api with real Postgres');
+ assert.ok(dbIndex>=0 && dbIndex<apiIndex,'独立数据库步骤必须先于 API');
+ const db=job.steps[dbIndex];
+ assert.equal(db.shell,'pwsh');
+ assert.equal(db['continue-on-error'],undefined);
+ assert.match(db.run,/\$ErrorActionPreference\s*=\s*'Stop'/);
+ assert.match(db.run,/Get-Service postgresql\*/);
+ assert.match(db.run,/if \(\$services\.Count -ne 1\) \{ throw/);
+ assert.match(db.run,/Set-Service -Name \$svc\.Name -StartupType Manual/);
+ assert.match(db.run,/Start-Service \$svc\.Name/);
+ assert.match(db.run,/\$env:PGPASSWORD = 'root'[\s\S]*& "\$env:PGBIN\\psql\.exe" -X -v ON_ERROR_STOP=1 -U postgres -h localhost -d postgres -c "ALTER USER postgres WITH PASSWORD 'postgres';"\s*if \(\$LASTEXITCODE -ne 0\) \{ throw/);
+ assert.match(db.run,/\$env:PGPASSWORD = 'postgres'[\s\S]*& "\$env:PGBIN\\createdb\.exe" -U postgres -h localhost zenithjoy_test\s*if \(\$LASTEXITCODE -ne 0\) \{ throw/);
+ const api=job.steps[apiIndex];
+ assert.equal(job.defaults.run.shell,'bash');
+ assert.doesNotMatch(api.run,/choco|PG_HOME|PGPASSWORD|createdb|powershell/i);
+ assert.match(api.run,/npm run migrate --workspace apps\/api/);
+ assert.match(api.run,/npm run build --workspace apps\/api/);
+ assert.match(api.run,/npm run dev --workspace apps\/api &/);
+ assert.match(api.run,/for i in \$\(seq 1 60\)/);
+ assert.match(api.run,/curl -fs http:\/\/localhost:3000\/health\s*$/);
+});
