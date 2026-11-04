@@ -243,6 +243,7 @@
     "session-health-smoke.sh",
     "sprint-2-1d-agent-uptime-smoke.sh",
     "sprint-2-1e-install-pack-smoke.sh",
+    "wechat-cs-config-smoke.sh",
     "wechat-cs-engine-smoke.sh",
     "wechat-cs-per-account-ia-redesign-smoke.sh",
     "ws2-three-template-builders-smoke.sh",
@@ -323,6 +324,7 @@
     "apps/api/tests/integration/media-extra/runtime.test.ts",
     "apps/api/tests/integration/media/materials.test.ts",
     "apps/api/tests/integration/media/pipeline.test.ts",
+    "apps/api/tests/integration/ws1/migration-failure.test.ts",
     "apps/api/tests/regression/acquisition-sse-transport.test.ts",
     "apps/api/tests/regression/consolidated-pg-admission.test.ts",
     "apps/api/tests/regression/consolidated-smoke-admission.test.ts",
@@ -333,6 +335,7 @@
     "apps/dashboard/src/pages/__tests__/OperatorPage.test.tsx",
     "apps/realtime-voice-mvp/server-local-contract.test.mjs",
     "apps/staff-hub/src/pages/QuadrantPage.test.tsx",
+    "scripts/__tests__/skills-source-bootstrap.test.py",
     "scripts/acceptance-spec/__tests__/readonly.test.js",
     "scripts/release-gate/__tests__/two-column-fixtures.test.mjs",
     "scripts/sessions/check-health.test.mjs",
@@ -426,6 +429,7 @@
     ".github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh",
     ".github/workflows/scripts/smoke/line02-dashboard-ia-redesign-smoke.sh",
     ".github/workflows/scripts/smoke/line02-dm-dispatch-smoke.sh",
+    ".github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh",
     ".github/workflows/scripts/smoke/line02-machine-burner-routing-smoke.sh",
     ".github/workflows/scripts/smoke/line02-stage2-collect-smoke.sh",
     ".github/workflows/scripts/smoke/line04-ai-overlay-r2-smoke.sh",
@@ -520,6 +524,7 @@
     ".github/workflows/scripts/smoke/warmup-dispatch-smoke.sh",
     ".github/workflows/scripts/smoke/wechat-auto-launch-smoke.sh",
     ".github/workflows/scripts/smoke/wechat-auto-reply-loop-smoke.sh",
+    ".github/workflows/scripts/smoke/wechat-cs-config-smoke.sh",
     ".github/workflows/scripts/smoke/wechat-cs-engine-smoke.sh",
     ".github/workflows/scripts/smoke/wechat-cs-per-account-ia-redesign-smoke.sh",
     ".github/workflows/scripts/smoke/wechat-cs-reply-smoke.sh",
@@ -564,8 +569,15 @@
   },
   "baseline_counts": {
     "before": 159,
-    "after": 73,
-    "removed": 91,
+    "after": 72,
+    "removed": 92,
     "added": 5
-  }
+  },
+  "top_level_smoke_counts": {
+    "before": 300,
+    "after": 119,
+    "original_entries_removed_or_relocated": 186,
+    "new_canonical_entries": 5
+  },
+  "post_ci_additional_evidence": "docs/ci/round3-post-ci-consolidation.json"
 }

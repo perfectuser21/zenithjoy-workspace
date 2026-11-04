@@ -9943,6 +9943,14 @@ tests:
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
 
+  - id: ci-closeout-26c1537ac00f
+    path: apps/api/tests/integration/ws1/migration-failure.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
   - id: ci-closeout-af4ed91b4eed
     path: apps/api/tests/regression/acquisition-sse-transport.test.ts
     type: unit
@@ -10019,6 +10027,14 @@ tests:
     path: apps/staff-hub/src/pages/QuadrantPage.test.tsx
     type: unit
     ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-dffb5d14e213
+    path: scripts/__tests__/skills-source-bootstrap.test.py
+    type: unit
+    ci: L3
     status: active
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.

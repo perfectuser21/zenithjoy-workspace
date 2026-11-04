@@ -66,7 +66,6 @@ structured-workbench-smoke.sh
 trim-json-lib-smoke.sh
 video-tools-smoke.sh
 wechat-cs-android-smoke.sh
-wechat-cs-config-smoke.sh
 wechat-cs-hardening-smoke.sh
 wechat-moments-controller-smoke.sh
 wechat-rpa-real-agent-smoke.sh
