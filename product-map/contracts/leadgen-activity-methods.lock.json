@@ -1449,7 +1449,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/runtime-receipts.mjs",
           "revision": "contract",
-          "sha256": "87ff5e889dd7e3c3e38fe6bfa602d6c615c2c4ffd88ecc5350bcebbd7de02085"
+          "sha256": "1e7067ebb037de8f7c1091236cd2671459afdfdafe50a86b47cd22bbfbd362be"
         },
         {
           "kind": "code",
@@ -1761,7 +1761,14 @@
           "sha256": "cb4df68d3f3c8e87d173f928be6beda92c3a684a75839ab4b0c7acd35ebd1a04"
         }
       ],
-      "code_digest": "06dd8eb40b4f0abbfcaf543cbd78c34d184fecdbf926d13b8ec55474caac40f9"
+      "code_digest": "2cf164e7006dd715493005371b984c56ef84e7fcc1d3466315bb0a7130d5f84d",
+      "code_compatibility": {
+        "kind": "internal_compatible",
+        "reason": "独立核验 ff1f7ab9fa0092f6b1b4d0c95ee7cd653a1ef7fa：仅 prepare 从中央全量机器读取改为实时 GET 精确 mac-mini-m4-us，将单记录交原 selectMmvTransport；同一固定 MMV UUID、active、Tailscale/public IP 与 HostKeyAlias 校验以及原认证、有限重试、release/source 冻结完全保留，无缓存/失败回退/硬编码IP，不改变方法、Activity合同、Task、资源、phone或104发送权限。真实HTTP及71项定向独审通过；仍须新HEAD完整CI，不构成实机业务通过。",
+        "reviewed_by": "/root/review_discovery_recovery",
+        "previous_code_digest": "06dd8eb40b4f0abbfcaf543cbd78c34d184fecdbf926d13b8ec55474caac40f9",
+        "current_code_digest": "2cf164e7006dd715493005371b984c56ef84e7fcc1d3466315bb0a7130d5f84d"
+      }
     },
     "douyin_video_processing.cleanup": {
       "activity_version": "2.2.1",
