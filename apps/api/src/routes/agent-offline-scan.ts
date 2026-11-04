@@ -9,7 +9,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { internalAuth } from '../middleware/internal-auth';
+import { requiredInternalAuth } from '../middleware/internal-auth';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { scanAndAlert, resolveFeishuWebhook } from '../services/agent-offline-monitor';
 
@@ -27,7 +27,7 @@ const router = Router();
  *   或失败时:
  *   { success: false, error: string, data?: { send_errors } }
  */
-router.post('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), internalAuth, async (req: Request, res: Response) => {
+router.post('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), requiredInternalAuth, async (req: Request, res: Response) => {
   const body = req.body || {};
   const thresholdHours = body.threshold_hours
     ? Number(body.threshold_hours)

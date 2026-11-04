@@ -36,3 +36,36 @@ for (const entry of cases) it(`${entry.name}: real limiter blocks before authent
   expect(mocks.session).toHaveBeenCalledTimes(sessionsBefore);
   expect(mocks.query).not.toHaveBeenCalled();
 }, 15_000);
+
+for (const token of [undefined, '', '  ']) for (const route of [
+  { module: '../operator-sessions', exported: 'operatorSessionsRouter', path: '/status', body: {updates:[{platform:'douyin',status:'active'}]} },
+  { module: '../agent-offline-scan', exported: 'default', path: '/', body: {} },
+]) it(`${route.module}: missing or blank server token ${JSON.stringify(token)} refuses production writes`, async () => {
+  vi.resetModules();
+  vi.clearAllMocks();
+  mocks.query.mockResolvedValue({rows:[],rowCount:1});
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('ZENITHJOY_INTERNAL_TOKEN', token);
+  const module = await import(route.module) as Record<string, Router>;
+  const app = express().use(express.json()).use('/', module[route.exported]);
+  const response = await request(app).post(route.path).send(route.body);
+  expect(response.status).toBe(503);
+  expect(response.body.error.code).toBe('INTERNAL_AUTH_UNAVAILABLE');
+  expect(mocks.query).not.toHaveBeenCalled();
+});
+
+for (const header of ['Authorization', 'X-Internal-Token']) for (const route of [
+  { module: '../operator-sessions', exported: 'operatorSessionsRouter', path: '/status', body: {updates:[{platform:'douyin',status:'active'}]} },
+  { module: '../agent-offline-scan', exported: 'default', path: '/', body: {} },
+]) it(`${route.module}: configured ${header} retains authenticated access`, async () => {
+  vi.resetModules();
+  vi.clearAllMocks();
+  mocks.query.mockResolvedValue({rows:[],rowCount:1});
+  vi.stubEnv('ZENITHJOY_INTERNAL_TOKEN', 'ci-sensitive-route-fixture');
+  const module = await import(route.module) as Record<string, Router>;
+  const app = express().use(express.json()).use('/', module[route.exported]);
+  const value = header==='Authorization' ? 'Bearer ci-sensitive-route-fixture' : 'ci-sensitive-route-fixture';
+  const response = await request(app).post(route.path).set(header,value).send(route.body);
+  expect(response.status).toBe(200);
+  expect(mocks.query).toHaveBeenCalled();
+});

@@ -28,7 +28,8 @@ vi.mock('../../middleware/simple-rate-limit', () => ({
   tenantKeyFn: () => 't',
   ipKeyFn: () => 'ip',
 }));
-vi.mock('../../middleware/internal-auth', () => ({
+vi.mock('../../middleware/internal-auth', async load => ({
+  ...await load<typeof import('../../middleware/internal-auth')>(),
   internalAuth: (req: any, res: any, next: any) => {
     if (req.headers.authorization !== 'Bearer tok-test') {
       return res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: '内部 token 无效' });

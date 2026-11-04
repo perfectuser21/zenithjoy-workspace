@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
-import { internalAuth } from '../middleware/internal-auth';
+import { requiredInternalAuth } from '../middleware/internal-auth';
 import { superAdminGuard } from '../middleware/super-admin';
 import { licenseAuth } from '../middleware/license-auth';
 
@@ -210,7 +210,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /status — GHA 巡检回写（internal-auth 守卫）
-router.post('/status', statusLimit, internalAuth, async (req: Request, res: Response) => {
+router.post('/status', statusLimit, requiredInternalAuth, async (req: Request, res: Response) => {
   const { updates } = req.body || {};
 
   if (!Array.isArray(updates) || updates.length === 0 || updates.length > VALID_PLATFORMS.length) {

@@ -13,7 +13,7 @@ vi.mock('../middleware/super-admin', () => ({
 }));
 
 vi.mock('../middleware/internal-auth', () => ({
-  internalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+  requiredInternalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 vi.mock('../middleware/license-auth', () => ({

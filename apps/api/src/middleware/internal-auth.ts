@@ -83,3 +83,15 @@ export function internalAuth(
 export function __resetInternalAuthWarnFlag(): void {
   warnedAboutMissingToken = false;
 }
+
+/** Sensitive internal writes must never inherit the legacy development bypass. */
+export function requiredInternalAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!process.env.ZENITHJOY_INTERNAL_TOKEN?.trim()) {
+    res.status(503).json({
+      success: false,
+      error: { code: 'INTERNAL_AUTH_UNAVAILABLE', message: 'Internal authentication is not configured' },
+    });
+    return;
+  }
+  internalAuth(req, res, next);
+}
