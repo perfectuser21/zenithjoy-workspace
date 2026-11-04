@@ -267,6 +267,21 @@ jobs:
                 port="${WORKBENCH_SMOKE_PORT:-$(node "$1/lib/workbench-port.mjs" allocate)}" || exit 1
                 WORKBENCH_SMOKE_PORT="$port" exec bash "$1/$2"
               ' workbench "$DIR" "$1"
+            elif [ "$1" = staff-workbench-smoke.sh ] || [ "$1" = knowledge-hub-path1-smoke.sh ]; then
+              # Probe inside the original script budget; explicit overrides fail closed.
+              # shellcheck disable=SC2016
+              timeout --kill-after=5s "$(script_timeout "$1")" bash -c '
+                case "$2" in
+                  staff-workbench-smoke.sh) requested="${STAFF_WORKBENCH_SMOKE_PORT:-}"; variable=STAFF_WORKBENCH_SMOKE_PORT; mode=check ;;
+                  knowledge-hub-path1-smoke.sh) requested="${KNOWLEDGE_SMOKE_PORT:-}"; variable=KNOWLEDGE_SMOKE_PORT; mode=check-pair ;;
+                esac
+                if [ -n "$requested" ]; then
+                  port="$(node "$1/lib/workbench-port.mjs" "$mode" "$requested")" || exit 1
+                else
+                  port="$(node "$1/lib/workbench-port.mjs" allocate)" || exit 1
+                fi
+                exec env "$variable=$port" bash "$1/$2"
+              ' workbench "$DIR" "$1"
             else
               timeout --kill-after=5s "$(script_timeout "$1")" bash "$DIR/$1"
             fi
