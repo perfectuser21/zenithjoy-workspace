@@ -127,7 +127,7 @@ export function verifyPatrolRequiredConsumer(repoRoot){
     !permanent(gateStep)||gateStep.run!=='node scripts/ci/required-gate.mjs code'||gateStep.env?.GATE_NEEDS!=='${{ toJSON(needs) }}')fail('REQUIRED_CONSUMER_DISABLED');
  const env={...process.env,PYTHONDONTWRITEBYTECODE:'1'};delete env.NODE_TEST_CONTEXT;
  const run=(args,extra={})=>spawnSync(process.execPath,args,{cwd:repoRoot,env:{...env,...extra},encoding:'utf8',timeout:90000,maxBuffer:2*1024*1024});
- const result=run(['--test','scripts/phone-account-patrol/implementation-regression.test.mjs']);
+ const result=run(['--test','--test-reporter=tap','scripts/phone-account-patrol/implementation-regression.test.mjs']);
  if(result.error||result.signal||result.status!==0||!(Number(result.stdout.match(/^# tests ([0-9]+)$/m)?.[1])>=2)||!/^# fail 0$/m.test(result.stdout)||!/^# skipped 0$/m.test(result.stdout)||!/^# todo 0$/m.test(result.stdout))fail('REQUIRED_RUNTIME_FAILED');
  const needs=Object.fromEntries(gate.needs.map(job=>[job,{result:'success'}]));
  needs.changes.outputs=Object.fromEntries(['dashboard','api','geoai','ci','agent_modules'].map(key=>[key,'false']));
