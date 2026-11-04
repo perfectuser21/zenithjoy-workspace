@@ -6,8 +6,8 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 test('真实Android command smoke保留Gradle完整失败原因及原非零退出码',()=>{
- const source=readFileSync(new URL('../smoke/agent-cmd-executor-smoke.sh',import.meta.url),'utf8');
- const line=source.split('\n').find(v=>v.startsWith('./gradlew '));
+ const source=readFileSync(new URL('../android-agent-contracts.sh',import.meta.url),'utf8');
+ const line=source.split('\n').map(v=>v.trim()).find(v=>v.startsWith('./gradlew '));
  assert.ok(line,'必须执行真实Gradle入口');
  const root=mkdtempSync(join(tmpdir(),'android-smoke-diagnostics-'));
  try{

@@ -17,7 +17,8 @@ vi.mock('../../src/db/connection', () => ({
 }));
 
 // Mock tenant-context：X-Tenant-Id header 直接设为 tenantId
-vi.mock('../../src/middleware/tenant-context', () => ({
+vi.mock('../../src/middleware/tenant-context', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../src/middleware/tenant-context')>(),
   tenantContextOptional: (req: any, _res: any, next: () => void) => {
     const t = req.header('X-Tenant-Id');
     if (t) req.tenantId = String(t).trim();

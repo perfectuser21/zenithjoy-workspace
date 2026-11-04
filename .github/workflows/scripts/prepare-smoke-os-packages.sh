@@ -2,7 +2,7 @@
 set -euo pipefail
 # One caller-owned 300s deadline covers original index, signed plan and install.
 echo "PREFLIGHT_START smoke-os-packages elapsed_s=$SECONDS"
-packages=(zsh python3 jq libxml2-utils)
+packages=(zsh python3 jq libxml2-utils fontconfig fonts-noto-cjk postgresql)
 for tool in ffmpeg zsh python3 jq xmllint; do
   echo "PREFLIGHT_TOOL $tool existing_path=$(command -v "$tool" || echo missing)"
 done

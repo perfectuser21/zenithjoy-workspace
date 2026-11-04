@@ -48,6 +48,8 @@ describe('actual app admission formerly repeated by HTTP smoke wrappers', () => 
   it.each([
     ['get', '/api/lead-config/self'],
     ['post', '/api/feishu/customer-list/sync'],
+    ['post', '/api/cs/voice-outreach/call'],
+    ['get', '/api/cs/voice-outreach/records'],
   ] as const)('%s %s remains exactly 404', async (method, path) => {
     expect((await request(app)[method](path).send({})).status).toBe(404);
     expect(deps.query).not.toHaveBeenCalled();

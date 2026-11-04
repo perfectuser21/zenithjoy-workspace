@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "reason": "Replace internal compatibility aliases with one required blocking canonical; no external stability obligation found.",
+  "retired": [
+    {
+      "path": ".github/workflows/scripts/smoke/agent-v110-stale-recovery-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/agent-v110-stale-recovery-smoke.sh",
+      "sha256": "26c1662aeadbdcf4494ae81eda0866fc5d0fcf3422f322572ba43d60bea56373",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/ai-video-checkpoint-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/ai-video-checkpoint-smoke.sh",
+      "sha256": "a70f50fc468c659776c83d8085cf450aed919c5898509309fbdb9896e03cc23f",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/ai-video-pipeline-new-fields-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/ai-video-pipeline-new-fields-smoke.sh",
+      "sha256": "fd0a3d71a44091df829df8f8038cffefbca003c2c67e11c184779eb581f04ca1",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/ai-video-pipeline-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/ai-video-pipeline-smoke.sh",
+      "sha256": "e9887d4debef7994a2a48260ccd0d3d283eeb85085d4d430a8fad5bc79eb67fa",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/ai-video-pipeline-ws1-original-script-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/ai-video-pipeline-ws1-original-script-smoke.sh",
+      "sha256": "a813a9b9c3fcb6b55262c086377b63514f7231b32d2ed9dd87567cc21ae50b67",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/ai-video-pipeline-ws1-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/ai-video-pipeline-ws1-smoke.sh",
+      "sha256": "68a0a6ea0fed2c3c6cee38b9a06bda600190fd761e899b33cc19126a8d3e2c0b",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/aidge-capability-center-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/aidge-capability-center-smoke.sh",
+      "sha256": "6b19e22d2ef85fd2213317f504451f068bd65b613938e6683334f3420b4b84e1",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/analyze-transcript-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/analyze-transcript-smoke.sh",
+      "sha256": "d8b3c53d9d2f101ae8d8891a07b20d80034d539227d40b6e177476d812204eb3",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/dynamic-template-compose-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/dynamic-template-compose-smoke.sh",
+      "sha256": "658b01fc64914ddee9e060f37189546b577c14aa64849754f2306394d1e69bd0",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh",
+      "sha256": "e435d98f8afebf69f8e69bf4802e84c2221b3fd5cb3621bb02484e308235b3a4",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/local-video-path-ui-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/local-video-path-ui-smoke.sh",
+      "sha256": "d7f6a9a71a0634fc3e4207a1cc38a55548018630ee0d9c403aba5da8e8b218e3",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/video-aspect-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/video-aspect-smoke.sh",
+      "sha256": "793c0658eb526b937e36c7e9fefef55dd8028b4d8a18aa433d929d96a05c154f",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/local-video-pipeline-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/local-video-pipeline-smoke.sh",
+      "sha256": "ec255a950bf91ee05111aeac647a4a6d7e4676b89673aeaff3e2713e4c2475e9",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/mashup-render-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/mashup-render-smoke.sh",
+      "sha256": "855562a19178a2cf6c8ade9f872fa0be9aaa7201ec1427ae558b02ac6a8ce7a1",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/material-delete-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/material-delete-smoke.sh",
+      "sha256": "fb38fcfd77f16a608f31bd2d546804ecfba94cb58b8038486ca0f6f537399ba9",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/material-direct-upload-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/material-direct-upload-smoke.sh",
+      "sha256": "0e7a5e78b20301a7b821cc9d22f045791fec9362874f9f61f5dfa1900a495dd7",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/material-upload-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/material-upload-smoke.sh",
+      "sha256": "41baad54b49db1de756a70af6c0b40eda4fb0a823d57f7303e94ad6c2eeed91b",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/node-agent-report-videos-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/node-agent-report-videos-smoke.sh",
+      "sha256": "ca540705ee3cf2cea27832b7440d7a4e8d08290458dacfbb00489db00ec4cc2e",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/orient-dblog-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/orient-dblog-smoke.sh",
+      "sha256": "23030097fa3a536688f7cc8625ae6f4b106b110f052af44a642a34d84505e94f",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/vision-orientation-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/vision-orientation-smoke.sh",
+      "sha256": "35766b872e9959ea15bd5863d42aeca7bd3c21b926168927f95878fe559db673",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/rotation-normalize-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/rotation-normalize-smoke.sh",
+      "sha256": "34bc18adc3d9deb2fa283f4e208c43c24677efa648621e4a68ef032fd2b5c5d2",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/sprint-2-1b-douyin-video-real-publish-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/sprint-2-1b-douyin-video-real-publish-smoke.sh",
+      "sha256": "85c2fbc800685add04ce76af5879a1b5315efbc001107f029fe32b76d7aa7f5c",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/stage1-report-videos-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/stage1-report-videos-smoke.sh",
+      "sha256": "0f88b9539ba7399edc09c8814c5f0c92e71cdb4d59161f14998bbd77cea06fea",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/template-c-r-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/template-c-r-smoke.sh",
+      "sha256": "5c15eb571687a6de5ff0979c00449d515eb4d687e85a97ebbaf7f36db4fa330b",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/template-video-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/template-video-smoke.sh",
+      "sha256": "4545fc6b9fc834f26bd88c6249e7108875479423beb0b0f43203d26a62052daf",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/ws2-three-template-builders-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/ws2-three-template-builders-smoke.sh",
+      "sha256": "50454ed32324615a81398c30f72840b23cb03f54982d8f83ea9b902d1f195c99",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/video-job-tenant-isolation-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/video-job-tenant-isolation-smoke.sh",
+      "sha256": "f0cc19954c59d13f1d6bbe30202f29dac003a1706344e3e18e8b11ea313573d6",
+      "replacement": ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
+    }
+  ]
+}

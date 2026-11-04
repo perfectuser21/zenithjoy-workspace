@@ -1,205 +1,98 @@
-# services/agent/build-modules/line04/wechat-rpa/voice_call/tests/test_call_rpa.py
-# TDD Red — GP-A 主动语音触达 · RPA 拨号单元测试（mock UIA，不需真机）
-#
-# 运行方式（CI 可达）：
-#   cd /workspace/services/agent/build-modules/line04/wechat-rpa
-#   python -m pytest voice_call/tests/test_call_rpa.py -v
-#
-# 覆盖：
-#   - contact 精确标题匹配（B-1/B-2）
-#   - VOIP mm:ss 文字解析（B-3/接通判定）
-#   - 超时路径 mock（B-3 no_answer）
-#   - safe_hangup 不抛异常（B-3）
+"""Retained voice prototype: real implementation, isolated UIA/time boundaries."""
+import importlib.util
+from pathlib import Path
+import unittest
+from unittest.mock import MagicMock, patch
 
-import re
-import time
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+spec = importlib.util.spec_from_file_location('retained_voice_rpa', Path(__file__).resolve().parents[1] / 'call_rpa.py')
+rpa = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(rpa)
 
+class VoiceImplementation(unittest.TestCase):
+    def test_real_bubble_parser(self):
+        for text, expected in [('\u901a\u8bdd\u65f6\u957f 00:45', 'answered'), ('\u5bf9\u65b9\u65e0\u5e94\u7b54', 'no_answer'), ('cancelled', 'failed'), ('', 'failed')]:
+            with self.subTest(text=text):
+                self.assertEqual(rpa._parse_bubble_status(text), expected)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers — 从 call_rpa 导入的逻辑（mock UIA 隔离）
-# ──────────────────────────────────────────────────────────────────────────────
+    def test_exact_contact_title_and_search(self):
+        main, chat, app = MagicMock(), MagicMock(), MagicMock()
+        with patch.object(rpa, '_get_wechat_app', return_value=app), patch.object(rpa, '_get_main_window', return_value=main), patch.object(rpa, '_get_chat_window', return_value=(chat, '  Alice  ')), patch.object(rpa.time, 'sleep'):
+            result = rpa.locate_contact('Alice')
+        self.assertEqual(result['status'], 'ok')
+        self.assertIs(result['window'], chat)
+        self.assertEqual(main.child_window.return_value.SendKeys.call_args_list[0].args, ('Alice',))
+        self.assertEqual(main.child_window.return_value.SendKeys.call_args_list[1].args, ('{ENTER}',))
 
-def _is_timer_format(text: str) -> bool:
-    """判断 VOIP 窗口顶部文字是否为 mm:ss 计时器格式（接通判定）。"""
-    return bool(re.match(r'^\d{2}:\d{2}$', text.strip()))
+    def test_mismatched_contact_never_returns_a_dial_target(self):
+        with patch.object(rpa, '_get_wechat_app', return_value=MagicMock()), patch.object(rpa, '_get_main_window', return_value=MagicMock()), patch.object(rpa, '_get_chat_window', return_value=(MagicMock(), 'Bob')), patch.object(rpa.time, 'sleep'):
+            result = rpa.locate_contact('Alice')
+        self.assertEqual(result['status'], 'contact_mismatch')
+        self.assertIsNone(result['window'])
 
+    def test_no_application_is_a_failure(self):
+        with patch.object(rpa, '_get_wechat_app', return_value=None):
+            self.assertEqual(rpa.locate_contact('Alice')['status'], 'failed')
 
-def _parse_bubble_text(text: str) -> str:
-    """
-    解析通话结束气泡文案：
-    - '通话时长 mm:ss' → 'answered'
-    - '对方无应答'     → 'no_answer'
-    - 其他             → 'failed'
-    """
-    if '通话时长' in text:
-        return 'answered'
-    if '无应答' in text:
-        return 'no_answer'
-    return 'failed'
+    def test_search_error_stops_before_contact_resolution(self):
+        main = MagicMock()
+        main.child_window.return_value.SendKeys.side_effect = RuntimeError('isolated UI error')
+        with patch.object(rpa, '_get_wechat_app', return_value=MagicMock()), patch.object(rpa, '_get_main_window', return_value=main), patch.object(rpa, '_get_chat_window') as resolve:
+            self.assertEqual(rpa.locate_contact('Alice')['status'], 'failed')
+            resolve.assert_not_called()
 
+    def test_real_dial_calls_only_the_resolved_control(self):
+        chat = MagicMock()
+        with patch.object(rpa.time, 'sleep'):
+            self.assertEqual(rpa.trigger_voice_call(chat), {'status': 'ok'})
+        chat.child_window.assert_called_once_with(title='\u8bed\u97f3\u901a\u8bdd', control_type='Button')
+        chat.child_window.return_value.click_input.assert_called_once()
 
-def _contact_title_matches(window_title: str, contact_name: str) -> bool:
-    """聊天窗口标题精确匹配校验（I-1 安全断言）。"""
-    return window_title.strip() == contact_name.strip()
+    def test_missing_dial_target_and_click_error_fail(self):
+        self.assertEqual(rpa.trigger_voice_call(None)['status'], 'failed')
+        chat = MagicMock()
+        chat.child_window.return_value.click_input.side_effect = RuntimeError('isolated')
+        self.assertEqual(rpa.trigger_voice_call(chat)['status'], 'failed')
 
+    def test_actual_wait_recognizes_timer(self):
+        with patch.object(rpa, '_get_voip_window_title', return_value='00:05'), patch.object(rpa.time, 'time', side_effect=[0, 0]), patch.object(rpa, 'safe_hangup') as hangup:
+            self.assertEqual(rpa.wait_for_answer(object(), timeout=1), {'status': 'answered', 'timer_text': '00:05'})
+            hangup.assert_not_called()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# B-1/B-2：联系人定位 + 标题精确匹配
-# ──────────────────────────────────────────────────────────────────────────────
+    def test_actual_timeout_hangs_up_and_does_not_answer(self):
+        app = object()
+        with patch.object(rpa, '_get_voip_window_title', return_value='1:5'), patch.object(rpa.time, 'time', side_effect=iter([0, 0, 1] + [2] * 20)), patch.object(rpa.time, 'sleep'), patch.object(rpa, 'safe_hangup') as hangup:
+            self.assertEqual(rpa.wait_for_answer(app, timeout=1), {'status': 'no_answer'})
+            hangup.assert_called_once_with(app)
 
-class TestContactPreciseMatch:
-    def test_contact_title_match_success(self):
-        """标题与 contact_name 完全一致 → 匹配成功。"""
-        assert _contact_title_matches('默忆', '默忆') is True
+    def test_safe_hangup_absent_and_failed_uia_is_idempotent(self):
+        rpa.safe_hangup(None)
+        app = MagicMock()
+        app.window.side_effect = RuntimeError('gone')
+        rpa.safe_hangup(app)
+        app = MagicMock()
+        app.window.return_value.exists.return_value = False
+        rpa.safe_hangup(app)
+        app.window.return_value.child_window.assert_not_called()
 
-    def test_contact_title_match_mismatch(self):
-        """标题与 contact_name 不一致 → 应返回 False，触发 contact_mismatch 中止。"""
-        assert _contact_title_matches('张三', '默忆') is False
+    def test_actual_hangup_parses_duration(self):
+        with patch.object(rpa, '_get_voip_window_title', return_value=''), patch.object(rpa, '_get_last_bubble_text', return_value='\u901a\u8bdd\u65f6\u957f 01:07'), patch.object(rpa.time, 'time', side_effect=[0, 0]):
+            result = rpa.wait_for_hangup(object(), object(), timeout=1)
+        self.assertEqual((result['status'], result['duration_seconds']), ('answered', 67))
 
-    def test_contact_title_match_empty(self):
-        """空标题 → 不匹配。"""
-        assert _contact_title_matches('', '默忆') is False
+    def test_make_call_rejects_contact_before_dial(self):
+        with patch.object(rpa, '_get_wechat_app', return_value=object()), patch.object(rpa, 'locate_contact', return_value={'status': 'contact_mismatch'}), patch.object(rpa, 'trigger_voice_call') as dial:
+            result = rpa.make_voice_call('Alice', tenant_id='isolated-tenant')
+            dial.assert_not_called()
+        self.assertEqual(result['status'], 'contact_mismatch')
+        self.assertEqual(result['tenant_id'], 'isolated-tenant')
 
-    def test_contact_title_match_whitespace_stripped(self):
-        """标题含前后空格时去掉后比较。"""
-        assert _contact_title_matches('  默忆  ', '默忆') is True
+    def test_make_call_propagates_answer_and_duration(self):
+        chat, app = object(), object()
+        with patch.object(rpa, '_get_wechat_app', return_value=app), patch.object(rpa, 'locate_contact', return_value={'status': 'ok', 'window': chat}), patch.object(rpa, 'trigger_voice_call', return_value={'status': 'ok'}) as dial, patch.object(rpa, 'wait_for_answer', return_value={'status': 'answered'}) as answer, patch.object(rpa, 'wait_for_hangup', return_value={'status': 'answered', 'duration_seconds': 9}):
+            result = rpa.make_voice_call('Alice', tenant_id='isolated-tenant')
+            dial.assert_called_once_with(chat)
+            answer.assert_called_once_with(app, timeout=rpa.ANSWER_TIMEOUT)
+        self.assertEqual((result['status'], result['duration_seconds']), ('answered', 9))
 
-    def test_contact_mismatch_returns_correct_status(self):
-        """
-        模拟 locate_contact 在标题不匹配时返回 contact_mismatch。
-        使用 MagicMock 模拟 UIA 窗口对象，不需真机。
-        """
-        mock_win = MagicMock()
-        mock_win.window_text.return_value = '张三'  # 标题不匹配
-
-        contact_name = '默忆'
-        title = mock_win.window_text()
-        status = 'contact_mismatch' if not _contact_title_matches(title, contact_name) else 'ok'
-        assert status == 'contact_mismatch'
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# B-3：VOIP mm:ss 接通判定 + 气泡文案解析
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestVoipTextParse:
-    def test_timer_format_valid(self):
-        """标准 mm:ss 格式 → 判定为接通。"""
-        assert _is_timer_format('00:05') is True
-        assert _is_timer_format('01:23') is True
-        assert _is_timer_format('59:59') is True
-
-    def test_timer_format_waiting(self):
-        """'等待对方接受邀请…' → 未接通。"""
-        assert _is_timer_format('等待对方接受邀请…') is False
-
-    def test_timer_format_empty(self):
-        """空字符串 → 未接通。"""
-        assert _is_timer_format('') is False
-
-    def test_bubble_answered(self):
-        """'通话时长 00:45' 气泡 → answered。"""
-        assert _parse_bubble_text('通话时长 00:45') == 'answered'
-
-    def test_bubble_no_answer(self):
-        """'对方无应答' 气泡 → no_answer。"""
-        assert _parse_bubble_text('对方无应答') == 'no_answer'
-
-    def test_bubble_unknown(self):
-        """未知气泡文案 → failed。"""
-        assert _parse_bubble_text('通话取消') == 'failed'
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# B-3：超时路径 mock（60 秒未接通 → no_answer）
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestTimeoutNoAnswer:
-    def test_timeout_no_answer_mock(self):
-        """
-        模拟 wait_for_answer 在 60 秒内 VOIP 窗口始终显示等待文字 → 返回 no_answer。
-        使用 MagicMock 模拟轮询，不实际等待 60 秒。
-        """
-        poll_count = 0
-
-        def mock_poll_voip_title():
-            nonlocal poll_count
-            poll_count += 1
-            return '等待对方接受邀请…'  # 永远等待
-
-        TIMEOUT = 60
-        POLL_INTERVAL = 1
-        max_polls = TIMEOUT // POLL_INTERVAL
-        mock_time = MagicMock(side_effect=lambda: poll_count * POLL_INTERVAL)
-
-        status = 'no_answer'
-        for _ in range(min(max_polls, 3)):  # 只 mock 3 次轮询验证逻辑
-            title = mock_poll_voip_title()
-            if _is_timer_format(title):
-                status = 'answered'
-                break
-
-        assert status == 'no_answer'
-        assert poll_count > 0
-
-    def test_timeout_answered_on_timer(self):
-        """
-        模拟 wait_for_answer：第 3 次轮询 VOIP 窗口出现 mm:ss → 判定为 answered。
-        """
-        poll_responses = ['等待对方接受邀请…', '等待对方接受邀请…', '00:03']
-        poll_index = 0
-
-        def mock_poll_voip_title():
-            nonlocal poll_index
-            text = poll_responses[poll_index % len(poll_responses)]
-            poll_index += 1
-            return text
-
-        status = 'no_answer'
-        for _ in range(10):
-            title = mock_poll_voip_title()
-            if _is_timer_format(title):
-                status = 'answered'
-                break
-
-        assert status == 'answered'
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# B-3：safe_hangup 不抛异常（模拟 VOIP 窗口已消失场景）
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestSafeHangup:
-    def test_safe_hangup_no_raise_when_window_missing(self):
-        """
-        safe_hangup 在 VOIP 窗口已消失时不应抛出异常（幂等挂断）。
-        使用 MagicMock 模拟窗口不存在。
-        """
-        mock_voip_win = MagicMock()
-        mock_voip_win.exists.return_value = False  # 窗口已消失
-
-        # 模拟 safe_hangup 逻辑：窗口不存在则跳过
-        def safe_hangup_mock(voip_win):
-            if not voip_win.exists():
-                return  # 幂等，不抛异常
-            voip_win.close()
-
-        try:
-            safe_hangup_mock(mock_voip_win)
-        except Exception as e:
-            pytest.fail(f'safe_hangup 不应抛异常，但抛出: {e}')
-
-    def test_safe_hangup_closes_when_window_exists(self):
-        """safe_hangup 在 VOIP 窗口存在时应调用关闭操作。"""
-        mock_voip_win = MagicMock()
-        mock_voip_win.exists.return_value = True
-
-        def safe_hangup_mock(voip_win):
-            if not voip_win.exists():
-                return
-            voip_win.close()
-
-        safe_hangup_mock(mock_voip_win)
-        mock_voip_win.close.assert_called_once()
+if __name__ == '__main__':
+    unittest.main()

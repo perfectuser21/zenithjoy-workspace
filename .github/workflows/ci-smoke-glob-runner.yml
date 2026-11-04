@@ -55,7 +55,6 @@ jobs:
     env:
       SMOKE_SHARD_INDEX: ${{ matrix.shard }}
       SMOKE_SHARD_COUNT: '2'
-      GRADLE_OPTS: '-Dorg.gradle.daemon=false'
       # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
@@ -208,12 +207,6 @@ jobs:
           docker pull mirror.gcr.io/library/nginx:1.27-alpine
           docker tag mirror.gcr.io/library/nginx:1.27-alpine nginx:1.27-alpine
 
-      # 冷下载/编译是显式准备；每个smoke仍在原有限预算内执行真实测试。
-      - name: Prepare Android unit-test artifacts
-        timeout-minutes: 5
-        working-directory: services/agent-android
-        run: ./gradlew :app:compileDebugUnitTestKotlin --no-daemon --console=plain
-
       - name: Discover + run all CI-capable smoke scripts (ratchet gate)
         id: glob
         run: |
@@ -223,10 +216,6 @@ jobs:
 
           # ── DENYLIST：真机/RPA smoke，CI 跑不了（原样保留） ──
           DENYLIST="
-          wechat-auto-launch-smoke.sh
-          wechat-rpa-auto-reply-smoke.sh
-          wechat-cs-visible-delivery-smoke.sh
-          line04-preflight-smoke.sh
           line02-android-collect-realmachine-smoke.sh
           line02-android-cancel-realmachine-smoke.sh
           account-scan-realmachine-smoke.sh
@@ -437,8 +426,7 @@ jobs:
           selection = runpy.run_path(".github/workflows/scripts/smoke-selection.py")["select"]()
           inventory = selection["inventory"]
           baseline = set(pathlib.Path(".github/workflows/scripts/smoke-baseline.txt").read_text().splitlines()) - {""}
-          denied = {"wechat-auto-launch-smoke.sh", "wechat-rpa-auto-reply-smoke.sh",
-                    "wechat-cs-visible-delivery-smoke.sh", "line04-preflight-smoke.sh",
+          denied = {
                     "line02-android-collect-realmachine-smoke.sh", "line02-android-cancel-realmachine-smoke.sh",
                     "account-scan-realmachine-smoke.sh", "dm-send-realmachine-smoke.sh"}
           assert inventory and baseline <= set(inventory), "missing baseline script"

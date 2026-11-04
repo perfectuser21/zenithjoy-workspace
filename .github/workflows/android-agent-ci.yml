@@ -70,6 +70,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Gradle 8.6
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -89,7 +92,7 @@ jobs:
       # job 默认 working-directory 是 services/agent-android，这里回 repo root 跑 smoke
       - name: Agent command executor smoke（OpenClaw 信号桥·件1）
         working-directory: ${{ github.workspace }}
-        run: bash .github/workflows/scripts/smoke/agent-cmd-executor-smoke.sh
+        run: bash .github/workflows/scripts/android-agent-contracts.sh --verify-results
 
       - name: Prepare signing keystore
         env:

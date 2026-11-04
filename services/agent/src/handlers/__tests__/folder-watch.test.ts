@@ -34,7 +34,7 @@ describe('folder-watch', () => {
   beforeEach(() => {
     managers = [];
     watchers = [];
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-fw-'));
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-fw-')));
   });
   afterEach(() => {
     try {
@@ -115,4 +115,30 @@ describe('folder-watch', () => {
       fs.rmSync(otherDir, { recursive: true, force: true });
     }
   });
+
+  it('delivers a real native file event through the production manager', async () => {
+    const target = path.join(tmpDir, 'native-event.mp4');
+    let finish!: (file: string) => void;
+    const event = new Promise<string>(resolve => { finish = resolve; });
+    const manager = createFolderWatchManager({ onChange: file => {
+      if (file === target) finish(file);
+    } });
+    managers.push(manager);
+    manager.bind(tmpDir);
+    // Repeat the actual write until the native subscription delivers. This
+    // observes readiness instead of relying on a fixed FSEvents startup sleep.
+    const writer = setInterval(() => fs.writeFileSync(target, String(Date.now())), 40);
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([event, new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('Native folder event was not delivered')), 8000);
+      })]);
+      expect(result).toBe(target);
+      expect(manager.listMp4s()).toContain(target);
+    } finally {
+      clearInterval(writer);
+      clearTimeout(deadline);
+      manager.stop();
+    }
+  }, 12000);
 });
