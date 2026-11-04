@@ -1321,7 +1321,7 @@ tests:
   - id: agent-ws1-qr-bind-douyin
     path: services/agent/src/handlers/__tests__/qr-bind-douyin.test.ts
     type: unit
-    ci: L3
+    ci: L4
     status: active
     product: AI员工
     execution: "agent-qr-windows-verify.yml / unit-tests-windows / npm test (Windows); shared source suites also run in agent CI"
@@ -1338,15 +1338,16 @@ tests:
   - id: agent-ws1-folder-watch
     path: services/agent/src/handlers/__tests__/folder-watch.test.ts
     type: unit
-    ci: L3
+    ci: L4
     status: active
     product: AI员工
-    note: "Walking Skeleton #1 — 本地视频文件夹绑定 + fs.watch"
+    execution: ci-l4-runtime.yml / agent-test + agent-windows-contracts / services/agent npm test
+    note: "真实目录/文件筛选及manager回调/关闭合同；fsWatch是隔离边界，六例不声明原生事件已送达。Mac独立原生探针未收事件的缺证据另记。"
 
   - id: agent-ws1-douyin-publish
     path: services/agent/src/handlers/__tests__/douyin-publish.test.ts
     type: unit
-    ci: L3
+    ci: L4
     status: active
     product: AI员工
     execution: "agent-qr-windows-verify.yml / unit-tests-windows / npm test (Windows); shared source suites also run in agent CI"
