@@ -27,3 +27,9 @@ GP-Anchor: none(infra)
 ## 本地验收
 
 实际 capability smoke 351/351 通过，0 skip/0 fail，136.6秒，原180秒预算不变；入口自测12/12、登记守卫29/29、真实启动配置自检18/18通过。登记校验1844个现存记录、1823个命名测试；六条退役历史保留。product-map无漂移、固定源版本准入及diff检查通过。远端必需检查仍以本PR当前SHA读回为准。
+
+## Windows 实际失败与准备修复
+
+首次远端 Orphan job126331417165在运行浏览器前因Chocolatey PostgreSQL包源HTTP406失败，后续数据库连接被拒；用例未执行，门禁保持红。复用同仓现役Windows流程的预装数据库服务启动方式，拆出独立pwsh步骤，显式启用服务并启动，psql和createdb非零立即抛错；保留原迁移、构建、健康探测、全部spec、取消双跑、证据与聚合。
+
+预装服务及其Stopped/Disabled/PGBIN配置见[GitHub官方runner镜像说明](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md#postgresql)。新增既有workflow接线合同先红后绿，本地仅验证配置合同；实际Windows执行以该候选的远端结果为准。

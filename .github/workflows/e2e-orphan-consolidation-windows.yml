@@ -107,12 +107,24 @@ jobs:
         working-directory: apps/dashboard
         run: npx playwright install chromium --with-deps
 
+      - name: Start runner PostgreSQL service
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $services = @(Get-Service postgresql* -ErrorAction SilentlyContinue)
+          if ($services.Count -ne 1) { throw "Expected one runner PostgreSQL service, found $($services.Count)" }
+          $svc = $services[0]
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service $svc.Name
+          $env:PGPASSWORD = 'root'
+          & "$env:PGBIN\psql.exe" -X -v ON_ERROR_STOP=1 -U postgres -h localhost -d postgres -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          if ($LASTEXITCODE -ne 0) { throw "PostgreSQL password setup failed: $LASTEXITCODE" }
+          $env:PGPASSWORD = 'postgres'
+          & "$env:PGBIN\createdb.exe" -U postgres -h localhost zenithjoy_test
+          if ($LASTEXITCODE -ne 0) { throw "PostgreSQL database creation failed: $LASTEXITCODE" }
+
       - name: Start apps/api with real Postgres
         run: |
-          choco install postgresql --no-progress -y --params '/Password:postgres' --params-global
-          PG_HOME=$(powershell -NoProfile -Command "(Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName")
-          export PGPASSWORD=postgres
-          "$PG_HOME/bin/createdb.exe" -U postgres -h localhost zenithjoy_test
           npm run migrate --workspace apps/api
           npm run build --workspace apps/api
           npm run dev --workspace apps/api &
