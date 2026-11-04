@@ -1,6 +1,9 @@
 """Exercise the real remake node class without importing unrelated tensor models."""
 import ast
 import pathlib
+import os
+from types import SimpleNamespace
+from urllib.parse import urlparse
 import re
 import unittest
 from unittest.mock import Mock
@@ -55,5 +58,22 @@ class WanRemakeTest(unittest.TestCase):
         payload = self.submit.call_args.args[1]['remake']
         self.assertEqual(payload['productMode'], 'color')
         self.assertEqual(payload['facePresence'], 'absent')
+
+class ApiMessageTest(unittest.TestCase):
+    def test_safe_validation_errors_are_actionable_but_sensitive_messages_stay_hidden(self):
+        tree = ast.parse((ROOT / 'custom_nodes/zenithjoy/__init__.py').read_text())
+        functions = [item for item in tree.body if isinstance(item, ast.FunctionDef) and item.name in ('_api', '_submit_and_wait')]
+        response = Mock(status_code=400)
+        request = Mock(return_value=response)
+        scope = {'os': SimpleNamespace(environ={'ZENITHJOY_CANVAS_API': 'http://api:5200', 'ZENITHJOY_CANVAS_TOKEN': 'secret'}), 'urlparse': urlparse, 're': re,
+                 'requests': SimpleNamespace(request=request, RequestException=ConnectionError)}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), '<real-api-functions>', 'exec'), scope)
+        response.json.return_value = {'error': '原片没有露脸，请关闭换脸或选择其他操作'}
+        with self.assertRaisesRegex(ValueError, '原片没有露脸'):
+            scope['_submit_and_wait']('/jobs', {'kind': 'wan'}, 'a'*32)
+        for message in ['请检查 https://signed.example/private?signature=secret', '敏感字段' + 'a'*50, '错误\n泄漏', '错'*201]:
+            response.json.return_value = {'error': message}
+            with self.subTest(message=message), self.assertRaisesRegex(RuntimeError, '^创作服务请求失败'):
+                scope['_api']('POST', '/jobs', {})
 
 if __name__ == '__main__': unittest.main()

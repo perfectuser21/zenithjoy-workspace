@@ -57,3 +57,19 @@ test('workflow exposes remake plus SaveVideo and ships with Docker image', async
   const docker=await readFile(new URL('Dockerfile',root),'utf8');assert.match(docker,/COPY infrastructure\/comfyui\/workflows\/video-remake-wan.json/);
   const identifiers=await readFile(new URL('custom_nodes/zenithjoy/web/identifiers.js',root),'utf8');assert.match(identifiers,/ZenithJoyWanRemake/);
 });
+
+test('removing a node during upload never writes its completion into detached widgets', async()=>{
+  let finish;
+  const f=await fixture(async()=>{await new Promise(resolve=>{finish=resolve;});return {ok:true,json:async()=>({id,kind:'video'})};});
+  const upload=f.choose('上传参考视频',new File(['x'],'source.mp4',{type:'video/mp4'}));
+  await new Promise(resolve=>setTimeout(resolve,0));
+  f.node.onRemoved();finish();await upload;
+  assert.equal(f.field('参考视频ID').value,'上传中');
+});
+
+test('completed task ID is exposed without serializing an extra execution input', async()=>{
+  const f=await fixture(async()=>{});
+  f.node.onExecuted({text:[id]});
+  assert.equal(f.field('视频任务ID（可复制）').value,id);
+  assert.equal(f.field('视频任务ID（可复制）').options.serialize,false);
+});

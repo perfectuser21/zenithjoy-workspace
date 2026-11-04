@@ -64,6 +64,13 @@ def _api(method, path, payload=None, stream=False, files=None):
         if is_old_task:
             raise RuntimeError('旧任务的参数或素材地址已变化，无法确认与原任务一致，请先核对历史记录再生成新版本')
         raise RuntimeError('参数已变化，请点击生成新版本')
+    if response.status_code == 400:
+        try:
+            message = response.json().get('error', '')
+        except (ValueError, AttributeError):
+            message = ''
+        if isinstance(message, str) and 0 < len(message) <= 200 and not re.search(r'[\x00-\x1f]|https?://|Bearer |[A-Za-z0-9_=-]{48,}', message):
+            raise ValueError(message)
     if not 200 <= response.status_code < 300:
         raise RuntimeError('创作服务请求失败，请联系管理员或查看任务记录')
     return response
@@ -73,8 +80,9 @@ def _submit_and_wait(path, payload, request_id, max_wait=900):
     if not re.fullmatch(r'[A-Za-z0-9_-]{16,100}', request_id):
         raise ValueError('请先点击节点上的生成新版本按钮')
     payload['clientRequestId'] = request_id
+    response = _api('POST', path, payload)
     try:
-        job = _api('POST', path, payload).json()
+        job = response.json()
         job_id = job['id']
         if not isinstance(job_id, str) or not all(c in '0123456789abcdefABCDEF-' for c in job_id):
             raise ValueError('bad job')
@@ -225,24 +233,89 @@ class WanGenerate:
             raise RuntimeError('图片素材不可用，请重新登记')
         job = _submit_and_wait('/jobs', {'kind': 'wan', 'prompt': prompt, 'duration': duration,
                                        'media': [{'type': 'reference_image', 'url': refreshed['url']}]}, request_id)
-        import folder_paths
-        from comfy_api.input_impl import VideoFromFile
-        filename = os.path.join(folder_paths.get_temp_directory(), 'zenithjoy-' + job['id'] + '.mp4')
-        try:
-            with _api('GET', '/jobs/' + job['id'] + '/download', stream=True) as response, open(filename, 'wb') as output:
-                size = 0
-                for chunk in response.iter_content(65536):
-                    size += len(chunk)
-                    if size > 200 * 1024 * 1024:
-                        raise RuntimeError('视频结果超过大小限制')
-                    output.write(chunk)
-            return (VideoFromFile(filename),)
-        except Exception:
-            if os.path.exists(filename):
-                os.unlink(filename)
-            raise
+        return (_download_job_video(job),)
+
+
+def _download_job_video(job):
+    import folder_paths
+    from comfy_api.input_impl import VideoFromFile
+    filename = os.path.join(folder_paths.get_temp_directory(), 'zenithjoy-' + job['id'] + '.mp4')
+    try:
+        with _api('GET', '/jobs/' + job['id'] + '/download', stream=True) as response, open(filename, 'wb') as output:
+            size = 0
+            for chunk in response.iter_content(65536):
+                size += len(chunk)
+                if size > 200 * 1024 * 1024:
+                    raise RuntimeError('视频结果超过大小限制')
+                output.write(chunk)
+        return VideoFromFile(filename)
+    except Exception:
+        if os.path.exists(filename):
+            os.unlink(filename)
+        raise
+
+
+
+class WanRemakeGenerate:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {
+            '参考视频ID': ('STRING', {'default': ''}),
+            '产品操作': (['保留产品', '更换款式', '更换颜色', '更换Logo'],),
+            '产品图片ID': ('STRING', {'default': ''}),
+            '产品说明': ('STRING', {'default': '', 'multiline': True}),
+            '目标颜色': ('STRING', {'default': ''}),
+            '更换背景': ('BOOLEAN', {'default': False}),
+            '背景说明': ('STRING', {'default': '', 'multiline': True}),
+            '背景图片ID': ('STRING', {'default': ''}),
+            '更换人脸': ('BOOLEAN', {'default': False}),
+            '原片人脸': (['尚未确认', '未露脸', '有露脸'],),
+            '人脸图片ID': ('STRING', {'default': ''}),
+            '确认生成': ('BOOLEAN', {'default': False}),
+            'request_id': ('STRING', {'default': ''}),
+        }}
+    RETURN_TYPES = ('VIDEO',)
+    RETURN_NAMES = ('视频',)
+    FUNCTION = 'run'
+    CATEGORY = 'ZenithJoy'
+
+    def run(self, 参考视频ID, 产品操作, 产品图片ID, 产品说明, 目标颜色, 更换背景, 背景说明, 背景图片ID,
+            更换人脸, 原片人脸, 人脸图片ID, 确认生成, request_id):
+        if not 确认生成:
+            raise ValueError('请先上传参考视频并选择要修改的内容，再打开确认生成')
+        # A browser upload temporarily marks the slot busy, preventing even global Queue.
+        fields = [参考视频ID, 产品图片ID, 背景图片ID, 人脸图片ID]
+        if any(value == '上传中' for value in fields):
+            raise ValueError('素材上传中，请等待上传完成后再运行')
+        for value in fields:
+            if value and (not isinstance(value, str) or not re.fullmatch(r'[A-Fa-f0-9]{8}(?:-[A-Fa-f0-9]{4}){3}-[A-Fa-f0-9]{12}', value)):
+                raise ValueError('素材ID无效，请使用节点上的上传按钮重新上传')
+        if not 参考视频ID:
+            raise ValueError('请先上传参考视频')
+        modes = {'保留产品': 'keep', '更换款式': 'replace', '更换颜色': 'color', '更换Logo': 'logo'}
+        faces = {'尚未确认': 'unknown', '未露脸': 'absent', '有露脸': 'present'}
+        if 产品操作 not in modes or 原片人脸 not in faces:
+            raise ValueError('请选择有效的产品操作和原片人脸状态')
+        if 产品操作 in ('更换款式', '更换Logo') and not 产品图片ID:
+            raise ValueError('请上传目标产品或Logo图片')
+        if 产品操作 == '更换颜色' and not 目标颜色.strip():
+            raise ValueError('请填写目标颜色')
+        if 更换背景 and not (背景说明.strip() or 背景图片ID):
+            raise ValueError('请填写背景说明或上传背景图片')
+        if 更换人脸 and 原片人脸 == '尚未确认':
+            raise ValueError('请先确认原片是否有露脸')
+        if 更换人脸 and 原片人脸 == '有露脸' and not 人脸图片ID:
+            raise ValueError('请上传目标人脸图片')
+        if 产品操作 == '保留产品' and not 更换背景 and not (更换人脸 and 原片人脸 == '有露脸'):
+            raise ValueError('请至少选择一项有效修改；原片未露脸时会跳过换脸')
+        remake = {'referenceAssetId': 参考视频ID, 'productMode': modes[产品操作],
+                  'productAssetId': 产品图片ID, 'productDescription': 产品说明.strip(), 'targetColor': 目标颜色.strip(),
+                  'background': 更换背景, 'backgroundDescription': 背景说明.strip(), 'backgroundAssetId': 背景图片ID,
+                  'face': 更换人脸, 'facePresence': faces[原片人脸], 'faceAssetId': 人脸图片ID}
+        job = _submit_and_wait('/jobs', {'kind': 'wan', 'remake': remake}, request_id)
+        return {'ui': {'text': [job['id']]}, 'result': (_download_job_video(job),)}
 
 
 WEB_DIRECTORY = './web'
-NODE_CLASS_MAPPINGS = {'ZenithJoyUploadImage': RegisterUploadedImage, 'ZenithJoyImage2': Image2Generate, 'ZenithJoyLoadAsset': LoadSavedAsset, 'ZenithJoyChooseAsset': ChooseAsset, 'ZenithJoyWan': WanGenerate}
-NODE_DISPLAY_NAME_MAPPINGS = {'ZenithJoyUploadImage': '登记上传图片', 'ZenithJoyImage2': 'Image2 图片生成', 'ZenithJoyLoadAsset': '加载已生成图片', 'ZenithJoyChooseAsset': '选择图片', 'ZenithJoyWan': 'Wan 视频生成'}
+NODE_CLASS_MAPPINGS = {'ZenithJoyUploadImage': RegisterUploadedImage, 'ZenithJoyImage2': Image2Generate, 'ZenithJoyLoadAsset': LoadSavedAsset, 'ZenithJoyChooseAsset': ChooseAsset, 'ZenithJoyWan': WanGenerate, 'ZenithJoyWanRemake': WanRemakeGenerate}
+NODE_DISPLAY_NAME_MAPPINGS = {'ZenithJoyUploadImage': '登记上传图片', 'ZenithJoyImage2': 'Image2 图片生成', 'ZenithJoyLoadAsset': '加载已生成图片', 'ZenithJoyChooseAsset': '选择图片', 'ZenithJoyWan': 'Wan 视频生成', 'ZenithJoyWanRemake': 'Wan 视频修改'}
