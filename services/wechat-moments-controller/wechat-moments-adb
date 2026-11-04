@@ -44,6 +44,19 @@ die() {
   exit 2
 }
 
+# Production keeps the same shared state/lock namespace as douyin-phone-adb.
+# Only a trusted contract-test process may use an existing owned scratch root;
+# neither command arguments nor task payloads can select another lock namespace.
+PHONE_STATE_ROOT="/private/tmp/openclaw-phone"
+if [[ -n "${WECHAT_CONTRACT_FIXTURE+x}${WECHAT_CONTRACT_STATE_ROOT+x}" ]]; then
+  [[ "${WECHAT_CONTRACT_FIXTURE:-}" == "1" && -n "${WECHAT_CONTRACT_STATE_ROOT:-}" ]] || die "invalid fixture state root configuration"
+  _fixture_tmp="${TMPDIR:-/tmp}"
+  _fixture_tmp="${_fixture_tmp:A}"
+  _fixture_state="${WECHAT_CONTRACT_STATE_ROOT:A}"
+  [[ "$_fixture_state" == "$_fixture_tmp"/moments-cli-contract-*/state && -d "$_fixture_state" && -O "$_fixture_state" ]] || die "fixture state root must be an owned contract scratch directory"
+  PHONE_STATE_ROOT="$_fixture_state"
+fi
+
 require_uint() {
   [[ "$1" == <-> ]] || die "expected non-negative integer"
 }
@@ -83,12 +96,12 @@ MAX_X=$(( SCREEN_W - 1 ))
 MAX_Y=$(( SCREEN_H - 1 ))
 
 REMOTE_UI="/sdcard/wechat-moments-ui-${PROFILE}.xml"
-EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence-moments/${PROFILE}"
+EVIDENCE_ROOT="$PHONE_STATE_ROOT/evidence-moments/${PROFILE}"
 LOCATE_CACHE_DIR="$HOME/.config/openclaw/locate-cache"
 # 设备锁：跟 douyin-phone-adb 共用同一套 LOCK_ROOT，锁键=物理设备 SERIAL（不分 app）。
 # 同一部手机如果同时跑抖音获客+朋友圈自动化，两边互认这把锁，谁先拿到谁独占前台，
 # 防止两个任务互抢同一部手机（判定点：设备被其他任务占用前台）。
-LOCK_ROOT="/private/tmp/openclaw-phone/locks"
+LOCK_ROOT="$PHONE_STATE_ROOT/locks"
 LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
 LOCK_TTL_SECONDS=1800
 
@@ -562,7 +575,7 @@ PYDONE
     check_target
     local_eid="$2"
     require_evidence_id "$local_eid"
-    lockfile="/private/tmp/openclaw-phone/publish-once/${SERIAL}-${local_eid}.lock"
+    lockfile="$PHONE_STATE_ROOT/publish-once/${SERIAL}-${local_eid}.lock"
     /bin/mkdir -p "${lockfile:h}"
     if [[ -e "$lockfile" ]]; then
       die "publish already attempted for this evidence_id — refusing to click 发表 twice (single-publish iron law)" TARGET_ABSENT
