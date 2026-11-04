@@ -1,0 +1,5 @@
+{
+  "provenance": "2026-11-04原目标Android15真实resolve-activity/dumpsys字段片段；仅省略无关系统属性，保留全部packageName及两个focus指示",
+  "home": "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\nActivityInfo:\n  name=com.hihonor.android.launcher.unihome.UniHomeLauncher\n  packageName=com.hihonor.android.launcher\n  ApplicationInfo:\n    name=com.hihonor.android.launcher.LauncherApplication\n    packageName=com.hihonor.android.launcher\n",
+  "focus": "WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)\n  mCurrentFocus=Window{4c1a686 u0 com.hihonor.android.launcher/com.hihonor.android.launcher.unihome.UniHomeLauncher}\n  mFocusedApp=ActivityRecord{851556 u0 com.hihonor.android.launcher/.unihome.UniHomeLauncher t2274}\n"
+}
