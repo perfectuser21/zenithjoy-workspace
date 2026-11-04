@@ -11,7 +11,6 @@
  *   7. machines_online = 0 时双自检 ai_incomplete 退出（B-06 / INV-4）
  *   8. trigger_collect 超过 2 次断言失败（B-07）
  *   9. /api/version 不可达时 fail-loud ai_incomplete 退出（B-08）
- *  10. workflow secrets 白名单不含禁用 secret，runner 为 ubuntu-latest（B-09 / INV-5）
  *  11. 私信/关注/点赞类动作在采证器全文为零（B-10）
  *
  * 运行：node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js
@@ -270,42 +269,7 @@ test('B-08: version fail-loud — capture.mjs 读取 /api/version 时若不可�
   );
 });
 
-// ─────────────────────────────────────────────────────────────
-// B-09 / INV-5: workflow secrets 白名单 + runner 断言
-// ─────────────────────────────────────────────────────────────
-test('B-09/INV-5: ai-acceptance-capture.yml 使用 ubuntu-latest，禁含 self-hosted', () => {
-  const workflowPath = resolve(REPO_ROOT, '.github/workflows/ai-acceptance-capture.yml');
-  if (!existsSync(workflowPath)) {
-    assert.fail(
-      '.github/workflows/ai-acceptance-capture.yml 不存在（D2 FR-5 实现缺失）'
-    );
-  }
-  const src = readFileSync(workflowPath, 'utf8');
-  assert.ok(src.includes('ubuntu-latest'), 'workflow 应使用 ubuntu-latest runner');
-  assert.ok(!src.includes('self-hosted'), 'workflow 禁止含 self-hosted runner label');
-});
-
-test('B-09: ai-acceptance-capture.yml secrets 白名单不含 ACCEPTANCE_API_TOKEN', () => {
-  const workflowPath = resolve(REPO_ROOT, '.github/workflows/ai-acceptance-capture.yml');
-  if (!existsSync(workflowPath)) {
-    assert.fail('.github/workflows/ai-acceptance-capture.yml 不存在');
-  }
-  const src = readFileSync(workflowPath, 'utf8');
-  assert.ok(!src.includes('ACCEPTANCE_API_TOKEN'), '禁止 ACCEPTANCE_API_TOKEN 出现在 ai-acceptance-capture.yml');
-  assert.ok(!src.includes('TAILSCALE_AUTHKEY'), '禁止 TAILSCALE_AUTHKEY 出现在 ai-acceptance-capture.yml');
-  assert.ok(!src.includes('HK_VPS_SSH_KEY'), '禁止 HK_VPS_SSH_KEY 出现在 ai-acceptance-capture.yml');
-});
-
-test('B-09: ai-acceptance-capture.yml 含必要的 3 个白名单 secrets', () => {
-  const workflowPath = resolve(REPO_ROOT, '.github/workflows/ai-acceptance-capture.yml');
-  if (!existsSync(workflowPath)) {
-    assert.fail('.github/workflows/ai-acceptance-capture.yml 不存在');
-  }
-  const src = readFileSync(workflowPath, 'utf8');
-  assert.ok(src.includes('STAGING_ACCEPTANCE_EMAIL'), '缺少 STAGING_ACCEPTANCE_EMAIL');
-  assert.ok(src.includes('STAGING_ACCEPTANCE_PASSWORD'), '缺少 STAGING_ACCEPTANCE_PASSWORD');
-  assert.ok(src.includes('ACCEPTANCE_AI_TOKEN'), '缺少 ACCEPTANCE_AI_TOKEN');
-});
+// 旧GitHub D2链已归档；CLI实际凭据/租户/设备/动作预算边界仍在此验证。
 
 // ─────────────────────────────────────────────────────────────
 // B-10: 私信/关注/点赞类动作在采证器全文为零
