@@ -50,7 +50,6 @@ rpa-reset-stage-smoke.sh
 scan-fail-diagnostic-capture-smoke.sh
 skill-registry-smoke.sh
 sprint-2-1a-type-route-smoke.sh
-sprint-2-1f-prod-readiness-smoke.sh
 step6-dispatch-chain-smoke.sh
 work-performance-smoke.sh
 ws2-three-template-builders-smoke.sh
