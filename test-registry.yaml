@@ -9518,3 +9518,19 @@ tests:
     status: active
     product: AI员工
     note: 真实Android15同HOME包重复字段可归一，畸形或混包与非HOME focus拒绝。
+
+  - id: collection-review-maintenance
+    path: services/phone-adb-controller/__tests__/collection-review-maintenance.test.py
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "仅本次失败102的新维护授权；真实Darwin nofork有限cleanup、未知意图不重发、固定原件及10guard单owner CAS守恒"
+
+  - id: collection-review-candidate
+    path: services/phone-adb-controller/__tests__/collection-review-candidate.test.py
+    type: integration
+    ci: L1
+    status: active
+    product: AI员工
+    note: "102专用维护核实际候选manifest/实测hostname/数组顺序及独立中央gate；不接受声明hostname替代观测"

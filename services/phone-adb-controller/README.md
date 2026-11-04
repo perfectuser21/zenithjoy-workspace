@@ -214,3 +214,20 @@ Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和�
 `maintenance-install-backend.mjs` 的 `review-guard-snapshot-v1` 仅用于固定原 3fe 事务的恢复：变更集合恰为 host、maintenance、input 三文件，host 新摘要及后两文件新旧摘要均固定，其他工具字节不得变化。原 host-only 条件保留；不得把新增文件泛化加入恢复白名单。测试的 `review-guard-3fe-source.json.gz` 是该原提交两份公开源码的压缩原文，供浅克隆 CI 核对摘要。
 
 候选重开入口为 SSH 远端 shell 显式保留空 release 参数；输入断言显式失败退出，不依赖 Bash 版本的隐式 `errexit` 行为。安全事务完成不代表候选业务验收通过，现有生产业务准入不变。
+
+
+### 本次失败102的独立维护
+
+`collection-review-maintenance-host.py plan <新候选SHA> <release-id>` 只读核对本次
+`ys20261103235714_102` 的原件、当前维护claim、现行中央归属、十个guard和候选实际字节。
+合同来自已保存原件SHA，包含旧101归档及其他owner完整盘点；调用者不能替换owner或预期hash。
+
+`apply` 在同一组guard下复核。仅当原生双焦点明确为该抖音应用、电话空闲、录制器静默时，
+新授权允许两个独立受限nofork请求：关闭固定抖音包、返回HOME；随后读取物理屏幕尺寸、
+PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号或未知结果保持原owner，
+再次调用只读回，不重发。全部核实后只归档本次102的目录，其他owner、旧101归档和迁移标记不变。
+中央锁由协调者另行精确CAS释放；本工具没有中央写接口。
+
+维护记录在独立私有目录，原102的failed与`execution_stopped=false`保持原样。
+这只证明本次同步手机请求域已关闭，不证明任意OS后代全停，不恢复原WeakMap、Skill或采集权限。
+测试中C客户端与PG为隔离替身；真实Darwin内核nofork测试进入L3，真实原件集成由受控本地副本提供。
