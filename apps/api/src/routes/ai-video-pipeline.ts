@@ -23,7 +23,12 @@ router.post('/:id/compose-template', composeTemplate);
 router.post('/:id/detect-frame-orientation', upload.single('frame'), detectFrameOrientation);
 
 // GET /:id/sse — 实时进度推送
-router.get('/:id/sse', async (req: Request, res: Response) => {
+router.get('/:id/sse', async (req: Request, res: Response, next) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    res.status(400).json({ error: 'invalid job id' });
+    return;
+  }
+  try {
   const job = await getJobRaw(req.params.id);
   if (!job) {
     res.status(404).json({ error: 'job not found' });
@@ -35,6 +40,7 @@ router.get('/:id/sse', async (req: Request, res: Response) => {
     progress: job.progress,
     error: (job as { error_msg?: string }).error_msg ?? undefined,
   });
+  } catch (error) { next(error); }
 });
 
 export default router;

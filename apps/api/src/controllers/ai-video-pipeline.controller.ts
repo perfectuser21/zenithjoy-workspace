@@ -95,18 +95,20 @@ export async function listJobs(req: Request, res: Response, next: NextFunction) 
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       const licenseKey = authHeader.slice(7).trim();
-      if (licenseKey) {
+      if (!licenseKey) return res.status(401).json({ error: 'invalid license' });
+      {
         const licRow = await pool.query<{ id: string }>(
           `SELECT id FROM zenithjoy.licenses WHERE license_key = $1 AND status = 'active' LIMIT 1`,
           [licenseKey],
         );
-        if (licRow.rows.length > 0) licenseId = licRow.rows[0].id;
+        if (licRow.rows.length === 0) return res.status(401).json({ error: 'invalid license' });
+        licenseId = licRow.rows[0].id;
       }
     }
 
     const status = req.query.status as string | undefined;
     if (status === 'pending') {
-      // null licenseId = unauthenticated caller — backward-compat: returns all pending jobs
+      // null licenseId retains access only to unlicensed compatibility jobs.
       // non-null licenseId = authenticated agent — strict isolation: only that license's jobs
       const jobs = await svc.listPending(licenseId);
       return res.json({ data: jobs });
@@ -114,7 +116,7 @@ export async function listJobs(req: Request, res: Response, next: NextFunction) 
     if (status === 'processing') {
       const staleMinutes = parseInt(req.query.stale_minutes as string, 10);
       if (!isNaN(staleMinutes) && staleMinutes > 0) {
-        const jobs = await svc.listStale(staleMinutes);
+        const jobs = await svc.listStale(staleMinutes, licenseId);
         return res.json({ data: jobs });
       }
       return res.json({ data: [] });
