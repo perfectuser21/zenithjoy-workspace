@@ -23,9 +23,12 @@ function validate(w) {
   assert.equal(job.if, undefined);
   assert.equal(job['continue-on-error'], undefined);
   assert.equal(job['timeout-minutes'], 10);
-  assert.deepEqual(job.strategy, {'fail-fast': false, matrix: {shard: [1, 2]}});
-  assert.equal(command(w), 'node --test --test-shard=${{ matrix.shard }}/2 ' + globs.join(' '));
+  assert.deepEqual(job.strategy, {'fail-fast': false, matrix: {shard: [1, 2, 3]}});
+  assert.equal(command(w), 'node --test --test-shard=${{ matrix.shard }}/3 ' + globs.join(' '));
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
+  const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
+  assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');
+  assert.equal(recovery.if,undefined);assert.equal(recovery['continue-on-error'],undefined);
 }
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'openclaw-ci-shards-'));
@@ -68,24 +71,27 @@ function shardCommand(index) {
 }
 function aggregate(result) { return runCodeGate(workflow,result); }
 
-test('OpenClaw keeps original four selectors in two independent ten-minute native shards', () => {
+test('OpenClaw keeps original four selectors in three independent ten-minute native shards', () => {
   validate(workflow);
 });
-test('actual matrix commands execute the original file union exactly once across both shards', t => {
+test('actual matrix commands execute the original file union exactly once across all three shards', t => {
   const f = fixture(t), all = run(f, original, 'all');
   assert.equal(all.status, 0, all.stdout + all.stderr);
   assert.deepEqual(all.rows.slice().sort(), f.files.slice().sort());
-  const parts = [1, 2].map(i => run(f, shardCommand(i), 'part-' + i));
+  const previous = [1, 2].map(i => run(f, 'node --test --test-shard='+i+'/2 '+globs.join(' '), 'previous-'+i));
+  for (const r of previous) assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(previous.flatMap(r=>r.rows).sort(),all.rows.slice().sort(),'the original two-shard union is the fixed baseline');
+  const parts = [1, 2, 3].map(i => run(f, shardCommand(i), 'part-' + i));
   for (const r of parts) assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(parts.every(r => r.rows.length > 0));
   const combined = parts.flatMap(r => r.rows);
-  assert.equal(new Set(combined).size, combined.length, 'a test file must never run in both shards');
+  assert.equal(new Set(combined).size, combined.length, 'a test file must never run in multiple shards');
   assert.deepEqual(combined.slice().sort(), all.rows.slice().sort(), 'no original file may be omitted');
 });
 test('a real fixture failure fails exactly one native shard and the unchanged L3 aggregate rejects it', t => {
   const f = fixture(t);
-  const results = [1, 2].map(i => run(f, shardCommand(i), 'failed-' + i, f.files[0]));
-  assert.deepEqual(results.map(r => r.status).sort(), [0, 1]);
+  const results = [1, 2, 3].map(i => run(f, shardCommand(i), 'failed-' + i, f.files[0]));
+  assert.deepEqual(results.map(r => r.status).sort(), [0, 0, 1]);
   assert.equal(aggregate('success').status, 0);
   for (const status of ['failure', 'cancelled', 'skipped']) assert.equal(aggregate(status).status, 1, status);
 });
@@ -102,7 +108,7 @@ test('missing or duplicate shards, filters, larger timeout and detached aggregat
   ]) {
     const w = structuredClone(workflow);
     // Shape mutations also remain meaningful before the RED implementation.
-    w.jobs['openclaw-scripts-test'].strategy ??= {'fail-fast': false, matrix: {shard: [1, 2]}};
+    w.jobs['openclaw-scripts-test'].strategy ??= {'fail-fast': false, matrix: {shard: [1, 2, 3]}};
     mutate(w.jobs['openclaw-scripts-test']);
     assert.throws(() => validate(w));
   }
