@@ -47,10 +47,12 @@ export function detectChanges(profile, eventName, event) {
     agentScope = classifyAgentChanges({ repoRoot: process.cwd(), base, head, event: eventName === 'merge_group' ? 'push' : eventName });
     if (process.env.CI_SCOPE_PROOF) writeFileSync(process.env.CI_SCOPE_PROOF, JSON.stringify(agentScope, null, 2) + '\n');
   }
+  // Company freeze SQL lives in phone code but is executed by required API PG.
+  const companyPostgres = profile === 'integration' && has(/^services\/phone-adb-controller\/(?:company-config-(?:lib\.js|readiness\.mjs|sync-lib\.js)|__tests__\/company-config(?:-postgres|-sync)?\.test\.mjs)$/);
   const apiOrDashboard = has(/^apps\/(?:api|dashboard)\//);
   const selected = {
     dashboard: ci || rootDependencies || has(/^apps\/dashboard\//),
-    api: ci || rootDependencies || has(/^apps\/api\//),
+    api: ci || rootDependencies || companyPostgres || has(/^apps\/api\//),
     geoai: ci || rootDependencies || has(/^apps\/geoai\//),
     agent: agentScope ? agentScope.agent : ci || has(/^services\/agent\//) || has(/^apps\/api\/src\/services\/walking-skeleton\.service\.ts$/),
     agent_modules: ci || has(/^services\/agent\//),

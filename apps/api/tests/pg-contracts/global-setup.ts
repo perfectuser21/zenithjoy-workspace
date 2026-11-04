@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { requireDisposableDatabases } from './disposable-db';
+import { runCompanyFreezePostgres } from './run-company-freeze.mjs';
 
 // Apply real production migrations in dependency order. Every SQL error fails setup.
 const migrations = [
@@ -47,6 +48,9 @@ export default async function setup() {
         console.log(`[pg-contracts] migrated ${file}`);
       }
     } finally { await db.end(); }
+    // This unique phone-side SQL contract used to run in company-wiki smoke.
+    // It shares the same fresh scratch DB and fails setup on child failure/skip.
+    console.log(runCompanyFreezePostgres(connection));
     return cleanup;
   } catch (error) { await cleanup(); throw error; }
 }

@@ -7661,10 +7661,11 @@ tests:
   - id: company-config-postgres
     path: services/phone-adb-controller/__tests__/company-config-postgres.test.mjs
     type: integration
-    ci: L4
+    ci: L4-INT
     status: active
     product: AI员工
-    note: "公司Wiki：租户隔离、来源、版本冻结与同步冲突回归"
+    execution: ci-l4-integration.yml / api-integration-test / vitest.pg-contracts.config.ts globalSetup -> real Node TAP child inside the fresh disposable PostgreSQL lifecycle
+    note: Company-only phone lib/readiness/sync/test changes select this required PG job; SQL immutable/upstream/task-input contracts retained. Child error, all-skipped or empty test must fail; no separate SmokeGlob database bootstrap.
 
   - id: company-config-runtime
     path: services/phone-adb-controller/__tests__/company-config-runtime.test.mjs
@@ -9805,3 +9806,21 @@ tests:
     product: unclassified
     execution: pr-review.yml / review / node --test scripts/ci/__tests__/pr-review-thinking.test.mjs scripts/ci/__tests__/pr-review-diff.test.mjs; real Git fixtures, no model calls
     note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
+
+  - id: company-freeze-node-child-admission
+    path: apps/api/tests/pg-contracts/run-company-freeze.test.ts
+    type: unit
+    ci: L4-INT
+    status: active
+    product: unclassified
+    execution: ci-l4-integration.yml / api-integration-test / vitest.pg-contracts.config.ts; also apps/api default unit suite
+    note: Real isolated Node subprocess pass/fail/all-skip/empty-file and loopback admission fixtures; no database/network in this guard test.
+
+  - id: company-pg-integration-routing
+    path: .github/workflows/scripts/__tests__/company-pg-integration-routing.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: unclassified
+    execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
+    note: Real Git push/PR/merge-group changes select required Integration for company config lib/readiness/sync/PG test/import consumers; selected missing/skip/failure/cancel reject, unrelated skip remains legal, other profiles unchanged.
