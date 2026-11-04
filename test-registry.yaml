@@ -9846,3 +9846,26 @@ tests:
     product: unclassified
     execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
     note: Parses actual required release-admission workflow and runs real mandatory same-SHA S2/S3 step with isolated SSH/HTTP; keeps dependency-free Core/L1 admission unit tests independent of YAML/node_modules.
+  - id: wan-remake-workflow-api
+    path: apps/api/src/services/__tests__/wan-remake-workflow.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: AI视频
+    note: 当前员工原片、产品/颜色/Logo/背景/脸组合，Wan3.0编辑参数、角色编号、续期及幂等；外部模型边界模拟。
+
+  - id: wan-remake-browser-extension
+    path: infrastructure/comfyui/tests/remake-extension.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: 真实widget回调的Cookie上传、类型检查、移除节点、失败恢复和模板打包。
+
+  - id: wan-remake-node-contract
+    path: infrastructure/comfyui/tests/test_wan_remake.py
+    type: unit
+    ci: L3
+    status: active
+    product: AI视频
+    note: 新节点真实类方法的输入与组合模式合同，API错误消息；无Torch运行AST抽取，仅验证节点方法不冒充真实模型。

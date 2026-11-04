@@ -69,6 +69,21 @@ describe('创作画布', () => {
     expect(loadGraphData).toHaveBeenCalledWith(graph,true,true,expect.stringMatching(/^上传图片工作流/));
     expect(fetchMock).toHaveBeenCalledWith('/api/creative-canvas/extensions/zenithjoy/upload-image-wan.json',expect.objectContaining({credentials:'include'}));
   });
+  it('在现有画布打开 Wan 3.0 视频复刻模板', async () => {
+    const graph = {nodes:[{type:'ZenithJoyWanRemake'}],links:[]};
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({available:true}),{status:200}))
+      .mockResolvedValueOnce(new Response(JSON.stringify(graph),{status:200}));
+    vi.stubGlobal('fetch',fetchMock);
+    render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);
+    const iframe = await screen.findByTitle('视频创作画布') as HTMLIFrameElement;
+    const loadGraphData = vi.fn().mockResolvedValue({});
+    Object.defineProperty(iframe.contentWindow!, 'app', {value:{graph:{},loadGraphData},configurable:true});
+    const button = screen.getByRole('button',{name:'打开视频复刻工作流'});
+    await vi.waitFor(()=>expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await vi.waitFor(()=>expect(loadGraphData).toHaveBeenCalledWith(graph,true,true,expect.stringMatching(/^视频复刻工作流/)));
+    expect(fetchMock).toHaveBeenCalledWith('/api/creative-canvas/extensions/zenithjoy/video-remake-wan.json',expect.objectContaining({credentials:'include'}));
+  });
   it('画布尚在加载时禁用工作流按钮，并在启动完成后启用', async () => {
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({available:true}),{status:200})));
     render(<MemoryRouter><CreativeCanvasPage /></MemoryRouter>);

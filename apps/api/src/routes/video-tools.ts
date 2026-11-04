@@ -16,11 +16,12 @@ import { parseFlatDirectory } from '../staff-directory';
 import { AliVideoProvider, AliVideoProviderError, type AliVideoTask, type WanVideoInput } from '../services/ali-video-provider';
 import { isCosConfigured, type MaterialStorage } from '../services/material-storage';
 import { ToApisImageProvider, type CreativeImageProvider } from '../services/creative-image-provider';
+import { parseRemake, remakeAssets, compileRemake, type RemakeConfig } from '../services/wan-remake-workflow';
 
 type Kind = 'wan' | 'upscale';
 interface Job extends AliVideoTask {
   id: string; kind: Kind; createdAt: string; taskId?: string; clientRequestId?: string;
-  prompt?: string; lastPolledAt?: number; requestHash?: string; referenceHash?: string;
+  prompt?: string; lastPolledAt?: number; requestHash?: string; referenceHash?: string; remake?: RemakeConfig;
 }
 interface Asset { id: string; url: string; kind: 'image' | 'video'; name: string; width: number; height: number; duration: number; size: number; fps: number; createdAt: string }
 interface UploadIntent { id: string; key: string; name: string; size: number; createdAt: string }
@@ -383,12 +384,12 @@ export function createVideoToolsRouter(options: Options = {}): Router {
     for (const name of names) { const a = await load<Asset>(join(assetDir, name), directory); if (a?.url === url) return a; }
     return null;
   }
-  function validate(body: Record<string, unknown>): Kind {
+  function validate(body: Record<string, unknown>, editing = false): Kind {
     if (body.kind !== 'wan' && body.kind !== 'upscale') return fail(400, '请选择视频生成或视频超分');
     if (body.clientRequestId !== undefined && (typeof body.clientRequestId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(body.clientRequestId))) return fail(400, '提交标识无效，请刷新后重试');
     if (body.kind === 'wan') {
       if (typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 10000) return fail(400, '请填写不超过 10000 字的提示词');
-      if (body.duration !== undefined && (!Number.isInteger(body.duration) || Number(body.duration) < 2 || Number(body.duration) > 30)) return fail(400, '视频时长应为 2 至 30 秒');
+      if (!(editing && body.duration === -1) && body.duration !== undefined && (!Number.isInteger(body.duration) || Number(body.duration) < 2 || Number(body.duration) > 30)) return fail(400, '视频时长应为 2 至 30 秒');
       if (body.resolution !== undefined && !['480P', '720P', '1080P'].includes(String(body.resolution))) return fail(400, '请选择有效的分辨率');
       if (body.ratio !== undefined && !['adaptive', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'].includes(String(body.ratio))) return fail(400, '请选择有效的画面比例');
       if (body.audio !== undefined && typeof body.audio !== 'boolean') return fail(400, '声音选项无效');
@@ -407,15 +408,18 @@ export function createVideoToolsRouter(options: Options = {}): Router {
     return body.kind;
   }
   router.post('/jobs', wrap(async (req, res) => {
-    const body = req.body ?? {};
-    const kind = validate(body);
-    const requestHash=hash(JSON.stringify({kind,prompt:body.prompt,media:body.media,duration:body.duration,resolution:body.resolution,ratio:body.ratio,audio:body.audio,videoUrl:body.videoUrl,bitRate:body.bitRate}));
+    let body = req.body ?? {};
+    const remake = body.remake === undefined ? undefined : parseRemake(body.remake);
+    if (remake && body.kind !== 'wan') return fail(400, '复刻工作流使用 Wan 3.0');
+    if (remake && (typeof body.clientRequestId !== 'string' || !/^[A-Za-z0-9_-]{16,100}$/.test(body.clientRequestId))) return fail(400, '请先点击生成新版本');
+    const kind = remake ? 'wan' : validate(body);
+    const requestHash=hash(JSON.stringify(remake ? {workflow:'wan-remake-v1',remake} : {kind,prompt:body.prompt,media:body.media,duration:body.duration,resolution:body.resolution,ratio:body.ratio,audio:body.audio,videoUrl:body.videoUrl,bitRate:body.bitRate}));
     // Signatures expire but the owned COS object identity remains its origin and path.
     const stableMedia=Array.isArray(body.media) ? body.media.map((item:{type?:string;url?:string})=>{
       try {const u=new URL(item.url || '');if (u.protocol==='https:' && /^[a-z0-9-]+\.cos\.[a-z0-9-]+\.myqcloud\.com$/.test(u.hostname)) return {...item,url:u.origin+u.pathname};} catch { /* validated above */ }
       return item;
     }) : body.media;
-    const referenceHash=hash(JSON.stringify({kind,prompt:body.prompt,media:stableMedia,duration:body.duration,resolution:body.resolution,ratio:body.ratio,audio:body.audio,videoUrl:body.videoUrl,bitRate:body.bitRate}));
+    const referenceHash=remake ? requestHash : hash(JSON.stringify({kind,prompt:body.prompt,media:stableMedia,duration:body.duration,resolution:body.resolution,ratio:body.ratio,audio:body.audio,videoUrl:body.videoUrl,bitRate:body.bitRate}));
     // Serialize per staff account: concurrent duplicate clicks share one provider submission.
     const owner = req.videoStaffId!;
     await serialized(`submit:${owner}`, async () => {
@@ -426,6 +430,25 @@ export function createVideoToolsRouter(options: Options = {}): Router {
       const active = history.filter(j => ['pending', 'running'].includes(j.status));
       const refreshed = await Promise.all(active.map(job => refreshJob(req, job.id)));
       if (refreshed.filter(j => ['pending', 'running'].includes(j.status)).length >= 2) return fail(429, '已有两个任务处理中，请等待完成后再提交');
+      if (remake) {
+        const urls: string[] = [];
+        for (const role of remakeAssets(remake)) {
+          const asset = await load<Asset>(assetPath(req, role.id), directory);
+          if (!asset || asset.kind !== role.kind) return fail(400, '请重新上传属于当前账号且类型正确的参考素材');
+          const suffix = extname(asset.name).toLowerCase();
+          if (!(role.kind === 'video' ? ['.mp4', '.mov'] : ['.png', '.jpg', '.jpeg', '.webp']).includes(suffix)) return fail(400, '参考素材格式无效，请重新上传');
+          if (!Number.isFinite(Date.parse(asset.createdAt))) return fail(400, '参考素材记录无效，请重新上传');
+          // Renew only server-owned object keys so saved workflows remain usable across days.
+          if (Date.now() - Date.parse(asset.createdAt) > 22 * 3600_000) {
+            asset.url = await (await getStorage()).getSignedUrl(`video-tools/${hash(req.videoStaffId!)}/${asset.id}${suffix}`, 86400);
+            asset.createdAt = new Date().toISOString();
+            await save(assetPath(req, asset.id), asset);
+          }
+          urls.push(asset.url);
+        }
+        body = { kind, clientRequestId: body.clientRequestId, ...compileRemake(remake, urls) };
+        validate(body, true);
+      }
       if (kind === 'wan') {
         let totalDuration = 0;
         for (const media of body.media ?? []) {
@@ -445,11 +468,11 @@ export function createVideoToolsRouter(options: Options = {}): Router {
         // Public URLs are also accepted for existing company media; uploaded files get metadata validation.
         if (asset && (asset.kind !== 'video' || asset.width <= 360 || asset.height <= 360 || Math.max(asset.width,asset.height) >= 1920 || Math.min(asset.width,asset.height) >= 1080)) return fail(400, '超分视频尺寸须大于 360×360，且小于 1920×1080');
       }
-      const job: Job = { id: randomUUID(), kind, status: 'pending', createdAt: new Date().toISOString(), clientRequestId: body.clientRequestId, requestHash, referenceHash, ...(kind === 'wan' ? { prompt: body.prompt.trim() } : {}) };
+      const job: Job = { id: randomUUID(), kind, status: 'pending', createdAt: new Date().toISOString(), clientRequestId: body.clientRequestId, requestHash, referenceHash, ...(kind === 'wan' ? { prompt: body.prompt.trim() } : {}), ...(remake ? {remake} : {}) };
       await save(jobPath(req, job.id), job);
       try {
         const submitted = kind === 'wan'
-          ? await provider.submitWan({ prompt: body.prompt.trim(), media: body.media, duration: body.duration, resolution: body.resolution, ratio: body.ratio, audio: body.audio } as WanVideoInput)
+          ? await provider.submitWan({ prompt: body.prompt.trim(), media: body.media, duration: body.duration, resolution: body.resolution, ratio: body.ratio, audio: body.audio, promptExtend: remake ? false : undefined } as WanVideoInput)
           : await provider.submitUpscale({ videoUrl: body.videoUrl, bitRate: body.bitRate });
         job.taskId = submitted.taskId;
       } catch (err) {
