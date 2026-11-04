@@ -3,8 +3,8 @@
  *
  * Sprint 07201705 / task_id: 027e6bba-9b00-4b9f-b3b9-33b2e3807717
  *
- * 完整 oracle 在 sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
- * 此文件覆盖核心行为断言，保证 lint-test-pairing 对 agent-offline-monitor.ts 的配对要求。
+ * Current unit oracle; real SQL/HTTP dedupe/recovery uses media-extra/runtime.test.ts.
+ * Active service behavior assertions complement that real integration contract.
  *
  * 合同对照：
  *   [BEHAVIOR-03] sendOfflineAlert fetch 失败时 throw 不 warn（INV-01）
@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('../db', () => ({
+vi.mock('../../db', () => ({
   default: {
     query: vi.fn().mockResolvedValue({ rows: [] }),
   },
@@ -21,6 +21,7 @@ vi.mock('../db', () => ({
 
 import {
   sendOfflineAlert,
+  scanAndAlert,
   sendRecoveryAlert,
   _resetAlertedMap,
   type AgentOfflineAlert,
@@ -33,6 +34,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
 
@@ -101,4 +103,20 @@ describe('[BEHAVIOR-02] 恢复通知 text 含恢复信号', () => {
     const hasRecovery = text.includes('已恢复') || text.includes('recovered') || text.includes('恢复');
     expect(hasRecovery).toBe(true);
   });
+});
+
+
+it('floors fractional duration while retaining the actual host and agent payload', async () => {
+  vi.stubEnv('FEISHU_ALERT_WEBHOOK','https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
+  const transport = vi.fn().mockResolvedValue({ok:true});vi.stubGlobal('fetch',transport);
+  await sendOfflineAlert({...staleAgent,offline_duration_minutes:300.75});
+  const text = JSON.parse(transport.mock.calls[0][1].body as string).content.text;
+  expect(text).toContain('hostname=unit-test-host agent_id=agent-unit-001');
+  expect(text).toMatch(/300\s+\u5206\u949f/);expect(text).not.toContain('300.75');
+});
+
+it('propagates scanner database failure instead of fabricating a successful structure', async () => {
+  const pool = (await import('../../db')).default;
+  vi.mocked(pool.query).mockRejectedValueOnce(new Error('owned scanner DB failure'));
+  await expect(scanAndAlert()).rejects.toThrow('owned scanner DB failure');
 });

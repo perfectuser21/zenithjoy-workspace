@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {createServer,type Server} from 'node:http';
-vi.mock('../db',()=>({default:{query:vi.fn().mockResolvedValue({rows:[]})}}));
+vi.mock('../../db',()=>({default:{query:vi.fn().mockResolvedValue({rows:[]})}}));
 import {sendOfflineAlert,sendRecoveryAlert} from '../agent-offline-monitor';
 const agent={agent_id:'fixture-offline',hostname:'synthetic-only',offline_duration_minutes:300};
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});

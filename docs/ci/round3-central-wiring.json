@@ -199,6 +199,15 @@
       "note": "Line02 分析+指派 smoke(:5200+postgres)：建 tenant → GET config无认证401/返默认 → PUT config非法400/合法upsert落库 → 建2 active burner+3 leads → POST build(scored=3+assigned落dm_assignments) → GET plan见指派 → POST run(dispatched落dm_outreach_log) → GET cookie-health分类。X-Tenant-Id头驱动租户。"
     },
     {
+      "id": "agent-offline-alert-sprint-oracle",
+      "path": "sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts",
+      "type": "unit",
+      "ci": "L3",
+      "status": "active",
+      "product": "微信AI客服",
+      "note": "sprint(07201705): agent离线静默告警——scanAndAlert去重/恢复/webhook失败路径oracle；vitest通过 apps/api/vitest.config.ts include 收集"
+    },
+    {
       "id": "aidge-capability-center-smoke",
       "path": ".github/workflows/scripts/smoke/aidge-capability-center-smoke.sh",
       "type": "smoke",
@@ -545,6 +554,7 @@
     ".github/workflows/scripts/smoke/zenithjoy-smoke-audit.sh",
     "apps/api/src/routes/__tests__/brain-sprint-state.test.ts",
     "apps/api/src/routes/brain-sprint-state.ts",
+    "sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts",
     "sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts",
     "sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts"
   ],

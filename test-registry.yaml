@@ -5577,14 +5577,6 @@ tests:
     product: 智能获客
     note: "sprint(07201700): 刀B M1 安装器清环境——POST /api/agent/boot-fail API 实现层测试（apps/api/src/routes/__tests__ 下运行版），与 sprint 合同测试功能相同"
 
-  - id: agent-offline-alert-sprint-oracle
-    path: sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 微信AI客服
-    note: "sprint(07201705): agent离线静默告警——scanAndAlert去重/恢复/webhook失败路径oracle；vitest通过 apps/api/vitest.config.ts include 收集"
-
   - id: agent-offline-monitor-service-unit
     path: apps/api/src/services/__tests__/agent-offline-monitor.test.ts
     type: unit
