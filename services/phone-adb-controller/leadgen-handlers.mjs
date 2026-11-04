@@ -135,6 +135,8 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       if(existsSync(flag))return {status:'paused',reason:'私信暂停标记生效',sent:0};
       return {status:'paused',reason:'本批私信未授权，保持暂停',sent:0};
     }
+    // 先核任务身份，公共空绑定不得在公司快照入口产生副作用。
+    if(needsCentralLock)await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
     const mmvStep=mmvDeviceRuntime?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
     // 正式冻结run的公司隔离与host无关；MMV旧直接入口仍沿原条件。
     const companyStep=(mmvDeviceRuntime||existsSync(join(env.WFR_RUN_DIR,'run-definition.json')))?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
@@ -159,7 +161,6 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     }
     if(needsCentralLock){
       const lease=getCentral();
-      await lease.verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
       await lease.acquire();
       appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'acquired',task_id:taskId,run_id:state.run_id,
         device_name:serial,source_commit:sourceCommit,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
