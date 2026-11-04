@@ -6,38 +6,44 @@ const {routeOf}=require('./line-routes.js');
 const {decodeXmlEntities}=require('./nickname-match-lib.js');
 const {isDeepStrictEqual}=require('node:util');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-function parseNative(profile,returned,{nickname,douyinId,commentBody,commentEncoding='canonical'}){
- if(!['xml_raw','canonical'].includes(commentEncoding))throw Error('RECIPIENT_BODY_ENCODING_INVALID');
- const r=spawnSync('python3',['-c',`import json,sys,re,xml.etree.ElementTree as E
-v=json.load(sys.stdin);pkg='com.ss.android.ugc.aweme'
-def nodes(s):
- if '<!DOCTYPE' in s or '<!ENTITY' in s: raise ValueError('doctype')
+// Both the identity verifier and the Agent's pre-click enumerator use this
+// exact panel recognizer. It performs no UI action and produces no identity proof.
+const nativePanelPython=String.raw`import json,sys,re,xml.etree.ElementTree as E
+pkg='com.ss.android.ugc.aweme'
+def native_nodes(s):
+ if re.search(r'<!DOCTYPE|<!ENTITY',s,re.I): raise ValueError('doctype')
  root=E.fromstring(s);ns=list(root.iter('node'))
  if root.tag!='hierarchy' or not ns or any(n.get('package')!=pkg for n in ns): raise ValueError('package')
  return ns
-p=nodes(v['profile']);b=nodes(v['returned'])
+def native_panel(s):
+ b=native_nodes(s)
+ headers=[n for n in b if n.get('class')=='android.widget.TextView' and ((n.get('resource-id')==pkg+':id/title' and re.fullmatch(r'[0-9万.]+条评论',n.get('text',''))) or (n.get('resource-id')==pkg+':id/ez-' and re.fullmatch(r'评论 [0-9万.]+',n.get('text',''))))]
+ legacy_input=[n for n in b if n.get('resource-id')==pkg+':id/ety']
+ layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8'),'e1b':('fod','jqh','kj+')}
+ strict_input=[n for n in b if n.get('resource-id') in [pkg+':id/'+i for i in layouts]]
+ comment_nodes=b;row_id='fhn';strict_layout=False
+ if strict_input:
+  strict_layout=True
+  if legacy_input or len(strict_input)!=1 or strict_input[0].get('class')!='android.widget.EditText': raise ValueError('layout')
+  row_id,panel_id,expand_id=layouts[strict_input[0].get('resource-id').split(':id/')[1]]
+  panels=[n for n in b if n.get('resource-id')==pkg+':id/'+panel_id]
+  if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq','fod') if r!=row_id] for n in b): raise ValueError('layout')
+  comment_nodes=list(panels[0].iter('node'))
+  if strict_input[0] not in comment_nodes or len(headers)!=1 or headers[0] not in comment_nodes: raise ValueError('panel')
+  for rid,desc in [('back_btn','关闭'),(expand_id,'放大评论区')]:
+   anchors=[n for n in b if n.get('resource-id')==pkg+':id/'+rid]
+   if len(anchors)!=1 or anchors[0] not in comment_nodes or anchors[0].get('class')!='android.widget.ImageView' or anchors[0].get('content-desc')!=desc: raise ValueError('panel')
+ else:
+  if not headers or not any(n.get('class')=='android.widget.EditText' for n in legacy_input): raise ValueError('panel')
+ return b,comment_nodes,row_id,strict_layout
+`;
+function parseNative(profile,returned,{nickname,douyinId,commentBody,commentEncoding='canonical'}){
+ if(!['xml_raw','canonical'].includes(commentEncoding))throw Error('RECIPIENT_BODY_ENCODING_INVALID');
+ const r=spawnSync('python3',['-c',nativePanelPython+String.raw`
+v=json.load(sys.stdin);p=native_nodes(v['profile']);b,comment_nodes,row_id,strict_layout=native_panel(v['returned'])
 ids=[n.get('text','')[4:] for n in p if n.get('text','').startswith('抖音号：')]
 if ids!=[v['douyinId']]: raise ValueError('uid')
 if sum(n.get('text')==v['nickname'] and n.get('content-desc')==v['nickname']+'，复制名字和修改备注' for n in p)!=1: raise ValueError('nickname')
-headers=[n for n in b if n.get('class')=='android.widget.TextView' and ((n.get('resource-id')==pkg+':id/title' and re.fullmatch(r'[0-9万.]+条评论',n.get('text',''))) or (n.get('resource-id')==pkg+':id/ez-' and re.fullmatch(r'评论 [0-9万.]+',n.get('text',''))))]
-# 明确原生布局成对识别；同一唯一面板内核验，不能借全局搜索卡或混合资源拼接。
-legacy_input=[n for n in b if n.get('resource-id')==pkg+':id/ety']
-layouts={'e19':('fpa','jqe','kkg'),'eyi':('flq','jn1','ki8'),'e1b':('fod','jqh','kj+')}
-strict_input=[n for n in b if n.get('resource-id') in [pkg+':id/'+i for i in layouts]]
-comment_nodes=b;row_id='fhn';strict_layout=False
-if strict_input:
- strict_layout=True
- if legacy_input or len(strict_input)!=1 or strict_input[0].get('class')!='android.widget.EditText': raise ValueError('layout')
- row_id,panel_id,expand_id=layouts[strict_input[0].get('resource-id').split(':id/')[1]]
- panels=[n for n in b if n.get('resource-id')==pkg+':id/'+panel_id]
- if len(panels)!=1 or panels[0].get('class')!='android.widget.FrameLayout' or any(n.get('resource-id') in [pkg+':id/'+r for r in ('fhn','fpa','flq','fod') if r!=row_id] for n in b): raise ValueError('layout')
- comment_nodes=list(panels[0].iter('node'))
- if strict_input[0] not in comment_nodes or len(headers)!=1 or headers[0] not in comment_nodes: raise ValueError('panel')
- for rid,desc in [('back_btn','关闭'),(expand_id,'放大评论区')]:
-  anchors=[n for n in b if n.get('resource-id')==pkg+':id/'+rid]
-  if len(anchors)!=1 or anchors[0] not in comment_nodes or anchors[0].get('class')!='android.widget.ImageView' or anchors[0].get('content-desc')!=desc: raise ValueError('panel')
-else:
- if not headers or not any(n.get('class')=='android.widget.EditText' for n in legacy_input): raise ValueError('panel')
 def exact_comment(n):
  if n.get('resource-id')!=pkg+':id/'+row_id or n.get('class')!='android.widget.FrameLayout' or n.get('text','')!='': return False
  m=re.fullmatch(re.escape(v['nickname'])+r',(.+),[^,]*, · [^,]*,回复 按钮(?:,.*)?',n.get('content-desc',''))
@@ -48,6 +54,45 @@ texts=list(dict.fromkeys(s for n in p for s in [n.get('text',''),n.get('content-
 print(json.dumps({'native_profile_texts':texts,'native_profile_verified':True,'returned_comment_verified':True},ensure_ascii=False))
 `],{input:JSON.stringify({profile,returned,nickname,douyinId,commentBody:commentEncoding==='xml_raw'?decodeXmlEntities(commentBody):commentBody}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});
  if(r.status!==0)throw Error('RECIPIENT_NATIVE_PROOF_INVALID');
+ return JSON.parse(r.stdout);
+}
+function parseNativeCommentXml(xml){
+ if(typeof xml!=='string'||Buffer.byteLength(xml)>4*1024*1024)throw Error('RECIPIENT_COMMENT_PANEL_INVALID');
+ const r=spawnSync('python3',['-c',nativePanelPython+String.raw`
+import base64
+v=json.load(sys.stdin);b,comment_nodes,row_id,strict_layout=native_panel(v['xml']);rows=[]
+def bounds(n):
+ m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+ if not m:return None
+ a=tuple(map(int,m.groups()))
+ return a if a[0]<a[2] and a[1]<a[3] else None
+for n in comment_nodes:
+ if n.get('resource-id')!=pkg+':id/'+row_id or n.get('class')!='android.widget.FrameLayout' or n.get('text','')!='':continue
+ m=re.fullmatch(r'([^,]+),(作者,)?(.+),([^,]*), · ([^,]*),回复 按钮(?:,.*)?',n.get('content-desc',''))
+ if not m:continue
+ nickname,author,body,time,region=m.groups();row={'nickname':nickname,'author':bool(author),'body':body,'time':time,'region':region}
+ avatars=[a for a in n.iter('node') if a.get('clickable')=='true' and (a.get('resource-id')==pkg+':id/avatar' or a.get('content-desc')==nickname+'的头像')]
+ if len(avatars)==1:
+  a,parent=bounds(avatars[0]),bounds(n)
+  if a and parent and parent[0]<=a[0]<a[2]<=parent[2] and parent[1]<=a[1]<a[3]<=parent[3]:row.update({'x':str((a[0]+a[2])//2),'y':str((a[1]+a[3])//2),'nickname_b64':base64.b64encode(nickname.encode()).decode()})
+ rows.append(row)
+footer=any(n.get('text','').strip()=='暂时没有更多了' or n.get('content-desc','').strip()=='暂时没有更多了' for n in comment_nodes)
+# A scroll is available only from a single native list inside the same strict
+# panel. Unknown/overlapping controls make the capability absent, never a guess.
+viewport=None
+lists=[n for n in comment_nodes if n.get('class','').endswith('.RecyclerView')]
+if strict_layout and len(lists)==1:
+ panel_bounds=bounds(comment_nodes[0]);list_bounds=bounds(lists[0])
+ controls=[n for n in comment_nodes if n.get('class')=='android.widget.EditText' or n.get('resource-id','').split(':id/')[-1] in ('back_btn','jqe','jn1','kj+') or n.get('text','').strip()=='发送' or n.get('content-desc','').strip()=='发送']
+ def inside(a,b):return bool(a and b and b[0]<=a[0]<a[2]<=b[2] and b[1]<=a[1]<a[3]<=b[3])
+ def overlaps(a,b):return bool(a and b and a[0]<b[2] and b[0]<a[2] and a[1]<b[3] and b[1]<a[3])
+ row_nodes=[n for n in comment_nodes if n.get('resource-id')==pkg+':id/'+row_id]
+ descendants=list(lists[0].iter('node'))
+ if inside(list_bounds,panel_bounds) and list_bounds[2]-list_bounds[0]>=100 and list_bounds[3]-list_bounds[1]>=200 and all(n in descendants for n in row_nodes) and controls and all(bounds(n) and not overlaps(bounds(n),list_bounds) for n in controls):
+  viewport=dict(zip(('left','top','right','bottom'),list_bounds))
+print(json.dumps({'rows':rows,'footer_reached':footer,'strict_layout':strict_layout,'scroll_viewport':viewport},ensure_ascii=False))
+`],{input:JSON.stringify({xml}),encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024});
+ if(r.status!==0)throw Error('RECIPIENT_COMMENT_PANEL_INVALID');
  return JSON.parse(r.stdout);
 }
 function validateEvidence(e,scope,{companyBinding}={}){
@@ -97,4 +142,4 @@ if(require.main===module){try{
  if(!profilePath||!returnedPath){console.log(`RECIPIENT_UNKNOWN\t${videoId}\t${douyinId}\t${hash(commentBody)}\tnative_profile_missing`);}
  else {const p=capture({runDir,line,run,sourceRun,videoId,videoUrl,profile,douyinId,nickname,commentBody,started,profilePath,returnedPath,profileEid,videoEid,commentEncoding,companyBindingFile,companyBindingSha});console.log(`RECIPIENT_PROOF\t${videoId}\t${douyinId}\t${p.body_sha256}\t${p.file}\t${p.sha256}`);}
 }catch{process.stderr.write('RECIPIENT_EVIDENCE_FAILED\n');process.exitCode=8;}}
-module.exports={hash,parseNative,validateEvidence,capture};
+module.exports={hash,parseNative,parseNativeCommentXml,validateEvidence,capture};

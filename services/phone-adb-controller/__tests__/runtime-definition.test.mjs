@@ -5,7 +5,7 @@ import { tmpdir,hostname } from 'node:os';
 import { deploymentTarget } from '../runtime-host.mjs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { freezeDefinition } from '../runtime-definition.mjs';
+import { freezeDefinition,agentInput } from '../runtime-definition.mjs';
 const hash = value => createHash('sha256').update(typeof value === 'string' ? value : canonical(value)).digest('hex');
 function canonical(x) { return JSON.stringify(x, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v); }
 function fixture() {
@@ -22,6 +22,68 @@ function fixture() {
   writeFileSync(join(dir,'deployment-manifest.json'),JSON.stringify({source_repo:source.repo,source_commit:sha,files:[{path:ap.implementation_bindings[0].path,deployed_path:'entry.sh',content_sha256:ap.implementation_bindings[0].content_sha256},...['workflow.plan','steps.json'].map(name=>({path:`services/phone-adb-controller/${name}`,deployed_path:name,content_sha256:hash(readFileSync(join(dir,name),'utf8'))}))]}));
   return {dir,routes,options:{runDir:join(dir,'run'),planPath:join(dir,'workflow.plan'),stepSpecPath:join(dir,'steps.json'),deploymentRoot:dir,workflowKey:'brain-test',rawContractSha256:hash(contract),runtimeFiles:[{path:'services/phone-adb-controller/entry.sh',content_sha256:ap.implementation_bindings[0].content_sha256}],get:async path=>structuredClone(routes[path])}};
 }
+test('执行模式只接受显式agent或code；104不可变成Agent发送路径',async()=>{
+ const {executionModeInput}=await import('../runtime-definition.mjs');
+ assert.equal(executionModeInput({}),'code');
+ for(const workflow of ['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring'])assert.equal(executionModeInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:workflow}),'agent');
+ for(const mode of ['', 'skill', 'AGENT', 'unknown'])assert.throws(()=>executionModeInput({LEADGEN_EXECUTION_MODE:mode,WF_BRAIN_WORKFLOW:'douyin_video_discovery'}),/EXECUTION_MODE/);
+ assert.throws(()=>executionModeInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'}),/EXECUTION_MODE/);
+});
+test('旧快照缺执行模式仍为Code，不能把已冻结Code静默改成Agent或反向切回',async()=>{
+ const {assertExecutionMode}=await import('../runtime-definition.mjs');
+ const env={WF_BRAIN_WORKFLOW:'douyin_video_discovery'};
+ const agent={execution_mode:'agent',workflow_version:{payload:{key:env.WF_BRAIN_WORKFLOW}}};
+ assert.equal(assertExecutionMode({},env),'code');
+ assert.equal(assertExecutionMode(agent,{...env,LEADGEN_EXECUTION_MODE:'agent'}),'agent');
+ assert.throws(()=>assertExecutionMode({}, {...env,LEADGEN_EXECUTION_MODE:'agent'}),/EXECUTION_MODE/);
+ assert.throws(()=>assertExecutionMode(agent,env),/EXECUTION_MODE/);
+ assert.throws(()=>assertExecutionMode({execution_mode:'invalid'},env),/EXECUTION_MODE/);
+});
+function primaryFixture({skill=true}={}){
+ const f=fixture(),workflow='douyin_video_discovery';f.options.workflowKey=workflow;f.routes['/api/brain/workflows'][0].key=workflow;
+ const w=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;w.payload.key=workflow;
+ w.payload_sha256=hash({source:{repo:w.source_repo,path:w.source_path,commit:w.source_commit},payload:w.payload});
+ if(skill){
+  const name='skills/douyin-leadgen-activity-101-collect-videos/SKILL.md',path=join(f.dir,name);mkdirSync(join(path,'..'),{recursive:true});writeFileSync(path,'---\nname: douyin-leadgen-activity-101-collect-videos\nmetadata:\n  version: 0.1.0\n---\n按合同交付视频。\n');
+  const sha=hash(readFileSync(path,'utf8')),av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;
+  av.payload.implementation_bindings.push({kind:'skill',name:'douyin-leadgen-activity-101-collect-videos',version:'0.1.0',status:'verified',repo:av.source_repo,path:'services/phone-adb-controller/'+name,revision:av.source_commit,content_sha256:sha});
+  av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
+  const manifest=join(f.dir,'deployment-manifest.json'),body=JSON.parse(readFileSync(manifest));body.files.push({path:'services/phone-adb-controller/'+name,deployed_path:name,content_sha256:sha});writeFileSync(manifest,JSON.stringify(body));
+ }
+ f.agentInput=agentInput({LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:workflow,WF_BRAIN_TASK_ID:'11111111-1111-4111-8111-111111111111',WFR_TAG:'primary101',P:'xiaolongxia',SERIAL:'ANGYVB4311010223',LEADGEN_LINE:'yuesheng',LEADGEN_LIMIT:'2',WF_RUN_MAX_SECONDS:'1800',WF_RUN_START_TS:'1700000000'});
+ return f;
+}
+test('Agent执行模式进入真实冻结摘要；原Code及Agent运行都不能续跑换模式',async()=>{
+ const f=primaryFixture();const frozen=await freezeDefinition({...f.options,executionMode:'agent',agentInput:f.agentInput});
+ assert.equal(frozen.execution_mode,'agent');assert.equal(frozen.snapshot_sha256,hash(Object.fromEntries(Object.entries(frozen).filter(([k])=>k!=='snapshot_sha256'))));
+ await assert.rejects(freezeDefinition({...f.options,executionMode:'code'}),/EXECUTION_MODE/);
+ await assert.rejects(freezeDefinition(f.options),/EXECUTION_MODE/);
+ const code=primaryFixture();await freezeDefinition(code.options);await assert.rejects(freezeDefinition({...code.options,executionMode:'agent'}),/EXECUTION_MODE/);
+});
+test('Agent冻结缺本机已验证Skill时在起跑前拒绝，不能只凭Code binding启动',async()=>{
+ const f=primaryFixture({skill:false});await assert.rejects(freezeDefinition({...f.options,executionMode:'agent',agentInput:f.agentInput}),/AGENT.*SKILL/);
+});
+test('真实Agent快照保存完整输入，冻结续跑不能改配额、来源、筛选、任务或预算，也不能撤输入',async()=>{
+ const f=primaryFixture(),options={...f.options,executionMode:'agent',agentInput:f.agentInput};
+ const first=await freezeDefinition(options);assert.deepEqual(first.agent_input,f.agentInput);
+ for(const mutation of [{limit:3},{task_id:'22222222-2222-4222-8222-222222222222'},{source_run:'other101'},{run_max_seconds:1801},{run_start_ts:1700000001},{discovery_filters:{sort:'comprehensive',time_layer:'one_week',location:'unlimited'}}])await assert.rejects(freezeDefinition({...options,agentInput:{...f.agentInput,...mutation}}),/AGENT_INPUT/);
+ await assert.rejects(freezeDefinition({...options,agentInput:undefined}),/AGENT_INPUT/);
+ const code=primaryFixture(),legacy=await freezeDefinition(code.options),explicit=primaryFixture(),same=await freezeDefinition({...explicit.options,executionMode:'code'});
+ assert.equal(Object.hasOwn(legacy,'agent_input'),false);assert.equal(Object.hasOwn(legacy,'execution_mode'),false);assert.equal(legacy.snapshot_sha256,same.snapshot_sha256);
+});
+test('真实prepare CLI把Agent规范输入写入发布冻结件；续跑改配额或撤Task不生成新快照',async t=>{
+ const {createServer}=await import('node:http'),{spawn}=await import('node:child_process'),{rmSync}=await import('node:fs');
+ const f=primaryFixture(),wf=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version; t.after(()=>rmSync(f.dir,{recursive:true,force:true}));
+ wf.payload.key='douyin_comment_scoring';wf.payload_sha256=hash({source:{repo:wf.source_repo,path:wf.source_path,commit:wf.source_commit},payload:wf.payload});
+ const release={id:'primary-input-release',environment:'scratch',target:deploymentTarget(hostname()),payload:{schema_version:1,workflows:[wf],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]}};release.manifest_sha256=hash({environment:release.environment,target:release.target,payload:release.payload});
+ const manifest=join(f.dir,'deployment-manifest.json');writeFileSync(manifest,JSON.stringify({...JSON.parse(readFileSync(manifest)),release_id:release.id,observation_id:'primary-input-observation',environment:release.environment,target:release.target}));
+ const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines')res.end(JSON.stringify([{id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}]));else if(req.url==='/api/brain/releases/'+release.id)res.end(JSON.stringify({release}));else{res.statusCode=404;res.end('{}');}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
+ const env={...process.env,LEADGEN_EXECUTION_MODE:'agent',BRAIN_URL:'http://127.0.0.1:'+server.address().port,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_RUN_DIR:f.options.runDir,WF_DEPLOYMENT_ROOT:f.dir,WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WF_BRAIN_TASK_ID:'11111111-1111-4111-8111-111111111111',BRAIN_TASK_ID:undefined,WFR_BRAIN_TASK_ID:undefined,WF_CONTRACT_RAW_SHA256:f.options.rawContractSha256,WF_PLAN_PATH:f.options.planPath,WF_STEP_SPEC:'steps.json',WF_ARG_CAP:'test',WFR_TAG:'primary103',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',WFR_RUN_ID:'run',WFR_HOME:f.dir,WF_RUN_START_TS:'1700000000',WF_RUN_MAX_SECONDS:'1800',LEADGEN_LIMIT:'2',LEADGEN_SOURCE_RUN:'primary102'};
+ const run=change=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,'prepare'],{env:{...env,...change}});let err='';child.stderr.on('data',bytes=>err+=bytes);child.on('exit',code=>resolve({code,err}));});
+ assert.deepEqual(await run({}),{code:0,err:''});const original=readFileSync(join(f.options.runDir,'run-definition.json'),'utf8'),actual=JSON.parse(original);assert.deepEqual(actual.agent_input,agentInput(env));
+ for(const change of [{LEADGEN_LIMIT:'3'},{WF_BRAIN_TASK_ID:undefined}]){const changed=await run(change);assert.notEqual(changed.code,0);assert.match(changed.err,/AGENT_INPUT/);assert.equal(readFileSync(join(f.options.runDir,'run-definition.json'),'utf8'),original);}
+});
 test('起跑冻结指定Workflow/Activity版本、引用位置和真实代码，之后latest变化不改run副本', async()=>{
   const f=fixture(); const result=await freezeDefinition(f.options);
   assert.equal(result.workflow_version.id,'wv-1'); assert.equal(result.activities[0].reference.reference_id,'ref-1');

@@ -338,3 +338,46 @@ test('103显式同批仍走原durable POST→GET并独立PG读回，无真实外
  const readback=await queueRequest(pool,{op:'bridge_readback',line:'jinuo',run:'score103',source_run:'source102',ids:result.ids});
  assert.equal(readback.verified,true);assert.deepEqual(readback.ids,[row.id]);
 });
+test('exactIDs真实mark/bridge仅处理20源评论中的冻结5条，余15与旧unknown不变',async()=>{
+ const comments=[],outbox=[],calls=[];
+ for(let i=0;i<20;i++){
+  const id=`00000000-0000-4000-8000-${String(i+101).padStart(12,'0')}`,p=pendingBridge().payload;
+  const row={id,line_key:'jinuo',dedup_key:'scope-'+i,nickname:p.nickname,douyin_id:p.target_douyin_id,profile_url:p.profile_url,comment_body:p.comment_body,source_video:p.source_video,source_video_url:p.source_video_url,harvest_batch:'source102',collected_at:p.collected_at,process_status:'待分拣',relevance:'相关',intent_grade:'A',judgment_reason:'原分档',recipient_evidence:p.recipient_evidence,judgment_config:{run_id:'score103',company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,policy_id:policySnapshot.policy_id}};
+  await attachDualPolicyProof(row);comments.push(row);
+  outbox.push({...pendingBridge(),id:`10000000-0000-4000-8000-${String(i+101).padStart(12,'0')}`,comment_id:id,qualification_status:'excluded',payload:{...p,comment_id:id},state:'pending'});
+ }
+ const old={...pendingBridge(),id:'10000000-0000-4000-8000-000000000999',comment_id:'00000000-0000-4000-8000-000000000999',state:'unknown',attempted_at:'2026-10-01T00:00:00Z'};outbox.push(old);
+ const selected=comments.slice(15).map(r=>r.id),before=structuredClone(outbox.slice(0,15)),oldBefore=structuredClone(old);
+ const client={release(){},async query(sql,args=[]){calls.push({sql,args});
+  if(/SELECT \* FROM zenithjoy.leadgen_comments/.test(sql)){
+   if(!sql.includes('FOR UPDATE'))return {rows:comments.filter(r=>Array.isArray(args[1])?args[1].includes(r.id):r.id===args[1])};
+   const exact=/AND id=ANY\(\$(\d+)::uuid\[\]\)/.exec(sql),ids=exact?args[Number(exact[1])-1]:null;
+   return {rows:comments.filter(r=>r.process_status==='待分拣'&&r.harvest_batch===args[1]&&!args[2].includes(r.id)&&(!ids||ids.includes(r.id))).slice(0,1)};
+  }
+  if(sql.includes('company_config_runs'))return {rows:[{snapshot:policySnapshot,company_id:policySnapshot.company_id,tenant_id:policySnapshot.tenant_id,version:policySnapshot.version,run_id:args[0]}]};
+  if(sql.includes('leadgen_videos'))return {rows:[{video_url:comments[0].source_video_url,title:comments[0].source_video,line_key:'jinuo',judgment_status:'matched'}]};
+  if(sql.includes('SELECT id, dup_hit_count'))return {rows:[]};
+  if(sql.includes('INSERT INTO zenithjoy.leadgen_leads'))return {rows:[{id:lid}]};
+  if(sql.includes('SELECT id,line_key,douyin_id FROM zenithjoy.leadgen_leads'))return {rows:[{id:lid,line_key:'jinuo',douyin_id:'person987'}]};
+  if(sql.includes('UPDATE zenithjoy.leadgen_comments')){comments.find(r=>r.dedup_key===args[1]).process_status='已分拣';return {rows:[],rowCount:1};}
+  if(sql.includes('SELECT * FROM zenithjoy.leadgen_bridge_outbox')){
+   const exact=/AND comment_id=ANY\(\$(\d+)::uuid\[\]\)/.exec(sql),ids=exact?args[Number(exact[1])-1]:null;
+   return {rows:outbox.filter(r=>r.source_run===args[2]&&['pending','attempted','unknown'].includes(r.state)&&(!ids||ids.includes(r.comment_id)))};
+  }
+  if(sql.includes('UPDATE zenithjoy.leadgen_bridge_outbox SET state=$3')){outbox.find(r=>r.id===args[1]).state=args[2];return {rows:[],rowCount:1};}
+  return {rows:[],rowCount:1};
+ }};const pool={query:client.query.bind(client),connect:async()=>client};
+ const marked=await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',limit:5,ids:selected},policyDeps);
+ assert.deepEqual(marked.ids,selected);assert.equal(comments.slice(0,15).every(r=>r.process_status==='待分拣'),true);
+ const bridge=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',source_run:'source102',limit:5,comment_ids:marked.ids},{lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>policySnapshot});
+ assert.deepEqual(bridge.ids,outbox.slice(15,20).map(r=>r.id));assert.deepEqual(outbox.slice(0,15),before);assert.deepEqual(old,oldBefore);
+ const beforeCalls=calls.length;const empty=await queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',source_run:'source102',ids:[],limit:5},policyDeps);assert.equal(empty.marked,0);
+ const emptyBridge=await queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',source_run:'source102',comment_ids:[],limit:5},{lock:async(_line,fn)=>fn(),freezeCompanyConfig:async()=>policySnapshot});assert.deepEqual(emptyBridge.ids,[]);assert.equal(calls.length,beforeCalls);
+});
+test('exactIDs格式/重复/上限在真实mark和bridge任何查询前拒绝',async()=>{
+ for(const bad of [null,'all',['invalid'],[[cid]],[cid,cid],Array.from({length:51},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`)]){
+  const pool={query:async()=>{throw Error('不得查询');},connect:async()=>{throw Error('不得连接');}};
+  await assert.rejects(queueRequest(pool,{op:'mark_leads',line:'jinuo',run:'score103',ids:bad},policyDeps),/MARK_IDS/);
+  await assert.rejects(queueRequest(pool,{op:'bridge_outreach',line:'jinuo',run:'score103',comment_ids:bad},{lock:async()=>{throw Error('不得取锁');}}),/BRIDGE_COMMENT_IDS/);
+ }
+});

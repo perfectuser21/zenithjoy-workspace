@@ -1,6 +1,7 @@
 acquisition-config-validation-smoke.sh
 agent-client-encapsulation-smoke.sh
 agent-core-self-upgrade-smoke.sh
+agent-first-leadgen-smoke.sh
 agent-form-smoke.sh
 agent-module-e2e-smoke.sh
 agent-self-heal-smoke.sh

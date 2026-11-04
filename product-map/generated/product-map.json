@@ -166,7 +166,8 @@
       "smoke_files": [
         ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
         "scripts/smoke/leadgen-split-smoke.sh",
-        ".github/workflows/scripts/smoke/keyword-return-route-smoke.sh"
+        ".github/workflows/scripts/smoke/keyword-return-route-smoke.sh",
+        ".github/workflows/scripts/smoke/agent-first-leadgen-smoke.sh"
       ],
       "steps": [
         {
@@ -653,5 +654,5 @@
       ]
     }
   ],
-  "digest": "d8f5dcef13700f626995fd3f35e207239d5aab3c90f41cc4bc99319c80ffea76"
+  "digest": "17d1a312a929e91d32a979eb827be25d0e0d7688bff2f6518f91ae9cb5af19b0"
 }

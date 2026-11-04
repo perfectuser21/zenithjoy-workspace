@@ -9,6 +9,21 @@ import { join,resolve } from 'node:path';
 import { seedFrozen } from './fixtures/frozen-runtime.mjs';
 const CLI=resolve('services/phone-adb-controller/runtime-receipts.mjs');
 function invoke(env,...args){return new Promise((done,reject)=>{const child=spawn(process.execPath,[CLI,...args],{env:{...process.env,HOME:env.WFR_RUN_DIR,...env}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('error',reject);child.on('exit',code=>done({code,out,err}));});}
+test('Agent运行真实span按冻结模式记执行者，不把预检和清场记成Code',async t=>{
+ const {digest}=await import('../runtime-definition.mjs');const dir=mkdtempSync(join(tmpdir(),'runtime-agent-span-'));seedFrozen(dir,null,{runId:'agent-span'});
+ const {snapshot_sha256,...body}=JSON.parse(readFileSync(join(dir,'run-definition.json'),'utf8'));body.execution_mode='agent';body.workflow_version.payload.key='douyin_video_discovery';
+ const frozen={...body,snapshot_sha256:digest(body)};writeFileSync(join(dir,'run-definition.json'),JSON.stringify(frozen));
+ for(const suffix of ['request','ack']){
+  const path=join(dir,'run-bindings','a1.'+suffix+'.json'),record=JSON.parse(readFileSync(path));
+  if(suffix==='request'){record.runtime_snapshot_sha256=frozen.snapshot_sha256;record.body.runtime_snapshot_sha256=frozen.snapshot_sha256;record.body.actor='runtime:phone-adb-controller:agent-v1';}
+  else{record.binding.runtime_snapshot_sha256=frozen.snapshot_sha256;record.binding.actor='runtime:phone-adb-controller:agent-v1';}
+  writeFileSync(path,JSON.stringify(record));
+ }
+ const spans=[];const server=createServer(async(req,res)=>{let raw='';for await(const part of req)raw+=part;spans.push(...JSON.parse(raw));res.end('{"inserted":1}');});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
+ const env={WFR_RUN_DIR:dir,WFR_RUN_ID:'agent-span',WFR_ATTEMPT:'a1',BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-token'};
+ for(const stage of ['preflight','cleanup']){const file=join(dir,stage+'.json');writeFileSync(file,JSON.stringify({observed_at:new Date().toISOString()}));const r=await invoke(env,'span',stage,'failed','1',file);assert.equal(r.code,0,r.err);}
+ assert.equal(spans.length,2);assert.ok(spans.every(s=>s.executor_kind==='agent'));assert.ok(spans.every(s=>s.evidence.execution_mode==='agent'));
+});
 test('真实HTTP: receipt断线留pending，重启flush字节不变，ack后sent，真重试新occurrence且409 blocked',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'runtime-http-'));seedFrozen(dir,null,{runId:'http-run'});let mode='drop';const bodies=[];
  const server=createServer((req,res)=>{let body='';req.on('data',b=>body+=b);req.on('end',()=>{bodies.push(body);assert.equal(req.headers.authorization,'Bearer fixture-token');if(mode==='drop')return req.socket.destroy();res.writeHead(mode==='conflict'?409:200,{'Content-Type':'application/json'});res.end('{"inserted":1}');});});

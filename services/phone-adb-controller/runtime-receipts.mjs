@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync,writeFileSync,realpathSync,lstatSync } from 'node:fs';
 import { resolve,join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput,outreachScopeInput } from './runtime-definition.mjs';
+import { freezeDefinition,readFrozen,registerRun,locateRun,commentSamplingInput,discoveryInput,outreachScopeInput,executionModeInput,frozenExecutionMode,agentInput,initializeAgentBudget } from './runtime-definition.mjs';
 import { bindRun,readBinding } from './runtime-binding.mjs';
 import {readCollectionPhoneScopeInput,defaultCollectionPhoneScope} from './collection-phone-scope.mjs';
 import {defaultDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
@@ -152,6 +152,11 @@ async function flushReceipts(dir){const deadline=deliveryDeadline();const status
 export async function run(args){
   const [cmd,...rest]=args; const dir=e.WFR_RUN_DIR;
   const indexRoot=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'run-index');
+  if(cmd==='agent-budget'){
+    if(rest.length)throw Error('AGENT_INPUT_BUDGET_INIT_INVALID');
+    const budget=initializeAgentBudget(e);
+    process.stdout.write(`export WF_RUN_START_TS=${budget.run_start_ts} WF_RUN_MAX_SECONDS=${budget.run_max_seconds}\n`);return;
+  }
   if(cmd==='locate-run'){
     const [capability,tag,profile,serial]=rest;const runDir=locateRun(indexRoot,{capability,tag,profile,serial});
     if(runDir)process.stdout.write(runDir+'\n');return;
@@ -169,7 +174,7 @@ export async function run(args){
       const scope=e.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?discoveryPhoneScope:collectionPhoneScope;
       if(scope&&scope.task_id!==taskIds[0])throw Error('CENTRAL_TASK_FROZEN_SCOPE_MISMATCH');
     }
-    const samplingInput=commentSamplingInput(e),fixedDiscoveryInput=discoveryInput(e),outreachScope=outreachScopeInput(e);
+    const executionMode=executionModeInput(e),fixedAgentInput=agentInput(e),samplingInput=commentSamplingInput(e),fixedDiscoveryInput=discoveryInput(e),outreachScope=outreachScopeInput(e);
     const producerDescriptor=e.LEADGEN_PRODUCER_DESCRIPTOR_FILE?readProducerDescriptor(e.LEADGEN_PRODUCER_DESCRIPTOR_FILE):undefined;
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
@@ -178,7 +183,7 @@ export async function run(args){
       const inventory=await request('/api/brain/machines');
       runtimeTransport=selectMmvTransport(inventory,e.WF_MMV_SSH_ROUTE);
     }
-    await freezeDefinition({discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
+    await freezeDefinition({executionMode,agentInput:fixedAgentInput,discoveryInput:fixedDiscoveryInput,producerDescriptor,discoveryPhoneScope,collectionPhoneScope,samplingInput,outreachScope,requireRelease:true,runtimeTransport,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runtimeTransport){
       // prepare冻结入口统一在freezeDefinition中记录，不能由业务活动改投影台账。
       const snapshot=readFrozen(dir);
@@ -210,7 +215,7 @@ export async function run(args){
     const qualificationIdentity=stage==='qualification'&&status==='completed'&&frozen.sampling_input
       ?qualificationIdentityEvidence({dir,frozen,binding}):null;
     const centralLock=centralDeviceLockEvidence({dir,stage,artifact,binding,frozen,env:e});
-    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(qualificationIdentity?{qualification_identity_v1:qualificationIdentity}:{}),...(centralLock?{central_device_lock_v1:centralLock}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
+    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:frozenExecutionMode(frozen)==='agent'?'agent':['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+avatar+1,fallback:rescan+avatar>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{...(frozenExecutionMode(frozen)==='agent'?{execution_mode:'agent'}:{}),sampling_input:frozen.sampling_input||null,...(admission?{sampling_admission_v1:admission}:{}),...(qualificationIdentity?{qualification_identity_v1:qualificationIdentity}:{}),...(centralLock?{central_device_lock_v1:centralLock}:{}),...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,identity_rescan_count:rescan,avatar_recovery_count:avatar,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
     for(const step of (artifact.verification?.step_dod||[]).flatMap(check=>check.steps||[])){
       const owner=frozen.activities.find(owner=>owner.reference.slot_key===step.activity);
       const definition=owner?.version.payload.steps?.find(s=>step.key?.endsWith(`.${s.locator?.step_key}`));

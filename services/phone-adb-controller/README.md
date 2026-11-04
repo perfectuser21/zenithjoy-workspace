@@ -205,6 +205,12 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 ### Runner vs Commander
 
+在原正式启动输入上设置 `LEADGEN_EXECUTION_MODE=agent`，可选择 101、102、103 的 Agent 主执行路径。执行模式、任务身份、输入范围与预算冻结到本 run，不能在续跑时切换为 Code，也不适用于 104。原 Code 路径保持独立。
+
+Agent 主执行时，每个 Activity 加载自己的冻结 Skill，通过当前活动允许的手机、录音、提交和读回原语完成工作；不会调用原业务 handler 或 `resume`。底层控制器、事务、资源管理和规则校验仍由代码提供。`inspect`、`phone`、`business` 只使用本次原请求给出的入口，Agent 不创建绑定或直接调用内部队列。
+
+新路径的结果来自服务端持久工具回执和原始证据，由原独立校验确认。Skill 文件、源码测试或 Agent 的完成文字都不构成实机通过；101 视频、102 评论、103 评分及精确来源读回需要分别提供真实运行证据。
+
 获客入口复用 Cecelia 公共 Activity Runner 的固定源副本；同步工具及 `common-runner/source.json` 记录来源与摘要。`leadgen-runner-adapter.mjs` 只连接业务执行、独立读回与手机安全证据，顺序、恢复次数和状态路由统一由公共 Runner 执行。
 
 Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和请求中止 Agent。不可达只记录 `commander_status=unavailable`；它的回复不能判定状态、改变顺序或批准发送。旧 `*_commander_verified` 可用性硬闸已移除，身份、来源、业务读回及发送安全闸保留。检查失败可在原预算内指导一次 Skill 接手，仍由独立检查再次判定；失败进入 `needs_review`。原代码失败与 Skill 救回分别记录，接手不覆盖失败事实。
@@ -224,7 +230,7 @@ Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和�
 
 ### 本次失败102的独立维护
 
-`collection-review-maintenance-host.py plan <新候选SHA> <release-id>` 只读核对本次
+`collection-review-maintenance-host.py plan <新候选SHA> <release-id> --gap-evidence <绝对授权JSON>` 只读核对本次
 `ys20261103235714_102` 的原件、当前维护claim、现行中央归属、十个guard和候选实际字节。
 合同来自已保存原件SHA，包含旧101归档及其他owner历史盘点；调用者不能替换owner或预期hash。
 仅legacy的`ANGYVB4227006983.lock`与`standalone-claims/ANGYVB4227006983`精确子树
@@ -245,3 +251,9 @@ PNG、XML和HOME双焦点。写动作先持久化独占意图，超时、信号�
 维护记录在独立私有目录，原102的failed与`execution_stopped=false`保持原样。
 这只证明本次同步手机请求域已关闭，不证明任意OS后代全停，不恢复原WeakMap、Skill或采集权限。
 维护测试使用隔离C客户端和本地文件夹具，不操作真实手机或业务库；真实Darwin内核nofork测试进入L3，真实原件集成由受控本地副本提供。
+
+断档授权v1只接受原始精确认领；原维护任务被降级blocked并清claim后不可使用。v2把原
+`maintenance`历史常量与`current_maintenance_claim`分开：绑定完整blocked原件、正式
+4小时新claim、恢复PATCH短回执、成功heartbeat和两次Task读回；每次准入再GET同一新claim
+和全部冻结payload。新claim不改写旧timestamp，不恢复旧业务。具体17文件格式、真实API
+回执及保守租约边界见 `docs/runner/collection-review-gap-evidence.md`。已有journal不能迁移。
