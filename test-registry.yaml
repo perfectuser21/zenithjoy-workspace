@@ -758,17 +758,19 @@ tests:
     path: services/agent/src/__tests__/line02-config-parse.test.ts
     type: unit
     ci: L2
-    status: active
+    status: "deprecated"
     product: AI员工
     note: "line02 config 解析回归守卫：agent 通过顶层字段发 config（msg.apiBase），模块必须用 msg.config ?? {apiBase: msg.apiBase} 而非 msg.config || {}，否则 apiBase 丢失 → 轮询 localhost:3000 → 永不拿任务（1.0.4 修复）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:services/agent/src/__tests__/line02-config-parse.test.ts. Inline Buggy/Fixed copied examples removed; current modules/line02 IPC/HTTP routing exercises actual implementation, both old bugs proven to fail with no external HTTP."
 
   - id: agent-line02-task-id-regression
     path: services/agent/src/__tests__/line02-task-id-regression.test.ts
     type: unit
     ci: L2
-    status: active
+    status: "deprecated"
     product: AI员工
     note: "line02 task_id 字段名回归守卫：pending-collect-tasks 返回 task_id，模块必须用 task.task_id 而非 task.id，否则 spawnKeywordSearch 收到 undefined → collect/report 400 → 任务永久 running（1.0.6 修复）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:services/agent/src/__tests__/line02-task-id-regression.test.ts. Inline Buggy/Fixed copied examples removed; current modules/line02 IPC/HTTP routing exercises actual implementation, both old bugs proven to fail with no external HTTP."
 
   - id: agent-module-manager-cleanup
     path: services/agent/src/__tests__/module-manager-cleanup.test.ts
@@ -1913,9 +1915,10 @@ tests:
     path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws1/publish-task-type.test.ts
     type: integration
     ci: L4-INT
-    status: pending-ci
+    status: "deprecated"
     product: 内容发布
     note: "Sprint 2.1a contract test (临时位置)，TDD RED 来源 — 副本于 apps/api/tests/ws1/"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/sprint-c-ws2-douyin-real-publish/tests/ws1/publish-task-type.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/tests/ws1/publish-task-type.test.ts\""
 
   - id: sprint-2-1a-ws2-douyin-route
     path: sprints/sprint-c-ws2-douyin-real-publish/tests/ws2/douyin-route.test.ts
@@ -2176,17 +2179,19 @@ tests:
     path: sprints/path-2-sprint-a-feishu/tests/ws1/migration.test.ts
     type: integration
     ci: L4-INT
-    status: pending-ci
+    status: "deprecated"
     product: 中台认证
     note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/integration/ws1/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-a-feishu/tests/ws1/migration.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/tests/integration/ws1/migration.test.ts\""
 
   - id: p2-sprint-a-contract-ws2-feishu-token
     path: sprints/path-2-sprint-a-feishu/tests/ws2/feishu-token.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 中台认证
     note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws2/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-a-feishu/tests/ws2/feishu-token.test.ts. Excluded historical OAuth copy retired after preserving state tampering, tenant binding, refresh and provider failure assertions in current src/routes OAuth suite, 18 cases verified."
 
   - id: p2-sprint-a-contract-ws3-bitable-mt
     path: sprints/path-2-sprint-a-feishu/tests/ws3/feishu-bitable-mt.test.ts
@@ -2208,9 +2213,10 @@ tests:
     path: sprints/path-2-sprint-a-feishu/tests/ws4/feishu-bind-page.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint A 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/dashboard/tests/ws4/.tsx）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-a-feishu/tests/ws4/feishu-bind-page.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: p2-sprint-a-contract-ws5-path1-isolation
     path: sprints/path-2-sprint-a-feishu/tests/ws5/path1-isolation.test.ts
@@ -2250,9 +2256,10 @@ tests:
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws1/migration-add-role.test.ts
     type: integration
     ci: L4-INT
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/integration/p2-sprint-b1-ws1/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws1/migration-add-role.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts\""
 
   - id: p2-sprint-b1-contract-ws2a-qr-bind-burner
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/qr-bind-douyin-burner.test.ts
@@ -2266,25 +2273,28 @@ tests:
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/douyin-comment-crawl.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 services/agent/scripts/__tests__/.cjs）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/douyin-comment-crawl.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs\""
 
   - id: p2-sprint-b1-contract-ws3a-agent-burner-routes
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/agent-burner-routes.test.ts
     type: integration
     ci: L4-INT
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/integration/p2-sprint-b1-ws3/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/agent-burner-routes.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: p2-sprint-b1-contract-ws3b-smoke-fake-agent-burner
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/smoke-fake-agent-burner.test.ts
     type: integration
     ci: L4-INT
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/integration/p2-sprint-b1-ws3/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/smoke-fake-agent-burner.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: p2-sprint-b1-contract-ws4-lead-writer
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws4/lead-writer.test.ts
@@ -2298,17 +2308,19 @@ tests:
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws5/douyin-burner-bind-page.test.tsx
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/dashboard/tests/p2-sprint-b1-ws5/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws5/douyin-burner-bind-page.test.tsx. 旧DouyinBurnerBindPage组件不存在且导航明确说明绑号并入AcquisitionAccountsPage；旧飞书先绑才可操作/手填保留名旧UI假设已失效，不复活旧界面。 Current replacement: [\"apps/dashboard/src/config/navigation.config.ts\",\"apps/dashboard/src/pages/AcquisitionAccountsPage.tsx\",\"apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx\"]"
 
   - id: p2-sprint-b1-contract-ws6-smoke-script-structure
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws6/smoke-script-structure.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 合同 SSOT — TDD RED 来源（不实跑，CI 落点在 apps/api/tests/p2-sprint-b1-ws6/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws6/smoke-script-structure.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: p2-sprint-b1-contract-ws7-lead-self-test-script-structure
     path: sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws7/lead-self-test-script-structure.test.ts
@@ -2357,9 +2369,10 @@ tests:
     path: apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts
     type: integration
     ci: L4-INT
-    status: active
+    status: "deprecated"
     product: 私域运营
     note: "Path 2 Sprint B-1 WS3b 落点 — fake-agent helper NODE_ENV+SMOKE_TOKEN 双门禁"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts. Permissive 200-or-404 historical integration copy removed; active route HTTP tests verify unknown tenant denial, exact scoped update and errors."
 
   - id: p2-sprint-b1-ws4-lead-writer
     path: apps/api/tests/p2-sprint-b1-ws4/lead-writer.test.ts
@@ -2557,28 +2570,30 @@ tests:
     path: sprints/agent-hardening-h1-backend-system/tests/ws1/license-register-dual-schema.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 中台认证
     note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws1/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/agent-hardening-h1-backend-system/tests/ws1/license-register-dual-schema.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/tests/h1/ws1/license-register-dual-schema.test.ts\""
 
   - id: h1-contract-ws2-publish-tasks-status-enum
     path: sprints/agent-hardening-h1-backend-system/tests/ws2/publish-tasks-status-enum.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 中台认证
     note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws2/）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/agent-hardening-h1-backend-system/tests/ws2/publish-tasks-status-enum.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts\""
 
   - id: h1-contract-ws3-ws-routing-uuid
     path: sprints/agent-hardening-h1-backend-system/tests/ws3/ws-routing-uuid.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 中台认证
     note: "Agent hardening H-1 合同 SSOT — TDD RED 来源（不实跑，副本在 apps/api/tests/ws3/）"
 
   # ─── H-2 Bug 3 + Bug 9 hotfix tests ───────────────────────────────────────────
-
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/agent-hardening-h1-backend-system/tests/ws3/ws-routing-uuid.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: h2-bug9-agent-ws-hello-handler
     path: apps/api/src/services/__tests__/agent-ws-hello.test.ts
@@ -3141,9 +3156,10 @@ tests:
     path: sprints/zj2-smart-acquisition-run1/tests/ws3/video-comment-result.test.ts
     type: unit
     ci: L4
-    status: active
+    status: "deprecated"
     product: 新媒体运营
     note: "ZJ2 Smart Acquisition Run1 WS3 — video comment result API 合同测试"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/zj2-smart-acquisition-run1/tests/ws3/video-comment-result.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: api-ws3-video-comment-result
     path: apps/api/tests/ws3/video-comment-result.test.ts
@@ -3192,25 +3208,28 @@ tests:
     path: sprints/zj-douyin-article-agent-port/tests/ws1/article-publisher.test.ts
     type: unit
     ci: L4
-    status: active
+    status: "deprecated"
     product: 新媒体运营
     note: "ZJ Douyin Article Agent Port WS1 — CDP article 发布脚本合同测试（DOM.setFileInputFiles/dryrun/fail-fast）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/zj-douyin-article-agent-port/tests/ws1/article-publisher.test.ts. 旧/workspace绝对路径合同已由现役vitest配置明确摘除；同发布器/干跑持久断言均在现行publishers树。 Current replacement: [\"services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs\"]"
 
   - id: zj-douyin-article-agent-port-ws2
     path: sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts
     type: unit
     ci: L4
-    status: active
+    status: "deprecated"
     product: 新媒体运营
     note: "ZJ Douyin Article Agent Port WS2 — douyin-publish.ts handler article 路由 + SUPPORTED_DOUYIN_TYPES 合同测试"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts. 旧/workspace文本扫描合同已摘除；当前handler单测真实执行article路由和错误分支。 Current replacement: [\"services/agent/src/handlers/__tests__/douyin-publish.test.ts\"]"
 
   - id: zj-douyin-article-agent-port-ws3
     path: sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts
     type: unit
     ci: L4
-    status: active
+    status: "deprecated"
     product: 新媒体运营
     note: "ZJ Douyin Article Agent Port WS3 — version 1.1.26 bump + build-install-pack.sh publishers 复制合同测试"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: zj-ops1-session-health-ws1
     path: sprints/zj-ops1-session-health/tests/ws1/check-health.test.ts
@@ -3537,11 +3556,12 @@ tests:
     path: sprints/run-20260527-1934/tests/ws4/agent-version-e2e-spec.test.ts
     type: e2e
     ci: L4
-    status: pending-ci
+    status: "deprecated"
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-1934 WS4 — Agent v1.1.29 version bump + E2E spec 更新 + GHA Windows 真实视频验收"
 
   # ── Line 05 AI 视频 Pipeline — run-20260527-2037 ─────────────────────────────
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/run-20260527-1934/tests/ws4/agent-version-e2e-spec.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: line05-run2037-ws1-new-fields
     path: sprints/run-20260527-2037/tests/ws1/video-pipeline-new-fields.test.ts
@@ -3571,19 +3591,21 @@ tests:
     path: sprints/run-20260527-2037/tests/ws4/dashboard-ui-aspect.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-2037 WS4 — Dashboard LocalVideoPipelinePage original_script textarea + aspect selector"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/run-20260527-2037/tests/ws4/dashboard-ui-aspect.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
 
   - id: line05-run2037-ws5-agent-version
     path: sprints/run-20260527-2037/tests/ws5/agent-version.test.ts
     type: unit
     ci: L3
-    status: pending-ci
+    status: "deprecated"
     product: 视频剪辑
     note: "Line 05 Sprint run-20260527-2037 WS5 — Agent v1.1.30 + GHA workflow 更新"
 
   # ── Line 05 AI 视频 Pipeline — zj-ai-video-ws1-ws3-ws4 ───────────────────────
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/run-20260527-2037/tests/ws5/agent-version.test.ts. 仅冻结1.1.30及旧默认版本/类型检查，不是当前发行/兼容合同；现役独立Agent包读取自身版本，L1真实版本演进检查接替。 Current replacement: [\".github/workflows/scripts/lint-agent-version-bump.sh\",\"services/agent/scripts/build-install-pack.sh\"]"
 
   - id: line05-zj-ai-video-ws1-original-script
     path: sprints/zj-ai-video-ws1-ws3-ws4/tests/ws1/original-script.test.ts
@@ -3728,9 +3750,11 @@ tests:
     path: sprints/zj-ai-video-ws3-ws4/tests/ws3/gha-version.test.ts
     type: contract
     ci: L2
-    status: active
+    status: "deprecated"
     product: AI视频本地流水线
     note: "AI视频Pipeline WS3 合同测试 — GHA agent-e2e-video.yml default version 1.1.31"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/zj-ai-video-ws3-ws4/tests/ws3/gha-version.test.ts. Completed Path4 sprint source-shape snapshots retired; current wechat-draft actual service and active smoke preserve chat safety and moments pending-review/profile-missing/daily dedup behavior, 37 real service cases verified."
+
   - id: line00-xhs-qr-bind-ws1
     path: sprints/line00-xiaohongshu-qr-bind/tests/ws1/xhs-qr-bind.test.ts
     type: contract
@@ -4020,11 +4044,12 @@ tests:
     path: sprints/06031608-agent-python-embedded/tests/agent-python-embedded.test.ts
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 客户私域AI接管
     note: "Agent v1.1.78 Python-embedded + wechat-rpa 零依赖安装包验证（build脚本/start.bat/handler 静态检查）"
 
   # ── 微信 AI 客服稳定性加固（wechat-cs-hardening sprint）────────────────────────
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/06031608-agent-python-embedded/tests/agent-python-embedded.test.ts. 现役vitest配置明确退役的1.1.79/Narrator旧路径冻结合同；Python选择机制已有当前模块/handler单测，构建bootstrap由当前安装包回归验证。 Current replacement: [\"services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts\",\"services/agent/src/handlers/__tests__/wechat-rpa.test.ts\"]"
 
   - id: wechat-cs-heartbeat-service
     path: apps/api/src/services/__tests__/wechat-heartbeat.test.ts
@@ -4182,9 +4207,10 @@ tests:
     path: sprints/06081800-agent-module-e2e-verify/tests/agent-module-e2e.test.ts
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 客户私域AI接管
     note: "Sprint 06081800 — preflight MOCK_WECHAT_VERSION 跨平台覆盖 + version-only warning 路径"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/06081800-agent-module-e2e-verify/tests/agent-module-e2e.test.ts. 旧version-only失败必须ok:true策略与现役硬拦相矛盾，现役config已明确摘除；真实兼容/拒绝义务在当前preflight/CLI测试。 Current replacement: [\"services/agent/modules/line04/__tests__/preflight.test.ts\",\"services/agent/modules/line04/__tests__/preflight-cli.test.ts\"]"
 
   - id: line04-preflight-card-e2e
     path: apps/dashboard/e2e/line04-preflight-card.spec.ts
@@ -5270,17 +5296,19 @@ tests:
     path: sprints/07081012-crm-status-history/tests/crm-status-history.test.ts
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 客户私域AI接管
     note: "sprint(07081012): CRM客户状态历史追踪——合同测试原始文件（sprint目录），正式位置在 apps/api/tests/routes/crm-status-history.test.ts"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07081012-crm-status-history/tests/crm-status-history.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/tests/routes/crm-status-history.test.ts\""
 
   - id: wechat-cs-reply-integration
     path: sprints/07081557-wechat-cs-reply-integration/tests/wechat-cs-reply-integration.test.ts
     type: integration
     ci: L4
-    status: active
+    status: "deprecated"
     product: 私域运营
     note: "wechat-cs-reply 判断内核接入合同测试（B-1~B-9）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07081557-wechat-cs-reply-integration/tests/wechat-cs-reply-integration.test.ts. 规范测试包含原8个cs-reply同名场景，原第9个群聊跳过已由更强群消息零LLM/零黑名单读取断言覆盖；原sprint还含错误相对import。规范回归已扩充反编造否定语境，不保留旧副本。 Current replacement: [\"apps/api/tests/services/wechat-draft.test.ts\"]"
 
   - id: staff-tools-middleware-unit
     path: apps/api/src/middleware/staff.test.ts
@@ -5600,17 +5628,19 @@ tests:
     path: sprints/07201700-installer-env-reset-m1/tests/boot-fail-api-contract.test.ts
     type: e2e
     ci: L4
-    status: active
+    status: "deprecated"
     product: 智能获客
     note: "sprint(07201700): 刀B M1 安装器清环境——POST /api/agent/boot-fail 合同测试，无鉴权可达+输入验证+proven-to-fire（BEHAVIOR-3/4）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07201700-installer-env-reset-m1/tests/boot-fail-api-contract.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts\""
 
   - id: installer-env-reset-setup-reset-ps1-contract
     path: sprints/07201700-installer-env-reset-m1/tests/setup-reset-ps1-contract.test.ts
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 智能获客
     note: "sprint(07201700): 刀B M1 安装器清环境——setup-reset.ps1 静态合同断言（ASCII/无 pause/无 warn 降级/DryRun 切换），含 Windows 真机执行断言（BEHAVIOR-1）"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07201700-installer-env-reset-m1/tests/setup-reset-ps1-contract.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts\""
 
   - id: installer-env-reset-setup-reset-ps1-impl-unit
     path: services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts
@@ -5756,17 +5786,19 @@ tests:
     path: sprints/07280933-product-map-ssot-claude/tests/contract.test.js
     type: e2e
     ci: L2
-    status: active
+    status: "deprecated"
     product: 产品基础设施
     note: "sprint(07280933): Product Map SSOT 合同测试 — BEHAVIOR-01~12 合同验收，RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07280933-product-map-ssot-claude/tests/contract.test.js. 旧App/GP固定个数、ability proposed、L2五分钟、registry日期冻结；分类SSOT已演进，当前schema/引用/CLI/生成漂移合同由L2完整单测验证，无独有兼容义务。 Current replacement: [\"scripts/product-map/__tests__/product-map.test.js\",\"scripts/product-map/__tests__/contracts.test.js\",\"scripts/product-map/__tests__/product-map-cli-json.test.js\"]"
 
   - id: product-map-seven-streams-sprint-contract
     path: sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js
     type: e2e
     ci: L2
-    status: active
+    status: "deprecated"
     product: 产品基础设施
     note: "sprint(08122228, task c2b59b6a): 7 Value Stream / 18 Golden Path 收敛合同测试（T1-T7），RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js. 旧7条Line/18条GP精确数量、仅当时允许diff范围冻结；今日SSOT有line08和多新增GP，当前L2 schema/生成/关系合同取代。 Current replacement: [\"scripts/product-map/__tests__/product-map.test.js\",\"scripts/product-map/__tests__/contracts.test.js\"]"
 
   - id: realmachine-unverified-ratchet
     path: scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js
@@ -6073,9 +6105,10 @@ tests:
     path: sprints/07282119-agent-panel-knife2-android/tests/panel-line02-bridge.test.ts
     type: contract
     ci: L3
-    status: active
+    status: "deprecated"
     product: 客户智能获客
     note: "Sprint 07282119合同测试（Red基线，永久保留）：与services/agent/src/shared/__tests__/panel-line02-bridge.test.ts同款断言，合同GAN阶段锁定证据"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07282119-agent-panel-knife2-android/tests/panel-line02-bridge.test.ts. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"services/agent/src/shared/__tests__/panel-line02-bridge.test.ts\""
 
   - id: agent-panel-line02-lane-sprint-contract
     path: sprints/07282119-agent-panel-knife2-android/tests/agent-panel-line02-lane.test.tsx
@@ -6173,9 +6206,10 @@ tests:
     path: sprints/w1-ai-scorer-d2/tests/capture-invariants.test.js
     type: unit
     ci: L3
-    status: active
+    status: "deprecated"
     product: 中台认证
     note: "AI打表器D2 sprint 合同测试入口（与 scripts/ 下副本同内容，sprint目录存档用）。"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/w1-ai-scorer-d2/tests/capture-invariants.test.js. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js\""
 
   - id: w4-quadrant-page-e2e
     path: sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts
@@ -7693,9 +7727,10 @@ tests:
     path: .github/workflows/scripts/__tests__/staging-promote-port-isolation.test.mjs
     type: integration
     ci: L3
-    status: active
+    status: "deprecated"
     product: AI员工
     note: "真实smoke私有端口及启动失败闭环；只在fixture子进程映射旧固定端口，禁止借用其它监听者的成功版本回执"
+    retirement: "2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:.github/workflows/scripts/__tests__/staging-promote-port-isolation.test.mjs. Dedicated regression for removed unconsumed legacy staging mock server; current frontend-release, staging image identity and independent workbench/API listener guards remain."
 
   - id: leadgen-workflow-skill-contract
     path: scripts/product-map/__tests__/leadgen-workflow-skill.test.js
@@ -8791,7 +8826,7 @@ tests:
   - {"id":"inventory-a9dc4f751c5a36b7","path":".github/workflows/scripts/__tests__/workbench-process-ownership.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-e40e6077f3579522","path":".github/workflows/scripts/smoke/lib/ensure-device-online.test.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-bb3fb76042fa9d53","path":".github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-c06498fe43f1b25c","path":"_archive/jnsy-label/app/test_api.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-c06498fe43f1b25c","path":"_archive/jnsy-label/app/test_api.py","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:_archive/jnsy-label/app/test_api.py. Archived manual diagnostic renamed diagnose_api.py; never a test assertion or current CI consumer, source preserved verbatim."}
   - {"id":"inventory-a1c24ef5a3966927","path":"apps/api/scripts/tests/test_wechat_mp_freepublish.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-1e72ea9130c3de5e","path":"deploy/tests/video-tools-deployment.test.cjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-51f7f9d6a264cda3","path":"scripts/ci/__tests__/implementation-impact-workflow.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9501,10 +9536,10 @@ tests:
   - {"id":"inventory-76a4e89b80cd9b45","path":"sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_lifecycle.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-67984e2a1e9d7f5b","path":"sprints/07121132-line04-ai-thinking-overlay/tests/test_overlay_preflight.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-12f970d5a4b48446","path":"sprints/07150800-line04-overlay-continuation/tests/test_overlay_continuation.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-a429ed6b0177c5dd","path":"sprints/07150917-lead-semantic-quality-gate/tests/lead-quality-gate.test.cjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-a429ed6b0177c5dd","path":"sprints/07150917-lead-semantic-quality-gate/tests/lead-quality-gate.test.cjs","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07150917-lead-semantic-quality-gate/tests/lead-quality-gate.test.cjs. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \".github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs\""}
   - {"id":"inventory-80cc5f2c59fa7ba0","path":"sprints/07152230-line04-events-writer/tests/test_events_writer.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-5c841978327f8b99","path":"sprints/07182017-gpa-voice-outreach/tests/test_contract.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
-  - {"id":"inventory-d7b39f552d4a202b","path":"sprints/07201740-half-deadzone-window-invariant/tests/test_window_invariant.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-d7b39f552d4a202b","path":"sprints/07201740-half-deadzone-window-invariant/tests/test_window_invariant.py","type":"unclassified","ci":"unverified","status":"deprecated","product":"unclassified","retirement":"2026-11-04 full CI review; restore source at 5d272bb40d6962e19c4cd7d9a9181d1b8889a225:sprints/07201740-half-deadzone-window-invariant/tests/test_window_invariant.py. 逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 Current replacement: \"services/agent/wechat-rpa/tests/test_window_invariant.py\""}
   - {"id":"inventory-ad21c4fa309537f5","path":"sprints/07201810-overlay-card-redesign-gp4/tests/test_customer_profile_api.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-387578560f8ee7e6","path":"sprints/07201810-overlay-card-redesign-gp4/tests/test_open_customer_page.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-758b79b9e10ff65b","path":"sprints/07201810-overlay-card-redesign-gp4/tests/test_tail_pointer.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
@@ -9630,3 +9665,12 @@ tests:
     status: active
     product: AI员工
     note: "真实作者footer脱敏树经控制器和队列原函数过滤，0入库不冒充no_comments"
+
+  - id: ci-review-services-agent-modules-line02-tests-ipc-collection-routing-test-ts
+    path: services/agent/modules/line02/__tests__/ipc-collection-routing.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: ci-l4-runtime.yml / agent-test / npx vitest run, current modules included
+    note: Added during 2026-11-04 current-consumer CI review; registration is inventory, actual run evidence is separate.
