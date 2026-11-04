@@ -1323,7 +1323,8 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: "Walking Skeleton #1 — 抖音首次扫码绑 + storageState 存盘"
+    execution: "agent-qr-windows-verify.yml / unit-tests-windows / npm test (Windows); shared source suites also run in agent CI"
+    note: "真实 getSessionPath 与注入浏览器依赖路径的 storageState 存盘合同；不证明生产外部扫码进程、真人登录或发布成功。"
 
   - id: agent-qr-bind-operator-spa-wait
     path: services/agent/src/handlers/__tests__/qr-bind-operator.test.ts
@@ -1347,7 +1348,8 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: "Walking Skeleton #1 — Agent 调 douyin-publisher dryrun + 上报回执"
+    execution: "agent-qr-windows-verify.yml / unit-tests-windows / npm test (Windows); shared source suites also run in agent CI"
+    note: "真实 publish handler 的 session 文件读取、子进程环境注入、旧错误路径拒读及发布回执合同；外部子进程/HTTP 为隔离边界，不证明 publisher 登录或真实发布。"
 
   - id: agent-ws1-wechat-image-dryrun
     path: services/agent/publishers/wechat-publisher/__tests__/wechat-image-dryrun.test.ts
