@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Path 4 Sprint 1 ws2 — qr_bind 完整版 + 飞书 4 表 + Dashboard 入口 + 8 fixture script
+# Path 4 Sprint 1 ws2 — 当前共享绑定：qr_bind dryrun + Dashboard 入口
 #
 # 静态校验：
 #   1) services/agent/wechat-rpa/qr_bind.py 真版 + __init__.py __all__ + requirements.txt
 #   2) qr_bind.py --dryrun 跑通 → JSON {ok:true, dryRun:true}
-#   3) 飞书 4 表名（客户档案 / 营销画像 / 内容排期 / 互动记录）注册
 #   4) Dashboard AgentMachines 绑微信入口
-#   5) 8 个飞书 fixture script 全在 + 抽检 --help 可执行
+# 旧审批路线的8个常量stub已退役；租户/鉴权/本地黑名单由现役API行为测试保护。
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -29,16 +28,6 @@ assert out.get('dryRun') is True, 'FAIL dryRun'
 print('  PASS qr_bind dryrun JSON 格式')
 "
 
-echo "=== ws2 Step 3: 飞书 4 表名注册 ==="
-SEEN=0
-for table in "客户档案" "营销画像" "内容排期" "互动记录"; do
-  if grep -rq "$table" apps/api/src apps/api/scripts 2>/dev/null; then
-    SEEN=$((SEEN + 1))
-  fi
-done
-[ "$SEEN" = "4" ] || { echo "FAIL: 4 表名仅 $SEEN 个 hit"; exit 1; }
-echo "  PASS 4 飞书表名全 hit"
-
 echo "=== ws2 Step 4: Dashboard 绑微信入口 ==="
 # 整合(2026-06-25)：孤儿页 AgentMachines.tsx 已删，绑微信/客服机入口并进
 # 「我的客服机」CsOneClickSetupPage（选机器→绑 wechat→配置）。这里改查它。
@@ -49,27 +38,4 @@ grep -qE "微信|wechat" "$AGENT_PAGE" \
   || { echo "FAIL: 客服机页缺 微信/wechat 入口"; exit 1; }
 echo "  PASS Dashboard 绑微信入口（CsOneClickSetupPage）"
 
-echo "=== ws2 Step 5: 8 fixture script ==="
-FIXTURES=(
-  seed-feishu-customer.js
-  seed-feishu-profile.js
-  seed-feishu-schedule.js
-  get-feishu-schedule.js
-  get-feishu-interaction.js
-  count-feishu-schedule.js
-  count-feishu-interaction.js
-  update-feishu-schedule.js
-)
-for f in "${FIXTURES[@]}"; do
-  test -f "apps/api/scripts/$f" || { echo "FAIL: $f 缺"; exit 1; }
-done
-echo "  PASS 8 fixture 全在"
-
-# 抽检 1 个 --help 可执行
-node apps/api/scripts/seed-feishu-customer.js --help 2>&1 | head -1 \
-  | grep -q "Usage" \
-  || { echo "FAIL: seed-feishu-customer.js --help 输出异常"; exit 1; }
-echo "  PASS fixture --help spawn 通"
-
-echo ""
-echo "ws2-smoke: ALL PASS"
+echo "ws2-smoke: ALL PASS — current binding only"

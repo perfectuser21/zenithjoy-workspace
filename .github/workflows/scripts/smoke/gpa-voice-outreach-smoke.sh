@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # smoke: gpa-voice-outreach-smoke.sh
-# GP-A 主动语音触达 — CI 可达段 smoke 验证
+# 语音原型局部合同检查（不代表GP交付）
 #
 # 覆盖范围：
 #   1. API 接口文件存在验证（CI 无法启动 server，改用文件检查 + 结构断言）
@@ -25,7 +25,7 @@ log_pass() { echo "  ✓ $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
 log_fail() { echo "  ✗ FAIL: $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 
 echo "========================================"
-echo "GP-A 语音触达 smoke (CI 可达段)"
+echo "语音原型：局部Python/源码合同（API未挂载，调度未接通）"
 echo "========================================"
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ done
 echo ""
 echo "[4] Python 单元测试 test_call_rpa（mock UIA，CI 可达）"
 
-TEST_FILE="$VOICE_CALL_DIR/tests/test_call_rpa.py"
+TEST_FILE="$WORKSPACE/services/agent/wechat-rpa/voice_call/tests/test_call_rpa.py"
 
 if [ ! -f "$TEST_FILE" ]; then
   log_fail "test_call_rpa.py 不存在: $TEST_FILE"
@@ -218,8 +218,7 @@ echo "[5] 真机段等价断言（TODO(real-machine) — CI 不可达）"
 #
 # 以上 4 项需在 xian-rog 真机上人工确认，skeleton maturity 阶段不纳入 CI 自动化。
 
-echo "  [真机段等价断言已注释，需在 xian-rog 人工执行 E-1~E-4]"
-PASS_COUNT=$((PASS_COUNT + 1))
+echo "NOT_RUN: device/call/AI conversation/receipt; comments are not equivalent evidence"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 汇总
@@ -234,5 +233,6 @@ if [ "$FAIL_COUNT" -gt 0 ]; then
   exit 1
 fi
 
-echo "✅ GP-A voice outreach smoke (CI 段) PASS"
+echo "LOCAL_CONTRACT_PASS: source/Python only"
+echo "NOT_DELIVERED: API_ROUTE_UNMOUNTED; DISPATCH_NOT_CONFIGURED; DEVICE_NOT_RUN"
 exit 0

@@ -1,6 +1,6 @@
-name: Golden Path 4 — Private AI Wechat Smoke
+name: Line04 — Shared Binding and Reception Smoke
 
-# Path 4 客户私域 AI 接管 端到端 smoke
+# Line04 当前共享绑定/接待 smoke（旧飞书审批路线已退役）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381af-af97-e3bc8e3b0fb4
 # Sprint:         sprints/sprint-d-path4-private-ai-thin/contract-dod.md
 #
@@ -40,7 +40,7 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws1-smoke.sh
 
   ws2:
-    name: ws2 — qr_bind + 飞书 4 表 + Dashboard + 8 fixture
+    name: ws2 — qr_bind dryrun + 当前客服机绑定入口
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -53,7 +53,7 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws2-smoke.sh
 
   ws3:
-    name: ws3 — DeepSeek 私聊草稿 + listen_chat + A 路线护栏
+    name: ws3 — 私聊自动回复 + listen_chat + 群/黑名单护栏
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -75,7 +75,7 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh
 
   ws5:
-    name: "[DRYRUN] ws5 — 飞书审批 + wechat_rpa 管道拼接（ubuntu 无微信，非真发）"
+    name: "[DRYRUN] ws5 — 旧审批路由禁用 + Python发送频控（无真机）"
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -88,7 +88,7 @@ jobs:
         run: bash .github/workflows/scripts/smoke/path4-sprint-1-ws5-smoke.sh
 
   agent-real-script:
-    name: Agent wechat-rpa 真实脚本接入（v1.1.77）
+    name: Agent wechat-rpa 当前脚本合同
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -101,7 +101,7 @@ jobs:
         run: bash .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
 
   golden-path-4-smoke:
-    name: Golden Path 4 — Full 6-step E2E Smoke
+    name: Line04 — Binding and Reception API/DB Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # 合同 r1 #14：ws1..ws5 全绿才跑完整端到端

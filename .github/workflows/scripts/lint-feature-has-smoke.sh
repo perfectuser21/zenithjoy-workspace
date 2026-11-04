@@ -62,14 +62,14 @@ while IFS= read -r smoke; do
     ADDED_LINES="${ADDED_LINES:-0}"
     ADDED_CMDS=$(git diff "${BASE_REF}...HEAD" -- "$smoke" 2>/dev/null \
       | grep -E '^\+' | grep -vE '^\+\+\+' \
-      | grep -cE "(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx)[[:space:]]" || echo 0)
+      | grep -cE "(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx|python3?)[[:space:]]" || echo 0)
     # 例外：纯"版本一致性常量同步"编辑（EXPECTED="x.y.z" 一行改成另一个 semver）豁免——
     # 这类 version-gate smoke 的设计就是靠这一行手动同步捕获三方漂移，不是新增覆盖，
     # 用 added_lines/added_cmds 门槛卡它是假阳性（file 本身已注册且已有真实命令）。
     DIFF_BODY=$(git diff "${BASE_REF}...HEAD" -- "$smoke" 2>/dev/null | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)')
     NON_VERSION_LINES=$(echo "$DIFF_BODY" | grep -vE '^[+-][[:space:]]*[A-Z0-9_]*EXPECTED[A-Z0-9_]*="[0-9]+\.[0-9]+\.[0-9]+"[[:space:]]*$' | grep -c '.' || true)
     NON_VERSION_LINES="${NON_VERSION_LINES:-0}"
-    WHOLE_FILE_CMDS=$(grep -cE "(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx)[[:space:]]" "$smoke" 2>/dev/null || true)
+    WHOLE_FILE_CMDS=$(grep -cE "(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx|python3?)[[:space:]]" "$smoke" 2>/dev/null || true)
     WHOLE_FILE_CMDS="${WHOLE_FILE_CMDS:-0}"
     IS_VERSION_SYNC_ONLY=0
     if [ "$NON_VERSION_LINES" -eq 0 ] && [ "$WHOLE_FILE_CMDS" -ge 1 ]; then
@@ -83,7 +83,7 @@ while IFS= read -r smoke; do
   else
     # Brand-new file: judge the whole file, as before.
     REAL_LINES=$(grep -v "^[[:space:]]*#" "$smoke" | grep -v "^[[:space:]]*$" | wc -l | tr -d " ")
-    TRUE_CMDS=$(grep -cE "(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx)[[:space:]]" "$smoke" 2>/dev/null || echo 0)
+    TRUE_CMDS=$(grep -cE "(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx|python3?)[[:space:]]" "$smoke" 2>/dev/null || echo 0)
     if [ "$REAL_LINES" -lt 5 ] || [ "$TRUE_CMDS" -lt 1 ]; then
       EMPTY_SMOKE+=("$smoke (lines=$REAL_LINES cmds=$TRUE_CMDS)")
     fi

@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "retirements": [
+    {
+      "path": ".github/workflows/scripts/smoke/wechat-publisher-smoke.sh",
+      "original_registry_id": null,
+      "dynamic_inventory_key": ".github/workflows/scripts/smoke/wechat-publisher-smoke.sh",
+      "source_commit": "b2611982c771fce0e03fef11982a44bbc9efb47c",
+      "source_blob": "4e1d89568ce7227863ed1ebb7e9537e4e717743a",
+      "source_sha256": "a6046a226571038b3b84fc1a834c96ac91ca5a59dfeda4f9fef41f9c76241156",
+      "disposition": "retire_obsolete_fixed_release_probe",
+      "dimensions": {
+        "current_value": "Keep current Windows installation, WeChat publishing and license compatibility obligations. Fixed v0.1.0 availability does not verify the current 2.0.95 candidate.",
+        "active_status": "Whole-repository executable caller review found only automatic glob execution and self comments; no explicit standalone workflow caller. None of these four is in smoke-baseline or the current explicit test-registry.",
+        "real_effect": "Old v0.1.0 payload greps for CDP/dryRun/risk strings. Current four publisher modules and real behavior tests remain; current producer copies the entire publishers tree. Exact 4dce logs show HTTP success followed by non-gzip/tar extraction failure, before any candidate validation.",
+        "test_and_blocking": "Keep required L1 ASCII/build-only, L4 Agent/API tests and actual agent-installpack producer. Current publisher behavior suite: 4 files/12 tests pass. Current register/install-pack API suite: 2 files/39 tests pass, including hex-key real router with fake DB, exact 401 and only one lookup query.",
+        "duplication_and_obsolescence": "Fixed v0.1.0 delivery snapshot superseded by versioned current build-install-pack producer. Preserve original package history; HEAD 200 and keyword presence never count as current delivery proof.",
+        "runtime_and_maintenance_cost": "Remove 105 lines/3459 bytes and repeated public downloads plus stale textual checks; no measured RSS or total runtime saving claimed.",
+        "retirement_and_dependencies": "Delete only this wrapper. Original bytes restore from source_commit:path, blob and SHA256. Keep producer, SDK, publishers, runtime, ledgers and published packages. Old v0.1.0 payload greps for CDP/dryRun/risk strings. Current four publisher modules and real behavior tests remain; current producer copies the entire publishers tree."
+      },
+      "replacement_paths": [
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/scripts/__tests__/installpack-build-only.test.py",
+        "services/agent/install-pack/__tests__/install-pack-ascii.test.sh",
+        "apps/api/src/routes/__tests__/agent-install-pack.test.ts",
+        "services/agent/publishers/wechat-publisher/__tests__/wechat-image-dryrun.test.ts",
+        "services/agent/publishers/wechat-publisher/__tests__/wechat-image.test.ts",
+        "services/agent/publishers/wechat-publisher/__tests__/wechat-video.test.ts",
+        "services/agent/publishers/wechat-publisher/__tests__/wechat-article.test.ts"
+      ],
+      "observed_failure": {
+        "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+        "evidence": "round2/core-smoke-debt-back-half-evidence.json",
+        "index": 43
+      },
+      "limits": "No current package download/deployment or Windows/device interaction. Preserved isolated behavior contracts do not claim fresh installation or WeChat delivery."
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/agent-onepush-smoke.sh",
+      "original_registry_id": null,
+      "dynamic_inventory_key": ".github/workflows/scripts/smoke/agent-onepush-smoke.sh",
+      "source_commit": "b2611982c771fce0e03fef11982a44bbc9efb47c",
+      "source_blob": "c2aa554b00067af85b92581ec017606adca41df6",
+      "source_sha256": "07b3cfc763a963a3d892a2585116dbee40446b80f9271008ce4e3ff0424cf833",
+      "disposition": "retire_obsolete_fixed_release_probe",
+      "dimensions": {
+        "current_value": "Keep current Windows installation, WeChat publishing and license compatibility obligations. Fixed v0.1.0 availability does not verify the current 2.0.95 candidate.",
+        "active_status": "Whole-repository executable caller review found only automatic glob execution and self comments; no explicit standalone workflow caller. None of these four is in smoke-baseline or the current explicit test-registry.",
+        "real_effect": "Old npm-install, interactive-license and customer-start contract has been superseded by the executable/start.bat installer. Do not revive the obsolete installation architecture. Exact 4dce logs show HTTP success followed by non-gzip/tar extraction failure, before any candidate validation.",
+        "test_and_blocking": "Keep required L1 ASCII/build-only, L4 Agent/API tests and actual agent-installpack producer. Current publisher behavior suite: 4 files/12 tests pass. Current register/install-pack API suite: 2 files/39 tests pass, including hex-key real router with fake DB, exact 401 and only one lookup query.",
+        "duplication_and_obsolescence": "Fixed v0.1.0 delivery snapshot superseded by versioned current build-install-pack producer. Preserve original package history; HEAD 200 and keyword presence never count as current delivery proof.",
+        "runtime_and_maintenance_cost": "Remove 61 lines/2128 bytes and repeated public downloads plus stale textual checks; no measured RSS or total runtime saving claimed.",
+        "retirement_and_dependencies": "Delete only this wrapper. Original bytes restore from source_commit:path, blob and SHA256. Keep producer, SDK, publishers, runtime, ledgers and published packages. Old npm-install, interactive-license and customer-start contract has been superseded by the executable/start.bat installer. Do not revive the obsolete installation architecture."
+      },
+      "replacement_paths": [
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/scripts/__tests__/installpack-build-only.test.py",
+        "services/agent/install-pack/__tests__/install-pack-ascii.test.sh",
+        "apps/api/src/routes/__tests__/agent-install-pack.test.ts"
+      ],
+      "observed_failure": {
+        "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+        "evidence": "round2/core-smoke-debt-back-half-evidence.json",
+        "index": 49
+      },
+      "limits": "No current package download/deployment or Windows/device interaction. Preserved isolated behavior contracts do not claim fresh installation or WeChat delivery."
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/agent-windows-quickstart-smoke.sh",
+      "original_registry_id": null,
+      "dynamic_inventory_key": ".github/workflows/scripts/smoke/agent-windows-quickstart-smoke.sh",
+      "source_commit": "b2611982c771fce0e03fef11982a44bbc9efb47c",
+      "source_blob": "982550aac7dd6bf922fa5923f2d8e3bc5570bb47",
+      "source_sha256": "aabedc1a602da23eafcf25d274577708437bb25e83b9be26aed38197d8824d34",
+      "disposition": "retire_obsolete_fixed_release_probe",
+      "dimensions": {
+        "current_value": "Keep current Windows installation, WeChat publishing and license compatibility obligations. Fixed v0.1.0 availability does not verify the current 2.0.95 candidate.",
+        "active_status": "Whole-repository executable caller review found only automatic glob execution and self comments; no explicit standalone workflow caller. None of these four is in smoke-baseline or the current explicit test-registry.",
+        "real_effect": "Frozen Chrome-CDP/npm-start/macOS fallback layout is not the current candidate installation contract. Shared Windows support for other Lines remains. Exact 4dce logs show HTTP success followed by non-gzip/tar extraction failure, before any candidate validation.",
+        "test_and_blocking": "Keep required L1 ASCII/build-only, L4 Agent/API tests and actual agent-installpack producer. Current publisher behavior suite: 4 files/12 tests pass. Current register/install-pack API suite: 2 files/39 tests pass, including hex-key real router with fake DB, exact 401 and only one lookup query.",
+        "duplication_and_obsolescence": "Fixed v0.1.0 delivery snapshot superseded by versioned current build-install-pack producer. Preserve original package history; HEAD 200 and keyword presence never count as current delivery proof.",
+        "runtime_and_maintenance_cost": "Remove 72 lines/2463 bytes and repeated public downloads plus stale textual checks; no measured RSS or total runtime saving claimed.",
+        "retirement_and_dependencies": "Delete only this wrapper. Original bytes restore from source_commit:path, blob and SHA256. Keep producer, SDK, publishers, runtime, ledgers and published packages. Frozen Chrome-CDP/npm-start/macOS fallback layout is not the current candidate installation contract. Shared Windows support for other Lines remains."
+      },
+      "replacement_paths": [
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/scripts/__tests__/installpack-build-only.test.py",
+        "services/agent/install-pack/__tests__/install-pack-ascii.test.sh",
+        "apps/api/src/routes/__tests__/agent-install-pack.test.ts"
+      ],
+      "observed_failure": {
+        "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+        "evidence": "round2/core-smoke-debt-back-half-evidence.json",
+        "index": 50
+      },
+      "limits": "No current package download/deployment or Windows/device interaction. Preserved isolated behavior contracts do not claim fresh installation or WeChat delivery."
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/sprint-2-1f-prod-readiness-smoke.sh",
+      "original_registry_id": null,
+      "dynamic_inventory_key": ".github/workflows/scripts/smoke/sprint-2-1f-prod-readiness-smoke.sh",
+      "source_commit": "b2611982c771fce0e03fef11982a44bbc9efb47c",
+      "source_blob": "5982fa9887f78fb94e3c20d553181066530a7837",
+      "source_sha256": "2127977da52d606d200262f1925a7da44d398eb7d6422e92f41d34dfdd628e15",
+      "disposition": "retire_obsolete_fixed_release_probe",
+      "dimensions": {
+        "current_value": "Keep current Windows installation, WeChat publishing and license compatibility obligations. Fixed v1.0.1 availability does not verify the current 2.0.95 candidate.",
+        "active_status": "Whole-repository executable caller review found only automatic glob execution and self comments; no explicit standalone workflow caller. None of these four is in smoke-baseline or the current explicit test-registry.",
+        "real_effect": "Frozen v1.0.1 start/uninstall archive probe. Register rejects only a single error string and accepts 500/empty output; new isolated real-router test preserves hex 0/1 compatibility while requiring INVALID_LICENSE and zero machine writes. Exact 4dce logs show HTTP success followed by non-gzip/tar extraction failure, before any candidate validation.",
+        "test_and_blocking": "Keep required L1 ASCII/build-only, L4 Agent/API tests and actual agent-installpack producer. Current publisher behavior suite: 4 files/12 tests pass. Current register/install-pack API suite: 2 files/39 tests pass, including hex-key real router with fake DB, exact 401 and only one lookup query.",
+        "duplication_and_obsolescence": "Fixed v1.0.1 delivery snapshot superseded by versioned current build-install-pack producer. Preserve original package history; HEAD 200 and keyword presence never count as current delivery proof.",
+        "runtime_and_maintenance_cost": "Remove 86 lines/3219 bytes and repeated public downloads plus stale textual checks; no measured RSS or total runtime saving claimed.",
+        "retirement_and_dependencies": "Delete only this wrapper. Original bytes restore from source_commit:path, blob and SHA256. Keep producer, SDK, publishers, runtime, ledgers and published packages. Frozen v1.0.1 start/uninstall archive probe. Register rejects only a single error string and accepts 500/empty output; new isolated real-router test preserves hex 0/1 compatibility while requiring INVALID_LICENSE and zero machine writes."
+      },
+      "replacement_paths": [
+        "services/agent/scripts/build-install-pack.sh",
+        "services/agent/scripts/__tests__/installpack-build-only.test.py",
+        "services/agent/install-pack/__tests__/install-pack-ascii.test.sh",
+        "apps/api/src/routes/__tests__/agent-install-pack.test.ts",
+        "apps/api/tests/routes/agent.test.ts"
+      ],
+      "observed_failure": {
+        "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+        "evidence": "round2/core-smoke-debt-back-half-evidence.json",
+        "index": 69
+      },
+      "limits": "No current package download/deployment or Windows/device interaction. Preserved isolated behavior contracts do not claim fresh installation or WeChat delivery."
+    }
+  ],
+  "baseline_removal": "None: all four wrappers were outside baseline; required context names/children unchanged.",
+  "verification": {
+    "api_files": 2,
+    "api_cases": 39,
+    "publisher_files": 4,
+    "publisher_cases": 12,
+    "runtime_source_changed": false,
+    "production_policy_changed": false
+  }
+}

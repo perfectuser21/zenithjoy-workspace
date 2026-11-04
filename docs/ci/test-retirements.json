@@ -1,0 +1,801 @@
+{
+  "schema_version": 1,
+  "retirements": [
+    {
+      "path": "sprints/07081012-crm-status-history/tests/crm-status-history.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "4ad0b08060a47d1664f4aef67e25907927f82b34",
+      "source_sha256": "44ae97265a0539b6994fc0306fcd3c6c406d4d4c65260f6908514ec8cb60da1c",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/routes/crm-status-history.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：CRM Status History — Contract Tests；[BEHAVIOR-02] 新客户首次写 status：历史表写入 old_status=NULL 记录；[BEHAVIOR-03] 已有客户 status 从 A2 → A3：历史表写入 old_status=A2 记录；[BEHAVIOR-04] 重复提交相同 status A3：历史表不写入新记录。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/routes/crm-status-history.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件12177字节/321行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/routes/crm-status-history.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/routes/crm-status-history.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/routes/crm-status-history.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07150917-lead-semantic-quality-gate/tests/lead-quality-gate.test.cjs",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "335195654e9e3ec311d229b9d900250c5cb12842",
+      "source_sha256": "4d66c4376c001cb7c5d2d994acf38625e41fb905c288c4dfcbe802ec163efa20",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：.github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs；不把登记当实际执行。",
+        "real_effect": "原具体场景：E1: 干净评论 → passed=true，violations 为空；E2: 购物车UI文案 → passed=false，reason 含；E3: 零宽字符混淆日期（04[U+2060]-[U+200B]07）→ passed=false，reason 含；E4: 混合批次（干净+垃圾各1条）→ passed=false（零容忍）。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：.github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件11346字节/214行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：.github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        ".github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs"
+      ],
+      "evidence_paths": [
+        ".github/workflows/scripts/smoke/lib/lead-quality-gate.test.cjs"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07201700-installer-env-reset-m1/tests/boot-fail-api-contract.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "4ebaae281ecb9d515d40de48ecf2bd2a2b80a9db",
+      "source_sha256": "4d26412b47fe78eda9cdd1839b2fe9f1970ef17352128024eef1b7b680e4905e",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：[CONTRACT] POST /api/agent/boot-fail -- BEHAVIOR-3；B3-1: endpoint reachable without Authorization header (N-2)；B3-2: valid payload accepted (200 or 202)；B3-3: missing machine_id returns 400。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件8274字节/211行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07201700-installer-env-reset-m1/tests/setup-reset-ps1-contract.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "bf4c0dcf01ed5539ad8a86761223f1a3490a55f0",
+      "source_sha256": "68eb19d26a814d33409a00959863ba27570b3ca5832a83ae109a48e1c652bcd8",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions；SR-1: setup-reset.ps1 exists at services/agent/install-pack/setup-reset.ps1；SR-2: setup-reset.ps1 is pure ASCII (I-2 PS5.1 ASCII rule)；SR-3: setup-reset.ps1 has no warning-downgrade pattern (I-1 no-warn-and-continue)。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件11407字节/254行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts"
+      ],
+      "evidence_paths": [
+        "services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07201740-half-deadzone-window-invariant/tests/test_window_invariant.py",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "ebe162d5205a57eb0bc009932ea713d59a0eacf7",
+      "source_sha256": "60087817bf737e2d02c1e91e39afdbb538649729f6b662120781fb2eaacb42f6",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/wechat-rpa/tests/test_window_invariant.py；不把登记当实际执行。",
+        "real_effect": "原具体场景：安装器HKCU/reset/start与API smoke旧合同。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/wechat-rpa/tests/test_window_invariant.py。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件7726字节/180行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/wechat-rpa/tests/test_window_invariant.py。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/wechat-rpa/tests/test_window_invariant.py"
+      ],
+      "evidence_paths": [
+        "services/agent/wechat-rpa/tests/test_window_invariant.py"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07282119-agent-panel-knife2-android/tests/panel-line02-bridge.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "abe020a0ea054316dc0b0201e0860e9e1134ba4d",
+      "source_sha256": "fa8a0c694c631608baefb32f8dd8df0c3f287e870a39ae95068317a28109e91f",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/src/shared/__tests__/panel-line02-bridge.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：PanelLine02Bridge — 真实 ingest 进 PanelEventBus [BEHAVIOR]；拉取到 activeTasks 后真实调用 bus.ingest()，getActiveTasks(；fetch 失败时不崩溃，不清空 bus 已有状态（静默降级，不得让故障传播到 line04）；done 状态的任务不进 activeTasks（映射进 bus 的 complete 语义）。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/src/shared/__tests__/panel-line02-bridge.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件3811字节/101行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/src/shared/__tests__/panel-line02-bridge.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/src/shared/__tests__/panel-line02-bridge.test.ts"
+      ],
+      "evidence_paths": [
+        "services/agent/src/shared/__tests__/panel-line02-bridge.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/agent-hardening-h1-backend-system/tests/ws1/license-register-dual-schema.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "eff07aecb874e052bc6a9140066fce0acba3c6bb",
+      "source_sha256": "2548191d0584baa098312688c114a8f859801a04ecd365f4f4caff24b2bf096a",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/h1/ws1/license-register-dual-schema.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS1 — license register dual schema [BEHAVIOR]；RegisterSuccess type 应含新字段 success / agent_id / license_tier / device_count / device_limit；RegisterFailure type 应含新字段 success / error / current_count / limit；registerAgent 第 1 个新 machine 返 device_count=1 + device_limit=1 + UUID agent_id。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/h1/ws1/license-register-dual-schema.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件5678字节/148行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/h1/ws1/license-register-dual-schema.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/h1/ws1/license-register-dual-schema.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/h1/ws1/license-register-dual-schema.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/agent-hardening-h1-backend-system/tests/ws2/publish-tasks-status-enum.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "60549b511e50b857452ea12d51253636d22bd980",
+      "source_sha256": "46f03fb6b0dbd73d8a6faacec77b681bdaa347094cb66113be2659b0d70204cf",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS2 — publish_tasks status enum migration [BEHAVIOR]；migration file 应存在含 publish_tasks_status_enum 关键字；migration SQL 应同时含 9 个 status 字面量；migration SQL 应同时含 DROP CONSTRAINT IF EXISTS 与 ADD CONSTRAINT chk_publish_tasks_status。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2272字节/62行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/h1/ws2/publish-tasks-status-enum.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/agent-hardening-h1-backend-system/tests/ws3/ws-routing-uuid.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "45c839df851cad4c800078527f1b443aae411306",
+      "source_sha256": "45fc0da484e9b86bf133908ad510ef90d35985438ad6f0f0f6534dbc480ba7f7",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/h1/ws3/ws-routing-uuid.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS3 — WS routing UUID 化 [BEHAVIOR]；agent-db.ts 应导出 findOrCreateAgentUuid 函数；agent-registry.ts AgentEntry interface 应含 displayName 字段；agent-ws.ts hello message handler 应调用 findOrCreateAgentUuid。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/h1/ws3/ws-routing-uuid.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2430字节/56行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/h1/ws3/ws-routing-uuid.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/h1/ws3/ws-routing-uuid.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/h1/ws3/ws-routing-uuid.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-a-feishu/tests/ws1/migration.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "b93a5bcc183e4b0b67a73609f1d55e677b3737b0",
+      "source_sha256": "3e62064484baf6fb335fbbb30608c5303fdfe44c9c4c45f2ccddc8c5338be99e",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/integration/ws1/migration.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 1 — tenant_feishu_bindings migration [BEHAVIOR]；migration 文件存在（文件名含 tenant_feishu_bindings）；迁移后 zenithjoy.tenant_feishu_bindings 表存在；表含 8 个必需列。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/integration/ws1/migration.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2756字节/80行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/integration/ws1/migration.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/integration/ws1/migration.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/integration/ws1/migration.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-a-feishu/tests/ws2/feishu-token.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "f9ca85a1cff5ced1aeefecb99adbc785cfaaa588",
+      "source_sha256": "205c26cead1a91ea529f2d422be77bc4a518e760413a121693a43f105edd05b4",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/src/services/feishu-token.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 2 — feishu-token service [BEHAVIOR]；getAuthorizeUrl 返回飞书 authorize URL + state 签名；handleCallback(code, state) 正常路径写 tenant_feishu_bindings；handleCallback state 验签失败抛 INVALID_STATE。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/src/services/feishu-token.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件4669字节/127行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/src/services/feishu-token.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/src/services/feishu-token.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/src/services/feishu-token.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws1/migration-add-role.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "eca20eba9499404ec53fb9fee6d18cfc24857bad",
+      "source_sha256": "f62aaa1672a3c31b6a5c4b49a674959a48a91e7dac12814fa2346f9d1809412e",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 1 — agent_platform_sessions add role migration [BEHAVIOR]；migration 文件存在（文件名含 agent_platform_sessions_add_role）；迁移后 agent_platform_sessions 表含 role 列 NOT NULL DEFAULT main；CHECK 约束拒绝 role NOT IN (main, burner)。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2633字节/69行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/integration/p2-sprint-b1-ws1/migration-add-role.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws2/douyin-comment-crawl.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "0ccbfd4077f70aea5846dbcdb3f39e7c58f86c78",
+      "source_sha256": "813c639cebbba31705458945141726b9fe5ed5bf448472a134dcaef5c9abbf44",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 2b — douyin-comment-crawl.cjs [BEHAVIOR]；脚本存在且用 launchPersistentContext + msedge channel；脚本含 comment-item selector + 评论字段提取（commenter_id / text / publish_time）；脚本限制只取前 5 条评论 + 评论 0 早 return 不抛错。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1564字节/41行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs"
+      ],
+      "evidence_paths": [
+        "services/agent/scripts/__tests__/douyin-comment-crawl.test.cjs"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/agent-burner-routes.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "c9a2771b0d1fb2c9a64f8121de67543f796faf12",
+      "source_sha256": "79af402d33bca24df8f9bc9d7e1d18dd274f53882e697a350dd11718cfd01319",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 3a — agent-burner routes [BEHAVIOR]；POST /api/agent/burner/qr-bind 正常 200 + task_id；POST /api/agent/burner/qr-bind 缺 account_label → 400 MISSING_ACCOUNT_LABEL；POST /api/agent/burner/qr-bind account_label=default → 400 RESERVED_ACCOUNT_LABEL。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件6452字节/166行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws3/smoke-fake-agent-burner.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "19defd28d6e6dd73353b6d710daf57631c832476",
+      "source_sha256": "856dd7c24dfa02ba71c26f63a67955f91ca8aee683f1add9d6cb5ea2367778a7",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/src/routes/agent-burner.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 3b — _smoke-fake-agent-burner [BEHAVIOR]；NODE_ENV=production → 404；NODE_ENV=test 缺 X-Smoke-Token → 403；NODE_ENV=test + 正确 SMOKE_TOKEN → 200 + 写 task response。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/src/routes/agent-burner.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1909字节/52行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/src/routes/agent-burner.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/src/routes/_smoke-fake-agent-burner.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/src/routes/_smoke-fake-agent-burner.test.ts",
+        "apps/api/tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws6/smoke-script-structure.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "f05f47e2d6d08c50348b2896607cdef45481fd64",
+      "source_sha256": "f723ae6b2e98093abcacf0f6105e4a88376e7c1b73b41f748b7ffdb011883cae",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 6 — smoke 脚本结构 [BEHAVIOR]；smoke 脚本存在 + 可执行；脚本头部含 4 ENV 自检；脚本含 10 个 Step 标识。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1786字节/48行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/p2-sprint-b1-ws6/smoke-script-structure.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/run-20260527-2037/tests/ws4/dashboard-ui-aspect.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "5ae20a2923a6807ff4dbadd39b344d76f673afc0",
+      "source_sha256": "2667b126369b4fdbcfacb8b2107b1878072106152d9527a4bc4b4d845784945c",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS4 — Dashboard UI original_script + aspect selector + E2E 更新 [BEHAVIOR]；LocalVideoPipelinePage 含 original_script 状态变量；LocalVideoPipelinePage createJob API call 传 original_script；LocalVideoPipelinePage createJob API call 传 target_aspect。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1728字节/44行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx"
+      ],
+      "evidence_paths": [
+        "apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/sprint-c-ws2-douyin-real-publish/tests/ws1/publish-task-type.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "cd2e79085c8ecab922b04b22c85d6c284f7ca03b",
+      "source_sha256": "0e9e06279edf1e043e681ca8667bde4846cd969ad8a46b4245efd5423de8a9a0",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/ws1/publish-task-type.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 1 — publish_tasks.type 字段 + createPublishTask 接 type [BEHAVIOR]；publish_tasks 表有 type 字段，NOT NULL，CHECK 约束限定 video/image/article；createPublishTask({type:；POST /api/publish/task 缺 type 字段 → 422 或缺省 image (策略需明确)。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/ws1/publish-task-type.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2749字节/51行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/ws1/publish-task-type.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/ws1/publish-task-type.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/ws1/publish-task-type.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/w1-ai-scorer-d2/tests/capture-invariants.test.js",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "74322f12fd4bc2b51a41cb4e67c711be25db51f7",
+      "source_sha256": "67ff73d7df05d94f307e1001c365973dcafef5fce5c867f458839d71351e4060",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js；不把登记当实际执行。",
+        "real_effect": "原具体场景：B-01/INV-1: action 枚举精确为 {observe, trigger_collect}，signup_flow 彻底消灭；B-02: capture.mjs 全文无 signup 字样；B-02: login.mjs 全文无 signup 字样；B-02: cells-map.mjs 全文无 signup 字样。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件19549字节/350行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js"
+      ],
+      "evidence_paths": [
+        "scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj2-smart-acquisition-run1/tests/ws3/video-comment-result.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "11ee573ee375460b46abc78968751b73c4561777",
+      "source_sha256": "266eb0968d80976dcb31c691a9ff6dbb41cf0fe333f574cadabdd99171cbed30",
+      "reason": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+      "dimensions": {
+        "current_value": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/ws3/video-comment-result.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS3 POST /api/acquisition/video-search-result [BEHAVIOR]；[BEHAVIOR] 返回 HTTP 200 且 received=true；[BEHAVIOR] video_count 等于上报视频数；[BEHAVIOR] keyword_task_id 缺失时返回 HTTP 400。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/ws3/video-comment-result.test.ts。",
+        "duplication_and_obsolescence": "逐段diff复核：同名场景完整包含于现行规范测试；差异仅加载路径/fixture修复或新增更强回归。旧副本无独有当前合同，原文Git历史保留。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件3400字节/99行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/ws3/video-comment-result.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/ws3/video-comment-result.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/ws3/video-comment-result.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/run-20260527-1934/tests/ws4/agent-version-e2e-spec.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "f6fb9313edec849c46358201ab0f257fd36e4a94",
+      "source_sha256": "013b05e24bc07d4d617cb30da4bfa2908638237f8ef1b98d5897cae2383928d8",
+      "reason": "历史Agent1.1.29固定版本已失效；持续UI比例/E2E字段合同在现役dashboard测试，现役版本演进由L1 agent bump lint及独立构建版本守卫。",
+      "dimensions": {
+        "current_value": "历史Agent1.1.29固定版本已失效；持续UI比例/E2E字段合同在现役dashboard测试，现役版本演进由L1 agent bump lint及独立构建版本守卫。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx, .github/workflows/scripts/lint-agent-version-bump.sh；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS4 — Agent v1.1.29 + E2E spec 更新 [BEHAVIOR]；Agent package.json version 精确等于 1.1.29；E2E spec 含 original_script 字段填写逻辑；E2E spec 含 W-G 模板选择代码。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx。",
+        "duplication_and_obsolescence": "历史Agent1.1.29固定版本已失效；持续UI比例/E2E字段合同在现役dashboard测试，现役版本演进由L1 agent bump lint及独立构建版本守卫。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1734字节/43行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx, .github/workflows/scripts/lint-agent-version-bump.sh。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx"
+      ],
+      "evidence_paths": [
+        "apps/dashboard/src/pages/__tests__/LocalVideoPipelineAspect.test.tsx",
+        ".github/workflows/scripts/lint-agent-version-bump.sh"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/run-20260527-2037/tests/ws5/agent-version.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "3f2fd5be4e0528107b24a06be431d07b13ea0075",
+      "source_sha256": "a0651c7dc28f04adb026a4bfaad2ee45bcb3c2f49de4e5a96b7d2e694809bb17",
+      "reason": "仅冻结1.1.30及旧默认版本/类型检查，不是当前发行/兼容合同；现役独立Agent包读取自身版本，L1真实版本演进检查接替。",
+      "dimensions": {
+        "current_value": "仅冻结1.1.30及旧默认版本/类型检查，不是当前发行/兼容合同；现役独立Agent包读取自身版本，L1真实版本演进检查接替。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：.github/workflows/scripts/lint-agent-version-bump.sh, services/agent/scripts/build-install-pack.sh；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS5 — Agent v1.1.30 + GHA workflow 更新 [BEHAVIOR]；services/agent/package.json version = ；agent-e2e-video.yml 默认版本含 1.1.30；agent-e2e-video.yml 默认版本不再是 1.1.29。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：无独有当期测试义务；见historical_obligation_evidence及所列现役消费者源码。",
+        "duplication_and_obsolescence": "仅冻结1.1.30及旧默认版本/类型检查，不是当前发行/兼容合同；现役独立Agent包读取自身版本，L1真实版本演进检查接替。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件940字节/24行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：.github/workflows/scripts/lint-agent-version-bump.sh, services/agent/scripts/build-install-pack.sh。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        ".github/workflows/scripts/lint-agent-version-bump.sh",
+        "services/agent/scripts/build-install-pack.sh"
+      ],
+      "historical_obligation_evidence": "仅冻结1.1.30及旧默认版本/类型检查，不是当前发行/兼容合同；现役独立Agent包读取自身版本，L1真实版本演进检查接替。"
+    },
+    {
+      "path": "sprints/zj-ai-video-ws3-ws4/tests/ws3/gha-version.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "9bcc046ca98b1dd1e5fb3ca25ff3068987ae66c6",
+      "source_sha256": "92355d78dc6b5f1bc6ceec86d27f9e8d128771dbd818197f02b89b8e77b9dbd7",
+      "reason": "仅冻结1.1.31与旧视频workflow默认输入；当前版本显著前进，静态旧默认不得拖回旧发行。",
+      "dimensions": {
+        "current_value": "仅冻结1.1.31与旧视频workflow默认输入；当前版本显著前进，静态旧默认不得拖回旧发行。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：.github/workflows/scripts/lint-agent-version-bump.sh, services/agent/scripts/build-install-pack.sh；不把登记当实际执行。",
+        "real_effect": "原具体场景：WS3 — GHA workflow default version 对齐 [BEHAVIOR]；GHA workflow default version 等于 agent package.json version；GHA workflow default 具体值为 1.1.31；GHA workflow default 不再是旧版 1.1.30。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：无独有当期测试义务；见historical_obligation_evidence及所列现役消费者源码。",
+        "duplication_and_obsolescence": "仅冻结1.1.31与旧视频workflow默认输入；当前版本显著前进，静态旧默认不得拖回旧发行。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1230字节/32行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：.github/workflows/scripts/lint-agent-version-bump.sh, services/agent/scripts/build-install-pack.sh。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        ".github/workflows/scripts/lint-agent-version-bump.sh",
+        "services/agent/scripts/build-install-pack.sh"
+      ],
+      "historical_obligation_evidence": "仅冻结1.1.31与旧视频workflow默认输入；当前版本显著前进，静态旧默认不得拖回旧发行。"
+    },
+    {
+      "path": "sprints/06031608-agent-python-embedded/tests/agent-python-embedded.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "c9005d73ddae13c99fe8714b3fea44fb8d7de6ac",
+      "source_sha256": "ab24b4a3b9dcbc4487bf61d445abb919211321c2e9335c36c33b71c7a43307f8",
+      "reason": "现役vitest配置明确退役的1.1.79/Narrator旧路径冻结合同；Python选择机制已有当前模块/handler单测，构建bootstrap由当前安装包回归验证。",
+      "dimensions": {
+        "current_value": "现役vitest配置明确退役的1.1.79/Narrator旧路径冻结合同；Python选择机制已有当前模块/handler单测，构建bootstrap由当前安装包回归验证。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts, services/agent/src/handlers/__tests__/wechat-rpa.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：agent-python-embedded [BEHAVIOR] — TDD Red Phase；build-install-pack.sh 含 python-embedded 下载步骤；start.bat 含讲述人解锁命令 Start-Process Narrator；wechat-rpa.ts handler 含 python-embedded 路径优先 + python3 回退。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts, services/agent/src/handlers/__tests__/wechat-rpa.test.ts。",
+        "duplication_and_obsolescence": "现役vitest配置明确退役的1.1.79/Narrator旧路径冻结合同；Python选择机制已有当前模块/handler单测，构建bootstrap由当前安装包回归验证。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2681字节/76行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts, services/agent/src/handlers/__tests__/wechat-rpa.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts",
+        "services/agent/src/handlers/__tests__/wechat-rpa.test.ts"
+      ],
+      "evidence_paths": [
+        "services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts",
+        "services/agent/src/handlers/__tests__/wechat-rpa.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/06081800-agent-module-e2e-verify/tests/agent-module-e2e.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "76408422a08a1294c82611a0c199ffadbf270a4d",
+      "source_sha256": "3ab7276bfeafe0c706602198967d96d0f4eb41a020f910701e3cd05485424a1f",
+      "reason": "旧version-only失败必须ok:true策略与现役硬拦相矛盾，现役config已明确摘除；真实兼容/拒绝义务在当前preflight/CLI测试。",
+      "dimensions": {
+        "current_value": "旧version-only失败必须ok:true策略与现役硬拦相矛盾，现役config已明确摘除；真实兼容/拒绝义务在当前preflight/CLI测试。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/modules/line04/__tests__/preflight.test.ts, services/agent/modules/line04/__tests__/preflight-cli.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：preflight MOCK_WECHAT_VERSION 环境变量覆盖（跨平台，任何 OS 均可测）；MOCK_WECHAT_VERSION=4.2.0.0 → checkWechatVersion() ok:false，fixGuide 含 WeChatWin_4.1.8.exe COS URL；MOCK_WECHAT_VERSION=4.1.8.0 → checkWechatVersion() ok:true，found==；runPreflight version-only warning 路径（PRD 边界情况：version 类失败只告警不判红）。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/modules/line04/__tests__/preflight.test.ts, services/agent/modules/line04/__tests__/preflight-cli.test.ts。",
+        "duplication_and_obsolescence": "旧version-only失败必须ok:true策略与现役硬拦相矛盾，现役config已明确摘除；真实兼容/拒绝义务在当前preflight/CLI测试。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件2514字节/51行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/modules/line04/__tests__/preflight.test.ts, services/agent/modules/line04/__tests__/preflight-cli.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/modules/line04/__tests__/preflight.test.ts",
+        "services/agent/modules/line04/__tests__/preflight-cli.test.ts"
+      ],
+      "evidence_paths": [
+        "services/agent/modules/line04/__tests__/preflight.test.ts",
+        "services/agent/modules/line04/__tests__/preflight-cli.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07280933-product-map-ssot-claude/tests/contract.test.js",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "97c52e3593d096ecf6ccdfb1367ad4d378b1e14a",
+      "source_sha256": "44c5427fb4ad3ba601f487feebb76f7ed726107e64cfff4cbb2c7f3fc90786dc",
+      "reason": "旧App/GP固定个数、ability proposed、L2五分钟、registry日期冻结；分类SSOT已演进，当前schema/引用/CLI/生成漂移合同由L2完整单测验证，无独有兼容义务。",
+      "dimensions": {
+        "current_value": "旧App/GP固定个数、ability proposed、L2五分钟、registry日期冻结；分类SSOT已演进，当前schema/引用/CLI/生成漂移合同由L2完整单测验证，无独有兼容义务。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：scripts/product-map/__tests__/product-map.test.js, scripts/product-map/__tests__/contracts.test.js, scripts/product-map/__tests__/product-map-cli-json.test.js；不把登记当实际执行。",
+        "real_effect": "原具体场景：BEHAVIOR-01: 产品分类结构解析；loadAndValidateProductMap 返回 { map, errors } 结构；精确解析两个 App: customer_app 和 staff_app；customer_app 拥有 line01/line02/line04；staff_app 拥有 line00。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：scripts/product-map/__tests__/product-map.test.js, scripts/product-map/__tests__/contracts.test.js, scripts/product-map/__tests__/product-map-cli-json.test.js。",
+        "duplication_and_obsolescence": "旧App/GP固定个数、ability proposed、L2五分钟、registry日期冻结；分类SSOT已演进，当前schema/引用/CLI/生成漂移合同由L2完整单测验证，无独有兼容义务。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件24640字节/525行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：scripts/product-map/__tests__/product-map.test.js, scripts/product-map/__tests__/contracts.test.js, scripts/product-map/__tests__/product-map-cli-json.test.js。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "scripts/product-map/__tests__/product-map.test.js",
+        "scripts/product-map/__tests__/contracts.test.js",
+        "scripts/product-map/__tests__/product-map-cli-json.test.js"
+      ],
+      "evidence_paths": [
+        "scripts/product-map/__tests__/product-map.test.js",
+        "scripts/product-map/__tests__/contracts.test.js",
+        "scripts/product-map/__tests__/product-map-cli-json.test.js"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "066d88f8886ea35cca30a0ab80664743ae3f565b",
+      "source_sha256": "02d80cd91ba38a384b6add8051b8bc1b8aee636000e3c83e74d1cbc5ccd78886",
+      "reason": "旧7条Line/18条GP精确数量、仅当时允许diff范围冻结；今日SSOT有line08和多新增GP，当前L2 schema/生成/关系合同取代。",
+      "dimensions": {
+        "current_value": "旧7条Line/18条GP精确数量、仅当时允许diff范围冻结；今日SSOT有line08和多新增GP，当前L2 schema/生成/关系合同取代。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：scripts/product-map/__tests__/product-map.test.js, scripts/product-map/__tests__/contracts.test.js；不把登记当实际执行。",
+        "real_effect": "原具体场景：T1: apps[].lines 精确等于 7 条（line00/01/02/04/05/07/10）；T2: line00 精确 3 条非废弃 GP（skill_acceptance 已 deprecated，ability_acceptance 仍 active）；T3: 非 deprecated Golden Path 总数精确为 18，按 line 分布精确匹配；T4: line05/07/10 三条新 GP 精确锚定 PRD 指定的既有 smoke 文件。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：scripts/product-map/__tests__/product-map.test.js, scripts/product-map/__tests__/contracts.test.js。",
+        "duplication_and_obsolescence": "旧7条Line/18条GP精确数量、仅当时允许diff范围冻结；今日SSOT有line08和多新增GP，当前L2 schema/生成/关系合同取代。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件11762字节/194行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：scripts/product-map/__tests__/product-map.test.js, scripts/product-map/__tests__/contracts.test.js。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "scripts/product-map/__tests__/product-map.test.js",
+        "scripts/product-map/__tests__/contracts.test.js"
+      ],
+      "evidence_paths": [
+        "scripts/product-map/__tests__/product-map.test.js",
+        "scripts/product-map/__tests__/contracts.test.js"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj-douyin-article-agent-port/tests/ws1/article-publisher.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "24592101d2129f4f0f32716ff784cd22046ed993",
+      "source_sha256": "ef67ab35732564016e8449fe764c6ec660e1f357aef40dc77a6884d8a219181d",
+      "reason": "旧/workspace绝对路径合同已由现役vitest配置明确摘除；同发布器/干跑持久断言均在现行publishers树。",
+      "dimensions": {
+        "current_value": "旧/workspace绝对路径合同已由现役vitest配置明确摘除；同发布器/干跑持久断言均在现行publishers树。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs；不把登记当实际执行。",
+        "real_effect": "原具体场景：publish-douyin-article.cjs [BEHAVIOR]；模块可以 require，不抛 MODULE_NOT_FOUND；DOM.setFileInputFiles — 脚本含 backendNodeId CDP 封面上传调用；cover fail fast — 传入不存在路径时包含 existsSync 检查。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs。",
+        "duplication_and_obsolescence": "旧/workspace绝对路径合同已由现役vitest配置明确摘除；同发布器/干跑持久断言均在现行publishers树。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件3482字节/89行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs"
+      ],
+      "evidence_paths": [
+        "services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj-douyin-article-agent-port/tests/ws2/routing.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "1b501b99d63fbcff56e31b89a618d0ddfbd35723",
+      "source_sha256": "c048395b035ba05a2917f4c42953f33ed88bd725630c156ed575829ac912c550",
+      "reason": "旧/workspace文本扫描合同已摘除；当前handler单测真实执行article路由和错误分支。",
+      "dimensions": {
+        "current_value": "旧/workspace文本扫描合同已摘除；当前handler单测真实执行article路由和错误分支。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/src/handlers/__tests__/douyin-publish.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：douyin-publish.ts article 路由 [BEHAVIOR]；SUPPORTED_DOUYIN_TYPES 源码包含字面字符串 article；暂未实现注释不再阻断 article（article 不在 throw 错误消息中）；publish-douyin-article 脚本路径字符串出现在 handler 中。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/src/handlers/__tests__/douyin-publish.test.ts。",
+        "duplication_and_obsolescence": "旧/workspace文本扫描合同已摘除；当前handler单测真实执行article路由和错误分支。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1465字节/34行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/src/handlers/__tests__/douyin-publish.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/src/handlers/__tests__/douyin-publish.test.ts"
+      ],
+      "evidence_paths": [
+        "services/agent/src/handlers/__tests__/douyin-publish.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/zj-douyin-article-agent-port/tests/ws3/install-pack.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "95f36732caedb38384a24ce171f1c982c1c99ae8",
+      "source_sha256": "fb11ad23e24d3422332a431ae9bafd5545e1396bdf723ee811fbbd7f99bf27cb",
+      "reason": "冻结1.1.26与/workspace路径，当前安装包脚本/模块及版本演进守卫替代；不复活旧发行。",
+      "dimensions": {
+        "current_value": "冻结1.1.26与/workspace路径，当前安装包脚本/模块及版本演进守卫替代；不复活旧发行。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts, services/agent/scripts/build-install-pack.sh, .github/workflows/scripts/lint-agent-version-bump.sh；不把登记当实际执行。",
+        "real_effect": "原具体场景：install-pack + version bump [BEHAVIOR]；package.json version === ；旧版本 ；build-install-pack.sh 含 publishers 复制命令。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts。",
+        "duplication_and_obsolescence": "冻结1.1.26与/workspace路径，当前安装包脚本/模块及版本演进守卫替代；不复活旧发行。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件1186字节/31行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts, services/agent/scripts/build-install-pack.sh, .github/workflows/scripts/lint-agent-version-bump.sh。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts"
+      ],
+      "evidence_paths": [
+        "services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts",
+        "services/agent/scripts/build-install-pack.sh",
+        ".github/workflows/scripts/lint-agent-version-bump.sh"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07081557-wechat-cs-reply-integration/tests/wechat-cs-reply-integration.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "195dc04bc2f38c626a15daef48dec6383e53b1b4",
+      "source_sha256": "237680cb348a124277f7427f5deea99a5adb58d1b4929999f79606a216a77b05",
+      "reason": "规范测试包含原8个cs-reply同名场景，原第9个群聊跳过已由更强群消息零LLM/零黑名单读取断言覆盖；原sprint还含错误相对import。规范回归已扩充反编造否定语境，不保留旧副本。",
+      "dimensions": {
+        "current_value": "规范测试包含原8个cs-reply同名场景，原第9个群聊跳过已由更强群消息零LLM/零黑名单读取断言覆盖；原sprint还含错误相对import。规范回归已扩充反编造否定语境，不保留旧副本。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/api/tests/services/wechat-draft.test.ts；不把登记当实际执行。",
+        "real_effect": "原具体场景：[B-1] cs-reply 内核接入：正常对话 → JSON 解析成功；cs-reply 内核接入：正常对话 → JSON 解析成功，reply 非空，tags.stage/escalate 可读；[B-2] cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜底；cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜底，仍返回非空 reply。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/api/tests/services/wechat-draft.test.ts。",
+        "duplication_and_obsolescence": "规范测试包含原8个cs-reply同名场景，原第9个群聊跳过已由更强群消息零LLM/零黑名单读取断言覆盖；原sprint还含错误相对import。规范回归已扩充反编造否定语境，不保留旧副本。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件16156字节/399行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/api/tests/services/wechat-draft.test.ts。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/api/tests/services/wechat-draft.test.ts"
+      ],
+      "evidence_paths": [
+        "apps/api/tests/services/wechat-draft.test.ts"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/path-2-sprint-a-feishu/tests/ws4/feishu-bind-page.test.ts",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "4f3fb6ae0e310d20d0db14331b89e0c1c6c3c8d8",
+      "source_sha256": "3ae7a72bb352c1bfdc8d91880538e584f626a0cb45066479035893bcc27dd5b9",
+      "reason": "FeishuBindTenant组件和路由已删除，旧绑定表单/回跳测试没有现役入口；当前账号页面通过统一AcquisitionAccountsPage，不复活旧Feishu配置面。后端OAuth合同不受此UI测试退役影响。",
+      "dimensions": {
+        "current_value": "FeishuBindTenant组件和路由已删除，旧绑定表单/回跳测试没有现役入口；当前账号页面通过统一AcquisitionAccountsPage，不复活旧Feishu配置面。后端OAuth合同不受此UI测试退役影响。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/dashboard/src/config/navigation.config.ts, apps/dashboard/src/pages/AcquisitionAccountsPage.tsx；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 4 — FeishuBindTenant 页 [BEHAVIOR]；未绑定状态：渲染 app_id + app_secret 表单；提交表单触发 fetch /api/feishu/oauth/start + 跳转 authorize_url；已绑定状态：显示。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：无独有当期测试义务；见historical_obligation_evidence及所列现役消费者源码。",
+        "duplication_and_obsolescence": "FeishuBindTenant组件和路由已删除，旧绑定表单/回跳测试没有现役入口；当前账号页面通过统一AcquisitionAccountsPage，不复活旧Feishu配置面。后端OAuth合同不受此UI测试退役影响。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件4320字节/126行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/dashboard/src/config/navigation.config.ts, apps/dashboard/src/pages/AcquisitionAccountsPage.tsx。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [],
+      "evidence_paths": [
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/src/pages/AcquisitionAccountsPage.tsx"
+      ],
+      "historical_obligation_evidence": "FeishuBindTenant组件和路由已删除，旧绑定表单/回跳测试没有现役入口；当前账号页面通过统一AcquisitionAccountsPage，不复活旧Feishu配置面。后端OAuth合同不受此UI测试退役影响。"
+    },
+    {
+      "path": "sprints/path-2-sprint-b1-douyin-burner-crawl/tests/ws5/douyin-burner-bind-page.test.tsx",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "db5875d8d265d06e39c83288d0318682e9bb6866",
+      "source_sha256": "4687b7313b05598c60b911fb511230f817268db52a04db50c69e179540ff0d5a",
+      "reason": "旧DouyinBurnerBindPage组件不存在且导航明确说明绑号并入AcquisitionAccountsPage；旧飞书先绑才可操作/手填保留名旧UI假设已失效，不复活旧界面。",
+      "dimensions": {
+        "current_value": "旧DouyinBurnerBindPage组件不存在且导航明确说明绑号并入AcquisitionAccountsPage；旧飞书先绑才可操作/手填保留名旧UI假设已失效，不复活旧界面。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：apps/dashboard/src/config/navigation.config.ts, apps/dashboard/src/pages/AcquisitionAccountsPage.tsx, apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx；不把登记当实际执行。",
+        "real_effect": "原具体场景：Workstream 5 — DouyinBurnerBindPage [BEHAVIOR]；飞书未绑（GET status bound=false）→ 表单 disabled + 提示「请先完成飞书绑定」；飞书已绑 + account_label=default → 校验报错 + 提交 disabled；GET sessions 返 burner 列表 → 渲染表格。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx。",
+        "duplication_and_obsolescence": "旧DouyinBurnerBindPage组件不存在且导航明确说明绑号并入AcquisitionAccountsPage；旧飞书先绑才可操作/手填保留名旧UI假设已失效，不复活旧界面。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件4303字节/132行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：apps/dashboard/src/config/navigation.config.ts, apps/dashboard/src/pages/AcquisitionAccountsPage.tsx, apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        "apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx"
+      ],
+      "evidence_paths": [
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/src/pages/AcquisitionAccountsPage.tsx",
+        "apps/dashboard/src/pages/AcquisitionAccountsPage.warmup.test.tsx"
+      ],
+      "historical_obligation_evidence": null
+    },
+    {
+      "path": "sprints/07201700-installer-env-reset-m1/tests/installer-env-reset-smoke-contract.sh",
+      "source_commit": "5d272bb40d6962e19c4cd7d9a9181d1b8889a225",
+      "source_blob": "ccb70e605a00a45a65e7840ca5291d566a904549",
+      "source_sha256": "930b140a38d87e0b34bf422b4f527552a4288eb5f31bd040abbf4c8156f5d722",
+      "reason": "旧sprint安装器smoke已由规范路径调用且更强Windows原生/reset/start与严格隔离API检查接替；无独有现役入口，历史A7/A10可把500/000当绿的副本不得留作保障。",
+      "dimensions": {
+        "current_value": "旧sprint安装器smoke已由规范路径调用且更强Windows原生/reset/start与严格隔离API检查接替；无独有现役入口，历史A7/A10可把500/000当绿的副本不得留作保障。",
+        "active_status": "旧文件在本候选已实际删除。当前替代或历史无独有义务证据来自：.github/workflows/scripts/smoke/installer-env-reset-smoke.sh；不把登记当实际执行。",
+        "real_effect": "原具体场景：安装器HKCU/reset/start与API smoke旧合同。当前替代保留持久安全/兼容断言；固定时点或已撤销界面不作为今天业务成功要求。",
+        "test_and_blocking": "只删除历史副本/失效断言，当前规范测试和required父闸不降为无条件绿。替代当前测试：.github/workflows/scripts/smoke/installer-env-reset-smoke.sh。",
+        "duplication_and_obsolescence": "旧sprint安装器smoke已由规范路径调用且更强Windows原生/reset/start与严格隔离API检查接替；无独有现役入口，历史A7/A10可把500/000当绿的副本不得留作保障。 原文以固定Git commit/blob/SHA256留档，禁止通过修改现役合同复绿。",
+        "runtime_and_maintenance_cost": "删除原文件13897字节/331行重复或腐烂维护面；不声称单文件RSS或共享job时间已经独立测量。",
+        "retirement_and_dependencies": "依赖/替代已逐路径存在性与源码场景复核：.github/workflows/scripts/smoke/installer-env-reset-smoke.sh。不删除生产数据、运行ledger、回执或安装包；重现旧文件或失去替代会由本通道拒绝。"
+      },
+      "replacement_test_paths": [
+        ".github/workflows/scripts/smoke/installer-env-reset-smoke.sh"
+      ],
+      "evidence_paths": [
+        ".github/workflows/scripts/smoke/installer-env-reset-smoke.sh"
+      ],
+      "historical_obligation_evidence": null
+    }
+  ]
+}

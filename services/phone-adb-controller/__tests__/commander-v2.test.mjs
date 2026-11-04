@@ -2,9 +2,10 @@ import {fixture,start} from './fixtures/commander-runtime.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {readFileSync, writeFileSync, existsSync,realpathSync} from 'node:fs';
+import {readFileSync, writeFileSync, existsSync,realpathSync,mkdtempSync,rmSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
+import {tmpdir} from 'node:os';
 const source=resolve('services/phone-adb-controller/commander');
 const sorted=v=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v;
 const hash=v=>createHash('sha256').update(JSON.stringify(sorted(v))).digest('hex');
@@ -39,6 +40,34 @@ test('v2无手机信封启动保留输入，重复启动复用request与deadline
  writeFileSync(join(f.dir,'wf-agent-lib.py'),'# deployment drift');assert.notEqual(f.call('wf-launch.sh',['--ready'],{definition:f.definition,workflow_key:'report.generic'}).status,0);
 });
 function helper(f,command,dir,input){return spawnSync('python3',[join(f.dir,'wf-v2.py'),command,dir],{env:f.env,input:input&&JSON.stringify(input),encoding:'utf8'});}
+// Fixture readiness has its own bounded observation window. Production envelope
+// deadlines and every owner/terminal/evidence assertion remain unchanged.
+async function waitForAgentRequest(worker,dir,{timeoutMs=20000}={}){
+ let logs='',spawnError;
+ const capture=data=>{logs=(logs+data.toString()).slice(-16384);};
+ const failed=error=>{spawnError=error;};
+ worker.stdout?.on('data',capture);worker.stderr?.on('data',capture);worker.on('error',failed);
+ const deadline=performance.now()+Math.min(timeoutMs,20000);
+ const diagnostic=reason=>{
+  const journals=['runtime.json','shell-preflight.json','execution-failure.json'].flatMap(name=>{
+   try{return [name+'='+readFileSync(join(dir,name),'utf8').slice(-4096)];}catch{return [];}
+  });
+  return new Error(reason+'; worker code='+worker.exitCode+' signal='+worker.signalCode+'\n'+logs+'\n'+journals.join('\n'));
+ };
+ try{
+  while(true){
+   if(spawnError)throw diagnostic('fixture worker failed to start: '+spawnError.message);
+   if(worker.exitCode!==null||worker.signalCode!==null)throw diagnostic('fixture worker terminated before request readiness');
+   if(existsSync(join(dir,'agent-request.json')))return;
+   const remaining=deadline-performance.now();
+   if(remaining<=0)throw diagnostic('fixture request readiness timed out');
+   await new Promise(resolve=>setTimeout(resolve,Math.min(50,remaining)));
+  }
+ }finally{
+  worker.stdout?.off('data',capture);worker.stderr?.off('data',capture);worker.off('error',failed);
+  worker.stdout?.resume();worker.stderr?.resume();
+ }
+}
 function bind(f,dir){
  const request=JSON.parse(readFileSync(join(dir,'agent-request.json')));
  const receipt=Object.fromEntries(['run_id','task_id','parent_session_key','nonce'].map(k=>[k,request[k]]));
@@ -126,9 +155,9 @@ else:print('ok')
  const childId='1234abcd-0000-4000-8000-000000000002';
  const terminal={runId:childId,status:'ok',endedAt:Date.now(),terminalReceipt:{runId:childId,effective:{provider:'openai',model:'gpt-6.1-sol'}},terminalReply:{text:'WF_DELIVERY '+JSON.stringify({status:'completed',outputs:{report:'手机读回'},evidence:['screen'],effects:[{key:f.envelope.task_id+':read',status:'none',receipt:{}}]})}};
  const cli=join(f.home,'openclaw');writeFileSync(cli,'#!/usr/bin/env python3\nprint('+JSON.stringify(JSON.stringify(terminal))+')\n',{mode:0o755});f.env.OPENCLAW=cli;
- const worker=spawn('python3',[join(f.dir,'wf-v2.py'),'worker',dir],{env:f.env,stdio:'ignore'});const done=new Promise(resolve=>worker.once('exit',resolve));
+ const worker=spawn('python3',[join(f.dir,'wf-v2.py'),'worker',dir],{env:f.env,stdio:['ignore','pipe','pipe']});const done=new Promise(resolve=>worker.once('exit',resolve));
  try{
-  for(let i=0;i<70&&!existsSync(join(dir,'agent-request.json'));i++)await new Promise(r=>setTimeout(r,50));
+  await waitForAgentRequest(worker,dir);
   assert.equal(existsSync(join(dir,'agent-request.json')),true);helper(f,'claim-spawn',dir);bind(f,dir);assert.equal(await done,0);
   const status=JSON.parse(f.call('wf-status.sh',[f.envelope.run_id]).stdout);assert.equal(status.delivery.status,'completed');assert.equal(status.delivery.cleanup.completed,true);assert.equal(existsSync(join(f.home,'owner')),false);
   const shellFacts=status.events.filter(x=>x.type==='activity_completed');
@@ -139,7 +168,7 @@ else:print('ok')
   assert.match(readFileSync(join(dir,'preflight-account.log'),'utf8'),/nickname=授权测试/);
   for(const stage of ['preflight','cleanup'])for(const edge of ['start','end'])assert.equal(JSON.parse(readFileSync(join(dir,stage+'-root-'+edge+'.json'))).matches,true);
   const calls=readFileSync(join(f.home,'calls'),'utf8');assert.match(calls,/lock-acquire wfd-test/);assert.match(calls,/--lock-owner wfd-test close-app/);assert.match(calls,/lock-release wfd-test/);
- }finally{if(worker.exitCode===null){worker.kill('SIGTERM');await done;}}
+ }finally{if(worker.pid&&worker.exitCode===null&&worker.signalCode===null){worker.kill('SIGTERM');await done;}}
 });
 test('deadline跨重启不变：只补预算内官方终态，晚终态拒绝冒充成功',()=>{
  for(const late of [false,true]){
@@ -494,4 +523,28 @@ assert not (d/'delivery.json').exists()
 e['cleanup_deadline_at']=datetime.fromtimestamp(time.time()+60,timezone.utc).isoformat();r.io.write(d/'envelope.json',e)
 r.main();assert calls==[d],'within-budget supervision no longer resumes'
 `);assert.equal(result.status,0,result.stderr+result.stdout);
+});
+
+
+test('fixture readiness rejects no request, early worker termination and failed start',async()=>{
+ const {spawn}=await import('node:child_process');
+ const dir=mkdtempSync(join(tmpdir(),'commander-readiness-'));
+ try{
+  for(const mode of ['no-request','early-exit','no-start']){
+   const worker=mode==='no-start'
+    ?spawn(join(dir,'missing-fixture-worker'),[],{stdio:['ignore','pipe','pipe']})
+    :spawn(process.execPath,['-e',mode==='early-exit'
+      ?'console.error("fixture stopped before request");process.exit(7)'
+      :'setInterval(()=>{},1000)'],{stdio:['ignore','pipe','pipe']});
+   try{
+    const message=mode==='no-request'?/request readiness timed out/:mode==='no-start'?/failed to start:.*ENOENT/:/terminated before request readiness[\s\S]*fixture stopped before request/;
+    await assert.rejects(waitForAgentRequest(worker,dir,{timeoutMs:mode==='no-request'?100:20000}),message);
+    assert.equal(existsSync(join(dir,'agent-request.json')),false);
+   }finally{
+    if(worker.pid&&worker.exitCode===null&&worker.signalCode===null){
+     const closed=new Promise(resolve=>worker.once('close',resolve));worker.kill('SIGTERM');await closed;
+    }
+   }
+  }
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

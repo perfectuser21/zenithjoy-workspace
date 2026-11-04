@@ -5,7 +5,8 @@
 // 背景（Issue 5c770b55）：tray.ts 读 build/tray-icon.png 失败时旧版兜底成 1×1 透明 PNG，
 // 用户看到的就是「空白托盘」。本测试真解码内嵌兜底 base64，断言它是一张可辨识的
 // 32×32 PNG（= 悦升云端缩略图），而非 1×1（旧空白兜底的特征尺寸）。
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
 import {
   _getFallbackIconBase64ForTest,
   _loadIconBase64ForTest,
@@ -34,13 +35,24 @@ describe('托盘兜底图标 — 悦升云端 logo，非 1x1 透明空白', () =
     expect(height).not.toBe(1);
   });
 
-  it('build/tray-icon.png 缺失场景下 loadIconBase64 返回兜底 logo（CI 无该资源在 cwd 旁时即走兜底）', () => {
-    // 测试环境（vitest，cwd=services/agent）下 __dirname/../build/tray-icon.png 可能存在也可能不在；
-    // 无论命中真资源还是兜底，结果都必须是一张 >1x1 的可见 PNG（绝不退回 1×1 透明）。
-    const out = _loadIconBase64ForTest();
-    const buf = Buffer.from(out, 'base64');
-    const { width, height } = pngSize(buf);
-    expect(width).toBeGreaterThan(1);
-    expect(height).toBeGreaterThan(1);
+  it('all platform icon candidates missing returns the embedded fallback PNG', () => {
+    // Make the absence explicit, including Windows icon.ico candidates.
+    const exists = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const read = vi.spyOn(fs, 'readFileSync');
+    try {
+      const out = _loadIconBase64ForTest();
+      expect(exists).toHaveBeenCalledTimes(3);
+      expect(read).not.toHaveBeenCalled();
+      expect(out).toBe(_getFallbackIconBase64ForTest());
+      const buf = Buffer.from(out, 'base64');
+      const { width, height } = pngSize(buf);
+      expect(width).toBeGreaterThan(1);
+      expect(height).toBeGreaterThan(1);
+      expect(width).toBe(32);
+      expect(height).toBe(32);
+    } finally {
+      read.mockRestore();
+      exists.mockRestore();
+    }
   });
 });

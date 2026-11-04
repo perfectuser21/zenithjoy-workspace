@@ -94,6 +94,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci --workspace=apps/api
+      - name: Install media tools required by current video contracts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Fix rollup optional deps (npm ci bug workaround)
         run: node -e "try{require('@rollup/rollup-linux-x64-gnu')}catch(e){require('child_process').execSync('npm install --no-save @rollup/rollup-linux-x64-gnu',{stdio:'inherit'})}" || true
       - name: Run tests with coverage
@@ -168,15 +170,8 @@ jobs:
                            tests/test_phase0_observability.py -q
       - name: line04 Phase 0 观测 smoke（版本三面一致 + build_diag 含 module_version/skip_reasons）
         run: bash .github/workflows/scripts/smoke/line04-phase0-observability-smoke.sh
-      - name: line04 CI×监听 桌面互斥接线 smoke（CI acquire/release + 监听 loop 顶让位）
-        run: bash .github/workflows/scripts/smoke/line04-ci-desktop-mutex-smoke.sh
       - name: Check build-modules/line04/wechat-rpa in sync with source
-        run: |
-          diff -r services/agent/wechat-rpa/ \
-               services/agent/build-modules/line04/wechat-rpa/ \
-               --exclude="*.pyc" --exclude="__pycache__" && \
-            echo "build-modules in sync" || \
-            (echo "build-modules diverged from source! Run: rsync -av services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rpa/" && exit 1)
+        run: python3 .github/workflows/scripts/line04-package-sync.py
 
       # 防漂移守卫（修 #817 部署 gap 的根）：line04 三个版本面必须完全一致。
       # build-line-module.sh 真读 modules/line04/manifest.json 决定 COS 包版本；
@@ -235,10 +230,32 @@ jobs:
         shell: powershell
         run: .\.github\workflows\scripts\__tests__\line02-process-job.test.ps1
 
+  # UI contracts are called here so failures participate in the required gate.
+  dashboard-operations-ui:
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.ci == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e-dashboard-operations-windows.yml
+
+  staff-skill-eval-ui:
+    needs: changes
+    if: needs.changes.outputs.staff_hub == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e-staff-skill-eval.yml
+
+  agent-windows-contracts:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.ci == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/agent-qr-windows-verify.yml
+
   # ─── L4 Gate ──────────────────────────────────────────────────────────
   l4-passed:
     name: L4 Runtime Gate Passed
-    needs: [changes, dashboard-test, api-test, agent-test, windows-process-cleanup, staff-hub-test]
+    needs: [changes, dashboard-test, api-test, agent-test, windows-process-cleanup, staff-hub-test, dashboard-operations-ui, staff-skill-eval-ui, agent-windows-contracts]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -250,4 +267,23 @@ jobs:
       - name: L4 Runtime Gate
         env:
           GATE_NEEDS: ${{ toJSON(needs) }}
-        run: node scripts/ci/required-gate.mjs runtime
+        run: |
+          node scripts/ci/required-gate.mjs runtime
+          # The shared checker validates detection outputs and every failure/cancel.
+          # Reusable contract selection spans existing routes; selected skip/missing must
+          # also fail this same required job.
+          node --input-type=module <<'JS'
+          const needs = JSON.parse(process.env.GATE_NEEDS);
+          const contracts = {
+            'dashboard-operations-ui': ['dashboard', 'ci'],
+            'staff-skill-eval-ui': ['staff_hub', 'api', 'ci'],
+            'agent-windows-contracts': ['agent', 'ci'],
+          };
+          for (const [job, routes] of Object.entries(contracts)) {
+            if (routes.some(route => needs.changes.outputs[route] === 'true') &&
+                needs[job]?.result !== 'success') {
+              throw new Error('Required consumer workflow did not succeed: ' + job + '=' + (needs[job]?.result ?? 'missing'));
+            }
+          }
+          console.log('Selected consumer workflows succeeded');
+          JS

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GP line02/customer_smart_acquisition：两试点共享 Activity 的本地动态回归。
+# phone 共享底座与保留的 SDK 历史兼容合同：本地动态回归。
 # 真实生产脚本/函数 + 隔离临时目录/假设备与网络适配器；不产生真实业务执行证据。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
@@ -22,7 +22,9 @@ TESTS=(
   "$D/harvest-keyword-profile-link-retry.test.mjs"
   "$D/harvest-keyword-lock-lifecycle.test.mjs"
   "$D/qualify-video.test.mjs"
-  "$D/batch2-activity-budget.test.mjs"
+  # Current queued-video consumers use this shared deadline/bounded-process library.
+  # The retired batch2 delivery/scoring retry replay has no active execution entry.
+  "$D/wf-limits.test.mjs"
   "$D/pipeline-v4-integration.test.mjs"
   "$D/outreach-tick-guard.test.mjs"
   "$D/next-outreach-guard-lib.test.mjs"

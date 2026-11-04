@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "kind": "duplicate_required_not_helper",
+  "items": [
+    {
+      "name": "dashboard-license-smoke.sh",
+      "source_path": ".github/workflows/scripts/smoke/dashboard-license-smoke.sh",
+      "source_commit": "b08fdcf82881b0e5c9ff6fd5b65a3fbfd260a7c7",
+      "source_blob": "82fd3009de6c1e6409ed587e052ae509a5f2254d",
+      "source_sha256": "0787d44f58401c2358ccba54baeae4dc8dd0bd90e2bc8e3aef01bcb6d0a2043f",
+      "disposition": "deduplicate_global_execution_keep_required",
+      "dimensions": {
+        "current_value": "共享license注册/撤销授权行为仍为现役产品义务。",
+        "active_status": "ci-l4-e2e-smoke.yml / smoke-api-contract 无条件运行原脚本；l4-e2e-passed always needs该job，所有非success都红。不是仅在此声明active。",
+        "real_effect": "4dce真实本地HTTP+数据库/身份fixture已验证DELETE后status=revoked。",
+        "test_and_blocking": "原source与required caller不改；只取消缺少该准备环境的glob第二次执行。36真实workflow/consumer矩阵含调用缺失、if:false、continue-on-error、needs移除、gate弱化、baseline重叠与伪artifact反例；真实L4 gate shell failure/cancel/skip/missing均红。",
+        "duplication_and_obsolescence": "同一source在同候选L4 required job已实跑；glob欠该身份配置导致独立失败不构成额外业务保障。独有业务断言保留原脚本，无替换为静态存在性。",
+        "runtime_and_maintenance_cost": "保原102行/4131字节；移除每个glob run同脚本的重复HTTP/DB动作，不臆测RSS/端到端节省。",
+        "retirement_and_dependencies": "不是脚本退役/业务下线。精确仅两项sealed allowlist；共享选择器按事件/API job header/原调用step/完整required gate块hash验证，任何变更须复审更新pin。baseline重叠必拒，原显式消费者保持。"
+      },
+      "consumer": {
+        "name": "dashboard-license-smoke.sh",
+        "reason": "Executed unchanged by the required API Contract Smoke job with isolated identity/API/PostgreSQL; duplicate auto-glob invocation lacks that prepared identity. See docs/ci/smoke-required-deduplication.json.",
+        "workflow": ".github/workflows/ci-l4-e2e-smoke.yml",
+        "job": "smoke-api-contract",
+        "step": "Smoke — Dashboard License (Sprint A)",
+        "required_context": "L4 E2E Gate Passed",
+        "consumer_contract_sha256": "2087b4e8e3c88f2e6cda0c2fe2fc3d528ad07c01a03a3ad53fc26dc87d0b7271"
+      },
+      "run_evidence": {
+        "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+        "run_id": 41783304348,
+        "api_job_id": 126419603631,
+        "api_job_conclusion": "success",
+        "step_name": "Smoke — Dashboard License (Sprint A)",
+        "step_conclusion": "success",
+        "log_marker": "OK: 200 status=revoked; dashboard-license-smoke PASSED"
+      },
+      "limits": "当前配置source与4dce日志证明真实HTTP业务断言；本地本刀仅跑隔离执行/聚合合同，不触生产、模型、设备。"
+    },
+    {
+      "name": "line04-crm-view-prefs-smoke.sh",
+      "source_path": ".github/workflows/scripts/smoke/line04-crm-view-prefs-smoke.sh",
+      "source_commit": "b08fdcf82881b0e5c9ff6fd5b65a3fbfd260a7c7",
+      "source_blob": "e81395e95a022c6c852b438d0b7e617f555dcd35",
+      "source_sha256": "00016bc22e68c0b5c07d1199469469e16e8d983e90e76ac628ff1a9caee13e03",
+      "disposition": "deduplicate_global_execution_keep_required",
+      "dimensions": {
+        "current_value": "按用户持久化CRM列偏好、精确GET/PUT读回仍服务现役共享CRM/Android客服管理面。",
+        "active_status": "ci-l4-e2e-smoke.yml / smoke-api-contract 无条件运行原脚本；l4-e2e-passed always needs该job，所有非success都红。不是仅在此声明active。",
+        "real_effect": "4dce真实本地HTTP+数据库/身份fixture已验证视图列偏好持久化且精确读回。",
+        "test_and_blocking": "原source与required caller不改；只取消缺少该准备环境的glob第二次执行。36真实workflow/consumer矩阵含调用缺失、if:false、continue-on-error、needs移除、gate弱化、baseline重叠与伪artifact反例；真实L4 gate shell failure/cancel/skip/missing均红。",
+        "duplication_and_obsolescence": "同一source在同候选L4 required job已实跑；glob欠该身份配置导致独立失败不构成额外业务保障。独有业务断言保留原脚本，无替换为静态存在性。",
+        "runtime_and_maintenance_cost": "保原40行/3289字节；移除每个glob run同脚本的重复HTTP/DB动作，不臆测RSS/端到端节省。",
+        "retirement_and_dependencies": "不是脚本退役/业务下线。精确仅两项sealed allowlist；共享选择器按事件/API job header/原调用step/完整required gate块hash验证，任何变更须复审更新pin。baseline重叠必拒，原显式消费者保持。"
+      },
+      "consumer": {
+        "name": "line04-crm-view-prefs-smoke.sh",
+        "reason": "Executed unchanged by the required API Contract Smoke job with isolated identity/API/PostgreSQL; duplicate auto-glob invocation lacks that prepared identity. See docs/ci/smoke-required-deduplication.json.",
+        "workflow": ".github/workflows/ci-l4-e2e-smoke.yml",
+        "job": "smoke-api-contract",
+        "step": "Line04 CRM view-prefs smoke（列偏好服务端持久化 GET/PUT）",
+        "required_context": "L4 E2E Gate Passed",
+        "consumer_contract_sha256": "f18844953ebf87927e65425735a608fc74f675750b7bce6829a2322c69278d4f"
+      },
+      "run_evidence": {
+        "sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+        "run_id": 41783304348,
+        "api_job_id": 126419603631,
+        "api_job_conclusion": "success",
+        "step_name": "Line04 CRM view-prefs smoke（列偏好服务端持久化 GET/PUT）",
+        "step_conclusion": "success",
+        "log_marker": "PASS: CRM view preferences persisted and read back exactly"
+      },
+      "limits": "当前配置source与4dce日志证明真实HTTP业务断言；本地本刀仅跑隔离执行/聚合合同，不触生产、模型、设备。"
+    }
+  ],
+  "verification": {
+    "real_workflow_tests": 36,
+    "forbid_extra_exclusions": true,
+    "baseline_changed": false,
+    "original_sources_and_callers_changed": false
+  }
+}

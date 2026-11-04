@@ -8,7 +8,7 @@ import {spawnSync} from 'node:child_process';
 import {parse} from 'yaml';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../../..');
 const profiles=[
- {name:'wechat',file:'wechat-cs-e2e.yml',gate:'wechat-cs-gate',routes:['agent_or_api','agent'],paths:[['apps/api/src/routes/wechat.ts','agent_or_api'],['services/agent/runtime.py','agent'],['services/agent/package-lock.json','agent'],['package-lock.json','agent_or_api'],['apps/creator/package.json','agent_or_api'],['scripts/ci/detect-changes.mjs','agent_or_api']],neighbor:'services/agent-old/runtime.py',manual:true},
+ {name:'wechat',file:'wechat-cs-e2e.yml',gate:'wechat-cs-gate',routes:['cs_backend','android_cs'],paths:[['apps/api/src/routes/wechat.ts','cs_backend'],['apps/api/src/routes/wechat-config.ts','android_cs'],['services/wechat-cs-android/watcher.py','android_cs'],['services/wechat-cs-android/backend_cli.py','cs_backend'],['services/wechat-cs-android/tests/test_bridge.py','android_cs'],['services/wechat-cs-android/workflows/wechat_cs_reply_delivery.android.json','android_cs'],['package-lock.json','cs_backend'],['apps/creator/package.json','cs_backend'],['scripts/ci/detect-changes.mjs','android_cs'],['.github/workflows/wechat-cs-e2e.yml','android_cs']],neighbor:'services/agent-android/app/build.gradle.kts',manual:true},
  {name:'lead',file:'e2e-line02-lead-human-handoff-windows.yml',gate:'lead-gate',routes:['lead','lead_windows'],paths:[['apps/api/src/routes/acquisition.ts','lead'],['apps/api/src/services/tenant.service.ts','lead'],['apps/dashboard/src/components/LeadsTable.tsx','lead'],['apps/dashboard/vite.config.ts','lead'],['services/agent/src/line02/reply-poller.ts','lead'],['package-lock.json','lead'],['scripts/ci/detect-changes.mjs','lead']],neighbor:'apps/dashboard-old/src/page.tsx',manual:true},
  {name:'orphan',file:'e2e-orphan-consolidation-windows.yml',gate:'orphan-e2e-gate',routes:['orphan'],paths:[['apps/dashboard/e2e/module-health.spec.ts','orphan'],['apps/dashboard/src/pages/Page.tsx','orphan'],['apps/dashboard/playwright.config.ts','orphan'],['apps/api/src/routes/agent.ts','orphan'],['package-lock.json','orphan'],['scripts/ci/detect-changes.mjs','orphan']],neighbor:'apps/dashboard-old/src/page.tsx',manual:true},
  {name:'android',file:'android-agent-ci.yml',gate:'android-ci-gate',routes:['android'],paths:[['services/agent-android/app/build.gradle.kts','android'],['services/agent-android/gradle.properties','android'],['.skills-source.json','android'],['scripts/ci/detect-changes.mjs','android']],neighbor:'services/agent-android-old/app/build.gradle.kts'},
@@ -38,7 +38,7 @@ for(const p of profiles){
  for(const route of p.routes)test(`${p.name}: ${route} selects actual job conditions and rejects selected skips`,()=>{
   const w=workflow(p),outputs=Object.fromEntries(p.routes.map(key=>[key,key===route?'true':'false'])),needs={changes:{outputs}},jobs=Object.fromEntries(w.jobs[p.gate].needs.filter(key=>key!=='changes').map(key=>[key,Function('needs','github',`return (${w.jobs[key].if})`)(needs,{event_name:route==='lead_windows'?'workflow_dispatch':'pull_request'})?'success':'skipped']));
   assert.equal(aggregate(p,{outputs,jobs}).status,0);
-  for(const[key,result]of Object.entries(jobs))if(result==='success')for(const invalid of ['failure','cancelled','skipped',''])assert.notEqual(aggregate(p,{outputs,jobs:{...jobs,[key]:invalid}}).status,0,`${key}=${invalid}`);
+  for(const[key,result]of Object.entries(jobs))if(result==='success'){for(const invalid of ['failure','cancelled','skipped',''])assert.notEqual(aggregate(p,{outputs,jobs:{...jobs,[key]:invalid}}).status,0,`${key}=${invalid}`);assert.notEqual(aggregate(p,{outputs,jobs,absent:[key]}).status,0,`${key}=missing`);}
  });
  for(const[path,route]of p.paths)for(const name of ['push','pull_request','merge_group']){
   if(name==='push'&&p.name==='lead')continue;
@@ -58,3 +58,17 @@ for(const p of profiles){
  });
  if(p.manual)test(`${p.name}: manual dispatch explicitly runs all checks`,()=>temp(dir=>{const{head}=fixture(dir,'docs/unrelated.md'),r=detect(p,dir,'workflow_dispatch',{},head);assert.equal(r.status,0,r.stderr);for(const key of p.routes)assert.equal(r.outputs[key],'true');}));
 }
+
+const wechat=profiles.find(p=>p.name==='wechat');
+test('wechat: current Android service command runs all offline safety contracts on Ubuntu',()=>{
+ const w=workflow(wechat);assert.deepEqual(Object.keys(w.jobs).sort(),['changes','middleware-chain','android-cs','wechat-cs-gate'].sort());
+ assert.equal(w.jobs['wechat-cs-gate'].if,'always()');assert.equal(w.jobs['wechat-cs-gate'].name,'WeChat CS Gate Passed');
+ const child=w.jobs['android-cs'];assert.equal(child['runs-on'],'ubuntu-latest');
+ assert.ok(child.steps.some(step=>step.uses==='./.github/actions/skills-source'));
+ const step=child.steps.find(step=>step.run==='bash .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh');assert.ok(step,'actual service unittest entry must execute');
+ const r=runStep(step,{},root);assert.equal(r.status,0,r.stdout+r.stderr);assert.ok(Number(r.stderr.match(/Ran (\d+) tests/)?.[1])>=83,r.stderr);
+ assert.doesNotMatch(JSON.stringify(w),/selfcheck_bubbles|wechat-capable|PsExec|--inject-message|overlay_window/);
+});
+for(const path of ['services/agent/modules/line04/index.ts','services/agent-android/app/src/main/MainActivity.kt'])test(`wechat: obsolete Windows CS and generic APK paths do not impersonate Android CS: ${path}`,()=>temp(dir=>{
+ const{base,head}=fixture(dir,path),r=detect(wechat,dir,'pull_request',event(base,head),head);assert.equal(r.status,0,r.stderr);assert.deepEqual(r.outputs,{cs_backend:'false',android_cs:'false'});
+}));

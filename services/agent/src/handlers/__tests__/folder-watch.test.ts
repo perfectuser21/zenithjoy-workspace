@@ -8,7 +8,7 @@
 //   - stop() 关闭 watcher
 //   - 多次 bind() 切换目录时旧 watcher 关闭
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,23 +16,46 @@ import { createFolderWatchManager } from '../folder-watch';
 
 describe('folder-watch', () => {
   let tmpDir: string;
+  let managers: ReturnType<typeof createFolderWatchManager>[];
+  let watchers: { close: ReturnType<typeof vi.fn>; listener: fs.WatchListener<string> }[];
+
+  // Keep directory/file operations real; inject only the native watcher boundary.
+  function createUnitManager(onChange?: (file: string) => void) {
+    const fsWatch = vi.fn((_path: fs.PathLike, _options: fs.WatchOptions, listener: fs.WatchListener<string>) => {
+      const watcher = { close: vi.fn(), listener };
+      watchers.push(watcher);
+      return watcher as unknown as fs.FSWatcher;
+    }) as unknown as typeof fs.watch;
+    const manager = createFolderWatchManager({ fsWatch, onChange });
+    managers.push(manager);
+    return manager;
+  }
+
   beforeEach(() => {
+    managers = [];
+    watchers = [];
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-fw-'));
   });
   afterEach(() => {
     try {
+      for (const manager of managers) manager.stop();
+    } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // ignore
     }
   });
 
-  it('bind() / getBoundPath()', () => {
-    const m = createFolderWatchManager();
+  it('bind() / getBoundPath() and actual onChange filename/null handling', () => {
+    const onChange = vi.fn();
+    const m = createUnitManager(onChange);
     expect(m.getBoundPath()).toBeNull();
     m.bind(tmpDir);
     expect(m.getBoundPath()).toBe(tmpDir);
+    watchers[0].listener('rename', 'new.mp4');
+    expect(onChange).toHaveBeenCalledWith(path.join(tmpDir, 'new.mp4'));
+    watchers[0].listener('change', null);
+    expect(onChange).toHaveBeenCalledTimes(1);
     m.stop();
+    expect(watchers[0].close).toHaveBeenCalledTimes(1);
   });
 
   it('listMp4s() returns only mp4 files', () => {
@@ -40,7 +63,7 @@ describe('folder-watch', () => {
     fs.writeFileSync(path.join(tmpDir, 'b.txt'), 'nope');
     fs.writeFileSync(path.join(tmpDir, 'c.MP4'), 'fake');
 
-    const m = createFolderWatchManager();
+    const m = createUnitManager();
     m.bind(tmpDir);
     const list = m.listMp4s().sort();
     expect(list.length).toBe(2);
@@ -52,7 +75,7 @@ describe('folder-watch', () => {
     fs.writeFileSync(path.join(tmpDir, 'b.mp4'), 'fake');
     fs.writeFileSync(path.join(tmpDir, 'a.mp4'), 'fake');
 
-    const m = createFolderWatchManager();
+    const m = createUnitManager();
     m.bind(tmpDir);
     const first = m.pickFirstMp4();
     expect(first).toBe(path.join(tmpDir, 'a.mp4'));
@@ -61,26 +84,32 @@ describe('folder-watch', () => {
 
   it('pickFirstMp4() returns null when folder empty / no mp4', () => {
     fs.writeFileSync(path.join(tmpDir, 'b.txt'), 'nope');
-    const m = createFolderWatchManager();
+    const m = createUnitManager();
     m.bind(tmpDir);
     expect(m.pickFirstMp4()).toBeNull();
     m.stop();
   });
 
   it('returns null when not bound', () => {
-    const m = createFolderWatchManager();
+    const m = createUnitManager();
     expect(m.pickFirstMp4()).toBeNull();
     expect(m.listMp4s()).toEqual([]);
     m.stop();
   });
 
   it('bind() to a new path closes the previous watcher', () => {
-    const m = createFolderWatchManager();
+    const m = createUnitManager();
     m.bind(tmpDir);
     const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-agent-fw2-'));
     try {
       m.bind(otherDir);
       expect(m.getBoundPath()).toBe(otherDir);
+      expect(watchers).toHaveLength(2);
+      expect(watchers[0].close).toHaveBeenCalledTimes(1);
+      expect(watchers[1].close).not.toHaveBeenCalled();
+      m.stop();
+      expect(watchers[0].close).toHaveBeenCalledTimes(1);
+      expect(watchers[1].close).toHaveBeenCalledTimes(1);
     } finally {
       m.stop();
       fs.rmSync(otherDir, { recursive: true, force: true });

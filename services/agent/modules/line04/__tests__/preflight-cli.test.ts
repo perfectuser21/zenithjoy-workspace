@@ -4,7 +4,8 @@
 // 读 stdout **最后一行** 并 JSON.parse。本测试用 tsx 直接跑 .ts 源码验证同等行为：
 //   1. stdout 最后一行是合法 JSON
 //   2. JSON 含 ok(boolean) 与 checks
-//   3. 退出码与 ok 对应（非 Windows ok:true → exit 0）
+//   3. MOCK 版本 4.1.8 接受 / 4.1.7 拒绝，退出码与 ok 对应
+// 仅 CLI 契约 fixture；版本来自注入，不安装/启动微信，不执行静默、送达或更新锁操作。
 
 import { describe, it, expect } from 'vitest';
 import { execFile } from 'node:child_process';
@@ -13,15 +14,29 @@ import { promisify } from 'node:util';
 
 const execFileP = promisify(execFile);
 
-const TSX = path.resolve(__dirname, '../../../node_modules/.bin/tsx');
+// Execute the exported CLI with Node: npm's shell shims are not native Windows executables.
+const TSX_CLI = require.resolve('tsx/cli');
 const PREFLIGHT_TS = path.resolve(__dirname, '../preflight.ts');
 
 describe('line04 preflight CLI 执行契约', () => {
-  it('直接执行打印最后一行 JSON（含 ok + checks），非 Windows 退出码 0', async () => {
+  it.each([
+    { version: '4.1.8.107', ok: true, code: 0 },
+    { version: '4.1.7.25', ok: false, code: 1 },
+  ])('MOCK $version：真实 Node+tsx CLI 最后一行 JSON 与退出码一致', async ({ version, ok, code }) => {
     let stdout = '';
     let exitCode = 0;
     try {
-      const r = await execFileP(TSX, [PREFLIGHT_TS], { timeout: 60_000 });
+      const r = await execFileP(process.execPath, [TSX_CLI, PREFLIGHT_TS], {
+        timeout: 60_000,
+        env: {
+          ...process.env,
+          CI_MODE: '1',
+          MOCK_WECHAT_VERSION: version,
+          MOCK_VERIFY_SILENT: 'skip',
+          MOCK_VERIFY_DELIVERY: 'skip',
+          MOCK_UPDATE_LOCK: 'skip',
+        },
+      });
       stdout = r.stdout;
     } catch (e) {
       // ok:false 时 process.exit(1) → execFile reject，但 stdout 仍带 JSON
@@ -37,13 +52,13 @@ describe('line04 preflight CLI 执行契约', () => {
     expect(typeof parsed.ok).toBe('boolean');
     expect(parsed).toHaveProperty('checks');
 
-    // 非 Windows：三项跳过 → ok:true → 退出码 0
-    if (process.platform !== 'win32') {
-      expect(parsed.ok).toBe(true);
-      expect(exitCode).toBe(0);
-    } else {
-      // Windows：退出码必须与 ok 一致
-      expect(exitCode).toBe(parsed.ok ? 0 : 1);
-    }
+    expect(parsed.ok).toBe(ok);
+    expect(parsed.checks.wechat_version).toBe(ok);
+    expect(parsed.checks.pywinauto).toBe(true);
+    expect(parsed.checks.verify_silent).toBe(true);
+    expect(parsed.checks.verify_delivery).toBe(true);
+    expect(parsed.checks.update_lock).toBe(true);
+    expect(parsed.reason).toContain(version);
+    expect(exitCode).toBe(code);
   });
 });

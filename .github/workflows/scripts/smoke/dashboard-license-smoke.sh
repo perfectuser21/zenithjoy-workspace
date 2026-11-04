@@ -10,11 +10,18 @@
 set -euo pipefail
 
 API_BASE="${API_BASE:-http://localhost:5200}"
+# This writes only disposable fixtures, never an inferred production identity.
+[ "${SMOKE_SCRATCH_API:-}" = 1 ] || { echo 'FAIL: SMOKE_SCRATCH_API=1 required for isolated CI fixture writes'; exit 1; }
+node - "$API_BASE" <<'JS'
+const u=new URL(process.argv[2]);
+if(!['localhost','127.0.0.1','[::1]'].includes(u.hostname))throw Error('scratch smoke requires a loopback API');
+JS
+
 ADMIN_FEISHU_ID="${ADMIN_FEISHU_ID:-ou_admin_smoke_001}"
 USER_FEISHU_ID="${USER_FEISHU_ID:-ou_customer_smoke_001}"
 
 echo "==> [1/5] GET /api/admin/license/me 缺 X-Feishu-User-Id 应返回 401"
-HTTP_CODE_1=$(curl -s -o /dev/null -w "%{http_code}" \
+HTTP_CODE_1=$(curl -sS --max-time 20 -o /dev/null -w "%{http_code}" \
   "${API_BASE}/api/admin/license/me")
 if [ "$HTTP_CODE_1" != "401" ]; then
   echo "  FAIL: 期望 401，实际 ${HTTP_CODE_1}"
@@ -23,7 +30,7 @@ fi
 echo "  OK: 401"
 
 echo "==> [2/5] GET /api/admin/license/me 普通用户 + 无 license 应返回 200 + license=null"
-RESP_2=$(curl -s -w "\n%{http_code}" \
+RESP_2=$(curl -sS --max-time 20 -w "\n%{http_code}" \
   -H "X-Feishu-User-Id: ${USER_FEISHU_ID}" \
   "${API_BASE}/api/admin/license/me")
 CODE_2=$(echo "$RESP_2" | tail -n1)
@@ -39,7 +46,7 @@ fi
 echo "  OK: 200 + license=null"
 
 echo "==> [3/5] POST /api/admin/license 非 admin 应返回 403"
-HTTP_CODE_3=$(curl -s -o /dev/null -w "%{http_code}" \
+HTTP_CODE_3=$(curl -sS --max-time 20 -o /dev/null -w "%{http_code}" \
   -X POST \
   -H "Content-Type: application/json" \
   -H "X-Feishu-User-Id: ${USER_FEISHU_ID}" \
@@ -52,7 +59,7 @@ fi
 echo "  OK: 403"
 
 echo "==> [4/5] POST /api/admin/license admin 创建 license 返回 200 + license_key"
-RESP_4=$(curl -s -w "\n%{http_code}" \
+RESP_4=$(curl -sS --max-time 20 -w "\n%{http_code}" \
   -X POST \
   -H "Content-Type: application/json" \
   -H "X-Feishu-User-Id: ${ADMIN_FEISHU_ID}" \
@@ -64,19 +71,19 @@ if [ "$CODE_4" != "200" ]; then
   echo "  FAIL: 期望 200，实际 ${CODE_4}"
   exit 1
 fi
-if ! echo "$BODY_4" | grep -q '"license_key"'; then
+if ! echo "$BODY_4" | jq -e '.success == true and (.data.license_key | type == "string" and length > 0)' >/dev/null; then
   echo "  FAIL: 期望 license_key 字段，body: $BODY_4"
   exit 1
 fi
-LICENSE_ID=$(echo "$BODY_4" | sed -E 's/.*"id":"([^"]+)".*/\1/' | head -c 36)
+LICENSE_ID=$(echo "$BODY_4" | jq -er '.data.id | select(type == "string" and test("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))') || { echo "FAIL: 创建响应缺合法 license id，不能跳过吊销"; exit 1; }
 echo "  OK: 200 license_key 已签发，license_id=${LICENSE_ID}"
 
 echo "==> [5/5] DELETE /api/admin/license/:id admin 吊销 license 返回 200 + status=revoked"
 if [ -z "$LICENSE_ID" ] || [ ${#LICENSE_ID} -lt 36 ]; then
-  echo "  SKIP: license_id 解析失败，跳过吊销"
-  exit 0
+  echo "  FAIL: license_id 解析失败"
+  exit 1
 fi
-RESP_5=$(curl -s -w "\n%{http_code}" \
+RESP_5=$(curl -sS --max-time 20 -w "\n%{http_code}" \
   -X DELETE \
   -H "X-Feishu-User-Id: ${ADMIN_FEISHU_ID}" \
   "${API_BASE}/api/admin/license/${LICENSE_ID}")
@@ -86,7 +93,7 @@ if [ "$CODE_5" != "200" ]; then
   echo "  FAIL: 期望 200，实际 ${CODE_5}"
   exit 1
 fi
-if ! echo "$BODY_5" | grep -q '"status":"revoked"'; then
+if ! echo "$BODY_5" | jq -e --arg id "$LICENSE_ID" '.success == true and .data.id == $id and .data.status == "revoked"' >/dev/null; then
   echo "  FAIL: 期望 status=revoked，body: $BODY_5"
   exit 1
 fi

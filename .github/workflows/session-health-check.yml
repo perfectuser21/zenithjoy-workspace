@@ -69,7 +69,7 @@ jobs:
           # 飞书机器人双渠道告警
           FEISHU_BOT_WEBHOOK: ${{ secrets.FEISHU_BOT_WEBHOOK }}
           # DB 回写
-          OPERATOR_API_URL: ${{ secrets.OPERATOR_API_URL || 'http://localhost:3000' }}
+          OPERATOR_API_URL: ${{ secrets.OPERATOR_API_URL || vars.OPERATOR_API_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           # 其他配置
           BARK_URL: ${{ secrets.BARK_DEVICE_URL }}

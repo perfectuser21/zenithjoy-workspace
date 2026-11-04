@@ -164,7 +164,7 @@ describe('registerPanelEventRoutes — 挂到真实 http.Server [BEHAVIOR]', () 
 
 describe('index.ts 真实启动路径确实调用了 registerPanelEventRoutes [BEHAVIOR]', () => {
   it('startLocalDiscoveryServer 里必须真调用 registerPanelEventRoutes(server, ...)', () => {
-    const srcPath = new URL('../../index.ts', import.meta.url).pathname;
+    const srcPath = new URL('../../index.ts', import.meta.url);
     const src = fs.readFileSync(srcPath, 'utf-8');
     expect(src).toMatch(/registerPanelEventRoutes\(server/);
   });

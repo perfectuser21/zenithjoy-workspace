@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { listenLoopback, closeLoopback } from '../helpers/loopback-server';
 
 vi.mock('../../src/services/payment/settlement.service', () => ({
   settleOrder: vi.fn(),
@@ -41,12 +42,13 @@ describe('POST /api/payment/callback/:provider 限流（按 IP，CodeQL js/missi
   it(
     `超过 ${CALLBACK_RATE_LIMIT_MAX} 次/分钟/IP 后返回 429 RATE_LIMITED，挡在验签之前`,
     async () => {
-      const app = makeApp();
+      const server = await listenLoopback(makeApp());
+      try {
       // 用错误签名：限流命中的关键在于"根本不该跑到验签逻辑"，用哪种 body 无所谓。
       let lastStatus = 0;
       let lastBody: unknown;
       for (let i = 0; i < CALLBACK_RATE_LIMIT_MAX + 1; i++) {
-        const res = await request(app)
+        const res = await request(server)
           .post('/api/payment/callback/mock')
           .set('Content-Type', 'application/json')
           .set('x-mock-signature', 'bad')
@@ -57,6 +59,7 @@ describe('POST /api/payment/callback/:provider 限流（按 IP，CodeQL js/missi
 
       expect(lastStatus).toBe(429);
       expect((lastBody as { error: { code: string } }).error.code).toBe('RATE_LIMITED');
+      } finally { await closeLoopback(server); }
     },
     20_000
   );

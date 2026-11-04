@@ -259,6 +259,7 @@ golden_paths:
     name: 智能客服·绑定/安装（共享前置）
     status: active
     smoke_files:
+      - .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh
       - .github/workflows/scripts/smoke/golden-path-4-smoke.sh
     steps:
       - id: step1
@@ -295,6 +296,7 @@ golden_paths:
     name: 智能客服·GP-B 被动接待
     status: active
     smoke_files:
+      - .github/workflows/scripts/smoke/wechat-cs-android-smoke.sh
       - .github/workflows/scripts/smoke/golden-path-4-smoke.sh
       - .github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh
       - .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh

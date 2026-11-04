@@ -25,7 +25,7 @@ describe('qr-bind-douyin', () => {
 
     it('honors custom sessionDir override', () => {
       const p = getSessionPath('douyin', 'main', '/tmp/sess');
-      expect(p).toBe('/tmp/sess/douyin/main.json');
+      expect(p).toBe(path.join('/tmp/sess', 'douyin', 'main.json'));
     });
   });
 

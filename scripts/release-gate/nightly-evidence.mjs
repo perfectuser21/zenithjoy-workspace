@@ -4,7 +4,8 @@ import {pathToFileURL} from 'node:url';
 import {REPO,parseTargets} from './acceptance-record.mjs';
 const workflow='nightly-real-machine-staging.yml';
 const need=(ok,message)=>{if(!ok)throw Error('夜间真机证据: '+message);};
-// 保留既有分车道策略：真微信/真抖音阻塞；真安卓单独告警。
+// Current Douyin read-side blocks; generic Android keeps its existing warning policy.
+// Android customer-service physical acceptance remains mandatory frozen Brain S2/S3.
 export function verifyNightly({api=path=>JSON.parse(execFileSync('gh',['api',path],{encoding:'utf8'})),now=Date.now()}={}){
  const page=api(`repos/${REPO}/actions/workflows/${workflow}/runs?branch=main&status=completed&per_page=2`);
  const runs=[...(page.workflow_runs||[])].sort((a,b)=>b.id-a.id).slice(0,2);
@@ -18,7 +19,7 @@ export function verifyNightly({api=path=>JSON.parse(execFileSync('gh',['api',pat
   const response=api(`repos/${REPO}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`);
   need(Array.isArray(response.jobs)&&response.total_count===response.jobs.length,'job清单缺失或不完整');
   const passed=prefix=>{const matches=response.jobs.filter(j=>j.name?.startsWith(prefix));return matches.length>0&&matches.every(j=>j.status==='completed'&&j.conclusion==='success');};
-  for(const prefix of ['真微信','真抖音'])need(passed(prefix),`run ${run.id} ${prefix}未通过`);
+  for(const prefix of ['真抖音'])need(passed(prefix),`run ${run.id} ${prefix}未通过`);
   if(!passed('真安卓'))android_warning_runs.push(run.id);
  }
  return {run_ids:runs.map(r=>r.id),android_warning_runs};

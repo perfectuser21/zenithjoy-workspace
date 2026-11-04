@@ -28,6 +28,14 @@ class BusinessGateTest(unittest.TestCase):
     def green(self, **changes):
         return {"finalized": True, "gate_verdict": "green", "backend_sha": SHA, **changes}
 
+    def test_missing_receipt_file_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(["bash", str(GATE), "--fixture",
+                                     str(Path(directory) / "missing.json")],
+                                    env={**os.environ, "PROMOTE_SHA": SHA},
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_green_finalized_same_full_sha_passes(self):
         result = self.run_gate(self.green())
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -161,6 +169,23 @@ class L1AggregateTest(unittest.TestCase):
     def test_gate_waits_for_every_child(self):
         # A gate must not finish while an unlisted check can still fail later.
         self.assertEqual(set(self.gate["needs"]), set(self.jobs) - {"l1-passed"})
+
+
+class StaticPrChecksTest(unittest.TestCase):
+    def test_static_lints_share_one_checkout_and_keep_every_command(self):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
+        job = jobs["static-pr-checks"]
+        self.assertEqual(job["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(sum(s.get("uses") == "actions/checkout@v4" for s in job["steps"]), 1)
+        commands = "\n".join(s.get("run", "") for s in job["steps"])
+        for name in ("test-pairing", "test-quality", "tdd-commit-order", "no-fake-test",
+                     "smoke-mock-honesty", "rpa-failure-scene", "feature-has-smoke",
+                     "gp-anchor", "agent-version-bump", "line04-manifest-version-bump",
+                     "wechat-rpa-runner", "contract-test-immutability"):
+            self.assertEqual(commands.count("scripts/lint-" + name + ".sh"), 1, name)
+        self.assertNotIn("lint-nightly-sparse-checkout-deps.sh", commands)
+        self.assertFalse(any(s.get("continue-on-error") for s in job["steps"]))
+        self.assertIn("static-pr-checks", jobs["l1-passed"]["needs"])
 
 
 if __name__ == "__main__":

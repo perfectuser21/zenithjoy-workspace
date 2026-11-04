@@ -42,6 +42,28 @@ async function typeInto(page: Page, text: string): Promise<void> {
   await page.keyboard.type(text, { delay: 20 });
 }
 
+async function expectSharedText(pageA: Page, pageB: Page, markers: string[]): Promise<void> {
+  // A socket opening is not an acknowledgement of queued CRDT updates. Check the
+  // actual editors on both sides; permanent loss still fails the existing budget.
+  await expect.poll(async () => {
+    const [a, b, statusA, statusB] = await Promise.all([
+      pageA.locator('[data-testid="collab-editor"] .ProseMirror').textContent(),
+      pageB.locator('[data-testid="collab-editor"] .ProseMirror').textContent(),
+      pageA.locator('[data-testid="collab-status"]').textContent(),
+      pageB.locator('[data-testid="collab-status"]').textContent(),
+    ]);
+    return {
+      connectedA: statusA?.includes('已连接') ?? false,
+      connectedB: statusB?.includes('已连接') ?? false,
+      equal: a === b,
+      missingA: markers.filter((marker) => !a?.includes(marker)),
+      missingB: markers.filter((marker) => !b?.includes(marker)),
+    };
+  }, { message: 'Both connected editors must converge with every participant change' }).toEqual({
+    connectedA: true, connectedB: true, equal: true, missingA: [], missingB: [],
+  });
+}
+
 test('双人同编：字符级合并 + 多人光标 + 断连 resync 零丢字 + 仅自己 404', async ({ browser }) => {
   test.setTimeout(120000);
 
@@ -66,9 +88,9 @@ test('双人同编：字符级合并 + 多人光标 + 断连 resync 零丢字 + 
 
   // ① 字符级合并：甲乙各输入可辨识文本，双方 DOM 均含两串（非 409）
   await typeInto(pageA, '甲甲甲AAA');
-  await pageA.waitForTimeout(600);
+  await expectSharedText(pageA, pageB, ['甲甲甲AAA']);
   await typeInto(pageB, '乙乙乙BBB');
-  await pageA.waitForTimeout(1200);
+  await expectSharedText(pageA, pageB, ['甲甲甲AAA', '乙乙乙BBB']);
 
   const aText1 = await pageA.locator('[data-testid="collab-editor"] .ProseMirror').innerText();
   const bText1 = await pageB.locator('[data-testid="collab-editor"] .ProseMirror').innerText();
@@ -88,10 +110,11 @@ test('双人同编：字符级合并 + 多人光标 + 断连 resync 零丢字 + 
   await expect(pageA.locator('[data-testid="offline-banner"]')).toBeVisible({ timeout: 15000 });
   await typeInto(pageA, ALPHA);
   await typeInto(pageB, BETA);
-  await pageA.waitForTimeout(800);
+  await expect(pageA.locator('[data-testid="collab-editor"] .ProseMirror')).toContainText(ALPHA);
+  await expect(pageB.locator('[data-testid="collab-editor"] .ProseMirror')).toContainText(BETA);
   await ctxA.setOffline(false);
   await expect(pageA.locator('[data-testid="collab-status"]')).toContainText('已连接', { timeout: 20000 });
-  await pageA.waitForTimeout(2500);
+  await expectSharedText(pageA, pageB, ['甲甲甲AAA', '乙乙乙BBB', ALPHA, BETA]);
 
   const aText2 = await pageA.locator('[data-testid="collab-editor"] .ProseMirror').innerText();
   const bText2 = await pageB.locator('[data-testid="collab-editor"] .ProseMirror').innerText();

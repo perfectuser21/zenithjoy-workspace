@@ -123,6 +123,16 @@ describe('POST /api/agent/register — 4 大场景', () => {
     expect(res.body.code).toBe('INVALID_LICENSE');
   });
 
+  it('历史hex license中的0/1通过格式校验，但未知key仍精确401且不注册机器', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const hexKey = 'ZJ-F-44D00A51';
+    const res = await request(app).post('/api/agent/register').send({ ...validBody, license_key: hexKey });
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('INVALID_LICENSE');
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(mockQuery.mock.calls[0][1]).toContain(hexKey);
+  });
+
   it('expired：license expires_at 已过 → 403', async () => {
     mockQuery.mockResolvedValueOnce({
       rows: [makeLicenseRow({ expires_at: PAST })],

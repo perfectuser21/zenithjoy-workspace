@@ -2,8 +2,8 @@
 // The same selection contract drives all three required aggregate checks.
 export const gates = {
   wechat: {
-    routes: ['agent_or_api', 'agent'],
-    conditional: { 'middleware-chain': 'agent_or_api', 'agent-windows': 'agent', 'bubble-read-gate': 'agent' },
+    routes: ['cs_backend', 'android_cs'],
+    conditional: { 'middleware-chain': 'cs_backend', 'android-cs': 'android_cs' },
     always: [], manual: true,
   },
   lead: { routes: ['lead', 'lead_windows'], conditional: { e2e: 'lead', 'e2e-windows': 'lead_windows' }, always: [], manual: true },

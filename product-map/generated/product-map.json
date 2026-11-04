@@ -303,6 +303,7 @@
       "name": "智能客服·绑定/安装（共享前置）",
       "status": "active",
       "smoke_files": [
+        ".github/workflows/scripts/smoke/wechat-cs-android-smoke.sh",
         ".github/workflows/scripts/smoke/golden-path-4-smoke.sh"
       ],
       "steps": [
@@ -429,6 +430,7 @@
       "name": "智能客服·GP-B 被动接待",
       "status": "active",
       "smoke_files": [
+        ".github/workflows/scripts/smoke/wechat-cs-android-smoke.sh",
         ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
         ".github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh",
         ".github/workflows/scripts/smoke/line04-cs-memory-smoke.sh",
@@ -657,5 +659,5 @@
       ]
     }
   ],
-  "digest": "485fcc93fbe8fdb9bebbf3ee54d6ed3dff5057eaec0784977106a42d3ac86282"
+  "digest": "148e6aaa7faa6eec497143026b03c1e1b7d67cc01d1eb780fa2d4c5e9bc4ab5d"
 }

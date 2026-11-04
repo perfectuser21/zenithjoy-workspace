@@ -1,9 +1,6 @@
 // 账本钩子内建进现网 batch2.sh / harvest-cron.sh（棒3b-3，决策 2ca30c4d）的集成测试。
 // 真跑 zsh 脚本：假 harvest-keyword.sh 按词回 0/1/3 并记录 argv；假 ssh/scp 放在 $HOME/.local/bin
-// （batch2.sh 的 PATH 首位）记录 argv 后 exit 0；账本落在临时 HOME。fixtures/batch2-pre-wfr.sh 是并入前
-// 的 batch2.sh 逐字快照（origin/main 23b0cd8a，md5 2abbb72968b4f8f1f03660425ef2dfa1；8bb3af55 先判后采时与现网同步删掉
-// 落池后的 judge-video.js 块，其余逐字不动），用来断言
-// WFR_DISABLED=1 时新脚本的日志/产物/子进程 argv 与旧版逐字一致。
+// mock 执行覆盖旧账本工件兼容；已退役引擎的逐字快照对拍不再承担现役合同。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -15,7 +12,6 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..");
 const BATCH2 = join(SRC, "batch2.sh");
-const LEGACY = join(HERE, "fixtures", "batch2-pre-wfr.sh");
 const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).stdout.trim();
 const JQ = spawnSync("bash", ["-lc", "command -v jq"], { encoding: "utf8" }).stdout.trim();
 const SKIP = (!ZSH && "no zsh (CI: sudo apt-get install -y zsh)") || (!JQ && "no jq");
@@ -79,18 +75,6 @@ function arts(ctx) { return readdirSync(ctx.kv.WFR_ART_DIR).filter((f) => f.incl
 function art(ctx, name) { return JSON.parse(readFileSync(join(ctx.kv.WFR_ART_DIR, `social-keyword-leadgen-crontab-t9__a1.${name}.worker-result.json`), "utf8")); }
 function readOr(p) { return existsSync(p) ? readFileSync(p, "utf8") : ""; }
 function nightLog(ctx) { return readOr(join(ctx.home, "night-t9.log")).replace(/^\[\d\d:\d\d:\d\d\] /gm, ""); }
-function outputs(ctx) {
-  return { log: nightLog(ctx), tsv: readOr(join(ctx.home, "night-t9.tsv")), hk: readOr(join(ctx.home, "hk-argv.log")),
-    ssh: readOr(join(ctx.home, "ssh-argv.log")).replace(/\S*t9-manifest\S*/g, "<manifest>").split(ctx.home).join("<home>") };
-}
-// 旧版 batch2.sh 逐词 sleep 20-60s（写死 /bin/sleep），测试里只把这一处替换成空操作，其余逐字不动
-function legacyScript(ctx) {
-  const src = readFileSync(LEGACY, "utf8");
-  const patched = src.replace("/bin/sleep $(( 20 + RANDOM % 40 ))", ":");
-  assert.notEqual(patched, src, "fixture 里找不到旧版 sleep 行（快照被改？）");
-  const p = join(ctx.home, "batch2-legacy.sh"); writeFileSync(p, patched); chmodSync(p, 0o755); return p;
-}
-
 test("四种出口码 → 阶段状态映射（af061588）；工件 n=词序；collection metrics 真实计数", { skip: SKIP }, () => {
   const ctx = setup(["ok", "nocard", "lock", "fail"]);
   const r = run(ctx);
@@ -255,39 +239,6 @@ test("scoring：PUSH=0 不分拣 → batch2 不写 scoring.1 工件（没跑到�
   assert.ok(!arts(ctx).some((f) => f.includes(".scoring.")));
   assert.equal(book(ctx).stages.scoring.status, "pending");
 });
-
-test("WFR_DISABLED=1 + 假 ssh 吐统计行：日志/产物/子进程 argv 仍与并入前逐字一致（解析代码不写 $LOG、不多发 ssh）", { skip: SKIP }, () => {
-  const env = { WFR_DISABLED: "1", FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: SORT };
-  const ctxNew = setup(["ok", "nocard"], { push: "1", stats: true });
-  const rNew = run(ctxNew, { line: "devline", env });
-  assert.equal(rNew.status, 0, rNew.stderr);
-  assert.equal(rNew.stdout, "");
-  assert.ok(!arts(ctxNew).some((f) => /scoring\.1|delivery/.test(f) && f.includes("__a1.")), "不该写 a1 工件");
-  const ctxOld = setup(["ok", "nocard"], { init: false, push: "1", stats: true });
-  const rOld = run(ctxOld, { script: legacyScript(ctxOld), line: "devline", env });
-  assert.equal(rOld.status, 0, rOld.stderr);
-  const a = outputs(ctxNew), b = outputs(ctxOld);
-  assert.ok(a.log.includes("PUSH_COMMENTS_STATS"), "前提：统计行确实进了日志");
-  assert.equal(a.log, b.log); assert.equal(a.tsv, b.tsv); assert.equal(a.hk, b.hk); assert.equal(a.ssh, b.ssh);
-});
-
-for (const [name, env] of [["WFR_DISABLED=1", { WFR_DISABLED: "1" }], ["workflow-result.sh 不存在", { WFR: "/nonexistent/workflow-result.sh" }]]) {
-  test(`${name}：不写账本，且日志/产物/子进程 argv 与并入前 batch2.sh 逐字一致`, { skip: SKIP }, () => {
-    const ctxNew = setup(["ok", "nocard", "lock", "fail"], { push: "1" });
-    const rNew = run(ctxNew, { line: "devline", env });
-    assert.equal(rNew.status, 0, rNew.stderr);
-    assert.equal(rNew.stdout, "", "no-op 模式不该往 stdout 打任何东西(旧版也不打)");
-    assert.equal(book(ctxNew).stages.discovery.items.length, 0, "账本不该有 discovery 记录");
-    assert.equal(arts(ctxNew).filter((f) => /discovery|collection|delivery/.test(f)).length, 0, "不该写任何词级/落池工件");
-    const ctxOld = setup(["ok", "nocard", "lock", "fail"], { init: false, push: "1" });
-    const rOld = run(ctxOld, { script: legacyScript(ctxOld), line: "devline" });
-    assert.equal(rOld.status, 0, rOld.stderr);
-    assert.equal(rNew.stdout, rOld.stdout);
-    const a = outputs(ctxNew), b = outputs(ctxOld);
-    assert.ok(a.log.includes("v2批开始"), a.log);
-    assert.equal(a.log, b.log); assert.equal(a.tsv, b.tsv); assert.equal(a.hk, b.hk); assert.equal(a.ssh, b.ssh);
-  });
-}
 
 test("hash 不一致 → 写 blocked hash_mismatch、打印 BATCH2_ESCALATE、停跑（fail-closed）", { skip: SKIP }, () => {
   const ctx = setup(["ok", "ok"]);

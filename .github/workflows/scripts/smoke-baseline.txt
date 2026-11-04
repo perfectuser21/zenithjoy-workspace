@@ -36,7 +36,6 @@ line04-scroll-wheel-source-smoke.sh
 line04-ship-version-sync-smoke.sh
 line04-version-lock-closure-smoke.sh
 line04-wheel-mousemove-source-smoke.sh
-notion-sync-smoke.sh
 offscreen-version-gate-smoke.sh
 operator-page-medium-smoke.sh
 p4-ws2-feishu-bitable-smoke.sh
@@ -49,15 +48,12 @@ path4-sprint-1-ws5-smoke.sh
 phone-adb-controller-smoke.sh
 phone-wall-push-smoke.sh
 preflight-delivery-selfcheck-smoke.sh
-release-selfcontained-smoke.sh
 require-core-2023-smoke.sh
 rotation-normalize-smoke.sh
 schedule-board-smoke.sh
 session-health-smoke.sh
 sprint-2-1d-agent-uptime-smoke.sh
 sprint-2-1e-install-pack-smoke.sh
-staging-promote-smoke.sh
-staging-promote-workflow-smoke.sh
 staging-smoke.sh
 wechat-cs-config-smoke.sh
 wechat-cs-engine-smoke.sh
@@ -95,7 +91,6 @@ agent-startup-reset-smoke.sh
 realtime-voice-mvp-domestic-smoke.sh
 device-type-ui-gate-smoke.sh
 gpa-voice-outreach-smoke.sh
-line04-ci-desktop-mutex-smoke.sh
 collect-report-comment-grading-smoke.sh
 dm-dispatch-sweep-smoke.sh
 account-scan-trigger-smoke.sh
@@ -114,7 +109,6 @@ trim-json-lib-smoke.sh
 dedupe-adb-devices-lib-smoke.sh
 ensure-shizuku-server-lib-smoke.sh
 staff-workbench-smoke.sh
-ai-acceptance-capture-smoke.sh
 release-gate-d5-smoke.sh
 staff-acceptance-quadrant-smoke.sh
 knowledge-hub-path1-smoke.sh
@@ -165,3 +159,5 @@ publish-recovery-core-smoke.sh
 pdd-listing-driver-smoke.sh
 
 common-runner-source-smoke.sh
+
+qr-notification-evidence-smoke.sh

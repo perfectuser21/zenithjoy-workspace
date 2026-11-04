@@ -33,3 +33,20 @@ GP-Anchor: none(infra)
 首次远端 Orphan job126331417165在运行浏览器前因Chocolatey PostgreSQL包源HTTP406失败，后续数据库连接被拒；用例未执行，门禁保持红。复用同仓现役Windows流程的预装数据库服务启动方式，拆出独立pwsh步骤，显式启用服务并启动，psql和createdb非零立即抛错；保留原迁移、构建、健康探测、全部spec、取消双跑、证据与聚合。
 
 预装服务及其Stopped/Disabled/PGBIN配置见[GitHub官方runner镜像说明](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md#postgresql)。新增既有workflow接线合同先红后绿，本地仅验证配置合同；实际Windows执行以该候选的远端结果为准。
+
+## capability wrapper 预算接线核销
+
+Smoke Glob 的显式集合仍引用已由 f41f99b36 删除的
+batch2-activity-budget.test.mjs，造成 node 在执行任何用例前因缺文件失败。
+该旧四例对应 batch2 delivery/scoring 的重试策略；原 deprecated 登记及恢复坐标保留。
+
+当前 queued-video-lib.sh 直接 source wf-limits.sh，并在远程调用及视频边界执行
+wf_run_bounded / wf_deadline_reached。wrapper 改接现存 wf-limits.test.mjs 六项动态合同：
+预算/分类读取、准确截止、有界子进程及孙进程终止、rc=124、stdout/退出码透传。
+L3 openclaw-scripts-test 三分片也实际收集同一共享库合同。选定集合的串行与 zero-skip
+要求继续由 Smoke Glob baseline 保证；其余17套及 SDK 历史 ledger/artifact/hash/resume
+合同原样保留，不恢复旧 batch2 retry 正向流程。
+
+新增编排断言覆盖18个目标均存在、无重复、当前预算套必选、已退休目标拒入。
+入口合同先红后绿12/12；实际完整 wrapper 350/350、0 skip、0 fail，132.233秒，
+原180秒预算和必绿 baseline 条目保持。验证仅为隔离回归，不作为真实手机执行证据。

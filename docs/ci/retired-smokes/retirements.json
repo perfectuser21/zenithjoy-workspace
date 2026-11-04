@@ -1,0 +1,47 @@
+{
+  "scope": "Retired standalone CI shells; archive bytes preserved exactly.",
+  "observed_sha": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+  "records": [
+    {
+      "observation_index": 12,
+      "original_id": "dynamic-smoke:.github/workflows/scripts/smoke/creator-service-smoke.sh",
+      "original_path": ".github/workflows/scripts/smoke/creator-service-smoke.sh",
+      "archive_path": "docs/ci/retired-smokes/creator-service-smoke.sh",
+      "original_sha256": "37774e30411dddd357f5e00331f666b590b7863a4bb3bd7c0265513f47781a8d",
+      "archive_sha256": "37774e30411dddd357f5e00331f666b590b7863a4bb3bd7c0265513f47781a8d",
+      "source_base": "63b11dd989572b23d51b3b78816ed825db4fc551",
+      "restore": "git show 63b11dd989572b23d51b3b78816ed825db4fc551:.github/workflows/scripts/smoke/creator-service-smoke.sh > .github/workflows/scripts/smoke/creator-service-smoke.sh",
+      "reason": "The old HTTP service at localhost:8899 has no services/creator implementation in the current tree. Its shell also credited failed or uncreated pipelines as passing. Current Topic/Pipeline/Worker acceptance is kept in the existing API workflow, not inferred from the old service name.",
+      "current_consumers_preserved": [
+        ".github/workflows/ci-l4-e2e-smoke.yml",
+        "apps/api/src/routes/pipeline.ts"
+      ],
+      "scope": "CI-only shell relocation; no API/UI/service/deployment/data changes",
+      "dynamic_discovery_effect": "Outside actual top-level smoke DIR/*.sh; not counted as a PASS or SKIP",
+      "baseline_entry_removed": false,
+      "falsegreen_debt_entry_removed": false
+    },
+    {
+      "observation_index": 27,
+      "original_id": "dynamic-smoke:.github/workflows/scripts/smoke/line07-video-remake-smoke.sh",
+      "original_path": ".github/workflows/scripts/smoke/line07-video-remake-smoke.sh",
+      "archive_path": "docs/ci/retired-smokes/line07-video-remake-smoke.sh",
+      "original_sha256": "637ed56a18d901873198d01e52d63027db5c86b7f2fcec733781497a157fe156",
+      "archive_sha256": "637ed56a18d901873198d01e52d63027db5c86b7f2fcec733781497a157fe156",
+      "source_base": "63b11dd989572b23d51b3b78816ed825db4fc551",
+      "restore": "git show 63b11dd989572b23d51b3b78816ed825db4fc551:.github/workflows/scripts/smoke/line07-video-remake-smoke.sh > .github/workflows/scripts/smoke/line07-video-remake-smoke.sh",
+      "reason": "The old Python server only exposes 01..09 confirm calls and returns completed without running remake work. Current Dashboard /video-remake uses the mounted Node /api/video-remake/jobs and N06/N07 protocol; its implementation and acceptance remain. The prototype implementation itself is not removed.",
+      "current_consumers_preserved": [
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/api/src/routes/video-remake.ts",
+        "apps/api/src/services/__tests__/video-remake.service.test.ts",
+        "apps/dashboard/e2e/video-remake.spec.ts",
+        ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh"
+      ],
+      "scope": "CI-only shell relocation; no API/UI/service/deployment/data changes",
+      "dynamic_discovery_effect": "Outside actual top-level smoke DIR/*.sh; not counted as a PASS or SKIP",
+      "baseline_entry_removed": false,
+      "falsegreen_debt_entry_removed": false
+    }
+  ]
+}

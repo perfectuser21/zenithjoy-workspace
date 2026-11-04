@@ -151,7 +151,7 @@ describe('resolveDouyinScriptPath (real-publish env switch)', () => {
   it('selects dryrun script path when ZENITHJOY_AGENT_REAL_PUBLISH unset', () => {
     const p = resolveDouyinScriptPath({});
     expect(p.endsWith('publish-douyin-image-dryrun.cjs')).toBe(true);
-    expect(p.includes('publishers/douyin-publisher')).toBe(true);
+    expect(p.includes(path.join('publishers', 'douyin-publisher'))).toBe(true);
   });
 
   it('selects dryrun script path when ZENITHJOY_AGENT_REAL_PUBLISH=0', () => {
@@ -168,7 +168,7 @@ describe('resolveDouyinScriptPath (real-publish env switch)', () => {
     const p = resolveDouyinScriptPath({ ZENITHJOY_AGENT_REAL_PUBLISH: '1' });
     expect(p.endsWith('publish-douyin-image.cjs')).toBe(true);
     expect(p.includes('dryrun')).toBe(false);
-    expect(p.includes('publishers/douyin-publisher')).toBe(true);
+    expect(p.includes(path.join('publishers', 'douyin-publisher'))).toBe(true);
   });
 
   it('selects real publish script path when ZENITHJOY_AGENT_REAL_PUBLISH=true', () => {

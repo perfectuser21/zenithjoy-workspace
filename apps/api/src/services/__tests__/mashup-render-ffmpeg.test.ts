@@ -5,8 +5,8 @@
  * video-frame-extract.test.ts 同口径：这一层就是纯 ffmpeg 编排，mock 掉就等于
  * 没测，真机验证成本又低（合成源几百毫秒生成），值得真跑。
  */
-import { describe, it, expect, afterEach } from 'vitest';
-import { execSync, spawnSync } from 'child_process';
+import { describe, it, expect, afterEach, beforeAll } from 'vitest';
+import { spawnSync } from 'child_process';
 import { existsSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -14,16 +14,11 @@ import { concatAndScale } from '../mashup-render-ffmpeg';
 
 let workDir: string;
 
-/** ubuntu-latest / 本机开发环境都自带 ffmpeg；缺失时跳过真合成正向用例，不假绿（同 video-frame-extract.test.ts 口径）。 */
-function hasFfmpeg(): boolean {
-  try {
-    execSync('ffmpeg -version', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-const runIfFfmpeg = hasFfmpeg() ? it : it.skip;
+// 正向渲染是现役成片合同，缺依赖必须红；CI安装ffmpeg/ffprobe后才能验收。
+beforeAll(() => {
+  expect(spawnSync('ffmpeg', ['-version']).status, 'ffmpeg is required').toBe(0);
+  expect(spawnSync('ffprobe', ['-version']).status, 'ffprobe is required').toBe(0);
+});
 
 function makeTestClip(path: string, size: string) {
   const r = spawnSync('ffmpeg', ['-f', 'lavfi', '-i', `testsrc=duration=1:size=${size}:rate=10`, '-y', path]);
@@ -35,7 +30,7 @@ afterEach(() => {
 });
 
 describe('concatAndScale', () => {
-  runIfFfmpeg('多段不同分辨率素材合成后统一为 1920x1080，时长为各段之和', () => {
+  it('多段不同分辨率素材合成后统一为 1920x1080，时长为各段之和', () => {
     workDir = mkdtempSync(join(tmpdir(), 'mashup-render-test-'));
     const clip1 = join(workDir, 'a.mp4');
     const clip2 = join(workDir, 'b.mp4');
@@ -58,7 +53,7 @@ describe('concatAndScale', () => {
     expect(duration).toBeLessThanOrEqual(2.2);
   });
 
-  runIfFfmpeg('单段素材也能正常合成（候选只有 1 个填充槽位时的边界情况）', () => {
+  it('单段素材也能正常合成（候选只有 1 个填充槽位时的边界情况）', () => {
     workDir = mkdtempSync(join(tmpdir(), 'mashup-render-test-'));
     const clip1 = join(workDir, 'only.mp4');
     const out = join(workDir, 'out.mp4');
@@ -85,7 +80,7 @@ describe('concatAndScale', () => {
   });
 
   // 候选真实轻量预览（决策 623a81d7）需要更小/更快的编码档位，不能沿用终版 1920x1080。
-  runIfFfmpeg('传入轻量档位 opts（width/height/fps）：输出按指定分辨率，不是默认 1920x1080', () => {
+  it('传入轻量档位 opts（width/height/fps）：输出按指定分辨率，不是默认 1920x1080', () => {
     workDir = mkdtempSync(join(tmpdir(), 'mashup-render-test-'));
     const clip1 = join(workDir, 'a.mp4');
     const out = join(workDir, 'out.mp4');

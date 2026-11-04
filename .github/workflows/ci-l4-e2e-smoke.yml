@@ -76,6 +76,8 @@ jobs:
       DATABASE_NAME: cecelia
       PORT: 5200
       NODE_ENV: test
+      # Permit fixture writes only against this job-owned loopback API/Postgres.
+      SMOKE_SCRATCH_API: '1'
       # Sprint B 多租户 smoke 用：API 识别 super-admin
       ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
       # Line04 CRM 邮箱超管旁路（修 403）：API 识别 X-User-Email ∈ ADMIN_EMAILS（须与 smoke SMOKE_ADMIN_EMAIL 同值）
@@ -616,16 +618,6 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-identity-mark-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-identity-mark-smoke.sh
 
-      # ─── Line04 CRM AG Grid 运营台 — 验证前端依赖的后端端点可用（AG Grid 行内编辑写回）───
-      - name: Smoke — Line04 CRM AG Grid 运营台（前端依赖端点健康检查）
-        env:
-          API_BASE: http://localhost:5200
-          ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
-          SMOKE_ADMIN_EMAIL: boss@zenjoymedia.media
-        run: |
-          chmod +x .github/workflows/scripts/smoke/line04-crm-aggrid-smoke.sh
-          bash .github/workflows/scripts/smoke/line04-crm-aggrid-smoke.sh
-
       - name: Line04 CRM view-prefs smoke（列偏好服务端持久化 GET/PUT）
         env:
           API_BASE: http://localhost:5200
@@ -711,6 +703,8 @@ jobs:
       DATABASE_NAME: cecelia
       PORT: 5200
       NODE_ENV: test
+      # Permit fixture writes only against this job-owned loopback API/Postgres.
+      SMOKE_SCRATCH_API: '1'
       APPS_API_BASE: http://localhost:5200
       CREATOR_PIPELINE_API: http://localhost:5200
       BRAIN_URL: ${{ secrets.BRAIN_URL || '' }}

@@ -1,14 +1,26 @@
 import request from 'supertest';
+import type { Server } from 'node:http';
+import { listenLoopback, closeLoopback } from './helpers/loopback-server';
 import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import app from '../src/app';
 import pool from '../src/db/connection';
+import { fetchLangGraphEvents } from '../src/services/langgraph-adapter';
+
+vi.mock('../src/services/langgraph-adapter', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/services/langgraph-adapter')>();
+  return { ...actual, fetchLangGraphEvents: vi.fn() };
+});
 
 vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn() },
 }));
+
+let server: Server;
+beforeAll(async () => { server = await listenLoopback(app); });
+afterAll(async () => { await closeLoopback(server); });
 
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 
@@ -35,6 +47,8 @@ afterAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockQuery.mockReset();
+  vi.mocked(fetchLangGraphEvents).mockReset().mockResolvedValue([]);
 });
 
 describe('GET /api/content-images/:pipelineId/:filename', () => {
@@ -42,7 +56,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot }] });
 
     const encoded = encodeURIComponent(IMAGE_NAME);
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/${encoded}`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/${encoded}`);
 
     expect(response.status).toBe(200);
     expect(response.headers['content-type']).toContain('image/png');
@@ -52,7 +66,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   });
 
   it('should return 400 when filename contains ..', async () => {
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/..%2Fetc%2Fpasswd`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/..%2Fetc%2Fpasswd`);
 
     expect(response.status).toBe(400);
     // 路径穿越必须被拒，绝不能落到 DB 查询
@@ -62,39 +76,57 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   it('should return 400 when filename contains slash after decode', async () => {
     // %2F decode 成 /，会被 express 当成路径分隔符，所以此场景实际走到我们的 handler
     // 的 filename 会是完整编码；直接测编码后的 %2F
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/sub%2Ffile.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/sub%2Ffile.png`);
 
     expect(response.status).toBe(400);
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('should return 404 when pipeline does not exist', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [] })   // pipeline_runs lookup
-      .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
+    mockQuery.mockResolvedValueOnce({ rows: [] });
 
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/any.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/any.png`);
 
     expect(response.status).toBe(404);
+    expect(fetchLangGraphEvents).toHaveBeenCalledWith(PIPELINE_ID);
+    expect(mockQuery).toHaveBeenCalledOnce();
   });
 
   it('should return 404 when file not found in any candidate dir', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot, cecelia_task_id: null }] })
-      .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
+    mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot, cecelia_task_id: null }] });
 
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/does-not-exist.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/does-not-exist.png`);
 
     expect(response.status).toBe(404);
+    expect(fetchLangGraphEvents).toHaveBeenCalledWith(PIPELINE_ID);
+    expect(mockQuery).toHaveBeenCalledOnce();
   });
 
   it('should return 404 when pipeline has no output_dir', async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [{ output_dir: null, cecelia_task_id: null }] })
-      .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
+    mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: null, cecelia_task_id: null }] });
 
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/anything.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/anything.png`);
 
     expect(response.status).toBe(404);
+    expect(fetchLangGraphEvents).toHaveBeenCalledWith(PIPELINE_ID);
+    expect(mockQuery).toHaveBeenCalledOnce();
   });
+  it('real resolveTaskDir locates image through the isolated Brain event fallback', async () => {
+    const taskId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: null, cecelia_task_id: taskId }] });
+    vi.mocked(fetchLangGraphEvents).mockResolvedValueOnce([
+      { id: 1, created_at: '2026-11-04T00:00:00Z', payload: { node: 'generate', step_index: 1, cards_dir: join(tmpRoot, 'cards') } },
+    ]);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/${encodeURIComponent(IMAGE_NAME)}`);
+    expect(response.status).toBe(200);
+    expect(Buffer.compare(response.body, PNG_BYTES)).toBe(0);
+    expect(fetchLangGraphEvents).toHaveBeenCalledWith(taskId);
+    expect(mockQuery).toHaveBeenCalledOnce();
+  });
+  it('real UUID validation skips Brain fallback for an unknown non-UUID pipeline', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    expect((await request(server).get('/api/content-images/not-a-uuid/any.png')).status).toBe(404);
+    expect(fetchLangGraphEvents).not.toHaveBeenCalled();
+  });
+
 });

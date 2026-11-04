@@ -70,6 +70,7 @@ jobs:
       PGDATABASE: cecelia
       PORT: 5200
       NODE_ENV: test
+      SMOKE_SCRATCH_API: '1'
       ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
       BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
       BETTER_AUTH_URL: http://localhost:5200
@@ -130,9 +131,11 @@ jobs:
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
       # 同时声明两个 workspace。
       # video-tools-smoke executes Dashboard interaction tests as well as API contracts.
-      # Install all three together so npm ci does not remove a previous workspace's dependencies.
-      - name: Install apps/api + apps/agent-panel + apps/dashboard deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root --workspace=apps/dashboard
+      # Staff's environment-badge smoke builds the current editor, including its
+      # collaboration dependencies. Install all four together: a later workspace
+      # npm ci would remove dependencies installed for the previous consumers.
+      - name: Install API, Agent Panel, Dashboard and Staff Hub deps together
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root --workspace=apps/dashboard --workspace=apps/staff-hub
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
@@ -258,6 +261,8 @@ jobs:
 
           run_one() {
             if [ "$1" = structured-workbench-smoke.sh ]; then
+              # The child expands its own positional arguments after timeout starts it.
+              # shellcheck disable=SC2016
               timeout --kill-after=5s "$(script_timeout "$1")" bash -c '
                 port="${WORKBENCH_SMOKE_PORT:-$(node "$1/lib/workbench-port.mjs" allocate)}" || exit 1
                 WORKBENCH_SMOKE_PORT="$port" exec bash "$1/$2"
@@ -273,21 +278,29 @@ jobs:
           if [[ ! "$SHARD_COUNT" =~ ^[12]$ || ! "$SHARD_INDEX" =~ ^[01]$ ]] || (( SHARD_INDEX >= SHARD_COUNT )); then
             echo "::error::invalid smoke shard index/count"; exit 1
           fi
-          # C顺序仅用于glob发现；真实脚本保留原UTF-8环境（Kotlin类名含非ASCII）。
-          SCRIPTS=()
-          while IFS= read -r -d '' discovered_script; do
-            SCRIPTS+=("$discovered_script")
-          done < <(LC_ALL=C; export LC_ALL; printf '%s\0' "$DIR"/*.sh)
-          [ -f "${SCRIPTS[0]}" ] || { echo "::error::empty smoke inventory"; exit 1; }
           REPORT_DIR="$RUNNER_TEMP/smoke-glob-shard-$SHARD_INDEX"
           mkdir -p "$REPORT_DIR"
           RESULTS="$REPORT_DIR/results.tsv"
           : > "$RESULTS"
-          python3 - "$REPORT_DIR/manifest.json" "$SHARD_INDEX" "$SHARD_COUNT" "$DENYLIST" "${SCRIPTS[@]}" <<'PY'
-          import json, os, pathlib, sys
-          dest, index, count, denied, *files = sys.argv[1:]
+          # One shared selector validates exact helper callers and rejects any
+          # baseline overlap before either worker executes a script.
+          python3 .github/workflows/scripts/smoke-selection.py --output "$REPORT_DIR/selection.json" || exit 1
+          SCRIPTS=()
+          while IFS= read -r -d '' discovered_script; do
+            SCRIPTS+=("$DIR/$discovered_script")
+          done < <(python3 - "$REPORT_DIR/selection.json" <<'PYSELECT'
+          import json, sys
+          for name in json.load(open(sys.argv[1]))["inventory"]:
+              sys.stdout.buffer.write(name.encode("utf-8") + b"\0")
+          PYSELECT
+          )
+          [ "${#SCRIPTS[@]}" -gt 0 ] || { echo "::error::empty standalone smoke inventory"; exit 1; }
+          python3 - "$REPORT_DIR/manifest.json" "$SHARD_INDEX" "$SHARD_COUNT" "$DENYLIST" "$REPORT_DIR/selection.json" <<'PY'
+          import json, os, sys
+          dest, index, count, denied, selected = sys.argv[1:]
+          selection = json.load(open(selected))
           json.dump({"source_sha": os.environ["GITHUB_SHA"], "shard_index": int(index),
-                     "shard_count": int(count), "inventory": [pathlib.Path(f).name for f in files],
+                     "shard_count": int(count), **selection,
                      "denylist": denied.split(), "complete": False}, open(dest, "w"))
           PY
           PASS=0; DEBT_FAIL=0; GATE_FAIL=0; SKIP=0
@@ -420,7 +433,9 @@ jobs:
           root = pathlib.Path(os.environ["SMOKE_ARTIFACTS"])
           manifests = sorted(root.rglob("manifest.json"))
           assert len(manifests) == 2, "missing or duplicate shard artifacts"
-          inventory = sorted(p.name for p in pathlib.Path(".github/workflows/scripts/smoke").glob("*.sh"))
+          import runpy
+          selection = runpy.run_path(".github/workflows/scripts/smoke-selection.py")["select"]()
+          inventory = selection["inventory"]
           baseline = set(pathlib.Path(".github/workflows/scripts/smoke-baseline.txt").read_text().splitlines()) - {""}
           denied = {"wechat-auto-launch-smoke.sh", "wechat-rpa-auto-reply-smoke.sh",
                     "wechat-cs-visible-delivery-smoke.sh", "line04-preflight-smoke.sh",
@@ -436,6 +451,8 @@ jobs:
               indices.add(index)
               assert meta["shard_count"] == 2 and meta["source_sha"] == os.environ["GITHUB_SHA"], "wrong shard/source"
               assert meta["inventory"] == inventory and set(meta["denylist"]) == denied, "changed inventory/denylist"
+              assert meta["excluded_helpers"] == selection["excluded_helpers"], "changed helper exclusions"
+              assert meta["excluded_required"] == selection["excluded_required"], "changed required duplicate exclusions"
               assert meta["complete"] is True and meta["gate_fail"] == 0, "incomplete or failed shard"
               rows = [line.split("\t") for line in (path.parent / "results.tsv").read_text().splitlines()]
               assert all(len(row) == 3 for row in rows), "malformed result row"
@@ -453,6 +470,8 @@ jobs:
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
               f.write("# Complete Smoke Glob shard results\n\n")
               f.write("证明范围：CI代码回归；SKIP=未评估，DEBT-FAIL=失败债务；本报告不构成真实业务验收或生产晋级依据。\n\n")
+              f.write("Context-only helpers excluded from automatic execution (not PASS/SKIP tests): " + ", ".join(selection["excluded_helpers"]) + "\n\n")
+              f.write("Duplicates executed by the required API Contract Smoke job: " + ", ".join(selection["excluded_required"]) + "\n\n")
               f.write("| Script | Result | Exit |\n|---|---|---|\n")
               for row in sorted(all_rows):
                   f.write("| " + " | ".join(row) + " |\n")

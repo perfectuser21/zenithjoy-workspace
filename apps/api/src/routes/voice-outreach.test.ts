@@ -48,24 +48,19 @@ app.use((_req, res) => res.status(404).json({ error: 'not found' }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockQuery.mockReset();
 });
 
 // ─── POST /call ────────────────────────────────────────────────────────────
 
 describe('POST /api/cs/voice-outreach/call', () => {
-  it('202 + call_id 当 tenant_id 和 contact_name 有效', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
-
-    const res = await request(app)
-      .post('/api/cs/voice-outreach/call')
-      .set('x-tenant-id', 'tenant-abc')
-      .send({ tenant_id: 'tenant-abc', contact_name: '默忆' });
-
-    expect(res.status).toBe(202);
-    expect(res.body.success).toBe(true);
-    expect(typeof res.body.data.call_id).toBe('string');
-    expect(res.body.data.status).toBe('queued');
-    expect(typeof res.body.data.queued_at).toBe('string');
+  it('未接通Agent调度时503，不假报queued也不写占位记录', async () => {
+    const res = await request(app).post('/api/cs/voice-outreach/call')
+      .set('x-tenant-id', 'tenant-abc').send({ contact_name: '默忆' });
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ success: false, error: { code: 'VOICE_DISPATCH_NOT_CONFIGURED' } });
+    expect(res.body.data).toBeUndefined();
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('400 当 contact_name 缺失', async () => {
@@ -98,18 +93,7 @@ describe('POST /api/cs/voice-outreach/call', () => {
     expect(res.body.success).toBe(false);
   });
 
-  it('500 当 DB 写入失败', async () => {
-    mockQuery.mockRejectedValueOnce(new Error('db error'));
 
-    const res = await request(app)
-      .post('/api/cs/voice-outreach/call')
-      .set('x-tenant-id', 'tenant-abc')
-      .send({ tenant_id: 'tenant-abc', contact_name: '默忆' });
-
-    expect(res.status).toBe(500);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('DB_ERROR');
-  });
 });
 
 // ─── GET /records ──────────────────────────────────────────────────────────

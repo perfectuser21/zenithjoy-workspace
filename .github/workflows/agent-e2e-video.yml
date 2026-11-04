@@ -3,9 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       agent_version:
-        description: Agent install pack version
-        required: false
-        default: "1.1.33"
+        description: 'Explicit candidate install-pack version (no historical default)'
+        required: true
       session_token:
         description: Session token from pre-login (run get-e2e-token.sh locally before triggering)
         required: true
@@ -21,8 +20,11 @@ jobs:
 
       - name: Download install pack
         shell: powershell
+        env:
+          CANDIDATE_VERSION: ${{ inputs.agent_version }}
         run: |
-          $v = "${{ github.event.inputs.agent_version }}"
+          $v = $env:CANDIDATE_VERSION
+          if ($v -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw 'Explicit semantic candidate version required' }
           $url = "https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v${v}.tar.gz"
           Write-Host "[e2e] downloading zenithjoy-agent-v${v}.tar.gz"
           Invoke-WebRequest -Uri $url -OutFile "agent.tar.gz" -UseBasicParsing
@@ -51,7 +53,7 @@ jobs:
         run: |
           $c = "ZENITHJOY_LICENSE=${{ secrets.ZENITHJOY_E2E_LICENSE_KEY }}`r`nZENITHJOY_API_BASE=https://autopilot.zenjoymedia.media`r`nZENITHJOY_API_URL=wss://autopilot.zenjoymedia.media/agent-ws"
           $c | Set-Content "pack\.env" -Encoding ascii
-          Get-Content "pack\.env"
+          Write-Host "[e2e] environment configured"
 
       - name: Extract Node.js v22
         shell: powershell
@@ -90,25 +92,8 @@ jobs:
           echo "PUPPETEER_EXECUTABLE_PATH=$chrome" >> $env:GITHUB_ENV
           echo "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1" >> $env:GITHUB_ENV
 
-      - name: Cancel stale E2E jobs (pre-agent cleanup)
-        shell: powershell
-        run: |
-          $hdr = @{ Authorization = "Bearer ${{ secrets.ZENITHJOY_E2E_LICENSE_KEY }}"; "Content-Type" = "application/json" }
-          $base = "https://autopilot.zenjoymedia.media"
-          foreach ($s in @("pending", "processing")) {
-            try {
-              $params = if ($s -eq "processing") { "status=processing&stale_minutes=0" } else { "status=pending" }
-              $r = Invoke-RestMethod -Uri "$base/api/ai-video/jobs?$params" -Headers $hdr -EA Stop
-              $jobList = if ($r.data) { $r.data } else { @() }
-              foreach ($job in $jobList) {
-                Write-Host "[pre-cleanup] cancelling $s job $($job.id)"
-                Invoke-RestMethod -Uri "$base/api/ai-video/jobs/$($job.id)/progress" `
-                  -Method PATCH -Headers $hdr `
-                  -Body (ConvertTo-Json @{ status = "failed"; progress = 0 }) | Out-Null
-              }
-            } catch { Write-Host "[pre-cleanup] $s cleanup (non-fatal): $($_.Exception.Message)" }
-          }
-          Write-Host "[pre-cleanup] done"
+      # Never cancel other runs' pending/processing tasks. This run verifies only
+      # its newly-created e2e-job-id.txt; legacy shared queues are left untouched.
 
       - name: Pre-install Chrome headless shell
         shell: powershell

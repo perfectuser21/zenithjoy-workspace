@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdtempSync,mkdirSync,rmSync,existsSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {spawnSync,execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -26,18 +26,24 @@ for(const row of [
  {name:'空正文',response:{choices:[{message:{content:''}}]},pass:false},
  {name:'仅reasoning',response:{choices:[{message:{reasoning:'fixture reasoning without final review'}}]},pass:false},
  {name:'额度错误不能冒审查',response:{error:{code:402,message:'fixture only'}},pass:false},
+ {name:'HTTP503即使含最终字段也失败',response:{choices:[{message:{content:'fixture final review'}}]},http:503,pass:false},
+ {name:'超时即使已收到最终字段也失败',response:{choices:[{message:{content:'fixture final review'}}]},exit:28,pass:false},
+ {name:'HTTP200空白keepalive无JSON',raw:' \n  \t \n',pass:false},
+ {name:'最终content仅空白',response:{choices:[{message:{content:' \n \t '}}]},pass:false},
+ {name:'最终content错误类型',response:{choices:[{message:{content:{text:'not a final string'}}}]},pass:false},
  {name:'真实最终字段有正文',response:{choices:[{message:{content:'fixture final review',reasoning:'fixture hidden reasoning'}}]},pass:true},
 ])test('实际审查step.run隔离fixture：'+row.name,()=>{
  const folder=mkdtempSync(join(tmpdir(),'pr-review-step-fixture-'));
  try{
   const bin=join(folder,'bin');mkdirSync(bin);
   const calls=join(folder,'calls.jsonl'),sleeps=join(folder,'sleep.jsonl'),response=join(folder,'response.json'),output=join(folder,'review-result.txt');
-  writeFileSync(response,JSON.stringify(row.response));
-  writeFileSync(join(bin,'curl'),'#!'+process.execPath+'\n'+`const fs=require('node:fs');fs.appendFileSync(process.env.FIXTURE_CALLS,JSON.stringify(process.argv.slice(2))+'\\n');process.stdout.write(fs.readFileSync(process.env.FIXTURE_RESPONSE));\n`,{mode:0o755});
+  writeFileSync(response,row.raw??JSON.stringify(row.response));
+  writeFileSync(output,'stale review must never survive a failed call');
+  writeFileSync(join(bin,'curl'),'#!'+process.execPath+'\n'+`const fs=require('node:fs'),args=process.argv.slice(2);fs.appendFileSync(process.env.FIXTURE_CALLS,JSON.stringify(args)+'\\n');fs.writeFileSync(args[args.indexOf('--output')+1],fs.readFileSync(process.env.FIXTURE_RESPONSE));process.stderr.write('fixture-sensitive-error Authorization: '+process.env.OPENROUTER_API_KEY+'\\n');process.stdout.write(process.env.FIXTURE_HTTP);process.exit(Number(process.env.FIXTURE_EXIT));\n`,{mode:0o755});
   writeFileSync(join(bin,'sleep'),'#!'+process.execPath+'\n'+`require('node:fs').appendFileSync(process.env.FIXTURE_SLEEPS,JSON.stringify(process.argv.slice(2))+'\\n');\n`,{mode:0o755});
   writeFileSync(join(folder,'pr-review.diff'),'fixture diff only');
   const script=run.replace(/^          /gm,'').replaceAll('/tmp/review-result.txt',output);
-  const result=spawnSync('bash',['-e','-o','pipefail','-c',script],{cwd:folder,encoding:'utf8',timeout:10000,env:{...process.env,PATH:bin+':'+process.env.PATH,RUNNER_TEMP:folder,OPENROUTER_API_KEY:'fixture-key-not-a-secret',TOAPIS_API_KEY:'fixture-old-key-not-used',FIXTURE_CALLS:calls,FIXTURE_SLEEPS:sleeps,FIXTURE_RESPONSE:response}});
+  const result=spawnSync('bash',['-e','-o','pipefail','-c',script],{cwd:folder,encoding:'utf8',timeout:10000,env:{...process.env,PATH:bin+':'+process.env.PATH,RUNNER_TEMP:folder,OPENROUTER_API_KEY:'fixture-key-not-a-secret',TOAPIS_API_KEY:'fixture-old-key-not-used',FIXTURE_CALLS:calls,FIXTURE_SLEEPS:sleeps,FIXTURE_RESPONSE:response,FIXTURE_HTTP:String(row.http??200),FIXTURE_EXIT:String(row.exit??0)}});
   assert.equal(result.error,undefined,result.error?.message);
   const observed=readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(observed.length,row.pass?1:3,'保留三次调用预算，最终正文成功即停止');
@@ -45,9 +51,11 @@ for(const row of [
    const methodIndex=args.indexOf('-X');assert.equal(args[methodIndex+1],'POST');
    assert.equal(args[methodIndex+2],'https://openrouter.ai/api/v1/chat/completions');
    assert.ok(args.includes('Authorization: Bearer fixture-key-not-a-secret'));
-   assert.equal(args[args.indexOf('--max-time')+1],'60');
+   assert.equal(args[args.indexOf('--connect-timeout')+1],'20');assert.equal(args[args.indexOf('--max-time')+1],'180');assert.ok(!args.includes('--retry'),'one retry owner; curl must not multiply calls');
    const body=JSON.parse(readFileSync(args[args.indexOf('--data-binary')+1].slice(1),'utf8'));assert.equal(body.model,'deepseek/deepseek-v4-flash');assert.deepEqual(body.reasoning,{enabled:false});assert.equal(body.max_tokens,4096);
   }
+  assert.match(result.stdout,new RegExp(`curl_exit=${row.exit??0} category=\\w+ http=${row.http??200} response_bytes=\\d+ stderr_bytes=\\d+`));
+  assert.ok(!(result.stdout+result.stderr).includes('fixture-sensitive-error'));assert.ok(!(result.stdout+result.stderr).includes('fixture-key-not-a-secret'));
   const retries=existsSync(sleeps)?readFileSync(sleeps,'utf8').trim().split('\n').map(JSON.parse):[];
   assert.equal(retries.length,row.pass?0:2);for(const args of retries)assert.deepEqual(args,['5']);
   if(row.pass){assert.equal(result.status,0,result.stderr);assert.equal(readFileSync(output,'utf8'),'fixture final review\n');}
@@ -59,17 +67,36 @@ test('真实workflow保留大单行XML diff于文件，正文不进入环境或�
  const folder=mkdtempSync(join(tmpdir(),'pr-review-large-diff-'));
  try{
   const bin=join(folder,'bin');mkdirSync(bin);
-  const diff='diff --git a/fixture.xml b/fixture.xml\n+'+'<node text="真实fixture"/>'.repeat(18000)+'\n';
-  const fixture=join(folder,'source.diff'),envFile=join(folder,'github.env'),calls=join(folder,'calls.jsonl');
-  writeFileSync(fixture,diff);writeFileSync(envFile,'');
-  writeFileSync(join(bin,'gh'),'#!'+process.execPath+'\n'+`process.stdout.write(require('node:fs').readFileSync(process.env.FIXTURE_DIFF));\n`,{mode:0o755});
-  writeFileSync(join(bin,'curl'),'#!'+process.execPath+'\n'+`const fs=require('node:fs'),args=process.argv.slice(2),i=args.indexOf('--data-binary');fs.appendFileSync(process.env.FIXTURE_CALLS,JSON.stringify({args,request:i<0?null:JSON.parse(fs.readFileSync(args[i+1].slice(1)))})+'\\n');process.stdout.write(JSON.stringify({choices:[{message:{content:'fixture final review'}}]}));\n`,{mode:0o755});
-  const env={...process.env,PATH:bin+':'+process.env.PATH,RUNNER_TEMP:folder,GITHUB_ENV:envFile,FIXTURE_DIFF:fixture,FIXTURE_CALLS:calls,OPENROUTER_API_KEY:'fixture-key'};
-  const get=source.match(/id: get-diff[\s\S]*?run: \|([\s\S]*?)(?=\n      - name:|$)/)[1].replace(/^          /gm,'').replaceAll('${{ github.event.pull_request.number }}','2374');
+  const xml='<node text="真实fixture"/>'.repeat(18000)+'\n';
+  const git=(...args)=>execFileSync('git',args,{cwd:folder,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  git('init','-q');mkdirSync(join(folder,'hooks'));git('config','core.hooksPath',join(folder,'hooks'));git('config','user.name','fixture');git('config','user.email','fixture@example.invalid');git('remote','add','origin','https://github.com/fixture/repository.git');
+  writeFileSync(join(folder,'base.txt'),'base');git('add','.');git('commit','-qm','base');const base=git('rev-parse','HEAD');
+  writeFileSync(join(folder,'fixture.xml'),xml);git('add','.');git('commit','-qm','large XML');const head=git('rev-parse','HEAD');
+  const diff=execFileSync('git',['diff','--binary','--full-index',base+'...'+head],{cwd:folder,encoding:'utf8'});
+  mkdirSync(join(folder,'scripts','ci'),{recursive:true});writeFileSync(join(folder,'scripts','ci','pr-review-diff.mjs'),readFileSync(new URL('../pr-review-diff.mjs',import.meta.url)));
+  const eventPath=join(folder,'event.json');writeFileSync(eventPath,JSON.stringify({pull_request:{base:{sha:base,repo:{full_name:'fixture/repository'}},head:{sha:head}}}));
+  const envFile=join(folder,'github.env'),calls=join(folder,'calls.jsonl');
+  writeFileSync(envFile,'');
+  writeFileSync(join(bin,'gh'),'#!'+process.execPath+'\n'+`console.error('API diff is capped at 300 files; local Git must be used');process.exit(1);\n`,{mode:0o755});
+  writeFileSync(join(bin,'curl'),'#!'+process.execPath+'\n'+`const fs=require('node:fs'),args=process.argv.slice(2),i=args.indexOf('--data-binary');fs.appendFileSync(process.env.FIXTURE_CALLS,JSON.stringify({args,request:i<0?null:JSON.parse(fs.readFileSync(args[i+1].slice(1)))})+'\\n');fs.writeFileSync(args[args.indexOf('--output')+1],JSON.stringify({choices:[{message:{content:'fixture final review'}}]}));process.stdout.write('200');\n`,{mode:0o755});
+  const env={...process.env,PATH:bin+':'+process.env.PATH,RUNNER_TEMP:folder,GITHUB_ENV:envFile,FIXTURE_CALLS:calls,OPENROUTER_API_KEY:'fixture-key',GITHUB_EVENT_PATH:eventPath,GITHUB_EVENT_NAME:'pull_request',GITHUB_REPOSITORY:'fixture/repository',GITHUB_SERVER_URL:'https://github.com',PR_BASE_SHA:base,PR_HEAD_SHA:head};
+  const get=source.match(/id: get-diff[\s\S]*?run: ([^\n]+)/)[1];
   const captured=spawnSync('bash',['-e','-o','pipefail','-c',get],{encoding:'utf8',env,cwd:folder});assert.equal(captured.status,0,captured.stderr);
   assert.equal(readFileSync(envFile,'utf8'),'','diff正文不得写入GITHUB_ENV，单行XML会触发Linux单变量上限');
   assert.equal(readFileSync(join(folder,'pr-review.diff'),'utf8'),diff,'真实diff完整保留，不按行或字节截断');
   const reviewed=spawnSync('bash',['-e','-o','pipefail','-c',run.replace(/^          /gm,'').replaceAll('/tmp/review-result.txt',join(folder,'review.txt'))],{encoding:'utf8',env,cwd:folder});assert.equal(reviewed.status,0,reviewed.stderr);
   const call=JSON.parse(readFileSync(calls,'utf8').trim());assert.ok(call.args.every(x=>!x.includes('<node')));assert.ok(call.request.messages[1].content.includes(diff));assert.deepEqual(call.request.reasoning,{enabled:false});
  }finally{rmSync(folder,{recursive:true,force:true});}
+});
+
+
+test('provider deadline is bounded by 3 attempts, two waits and the job ceiling',()=>{
+ const attempts=Number(run.match(/MAX_RETRY=(\d+)/)[1]);
+ const maxTime=Number(run.match(/--max-time (\d+)/)[1]);
+ const connectTime=Number(run.match(/--connect-timeout (\d+)/)[1]);
+ const wait=Number(run.match(/sleep (\d+)/)[1]);
+ const jobMinutes=Number(source.match(/timeout-minutes: (\d+)/)[1]);
+ assert.equal(attempts,3);assert.equal(maxTime,180);assert.equal(connectTime,20);
+ assert.equal(attempts*maxTime+(attempts-1)*wait,550);
+ assert.equal(jobMinutes,12);assert.ok(attempts*maxTime+(attempts-1)*wait < jobMinutes*60);
 });

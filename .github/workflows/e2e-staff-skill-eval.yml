@@ -1,0 +1,29 @@
+name: Staff Hub Skill Evaluation UI
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staff-skill-eval-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  skill-eval-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+        working-directory: apps/staff-hub
+      - name: Current Staff Hub UI with real API guard and isolated external evaluator
+        working-directory: apps/staff-hub
+        run: npx playwright test --config playwright.skill-eval.config.ts --reporter=list
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: staff-skill-eval-ui
+          path: apps/staff-hub/test-results/

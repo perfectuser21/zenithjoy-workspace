@@ -118,3 +118,51 @@ describe('feishu-token getValidToken — [ARCH hotfix] 0 binding 行 fallback', 
     await expect(getValidToken('tenant-no-app')).rejects.toThrow(/FEISHU_NOT_BOUND/);
   });
 });
+
+describe('current OAuth compatibility — signed state and expiring provider token', () => {
+  beforeEach(async () => {
+    vi.mocked((await import('../db/connection')).default.query).mockReset();
+    vi.mocked((await import('axios')).default.post).mockReset();
+  });
+  it('tampered state is rejected before DB or provider calls', async () => {
+    const { handleCallback } = await import('./feishu-token');
+    await expect(handleCallback('fixture-code', 'tampered-state')).rejects.toThrow(/INVALID_STATE/);
+    expect((await import('../db/connection')).default.query).not.toHaveBeenCalled();
+    expect((await import('axios')).default.post).not.toHaveBeenCalled();
+  });
+  it('valid signed state binds provider token to the original tenant', async () => {
+    const pool = (await import('../db/connection')).default;
+    const axios = (await import('axios')).default;
+    vi.mocked(pool.query).mockResolvedValue({ rows: [{ feishu_app_id: 'fixture-app', feishu_app_secret: 'fixture-secret' }] } as any);
+    vi.mocked(axios.post).mockResolvedValue({ data: { code: 0, tenant_access_token: 'fixture-token', expire: 7200 } });
+    const { handleCallback } = await import('./feishu-token');
+    const state = new URL(await getAuthorizeUrl('tenant-original', 'fixture-app')).searchParams.get('state')!;
+    expect(await handleCallback('fixture-code', state)).toEqual({ tenant_id: 'tenant-original' });
+    expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual(['tenant-original', 'fixture-token', expect.any(Date)]);
+  });
+  it('valid cached token avoids provider calls; near expiry refresh is persisted for that tenant', async () => {
+    const pool = (await import('../db/connection')).default;
+    const axios = (await import('axios')).default;
+    const query = vi.mocked(pool.query);
+    query.mockResolvedValueOnce({ rows: [{ tenant_access_token: 'cached', expires_at: new Date(Date.now() + 3_600_000) }] } as any);
+    const { getValidToken } = await import('./feishu-token');
+    expect(await getValidToken('tenant-valid')).toBe('cached');
+    expect(axios.post).not.toHaveBeenCalled();
+    query.mockResolvedValueOnce({ rows: [{ tenant_access_token: 'old', expires_at: new Date(Date.now() + 60_000) }] } as any)
+      .mockResolvedValueOnce({ rows: [{ feishu_app_id: 'app', feishu_app_secret: 'secret' }] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any);
+    vi.mocked(axios.post).mockResolvedValue({ data: { code: 0, tenant_access_token: 'fresh', expire: 7200 } });
+    expect(await getValidToken('tenant-expiring')).toBe('fresh');
+    expect(query.mock.calls.at(-1)?.[1]).toEqual(['tenant-expiring', 'fresh', expect.any(Date)]);
+  });
+  it('provider business failure is rejected and never writes a binding', async () => {
+    const pool = (await import('../db/connection')).default;
+    const axios = (await import('axios')).default;
+    vi.mocked(pool.query).mockResolvedValue({ rows: [{ feishu_app_id: 'app', feishu_app_secret: 'secret' }] } as any);
+    vi.mocked(axios.post).mockResolvedValue({ data: { code: 99991663, msg: 'app_id_invalid' } });
+    const { handleCallback } = await import('./feishu-token');
+    const state = new URL(await getAuthorizeUrl('tenant-error', 'app')).searchParams.get('state')!;
+    await expect(handleCallback('code', state)).rejects.toThrow(/99991663/);
+    expect(pool.query).toHaveBeenCalledOnce();
+  });
+});

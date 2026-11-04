@@ -107,6 +107,14 @@ jobs:
         working-directory: apps/api
         run: npx vitest run --config vitest.integration.config.ts
 
+      - name: Run disposable PostgreSQL API contracts
+        working-directory: apps/api
+        env:
+          PG_CONTRACTS_DISPOSABLE: '1'
+          DATABASE_NAME: zenithjoy_contract_test
+          COMPANY_CONFIG_SCRATCH_URL: postgresql://postgres:postgres@localhost:5432/cecelia_scratch
+        run: npx vitest run --config vitest.pg-contracts.config.ts
+
   # ─── Integration Gate ─────────────────────────────────────────────────
   integration-gate:
     name: Integration Gate Passed

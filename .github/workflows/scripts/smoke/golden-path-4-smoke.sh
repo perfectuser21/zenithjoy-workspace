@@ -199,9 +199,8 @@ grep -q "enqueued_at" services/agent/wechat-rpa/listen_chat.py \
 echo "Step 3l grep 锚全部通过"
 
 # rsync 同步校验：源文件与 build-modules 必须一致（L4 Runtime Gate）
-diff -r services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rpa/ \
-  --exclude="*.pyc" --exclude="__pycache__" \
-  || { echo "FAIL Step 3l: wechat-rpa rsync 未同步"; exit 3; }
+python3 .github/workflows/scripts/line04-package-sync.py \
+  || { echo "FAIL Step 3l: wechat-rpa runtime package 未同步"; exit 3; }
 echo "Step 3l rsync 同步校验通过"
 
 # version bump 校验

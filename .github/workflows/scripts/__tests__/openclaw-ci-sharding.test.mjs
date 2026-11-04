@@ -28,7 +28,7 @@ function validate(w) {
   assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
   const recovery=job.steps.find(s=>s.name==='Durable publish recovery core');
   assert.equal(recovery.run,'node --test services/listing-workflow/__tests__/*.test.mjs');
-  assert.equal(recovery.if,undefined);assert.equal(recovery['continue-on-error'],undefined);
+  assert.equal(recovery.if,'matrix.shard == 1');assert.equal(recovery['continue-on-error'],undefined);
 }
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'openclaw-ci-shards-'));
@@ -116,3 +116,91 @@ test('missing or duplicate shards, filters, larger timeout and detached aggregat
   w.jobs['l3-passed'].needs = w.jobs['l3-passed'].needs.filter(n => n !== 'openclaw-scripts-test');
   assert.throws(() => validate(w));
 });
+
+// Listing recovery is independent of OpenClaw's file sharding. Run its full
+// failure semantics once, inside the already required matrix aggregate.
+function validateRecovery(w) {
+  const steps = w.jobs['openclaw-scripts-test'].steps.filter(s => s.run?.includes('services/listing-workflow/__tests__/*.test.mjs'));
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].run, 'node --test services/listing-workflow/__tests__/*.test.mjs');
+  assert.equal(steps[0].if, 'matrix.shard == 1');
+  assert.equal(steps[0]['continue-on-error'], undefined);
+  assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
+}
+test('durable recovery runs its complete suite once and remains required', () => {
+  validateRecovery(workflow);
+  for (const mutate of [
+    w => {delete w.jobs['openclaw-scripts-test'].steps.find(s => s.name === 'Durable publish recovery core').if;},
+    w => {w.jobs['openclaw-scripts-test'].steps.find(s => s.name === 'Durable publish recovery core')['continue-on-error'] = true;},
+    w => {w.jobs['l3-passed'].needs = w.jobs['l3-passed'].needs.filter(n => n !== 'openclaw-scripts-test');},
+  ]) {
+    const w = structuredClone(workflow); mutate(w); assert.throws(() => validateRecovery(w));
+  }
+});
+
+// Execute the actual matrix's two Node steps against independent local suites.
+// Trace individual recovery cases, not just a declaration or a job name.
+function recoveryFixture(t) {
+  const f = fixture(t);
+  f.recoveryCases = [];
+  for (const name of ['coordinator', 'reconcile', 'cleanup']) {
+    const file = 'services/listing-workflow/__tests__/' + name + '.test.mjs';
+    const cases = ['normal', 'lost-response'].map(scenario => file + '#' + scenario);
+    f.recoveryCases.push(...cases);
+    mkdirSync(dirname(join(f.root, file)), {recursive: true});
+    writeFileSync(join(f.root, file),
+      "import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';\n" +
+      cases.map(id => 'test(' + JSON.stringify(id) + ',()=>{' +
+        'fs.appendFileSync(process.env.SHARD_TRACE,' + JSON.stringify(id + '\n') + ');' +
+        'assert.notEqual(process.env.SHARD_FAIL,' + JSON.stringify(id) + ');});').join('\n'));
+  }
+  return f;
+}
+function matrixExecutions(f, w, name, failed = '') {
+  const job = w.jobs['openclaw-scripts-test'];
+  return job.strategy.matrix.shard.map(shard => {
+    const scripts = job.steps
+      .filter(step => step.run?.startsWith('node --test'))
+      .filter(step => step.if === undefined ||
+        Function('matrix', 'return (' + step.if + ')')({shard}))
+      .map(step => step.run.replaceAll('$' + '{{ matrix.shard }}', String(shard)));
+    return {...run(f, scripts.join('\n'), name + '-' + shard, failed), shard};
+  });
+}
+function assertRecoveryExecution(f, parts) {
+  assert.deepEqual(parts.map(p => p.shard), [1, 2, 3]);
+  const recovered = parts.map(p => p.rows.filter(row => row.startsWith('services/listing-workflow/')));
+  assert.deepEqual(recovered[0].slice().sort(), f.recoveryCases.slice().sort(),
+    'shard 1 must execute every recovery case exactly once');
+  assert.deepEqual(recovered[1], [], 'shard 2 must not repeat recovery');
+  assert.deepEqual(recovered[2], [], 'shard 3 must not repeat recovery');
+  const all = recovered.flat();
+  assert.equal(new Set(all).size, all.length, 'recovery cases must never repeat');
+  assert.deepEqual(all.slice().sort(), f.recoveryCases.slice().sort(), 'no recovery case may disappear');
+}
+test('actual three-leg workflow executes the complete recovery suite only on shard 1', t => {
+  const f = recoveryFixture(t), parts = matrixExecutions(f, workflow, 'recovery-once');
+  for (const p of parts) assert.equal(p.status, 0, p.stdout + p.stderr);
+  assertRecoveryExecution(f, parts);
+});
+test('a real recovery failure fails shard 1 and the required YAML aggregate', t => {
+  const f = recoveryFixture(t), parts = matrixExecutions(f, workflow, 'recovery-failure', f.recoveryCases[0]);
+  assert.deepEqual(parts.map(p => p.status), [1, 0, 0]);
+  assertRecoveryExecution(f, parts);
+  assert.equal(aggregate(parts.some(p => p.status !== 0) ? 'failure' : 'success').status, 1);
+});
+for (const [name, mutate] of [
+  ['missing recovery step', job => {job.steps = job.steps.filter(step => step.name !== 'Durable publish recovery core');}],
+  ['wrong recovery shard', job => {job.steps.find(step => step.name === 'Durable publish recovery core').if = 'matrix.shard == 2';}],
+  ['duplicate recovery step', job => {job.steps.push(structuredClone(job.steps.find(step => step.name === 'Durable publish recovery core')));}],
+  ['unconditional repeated recovery', job => {delete job.steps.find(step => step.name === 'Durable publish recovery core').if;}],
+]) {
+  test('real matrix traces reject ' + name, t => {
+    const f = recoveryFixture(t), w = structuredClone(workflow);
+    mutate(w.jobs['openclaw-scripts-test']);
+    assert.throws(() => validateRecovery(w));
+    const parts = matrixExecutions(f, w, name.replaceAll(' ', '-'));
+    for (const p of parts) assert.equal(p.status, 0, p.stdout + p.stderr);
+    assert.throws(() => assertRecoveryExecution(f, parts));
+  });
+}
