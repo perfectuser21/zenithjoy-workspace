@@ -303,7 +303,7 @@
       "code_digest": "732ebec8300b9e6022c22318c68a3d5784846f7cd24b54cca336875d38505cbc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "11555979dce41dd993c890b35ee24a58cb8cd3f21cf8c9e542d45b3e33db8e7c",
         "current_code_digest": "732ebec8300b9e6022c22318c68a3d5784846f7cd24b54cca336875d38505cbc"
@@ -601,7 +601,7 @@
       "code_digest": "e1c51eca7772edcaa17cfb0b6a3222ed71b47313e86e5fc175a0242f90688cbe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "36b8f4fb3b35feeee54ee716409d4ef44176126610b233f8484a25782ddebdbe",
         "current_code_digest": "e1c51eca7772edcaa17cfb0b6a3222ed71b47313e86e5fc175a0242f90688cbe"
@@ -902,7 +902,7 @@
       "code_digest": "b1e02037f00a9947fa64dc3479e425570edbefadec7f46ada11d1a1cadb6a6b8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "e1586258cb694108c5085e5b9f1e2ca515a4863e9615c40110caaed89696a105",
         "current_code_digest": "b1e02037f00a9947fa64dc3479e425570edbefadec7f46ada11d1a1cadb6a6b8"
@@ -1287,7 +1287,7 @@
       "code_digest": "91d2dabf99f649080910756fc21dd94ad9292a53fa9548af79484625e05bb836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "61260e4e4cccc061f6c4511b6434bf559f9fd53cf0a0acd0f5fc74c81d1a802a",
         "current_code_digest": "91d2dabf99f649080910756fc21dd94ad9292a53fa9548af79484625e05bb836"
@@ -1617,7 +1617,7 @@
       "code_digest": "95697f0458b961fff6a5ffa359a57ae8c3d50f00d645ac876564db1bd29fa30a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "dbaa5c2283083ac050faca1676de095baac0f93dbd841dbdaa06fbef8d3c08d2",
         "current_code_digest": "95697f0458b961fff6a5ffa359a57ae8c3d50f00d645ac876564db1bd29fa30a"
@@ -1907,7 +1907,7 @@
       "code_digest": "2823e6b5bc6887a2f74c8cc9bd178aa8cccebaed88b97cfc03edb4d592ecf31c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "0b15c0444bc59f45eaad3150d07442cbd41d627f4ead2aeff93ade013743bd03",
         "current_code_digest": "2823e6b5bc6887a2f74c8cc9bd178aa8cccebaed88b97cfc03edb4d592ecf31c"
@@ -2208,7 +2208,7 @@
       "code_digest": "1e8c1fd1f26015b725468da052e31895360f22cbd57493b9dfff7c2f73d9994d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "82677e9cc1de4ca72835388ce5d9998c032337bbe615ef128ca15a8dc48d506c",
         "current_code_digest": "1e8c1fd1f26015b725468da052e31895360f22cbd57493b9dfff7c2f73d9994d"
@@ -2551,7 +2551,7 @@
       "code_digest": "0fbcfd3ca7fbaea3c9cbbbb1e00d46e2c8d86f59169c6c424d404a273d5c7b7d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "6c57c6ac769c33b8d4a17fc6424022152d08fd430409fb7315474996c739f7f3",
         "current_code_digest": "0fbcfd3ca7fbaea3c9cbbbb1e00d46e2c8d86f59169c6c424d404a273d5c7b7d"
@@ -2877,7 +2877,7 @@
       "code_digest": "2c39dd9da95751c1d61d18a87f8296629ac2022f5d9519c63dc3f183fb36f5a5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "74e8f03853b1ec9082c35f5e8bd21892fdbb3a46c767ca5798cb78043734f8ee",
         "current_code_digest": "2c39dd9da95751c1d61d18a87f8296629ac2022f5d9519c63dc3f183fb36f5a5"
@@ -3178,7 +3178,7 @@
       "code_digest": "7c2041fdf9c2b914e06ce6439acbcaf4b33b4883d12841697c74d856572de2dd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "2c3f204512656f51daf6520bed76435167114f5582d1ed61d16e883298ae9e03",
         "current_code_digest": "7c2041fdf9c2b914e06ce6439acbcaf4b33b4883d12841697c74d856572de2dd"
@@ -3472,7 +3472,7 @@
       "code_digest": "0d51b3e5ac80b7acdf960286223e7a454877ae51eed3d50d1a573dc59bee955d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "f92605334ae09386b3f55495f6b15643612516b64e48df9192955af3fe5c74b9",
         "current_code_digest": "0d51b3e5ac80b7acdf960286223e7a454877ae51eed3d50d1a573dc59bee955d"
@@ -3776,7 +3776,7 @@
       "code_digest": "6e94a897672f528bc26e77cf45e81847ff9ea4d12d7c097d15aa4eb7448a77d7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "同业务合同内修复：正式冻结101/102先核任务、公司等待后再核任务再取同公司/租户/run/设备/账号动态绑定；原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
         "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
         "previous_code_digest": "319431d9dec041a4fa94f080f52cfcb40a8612bea778a9d1bdfe2fe4beb7b0db",
         "current_code_digest": "6e94a897672f528bc26e77cf45e81847ff9ea4d12d7c097d15aa4eb7448a77d7"
