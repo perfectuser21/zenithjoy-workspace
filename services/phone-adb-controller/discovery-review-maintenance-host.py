@@ -122,6 +122,16 @@ def candidate(home, sha, release_id):
             'observation_id': observation['id'], 'manifest_sha256': release['manifest_sha256']}
 
 
+def verify_current_desktop(serial, launcher_output, focus_output):
+    need(isinstance(launcher_output, str) and isinstance(focus_output, str), 'DESKTOP_EVIDENCE')
+    # Android 15 emits the same HOME package in ActivityInfo and nested
+    # ApplicationInfo. Deduplicate that identity, never the focus indicators.
+    packages = [value.strip() for value in re.findall(r'(?m)^\s*packageName=([^\r\n]*)', launcher_output)]
+    need(packages and all(prior.proof._PACKAGE.fullmatch(value) for value in packages)
+         and len(set(packages)) == 1, 'DESKTOP_LAUNCHER')
+    return prior.proof.verify_safe_desktop(serial, 'packageName=' + packages[0] + '\n', focus_output)
+
+
 def desktop(home, sha):
     runtime = home / '.local/share/zenithjoy/phone-candidates' / sha / 'runtime'
     original = home / '.local/share/zenithjoy/phone-candidate-runs' / proof.SCOPE['source_commit'] / 'ledger' / proof.SCOPE['run_id'].removesuffix('__a1')
@@ -156,7 +166,7 @@ def desktop(home, sha):
     home_read = read(['cmd', 'package', 'resolve-activity', '-a', 'android.intent.action.MAIN',
                       '-c', 'android.intent.category.HOME'])
     focus = read(['dumpsys', 'window', 'displays'])
-    return prior.proof.verify_safe_desktop(proof.SCOPE['serial'], home_read, focus)
+    return verify_current_desktop(proof.SCOPE['serial'], home_read, focus)
 
 
 def legacy_record(home):

@@ -13,6 +13,8 @@ python3 /固定工具目录/services/phone-adb-controller/discovery-review-maint
 
 当前候选的安装manifest按正式 `observeDeployment` ABI不含 `observed_hostname`。工具现场调用系统hostname，按现有机器映射核目标，再逐文件重算hash并保留manifest原数组顺序，重建实际观测体；其摘要必须匹配Brain当前observation的 `evidence_ref`，不接受manifest自报hostname。
 
+Android 15的HOME解析可在ActivityInfo和嵌套ApplicationInfo重复给出同一packageName；仅当所有记录均为合法且唯一同包时归一化。当前focus原文仍交原严格核验，任一非HOME或缺失focus不通过；通用旧恢复判据不修改。
+
 `plan`只读。`apply`必须重新核本次任务claim、原件完整hash、当前候选manifest与Brain gate、自动入口关闭和当前HOME/focus；桌面探测使用原冻结ADB二进制hash与既有数值endpoint，只读、不发HOME键、不启动server。持两根现有guard后再次核全部前置，单durable原owner目录经journal和inventory CAS归档。legacy目标必须始终不存在；migration marker及其他两个旧review owner的原字节保持不变。中断后使用相同命令重入，只接受journal登记的before/after状态。
 
 维护journal：`~/.config/zenithjoy/discovery-review-maintenance/`。工具不会释放中央租约：当前中央接口缺少run/fence CAS，协调者必须独立处理原任务终态及读回，不能假称已做fenced release。恢复业务须另走正常新101→102→103，不能将原失败101来源伪装为completed。
@@ -24,6 +26,7 @@ python3 services/phone-adb-controller/__tests__/discovery-review-maintenance.tes
 python3 services/phone-adb-controller/__tests__/discovery-review-lock.test.py
 python3 services/phone-adb-controller/__tests__/discovery-review-host.test.py
 python3 services/phone-adb-controller/__tests__/discovery-review-candidate.test.py
+python3 services/phone-adb-controller/__tests__/discovery-review-desktop.test.py
 DISCOVERY_REVIEW_ORIGINAL_FIXTURE=/原run完整只读副本 python3 services/phone-adb-controller/__tests__/discovery-review-maintenance.test.py
 ```
 

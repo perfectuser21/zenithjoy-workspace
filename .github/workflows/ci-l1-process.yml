@@ -657,6 +657,7 @@ jobs:
           python3 services/phone-adb-controller/__tests__/discovery-review-lock.test.py
           python3 services/phone-adb-controller/__tests__/discovery-review-host.test.py
           python3 services/phone-adb-controller/__tests__/discovery-review-candidate.test.py
+          python3 services/phone-adb-controller/__tests__/discovery-review-desktop.test.py
           python3 services/phone-adb-controller/__tests__/maintenance-reopen-proof.test.py
           python3 services/phone-adb-controller/__tests__/maintenance-reopen-lock.test.py
           python3 services/phone-adb-controller/__tests__/maintenance-reopen-roots.test.py

@@ -24,12 +24,12 @@ class CurrentDesktopTest(unittest.TestCase):
 
     def test_different_nested_package_and_missing_package_rejected(self):
         home = FIXTURE['home'].replace('    packageName=com.hihonor.android.launcher', '    packageName=foreign.package')
-        for changed in (home, 'ActivityInfo:\nname=MissingPackage\n', ''):
+        for changed in (home, 'packageName=bad-package\n', 'ActivityInfo:\nname=MissingPackage\n', ''):
             with self.subTest(home=changed), self.assertRaises(ValueError): self.verify(home=changed)
 
     def test_non_home_focus_and_absent_focus_are_rejected(self):
         for focus in ('', FIXTURE['focus'].replace('com.hihonor.android.launcher/', 'com.ss.android.ugc.aweme/', 1),
-                      FIXTURE['focus'].replace('mFocusedApp=ActivityRecord', 'mFocusedApp=foreign.ActivityRecord')):
+                      FIXTURE['focus'].replace('com.hihonor.android.launcher/.unihome', 'foreign.package/.unihome')):
             with self.subTest(focus=focus), self.assertRaises(ValueError): self.verify(focus=focus)
 
     def test_single_home_package_remains_valid(self):
