@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join, dirname} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import YAML from 'yaml';
+import {runCodeGate} from './helpers/run-code-gate.mjs';
 
 const workflow = YAML.parse(readFileSync(new URL('../../ci-l3-code.yml', import.meta.url), 'utf8'));
 const globs = [
@@ -65,11 +66,7 @@ function run(f, code, name, failed = '') {
 function shardCommand(index) {
   return command().replaceAll('${{ matrix.shard }}', String(index));
 }
-function aggregate(result) {
-  const code = workflow.jobs['l3-passed'].steps[0].run.replace(/\$\{\{\s*([^}]+?)\s*\}\}/g,
-    (_, key) => key === 'needs.openclaw-scripts-test.result' ? result : key.includes('.outputs.') ? 'false' : 'success');
-  return spawnSync('bash', ['-e', '-o', 'pipefail', '-c', code], {encoding: 'utf8', timeout: 5000});
-}
+function aggregate(result) { return runCodeGate(workflow,result); }
 
 test('OpenClaw keeps original four selectors in two independent ten-minute native shards', () => {
   validate(workflow);

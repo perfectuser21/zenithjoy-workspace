@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join,basename} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {parse} from 'yaml';
+import {runCodeGate} from './helpers/run-code-gate.mjs';
 
 const script=new URL('../smoke/leadgen-field-cleanup-smoke.sh',import.meta.url).pathname;
 const expected=['own-accounts-lib','lead-fields-lib','next-outreach-lib','account-current-nickname','video-link-restore'].map(s=>s+'.test.mjs');
@@ -38,10 +39,7 @@ function fullSuiteRequired(w){
  assert.doesNotMatch(step.run,/--test-name-pattern|--test-skip-pattern|\|\|\s*true/);
  assert.ok(w.jobs['l3-passed'].needs.includes('openclaw-scripts-test'));
 }
-function aggregate(w,result){
- const code=w.jobs['l3-passed'].steps[0].run.replace(/\$\{\{\s*([^}]+?)\s*\}\}/g,(_,key)=>key==='needs.openclaw-scripts-test.result'?result:key.includes('.outputs.')?'false':'success');
- return spawnSync('bash',['-c',code],{encoding:'utf8',timeout:5000});
-}
+function aggregate(w,result){return runCodeGate(w,result);}
 test('独立完整phone通配套始终执行且聚合器实际拒绝其失败/取消/跳过',()=>{
  fullSuiteRequired(workflow);assert.equal(aggregate(workflow,'success').status,0);
  for(const result of ['failure','cancelled','skipped'])assert.equal(aggregate(workflow,result).status,1,result);
@@ -52,6 +50,6 @@ test('全套门禁缺通配/变条件/脱离required/聚合吞错的四类变异
   w=>{w.jobs['openclaw-scripts-test'].if='false';},
   w=>{w.jobs['l3-passed'].needs=w.jobs['l3-passed'].needs.filter(s=>s!=='openclaw-scripts-test');}
  ]){const w=structuredClone(workflow);mutate(w);assert.throws(()=>fullSuiteRequired(w));}
- const w=structuredClone(workflow);w.jobs['l3-passed'].steps[0].run=w.jobs['l3-passed'].steps[0].run.replaceAll('${{ needs.openclaw-scripts-test.result }}','success');
+ const w=structuredClone(workflow);w.jobs['l3-passed'].steps.find(step=>step.run).run='node -e \"process.exit(0)\"';
  assert.equal(aggregate(w,'failure').status,0,'本变异必须真的会吞失败，正常聚合测试能揭露它');
 });

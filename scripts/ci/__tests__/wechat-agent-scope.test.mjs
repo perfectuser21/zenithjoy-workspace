@@ -40,8 +40,8 @@ test('changes job permanently runs regression and scopes only AGENT through fixe
  const workflow=readFileSync(new URL('../../../.github/workflows/wechat-cs-e2e.yml',import.meta.url),'utf8');
  assert.match(workflow,/run: node --test scripts\/ci\/__tests__\/wechat-agent-scope.test.mjs/);
  assert.match(workflow,/SKILLS_SOURCE_SSH_KEY: \$\{\{ secrets.SKILLS_SOURCE_SSH_KEY \}\}/);
- assert.match(workflow,/AGENT=\$\(node scripts\/ci\/wechat-agent-scope.mjs/);
- assert.match(workflow,/if echo "\$FILES" \| grep -qE '\^\(services\/agent\//);
+ assert.match(workflow,/run: node scripts\/ci\/detect-changes\.mjs wechat/);
+ assert.match(workflow,/CI_SCOPE_PROOF: \$\{\{ runner\.temp \}\}\/wechat-agent-scope\.json/);
 });
 
 test('CLI classification errors are nonzero and never print false',()=>{

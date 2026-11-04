@@ -128,9 +128,10 @@ async function sendFeishuAlert(title, content) {
     msg_type: 'text',
     content: { text: `${title}\n${content}` },
   });
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('feishu timeout')), 3000)
-  );
+  let timeoutId;
+  const timeout = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve(0), 3000);
+  });
   const request = new Promise((resolve) => {
     try {
       const u = new URL(FEISHU_BOT_WEBHOOK);
@@ -152,9 +153,11 @@ async function sendFeishuAlert(title, content) {
     }
   });
   try {
-    await Promise.race([request, timeout]);
+    return await Promise.race([request, timeout]);
   } catch (_e) {
-    // timeout — fire and forget
+    return 0;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -179,12 +182,18 @@ async function checkPlatform(p) {
 
   let cookies;
   try {
-    cookies = JSON.parse(raw.replace(/^﻿/, ''));
+    const state = JSON.parse(raw.replace(/^﻿/, ''));
+    cookies = Array.isArray(state) ? state : state?.cookies;
   } catch (_e) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'invalid', checkedAt, expiresAt: null };
   }
 
-  if (!Array.isArray(cookies) || cookies.length === 0) {
+  if (!Array.isArray(cookies) || !cookies.every(cookie => cookie && typeof cookie === 'object'
+    && typeof cookie.name === 'string' && cookie.name.trim() && typeof cookie.value === 'string')) {
+    return { platform: p.platform, secretEnv: p.secretEnv, status: 'invalid', checkedAt, expiresAt: null };
+  }
+
+  if (cookies.length === 0) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'expired', checkedAt, expiresAt: null };
   }
 
@@ -234,7 +243,7 @@ async function checkPlatform(p) {
     return { platform: p.platform, secretEnv: p.secretEnv, status: 'ok', checkedAt, expiresAt };
   }
 
-  return { platform: p.platform, secretEnv: p.secretEnv, status: 'ok', checkedAt, expiresAt };
+  return { platform: p.platform, secretEnv: p.secretEnv, status: 'unknown', checkedAt, expiresAt };
 }
 
 // ── DB 回写 ──────────────────────────────────────────────────────
@@ -294,16 +303,26 @@ async function main() {
 
   const expired = results.filter(r => r.status === 'expired');
   const missing = results.filter(r => r.status === 'missing');
+  const uncertain = results.filter(r => r.status === 'unknown' || r.status === 'invalid');
   const ok = results.filter(r => r.status === 'ok');
 
   // missing 不等于 ok — 有 missing 的平台也需要告警
-  const needNotify = FORCE_NOTIFY || expired.length > 0 || missing.length > 0;
+  const needNotify = FORCE_NOTIFY || expired.length > 0 || missing.length > 0 || uncertain.length > 0;
 
   // 回写 DB（无论是否需要通知都执行）
-  await postSessionStatus(results);
+  const writebackStatus = await postSessionStatus(results);
+  const writebackFailed = writebackStatus !== undefined && !(writebackStatus >= 200 && writebackStatus < 300);
+  if (writebackFailed) {
+    console.error(`[session-health] Session状态回写失败（HTTP ${writebackStatus || 'network error'}）`);
+    process.exitCode = 1;
+  }
 
   if (!needNotify) {
-    console.log(`[session-health] 全部正常（ok=${ok.length}），无需通知`);
+    if (writebackFailed) {
+      console.log(`[session-health] Session检测完成（ok=${ok.length}），状态回写失败`);
+    } else {
+      console.log(`[session-health] 全部正常（ok=${ok.length}），无需通知`);
+    }
     return;
   }
 
@@ -316,16 +335,30 @@ async function main() {
     title = `⚠️ Session缺失`;
     const missingNames = missing.map(r => r.platform).join('、');
     body = `${missingNames} 尚未绑定，请完成初始登录`;
+  } else if (uncertain.length > 0) {
+    title = `⚠️ Session状态未确认`;
+    body = `${uncertain.map(r => r.platform).join('、')} 检测失败或配置无效，请检查巡检报告后重试`;
   } else {
     title = `✅ Session全部正常`;
     body = ok.map(r => r.platform).join('、');
   }
+  if (uncertain.length > 0 && (expired.length > 0 || missing.length > 0)) {
+    body += `\n状态未确认: ${uncertain.map(r => r.platform).join('、')}`;
+  }
 
   console.log(`[session-health] 发送告警: ${title}`);
-  await Promise.all([
+  const deliveries = await Promise.all([
     barkNotify(title, body),
     sendFeishuAlert(title, body),
   ]);
+  if (deliveries.some(status => status !== undefined && !(status >= 200 && status < 300))) {
+    console.error('[session-health] 告警发送失败，请检查通知通道');
+    process.exitCode = 1;
+  }
+  if (uncertain.length > 0) {
+    console.error(`[session-health] ${uncertain.length} 个平台 session 状态未确认`);
+    process.exitCode = 1;
+  }
 
   if (expired.length > 0) {
     console.error(`[session-health] ${expired.length} 个平台 session 已过期`);

@@ -36,24 +36,12 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Detect changed modules
         id: filter
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            BEFORE="${{ github.event.before }}"
-            AFTER="${{ github.event.after }}"
-            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              echo "api=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          else
-            BASE_REF="${{ github.base_ref }}"
-            CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || echo "")
-          fi
-
-          echo "$CHANGED" | grep -q "^apps/api/" \
-            && echo "api=true" >> $GITHUB_OUTPUT || echo "api=false" >> $GITHUB_OUTPUT
+        run: node scripts/ci/detect-changes.mjs integration
 
   # ─── Integration Tests with Real DB ──────────────────────────────────
   api-integration-test:
@@ -127,27 +115,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Check integration gate
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  L4 Integration Gate"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          FAILED=false
-
-          if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
-            if [ "${{ needs.api-integration-test.result }}" != "success" ]; then
-              echo "FAIL: API Integration Test (${{ needs.api-integration-test.result }})"
-              FAILED=true
-            fi
-          fi
-
-          if [ "$FAILED" = "true" ]; then
-            echo ""
-            echo "  Integration Gate FAILED"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            exit 1
-          fi
-
-          echo "  Integration Gate PASSED"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        env:
+          GATE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci/required-gate.mjs integration

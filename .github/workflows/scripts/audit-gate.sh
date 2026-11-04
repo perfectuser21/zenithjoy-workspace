@@ -63,21 +63,73 @@ ALLOWLIST=(
   "vitest" "tinypool"
 )
 
-cd "$DIR"
-AUDIT_JSON=$(npm audit --json 2>/dev/null || true)
+if ! cd "$DIR"; then
+  echo "❌ 无法进入 npm audit 目录: $DIR" >&2
+  exit 1
+fi
+if [ ! -f package.json ] || [ ! -f package-lock.json ]; then
+  echo "❌ npm audit 目录必须含 package.json 和 package-lock.json: $DIR" >&2
+  exit 1
+fi
+
+# npm audit exit 1 normally means vulnerabilities were found. Other failures must
+# not become an empty vulnerability set or a successful security decision.
+AUDIT_STATUS=0
+AUDIT_JSON=$(npm audit --json) || AUDIT_STATUS=$?
+if [ "$AUDIT_STATUS" -ne 0 ] && [ "$AUDIT_STATUS" -ne 1 ]; then
+  echo "❌ npm audit 执行失败（exit $AUDIT_STATUS）" >&2
+  exit 1
+fi
 if [ -z "$AUDIT_JSON" ]; then
   echo "❌ npm audit 无输出（$DIR 缺 package-lock.json？）"
   exit 1
 fi
 
-VIOLATIONS=$(echo "$AUDIT_JSON" | jq -r --argjson allow "$(printf '%s\n' "${ALLOWLIST[@]}" | jq -R . | jq -s .)" '
-  .vulnerabilities // {} | to_entries[]
+# Fail closed on registry/lockfile error objects, unsupported reports, malformed
+# entries, or missing/inconsistent counts. Never default absent evidence to {}.
+if ! printf '%s\n' "$AUDIT_JSON" | jq -se '
+  def count: type == "number" and . >= 0 and . == floor;
+  if length != 1 then error("expected one audit report") else .[0] end |
+  type == "object" and (has("error") | not)
+  and .auditReportVersion == 2
+  and (.vulnerabilities | type == "object")
+  and (.metadata | type == "object")
+  and (.metadata.vulnerabilities | type == "object")
+  and ([.metadata.vulnerabilities | .info, .low, .moderate, .high, .critical, .total] | all(count))
+  and (.vulnerabilities | to_entries | all(
+    .key as $name | .value |
+    type == "object" and .name == $name
+    and (.severity | IN("info", "low", "moderate", "high", "critical"))
+  ))
+  and (. as $report | ["info", "low", "moderate", "high", "critical"] | all(
+    . as $severity |
+    $report.metadata.vulnerabilities[$severity] ==
+      ([$report.vulnerabilities[] | select(.severity == $severity)] | length)
+  ))
+  and .metadata.vulnerabilities.total == (.vulnerabilities | length)
+' >/dev/null; then
+  echo "❌ npm audit 报告无效或不完整，不能判定安全" >&2
+  exit 1
+fi
+
+if ! ALLOW_JSON=$(printf '%s\n' "${ALLOWLIST[@]}" | jq -R . | jq -s .); then
+  echo "❌ 无法解析 npm audit allowlist" >&2
+  exit 1
+fi
+if ! VIOLATIONS=$(printf '%s\n' "$AUDIT_JSON" | jq -r --argjson allow "$ALLOW_JSON" '
+  .vulnerabilities | to_entries[]
   | select(.value.severity == "high" or .value.severity == "critical")
   | select((.key as $k | $allow | index($k)) | not)
-  | "\(.key): \(.value.severity)"')
+  | "\(.key): \(.value.severity)"'); then
+  echo "❌ 无法解析 npm audit 漏洞列表" >&2
+  exit 1
+fi
 
 echo "== npm audit gate（目录: ${DIR}，含 dev deps）=="
-echo "$AUDIT_JSON" | jq -r '.metadata.vulnerabilities | "总计: low=\(.low) moderate=\(.moderate) high=\(.high) critical=\(.critical)"'
+if ! printf '%s\n' "$AUDIT_JSON" | jq -r '.metadata.vulnerabilities | "总计: low=\(.low) moderate=\(.moderate) high=\(.high) critical=\(.critical)"'; then
+  echo "❌ 无法解析 npm audit 汇总" >&2
+  exit 1
+fi
 
 if [ -n "$VIOLATIONS" ]; then
   echo "❌ 存在 allowlist 之外的 high/critical 漏洞："

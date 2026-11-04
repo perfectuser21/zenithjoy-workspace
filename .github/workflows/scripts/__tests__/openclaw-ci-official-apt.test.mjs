@@ -8,10 +8,10 @@ import {fileURLToPath} from 'node:url';
 const script=fileURLToPath(new URL('../prepare-openclaw-os-packages.sh',import.meta.url));
 test('既有OS步骤仅用一个300秒边界调用真实隔离脚本',()=>{const text=readFileSync(new URL('../../ci-l3-code.yml',import.meta.url),'utf8');assert.match(text,/timeout 300s bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh/);});
 const source='Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates noble-backports\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n\nTypes: deb\nURIs: https://security.ubuntu.com/ubuntu/\nSuites: noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n';
-function invoke(t,{fail='',drift=false,untrusted=false,badPlan=false,badKey=false,actualSource=false}={}){
+function invoke(t,{fail='',drift=false,untrusted=false,badPlan=false,badKey=false,actualSource=false,sourceText}={}){
  const top=mkdtempSync(join(tmpdir(),'official-apt-'));t.after(()=>rmSync(top,{recursive:true,force:true}));
  const bin=join(top,'bin'),tmp=join(top,'tmp'),src=join(top,'ubuntu.sources'),mirrors=join(top,'apt-mirrors.txt'),trace=join(top,'trace');mkdirSync(bin);mkdirSync(tmp);
- writeFileSync(src,actualSource?readFileSync(new URL('./fixtures/ubuntu24-20261012.334.sources',import.meta.url),'utf8'):badKey?source.replaceAll('/usr/share/keyrings/ubuntu-archive-keyring.gpg','/tmp/unknown.gpg'):untrusted?source.replace('mirror+file:/etc/apt/apt-mirrors.txt','https://evil.example/ubuntu/'):source);writeFileSync(mirrors,'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\n');
+ writeFileSync(src,sourceText??(actualSource?readFileSync(new URL('./fixtures/ubuntu24-20261012.334.sources',import.meta.url),'utf8'):badKey?source.replaceAll('/usr/share/keyrings/ubuntu-archive-keyring.gpg','/tmp/unknown.gpg'):untrusted?source.replace('mirror+file:/etc/apt/apt-mirrors.txt','https://evil.example/ubuntu/'):source));writeFileSync(mirrors,'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\n');
  const before=readFileSync(src,'utf8');
  writeFileSync(join(bin,'sudo'),'#!/bin/sh\nexec "$@"\n',{mode:0o755});
  writeFileSync(join(bin,'apt-get'),`#!/bin/sh
@@ -42,3 +42,22 @@ test('两边都有无法解析的Inst也不能被过滤成相同空计划',t=>{c
 for(const [phase,code] of [['simulate',41],['update',42],['install',43]])test('真实bash失败保留'+phase+'阶段且不报告完成',t=>{const r=invoke(t,{fail:phase});assert.equal(r.status,code,r.stderr);assert.doesNotMatch(r.stdout,/PREFLIGHT_APT_DONE/);assert.equal(r.sourceUnchanged,true);});
 
 test('真实runner完整source含纯注释分段，仍逐段验证真实源后安装',t=>{const r=invoke(t,{actualSource:true});assert.equal(r.status,0,r.stderr);assert.equal(r.sourceUnchanged,true);assert.match(r.log,/INSTALLED/);});
+
+test('Shard 0真实runner无尾斜线官方security源仍验证签名与计划后安装',t=>{
+ const sourceText=readFileSync(new URL('./fixtures/ubuntu24-20261018.96.sources',import.meta.url),'utf8');
+ const r=invoke(t,{sourceText});
+ assert.equal(r.status,0,r.stderr);
+ assert.equal(r.sourceUnchanged,true);
+ assert.match(r.log,/URIs: https:\/\/security\.ubuntu\.com\/ubuntu\//);
+ assert.match(r.log,/Signed-By: \/usr\/share\/keyrings\/ubuntu-archive-keyring.gpg/);
+ assert.match(r.stdout,/PREFLIGHT_APT_PLAN identical packages=3/);
+ assert.match(r.log,/INSTALLED/);
+});
+
+for(const uri of ['https://security.ubuntu.com/ubuntu.evil','https://security.ubuntu.com:8443/ubuntu','https://security.ubuntu.com/ubuntu?mirror=evil','https://security.ubuntu.com@evil.example/ubuntu','https://security.ubuntu.com/ubuntu//'])test('官方源兼容不得信任相近URI '+uri,t=>{
+ const r=invoke(t,{sourceText:source.replace('https://security.ubuntu.com/ubuntu/',uri)});
+ assert.notEqual(r.status,0);
+ assert.match(r.stderr,/APT_SOURCE_UNTRUSTED/);
+ assert.doesNotMatch(r.log,/INSTALLED/);
+ assert.equal(r.sourceUnchanged,true);
+});

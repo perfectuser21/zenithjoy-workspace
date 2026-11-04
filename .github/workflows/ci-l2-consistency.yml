@@ -174,7 +174,7 @@ jobs:
   orphan-test-check:
     name: Orphan Test Check
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -183,65 +183,15 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Verify orphan scanner excludes generated source cache
-        run: node --test scripts/ci/__tests__/orphan-cache-filter.test.mjs
-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked registry parser
+        run: npm ci --ignore-scripts --workspaces=false
+      - name: Verify registry checker regressions
+        run: node --test .github/workflows/scripts/__tests__/test-registry.test.mjs scripts/ci/__tests__/orphan-cache-filter.test.mjs scripts/ci/__tests__/orphan-test-workflow.test.mjs
       - name: Check all test files are registered in test-registry.yaml
-        run: |
-          echo "Scanning for unregistered test files..."
-
-          if [ ! -f "test-registry.yaml" ]; then
-            echo "SKIP: test-registry.yaml not found at repo root"
-            exit 0
-          fi
-
-          # Dependency source caches are not workspace-owned tests.
-          # Find all test/spec files, exclude node_modules and generated dirs
-          FOUND_FILES=$(find . \
-            -path "./.skills-source" -prune -o \
-            \( -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.tsx" -o -name "*.spec.js" \) \
-            -not -path "*/.skills-source/*" \
-            -not -path "*/.skills-runtime/*" \
-            -not -path "*/node_modules/*" \
-            -not -path "*/.git/*" \
-            -not -path "*/dist/*" \
-            -not -path "*/build/*" \
-            -not -path "*/coverage/*" -print \
-            2>/dev/null | sed 's|^\./||' | sort)
-
-          if [ -z "$FOUND_FILES" ]; then
-            echo "No test files found — nothing to check"
-            exit 0
-          fi
-
-          echo "Found $(echo "$FOUND_FILES" | wc -l | tr -d ' ') test file(s)"
-
-          # Extract all registered paths from test-registry.yaml
-          REGISTERED=$(grep -E '^\s+path:\s+' test-registry.yaml | sed 's/.*path:[[:space:]]*//' | tr -d '"' | sort)
-
-          # Find orphans: test files not in registry
-          ORPHANS=""
-          while IFS= read -r file; do
-            if ! grep -Fx -- "$file" <<< "$REGISTERED" > /dev/null; then
-              ORPHANS="$ORPHANS\n  - $file"
-            fi
-          done <<< "$FOUND_FILES"
-
-          if [ -n "$ORPHANS" ]; then
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  FAIL: Unregistered test files found"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf "%b\n" "$ORPHANS"
-            echo ""
-            echo "Fix: add each file to test-registry.yaml with id/path/type/ci/status/product fields"
-            echo "Docs: docs/registry/feature-registry.yml"
-            exit 1
-          fi
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  PASS: All test files are registered"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        run: node scripts/ci/test-registry.mjs
 
   registry-sync-check:
     name: Registry Sync Check
@@ -286,9 +236,7 @@ jobs:
         run: npm run test:product-map
 
       - name: Check product-map drift
-        run: |
-          npm run product-map:generate
-          npm run product-map:check
+        run: npm run product-map:check
 
       # 7f842d12 契约组装执行: 执行机 wf-run.sh 读的 plans/*.plan 必须与契约一致(改契约不重生成 = 红)
       - name: Check wf-plan execution plans drift
