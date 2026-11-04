@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import socket
 import subprocess
 import sys
 from urllib.request import Request, urlopen
@@ -90,16 +91,26 @@ def candidate(home, sha, release_id):
     identity = json.loads(proof.read(base / 'candidate-identity.json'))
     need(identity == {'source_commit': sha, 'release_id': release_id,
                       'manifest_sha256': release['manifest_sha256']}, 'CANDIDATE_IDENTITY')
-    observed = {k: manifest[k] for k in ('source_repo', 'source_commit', 'files', 'observed_hostname')}
-    need(observation['payload'].get('evidence_ref') == 'deployment-sha256:' + gate.digest(observed), 'OBSERVATION_DIGEST')
-    seen, by_source = set(), {}
+    # observeDeployment persists the declaration plus release metadata; host
+    # identity exists only in the measured observation, never in that file.
+    measured_hostname = socket.gethostname()
+    # Same xian-m4 mapping as runtime-host.mjs deploymentTarget().
+    need(isinstance(measured_hostname, str) and 'm4-xian' in measured_hostname.lower().split('.')[0], 'MEASURED_HOST')
+    seen, by_source, measured_files = set(), {}, []
     for row in manifest.get('files', []):
         name = row.get('deployed_path')
         need(isinstance(name, str) and not name.startswith('/') and name not in seen
              and all(part not in ('', '.', '..') for part in name.split('/')), 'MANIFEST_PATH')
         seen.add(name)
-        need(proof.sha(proof.read(runtime / name)) == row.get('content_sha256'), 'CANDIDATE_BYTES')
-        by_source[row['path']] = row['content_sha256']
+        actual_sha = proof.sha(proof.read(runtime / name))
+        need(actual_sha == row.get('content_sha256'), 'CANDIDATE_BYTES')
+        measured_files.append({**row, 'content_sha256': actual_sha})
+        by_source[row['path']] = actual_sha
+    observed = {'source_repo': manifest['source_repo'], 'source_commit': manifest['source_commit'],
+                'files': measured_files, 'observed_hostname': measured_hostname}
+    # Canonicalization sorts object keys only: the original file array order
+    # is covered exactly as in collectDeployment/observeDeployment.
+    need(observation['payload'].get('evidence_ref') == 'deployment-sha256:' + gate.digest(observed), 'OBSERVATION_DIGEST')
     need({'leadgen-run.sh', 'adb-managed-client.py', 'adb-existing-route.py'} <= seen, 'CANDIDATE_FILES')
     components = payload.get('components')
     need(isinstance(components, list) and components, 'COMPONENTS')
