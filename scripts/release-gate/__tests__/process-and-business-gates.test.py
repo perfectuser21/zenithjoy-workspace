@@ -28,6 +28,14 @@ class BusinessGateTest(unittest.TestCase):
     def green(self, **changes):
         return {"finalized": True, "gate_verdict": "green", "backend_sha": SHA, **changes}
 
+    def test_missing_receipt_file_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(["bash", str(GATE), "--fixture",
+                                     str(Path(directory) / "missing.json")],
+                                    env={**os.environ, "PROMOTE_SHA": SHA},
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_green_finalized_same_full_sha_passes(self):
         result = self.run_gate(self.green())
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
