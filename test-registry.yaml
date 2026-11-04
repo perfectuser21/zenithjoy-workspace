@@ -9501,3 +9501,6 @@ tests:
   - {"id":"inventory-f47e8db3e7adad5d","path":"scripts/__tests__/test_publish_by_content_id.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-07e2861a581802c5","path":"scripts/__tests__/test_sync_scraper_to_works.sh","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
   - {"id":"inventory-4dc63e7c509a8b75","path":"services/phone-adb-controller/__tests__/honor-hosted-news-widget.test.mjs","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-0e5e9b41b44671e8","path":"services/phone-adb-controller/__tests__/discovery-review-host.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-add1c8354a50f9ef","path":"services/phone-adb-controller/__tests__/discovery-review-lock.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
+  - {"id":"inventory-48df279a1aa4fee9","path":"services/phone-adb-controller/__tests__/discovery-review-maintenance.test.py","type":"unclassified","ci":"unverified","status":"pending-ci","product":"unclassified"}
