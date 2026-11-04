@@ -136,16 +136,18 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       return {status:'paused',reason:'本批私信未授权，保持暂停',sent:0};
     }
     const mmvStep=mmvDeviceRuntime?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
-    if(mmvStep) {
+    // 正式冻结run的公司隔离与host无关；MMV旧直接入口仍沿原条件。
+    const companyStep=(mmvDeviceRuntime||existsSync(join(env.WFR_RUN_DIR,'run-definition.json')))?{douyin_video_discovery:'101',douyin_video_processing:'102'}[env.WF_BRAIN_WORKFLOW]:undefined;
+    if(companyStep) {
       // 101沿原取词入口先冻结归一化taskInputs；不能先以空输入建立同run快照。
       // getDiscovery只取公司关键词并构造handler，此处不会搜索或执行手机动作。
-      if(mmvStep==='101')await getDiscovery();
-      const config=await queue('company_config',{step:mmvStep,device_binding:{profile,device_serial:serial}});
+      if(companyStep==='101')await getDiscovery();
+      const config=await queue('company_config',{step:companyStep,device_binding:{profile,device_serial:serial}});
       const binding=config?.device_binding;
       if(!config?.company_id||!config?.tenant_id||!Number.isSafeInteger(config?.version)||config.version<1||config.run_id!==run
         ||!binding||binding.company_id!==config.company_id||binding.tenant_id!==config.tenant_id||binding.version!==config.version||binding.run_id!==run
         ||binding.profile!==profile||binding.device_serial!==serial||binding.verification_status!=='verified'||binding.enabled!==true
-        ||typeof binding.douyin_id!=='string'||!binding.douyin_id||binding.douyin_id.trim()!==binding.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: MMV company/run/account binding missing or mismatched');
+        ||typeof binding.douyin_id!=='string'||!binding.douyin_id||binding.douyin_id.trim()!==binding.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED: company/run/account binding missing or mismatched');
       state.company_config={...config,expected_sender:binding.douyin_id};
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
     } else if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach') {
@@ -190,7 +192,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     }
     state.account=id;
     if(state.company_config&&state.company_config.expected_sender!==id)throw Error('COMPANY_ACCOUNT_IDENTITY_MISMATCH');
-    if(mmvStep==='102'){
+    if(companyStep==='102'){
       state.recipientCompanyBinding={...state.company_config.device_binding,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN||null};
       const file=join(env.WFR_RUN_DIR,run+'-company-binding.json'),bytes=JSON.stringify(state.recipientCompanyBinding);
       try{writeFileSync(file,bytes,{mode:0o600,flag:'wx'});}catch(error){
@@ -521,7 +523,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
       const outcome={sampling_receipts:sampleReceipts.map(({pg_rows,...publicReceipt})=>publicReceipt),fulfilled_sample_video_ids:sampleReceipts.map(v=>v.video_id),sampling_required_count:sampleInput?qualified.length:0,sampling_readback_count:sampleReceipts.length,collected,videos_collected:collected,videos_sampled:sampled,comment_sample_limit:sampleInput?.comment_limit||0,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected+sampled,rescan_count:rescans,identity_rescan_count:rescans,avatar_recovery_count:avatarRecoveries,
         identity_rescan_rate:qualified.length?rescans/qualified.length:0,rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};
       const finished=collectionScope?await collectionScope.finish(outcome):outcome;
-      if(finished.returned_phone_scope)state.collectionReturnedEvidence=finished;
+      if(finished.returned_phone_scope||finished.cleanup_phone_scope)state.collectionReturnedEvidence=finished;
       return finished;
       }finally{await collectionScope?.close();collectionScope=null;}},
     scoring:createScoringHandler({env,run,line,state,queue}),

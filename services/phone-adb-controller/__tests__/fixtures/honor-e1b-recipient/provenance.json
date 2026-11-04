@@ -6,5 +6,9 @@
   "returned": {
     "raw_sha256": "3688a7799b6a34e5a17e1e7968eb8166b35ecc1680ff615ca055433b7703741d",
     "sanitized": true
+  },
+  "author_footer": {
+    "raw_sha256": "91be8eab2d4b53df4e6e9968dcf3946fa18de8d75c4afb0ca1faed5e56ae3d1a",
+    "sanitized": true
   }
 }
