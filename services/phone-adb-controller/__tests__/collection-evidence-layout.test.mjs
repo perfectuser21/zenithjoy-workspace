@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync,readFileSync,existsSync,symlinkSync,realpathSync,rmSync,renameSync,chmodSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,existsSync,symlinkSync,realpathSync,rmSync,renameSync,chmodSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
-import {collectionFixture} from './helpers/collection-recovery-fixture.mjs';
+import {collectionFixture,saveCollectionFailure} from './helpers/collection-recovery-fixture.mjs';
 
 const sha=b=>createHash('sha256').update(b).digest('hex');
 async function aliasFixture(t){
@@ -25,6 +25,27 @@ async function aliasFixture(t){
  const state={currentActivity:'collection',account:'fixture-account',budgetDeadline:Date.now()+60000};
  const start=()=>startCollectionPhoneScope({root:f.runtime,env:f.env,state,sourceCommit:'a'.repeat(40),taskId:'scope-task',qualifiedVideoIds:[]});
  return {...f,canonical,alias,scope,start,state,load,freeze};
+}
+
+// 此组验证证据目录身份，不验证TCP路由；仍必须先完成真实parent broker/nofork C leaf。
+async function completedNativeVersion(t,f,scope){
+ let executed;
+ try{
+  const {execInput}=await f.load('leadgen-client.mjs');
+  const python=f.frozen.collection_phone_scope.executables.python.path;
+  executed=await execInput(python,[join(f.runtime,'adb-managed-client.py'),'version'],{env:{...f.env,...scope.env},timeoutMs:10000});
+  assert.equal(executed.code,0,executed.stderr);assert.match(executed.stdout,/^Android Debug Bridge version 1\.0\.41\r?\n$/);
+  const parent=join(f.d,'collection-phone-scopes'),scopes=readdirSync(parent);assert.equal(scopes.length,1);
+  const directory=join(parent,scopes[0]),ledgers=readdirSync(directory).filter(n=>/^collection-leaves-[0-9a-f]+\.jsonl$/.test(n));assert.equal(ledgers.length,1);
+  const rows=readFileSync(join(directory,ledgers[0]),'utf8').trim().split('\n').map(JSON.parse);
+  assert.deepEqual(rows.map(r=>r.phase),['intent','started','exit']);
+  for(const r of rows){assert.equal(r.sequence,1);assert.equal(r.argv_sha256,sha(JSON.stringify(['version'])));assert.equal(r.boundary,'darwin-sandbox-deny-process-fork-v1');}
+  assert.ok(rows[1].pid>1);assert.equal(rows[2].pid,rows[1].pid);assert.ok(rows[0].intent_at<=rows[1].started_at&&rows[1].started_at<=rows[2].ended_at);
+  assert.equal(rows[2].code,0);assert.equal(rows[2].signal,null);assert.equal(rows[2].tainted,false);assert.equal(rows[2].request_returned,true);
+ }catch(error){
+  const path=saveCollectionFailure(f,{phase:'directory-proof-native-leaf',executed,error:{message:error.message,stack:error.stack}});
+  t.diagnostic('collection_failure_evidence='+path);throw error;
+ }
 }
 
 test('现役授权alias在freeze固定canonical身份，实际collection执行不再消费可变alias',{skip:process.platform!=='darwin'},async t=>{
@@ -63,8 +84,7 @@ for(const [name,mutate] of mutations){
  test('授权目录start拒绝：'+name,{skip:process.platform!=='darwin'},async t=>{const f=await aliasFixture(t);mutate(f);await assert.rejects(f.start(),/COLLECTION_.*(?:EVIDENCE|RECORDING)/);});
  for(const phase of ['finish','fresh'])test('真实leaf完成后'+phase+'仍拒绝：'+name,{skip:process.platform!=='darwin'},async t=>{
   const f=await aliasFixture(t),scope=await f.start();t.after(()=>scope.close());mkdirSync(join(f.d,'native-operations'),{recursive:true});
-  const {execInput}=await f.load('leadgen-client.mjs');
-  const executed=await execInput(process.execPath,[join(f.runtime,'douyin-phone-adb'),'--profile',f.env.P,'status'],{env:{...f.env,...scope.env},timeoutMs:10000});assert.equal(executed.code,0,executed.stderr);
+  await completedNativeVersion(t,f,scope);
   const failure={status:'partial',failures:[{reason:'COLLECTION_COMMENT_PANEL_READBACK_FAILED'}]};
   const {collectionPhoneProofValid}=await f.load('collection-phone-scope.mjs');
   const context={task_id:'scope-task',run_id:'scope-run__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:f.env.P,serial:f.env.SERIAL,activity:'collection',owner:f.env.WFR_TAG,target:'xian-m4',deadline_ms:f.state.budgetDeadline,snapshot_sha256:f.frozen.snapshot_sha256,binding_id:'scope-binding'};

@@ -226,7 +226,15 @@ Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和�
 
 `collection-review-maintenance-host.py plan <新候选SHA> <release-id>` 只读核对本次
 `ys20261103235714_102` 的原件、当前维护claim、现行中央归属、十个guard和候选实际字节。
-合同来自已保存原件SHA，包含旧101归档及其他owner完整盘点；调用者不能替换owner或预期hash。
+合同来自已保存原件SHA，包含旧101归档及其他owner历史盘点；调用者不能替换owner或预期hash。
+仅legacy的`ANGYVB4227006983.lock`与`standalone-claims/ANGYVB4227006983`精确子树
+允许与历史盘点不同；这些外部业务状态只被保留，不据此认定其合法或已停止。
+其他legacy条目（包括431历史claims）、durable、迁移标记、alias与十个guard继续固定原合同。
+全guard下双次稳定盘点后，`apply`先独占持久化`inventory-snapshot.json`，绑定完整当前中央租约、
+维护claim、候选业务版本、维护工具40位版本目录及15文件实际哈希、原合同SHA和目标inode。
+所有后续阶段要求当前legacy完整等于此快照；pre-retirement及completion绑定其原始字节SHA。
+已有任何意图或结果但缺快照、快照不完整或其后状态变化均拒绝，崩溃重入不会重新采纳新盘点。
+原migration摘要只作历史锚，不冒充当前legacy全盘一致；新快照不修改原合同或旧run。
 
 `apply` 在同一组guard下复核。仅当原生双焦点明确为该抖音应用、电话空闲、录制器静默时，
 新授权允许两个独立受限nofork请求：关闭固定抖音包、返回HOME；随后读取物理屏幕尺寸、

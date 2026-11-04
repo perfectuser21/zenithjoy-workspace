@@ -109,8 +109,18 @@ def lock_paths(home):
     need(marker['legacy_root']==str(logical) and marker['entries']==207 and marker['review_owners']==2,'MIGRATION_MARKER')
     return old,durable,record
 
+def preserved_legacy_path(name):
+    # 两个精确path-component域；外部业务状态只保留，不裁定其合法性或停止。
+    parts=name.split('/')
+    return parts[0]=='ANGYVB4227006983.lock' or parts[:2]==['standalone-claims','ANGYVB4227006983']
+
+def legacy_diff(entries):
+    before={r[0]:r for r in CONTRACT['lock_state']['legacy']};after={r[0]:r for r in entries}
+    return [{'path':p,'before':before.get(p),'after':after.get(p)} for p in sorted(before.keys()|after.keys()) if before.get(p)!=after.get(p)]
+
 class OwnedGuards:
-    def __init__(self,home):self.home=home;self.fds=[]
+    def __init__(self,home,*,legacy_snapshot=None):
+        self.home=home;self.fds=[];self.legacy_snapshot=legacy_snapshot
     def __enter__(self):
         self.old,self.durable,self.legacy=lock_paths(self.home)
         try:
@@ -130,7 +140,12 @@ class OwnedGuards:
         need(sorted([*self.old.glob('*.guard'),*self.durable.glob('*.guard')])==[p for _,p in self.fds],'GUARD_SET_DRIFT')
         before=CONTRACT['lock_state']['durable'];after=primitives.changed_inventory(before,SCOPE['serial']+'.lock',ARCHIVE)
         current=locks.inventory(self.durable)
-        need(locks.inventory(self.old)==CONTRACT['lock_state']['legacy'] and current in [before,after],'LOCK_INVENTORY')
+        observed=locks.inventory(self.old)
+        need(all(preserved_legacy_path(d['path']) for d in legacy_diff(observed)) and current in [before,after],'LOCK_INVENTORY')
+        if self.legacy_snapshot is None:
+            need(locks.inventory(self.old)==observed and locks.inventory(self.durable)==current,'LEGACY_SNAPSHOT_UNSTABLE')
+            self.legacy_snapshot=observed
+        else:need(observed==self.legacy_snapshot,'LEGACY_SNAPSHOT_DRIFT')
         target=self.durable/(SCOPE['serial']+'.lock' if current==before else ARCHIVE)
         primitives.owner_directory(target,SCOPE['owner'])
         st=target.lstat();identity=[st.st_dev,st.st_ino,st.st_uid,st.st_mode]
