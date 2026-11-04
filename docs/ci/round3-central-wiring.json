@@ -358,7 +358,17 @@
     "services/agent/publishers/__tests__/douyin-cookie-admission.test.ts",
     "services/agent/src/handlers/__tests__/media-rotation-runtime.test.ts",
     "services/agent/src/handlers/__tests__/video-pipeline-process.test.ts",
+    "services/phone-adb-controller/__tests__/activity-skill-primary-broker.test.mjs",
+    "services/phone-adb-controller/__tests__/agent-first-executor.test.mjs",
+    "services/phone-adb-controller/__tests__/agent-first-input.test.mjs",
+    "services/phone-adb-controller/__tests__/agent-first-runtime.test.mjs",
+    "services/phone-adb-controller/__tests__/agent-first-transport.test.mjs",
+    "services/phone-adb-controller/__tests__/agent-native-comment-panel.test.mjs",
+    "services/phone-adb-controller/__tests__/collection-review-maintenance-claim.test.py",
     "services/phone-adb-controller/__tests__/controller-compatibility.test.mjs",
+    "services/phone-adb-controller/__tests__/leadgen-agent-artifacts.test.mjs",
+    "services/phone-adb-controller/__tests__/leadgen-agent-resource.test.mjs",
+    "services/phone-adb-controller/__tests__/leadgen-agent-tools.test.mjs",
     "services/wechat-moments-controller/__tests__/safety.test.mjs"
   ],
   "required_contracts": {
@@ -586,15 +596,46 @@
   },
   "baseline_counts": {
     "before": 159,
+    "after": 73,
+    "removed": 92,
+    "added": 6,
+    "new_canonical_entries": 5,
+    "new_upstream_entries": 1
+  },
+  "top_level_smoke_counts": {
+    "before": 300,
+    "after": 120,
+    "original_entries_removed_or_relocated": 186,
+    "new_canonical_entries": 5,
+    "new_upstream_entries": 1
+  },
+  "post_ci_additional_evidence": "docs/ci/round3-post-ci-consolidation.json",
+  "audit_scope_baseline_counts": {
+    "before": 159,
     "after": 72,
     "removed": 92,
     "added": 5
   },
-  "top_level_smoke_counts": {
+  "audit_scope_top_level_smoke_counts": {
     "before": 300,
     "after": 119,
     "original_entries_removed_or_relocated": 186,
     "new_canonical_entries": 5
   },
-  "post_ci_additional_evidence": "docs/ci/round3-post-ci-consolidation.json"
+  "upstream_integration": {
+    "pull_request": 2404,
+    "commit": "d0f14535c40b17e6cb13f2be3c031a2e89fd3392",
+    "preserved_smoke": "agent-first-leadgen-smoke.sh",
+    "main_before_this_cleanup": {
+      "top_level_smoke": 301,
+      "baseline": 160
+    },
+    "integrated_candidate": {
+      "top_level_smoke": 120,
+      "baseline": 73
+    },
+    "skills_revision": "eb8b8efa8237afe079c2733422f2d745f53fc3a3",
+    "scope": "Original 300/159 inventory and 172 action units stay frozen; preserve independently merged current-main additions."
+  },
+  "installer_candidate_boundary": "agent-installpack.yml only retains SHA-bound core and four module candidates; deprecated publish=true fails before builds. No COS upload or production manifest update; real business admission/promotion remains outside CI completion."
 }
