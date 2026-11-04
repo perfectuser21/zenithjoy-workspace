@@ -23,9 +23,9 @@ const api=[
 const dashboard=['src/components/video-pipeline/__tests__/TemplateSelector.test.tsx','src/pages/__tests__/LocalVideoPipelinePage.test.ts','src/pages/__tests__/CreativeCanvasPage.test.tsx','src/pages/__tests__/VideoToolsPage.test.tsx','src/pages/__tests__/AidgeWorkspacePage.test.tsx','src/api/aidge-access.test.ts'];
 const agent=['src/handlers/__tests__/media-rotation-runtime.test.ts','src/handlers/__tests__/video-pipeline.test.ts','modules/line02/__tests__/report-videos-runtime.test.ts','publishers/douyin-publisher/__tests__/publish-douyin-video.test.cjs'];
 export const groups={render:{cwd:'apps/api',files:['src/services/__tests__/media-render-runtime.test.ts']},api:{cwd:'apps/api',files:api},dashboard:{cwd:'apps/dashboard',files:dashboard},agent:{cwd:'services/agent',files:agent},pg:{cwd:'apps/api',files:['tests/integration/media/pipeline.test.ts','tests/integration/media/materials.test.ts'],config:'vitest.media-pg.config.ts'}};
-function main(){
+export function runContractGroups(selected=process.argv.slice(2)){
  const root=fileURLToPath(new URL('../../../../../',import.meta.url));
- const selected=process.argv.slice(2);if(!selected.length)selected.push(...Object.keys(groups));
+ if(!selected.length)selected.push(...Object.keys(groups));
  if(selected.some(g=>!groups[g]))throw new Error('unknown media contract group');
  const temp=mkdtempSync('/tmp/zj-media-');let pgStarted=false;
  const pgBin=process.env.MEDIA_POSTGRES_BIN??['/opt/homebrew/opt/postgresql@17/bin','/usr/lib/postgresql/17/bin','/usr/lib/postgresql/16/bin','/usr/lib/postgresql/15/bin'].find(p=>existsSync(path.join(p,'initdb')));
@@ -35,7 +35,7 @@ function main(){
    const g=groups[name],env={...process.env};
    // All model/provider tests inject their boundary; accidental real credentials are absent.
    for(const k of Object.keys(env))if(/(API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY)/i.test(k))delete env[k];
-   if(name==='pg'){
+   if(name==='pg'||g.postgres){
     if(!pgBin)throw new Error('PostgreSQL initdb/pg_ctl required; set MEDIA_POSTGRES_BIN');
     exec(path.join(pgBin,'initdb'),['-D',temp+'/data','-U','media_contract','-A','trust','--no-locale'],{stdio:'ignore'});
     exec(path.join(pgBin,'pg_ctl'),['-D',temp+'/data','-l',temp+'/postgres.log','-o',`-F -k ${temp} -h ''`,'-w','start'],{stdio:'ignore'});pgStarted=true;
@@ -50,4 +50,4 @@ function main(){
   }
  }finally{if(pgStarted)spawnSync(path.join(pgBin,'pg_ctl'),['-D',temp+'/data','-m','immediate','-w','stop'],{stdio:'ignore'});rmSync(temp,{recursive:true,force:true});}
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main();
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))runContractGroups();

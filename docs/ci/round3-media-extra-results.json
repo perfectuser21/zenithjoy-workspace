@@ -1,0 +1,112 @@
+{
+  "lane": "media-extra",
+  "units_total": 6,
+  "rows": [
+    {
+      "unit_id": "android-command-bridge",
+      "paths": [
+        ".github/workflows/scripts/smoke/agent-cmd-executor-smoke.sh",
+        ".github/workflows/scripts/smoke/device-command-bridge-smoke.sh"
+      ],
+      "actual_action": "AgentService live WS cmd handler delegates same production parse/submit/rejection helper driven by new JVM tests and real CommandQueue. Invalid action/out-of-bounds/missing correlation negatives exercise actual code. Existing command Executor/lease/queue/protocol/security-source suites retained. API schema/bridge/registry close race/agent-ws dispatch/devices plus mounted production-token guard execute; actual bridge shell scripts use loopback/fake hardware fixtures. Missing SDK is explicit nonzero.",
+      "tests": [
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/AgentServiceCommandRouteTest.kt",
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/command/*",
+        "apps/api/src/services/__tests__/agent-ws-cmd.test.ts",
+        "apps/api/src/routes/__tests__/devices.test.ts",
+        "scripts/openclaw/__tests__/adb-controller-bridge.test.js"
+      ],
+      "state": "implemented_verified_current_code",
+      "required_integration": "root central canonical wiring per media-extra-wiring.json",
+      "external_delivery": "No physical device, publishing, real message/webhook recipient or paid model call executed or claimed."
+    },
+    {
+      "unit_id": "android-content-judgment-client-wiring",
+      "paths": [
+        ".github/workflows/scripts/smoke/content-judgment-client-wiring-smoke.sh"
+      ],
+      "actual_action": "AgentService init now calls its actual production assembly factory. Real factory→poll→judge HTTP requests verify mixed matched/rejected dispatch and all-rejected no Stage2 callback. Nonempty data uses valid tenant and captured actual request, avoiding old early-return toy. Screenshot failure still posts skipped_capture_failed. Timeout is isolated thrown SocketTimeoutException, no real waiting/provider. Removing rejected gate was actually caught by two tests.",
+      "tests": [
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/ContentJudgmentClientWiringTest.kt"
+      ],
+      "state": "implemented_verified_current_code",
+      "required_integration": "root central canonical wiring per media-extra-wiring.json",
+      "external_delivery": "No physical device, publishing, real message/webhook recipient or paid model call executed or claimed."
+    },
+    {
+      "unit_id": "startup-health",
+      "paths": [
+        ".github/workflows/scripts/smoke/startup-config-check-smoke.sh"
+      ],
+      "actual_action": "Real app.ts mounted /health and /api/health executed over HTTP with complete required keys and disposable DB host/name group; exact config.ok=true and missing TOAPI negative verified. Direct current verifier protects both OR alternatives and rejects half/missing DB groups. No repeated whole-app dist build or fixed port.",
+      "tests": [
+        "apps/api/tests/integration/media-extra/runtime.test.ts",
+        "apps/api/src/__tests__/startup-check.test.ts"
+      ],
+      "state": "implemented_verified_current_code",
+      "required_integration": "root central canonical wiring per media-extra-wiring.json",
+      "external_delivery": "No physical device, publishing, real message/webhook recipient or paid model call executed or claimed."
+    },
+    {
+      "unit_id": "voice-prototype",
+      "paths": [
+        ".github/workflows/scripts/smoke/realtime-voice-mvp-smoke.sh"
+      ],
+      "actual_action": "Existing realtime prototype is exercised in its own exact fork PID with whitelisted child env, random loopback port and unique temporary launcher. All inherited provider credentials are absent. Child HTTP/HTTPS client transport is blocked; /session exact missing-key500 JSON and static page200 pass with zero provider attempts. Exact PID termination awaited, temp tree removed. Does not attach any new production navigation or alter retained proactive voice.",
+      "tests": [
+        "apps/realtime-voice-mvp/server-local-contract.test.mjs"
+      ],
+      "state": "implemented_verified_current_code",
+      "required_integration": "root central canonical wiring per media-extra-wiring.json",
+      "external_delivery": "No physical device, publishing, real message/webhook recipient or paid model call executed or claimed."
+    },
+    {
+      "unit_id": "installer-personal-env-isolation",
+      "paths": [
+        ".github/workflows/scripts/smoke/agent-installpack-url-burn-smoke.sh"
+      ],
+      "actual_action": "Actual mounted dotenv endpoint and actual SQL accounts/licenses run twice with explicit staging/prod address/WS/env-marker fixtures. Generated env consumed by current shared config-loader under temporary APPDATA; exact license/API values verified. Missing URL consumer rejects, anonymous401/unlicensed503 exact. All HTTP requests have explicit response/deadline bounds and console capture proves no license emitted. No production registration/package writes or downloads.",
+      "tests": [
+        "apps/api/tests/integration/media-extra/runtime.test.ts",
+        "apps/api/src/routes/__tests__/agent-install-pack.test.ts"
+      ],
+      "state": "implemented_verified_current_code",
+      "required_integration": "root central canonical wiring per media-extra-wiring.json",
+      "external_delivery": "No physical device, publishing, real message/webhook recipient or paid model call executed or claimed."
+    },
+    {
+      "unit_id": "agent-offline-alert",
+      "paths": [
+        ".github/workflows/scripts/smoke/agent-offline-alert-smoke.sh"
+      ],
+      "actual_action": "Real disposable PG agents+mounted scan route+random-port loopback webhook all isolated from defaults. Fresh/Android rows excluded; stale Windows payload fields/duration verified, dedupe is tested before recovery, exact recovery notification follows SQL update. Refused port requires actual JSON success=false and specific agent send_errors; failed send is retryable. Found and fixed real webhookHTTP503 silently counted-success bug, added bounded transport. Removing HTTP status rejection was actually caught.",
+      "tests": [
+        "apps/api/tests/integration/media-extra/runtime.test.ts",
+        "apps/api/src/services/__tests__/agent-offline-monitor.test.ts",
+        "apps/api/src/routes/__tests__/agent-offline-scan.test.ts"
+      ],
+      "state": "implemented_verified_current_code",
+      "required_integration": "root central canonical wiring per media-extra-wiring.json",
+      "external_delivery": "No physical device, publishing, real message/webhook recipient or paid model call executed or claimed."
+    }
+  ],
+  "validation": {
+    "api_unit_suites": 9,
+    "api_unit_tests": 118,
+    "real_pg_http_tests": 11,
+    "bridge_shell_tests": 47,
+    "realtime_prototype_tests": 1,
+    "android_selected_suites": 13,
+    "android_selected_tests": 79,
+    "android_required_xml_suites": 7,
+    "android_required_xml_tests": 47,
+    "all_skipped": 0,
+    "missing_sdk_negative": "exit1 with explicit required SDK error before Gradle",
+    "source_mutations_caught": "3/3; see round3-media-extra-mutations.json; sources restored before final green run",
+    "api_typecheck": "pass",
+    "product_map_check": "pass",
+    "runtime_canonical_command": "PATH=/opt/homebrew/opt/node@20/bin:$PATH bash .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh",
+    "android_canonical_command": "ANDROID_HOME=/opt/homebrew/share/android-commandlinetools bash .github/workflows/scripts/smoke/android-agent-contracts-smoke.sh"
+  },
+  "scope": "Current code contracts only; root owns final required integration. No production config/secrets/DB/device/app.ts/global workflow or product map edits by this lane."
+}

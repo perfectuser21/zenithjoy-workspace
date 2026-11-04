@@ -83,11 +83,13 @@ export async function sendOfflineAlert(
   });
 
   try {
-    await fetch(webhook, {
+    const response = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
+      signal: AbortSignal.timeout(10_000),
     });
+    if (!response.ok) throw new Error(`webhook HTTP ${response.status}`);
   } catch (err) {
     console.error('[agent-offline-monitor] 飞书告警发送失败:', err);
     throw err;
@@ -121,11 +123,13 @@ export async function sendRecoveryAlert(
   });
 
   try {
-    await fetch(webhook, {
+    const response = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
+      signal: AbortSignal.timeout(10_000),
     });
+    if (!response.ok) throw new Error(`webhook HTTP ${response.status}`);
   } catch (err) {
     console.error('[agent-offline-monitor] 飞书恢复通知发送失败:', err);
     throw err;
