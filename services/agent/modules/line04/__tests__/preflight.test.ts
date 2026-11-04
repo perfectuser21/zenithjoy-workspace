@@ -276,10 +276,45 @@ describe('fixGuide 中文修复指引', () => {
 });
 
 describe('runPreflight 跨平台行为', () => {
-  it('返回结构化结果（checks + ok 为 boolean）', async () => {
-    const r = await runPreflight(os.tmpdir());
-    expect(r).toHaveProperty('checks');
-    expect(typeof r.ok).toBe('boolean');
+  it('CI fixture 返回结构化结果，Win32 分支不安装或调用设备', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    const env = {
+      CI_MODE: '1',
+      MOCK_WECHAT_VERSION: '4.1.8.107',
+      MOCK_VERIFY_SILENT: 'skip',
+      MOCK_VERIFY_DELIVERY: 'skip',
+      MOCK_UPDATE_LOCK: 'skip',
+    };
+    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+    const forbidden = () => { throw new Error('CI structural fixture must not install or invoke external tools'); };
+    const exec = vi.mocked(execSync);
+    const execImplementation = exec.getMockImplementation();
+    const spies = [
+      vi.spyOn(_repairFuncs, 'installWeChat').mockImplementation(forbidden),
+      vi.spyOn(_repairFuncs, 'installPywinauto').mockImplementation(forbidden),
+      vi.spyOn(_repairFuncs, 'installPywebview').mockImplementation(forbidden),
+      vi.spyOn(childProcessModule, 'spawn').mockImplementation(forbidden),
+      vi.spyOn(childProcessModule, 'spawnSync').mockImplementation(forbidden),
+      vi.spyOn(https, 'get').mockImplementation(forbidden),
+    ];
+    // The running-process hint has no dedicated MOCK seam. Isolate its read-only
+    // tasklist boundary here; all preflight logic and outcome assertions are real.
+    exec.mockReturnValue('WeChatAppEx.exe');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const r = await runPreflight(os.tmpdir());
+      expect(r).toHaveProperty('checks');
+      expect(typeof r.ok).toBe('boolean');
+      expect(r.ok).toBe(true);
+      expect(r.checks.wechat_version).toBe(true);
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      for (const spy of spies.reverse()) spy.mockRestore();
+      exec.mockReset();
+      if (execImplementation) exec.mockImplementation(execImplementation);
+      vi.unstubAllEnvs();
+    }
   });
 
   it('非 Windows 平台不崩溃且返回 ok:true', async () => {
