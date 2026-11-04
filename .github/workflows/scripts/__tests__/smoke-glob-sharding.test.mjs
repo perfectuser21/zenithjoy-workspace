@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import {parse} from 'yaml';
 
 const requiredDuplicates=['dashboard-license-smoke.sh','line04-crm-view-prefs-smoke.sh'];
-const helpers = ['remote-adb.sh','line02-android-accessibility-ui.sh','line02-android-cancel-candidate-setup.sh','remote-android-install.sh'];
+const helpers = ['remote-adb.sh','line02-android-accessibility-ui.sh','line02-android-cancel-candidate-setup.sh','remote-android-install.sh','line02-android-cancel-candidate-cleanup.sh'];
 const workflow = readFileSync(new URL('../../ci-smoke-glob-runner.yml', import.meta.url), 'utf8');
 function step(name) {
   const tail = workflow.split(`      - name: ${name}\n`)[1];

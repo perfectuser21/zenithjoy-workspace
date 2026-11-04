@@ -16,6 +16,16 @@ function fixture(t){
  git('init','-q','-b','main');git('config','user.name','scope-fixture');git('config','user.email','scope@example.invalid');git('remote','add','origin','https://github.com/perfectuser21/zenithjoy-workspace.git');
  const put=(p,s)=>{mkdirSync(dirname(join(root,p)),{recursive:true});writeFileSync(join(root,p),s)};
  put(contractPath,JSON.stringify(sourceContract));for(const p of [...sourceContract.workflows.flatMap(w=>w.activities.flatMap(a=>a.bindings)),...sourceContract.auxiliary_paths])if(p!==contractPath)put(p,'fixture\n');
+ // Match the actual selector's declared dependencies before taking the base snapshot.
+ const dependencies=['.github/workflows/scripts/smoke-selection.py',
+  '.github/workflows/scripts/smoke-helpers.json',
+  '.github/workflows/scripts/smoke-required-duplicates.json',
+  '.github/workflows/ci-l4-e2e-smoke.yml'];
+ for(const p of dependencies)put(p,readFileSync(new URL('../../../'+p,import.meta.url),'utf8'));
+ const helperManifest=JSON.parse(readFileSync(join(root,dependencies[1]),'utf8'));
+ for(const record of helperManifest.helpers)for(const p of record.consumers)put(p,readFileSync(new URL('../../../'+p,import.meta.url),'utf8'));
+ const duplicates=JSON.parse(readFileSync(join(root,dependencies[2]),'utf8')).duplicates;
+ for(const record of [...helperManifest.helpers,...duplicates])put('.github/workflows/scripts/smoke/'+record.name,'#!/bin/bash\n# Inert fixture references: '+helperManifest.helpers.map(h=>h.name).join(', ')+'\nexit 97\n');
  const commit=()=>{git('add','.');git('commit','-qm','fixture');return git('rev-parse','HEAD')};
  const base=commit();return {root,git,put,commit,base,registeredRevision:base,contract:structuredClone(sourceContract)};
 }
@@ -76,6 +86,13 @@ test('caller永久执行并仅根据成功分类控制巡查；所有事件保�
 test('共享smoke真实隔离消费者守卫：正常执行且巡查失败必非零',async()=>{
  const {verifyPatrolSmokeConsumer}=await api();const root=new URL('../../../',import.meta.url).pathname;
  const r=verifyPatrolSmokeConsumer(root);assert.equal(r.verified,true);assert.equal(r.shards_executed,2);assert.equal(r.aggregate_verified,true);assert.equal(r.coverage_source_failure_blocked,true);
+});
+for(const dependency of ['smoke-selection.py','smoke-helpers.json','smoke-required-duplicates.json'])test('隔离消费者必须包含现役发现依赖：'+dependency,async t=>{
+ const {verifyPatrolSmokeConsumer}=await api(),f=fixture(t);
+ f.put('.github/workflows/scripts/smoke-baseline.txt','phone-account-patrol-smoke.sh\n');
+ f.put('.github/workflows/ci-smoke-glob-runner.yml',readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8'));
+ rmSync(join(f.root,'.github/workflows/scripts',dependency));
+ assert.throws(()=>verifyPatrolSmokeConsumer(f.root),/PATROL_SCOPE_SMOKE_SELECTION_DEPENDENCY_INVALID/);
 });
 test('共享baseline删巡查、deny巡查不得通过消费者守卫',async t=>{
  const {verifyPatrolSmokeConsumer}=await api(),f=fixture(t);const base='.github/workflows/scripts/smoke-baseline.txt',runner='.github/workflows/ci-smoke-glob-runner.yml';

@@ -4,22 +4,38 @@
     {
       "name": "remote-adb.sh",
       "reason": "ADB argv transport over an explicitly configured SSH host; not a standalone test and must never be invoked without the bounded device workflow context.",
-      "consumers": [".github/workflows/e2e-line02-android-collect.yml"]
+      "consumers": [
+        ".github/workflows/e2e-line02-android-collect.yml"
+      ]
     },
     {
       "name": "line02-android-accessibility-ui.sh",
       "reason": "Explicit enable/restore helper owned by isolated Android candidate setup and cleanup; requires ADB, RUNNER_TEMP and an action.",
-      "consumers": [".github/workflows/scripts/smoke/line02-android-cancel-candidate-setup.sh", ".github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh"]
+      "consumers": [
+        ".github/workflows/scripts/smoke/line02-android-cancel-candidate-setup.sh",
+        ".github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh"
+      ]
     },
     {
       "name": "line02-android-cancel-candidate-setup.sh",
       "reason": "Creates the device workflow's isolated candidate identity/API binding; requires the explicit E2E database, APK and device context.",
-      "consumers": [".github/workflows/e2e-line02-android-collect.yml"]
+      "consumers": [
+        ".github/workflows/e2e-line02-android-collect.yml"
+      ]
     },
     {
       "name": "remote-android-install.sh",
       "reason": "Transferred and run explicitly by the bounded Android E2E job to install its isolated APK; never a no-argument Ubuntu smoke.",
-      "consumers": [".github/workflows/e2e-line02-android-collect.yml"]
+      "consumers": [
+        ".github/workflows/e2e-line02-android-collect.yml"
+      ]
+    },
+    {
+      "name": "line02-android-cancel-candidate-cleanup.sh",
+      "reason": "Explicit E2E teardown can restore accessibility, uninstall the isolated APK, remove the bounded tenant fixture and stop its API. Without that owned context it only prints PASS, so it is not a standalone test.",
+      "consumers": [
+        ".github/workflows/e2e-line02-android-collect.yml"
+      ]
     }
   ]
 }

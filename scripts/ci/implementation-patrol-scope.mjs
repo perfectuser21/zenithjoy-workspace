@@ -14,7 +14,7 @@ const REGISTERED_REVISION='f0923e5396bade1986ba5452e766cabb5f4a30b3';
 const SCOPE='cecelia-device-patrol',REPO='perfectuser21/zenithjoy-workspace';
 const PREFIX=dirname(CONTRACT_PATH)+'/';
 const dedicated=new Set(['.github/workflows/phone-account-patrol.yml','.github/workflows/scripts/smoke/phone-account-patrol-smoke.sh']);
-const fail=code=>{throw Object.assign(Error('PATROL_SCOPE_'+code),{code:'PATROL_SCOPE_'+code})};
+const fail=(code,detail='')=>{throw Object.assign(Error('PATROL_SCOPE_'+code+(detail?' '+detail:'')),{code:'PATROL_SCOPE_'+code})};
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const revision=v=>typeof v==='string'&&/^[a-f0-9]{40}$/.test(v);
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
@@ -137,6 +137,32 @@ export function verifyPatrolSmokeConsumer(repoRoot){
  try{
   const dir=join(root,'.github/workflows/scripts/smoke'),reports=join(root,'reports');mkdirSync(dir,{recursive:true});mkdirSync(reports);
   const companion='a-consumer-smoke.sh',source='f'.repeat(40);
+  // The real worker now consumes a reviewed selector and two exclusion manifests.
+  // Recreate those dependencies inside this isolated fixture. Helpers and
+  // duplicate probes are inert sentinels: an accidental invocation must fail,
+  // never operate a physical device or call an external API.
+  const selectionPaths=['.github/workflows/scripts/smoke-selection.py',
+   '.github/workflows/scripts/smoke-helpers.json',
+   '.github/workflows/scripts/smoke-required-duplicates.json',
+   '.github/workflows/ci-l4-e2e-smoke.yml'];
+  const put=(path,text)=>{mkdirSync(dirname(join(root,path)),{recursive:true});writeFileSync(join(root,path),text)};
+  try{
+   for(const path of selectionPaths)put(path,readFileSync(join(repoRoot,path),'utf8'));
+   const helpers=JSON.parse(readFileSync(join(root,selectionPaths[1]),'utf8')).helpers;
+   const duplicates=JSON.parse(readFileSync(join(root,selectionPaths[2]),'utf8')).duplicates;
+   if(!Array.isArray(helpers)||!Array.isArray(duplicates))fail('SMOKE_SELECTION_DEPENDENCY_INVALID');
+   for(const helper of helpers){
+    if(!Array.isArray(helper.consumers))fail('SMOKE_SELECTION_DEPENDENCY_INVALID');
+    for(const path of helper.consumers){
+     if(typeof path!=='string'||!/^[-\w./]+$/.test(path)||path.startsWith('/')||path.split('/').some(p=>!p||p==='.'||p==='..'))fail('SMOKE_SELECTION_DEPENDENCY_INVALID');
+     put(path,readFileSync(join(repoRoot,path),'utf8'));
+    }
+   }
+   for(const record of [...helpers,...duplicates]){
+    if(typeof record.name!=='string'||!/^[-\w.]+\.sh$/.test(record.name))fail('SMOKE_SELECTION_DEPENDENCY_INVALID');
+    put('.github/workflows/scripts/smoke/'+record.name,'#!/bin/bash\n# Inert fixture references: '+helpers.map(h=>h.name).join(', ')+'\nexit 97\n');
+   }
+  }catch{fail('SMOKE_SELECTION_DEPENDENCY_INVALID')}
   writeFileSync(join(dirname(dir),'smoke-baseline.txt'),companion+'\n'+name+'\n');
   const env={PATH:'/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin',HOME:root,CI:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_SHA:source,GITHUB_STEP_SUMMARY:join(root,'summary'),RUNNER_TEMP:reports,SMOKE_SHARD_COUNT:'2',SMOKE_ARTIFACTS:reports};
   const run=(script,extra={})=>spawnSync('/bin/bash',['-c',script],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:20000,maxBuffer:2*1024*1024});
@@ -152,9 +178,9 @@ export function verifyPatrolSmokeConsumer(repoRoot){
    writeFileSync(join(dir,companion),`#!/bin/bash\nprintf executed >> '${other}'\nexit 0\n`);
    writeFileSync(join(dir,name),`#!/bin/bash\nprintf executed >> '${marker}'\nexit ${exitCode}\n`);
    const workers=[0,1].map(i=>run(step.run,{SMOKE_SHARD_INDEX:String(i)}));
-   if(!existsSync(marker)||!existsSync(other)||readFileSync(other,'utf8')!=='executed'||readFileSync(marker,'utf8')!==(exitCode?'executedexecuted':'executed'))fail('SMOKE_CONSUMER_BYPASSED');
+   if(!existsSync(marker)||!existsSync(other)||readFileSync(other,'utf8')!=='executed'||readFileSync(marker,'utf8')!==(exitCode?'executedexecuted':'executed'))fail('SMOKE_CONSUMER_BYPASSED',JSON.stringify(workers.map(r=>({status:r.status,error:r.error?.message,stdout:r.stdout,stderr:r.stderr}))));
    const result=workers.every(ok)?'success':'failure';
-   if(exitCode){if(!ok(workers[0]))fail('SMOKE_CONSUMER_BYPASSED');requireBlocked(workers[1]);requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:result}));continue}
+   if(exitCode){if(!ok(workers[0]))fail('SMOKE_CONSUMER_BYPASSED',JSON.stringify(workers.map(r=>({status:r.status,error:r.error?.message,stdout:r.stdout,stderr:r.stderr}))));requireBlocked(workers[1]);requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:result}));continue}
    if(result!=='success'||!ok(run(verify.run,{SMOKE_SHARDS_RESULT:result})))fail('SMOKE_CONSUMER_BYPASSED');
    // 使用真实聚合器及真实worker产物证明不可漏覆盖、串source或吞worker失败。
    requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:'failure'}));
