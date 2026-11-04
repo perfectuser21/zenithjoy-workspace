@@ -87,7 +87,8 @@ class ExactDurableTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'LEGACY_BINDING_REQUIRED'):
             mod.retire(alias, self.new, self.journal, 'b' * 64)
         binding = {'home': str(self.base), 'physical_root': str(self.old), 'alias': ['original-inode']}
-        record = {'legacy_root': str(alias), 'legacy_binding': binding, 'guard_identity': {}}
+        record = {'legacy_root': str(alias), 'legacy_binding': binding, 'guard_identity': {},
+                  'migration_sha256': json.loads(marker.read_text())['source_sha256']}
         for root in (self.old, self.new):
             for path in root.glob('*.guard'):
                 st = path.stat()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """单durable原101 owner的可重入CAS归档；不改旧migration marker/计数。"""
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -72,6 +73,18 @@ def retire(old_root, durable_root, journal_path, authority_sha256, *, after_step
                 need([actual.st_dev, actual.st_ino, actual.st_ctime_ns] == legacy_record['guard_identity'][str(path)], 'ORIGINAL_GUARD_IDENTITY')
         before_old = locks.inventory(old)
         current = locks.inventory(durable)
+        # The old migration is historical evidence, not a new baseline that a
+        # first invocation may adopt. Exclude only this current owner/archive.
+        historical_sha = hashlib.sha256(json.dumps(before_old, separators=(',', ':')).encode()).hexdigest()
+        need(marker.get('source_sha256') == historical_sha
+             and marker.get('entries') == len(before_old) and marker.get('review_owners') == 2
+             and {p.name for p in old.glob('*.lock')} ==
+                 {'ANGYVB4227006983.lock', 'ANGYVB4402004137.lock'}, 'HISTORICAL_MIGRATION')
+        if legacy_record is not None:
+            need(marker['source_sha256'] == legacy_record.get('migration_sha256'), 'ORIGINAL_MIGRATION_SHA')
+        historical_durable = [row for row in current if row[0] != locks.MARKER
+            and not any(row[0] == name or row[0].startswith(name + '/') for name in (source, ARCHIVE))]
+        need(historical_durable == before_old, 'HISTORICAL_DURABLE')
         identity = {'transaction': TRANSACTION, 'serial': SERIAL, 'owner': OWNER,
                     'old_root': str(logical_old), 'physical_old_root': str(old),
                     'legacy_binding': legacy_record, 'durable_root': str(durable), 'authority_sha256': authority_sha256}
