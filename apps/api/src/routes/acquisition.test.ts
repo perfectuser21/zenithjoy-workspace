@@ -409,7 +409,6 @@ describe('POST /api/acquisition/collect/start — burner account_label 自动路
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('account_label 查不到 active burner session → 400 BURNER_SESSION_NOT_FOUND', async () => {
-    const mod = await import('../db/connection');
     collectStartFixture(null);
 
     const res = await request(app)
@@ -465,7 +464,6 @@ describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]',
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('带 x-test-tenant-id + keywords → 用 session tenant 派单（不拿 body 占位）', async () => {
-    const mod = await import('../db/connection');
     collectStartFixture();
     const res = await request(app)
       .post('/api/acquisition/collect/start')

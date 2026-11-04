@@ -53,15 +53,6 @@ interface VoiceCallRequest {
   wechat_account?: string;
 }
 
-/** POST /call 响应。 */
-interface VoiceCallResponse {
-  call_id: string;
-  status: 'queued';
-  queued_at: string;
-  tenant_id: string;
-  contact_name: string;
-}
-
 // ─── POST /api/cs/voice-outreach/call — 发起语音触达 ──────────────────────
 
 voiceOutreachRouter.post(
@@ -80,7 +71,7 @@ voiceOutreachRouter.post(
       });
     }
 
-    const { contact_name, wechat_account } = body;
+    const { contact_name } = body;
 
     if (!contact_name || typeof contact_name !== 'string' || !contact_name.trim()) {
       return res.status(400).json({
