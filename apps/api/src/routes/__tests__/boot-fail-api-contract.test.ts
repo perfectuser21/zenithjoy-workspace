@@ -87,6 +87,11 @@ describe('POST /api/agent/boot-fail — 现役安装器无鉴权上报合同', (
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, success: true, recorded: true });
     expect(agents[0].last_boot_error).toMatchObject({ reason: 'license_401' });
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/FROM zenithjoy\.license_machines lm/);
+    expect(sql).toMatch(/lm\.agent_id = a\.agent_id/);
+    expect(params[1]).toBe('mach-1');
+    expect(JSON.parse(params[0] as string)).toMatchObject({ machine_id: 'mach-1', hostname: 'host-1', reason: 'license_401' });
   });
 
   it('未注册机器 → 202（graceful，不 500）', async () => {
