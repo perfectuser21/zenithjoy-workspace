@@ -1,4 +1,4 @@
-name: QR 飞书通知验证 (Windows)
+name: QR Notification API Acceptance (Windows)
 
 # 验证 qr-bind-operator.cjs 在 Windows 上：
 #   1. 启动浏览器 → 打开抖音登录页
@@ -7,19 +7,20 @@ name: QR 飞书通知验证 (Windows)
 #   4. 推送飞书互动卡片
 #
 # 脚本会在 90s 后扫码超时退出（正常，没人扫）。
-# 验收：飞书群收到带 QR 图的卡片，且图片只包含二维码区域。
+# 仅验证元素截图边界与provider业务码成功；不声称群内已送达/可扫码，需独立读回。
 
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: '平台（默认 douyin）'
-        required: false
-        default: 'douyin'
+        description: '待验证平台'
+        type: choice
+        options: [douyin, kuaishou, xiaohongshu, shipinhao, toutiao, weibo, zhihu, gongzhonghao]
+        default: douyin
 
 jobs:
   qr-feishu-notify:
-    name: QR 飞书通知 E2E (${{ github.event.inputs.platform || 'douyin' }})
+    name: QR element crop + provider API acceptance
     runs-on: windows-latest
     timeout-minutes: 8
 
@@ -40,32 +41,26 @@ jobs:
         working-directory: services/agent
         run: npx playwright install chromium --with-deps
 
-      - name: Run qr-bind-operator (150s timeout, 飞书通知后超时退出)
+      - name: Bind attempt and strict provider acceptance receipt
         working-directory: services/agent
         shell: pwsh
         env:
+          PLATFORM: ${{ inputs.platform || 'douyin' }}
+          QR_NOTIFICATION_EVIDENCE: ${{ github.workspace }}/qr-notification-evidence.json
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           ZENITHJOY_FEISHU_WEBHOOK: ${{ secrets.ZENITHJOY_FEISHU_WEBHOOK }}
         run: |
-          $platform = "${{ github.event.inputs.platform || 'douyin' }}"
-          Write-Host "[qr-verify] 平台: $platform，超时 150s（无人扫码属正常）"
-          # 退出码 1 = 超时，属预期；只有进程崩溃/截图失败才算真正出错
-          node publishers\qr-bind-operator.cjs $platform "" "ci-verify" 150000
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "[qr-verify] 脚本以退出码 $LASTEXITCODE 结束（超时退出属预期）"
-          }
-          Write-Host "[qr-verify] 完成——请检查飞书群是否收到 QR 卡片"
-        continue-on-error: true
-
-      - name: 验收说明
-        shell: pwsh
-        run: |
-          Write-Host ""
-          Write-Host "================================================"
-          Write-Host "  验收标准（人工确认）："
-          Write-Host "  ✓ 飞书群收到互动卡片"
-          Write-Host "  ✓ 卡片图片只包含二维码区域（非全屏）"
-          Write-Host "  ✓ 二维码清晰可辨"
-          Write-Host "  脚本超时退出属正常（无人扫码）"
-          Write-Host "================================================"
+          node publishers/qr-bind-operator.cjs $env:PLATFORM "" "ci-verify" 150000 > "$env:GITHUB_WORKSPACE/qr-bind-result.jsonl"
+          $bindingExit = $LASTEXITCODE
+          node ../../scripts/sessions/validate-qr-notification.mjs $env:QR_NOTIFICATION_EVIDENCE "$env:GITHUB_WORKSPACE/qr-bind-result.jsonl" "$bindingExit" $env:GITHUB_RUN_ID $env:PLATFORM
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "API acceptance verified. External message delivery and QR readability remain NOT_VERIFIED."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qr-notification-api-acceptance
+          path: |
+            qr-notification-evidence.json
+            qr-bind-result.jsonl
+          if-no-files-found: error
