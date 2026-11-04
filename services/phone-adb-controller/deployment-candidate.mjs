@@ -90,6 +90,7 @@ export async function stageCandidate({root,sha,plan,attemptKey,request,brainUrl}
    if(manifest.files.some(f=>f.deployed_path==='preflight-pg-lock.json')){
     const fixed=verifyPreflightPgLock(readDeploymentSource(root,sha,'package-lock.json'));
     need(release.payload.components.some(c=>c.kind==='code'&&c.path===prefix+'preflight-pg-lock.json'&&c.revision===sha&&c.digest==='sha256:'+fixed.lock_sha256),'依赖缺中央Git descriptor固定组件');
+    need(release.payload.activities?.some(a=>a.payload.implementation_bindings?.some(b=>b.kind==='code'&&b.status==='verified'&&b.repo===manifest.source_repo&&b.path===prefix+'preflight-pg-lock.json'&&b.revision===sha&&b.digest==='sha256:'+fixed.lock_sha256)),'依赖descriptor缺冻结Activity绑定');
     await installPreflightPg({runtimeRoot:directory,sourceCommit:sha});
     manifest.dependencies={preflight_pg:preflightPgDeployment({runtimeRoot:directory,sourceCommit:sha})};
    }

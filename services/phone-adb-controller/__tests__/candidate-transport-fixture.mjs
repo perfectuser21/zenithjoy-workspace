@@ -45,7 +45,11 @@ export function transportFixture(t,{payloadBytes=270000,preflightPg=false}={}){
  f.plan={environment,releases:{},release_ids:{}};
  for(const host of ['mmv','xian-m4']){
   const payload={components:[{kind:'repo',repo,revision:f.revision}],workflows:[{payload:{key:'fixture'},payload_sha256:'f'.repeat(64)}]};
-  if(preflightPg)payload.components.push({kind:'code',repo,revision:f.revision,path:prefix+'preflight-pg-lock.json',digest:'sha256:'+hash(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url)))});
+  if(preflightPg){
+   const binding={kind:'code',scope:'activity',status:'verified',repo,revision:f.revision,path:prefix+'preflight-pg-lock.json',digest:'sha256:'+hash(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url)))};
+   payload.components.push(Object.fromEntries(Object.entries(binding).filter(([k])=>!['scope','status'].includes(k))));
+   payload.activities=[{payload:{implementation_bindings:[binding]}}];
+  }
   const release={id:'release-'+host,environment,target:host,payload};
   // 原digest是稳定key序JSON，不是普通JSON串。
   f.plan.releases[host]=release;f.plan.release_ids[host]=release.id;

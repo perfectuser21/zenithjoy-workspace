@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync,writeFileSync,mkdirSync,symlinkSync,rmSync,chmodSync} from 'node:fs';
 import {join} from 'node:path';
 import {transportFixture} from './candidate-transport-fixture.mjs';
+test('中央等价边界：descriptor组件无冻结Activity绑定时零SSH零部署ACK',t=>{
+ const f=transportFixture(t,{preflightPg:true});for(const release of Object.values(f.plan.releases))release.payload.activities=[];
+ const result=f.run('normal');assert.equal(result.ok,false,JSON.stringify(result));assert.match(result.error,/冻结Activity绑定/);assert.equal(f.calls().length,0);assert.equal(existsSync(join(f.top,'brain.jsonl')),false);
+});
 test('候选依赖真实安装与两端SSRI文件观测，既有包篡改后不重传不发布',t=>{
  const f=transportFixture(t,{preflightPg:true}),result=f.run('normal');assert.equal(result.ok,true,JSON.stringify(result));
  for(const host of ['mmv','xian-m4']){

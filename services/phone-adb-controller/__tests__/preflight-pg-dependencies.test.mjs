@@ -102,7 +102,10 @@ test('Git锁闭包机械检查拒不同版本/父级依赖映射或漏optional',
 
 test('中央release固定真实Git descriptor而不将第三方文件伪装Git code',async()=>{
  const {bindingComponents}=await import('../deployment-targets.mjs');
- const components=bindingComponents({activities:[]},'a'.repeat(40),{preflightPgLock:{lock_sha256:'38cfd7e7ce6e47f2ac6abd408f1ca52d94bb59c2167a87b32fd87adf141c8eb7',package_lock_sha256:JSON.parse(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url))).package_lock_sha256}});
+ const identity={lock_sha256:'38cfd7e7ce6e47f2ac6abd408f1ca52d94bb59c2167a87b32fd87adf141c8eb7',package_lock_sha256:JSON.parse(readFileSync(new URL('../preflight-pg-lock.json',import.meta.url))).package_lock_sha256};
+ const binding={kind:'code',scope:'activity',status:'verified',repo:'perfectuser21/zenithjoy-workspace',path:'services/phone-adb-controller/preflight-pg-lock.json',revision:'a'.repeat(40),digest:'sha256:'+identity.lock_sha256};
+ const components=bindingComponents({activities:[{payload:{implementation_bindings:[binding]}}]},'a'.repeat(40),{preflightPgLock:identity});
+ assert.throws(()=>bindingComponents({activities:[]},'a'.repeat(40),{preflightPgLock:identity}),/统一部署/);
  assert.equal(components.length,2);assert.equal(components[0].path,'services/phone-adb-controller/preflight-pg-lock.json');
  assert.ok(components.every(c=>!c.path?.includes('_dependencies/')));
  assert.throws(()=>bindingComponents({activities:[]},'a'.repeat(40),{preflightPgLock:{lock_sha256:'f'.repeat(64)}}),/PREFLIGHT|统一部署/);

@@ -23,7 +23,7 @@ export function bindingComponents(definitions,sha,{preflightPgLock}={}){
    need(!entries.has(key)||same(entries.get(key),value),'binding同路径冲突');entries.set(key,value);
   }
  }
- if(preflightPgLock){need(same(preflightPgLock,preflightPgLockIdentity()),'预检依赖Git锁身份不符');entries.set('code:'+pgLockPath,{kind:'code',repo:DEPLOY_REPO,path:pgLockPath,revision:sha,digest:'sha256:'+preflightPgLock.lock_sha256});}
+ if(preflightPgLock){need(same(preflightPgLock,preflightPgLockIdentity()),'预检依赖Git锁身份不符');const key='code:'+pgLockPath;need(entries.has(key)&&same(entries.get(key),{kind:'code',repo:DEPLOY_REPO,path:pgLockPath,revision:sha,digest:'sha256:'+preflightPgLock.lock_sha256}),'预检依赖缺冻结定义binding');}
  return [...entries.values()].sort((a,b)=>`${a.kind}:${a.path||''}`.localeCompare(`${b.kind}:${b.path||''}`));
 }
 function checkScope(e,scope,sha){
