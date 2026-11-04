@@ -12,6 +12,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {createRequire} from 'node:module';
 import { createFolderWatchManager } from '../folder-watch';
 
 describe('folder-watch', () => {
@@ -116,29 +119,21 @@ describe('folder-watch', () => {
     }
   });
 
-  it('delivers a real native file event through the production manager', async () => {
-    const target = path.join(tmpDir, 'native-event.mp4');
-    let finish!: (file: string) => void;
-    const event = new Promise<string>(resolve => { finish = resolve; });
-    const manager = createFolderWatchManager({ onChange: file => {
-      if (file === target) finish(file);
-    } });
-    managers.push(manager);
-    manager.bind(tmpDir);
-    // Repeat the actual write until the native subscription delivers. This
-    // observes readiness instead of relying on a fixed FSEvents startup sleep.
-    const writer = setInterval(() => fs.writeFileSync(target, String(Date.now())), 40);
-    let deadline: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const result = await Promise.race([event, new Promise<never>((_, reject) => {
-        deadline = setTimeout(() => reject(new Error('Native folder event was not delivered')), 8000);
-      })]);
-      expect(result).toBe(target);
-      expect(manager.listMp4s()).toContain(target);
-    } finally {
-      clearInterval(writer);
-      clearTimeout(deadline);
-      manager.stop();
-    }
+  it('delivers a real native file event through the production manager', () => {
+    const fixture=fileURLToPath(new URL('./fixtures/folder-watch-native.mjs',import.meta.url));
+    const loader=createRequire(import.meta.url).resolve('tsx');
+    const result=spawnSync(process.execPath,['--import',pathToFileURL(loader).href,fixture,tmpDir],{
+      encoding:'utf8',timeout:10000,
+    });
+    expect(result.error?.message).toBeUndefined();
+    expect(result.status,result.stderr).toBe(0);
+    const report=JSON.parse(result.stdout);
+    const target=path.join(tmpDir,'watched','native-event.mp4');
+    expect(report.target).toBe(target);
+    expect(report.published).toBe(1);
+    expect(report.events.some((event:{file:string})=>path.basename(event.file).startsWith('ready-'))).toBe(true);
+    expect(report.events.some((event:{file:string})=>event.file===target)).toBe(true);
+    expect(report.elapsedMs).toBeLessThan(8000);
+    expect(fs.readFileSync(target,'utf8')).toBe('native video publication');
   }, 12000);
 });

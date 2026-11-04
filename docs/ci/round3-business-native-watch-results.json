@@ -1,0 +1,89 @@
+{
+  "base_sha": "b3a5c2aab",
+  "scope": "real native folder-watch fixture stabilization; production manager unchanged",
+  "findings": {
+    "old_fixture": "Starts 40ms same-file overwrites immediately after bind; never distinguishes native subscription readiness from target publication. Root recorded two 8s misses; independent old full-suite run delivered only after 6870ms.",
+    "native_trace": "Unmocked production callback first emitted a directory-level watched/watched path, then batched distinct ready-file paths, then the target. bind return alone is not readiness.",
+    "inference": "Continuous overwrite coalescing and in-process worker scheduling can hide/delay the target notification. Exact kernel scheduling cause is not asserted; the fixture now observes readiness and publishes once after the callback batch drains."
+  },
+  "fix": {
+    "loader": "declared, lock-installed tsx via file URL; fresh actual Node process statically imports production folder-watch.ts",
+    "readiness": "real atomic rename of uniquely named readiness files; await actual onChange path, stop probes",
+    "target": "one atomic rename, then quiescence; assert exact callback path, file bytes, and production listMp4s",
+    "deadlines": {
+      "native_ms": 8000,
+      "parent_child_ms": 10000,
+      "vitest_test_ms": 12000,
+      "note": "Native and Vitest deadlines unchanged; child process cleanup is bounded."
+    }
+  },
+  "executions": {
+    "targeted": {
+      "files": 1,
+      "tests": 7,
+      "fail": 0,
+      "native_ms": 2052
+    },
+    "full_final": {
+      "files": 101,
+      "tests": 1054,
+      "fail": 0,
+      "skipped": 0,
+      "native_ms": 2508
+    },
+    "agent_typecheck": {
+      "command": "npx tsc --noEmit --module esnext --moduleResolution bundler",
+      "exit": 0
+    },
+    "source_mutation": {
+      "control_exit": 0,
+      "control_native_ms": 681,
+      "observed_file_basenames": [
+        "watched",
+        "ready-1.txt",
+        "ready-2.txt",
+        "ready-3.txt",
+        "native-event.mp4"
+      ],
+      "published": 1,
+      "disabled_production_callback_exit": 1,
+      "negative": "actual native watcher kept; removing only production onChange delivery fails the same 8000ms deadline with zero published target and zero observed callbacks"
+    }
+  },
+  "integration_prerequisite": {
+    "path": "services/agent/src/handlers/__tests__/video-pipeline-aspect.test.ts",
+    "note": "Full verification read-only mirrored the root-owned pending argv assertion fix; this child commit intentionally excludes that file.",
+    "sha256": "f1eec9fb9702b1842bcd89f7ba6351837a5828440d27f67cf964043564902348"
+  },
+  "production_source_sha256": "e08f7b0c20db7bde9b64c3065ea30c0271dc516e9aa9638e96ca731bfcfe94c7",
+  "logs": {
+    "old_full": {
+      "path": "/tmp/pr2406-native-full-red.log",
+      "sha256": "363e4ba771535c5e8a56e599b6d495d1c52882ddf8fc9a5e90c7b9cb5671418d"
+    },
+    "root_timeout": {
+      "path": "/private/tmp/zenithjoy-round3-agent-security-final2.log",
+      "sha256": "d63957be34340c1fa5e85377a3da07746cc6b1e14af7e2963c9faecee6dbb6e0"
+    },
+    "targeted": {
+      "path": "/tmp/pr2406-native-targeted-green.log",
+      "sha256": "9b984df23c63f20d35f76a0f17e48564046b0283ea150c66b3cd885368221995"
+    },
+    "full_after_readiness": {
+      "path": "/tmp/pr2406-native-full-green.log",
+      "sha256": "9856fd8fb43236f578d9b88ca5385816ad37aafbf6c8e35785df0e362db72783"
+    },
+    "full_final_file_url_loader": {
+      "path": "/tmp/pr2406-native-full-final.log",
+      "sha256": "df5d317c4009e1fb150c2f8d2e6f93ac05db1ffc69d45ae2bb366613979b12d5"
+    },
+    "source_mutation": {
+      "path": "/tmp/pr2406-native-source-mutation.log",
+      "sha256": "186cf449a9a77fd70228e7ea215cff26657f23c3fd64e48f9bcd7ee8ca820ce2"
+    },
+    "agent_typecheck": {
+      "path": "/tmp/pr2406-native-typecheck-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
