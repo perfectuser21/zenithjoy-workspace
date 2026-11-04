@@ -4,6 +4,9 @@ import { internalAuth } from '../middleware/internal-auth';
 import { superAdminGuard } from '../middleware/super-admin';
 import { licenseAuth } from '../middleware/license-auth';
 
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+
+const statusLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn });
 const router = Router();
 
 const VALID_PLATFORMS = [
@@ -207,7 +210,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /status — GHA 巡检回写（internal-auth 守卫）
-router.post('/status', internalAuth, async (req: Request, res: Response) => {
+router.post('/status', statusLimit, internalAuth, async (req: Request, res: Response) => {
   const { updates } = req.body || {};
 
   if (!Array.isArray(updates) || updates.length === 0 || updates.length > VALID_PLATFORMS.length) {

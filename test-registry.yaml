@@ -9831,6 +9831,14 @@ tests:
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
 
+  - id: ci-closeout-5abe2f3d900c
+    path: apps/api/src/routes/__tests__/ci-audit-rate-limits.test.ts
+    type: unit
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
   - id: ci-closeout-fabddee25bc5
     path: apps/api/src/services/__tests__/media-render-runtime.test.ts
     type: unit

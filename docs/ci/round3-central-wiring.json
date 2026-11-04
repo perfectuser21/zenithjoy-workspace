@@ -310,6 +310,7 @@
     ".github/workflows/scripts/operator/rpa-locator-assist-probe.test.mjs",
     ".github/workflows/scripts/smoke/helpers/media-contracts.test.mjs",
     "apps/api/src/controllers/__tests__/media-provider-http.test.ts",
+    "apps/api/src/routes/__tests__/ci-audit-rate-limits.test.ts",
     "apps/api/src/services/__tests__/media-render-runtime.test.ts",
     "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
     "apps/api/tests/integration/business-contracts/session-writeback.pg.test.ts",

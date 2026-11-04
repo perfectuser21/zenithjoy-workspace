@@ -3,10 +3,12 @@ import { createTask, getTask, listTasks } from '../services/task-db';
 import { dispatchTask } from '../services/task-dispatch';
 import { tenantContext } from '../middleware/tenant-context';
 
-export const tasksRouter = Router();
-tasksRouter.use(tenantContext);
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
-tasksRouter.post('/', async (req, res, next) => {
+const taskLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+export const tasksRouter = Router();
+
+tasksRouter.post('/', taskLimit, tenantContext, async (req, res, next) => {
   try {
     const { tenantId: hint, skill, params = {} } = req.body;
     const tenantId = req.tenantId!;
@@ -22,7 +24,7 @@ tasksRouter.post('/', async (req, res, next) => {
   }
 });
 
-tasksRouter.get('/', async (req, res, next) => {
+tasksRouter.get('/', taskLimit, tenantContext, async (req, res, next) => {
   try {
     const tenantId = req.tenantId!;
     if (req.query.tenantId !== undefined && req.query.tenantId !== tenantId) return res.status(403).json({ error: 'forbidden' });
@@ -34,7 +36,7 @@ tasksRouter.get('/', async (req, res, next) => {
 });
 
 // Derive tenancy from the resolved identity; request hints never authorize access.
-tasksRouter.get('/:id', async (req, res, next) => {
+tasksRouter.get('/:id', taskLimit, tenantContext, async (req, res, next) => {
   try {
     const tenantId = req.tenantId!;
     if (req.query.tenantId !== undefined && req.query.tenantId !== tenantId) return res.status(403).json({ error: 'forbidden' });

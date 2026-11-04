@@ -1611,7 +1611,8 @@ acquisitionRouter.get('/collect/:task_id', async (req: Request, res: Response) =
 });
 
 // GET /api/acquisition/collect/:task_id/sse — SSE 实时状态推送
-acquisitionRouter.get('/collect/:task_id/sse', tenantContext, async (req: Request, res: Response) => {
+const collectSseLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
+acquisitionRouter.get('/collect/:task_id/sse', collectSseLimit, tenantContext, async (req: Request, res: Response) => {
   const taskId = req.params.task_id;
   if (!UUID_RE.test(taskId)) return fail(res, 400, 'INVALID_TASK_ID', 'task_id 必须是 UUID');
   try {
