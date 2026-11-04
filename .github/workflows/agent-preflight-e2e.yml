@@ -29,6 +29,43 @@ jobs:
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 10
     steps:
+      - name: Prepare existing GitHub-only loopback proxy
+        id: github-proxy
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $available = $false
+          $client = New-Object System.Net.Sockets.TcpClient
+          try {
+            $pending = $client.BeginConnect('127.0.0.1', 7890, $null, $null)
+            if ($pending.AsyncWaitHandle.WaitOne(750, $false)) {
+              $client.EndConnect($pending)
+              $available = $client.Connected
+            }
+          } catch {
+            # Only probe the already-running loopback service; never start one.
+            $available = $false
+          } finally {
+            $client.Close()
+          }
+          if ($available) {
+            $count = 0
+            if (Test-Path Env:GIT_CONFIG_COUNT) {
+              if ($env:GIT_CONFIG_COUNT -notmatch '\A[0-9]+\z' -or
+                  -not [int]::TryParse($env:GIT_CONFIG_COUNT, [ref]$count) -or
+                  $count -eq [int]::MaxValue) {
+                throw 'Cannot append GitHub proxy: invalid existing Git config count'
+              }
+            }
+            # Append at the next active index; inherited KEY/VALUE entries remain.
+            Add-Content -Path $env:GITHUB_ENV -Encoding utf8 -Value "GIT_CONFIG_KEY_${count}=http.https://github.com/.proxy"
+            Add-Content -Path $env:GITHUB_ENV -Encoding utf8 -Value "GIT_CONFIG_VALUE_${count}=http://127.0.0.1:7890"
+            Add-Content -Path $env:GITHUB_ENV -Encoding utf8 -Value "GIT_CONFIG_COUNT=$($count + 1)"
+            Write-Host 'Existing loopback proxy selected for GitHub Git HTTPS only'
+          } else {
+            Write-Host 'Loopback proxy unavailable; preserving direct checkout transport'
+          }
+
       - uses: actions/checkout@v4
 
       - name: Restore complete agent source after reused checkout

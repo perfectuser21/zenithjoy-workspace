@@ -9811,3 +9811,12 @@ tests:
     product: unclassified
     execution: ci-l3-code.yml / openclaw-scripts-test / node --test .github/workflows/scripts/__tests__/*.test.mjs
     note: Executes the actual preflight workflow command with isolated result fixtures; version, combined failures and incomplete results must fail. No device or login verification is claimed.
+
+  - id: ci-agent-preflight-github-proxy
+    path: .github/workflows/scripts/__tests__/agent-preflight-proxy.test.ps1
+    type: unit
+    ci: L4
+    status: active
+    product: unclassified
+    execution: 'ci-l4-runtime.yml / agent-windows-contracts -> agent-qr-windows-verify.yml / unit-tests-windows / powershell at GITHUB_WORKSPACE'
+    note: Executes the actual inline pre-checkout proxy step with a fake TCP boundary and private temporary GITHUB_ENV files; ten cases preserve inherited Git config, bound loopback probing, reject malformed counts and prohibit diagnostic credential leakage. No live network, global config, UI or device operations.
