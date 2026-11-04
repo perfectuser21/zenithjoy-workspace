@@ -2,7 +2,7 @@
  * /api/cs/voice-outreach/* — GP-A 主动语音触达 API 端点
  *
  * 端点：
- *   POST /api/cs/voice-outreach/call    — 发起语音触达指令（中台 → Agent 异步执行）
+ *   POST /api/cs/voice-outreach/call    — 未接调度时明确503（本router尚未挂当前app）
  *   GET  /api/cs/voice-outreach/records — 查询通话记录列表（多租户隔离）
  *
  * 鉴权（N-3 多租户隔离）：
@@ -89,37 +89,12 @@ voiceOutreachRouter.post(
       });
     }
 
-    const call_id = randomUUID();
-    const queued_at = new Date().toISOString();
-
-    // 落库（status=queued 过渡状态，Agent 回写后更新为最终状态）
-    try {
-      await pool.query(
-        `INSERT INTO voice_call_records
-           (id, tenant_id, contact_name, wechat_account, status, duration_seconds, called_at, call_id)
-         VALUES ($1, $2, $3, $4, 'failed', 0, NOW(), $5)`,
-        [randomUUID(), tenant_id, contact_name.trim(), wechat_account || null, call_id],
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return res.status(500).json({
-        success: false,
-        error: { code: 'DB_ERROR', message: `写入通话记录失败: ${msg}` },
-      });
-    }
-
-    // TODO(agent-dispatch): 通过 SSE / WebSocket 派发指令到 Agent 执行
-    // Agent 完成后调用 POST /api/cs/voice-outreach/records 回写最终状态
-
-    const responseData: VoiceCallResponse = {
-      call_id,
-      status: 'queued',
-      queued_at,
-      tenant_id,
-      contact_name: contact_name.trim(),
-    };
-
-    return res.status(202).json({ success: true, data: responseData });
+    // No current producer dispatches this call to an Agent. Never claim queued
+    // or persist a fabricated call record before a real dispatcher accepts it.
+    return res.status(503).json({
+      success: false,
+      error: { code: 'VOICE_DISPATCH_NOT_CONFIGURED', message: '语音拨号调度尚未接通' },
+    });
   },
 );
 
