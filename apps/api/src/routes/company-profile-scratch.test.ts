@@ -29,8 +29,9 @@ describe('真实scratch公司Wiki/API/页面闭环', () => {
   it('两公司真实种子、版本生命周期、浏览器编辑与运行冻结不漂移', async () => {
     if (!process.env.COMPANY_CONFIG_SCRATCH_URL) throw new Error('Run via vitest.pg-contracts.config.ts with an explicit disposable scratch URL');
     const {requireDisposableDatabases}=await import('../../tests/pg-contracts/disposable-db');
-    requireDisposableDatabases();
-    const pool = new pg.Pool({connectionString:process.env.COMPANY_CONFIG_SCRATCH_URL});
+    const connection=requireDisposableDatabases();
+    // Never pass a URL to pg: URL query parameters can override its parsed host.
+    const pool = new pg.Pool({...connection,database:'cecelia_scratch'});
     const client = await pool.connect(); shared.client=client;
     let browser:Browser|undefined, vite:ViteDevServer|undefined, server:Server|undefined;
     const cookieFiles:string[]=[];
