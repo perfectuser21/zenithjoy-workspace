@@ -17,19 +17,29 @@ test('终止仍未知时保留原始采集失败诊断，继续隔离而非清�
  assert.equal(cleanups,0);assert.equal(recoveries,0);assert.equal(out.resource_quarantine.verified,true);
 });
 
-async function issued(t,{codeOne=false}={}){
+async function issued(t,{codeOne=false,unknownReturn=false}={}){
  const f=await collectionFixture(t),load=n=>import(pathToFileURL(join(f.runtime,n)));
  const api=await load('collection-phone-scope.mjs');
  const state={nativeStopUnproven:true,currentActivity:'collection',account:'fixture-account',run:f.env.WFR_TAG,run_id:'scope-run__a1',profile:f.env.P,source_commit:'a'.repeat(40),task_id:'scope-task',budgetDeadline:Date.now()+60000};
  mkdirSync(join(f.d,'native-operations'),{recursive:true});
  const scope=await api.startCollectionPhoneScope({root:f.runtime,env:f.env,state,sourceCommit:state.source_commit,taskId:state.task_id,qualifiedVideoIds:vids});t.after(()=>scope.close());
- const argv=codeOne?['-H','127.0.0.1','-P',f.frozen.collection_phone_scope.policy.endpoint.split(':').at(-1),'-s',f.env.SERIAL,'shell','known-failure']:['version'];
+ const argv=codeOne||unknownReturn?['-H','127.0.0.1','-P',f.frozen.collection_phone_scope.policy.endpoint.split(':').at(-1),'-s',f.env.SERIAL,'shell',unknownReturn?'return-unknown':'known-failure']:['version'];
  await new Promise((yes,no)=>{const s=createConnection(scope.env.WFR_COLLECTION_LEAF_SOCKET);let raw='';s.on('error',no);s.on('connect',()=>s.end(JSON.stringify({nonce:scope.env.WFR_COLLECTION_LEAF_NONCE,argv})));s.on('data',b=>raw+=b);s.on('end',()=>{try{assert.equal(JSON.parse(raw).code,codeOne?1:0);yes();}catch(e){no(e);}});});
- const failure={status:'partial',videos_processed:0,failures:[{video_id:vids[0],reason:'RECIPIENT_EVIDENCE_FAILED'}]};
+ const failure={status:'partial',videos_processed:0,failures:[{video_id:vids[0],reason:unknownReturn?'COLLECTION_VIDEO_IDENTITY_READBACK_FAILED':'RECIPIENT_EVIDENCE_FAILED'}]};
  const result=await scope.finish(failure);
  const context={task_id:state.task_id,run_id:state.run_id,attempt:'a1',source_commit:state.source_commit,profile:f.env.P,serial:f.env.SERIAL,activity:'collection',owner:f.env.WFR_TAG,target:f.frozen.deployment.target,snapshot_sha256:f.frozen.snapshot_sha256,binding_id:'scope-binding'};
  return {...f,api,state,result,failure,context,load};
 }
+
+test('实际code0但stderr表明请求域未知，semantic也不得签恢复或清场能力',{skip:process.platform!=='darwin'},async t=>{
+ const f=await issued(t,{unknownReturn:true});
+ assert.equal(f.api.collectionEvidenceProof(f.result,f.context),null);
+ assert.equal(f.api.collectionReturnedEvidence(f.result,f.context),null);
+ assert.equal(f.api.collectionCleanupEvidence(f.result,f.context),null);
+ const {invokeNativeActivity}=await f.load('leadgen-workflow.mjs');
+ const result=await invokeNativeActivity(async()=>f.result,f.state);
+ assert.equal(result.execution_stopped,false);assert.equal(f.state.executionUnknown,true);
+});
 
 for(const codeOne of [false,true])test('真实归还code'+Number(codeOne)+'的非semantic采集失败仅允许原cleanup，保留失败且不能交Skill重采',{skip:process.platform!=='darwin'},async t=>{
  const f=await issued(t,{codeOne});

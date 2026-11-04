@@ -208,7 +208,7 @@ export async function startCollectionPhoneScope({root,env,state,sourceCommit,tas
      generation:generations.get(state)||0,phase:'available',globalDeadline:Number.isSafeInteger(originalGlobal)&&originalGlobal>=identity.deadline_ms?originalGlobal:identity.deadline_ms,env,scopedEnv});
     return {...result,returned_phone_scope:proof};
    }
-   const semanticFailure=status.complete&&result.status==='partial'&&result.failures?.length&&result.failures.every(x=>collectionSemanticReason(x.reason));
+   const semanticFailure=status.complete&&status.requests_returned&&result.status==='partial'&&result.failures?.length&&result.failures.every(x=>collectionSemanticReason(x.reason));
    if(!semanticFailure&&status.requests_returned&&!state.executionUnknown&&current.snapshot_sha256===frozen.snapshot_sha256&&evidenceStillQuiet(evidence,specification)
     &&!state.remainingVideoIds?.length&&['partial','failed'].includes(result.status)&&Array.isArray(result.failures)&&result.failures.length>0){
     const originalGlobal=(Number(env.WF_RUN_START_TS)+Number(env.WF_RUN_MAX_SECONDS))*1000;
