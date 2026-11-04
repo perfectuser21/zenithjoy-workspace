@@ -9870,10 +9870,14 @@ tests:
     product: AI视频
     note: 新节点真实类方法的输入与组合模式合同，API错误消息；无Torch运行AST抽取，仅验证节点方法不冒充真实模型。
 
-<<<<<<< HEAD
   - id: collection-review-gap
     path: services/phone-adb-controller/__tests__/collection-review-gap.test.py
-=======
+    type: integration
+    ci: L3
+    status: active
+    product: AI员工
+    note: "旧failed不复活；断档原件及新f107独立租约精确绑定、原claim/epoch/完整设备守恒、拒旧journal迁移"
+
   - id: phone-agent-first-leadgen-smoke
     path: .github/workflows/scripts/smoke/agent-first-leadgen-smoke.sh
     type: smoke
@@ -9884,14 +9888,10 @@ tests:
 
   - id: phone-activity-skill-primary-broker
     path: services/phone-adb-controller/__tests__/activity-skill-primary-broker.test.mjs
->>>>>>> e6059f998 (feat(leadgen): 接通101–103纯Skill执行与Commander受控协作)
     type: integration
     ci: L3
     status: active
     product: AI员工
-<<<<<<< HEAD
-    note: "旧failed不复活；断档原件及新f107独立租约精确绑定、原claim/epoch/完整设备守恒、拒旧journal迁移"
-=======
     note: "GP-Anchor: line02/keyword_acquisition#step3；纯Skill主执行、受控原语与原件验收；无设备测试不代表实机通过"
 
   - id: phone-agent-first-executor
@@ -9957,4 +9957,3 @@ tests:
     status: active
     product: AI员工
     note: "GP-Anchor: line02/keyword_acquisition#step3；纯Skill主执行、受控原语与原件验收；无设备测试不代表实机通过"
->>>>>>> e6059f998 (feat(leadgen): 接通101–103纯Skill执行与Commander受控协作)
