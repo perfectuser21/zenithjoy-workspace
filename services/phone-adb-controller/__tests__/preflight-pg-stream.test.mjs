@@ -47,14 +47,20 @@ test('parent metadata runs the original company freeze and independently reads t
  await setup.query('INSERT INTO zenithjoy.tenant_company_profiles VALUES($1,$2,1,$3,$4)', ['company','tenant','enabled',JSON.stringify(snapshot.runtime_config)]);
  await setup.query('INSERT INTO zenithjoy.company_config_versions VALUES($1,1,$2,$3)', ['company','tenant',JSON.stringify(snapshot)]);
  await setup.query('INSERT INTO zenithjoy.company_config_runs VALUES($1,$2,1,$3,$4,$5,null)', ['company','new101','tenant',JSON.stringify(snapshot),'{}']);
+ const systemId=(await setup.query('SELECT system_identifier::text FROM pg_control_system()')).rows[0].system_identifier;
  const metadata=createPreflightMetadata({directory:f.directory,scope:{workflow:'douyin_video_processing',line:'yuesheng',run:'new102',source_run:'new101',limit:2,profile:'fixture',serial:'fixture-serial'},source:{commit:'a'.repeat(40)},verify:()=>{},createPool:async({deadlineMs})=>{
-  const transport=await createPreflightPgStream({directory:f.directory,policy:f.policy,deadlineMs});return {pool:new Pool({...f.connection,max:1,stream:transport.stream}),transport,expectedIdentity:{database:'postgres',role:'preflight_fixture'}};
+  const transport=await createPreflightPgStream({directory:f.directory,policy:f.policy,deadlineMs});return {pool:new Pool({...f.connection,max:1,stream:transport.stream}),transport,expectedIdentity:{database:'postgres',role:'preflight_fixture',system_identifier:systemId}};
  }});t.after(()=>metadata.close());
  const result=await metadata({kind:'queue',request:{op:'company_config',step:'102',line:'yuesheng',run:'new102',source_run:'new101',limit:2,device_binding:{profile:'fixture',device_serial:'fixture-serial'}}},{scope:{deadline_ms:Date.now()+10000}});
  assert.equal(result.result.device_binding.douyin_id,'actual-account');
  const rows=(await setup.query('SELECT source_run,task_inputs FROM zenithjoy.company_config_runs WHERE run_id=$1',['new102'])).rows;
  assert.deepEqual(rows,[{source_run:'new101',task_inputs:{device_binding:{profile:'fixture',device_serial:'fixture-serial'}}}]);
  assert.equal(metadata.snapshot().unknown,false);
+ const bad=createPreflightMetadata({directory:f.directory,scope:{workflow:'douyin_video_processing',line:'yuesheng',run:'wrong_cluster102',source_run:'new101',limit:2,profile:'fixture',serial:'fixture-serial'},source:{commit:'a'.repeat(40)},verify:()=>{},createPool:async({deadlineMs})=>{
+  const transport=await createPreflightPgStream({directory:f.directory,policy:f.policy,deadlineMs});return {pool:new Pool({...f.connection,max:1,stream:transport.stream}),transport,expectedIdentity:{database:'postgres',role:'preflight_fixture',system_identifier:'0'}};
+ }});t.after(()=>bad.close());
+ await assert.rejects(()=>bad({kind:'queue',request:{op:'company_config',step:'102',line:'yuesheng',run:'wrong_cluster102',source_run:'new101',limit:2,device_binding:{profile:'fixture',device_serial:'fixture-serial'}}},{scope:{deadline_ms:Date.now()+10000}}),{code:'PREFLIGHT_METADATA_UNKNOWN'});
+ assert.equal((await setup.query('SELECT count(*)::int AS n FROM zenithjoy.company_config_runs WHERE run_id=$1',['wrong_cluster102'])).rows[0].n,0);
 });
 
 for(const mismatch of ['host-key','identity'])test('real SSH refuses mismatched '+mismatch+' with no fallback or second leaf',{skip:!supported},async t=>{

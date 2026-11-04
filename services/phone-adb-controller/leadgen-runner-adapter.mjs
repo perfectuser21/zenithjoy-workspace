@@ -18,7 +18,7 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
  const routes=context.workflow_routes||(context.require_routing?{needs_review:'pause'}:defaults);
  const routingMissing=context.require_routing&&!Object.keys(defaults).every(k=>typeof routes[k]==='string');
  const run_tag=context.run_id||'leadgen-run',byKey=new Map(activities.map(a=>[a.key,a]));
- const native=new Map(),commanderStatuses=new Map();let unsafe=false,resourceUnsafe=false,lastEvidence;
+ const native=new Map(),commanderStatuses=new Map(),activityDeadlines=new Map();let unsafe=false,resourceUnsafe=false,lastEvidence;
  const scope=key=>({run_id:context.run_id,task_id:context.task_id??null,source_commit:context.source_commit,activity:key});
  const returned=(key,evidence)=>discoveryCleanupEvidence(evidence,scope(key))||collectionCleanupEvidence(evidence,scope(key));
  const progress=key=>({completed_activity_keys:[...native].filter(([,e])=>['completed','skipped'].includes(e.status)).map(([k])=>k),remaining_activity_keys:activities.slice(activities.findIndex(a=>a.key===key)+1).map(a=>a.key)});
@@ -45,7 +45,7 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
   try{
    if(primaryError)throw Error(primaryError);
    if(agentPrimary){
-    const deadline_ms=Math.floor(Date.now()+a.budget.max_duration_s*1000);
+    const deadline_ms=Math.floor(Date.now()+a.budget.max_duration_s*1000);activityDeadlines.set(a.key,deadline_ms);
     const result=await executeAgent(activity,{context,deadline_ms,guidance:input.commander_guidance||[],signal:opts.signal,onEvent:async event=>({...await opts.onAgentEvent(event),commander_status:bridge.status})});
     if(!result||typeof result.execution_stopped!=='boolean')throw Object.assign(Error('AGENT_PRIMARY_RECEIPT_INVALID'),{executionStopped:false});
     evidence={...result,status:statusOf(result.status),attempt:input.attempt};
@@ -65,14 +65,14 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
  await bridge.wake();let receipt;
  try{
   receipt=await runActivityContract(contract,{run_tag},{signal,commander:bridge,executeActivity,
-   checkActivity:async(a,result,{phase})=>{
+   checkActivity:async(a,result,{phase,remaining_ms,signal:checkSignal})=>{
     if(phase==='start')return {verdict:primaryError||routingMissing?'unknown':'pass',...(primaryError?{reason:primaryError}:routingMissing?{reason:'workflow_status_routes_missing'}:{})};
     const evidence=result.adapter_result,activity=byKey.get(a.key);
     if(result.execution_stopped===false)return {verdict:'unknown',reason:'execution_termination_unknown'};
     if(agentPrimary&&evidence.resource_unverified===true)return {verdict:'unknown',reason:'resource_lease_unverified'};
     if(agentPrimary){
      if(!['completed','empty','partial','skipped'].includes(evidence.status)||!evidence.result)return {verdict:'fail',reason:'agent_execution_failed'};
-     evidence.verification=await verify(activity,evidence);
+     evidence.verification=await verify(activity,evidence,{deadline_ms:Math.min(activityDeadlines.get(a.key),Math.floor(Date.now()+remaining_ms)),signal:checkSignal});
      await record({...context,activity:a.key,phase:'verification',evidence:structuredClone(evidence)});
      return {verdict:evidence.verification?.verified===true?'pass':'fail',verification:evidence.verification};
     }

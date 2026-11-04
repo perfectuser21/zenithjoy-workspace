@@ -19,3 +19,14 @@ test('metadata admission rejects bare RPC and drift before allocating a PG trans
  for(const bad of [{kind:'outreach'}, {...input,request:{...input.request,op:'score'}}, {...input,request:{...input.request,run:'other'}}, {...input,request:{...input.request,device_binding:{profile:'other',device_serial:'fixture-serial'}}}])await assert.rejects(()=>metadata(bad,{scope:{deadline_ms:Date.now()+10000}}),{code:'PREFLIGHT_METADATA_SCOPE'});
  assert.equal(allocated,0);
 });
+test('source identity matching uses actual public fingerprints and hashed known_hosts, never caller hashes',async t=>{
+ const {execFileSync}=await import('node:child_process'),{preflightSshIdentityFingerprint,preflightKnownHostKey}=await import('../preflight-metadata.mjs'),{writeFileSync}=await import('node:fs');
+ const dir=mkdtempSync(join(tmpdir(),'preflight-ssh-authority-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ for(const type of ['rsa','ed25519']){
+  const path=join(dir,type);execFileSync('/usr/bin/ssh-keygen',['-q','-t',type,'-N','','-f',path]);const fp=execFileSync('/usr/bin/ssh-keygen',['-lf',path+'.pub'],{encoding:'utf8'}).trim().split(/\s+/)[1];assert.equal(preflightSshIdentityFingerprint(readFileSync(path)),fp);
+  const known=join(dir,type+'-known');writeFileSync(known,'38.23.42.120 '+readFileSync(path+'.pub','utf8'));execFileSync('/usr/bin/ssh-keygen',['-q','-H','-f',known],{stdio:'ignore'});
+  assert.equal(preflightKnownHostKey(readFileSync(known,'utf8'),'38.23.42.120',fp),type==='rsa'?'ssh-rsa':'ssh-ed25519');
+  assert.throws(()=>preflightKnownHostKey(readFileSync(known,'utf8'),'38.23.42.120','SHA256:untrusted'),/PREFLIGHT_CONTROL_HOST_KEY/);
+ }
+ const encrypted=join(dir,'encrypted');execFileSync('/usr/bin/ssh-keygen',['-q','-t','ed25519','-N','fixture-passphrase','-f',encrypted]);assert.throws(()=>preflightSshIdentityFingerprint(readFileSync(encrypted)),/PREFLIGHT_CONTROL_IDENTITY/);
+});

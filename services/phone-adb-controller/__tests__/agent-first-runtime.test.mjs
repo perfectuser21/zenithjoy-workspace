@@ -59,3 +59,11 @@ test('Agent-first的Commander纠偏送达Agent下一轮，原始业务结果仍�
  assert.equal(result.status,'completed');assert.equal(corrected,true);
  assert.ok(records.some(row=>row.phase==='commander_exchange'&&row.activity==='collect_videos'));
 });
+
+test('parent endcheck receives the public remaining deadline rather than a fresh activity budget',async()=>{
+ const deadlines=new Map();let checked=0;
+ const result=await runWorkflow(base({activities:[{key:'preflight',budget:{max_duration_s:10}},{key:'cleanup',budget:{max_duration_s:10}}],executeAgent:async(activity,options)=>{deadlines.set(activity.key,options.deadline_ms);await new Promise(r=>setTimeout(r,5));return {status:'completed',execution_stopped:true,result:{saved:1}};},verify:async(activity,_evidence,options)=>{
+  assert.ok(Number.isSafeInteger(options?.deadline_ms));assert.ok(options.deadline_ms<=deadlines.get(activity.key));assert.ok(options.deadline_ms>Date.now());assert.equal(options.signal instanceof AbortSignal,true);checked++;return {verified:true};
+ }}));
+ assert.equal(result.status,'completed');assert.equal(checked,2);
+});

@@ -28,13 +28,16 @@ import {createActivityRecovery} from './activity-skill-recovery.mjs';
 import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
 import {readFrozen,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
-import {createRpc,execInput} from './leadgen-client.mjs';
+import {createRpc,execInput,rpcSource} from './leadgen-client.mjs';
+import {judgePreflightInProcess} from './preflight-judge.mjs';
 import {judgeSteps,workflowReadbackPassed} from './step-judge.mjs';
 import {verifyDiscoveryFilterEvidence} from './leadgen-discovery.mjs';
 import discoveryMetrics from './discovery-metrics.js';
 import lineRoutes from './line-routes.js';
 import {verifyCleanupReadback} from './discovery-cleanup-readback.mjs';
 import {summarizeCommanderEvidence} from './commander-model-receipt.mjs';
+import {markActivityStart} from './runtime-receipts.mjs';
+import {setLedgerStage} from './ledger.mjs';
 
 export function readCommanderSkill(frozen,runDir){
  const path='runtime/skills/runner-commander/SKILL.md',bytes=readFileSync(join(runDir,path));
@@ -95,6 +98,30 @@ export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,
  return {executionMode,execution};
 }
 
+export async function recordActivityBookkeeping(r,{root,env,executionMode,execute=execInput}){
+  const dir=env.WFR_RUN_DIR,inProcess=executionMode==='agent'&&r.activity==='preflight'&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
+    if(r.phase==='start'){
+      if(inProcess)markActivityStart({dir,attempt:env.WFR_ATTEMPT,activity:r.activity,n:1});
+      else {const mark=await execute(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
+      if(mark.code!==0)throw Error('活动起始证据未登记');}
+    }
+    if(['execution','verification'].includes(r.phase)){
+      const ledgerStatus=r.evidence.status==='failed'?'failed':[r.evidence.status,r.evidence.result?.status].some(status=>['partial','paused','skipped','needs_review'].includes(status))?'blocked':r.evidence.status;
+      if(inProcess)setLedgerStage({runDir:dir,stage:r.activity,status:ledgerStatus,n:'1',word:''});
+      else {const updated=await execute(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
+        '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
+      if(updated.code!==0)throw Error('实际活动账本更新失败');}
+    }
+}
+
+export async function readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,deadline_ms,signal}){
+  if(executionMode==='agent'&&activity.key==='preflight'&&['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW)){
+    if(signal?.aborted)throw Error('PREFLIGHT_JUDGE_DEADLINE');
+    return judgePreflightInProcess({root,source:rpcSource(frozen),workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics,deadlineMs:deadline_ms});
+  }
+  return rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
+}
+
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
   const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);assertAgentInput(frozen,env);const executionMode=assertExecutionMode(frozen,env),binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
@@ -116,19 +143,10 @@ async function main(){
   const records=[];const record=async r=>{
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
-    if(r.phase==='start'){
-      const mark=await execInput(process.execPath,[join(root,'runtime-receipts.mjs'),'mark-start',r.activity,'1']);
-      if(mark.code!==0)throw Error('活动起始证据未登记');
-    }
-    if(['execution','verification'].includes(r.phase)){
-      const ledgerStatus=r.evidence.status==='failed'?'failed':[r.evidence.status,r.evidence.result?.status].some(status=>['partial','paused','skipped','needs_review'].includes(status))?'blocked':r.evidence.status;
-      const updated=await execInput(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
-        '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
-      if(updated.code!==0)throw Error('实际活动账本更新失败');
-    }
+    await recordActivityBookkeeping(r,{root,env,executionMode});
   };
   const activities=frozen.activities.map(a=>({...a.version.payload.contract,key:a.reference.slot_key}));
-  const verify=async(activity,result)=>{
+  const verify=async(activity,result,options={})=>{
     const receipts=records.filter(r=>r.activity===activity.key&&r.phase==='commander_exchange');
     const metrics={...(result.result?.counts||{}),...result.result,commander_verified:Number(receipts.length>0&&receipts.every(r=>r.commander_status==='available'))};
     if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'&&activity.key==='cleanup'){
@@ -143,7 +161,7 @@ async function main(){
         scope:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,source_commit:frozen.deployment.source_commit,line_key:lineRoutes.routeOf(env.LEADGEN_LINE).key},
         readback:async video=>(await rpc({kind:'queue',request:{op:'discover_readback',run:env.WFR_TAG,line:env.LEADGEN_LINE,video}},{timeoutMs:60000})).result}));
     }
-    const response=await rpc({kind:'verify',workflow:env.WF_BRAIN_WORKFLOW,stage:activity.key,run:env.WFR_TAG,line:env.LEADGEN_LINE,metrics},{timeoutMs:100000});
+    const response=await readbackActivityChecks({executionMode,activity,root,frozen,env,metrics,rpc,...options});
     const spec=JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8'));
     // 多源取证分别按真实source索引检查，不能拿一个来源的截图代替另一个。
     const phoneEvidence=env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',env.P);

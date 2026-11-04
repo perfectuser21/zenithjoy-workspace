@@ -12,3 +12,8 @@ test('parent-only preflight Judge rejects other phases and exhausted endcheck wi
  const f=fixture(t),{judgePreflightInProcess}=await import('../preflight-judge.mjs');
  for(const changes of [{stage:'collect_videos'},{workflow:'douyin_lead_outreach'},{deadlineMs:Date.now()-1}])await assert.rejects(()=>judgePreflightInProcess({root:f.base,source:f.source,workflow:'douyin_video_discovery',stage:'preflight',run:'fixture',line:'yuesheng',deadlineMs:Date.now()+10000,...changes}),/PREFLIGHT_JUDGE_SCOPE|PREFLIGHT_JUDGE_DEADLINE/);
 });
+test('real workflow preflight readback dispatch does not reopen the old Judge RPC outer',async t=>{
+ const f=fixture(t),workflow=await import('../leadgen-workflow.mjs'),frozen={deployment:{source_commit:f.source.commit},files:Object.fromEntries(f.source.files.map(x=>['runtime/'+x.path,x.sha256]))};
+ const result=await workflow.readbackActivityChecks({executionMode:'agent',activity:{key:'preflight'},root:f.base,frozen,env:{WF_BRAIN_WORKFLOW:'douyin_video_discovery',WFR_TAG:'fixture',LEADGEN_LINE:'yuesheng'},metrics:{device_verified:1,account_verified:1,call_state_idle:1,lock_acquired:1},rpc:async()=>{throw Error('UNCONTROLLED_JUDGE_OUTER');},deadline_ms:Date.now()+10000});
+ assert.equal(result.result.gate.verdict,'pass');
+});
