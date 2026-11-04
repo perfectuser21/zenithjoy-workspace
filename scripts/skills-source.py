@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generated business bootstrap; maintained in zenithjoy-skills/distribution."""
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -81,6 +82,26 @@ def write_identity(directory, key):
     return keyfile
 
 
+def report_identity(keyfile, env):
+    """Observe only the public type/digest; never echo keygen output or errors."""
+    try:
+        result = subprocess.run(['ssh-keygen', '-y', '-P', '', '-f', str(keyfile)],
+                                env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                                text=True, timeout=5, check=True)
+        kind, encoded, *_ = result.stdout.split()
+        if not re.fullmatch(r'(?:ssh|ecdsa|sk)-[A-Za-z0-9@._+-]+', kind):
+            raise ValueError('unsupported identity type')
+        blob = base64.b64decode(encoded, validate=True)
+        length = int.from_bytes(blob[:4], 'big')
+        if blob[4:4 + length].decode('ascii') != kind:
+            raise ValueError('identity type mismatch')
+        fingerprint = base64.b64encode(hashlib.sha256(blob).digest()).decode('ascii').rstrip('=')
+        print(f'skill source identity type={kind} fingerprint=SHA256:{fingerprint}', file=sys.stderr)
+    except (OSError, ValueError, UnicodeError, subprocess.SubprocessError):
+        # An observational diagnostic must not replace fetch/checksum/verify errors.
+        print('skill source identity diagnostic unavailable', file=sys.stderr)
+
+
 def bootstrap(workspace, source, command, ref="HEAD", read_path=None):
     if command == "cat":
         lock = json.loads(subprocess.check_output(["git", "-C", str(workspace), "show",
@@ -115,7 +136,7 @@ def bootstrap(workspace, source, command, ref="HEAD", read_path=None):
             hosts = Path(private) / "known_hosts"
             hosts.write_bytes(b"github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n")
             # No agent, alternate identity, credential helper or interactive fallback.
-            env["GIT_SSH_COMMAND"] = (f'ssh -i "{keyfile}" -o IdentitiesOnly=yes '
+            env["GIT_SSH_COMMAND"] = (f'ssh -F /dev/null -i "{keyfile}" -o IdentitiesOnly=yes '
                 f'-o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=10 '
                 f'-o ConnectionAttempts=1 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 '
                 f'-o StrictHostKeyChecking=yes -o UserKnownHostsFile="{hosts}"')
@@ -123,6 +144,7 @@ def bootstrap(workspace, source, command, ref="HEAD", read_path=None):
             if not (source / ".git").exists():
                 source.mkdir(parents=True, exist_ok=True)
                 subprocess.run(["git", "init", "-q", str(source)], env=env, check=True)
+            report_identity(keyfile, env)
             fetch_pinned_revision(source, remote, revision, env, key)
     if command == "cat":
         catalog = json.loads(subprocess.check_output(["git", "-C", str(source), "show",

@@ -19,21 +19,57 @@ function sourceCache(){
  if(!cache){cache=mkdtempSync(join(tmpdir(),'implementation-skills-'));process.once('exit',()=>rmSync(cache,{recursive:true,force:true}));}
  return join(cache,'objects');
 }
+function reportIdentity(identity,env){
+ try{
+  const output=execFileSync('ssh-keygen',['-y','-P','','-f',identity],{env,stdio:['ignore','pipe','pipe'],timeout:5000,killSignal:'SIGKILL',encoding:'utf8'});
+  const [type,encoded]=output.trim().split(/\s+/);
+  if(!/^(?:ssh|ecdsa|sk)-[A-Za-z0-9@._+-]+$/.test(type)||!encoded||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))throw Error('invalid identity');
+  const blob=Buffer.from(encoded,'base64');
+  if(blob.length<4||blob.subarray(4,4+blob.readUInt32BE(0)).toString()!==type)throw Error('identity type mismatch');
+  const fingerprint=createHash('sha256').update(blob).digest('base64').replace(/=+$/,'');
+  process.stderr.write(`skill source identity type=${type} fingerprint=SHA256:${fingerprint}\n`);
+ }catch{
+  // This observation never replaces the fetch or trusted-byte verification result.
+  process.stderr.write('skill source identity diagnostic unavailable\n');
+ }
+}
+function fetchCategory(message){
+ const lower=message.toLowerCase();
+ if(['invalid format','error in libcrypto','incorrect passphrase','repository not found','does not appear to be a git repository','not our ref',"couldn't find remote ref",'unadvertised object','host key verification failed','remote host identification has changed'].some(reason=>lower.includes(reason)))return ['permanent',false];
+ if(lower.includes('permission denied (publickey)'))return ['ssh_publickey',true];
+ if(['connection timed out','connection timeout','connection reset','connection refused','connection closed','could not resolve hostname','kex_exchange_identification','remote end hung up','early eof','rpc failed','temporary failure in name resolution'].some(reason=>lower.includes(reason)))return ['transport',true];
+ return ['permanent',false];
+}
+function fetchPinned(source,revision,env,key){
+ const args=['--no-replace-objects','-C',source,'fetch','--quiet','--depth=1','git@github.com:perfectuser21/zenithjoy-skills.git',revision];
+ for(let attempt=1;attempt<=3;attempt++){
+  try{execFileSync('git',args,{env,stdio:['ignore','pipe','pipe'],timeout:35000,killSignal:'SIGKILL',maxBuffer:32*1024*1024});return;}
+  catch(error){
+   let message=error.stderr?.toString().trim()||`git fetch ${error.code||error.status||'failed'}`;
+   const [category,retryable]=error.code==='ETIMEDOUT'?['transport_timeout',true]:fetchCategory(message);
+   if(retryable&&attempt<3){
+    process.stderr.write(`skill source fetch attempt ${attempt}/3 failed (${category}); retrying the same pinned identity/object in ${attempt}s\n`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,attempt*1000);continue;
+   }
+   for(const secret of [key,...key.replace(/\r\n/g,'\n').split('\n')])if(secret.trim())message=message.split(secret).join('[REDACTED]');
+   // Do not retain the raw child error/argv/stdio, which may contain secret echoes.
+   fail(`skill source fetch failed after ${attempt} attempt(s) (${category}): ${message}`);
+  }
+ }
+}
 function ensureSource(source,revision){
  try{git(source,'cat-file','-e',`${revision}^{commit}`);return;}catch{}
+ const key=process.env.SKILLS_SOURCE_SSH_KEY||'';
+ if(!key.trim())fail('SKILLS_SOURCE_SSH_KEY is required for an uncached private skill source');
  mkdirSync(source,{recursive:true});git(source,'init','-q');
- const env=environment();let remote='https://github.com/perfectuser21/zenithjoy-skills.git';
- const key=process.env.SKILLS_SOURCE_SSH_KEY;
- const auth=mkdtempSync(join(tmpdir(),'implementation-skills-auth-'));
+ const env=environment(),auth=mkdtempSync(join(tmpdir(),'implementation-skills-auth-'));
  try{
-  if(key){
-   const identity=join(auth,'key'),hosts=join(auth,'known_hosts');
-   writeFileSync(identity,key.trimEnd()+'\n',{mode:0o600});
-   writeFileSync(hosts,'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n');
-   env.GIT_SSH_COMMAND=`ssh -F /dev/null -i "${identity}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${hosts}"`;
-   remote='git@github.com:perfectuser21/zenithjoy-skills.git';
-  }
-  execFileSync('git',['--no-replace-objects','-C',source,'fetch','--quiet','--depth=1',remote,revision],{env,stdio:['ignore','pipe','pipe'],timeout:60000});
+  const identity=join(auth,'key'),hosts=join(auth,'known_hosts');
+  writeFileSync(identity,key.replace(/\r\n/g,'\n').trimEnd()+'\n',{mode:0o600});
+  writeFileSync(hosts,'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n');
+  env.GIT_SSH_COMMAND=`ssh -F /dev/null -i "${identity}" -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${hosts}"`;
+  reportIdentity(identity,env);
+  fetchPinned(source,revision,env,key);
  }finally{rmSync(auth,{recursive:true,force:true});}
 }
 export function readImplementationSource(root,revision,path,{source,offline=false}={}){
