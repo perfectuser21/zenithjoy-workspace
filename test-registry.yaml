@@ -10310,3 +10310,11 @@ tests:
     status: active
     product: 获客
     note: Fixed template consumer for exact e6 M4 101/102 scope; no claim of physical-device acceptance.
+
+  - id: payment-public-check-contract
+    path: .github/workflows/scripts/__tests__/payment-public-check.test.mjs
+    type: contract
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Blocking Smoke Glob baseline payment-smoke.sh executes real Node children and loopback HTTP; public deployment probe separately records verified/not_verified/failed and never claims payment business acceptance.

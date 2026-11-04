@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -242,3 +242,93 @@ for (const status of [401, 500]) test('configured required profile keeps expired
  const result = runHealth({ required: requiredAccounts.join(','), configuredCookies: requiredAccounts, noAlerts: true, status });
  assert.notEqual(result.status, 0); assert.equal(result.notifications.length, 0);
 });
+
+
+// Execute both real operator CLIs with only the browser transport replaced.
+// Every state/cookie is synthetic, all filesystem writes stay in owned scratch,
+// and a child preload rejects HTTP/HTTPS/fetch so no alert can leave the fixture.
+function runOperatorOracle(platform, responses = [], concurrent = false) {
+  const root = mkdtempSync(join(tmpdir(), 'operator-oracle-contract-'));
+  try {
+    const sessions = join(root, 'scripts', 'sessions');
+    const dependency = join(root, 'services', 'agent', 'node_modules', 'playwright');
+    const temporary = join(root, 'tmp');
+    for (const dir of [sessions, dependency, temporary]) mkdirSync(dir, { recursive: true });
+    writeFileSync(join(root, 'package.json'), '{"type":"module"}');
+    writeFileSync(join(dependency, 'package.json'), '{"main":"index.cjs","type":"commonjs"}');
+    const producer = `verify-operator-${platform}.js`;
+    writeFileSync(join(sessions, producer), readFileSync(new URL('../../../../scripts/sessions/' + producer, import.meta.url)));
+    const preload = join(root, 'deny-network.mjs');
+    writeFileSync(preload, `import http from 'node:http';import https from 'node:https';
+const deny=()=>{throw Error('OPERATOR_FIXTURE_NETWORK_FORBIDDEN')};
+http.request=deny;http.get=deny;https.request=deny;https.get=deny;globalThis.fetch=deny;`);
+    writeFileSync(join(dependency, 'index.cjs'), `
+const config=JSON.parse(process.env.OPERATOR_ORACLE_FIXTURE);
+let listener;const pending=[];
+const page={
+ async goto(){
+  for(const item of config.responses){
+   const response={url:()=>item.url,status:()=>item.status??200,
+    json:async()=>{if(item.delayMs)await new Promise(resolve=>setTimeout(resolve,item.delayMs));if(item.invalidJSON)throw Error('fixture invalid JSON');return item.body;}};
+   const outcome=listener?.(response);if(config.concurrent)pending.push(outcome);else await outcome;
+  }
+ },async waitForTimeout(){await Promise.all(pending);},url:()=>config.finalUrl,async screenshot(){}
+};
+const context={on:(name,handler)=>{if(name==='response')listener=handler;},newPage:async()=>page};
+module.exports={chromium:{launch:async()=>({newContext:async()=>context,close:async()=>{}})}};
+`);
+    const state = JSON.stringify({ cookies: [
+      { name: 'sessionid', value: 'synthetic-fixture-only' },
+      { name: 'galaxy_creator_session_info', value: 'synthetic-fixture-only' },
+    ], origins: [] });
+    const finalUrl = platform === 'douyin' ? 'https://creator.douyin.com/creator-micro/home' : 'https://creator.xiaohongshu.com/publish/publish';
+    const result = spawnSync(process.execPath, ['--import', preload, join(sessions, producer)], {
+      cwd: root, encoding: 'utf8', timeout: 5000,
+      env: { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+        TMPDIR: temporary, TMP: temporary, TEMP: temporary,
+        DOUYIN_OPERATOR_SESSION: state, XIAOHONGSHU_COOKIES: state,
+        OPERATOR_ORACLE_FIXTURE: JSON.stringify({ finalUrl, responses, concurrent }),
+      },
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.signal, null);
+    return result;
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}
+const operatorEndpoints = {
+  douyin: 'https://creator.douyin.com/web/api/base/creator/user/info/',
+  xiaohongshu: 'https://creator.xiaohongshu.com/api/galaxy/creator/home/cre_info',
+};
+const operatorSuccess = { douyin: { status_code: 0 }, xiaohongshu: { code: 0 } };
+for (const platform of Object.keys(operatorEndpoints)) {
+  const url = operatorEndpoints[platform];
+  const positive = operatorSuccess[platform];
+  const negative = platform === 'douyin' ? { status_code: 401 } : { code: 401, success: false };
+  for (const [name, responses] of [
+    ['missing account API', []],
+    ['unrelated API', [{ url: 'https://example.invalid/unrelated', body: positive }]],
+    ['HTTP200 invalid JSON', [{ url, invalidJSON: true }]],
+    ['HTTP200 business failure', [{ url, body: negative }]],
+    ['HTTP503 positive-looking body', [{ url, status: 503, body: positive }]],
+    ['null JSON body', [{ url, body: null }]],
+    ['array JSON body', [{ url, body: [] }]],
+    ['later business failure after earlier success', [{ url, body: positive }, { url, body: negative }]],
+  ]) test(`operator ${platform} rejects ${name} through actual CLI`, () => {
+    const result = runOperatorOracle(platform, responses);
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.doesNotMatch(result.stdout, /PASS:/);
+  });
+  test(`operator ${platform} ignores a stale earlier success finishing after a newer failure`, () => {
+    const result = runOperatorOracle(platform, [{ url, body: positive, delayMs: 30 }, { url, body: negative }], true);
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.doesNotMatch(result.stdout, /PASS:/);
+  });
+  const positives = platform === 'douyin'
+    ? [{ status_code: 0 }, { user_info: { uid: 'fixture' } }, { creator_info: { id: 'fixture' } }]
+    : [{ code: 0 }, { success: true }];
+  for (const [index, body] of positives.entries()) test(`operator ${platform} retains valid business success ${index}`, () => {
+    const result = runOperatorOracle(platform, [{ url, body }]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /PASS:/);
+  });
+}
