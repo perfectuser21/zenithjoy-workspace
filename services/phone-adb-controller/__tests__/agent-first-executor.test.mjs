@@ -268,3 +268,11 @@ test('早期stall的Observer异常仅记unavailable，不触发资源未知或�
  assert.equal(result.status,'completed');assert.equal(result.execution_stopped,true);assert.equal(stopped,0);
  const row=JSON.parse(readFileSync(join(f.runDir,'skill-primary/scoring/broker-events.jsonl'),'utf8').trim());assert.equal(row.commander_status,'unavailable');assert.equal(row.event.type,'stall');
 });
+
+test('prepare receives the same worker/receipt absolute windows as the official primary request',async t=>{
+ const f=phoneFixture(t);let captured,request;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async(_activity,scope)=>{captured=scope;return {prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>({account_verified:true})};},rpc:async q=>{if(q.kind==='activity_skill_authority')return {authorized:true};request=q.request;return {result:receipt(q.request)};}});
+ await execute({key:'preflight',budget:{max_duration_s:300}},{context:{task_id:taskId}});
+ assert.equal(captured.worker_deadline_ms,request.worker_deadline_ms);assert.equal(captured.receipt_deadline_ms,request.receipt_deadline_ms);
+ assert.ok(captured.worker_deadline_ms<captured.receipt_deadline_ms);assert.ok(captured.receipt_deadline_ms<captured.deadline_ms);
+});

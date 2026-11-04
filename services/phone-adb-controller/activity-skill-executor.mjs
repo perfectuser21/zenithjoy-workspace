@@ -53,7 +53,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    binding_id:binding.id,source_commit:frozen.deployment.source_commit,snapshot_sha256:frozen.snapshot_sha256,
    profile:fixed.profile,serial:fixed.serial,line:fixed.line,source_run:fixed.source_run,
    limit:fixed.limit,comment_limit:fixed.comment_limit,discovery_filters:structuredClone(fixed.discovery_filters),collection_budget_s:fixed.collection_budget_s,
-   run_start_ts:fixed.run_start_ts,run_max_seconds:fixed.run_max_seconds,deadline_ms:deadline};
+   run_start_ts:fixed.run_start_ts,run_max_seconds:fixed.run_max_seconds,deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline};
   const tools=await createTools(activity,scope);
   if(!tools||['inspect','phone','business','getResult','prepare','settle'].some(key=>typeof tools[key]!=='function')
     ||activity.key==='cleanup'&&typeof tools.release!=='function')throw noLaunch('AGENT_PRIMARY_TOOLS_UNAVAILABLE');

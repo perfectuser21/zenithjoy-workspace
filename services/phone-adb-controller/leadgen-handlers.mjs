@@ -57,7 +57,7 @@ export function parseCollection(result,videoId,{allowPartial=false,recipientScop
   return comments;
 }
 
-export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease}) {
+export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,taskId,outreachScope=null,centralLease,preflightMetadata}) {
   const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
@@ -296,20 +296,24 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   const prepareAgentResources=async scope=>{
     if(scope.activity==='preflight'){
       if(agent.facts.prepared)return;
+      const metadataActive=()=>{if(Date.now()>=Math.min(scope.worker_deadline_ms??scope.deadline_ms,scope.deadline_ms))throw Object.assign(Error('PREFLIGHT_METADATA_DEADLINE'),{code:'PREFLIGHT_METADATA_DEADLINE'});preflightMetadata?.assertActive?.();};
+      metadataActive();
       const step=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?'101':'102';
       if(step==='101'){
         const fixed=assertDiscoveryInput(readFrozen(env.WFR_RUN_DIR),env);
-        const reply=await rpc({kind:'keywords',line,run,limit:2,keywords:fixed.sources});
+        const reply=await (preflightMetadata||rpc)({kind:'keywords',line,run,limit:2,keywords:fixed.sources},{scope});
+        metadataActive();
         if(canonical(reply.result)!==canonical(fixed.sources))throw Error('DISCOVERY_INPUT_SOURCE_MISMATCH');
         agent.sources=reply.result;agent.discoveryInput=fixed;
       }
-      const config=await queue('company_config',{step,device_binding:{profile,device_serial:serial}}),b=config?.device_binding;
+      const config=preflightMetadata?(await preflightMetadata({kind:'queue',request:{op:'company_config',line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),step,device_binding:{profile,device_serial:serial}}},{scope})).result:await queue('company_config',{step,device_binding:{profile,device_serial:serial}}),b=config?.device_binding;
+      metadataActive();
       if(!config?.company_id||!config.tenant_id||config.run_id!==run||!Number.isSafeInteger(config.version)||config.version<1
         ||!b||b.company_id!==config.company_id||b.tenant_id!==config.tenant_id||b.version!==config.version||b.run_id!==run
         ||b.profile!==profile||b.device_serial!==serial||b.enabled!==true||b.verification_status!=='verified'||typeof b.douyin_id!=='string'||!b.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED');
       state.company_config={...config,expected_sender:b.douyin_id};state.companyConfig=config;
       appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
-      await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});await getCentral().acquire();
+      await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});metadataActive();await getCentral().acquire();metadataActive();
       appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'acquired',task_id:taskId,run_id:state.run_id,device_name:serial,source_commit:sourceCommit,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
       const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
       if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');env.ADB_SERVER_SOCKET=`tcp:127.0.0.1:${route}`;env.DOUYIN_ADB_PORT=route;
@@ -521,7 +525,9 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     const primitiveQueue=async(op,input)=>{
       if(op==='score_scope'&&agent.scoreScope)return structuredClone(agent.scoreScope);
       if(op==='claim_videos')state.qualificationClaimUnknown=true;
-      let value=await queue(op,input);
+      const cachedPreflight=preflightMetadata&&activity.key==='preflight'&&op==='company_config';
+      if(cachedPreflight){preflightMetadata.assertActive?.();if(Date.now()>=Math.min(scope.worker_deadline_ms??scope.deadline_ms,scope.deadline_ms)||!agent.facts.prepared||!state.company_config?.device_binding)throw Error('PREFLIGHT_METADATA_DEADLINE');}
+      let value=cachedPreflight?structuredClone(state.company_config):await queue(op,input);
       if(op==='score_scope'){
         if(!Array.isArray(value?.ids)||!value.sources||new Set(value.ids).size!==value.ids.length||value.ids.some(id=>value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
         const ids=value.ids.slice(0,scope.limit);value={...value,ids,sources:Object.fromEntries(ids.map(id=>[id,value.sources[id]]))};
