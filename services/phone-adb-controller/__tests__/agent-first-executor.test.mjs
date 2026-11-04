@@ -217,3 +217,54 @@ test('真实owner reservation：同run的Observer与Skill执行父会话互不�
  try{await one.check();await two.check();await assert.rejects(()=>reserveWorkflowCommanderTurn(worker,{home}),/COMMANDER_OWNER_TURN_UNRESOLVED/);}
  finally{await one.returned('worker real result');await two.returned('observer real result');await one.close();await two.close();}
 });
+
+test('Primary继承公共Runner剩余绝对截止，给Worker/官方返回/终检在原预算内分期',async t=>{
+ const f=fixture(t),absolute=Date.now()+1000;let request;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async()=>({prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>({scored:1})}),rpc:async q=>{request=q.request;return {result:receipt(q.request)};}});
+ await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId},deadline_ms:absolute});
+ assert.ok(request.deadline_ms<=absolute,'不能用now+原Activity预算覆盖公共剩余');
+ assert.ok(request.worker_deadline_ms<request.receipt_deadline_ms);
+ assert.ok(request.receipt_deadline_ms<request.deadline_ms);
+});
+test('Primary普通RPC超时也精确请求当前绑定停止，缺双方证明仍不settle/release',async t=>{
+ const f=fixture(t);let launches=0,stops=0,settled=0,request;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async()=>({prepare:async()=>{},settle:async()=>{settled++;},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>null}),rpc:async q=>{
+  if(q.kind==='activity_skill_stop'){stops++;assert.deepEqual(q.request,request);return {result:{execution_stopped:false,child_execution_stopped:true}};}
+  launches++;request=q.request;throw Error('EXECUTION_DEADLINE');
+ }});
+ await assert.rejects(()=>execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId},deadline_ms:Date.now()+1000}),error=>error.message==='EXECUTION_DEADLINE'&&error.executionStopped===false);
+ assert.equal(launches,1);assert.equal(stops,1);assert.equal(settled,0);
+});
+
+test('公共Runner短预算到Worker截止仍有真实终检与cleanup，未扩大整轮截止',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.now()});
+ const f=phoneFixture(t),start=Date.now();let checked=0,released=0;const slots=[];
+ const tools=async activity=>({prepare:async()=>{},settle:async()=>{},release:async()=>{released++;},inspect:async()=>({}),phone:async()=>({}),business:async()=>({}),getResult:()=>activity.key==='cleanup'?{cleaned:true}:null});
+ const execute=api.createActivitySkillExecutor({...f,createTools:tools,rpc:async q=>{
+  slots.push(q.request.activity_key);
+  if(q.request.activity_key==='preflight')t.mock.timers.tick(q.request.worker_deadline_ms-Date.now());
+  return {result:receipt(q.request,{status:q.request.activity_key==='cleanup'?'ok':'timeout'})};
+ }});
+ const result=await runWorkflow({activities:[{key:'preflight',budget:{max_duration_s:1}},{key:'cleanup',budget:{max_duration_s:1}}],context:{run_id:f.binding.run_id,task_id:taskId,workflow_key:f.env.WF_BRAIN_WORKFLOW,execution_mode:'agent'},executeAgent:execute,verify:async()=>{checked++;return {verified:true};},commander:async()=>({action:'none'})});
+ assert.equal(result.status,'needs_review');assert.deepEqual(slots,['preflight','cleanup']);assert.equal(released,1);assert.equal(checked,1);
+ assert.equal(result.results[0].checks.at(-1).reason,'agent_execution_failed');assert.ok(Date.now()-start<1000);
+});
+test('Primary在短Activity耗尽前报告早期stall，普通inspect不冒充业务进展',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:Date.now()});const f=fixture(t),seen=[];
+ const execute=api.createActivitySkillExecutor({...f,createTools:async()=>({prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>({scored:1})}),rpc:async q=>{
+  t.mock.timers.tick(2500);await new Promise(resolve=>setImmediate(resolve));return {result:receipt(q.request)};
+ }});
+ await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId},onEvent:async event=>{seen.push(event);return {action:'none'};}});
+ assert.equal(seen.filter(event=>event.type==='stall').length,1);assert.ok(seen[0].elapsed_ms<10000);
+});
+
+test('早期stall的Observer异常仅记unavailable，不触发资源未知或精确停止',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:Date.now()});const f=fixture(t);let stopped=0;
+ const execute=api.createActivitySkillExecutor({...f,createTools:async()=>({prepare:async()=>{},settle:async()=>{},inspect:async()=>({}),phone:async()=>{},business:async()=>{},getResult:()=>({scored:1})}),rpc:async q=>{
+  if(q.kind==='activity_skill_stop'){stopped++;return {result:{execution_stopped:false}};}
+  t.mock.timers.tick(2500);await new Promise(resolve=>setImmediate(resolve));return {result:receipt(q.request)};
+ }});
+ const result=await execute({key:'scoring',budget:{max_duration_s:30}},{context:{task_id:taskId},onEvent:async()=>{throw Error('observer unavailable');}});
+ assert.equal(result.status,'completed');assert.equal(result.execution_stopped,true);assert.equal(stopped,0);
+ const row=JSON.parse(readFileSync(join(f.runDir,'skill-primary/scoring/broker-events.jsonl'),'utf8').trim());assert.equal(row.commander_status,'unavailable');assert.equal(row.event.type,'stall');
+});

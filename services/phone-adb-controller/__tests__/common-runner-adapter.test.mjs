@@ -74,3 +74,9 @@ test('每次Commander交换保留wake/event/recovery/sleep原phase，不被事�
  const records=[];await runWorkflow(base({commander:async()=>({action:'none'}),record:async e=>records.push(e)}));
  const exchanges=records.filter(e=>e.phase==='commander_exchange');assert.ok(exchanges.some(e=>e.commander_phase==='wake'));assert.ok(exchanges.some(e=>e.commander_phase==='event'));assert.ok(exchanges.some(e=>e.commander_phase==='sleep'));
 });
+
+test('Agent adapter把公共Runner实际剩余冻结为一次绝对截止，不重新给原活动预算',async()=>{
+ let deadline;const began=Date.now();
+ const actual=await runWorkflow(base({activities:[{key:'work',budget:{max_duration_s:1}}],context:{execution_mode:'agent',workflow_key:'douyin_comment_scoring'},executeAgent:async(a,options)=>{deadline=options.deadline_ms;return {status:'completed',execution_stopped:true,result:{saved:1}};},record:async row=>{if(row.event_type==='ACTIVITY_STARTED')await new Promise(resolve=>setTimeout(resolve,30));}}));
+ assert.equal(actual.status,'completed');assert.ok(Number.isSafeInteger(deadline));assert.ok(deadline<=began+1020);assert.ok(deadline>Date.now());
+});
