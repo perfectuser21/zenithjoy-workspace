@@ -345,14 +345,17 @@ for(const mode of ['exited','exited-before-first-probe','not-ready'])test('workb
  const root=mkdtempSync(join(tmpdir(),'workbench-startup-diagnostic-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
  for(const file of ['apps/api/src/services/workbench.ts','apps/api/src/routes/staff.ts','apps/staff-hub/src/pages/HomePage.tsx']){mkdirSync(join(root,file,'..'),{recursive:true});writeFileSync(join(root,file),'');}
  const bin=join(root,'fixture-bin');mkdirSync(bin);
+ writeFileSync(join(root,'curl.trace'),'',{flag:'wx',mode:0o600});
  const noise='for i in $(seq 1 180); do echo "STARTUP_NOISE_$i" >&2; done; echo STARTUP_FIXTURE_REFUSED >&2; echo "Authorization: Bearer fixture-bearer" >&2; echo "postgres://user:fixture-password@db.invalid/db" >&2; echo "API_KEY=fixture-api-key" >&2; echo "https://service.invalid/path?token=fixture-query-token" >&2;';
- for(const [name,body]of Object.entries({npm:'exit 0',node:'printf "%s\\n" "$$" > "$CHILD_PID";'+noise+(mode.startsWith('exited')?'exit 42':'exec /bin/sleep 30'),curl:'printf "%s\\n" "$*" >> "$CURL_TRACE";exit 7',sleep:'printf "%s\\n" "$*" >> "$SLEEP_TRACE";/bin/sleep 0.01'}))writeFileSync(join(bin,name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
+ for(const [name,body]of Object.entries({npm:'exit 0',node:'printf "%s" "$$" > "$CHILD_PID";'+noise+(mode.startsWith('exited')?'exit 42':'exec /bin/sleep 30'),curl:'printf "%s\\n" "$*" >> "$CURL_TRACE";exit 7',sleep:'printf "%s\\n" "$*" >> "$SLEEP_TRACE";/bin/sleep 0.01'}))writeFileSync(join(bin,name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
  // 夹具只控制调度：子进程确已停止后，仍原样枚举正式入口的30次尝试。
  if(mode==='exited-before-first-probe')writeFileSync(join(bin,'seq'),`#!/bin/bash
 if [[ "$*" == '1 30' ]]; then
  for fixture_wait in $(/usr/bin/seq 1 100); do
   if [[ -s "$CHILD_PID" ]]; then
-   fixture_state=$(/bin/ps -o stat= -p "$(cat "$CHILD_PID")" 2>/dev/null || true)
+   fixture_pid=$(cat "$CHILD_PID")
+   [[ "$fixture_pid" =~ ^[1-9][0-9]*$ ]] || exit 92
+   fixture_state=$(/bin/ps -o stat= -p "$fixture_pid" 2>/dev/null || true)
    if [[ -z "$fixture_state" || "$fixture_state" == *Z* ]]; then printf stopped > "$EXIT_SCHEDULE"; exec /usr/bin/seq "$@"; fi
   fi
   /bin/sleep 0.01
