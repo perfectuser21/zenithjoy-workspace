@@ -1,0 +1,15 @@
+{
+  "extra_unit_count": 2,
+  "original_business_denominator_unchanged": 48,
+  "remove_retired_glob_paths": [
+    ".github/workflows/scripts/smoke/line04-scan-scroll-detail-fields-smoke.sh",
+    ".github/workflows/scripts/smoke/skill-create-longrun-smoke.sh"
+  ],
+  "required_command_already_requested": "cd apps/api && npx vitest run --config vitest.business-pg.config.ts",
+  "default_api_tests_preserved": [
+    "apps/api/src/routes/__tests__/skill-drafts-longrun.test.ts",
+    "apps/api/src/routes/__tests__/skill-drafts.test.ts"
+  ],
+  "no_central_app_mount_change_requested": true,
+  "no_physical_or_legacy_cs_execution": true
+}

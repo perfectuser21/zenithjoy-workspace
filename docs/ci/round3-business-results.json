@@ -29,7 +29,12 @@
       "implemented_contract": "Real owner cookie sees only its machine; URL visibility and five-tab CS context rendered.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "crm-blacklist-onboarding",
@@ -50,7 +55,11 @@
       "implemented_contract": "License-derived CRM ingest, bot blacklist, own identity/onboarding and internal-hidden roster; no forged admin email.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "crm-identity",
@@ -71,7 +80,11 @@
       "implemented_contract": "Current identity write persists; internal customers are deliberately absent from roster; UUID fixtures and real cookie reads.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "account-identity",
@@ -91,7 +104,11 @@
       "implemented_contract": "JSON-parsed actual signup user.id -> customer_id/tenant/owner -> account/me, no greedy session-ID sed.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "account-scan-result",
@@ -111,7 +128,11 @@
       "implemented_contract": "Real UUID task closes done exactly once; duplicate HTTP succeeds with idempotent=true, sessions and SCREEN_LOCKED diagnostics read back.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "acquisition-collect",
@@ -132,7 +153,11 @@
       "implemented_contract": "Current two-stage production report-videos then report, real counts/cards/leads; expand/manual behavior isolated at provider transport.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "acquisition-machine-tenant-fixtures",
@@ -166,7 +191,11 @@
       "implemented_contract": "Actual registered UUID agents and owner cookies replace malformed tenant strings and psql command-tag captures.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "acquisition-dispatch-real-scheduling-smoke",
@@ -187,7 +216,11 @@
       "implemented_contract": "Live Android eligibility yields a real queued assignment; current negative auth remains 401; scheduling/remap behavior covered in service contracts.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "acquisition-dispatch",
@@ -208,7 +241,11 @@
       "implemented_contract": "Fresh heartbeat, capabilities and burner session fixture produces actual assignment and Android payload.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "acquisition-ia-redesign-smoke",
@@ -228,7 +265,11 @@
       "implemented_contract": "Stage1 registers real numeric video IDs before Stage2; cards/comment fields/counts and cross-tenant 404 assert current protocol.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "admin-platform-sessions-pages",
@@ -248,7 +289,11 @@
       "implemented_contract": "Both restricted pages render real rows/selected tenant and refuse non-admin data requests.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "agent-events",
@@ -274,7 +319,11 @@
       "implemented_contract": "Required license tier/tenant real fixture; single+batch events persist derived tenant, machine logs/upgrades read back and foreign machine 404.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "license-register-lifecycle",
@@ -302,7 +351,11 @@
       "implemented_contract": "Atomic tenant+paid-license create, paid signup, dual register/reconnect/quota; orphan fails403 before any machine row.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "android-collect-protocol-v2",
@@ -323,7 +376,11 @@
       "implemented_contract": "Split backend PostgreSQL protocol from native compile; Kotlin tests remain in android-agent-ci testDebugUnitTest, no tail-masked Gradle failure.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": "Native Kotlin execution belongs to dedicated Android CI; no physical result claimed."
+      "external_evidence": "Native Kotlin execution belongs to dedicated Android CI; no physical result claimed.",
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "clips-operator-ocr-probe",
@@ -346,7 +403,10 @@
       "implemented_contract": "Remove fake-green no-cookie CI entry. Preserve explicit cookie/source/external opt-in bounded OCR operator probe; external OCR deliberately not run.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": "Explicit operator OCR receipt remains unexecuted by authorization boundary."
+      "external_evidence": "Explicit operator OCR receipt remains unexecuted by authorization boundary.",
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "content-judgment",
@@ -367,7 +427,11 @@
       "implemented_contract": "Actual parser + SQL producer use injected transport response, matched persisted and cache calls provider exactly once; not only force_result.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "content-publish-dispatch",
@@ -387,7 +451,10 @@
       "implemented_contract": "Preserve CAS, idempotency, claim and legacy queue exclusion tests; real media fixture coverage is separately coordinated with media lane.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "crm-manual-history",
@@ -410,7 +477,12 @@
       "implemented_contract": "Default real cookie/SQL concurrent confirmation and foreign404; existing Chromium+disposable PostgreSQL fixture actually executed, eight checks passed.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union",
+        "manual_history_chromium_pg"
+      ]
     },
     {
       "unit_id": "shared-cs-oneclick-config",
@@ -431,7 +503,11 @@
       "implemented_contract": "Actual owner-cookie setup -> license_machines binding -> service_agents -> per-CS config -> Android shared agent-config. Unauthenticated401/foreign403 remain.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "cs-stats",
@@ -451,7 +527,11 @@
       "implemented_contract": "Exact fixture CS row, received1/replies0 before receipt then replies1, served1 and numeric duration; draft is not delivered.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "deploy-version-selfcheck",
@@ -471,7 +551,11 @@
       "implemented_contract": "Real build JSON -> isolated own loopback app process -> health/version -> correct SHA pass and wrong SHA failure; no worker startup or kill_port.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union",
+        "deploy_build_process_sha"
+      ]
     },
     {
       "unit_id": "scheduler-dispatch",
@@ -491,7 +575,10 @@
       "implemented_contract": "Real timer advanced in isolated test calls DM sweep; exact per-tenant dispatch/overlap failures asserted. No optional health PASS.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "douyin-dm-outreach-android-smoke",
@@ -514,7 +601,11 @@
       "implemented_contract": "Actual SQL build/dispatch/douyin_id Android payload and repeated result count; native pure logic tests remain exclusively in dedicated Android CI.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": "Native Kotlin execution belongs to dedicated Android CI; no physical result claimed."
+      "external_evidence": "Native Kotlin execution belongs to dedicated Android CI; no physical result claimed.",
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "dynamic-scenes-compose",
@@ -534,7 +625,10 @@
       "implemented_contract": "Unsafe default production/paid compose smoke removed; template behavior kept in media canonical fixture contracts, external render receipt is separate.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "free-onboarding",
@@ -555,7 +649,11 @@
       "implemented_contract": "Current source+05-07 migration establish quota1; actual signup owns one free license/tenant/member, receives100 credits and cookie works200 including invalid-key fallback.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "mock-seed-boundary",
@@ -575,7 +673,10 @@
       "implemented_contract": "Current seed route tests cover wrong/missing token, invalid body and production refusal; dual identity is also covered by actual register/reconnect PG lifecycle.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "leads-reply-assignee",
@@ -597,7 +698,12 @@
       "implemented_contract": "Current leads fields and assignment rendering retained; real comment/grade/douyin identity rows now read via current workbench API.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "company-profile-collect",
@@ -620,7 +726,13 @@
       "implemented_contract": "Remove obsolete bare company_profiles/time-window contract. Existing current company wiki/CAS PG lane and UI contract retained; current collection separately real SQL.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union",
+        "dashboard_canonical_union",
+        "current_company_pg_own_instance"
+      ]
     },
     {
       "unit_id": "line02-dm-dispatch",
@@ -641,7 +753,11 @@
       "implemented_contract": "Actual assignment -> queued dm_outreach -> persisted sent receipt -> outreach-history, duplicate report does not duplicate log.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "collect-terminal",
@@ -661,7 +777,11 @@
       "implemented_contract": "Current Stage1 report-videos -> stage_1_done, complete registered Stage2 videos -> done and terminal ignored replay. No malformed task IDs or swallowed seed errors.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "line04-crm-glide-smoke",
@@ -683,7 +803,12 @@
       "implemented_contract": "Current shared CRM using actual cookie and license scope; source named Glide is no longer treated as architecture/retirement fact.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "line04-crm-scan-reconcile-smoke",
@@ -703,7 +828,11 @@
       "implemented_contract": "Real DB dry-run miss3 never deletes, reappearing resets0, bot blacklist/self filter/internal hiding and scoped roster verified.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "my-works",
@@ -724,7 +853,11 @@
       "implemented_contract": "Current my-works UI and dispatch behavior retained; image decode/signature/SQL publication seam coordinated with media fixture lane.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "operator-browser-session-ui",
@@ -745,7 +878,11 @@
       "implemented_contract": "Real OperatorPage renders8 platforms, discovers injected local agent and submits exact bind payload then refreshes. Server invalid/failure behaviors retained.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union",
+        "dashboard_canonical_union"
+      ]
     },
     {
       "unit_id": "moments-local-profile-review-contract",
@@ -762,10 +899,14 @@
         "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
         "apps/api/tests/services/wechat-draft.test.ts"
       ],
-      "implemented_contract": "Actual profile upsert/moment approve/reject/foreign404 preserves dispatch axis; new dual-schema migration makes producer writes possible and dashboard approval valid.",
+      "implemented_contract": "Actual profile upsert/moment approve/reject/foreign404 preserves dispatch axis; new dual-schema migration makes producer writes possible and dashboard approval valid. Real generator now scopes daily dedupe by tenant and returns persist_failed on a rejected SQL insert (both proven red then green).",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "schedule-auth",
@@ -786,7 +927,10 @@
       "implemented_contract": "Current route contracts assert401, scoped agent whitelist, stale/degraded read and atomic oneoff claim/receipt semantics; no non404-as-success.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "screenshots-static",
@@ -805,7 +949,10 @@
       "implemented_contract": "Actual app same temporary volume returns exact unique bytes; missing/dotfile/traversal404 and finally removes its own directory.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "session-health",
@@ -824,7 +971,10 @@
       "implemented_contract": "Import-safe actual logic: malformed/expired/missing/unauthorized/redirect/unknown responses; offline inspection never marks an unchecked session healthy. No writeback or alerts in tests.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "isolated_node_contracts"
+      ]
     },
     {
       "unit_id": "session-health-current-report-contract",
@@ -844,7 +994,11 @@
       "implemented_contract": "Every35 distinct current platform definition yields exact5-field schema; live decision includes unknown. No overwrite of checked-in report or actual platform account.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union",
+        "isolated_node_contracts"
+      ]
     },
     {
       "unit_id": "skill-registry-api-contract",
@@ -864,7 +1018,11 @@
       "implemented_contract": "Real seeded nonempty array/schema and agent_statuses asserted against production SQL, plus HTTP service-error contract.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "sse-smoke",
@@ -884,7 +1042,11 @@
       "implemented_contract": "Native actual SSE stream receives exact persisted task/counts; anonymous401/malformed400/foreign404. DB error now caught; media UUID seams separately fixed.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "staff-acceptance-readonly-ui",
@@ -906,7 +1068,12 @@
       "implemented_contract": "Actual quadrant lock/degraded/verdict matrix and new-run mandatory selection gate render; readonly generated HTML verified and actual staff typecheck exit0.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "staff_canonical_union",
+        "acceptance_spec",
+        "staff_typecheck"
+      ]
     },
     {
       "unit_id": "staff-hub-env-badge",
@@ -925,7 +1092,10 @@
       "implemented_contract": "Current component tests render staging badge and assert absent production; remove repeated destructive builds and shared dist cleanup.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "staff_canonical_union"
+      ]
     },
     {
       "unit_id": "staff-line-health",
@@ -945,7 +1115,10 @@
       "implemented_contract": "Current service/http fixtures isolate GitHub/Brain/version transports, real response types and unknown/degraded guards; connected is not production freshness evidence.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "warmup-dispatch",
@@ -966,7 +1139,11 @@
       "implemented_contract": "Real queued warmup operator_nickname/task_type -> exact2 liveness rows/alive+1196 -> done; second HTTP200 idempotent leaves2 rows.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "shared-cs-reply-escalation-persistence",
@@ -987,7 +1164,11 @@
       "implemented_contract": "Actual draft service with isolated model persists escalation+AI stage, draft ledger and receipt transition. Dual-schema fix repairs previously swallowed NOT NULL; real callback stats prove delivery counting.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     },
     {
       "unit_id": "android-moments-controller-safety",
@@ -1007,7 +1188,10 @@
       "implemented_contract": "Actual CLI with synthetic registry/strict local adapters verifies same-owner lock idempotency, competing owner refusal, foreign-release refusal, repeat-publish refusal and visual failure zero taps.",
       "real_pg_assertions": false,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "isolated_node_contracts"
+      ]
     },
     {
       "unit_id": "work-performance",
@@ -1028,10 +1212,14 @@
       "implemented_contract": "Real work/platform/content snapshot saves555 reads back to owner only; actual PG IDOR red case fixed by JOIN works tenant filter.",
       "real_pg_assertions": true,
       "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
-      "external_evidence": null
+      "external_evidence": null,
+      "execution_evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
     }
   ],
-  "verification_status": "19 real PostgreSQL/HTTP/SSE/auth lifecycle tests passed; current API/UI/node/deployment/Chromium groups passed; final canonical union replay underway",
+  "verification_status": "completed_for_authorized_code_scope",
   "additional_retirements": [
     "sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts",
     "sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts"
@@ -1039,5 +1227,109 @@
   "updated_compatibility_callers": [
     "scripts/smoke/clips-smoke.sh",
     "sprints/07081557-wechat-cs-reply-integration/tests/e2e-verify.sh"
-  ]
+  ],
+  "execution_evidence": [
+    {
+      "id": "api_canonical_union",
+      "result": "passed",
+      "log_path": "/tmp/business-final-api-union.log",
+      "log_sha256": "d48d9d5d1f9a016a30c45b2ddcb07bcf59feed341eac4697cb32e70412b41abd",
+      "files": 62,
+      "tests_or_checks": 790
+    },
+    {
+      "id": "business_real_pg",
+      "result": "passed",
+      "log_path": "/tmp/business-final-pg.log",
+      "log_sha256": "c503e3a3beda91486114e19f821f7fb2049aa5b8063cfc3005b7adddbf257e5a",
+      "files": 1,
+      "tests_or_checks": 23
+    },
+    {
+      "id": "current_company_pg_own_instance",
+      "result": "passed",
+      "log_path": "/tmp/business-existing-pg-own-instance.log",
+      "log_sha256": "40ef63b5c80e16b0b116876d2fcada0603a5deb921efec15583baf95828b1c8e",
+      "files": 5,
+      "tests_or_checks": 49
+    },
+    {
+      "id": "dashboard_canonical_union",
+      "result": "passed",
+      "log_path": "/tmp/business-final-dashboard-union.log",
+      "log_sha256": "e7a5361568beaa9192be889f29905c1c6c2f89f8894ef80660d5c6dcf49cab58",
+      "files": 6,
+      "tests_or_checks": 36
+    },
+    {
+      "id": "staff_canonical_union",
+      "result": "passed",
+      "log_path": "/tmp/business-final-staff-union.log",
+      "log_sha256": "15f499b8096bc1d02cf505abfd2c4ebdc00e73ea804954841a7e00f1dab92b9f",
+      "files": 4,
+      "tests_or_checks": 21
+    },
+    {
+      "id": "legacy_skill_draft_contracts",
+      "result": "passed",
+      "log_path": "/tmp/business-skill-drafts.log",
+      "log_sha256": "b98783f630d6ff9a1c0a152497558de28c1118b30ad5abf21e73dc87dad51380",
+      "files": 2,
+      "tests_or_checks": 38
+    },
+    {
+      "id": "isolated_node_contracts",
+      "result": "passed",
+      "log_path": "/tmp/business-final-node.log",
+      "log_sha256": "cdf3c9cdf85290da66b8f999c8ca57d3de0f31b97cf3bbe266aeeadb91822caf",
+      "files": 3,
+      "tests_or_checks": 6
+    },
+    {
+      "id": "acceptance_spec",
+      "result": "passed",
+      "log_path": "/tmp/business-acceptance-spec.log",
+      "log_sha256": "5e150a67053bb3938b0b415d71b4f2cc1849f23430e0cbbaf470805088aff89c",
+      "files": 3,
+      "tests_or_checks": 20
+    },
+    {
+      "id": "manual_history_chromium_pg",
+      "result": "passed",
+      "log_path": "/tmp/business-manual-history.log",
+      "log_sha256": "7199c7d312518d78176c749e8697eb1c19332f79de14c8544936d01e3ee8351c",
+      "files": null,
+      "tests_or_checks": 8
+    },
+    {
+      "id": "deploy_build_process_sha",
+      "result": "passed",
+      "log_path": "/tmp/business-deploy-selfcheck.log",
+      "log_sha256": "4463709b755662a7229f85ea0791c3e91cca74b3aeab6348485a6e2c17d7d8c7",
+      "files": null,
+      "tests_or_checks": null
+    },
+    {
+      "id": "api_build",
+      "result": "passed",
+      "log_path": "/tmp/business-api-build-final.log",
+      "log_sha256": "fce64e06906cc0e7131e195491c5c83b780468e4ee1d61ef4bc9fdd9a21248bf",
+      "files": null,
+      "tests_or_checks": null
+    },
+    {
+      "id": "staff_typecheck",
+      "result": "passed",
+      "log_path": "/tmp/business-staff-typecheck.log",
+      "log_sha256": "b04b6d714908da0b5248dd8124c5d902e5b82b1f8306bfed1f661f7607bcd7fd",
+      "files": null,
+      "tests_or_checks": null
+    }
+  ],
+  "database_safety_evidence": {
+    "external_host": "expected fail before connection, /tmp/business-pg-guard-rejection.log",
+    "preexisting_database": "expected fail and exact own marker survived; /tmp/business-preexisting-guard.log",
+    "existing_scratch": "preexisting cecelia_scratch rejected and left untouched; canonical suite replayed successfully on own initdb instance"
+  },
+  "integration_status": "Root owns central registration and final integrated replay; no production receipt inferred."
 }

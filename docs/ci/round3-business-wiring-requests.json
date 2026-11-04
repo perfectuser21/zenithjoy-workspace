@@ -104,5 +104,6 @@
   "updated_compatibility_callers": [
     "scripts/smoke/clips-smoke.sh",
     "sprints/07081557-wechat-cs-reply-integration/tests/e2e-verify.sh"
-  ]
+  ],
+  "latest_validation": "All replacement canonical groups executed; dedicated business PostgreSQL now contains23 assertions, including separate2-unit extras and existing UUID identity helper."
 }

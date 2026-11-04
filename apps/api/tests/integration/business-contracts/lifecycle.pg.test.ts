@@ -1,6 +1,16 @@
 import './setup-env';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-const {model,provider}=vi.hoisted(()=>({model:vi.fn(),provider:vi.fn()}));
+const {model,provider,childCalls}=vi.hoisted(()=>({model:vi.fn(),provider:vi.fn(),childCalls:[] as Array<{command:string,args:string[],options:unknown,closed:Promise<unknown>}>}));
+// The actual route invokes its process boundary, but this fixture only launches a
+// disposable local Node process. It cannot SSH, invoke Claude or use an account.
+vi.mock('child_process',async()=>{
+ const real=await vi.importActual<typeof import('child_process')>('child_process');
+ return {...real,spawn:(command:string,args:string[],options:unknown)=>{
+  if(command!=='ssh'||args[0]!=='mmv')throw new Error('unexpected process boundary');
+  const child=real.spawn(process.execPath,['-e','process.exit(0)'],{detached:true,stdio:'ignore'});
+  const closed=new Promise(resolve=>child.once('exit',resolve));childCalls.push({command,args,options,closed});return child;
+ }};
+});
 vi.mock('axios',()=>({default:{post:provider,get:provider,isAxiosError:()=>false}}));
 vi.mock('../../../src/services/comment-grading',()=>({gradeComments:vi.fn(async(_profile,_title,_transcript,comments)=>comments.map(()=> '精准'))}));
 vi.mock('../../../src/llm/openrouter',()=>({callOpenRouter:model}));
@@ -266,4 +276,59 @@ it('moment generation persists both tenants independently and never reports succ
  await pool.query("INSERT INTO zenithjoy.wechat_marketing_profile(tenant_id,customer,industry,audience,hook) VALUES($1,'rejected-fixture-customer','software','operators','fixture-hook')",[owners[0].tenant]);
  await pool.query(`CREATE FUNCTION zenithjoy.reject_fixture_moment() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.target_user='rejected-fixture-customer' THEN RAISE EXCEPTION 'injected fixture insert failure'; END IF; RETURN NEW; END $$;CREATE TRIGGER reject_fixture_moment BEFORE INSERT ON zenithjoy.wechat_publish_task FOR EACH ROW EXECUTE FUNCTION zenithjoy.reject_fixture_moment()`);
  try{const rejected=await generateMomentDraft({customer:'rejected-fixture-customer',tenant_id:owners[0].tenant});expect(rejected).toEqual({ok:false,reason:'persist_failed'});}finally{await pool.query('DROP TRIGGER reject_fixture_moment ON zenithjoy.wechat_publish_task;DROP FUNCTION zenithjoy.reject_fixture_moment()');}
+});
+
+
+it('shared friend-scan API persists exact detail fields and all twelve contacts without a UI-scroll claim',async()=>{
+ const d=await device(),cs=await bindCs(d),alien=await device();
+ const contacts=Array.from({length:12},(_,i)=>({name:`detail-fixture-${i.toString().padStart(2,'0')}`,wechat_id:`wx-detail-${i}`,add_friend_time:i===0?'2026-03-12T00:00:00Z':undefined,last_message:`message-${i}`}));
+ expect((await request(app).post('/api/crm/friend-scan/ingest').send({cs_wechat_id:cs,contacts})).status).toBe(401);
+ expect((await request(app).post('/api/crm/friend-scan/ingest').set('X-License-Key',alien.key).send({cs_wechat_id:cs,contacts})).status).toBe(403);
+ const response=await request(app).post('/api/crm/friend-scan/ingest').set('X-License-Key',d.key).send({cs_wechat_id:cs,contacts});expect(response.status).toBe(200);expect(response.body).toMatchObject({success:true,ingested:12,scanned_count:12});
+ const stored=(await pool.query('SELECT contact,wechat_id,add_friend_time,last_message,source FROM zenithjoy.crm_customers WHERE tenant_id=$1 AND cs_wechat_id=$2 ORDER BY contact',[d.tenant,cs])).rows;expect(stored).toHaveLength(12);
+ for(const [i,row] of stored.entries()){expect(row).toMatchObject({contact:contacts[i].name,wechat_id:contacts[i].wechat_id,last_message:contacts[i].last_message,source:'scan'});expect(row.add_friend_time?new Date(row.add_friend_time).toISOString():null).toBe(i===0?'2026-03-12T00:00:00.000Z':null);}
+ const roster=await request(app).get(`/api/crm/customers?cs_wechat_id=${cs}`).set('Cookie',d.cookie);expect(roster.status).toBe(200);expect(roster.body.customers).toHaveLength(12);expect(roster.body.customers.find((r:any)=>r.contact===contacts[0].name)).toMatchObject({wechat_id:'wx-detail-0',add_friend_time:'2026-03-12T00:00:00.000Z'});
+});
+
+it('legacy skill draft lifecycle persists running/pause/token rotation/done with an isolated local child process',async()=>{
+ vi.stubEnv('STAFF_EMAILS','fixture-staff@example.test');
+ const staff={'X-User-Email':'fixture-staff@example.test'};
+ try{
+  expect((await request(app).post('/api/staff/skill-drafts').send({})).status).toBe(403);
+  const created=await request(app).post('/api/staff/skill-drafts').set(staff).send({});expect(created.status).toBe(201);const id=created.body.data.id;
+  await vi.waitFor(async()=>expect((await pool.query('SELECT status FROM zenithjoy.skill_drafts WHERE id=$1',[id])).rows).toEqual([{status:'chatting'}]));
+  const start=await request(app).post(`/api/staff/skill-drafts/${id}/generate`).set(staff).send({});expect(start.status).toBe(200);expect(start.body.data.status).toBe('running');
+  expect((await request(app).post(`/api/staff/skill-drafts/${id}/generate`).set(staff).send({})).status).toBe(409);
+  let token:string='';await vi.waitFor(async()=>{const r=(await pool.query('SELECT status,callback_token FROM zenithjoy.skill_drafts WHERE id=$1',[id])).rows[0];expect(r.status).toBe('running');expect(r.callback_token).toMatch(/^[a-f0-9-]{36}$/);token=r.callback_token;});
+  const callback=(body:object)=>request(app).post(`/internal/skill-drafts/${id}/callback`).send(body);
+  expect((await callback({token:randomUUID(),event:'done',zip_path:'/tmp/fixture.zip'})).status).toBe(400);
+  expect((await callback({token,event:'invalid_fixture_event'})).status).toBe(400);
+  const paused=await callback({token,event:'needs_input',question:'fixture question'});expect(paused.status).toBe(200);
+  await vi.waitFor(async()=>expect((await pool.query('SELECT status,pending_question,callback_token FROM zenithjoy.skill_drafts WHERE id=$1',[id])).rows).toEqual([{status:'needs_input',pending_question:'fixture question',callback_token:null}]));
+  expect((await callback({token,event:'done'})).status).toBe(400);
+  const answer=await request(app).post(`/api/staff/skill-drafts/${id}/answer`).set(staff).send({answer:'fixture answer'});expect(answer.status).toBe(200);
+  let nextToken='';await vi.waitFor(async()=>{const r=(await pool.query('SELECT status,callback_token,messages_json FROM zenithjoy.skill_drafts WHERE id=$1',[id])).rows[0];expect(r.status).toBe('running');expect(r.callback_token).not.toBe(token);nextToken=r.callback_token;expect(r.messages_json).toEqual([{role:'user',content:'fixture answer'}]);});
+  const done=await callback({token:nextToken,event:'done',zip_path:'/tmp/fixture-only.zip'});expect(done.status).toBe(200);
+  await vi.waitFor(async()=>expect((await pool.query('SELECT status,callback_token,result_json FROM zenithjoy.skill_drafts WHERE id=$1',[id])).rows).toEqual([{status:'done',callback_token:null,result_json:{zip_path:'/tmp/fixture-only.zip'}}]));
+  expect((await request(app).post(`/api/staff/skill-drafts/${id}/generate`).set(staff).send({})).status).toBe(409);
+  expect(childCalls).toHaveLength(2);for(const call of childCalls)expect(call.options).toMatchObject({detached:true});await Promise.all(childCalls.map(c=>c.closed));
+ }finally{vi.unstubAllEnvs();}
+});
+
+it('license register plus current WebSocket hello resolver reuses the exact existing UUID',async()=>{
+ const d=await device();const {resolveAgentUuidFromHello}=await import('../../../src/services/agent-ws');
+ const resolved=await resolveAgentUuidFromHello({agentId:`different-display-${randomUUID()}`,agentUuid:d.agent,capabilities:['douyin'],version:'1.0.1',tenantId:d.tenant});
+ expect(resolved).toBe(d.agent);expect((await pool.query('SELECT id FROM zenithjoy.agents WHERE tenant_id=$1',[d.tenant])).rows).toEqual([{id:d.agent}]);
+});
+
+it('legacy skill draft soft timeout and error callbacks persist explicit recoverable error states',async()=>{
+ vi.stubEnv('STAFF_EMAILS','fixture-staff@example.test');
+ try{
+  const stale=randomUUID();await pool.query("INSERT INTO zenithjoy.skill_drafts(id,status,callback_token,updated_at) VALUES($1,'running',$2,now()-interval '3 hours')",[stale,randomUUID()]);
+  const read=await request(app).get(`/api/staff/skill-drafts/${stale}`).set('X-User-Email','fixture-staff@example.test');expect(read.status).toBe(200);expect(read.body.data.status).toBe('error');expect(read.body.data.result_json.error_message).toContain('超时');
+  await vi.waitFor(async()=>expect((await pool.query('SELECT status FROM zenithjoy.skill_drafts WHERE id=$1',[stale])).rows).toEqual([{status:'error'}]));
+  const failed=randomUUID(),token=randomUUID();await pool.query("INSERT INTO zenithjoy.skill_drafts(id,status,callback_token) VALUES($1,'running',$2)",[failed,token]);
+  const callback=await request(app).post(`/internal/skill-drafts/${failed}/callback`).send({token,event:'error',error_message:'isolated worker failure'});expect(callback.status).toBe(200);
+  await vi.waitFor(async()=>expect((await pool.query('SELECT status,result_json,callback_token FROM zenithjoy.skill_drafts WHERE id=$1',[failed])).rows).toEqual([{status:'error',result_json:{error_message:'isolated worker failure'},callback_token:null}]));
+ }finally{vi.unstubAllEnvs();}
 });
