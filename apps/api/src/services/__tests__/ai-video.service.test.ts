@@ -5,19 +5,27 @@
  * Integration tests with real database are in DoD manual testing checklist.
  */
 
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+const { query, createVideo, getStatus } = vi.hoisted(() => ({ query: vi.fn(), createVideo: vi.fn(), getStatus: vi.fn() }));
+vi.mock('../../db/connection', () => ({ default: { query } }));
+vi.mock('../../clients/toapi.client', () => ({ ToAPIClient: class {
+  createVideoGeneration = createVideo;
+  getTaskStatus = getStatus;
+} }));
 import { AiVideoService, type CreateAiVideoParams } from '../ai-video.service';
 import pool from '../../db/connection';
 
-// Skip: integration tests require database and ToAPI connection
-describe.skip('AiVideoService', () => {
+// Current /api/ai-video consumes this service. DB and paid provider are isolated boundaries.
+describe('AiVideoService', () => {
   let service: AiVideoService;
   let mockQuery: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     service = new AiVideoService();
     mockQuery = pool.query as ReturnType<typeof vi.fn>;
-    mockQuery.mockClear();
+    mockQuery.mockReset();
+    createVideo.mockReset().mockResolvedValue({ id: "task-123", status: "queued", progress: 0 });
+    getStatus.mockReset();
   });
 
   describe('createGeneration', () => {
@@ -137,9 +145,28 @@ describe.skip('AiVideoService', () => {
 
       expect(result).toHaveLength(2);
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("status IN ('queued', 'in_progress')"),
-        []
+        expect.stringContaining("status IN ('queued', 'in_progress')")
       );
     });
   });
+  it('provider failure rejects without inserting a fake queued task', async () => {
+    createVideo.mockRejectedValueOnce(new Error('provider unavailable'));
+    await expect(service.createGeneration({ platform: 'toapi', model: 'veo3.1-fast', prompt: 'fixture' })).rejects.toThrow('provider unavailable');
+    expect(query).not.toHaveBeenCalled();
+  });
+  it('pending task refresh persists actual provider terminal output', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'task-123', platform: 'toapi', status: 'queued' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'task-123', status: 'completed', video_url: 'fixture.mp4' }] });
+    getStatus.mockResolvedValueOnce({ status: 'completed', progress: 100, video_url: 'fixture.mp4' });
+    expect(await service.getGenerationById('task-123')).toMatchObject({ status: 'completed', video_url: 'fixture.mp4' });
+    expect(getStatus).toHaveBeenCalledWith('task-123');
+    expect(query.mock.calls[1][1]).toEqual(['completed', 100, 'fixture.mp4', null, null, 'task-123']);
+  });
+  it('provider status failure preserves the stored task instead of reporting completion', async () => {
+    const stored = { id: 'task-123', platform: 'toapi', status: 'queued' };
+    query.mockResolvedValueOnce({ rows: [stored] }); getStatus.mockRejectedValueOnce(new Error('network down'));
+    expect(await service.getGenerationById('task-123')).toBe(stored);
+    expect(query).toHaveBeenCalledOnce();
+  });
+
 });
