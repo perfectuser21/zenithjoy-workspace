@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import express from 'express';
+import {createServer} from 'node:http';
 import request from 'supertest';
 // Only session lookup is an isolated identity boundary. Router, service and SQL are real.
 vi.mock('../../../src/auth',()=>({auth:{api:{getSession:async()=>null}}}));
@@ -57,6 +58,19 @@ describe('real HTTP + PostgreSQL pipeline lifecycle and isolation',()=>{
   expect((await request(app).patch(`/api/ai-video/jobs/${id}/progress`).send({progress:25,status:'processing',detected_aspect:'16:9'})).status).toBe(200);
   expect((await request(app).put(`/api/ai-video/jobs/${id}/complete`).send({output_dir:'/tmp/output'})).body).toMatchObject({status:'completed',progress:100,detected_aspect:'16:9',output_dir:'/tmp/output'});
   expect((await pool.query('SELECT status FROM zenithjoy.ai_video_pipeline_jobs WHERE id=$1',[id])).rows[0].status).toBe('completed');
+ });
+ it('persists orientation fields with the current service and actual PostgreSQL types',async()=>{
+  const id=await create('a');await new AiVideoPipelineService().updateStatus(id,{step15Orientation:'cw90',step15Confidence:0.87,step15Reasoning:'sideways face'});
+  expect((await request(app).get(`/api/ai-video/jobs/${id}`)).body).toMatchObject({step15_orientation:'cw90',step15_confidence:0.87,step15_reasoning:'sideways face'});
+ });
+ it('streams the persisted local output directory on actual completion',async()=>{
+  const id=await create('a');const server=createServer(app);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+  try{
+   const response=await fetch(`http://127.0.0.1:${(server.address()as any).port}/api/ai-video/jobs/${id}/sse`);expect(response.status).toBe(200);
+   const events=response.text();await request(app).put(`/api/ai-video/jobs/${id}/complete`).send({output_dir:'/tmp/real-local-output'});
+   const lines=(await events).split('\n').filter(l=>l.startsWith('data: ')).map(l=>JSON.parse(l.slice(6)));
+   expect(lines.at(-1)).toMatchObject({status:'completed',output_dir:'/tmp/real-local-output'});
+  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
  });
  it('SSE rejects malformed pipeline UUID, returns unknown IDs as exact 404, and forwards DB failures',async()=>{
   expect((await request(app).get('/api/ai-video/jobs/not-a-uuid/sse').timeout(2000)).status).toBe(400);

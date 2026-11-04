@@ -42,7 +42,7 @@ const SCENES = [
 ];
 
 describe('composeTemplate', () => {
-  beforeEach(() => { mockQuery.mockReset(); });
+  beforeEach(() => { mockQuery.mockReset(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('/* isolated GSAP CDN */'))); });
 
   it('exports composeTemplate function', async () => {
     const mod = await import('../../controllers/ai-video-pipeline-ai.controller');
@@ -176,7 +176,7 @@ describe('_buildDynamicTemplateHtml — GSAP timeline', () => {
 // phone screen.  Without it, phoneRect === null and the overlay step is skipped,
 // so the output video shows an empty phone frame instead of the real footage.
 describe('composeTemplate — phoneRect in response (regression #916)', () => {
-  beforeEach(() => { mockQuery.mockReset(); });
+  beforeEach(() => { mockQuery.mockReset(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('/* isolated GSAP CDN */'))); });
 
   it('includes phoneRect for template C so agent can overlay original video', async () => {
     mockQuery.mockResolvedValueOnce({

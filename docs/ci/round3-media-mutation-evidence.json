@@ -1,0 +1,48 @@
+[
+  {
+    "mutation": "stale-license-filter",
+    "source": "apps/api/src/services/ai-video-pipeline.service.ts",
+    "before": "license_id IS NOT DISTINCT FROM $2::uuid",
+    "mutant": "(license_id IS NOT DISTINCT FROM $2::uuid OR license_id IS NOT NULL)",
+    "command": [
+      "node",
+      ".github/workflows/scripts/smoke/helpers/media-contracts.mjs",
+      "pg"
+    ],
+    "exit_code": 1,
+    "caught": true,
+    "failed_assertion_excerpt": "JSON report written to /tmp/zj-media-gbWCBk/pg.json\n/Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/apps/api/tests/integration/media/pipeline.test.ts  [\n  {\n    ancestorTitles: [ 'real HTTP + PostgreSQL pipeline lifecycle and isolation' ],\n    fullName: 'real HTTP + PostgreSQL pipeline lifecycle and isolation returns only the calling license stale jobs, excludes fresh/other-license jobs',\n    status: 'failed',\n    title: 'returns only the calling license stale jobs, excludes fresh/other-license jobs',\n    duration: 8.64137500000001,\n    failureMessages: [\n      'AssertionError: expected [ …(2) ] to deeply equal [ Array(1) ]\\n' +\n        '    at /Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/apps/api/tests/integration/media/pipeline.test.ts:52:101\\n' +\n        '    at processTicksAndRejections (node:internal/process/task_queues:95:5)\\n' +\n        '    at file:///Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20'\n    ],\n    meta: {}\n  }\n]\nfile:///Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/.github/workflows/scripts/smoke/helpers/media-contracts.mjs:32\n const exec=(exe,args,opts={})=>{const r=spawnSync(exe,args,{encoding:'utf8',stdio:'inherit',...opts});if(r.status!==0)throw new Error(`${exe} exited ${r.status}: ${r.error??''}`);};\n                                                                                                                             ^\n\nError: /opt/homebrew/Cellar/node@20/20.20.2/bin/node exited 1: \n    at exec (file:///Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/.github/workflows/scripts/smoke/helpers/media-contracts.mjs:32:126)\n    at main (file:///Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/.github/workflows/scripts/smoke/helpers/media-contracts.mjs:47:10)"
+  },
+  {
+    "mutation": "material-cross-tenant-delete",
+    "source": "apps/api/src/routes/materials.ts",
+    "before": "WHERE id = $1 AND tenant_id = $2",
+    "mutant": "WHERE id = $1 AND ($2::uuid IS NOT NULL)",
+    "command": [
+      "node",
+      ".github/workflows/scripts/smoke/helpers/media-contracts.mjs",
+      "pg"
+    ],
+    "exit_code": 1,
+    "caught": true,
+    "failed_assertion_excerpt": "JSON report written to /tmp/zj-media-nA91hd/pg.json\n/Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/apps/api/tests/integration/media/materials.test.ts  [\n  {\n    ancestorTitles: [\n      'material multipart/direct/delete through actual SQL, HTTP and temporary files'\n    ],\n    fullName: 'material multipart/direct/delete through actual SQL, HTTP and temporary files cross-tenant delete preserves bytes/row; published linkage blocks; successful deletion removes both',\n    status: 'failed',\n    title: 'cross-tenant delete preserves bytes/row; published linkage blocks; successful deletion removes both',\n    duration: 5.1937910000000045,\n    failureMessages: [\n      'AssertionError: expected 200 to be 404 // Object.is equality\\n' +\n        '    at /Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/apps/api/tests/integration/media/materials.test.ts:55:33\\n' +\n        '    at processTicksAndRejections (node:internal/process/task_queues:95:5)\\n' +\n        '    at file:///Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20'\n    ],\n    meta: {}\n  }\n]\nfile:///Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/.github/workflows/scripts/smoke/helpers/media-contracts.mjs:32\n const exec=(exe,args,opts={})=>{const r=spawnSync(exe,args,{encoding:'utf8',stdio:'inherit',...opts});if(r.status!==0)throw new Error(`${exe} exited ${r.status}: ${r.error??''}`);};\n                                                                                                                             ^\n\nError: /opt/homebrew/Cellar/node@20/20.20.2/bin/node exited 1: "
+  },
+  {
+    "mutation": "provider-http-status",
+    "source": "apps/api/src/controllers/ai-video-pipeline-ai.controller.ts",
+    "before": "if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300))",
+    "mutant": "if (false && res.statusCode && (res.statusCode < 200 || res.statusCode >= 300))",
+    "command": [
+      "npm",
+      "test",
+      "--workspace",
+      "apps/api",
+      "--",
+      "src/controllers/__tests__/media-provider-http.test.ts",
+      "--reporter=dot"
+    ],
+    "exit_code": 1,
+    "caught": true,
+    "failed_assertion_excerpt": "\n> @zenithjoy/api@1.0.1 test\n> vitest run src/controllers/__tests__/media-provider-http.test.ts --reporter=dot\n\n\n RUN  v3.2.7 /Users/administrator/perfect21/zenithjoy/.worktrees/cp-1104-media-closeout/apps/api\n\n·······x·\n\n Test Files  1 failed (1)\n      Tests  1 failed | 8 passed (9)\n   Start at  17:09:01\n   Duration  418ms (transform 64ms, setup 14ms, collect 223ms, tests 35ms, environment 0ms, prepare 31ms)\n\nstderr | src/controllers/__tests__/media-provider-http.test.ts\n[better-auth] BETTER_AUTH_SECRET 未设置，使用 dev 默认（生产必改）\n\n\n⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\n\n FAIL  src/controllers/__tests__/media-provider-http.test.ts > current transcript/orientation provider adapters over loopback HTTP > rejects empty segment input and provider error JSON instead of success-shaped output\nAssertionError: expected 200 to be 502 // Object.is equality\n\n- Expected"
+  }
+]

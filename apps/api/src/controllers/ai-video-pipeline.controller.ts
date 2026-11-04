@@ -163,7 +163,7 @@ export async function completeJob(req: Request, res: Response, next: NextFunctio
       outputDir: output_dir,
       errorMsg: error_msg,
     });
-    sseService.close(updated.id, { id: updated.id, status: updated.status, progress: updated.progress, error: error_msg ?? undefined });
+    sseService.close(updated.id, { id: updated.id, status: updated.status, progress: updated.progress, error: error_msg ?? undefined, output_dir: updated.output_dir ?? undefined });
     res.json(updated);
   } catch (err) { next(err); }
 }
