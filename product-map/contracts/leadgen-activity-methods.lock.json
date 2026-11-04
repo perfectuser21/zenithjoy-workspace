@@ -24,7 +24,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -80,7 +80,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -199,14 +199,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -300,13 +300,13 @@
           "sha256": "227a53279b526075a4e58fe33a7c2e8224200b3fc55bd5efaed9942b98e6d535"
         }
       ],
-      "code_digest": "11555979dce41dd993c890b35ee24a58cb8cd3f21cf8c9e542d45b3e33db8e7c",
+      "code_digest": "732ebec8300b9e6022c22318c68a3d5784846f7cd24b54cca336875d38505cbc",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "4727c253f9e57b52eb1bcac6d83534fb8a2a14ebe896842cfe43d533589cae45",
-        "current_code_digest": "11555979dce41dd993c890b35ee24a58cb8cd3f21cf8c9e542d45b3e33db8e7c"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "11555979dce41dd993c890b35ee24a58cb8cd3f21cf8c9e542d45b3e33db8e7c",
+        "current_code_digest": "732ebec8300b9e6022c22318c68a3d5784846f7cd24b54cca336875d38505cbc"
       }
     },
     "douyin_video_processing.preflight": {
@@ -332,7 +332,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -395,7 +395,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -525,14 +525,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -598,13 +598,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "36b8f4fb3b35feeee54ee716409d4ef44176126610b233f8484a25782ddebdbe",
+      "code_digest": "e1c51eca7772edcaa17cfb0b6a3222ed71b47313e86e5fc175a0242f90688cbe",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "87c56fd47a4e42385d55dfbd8559c38267b73c6529fd93d81953a907d012e9cb",
-        "current_code_digest": "36b8f4fb3b35feeee54ee716409d4ef44176126610b233f8484a25782ddebdbe"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "36b8f4fb3b35feeee54ee716409d4ef44176126610b233f8484a25782ddebdbe",
+        "current_code_digest": "e1c51eca7772edcaa17cfb0b6a3222ed71b47313e86e5fc175a0242f90688cbe"
       }
     },
     "douyin_video_processing.dedup": {
@@ -630,7 +630,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -693,7 +693,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -812,14 +812,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -899,13 +899,13 @@
           "sha256": "189da0872b2a70fad45a8620f5f868b78a93433cfc0305f21e474227908f3af0"
         }
       ],
-      "code_digest": "e1586258cb694108c5085e5b9f1e2ca515a4863e9615c40110caaed89696a105",
+      "code_digest": "b1e02037f00a9947fa64dc3479e425570edbefadec7f46ada11d1a1cadb6a6b8",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "901dd254ce271014b82419a64c608b340fd9419df9b42740007e4052e702ad89",
-        "current_code_digest": "e1586258cb694108c5085e5b9f1e2ca515a4863e9615c40110caaed89696a105"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "e1586258cb694108c5085e5b9f1e2ca515a4863e9615c40110caaed89696a105",
+        "current_code_digest": "b1e02037f00a9947fa64dc3479e425570edbefadec7f46ada11d1a1cadb6a6b8"
       }
     },
     "douyin_video_processing.qualification": {
@@ -931,7 +931,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -1022,7 +1022,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -1141,14 +1141,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -1284,13 +1284,13 @@
           "sha256": "b0b9b8c6115c4b5fd04f73826acee08a797d6cc3d0eb525887764c53f298cb8d"
         }
       ],
-      "code_digest": "61260e4e4cccc061f6c4511b6434bf559f9fd53cf0a0acd0f5fc74c81d1a802a",
+      "code_digest": "91d2dabf99f649080910756fc21dd94ad9292a53fa9548af79484625e05bb836",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "1ab0da77ac6a3f2401b221230f8ab3a0d84a129bdd53a158dc4611b61b9b3370",
-        "current_code_digest": "61260e4e4cccc061f6c4511b6434bf559f9fd53cf0a0acd0f5fc74c81d1a802a"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "61260e4e4cccc061f6c4511b6434bf559f9fd53cf0a0acd0f5fc74c81d1a802a",
+        "current_code_digest": "91d2dabf99f649080910756fc21dd94ad9292a53fa9548af79484625e05bb836"
       }
     },
     "douyin_video_processing.collection": {
@@ -1316,7 +1316,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -1386,7 +1386,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -1513,14 +1513,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -1611,16 +1611,16 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
+          "sha256": "af628e365ab9ae760069706c643e8d552d5678bd1d6ff17f7795312f6328ab44"
         }
       ],
-      "code_digest": "dbaa5c2283083ac050faca1676de095baac0f93dbd841dbdaa06fbef8d3c08d2",
+      "code_digest": "95697f0458b961fff6a5ffa359a57ae8c3d50f00d645ac876564db1bd29fa30a",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "73fcb8ea3a7bb210fe6d25f24b3de2d6ee0580d0f957361a415bc9b1bf75be4d",
-        "current_code_digest": "dbaa5c2283083ac050faca1676de095baac0f93dbd841dbdaa06fbef8d3c08d2"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "dbaa5c2283083ac050faca1676de095baac0f93dbd841dbdaa06fbef8d3c08d2",
+        "current_code_digest": "95697f0458b961fff6a5ffa359a57ae8c3d50f00d645ac876564db1bd29fa30a"
       }
     },
     "douyin_video_processing.cleanup": {
@@ -1646,7 +1646,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -1702,7 +1702,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -1824,14 +1824,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -1904,13 +1904,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "0b15c0444bc59f45eaad3150d07442cbd41d627f4ead2aeff93ade013743bd03",
+      "code_digest": "2823e6b5bc6887a2f74c8cc9bd178aa8cccebaed88b97cfc03edb4d592ecf31c",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "仅为已观测荣耀工作区托管头条widget增加精确包名、祖先锚点、同launcher host及逐层边界验证；合同、方法、冻结来源与unknown隔离语义不变。独立33项及真实原件离线读回通过，旧run和隔离owner不改。",
-        "reviewed_by": "independent-review:/root/canvas_review:cleanup-widget-root-review.json",
-        "previous_code_digest": "13ae90b0feed4bf7250d03c88b25cbe2c1622aed328859b1323eb38479aabadf",
-        "current_code_digest": "0b15c0444bc59f45eaad3150d07442cbd41d627f4ead2aeff93ade013743bd03"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "0b15c0444bc59f45eaad3150d07442cbd41d627f4ead2aeff93ade013743bd03",
+        "current_code_digest": "2823e6b5bc6887a2f74c8cc9bd178aa8cccebaed88b97cfc03edb4d592ecf31c"
       }
     },
     "douyin_comment_scoring.scoring": {
@@ -1936,7 +1936,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -1992,7 +1992,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -2083,14 +2083,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -2205,13 +2205,13 @@
           "sha256": "df0c8b5d118f931a730cca1192f7bcfcf7ef05a6ca0c901c435c1e6c40094d2c"
         }
       ],
-      "code_digest": "82677e9cc1de4ca72835388ce5d9998c032337bbe615ef128ca15a8dc48d506c",
+      "code_digest": "1e8c1fd1f26015b725468da052e31895360f22cbd57493b9dfff7c2f73d9994d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "cc7256ee95a71265464934312fc61db1d8c89380eed80f630f2f794f7bbf0a86",
-        "current_code_digest": "82677e9cc1de4ca72835388ce5d9998c032337bbe615ef128ca15a8dc48d506c"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "82677e9cc1de4ca72835388ce5d9998c032337bbe615ef128ca15a8dc48d506c",
+        "current_code_digest": "1e8c1fd1f26015b725468da052e31895360f22cbd57493b9dfff7c2f73d9994d"
       }
     },
     "douyin_comment_scoring.mark_leads": {
@@ -2237,7 +2237,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -2300,7 +2300,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -2391,14 +2391,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -2503,7 +2503,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/queued-recipient-evidence.js",
           "revision": "contract",
-          "sha256": "7a01e003a9a9031fc0ce66221066a94540c1ca28246cc0903b6e75244dc9d126"
+          "sha256": "af628e365ab9ae760069706c643e8d552d5678bd1d6ff17f7795312f6328ab44"
         },
         {
           "kind": "code",
@@ -2548,13 +2548,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "6c57c6ac769c33b8d4a17fc6424022152d08fd430409fb7315474996c739f7f3",
+      "code_digest": "0fbcfd3ca7fbaea3c9cbbbb1e00d46e2c8d86f59169c6c424d404a273d5c7b7d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "01dccadcdf186383db892ac39a4a36992fddb888cea992e60dee0bcbb394263b",
-        "current_code_digest": "6c57c6ac769c33b8d4a17fc6424022152d08fd430409fb7315474996c739f7f3"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "6c57c6ac769c33b8d4a17fc6424022152d08fd430409fb7315474996c739f7f3",
+        "current_code_digest": "0fbcfd3ca7fbaea3c9cbbbb1e00d46e2c8d86f59169c6c424d404a273d5c7b7d"
       }
     },
     "douyin_lead_outreach.preflight": {
@@ -2580,7 +2580,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -2636,7 +2636,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -2773,14 +2773,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -2874,13 +2874,13 @@
           "sha256": "9abc5309186e4f1e1013e85ab4d1e489dadbee2a26374c829ee1b500c694a20e"
         }
       ],
-      "code_digest": "74e8f03853b1ec9082c35f5e8bd21892fdbb3a46c767ca5798cb78043734f8ee",
+      "code_digest": "2c39dd9da95751c1d61d18a87f8296629ac2022f5d9519c63dc3f183fb36f5a5",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "cddbb30f6d750814f355a7f22569a5e5a551caf29e5b3d9305e95d46236cf954",
-        "current_code_digest": "74e8f03853b1ec9082c35f5e8bd21892fdbb3a46c767ca5798cb78043734f8ee"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "74e8f03853b1ec9082c35f5e8bd21892fdbb3a46c767ca5798cb78043734f8ee",
+        "current_code_digest": "2c39dd9da95751c1d61d18a87f8296629ac2022f5d9519c63dc3f183fb36f5a5"
       }
     },
     "douyin_lead_outreach.send_dm": {
@@ -2906,7 +2906,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -2962,7 +2962,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -3088,14 +3088,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -3175,13 +3175,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "2c3f204512656f51daf6520bed76435167114f5582d1ed61d16e883298ae9e03",
+      "code_digest": "7c2041fdf9c2b914e06ce6439acbcaf4b33b4883d12841697c74d856572de2dd",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "8dd14c6a0ea27e3e007ee3ecf08f21f6fb34c5ab70562d2f8d53b5829dd44c04",
-        "current_code_digest": "2c3f204512656f51daf6520bed76435167114f5582d1ed61d16e883298ae9e03"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "2c3f204512656f51daf6520bed76435167114f5582d1ed61d16e883298ae9e03",
+        "current_code_digest": "7c2041fdf9c2b914e06ce6439acbcaf4b33b4883d12841697c74d856572de2dd"
       }
     },
     "douyin_lead_outreach.write_back": {
@@ -3207,7 +3207,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -3263,7 +3263,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -3389,14 +3389,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -3469,13 +3469,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "f92605334ae09386b3f55495f6b15643612516b64e48df9192955af3fe5c74b9",
+      "code_digest": "0d51b3e5ac80b7acdf960286223e7a454877ae51eed3d50d1a573dc59bee955d",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "e371081c575d1a51def8d3f7e6038994bf8ac54250f028f72c3dcd0f5c1bc859",
-        "current_code_digest": "f92605334ae09386b3f55495f6b15643612516b64e48df9192955af3fe5c74b9"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "f92605334ae09386b3f55495f6b15643612516b64e48df9192955af3fe5c74b9",
+        "current_code_digest": "0d51b3e5ac80b7acdf960286223e7a454877ae51eed3d50d1a573dc59bee955d"
       }
     },
     "douyin_lead_outreach.cleanup": {
@@ -3501,7 +3501,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-runner-adapter.mjs",
           "revision": "contract",
-          "sha256": "65b1f31f61e660158a559048dd44bcb627e725658f1b232e3c9b1acc080ad9a8"
+          "sha256": "f3851a6cfcd164788b4fa55370c5b396f071b3e9b52f3c3b5bed643f6ec575b9"
         },
         {
           "kind": "code",
@@ -3557,7 +3557,7 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/collection-phone-scope.mjs",
           "revision": "contract",
-          "sha256": "7f699531c230fd24d6fd6802a9086aacb5e0cac42e4f237eef60c61931d66c17"
+          "sha256": "5344584d01ebe076066036a555aa2fae09ab0753797930f77b17783fef5e1071"
         },
         {
           "kind": "code",
@@ -3686,14 +3686,14 @@
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-workflow.mjs",
           "revision": "contract",
-          "sha256": "3cbe8457481494f08ddb168a07e9dc60aa83a2173bb237eab7ce36b48fab7347"
+          "sha256": "7e51695e7a593a93cc31cead1134e7d4fb738a1cb4dae5b161a40574b4f03deb"
         },
         {
           "kind": "code",
           "repo": "perfectuser21/zenithjoy-workspace",
           "path": "services/phone-adb-controller/leadgen-handlers.mjs",
           "revision": "contract",
-          "sha256": "93f4332fc7e986d48f6af545e60302ebdaf148cb7094fa948901051d6e6fca2d"
+          "sha256": "b52f9acad6c50394ec06025761bf4a903e146babd5c3b08657ae31cd57dd12f8"
         },
         {
           "kind": "code",
@@ -3773,13 +3773,13 @@
           "sha256": "9d2ac3ed31e608a86ca075f0fb292f92120a8b8957e1183a8d60a2fdf8b8f5f9"
         }
       ],
-      "code_digest": "319431d9dec041a4fa94f080f52cfcb40a8612bea778a9d1bdfe2fe4beb7b0db",
+      "code_digest": "6e94a897672f528bc26e77cf45e81847ff9ea4d12d7c097d15aa4eb7448a77d7",
       "code_compatibility": {
         "kind": "internal_compatible",
-        "reason": "只追加已verified小龙虾精确xian-m4 101/102固定grant；原两条配置、方法正文和业务合同不变，104由workflow_keys及入口双门拒绝；独立RPA审查与来源/账号/序列号反例验证。",
-        "reviewed_by": "independent-rpa-review:/root/leadgen/xiaolongxia_grant_audit",
-        "previous_code_digest": "19b929bcbd07b4fef7cd50ac37430362ab0671b88fcbac8829617cfaaca3e44a",
-        "current_code_digest": "319431d9dec041a4fa94f080f52cfcb40a8612bea778a9d1bdfe2fe4beb7b0db"
+        "reason": "同业务合同内修复：正式冻结101/102取得同公司/租户/run/设备/账号动态绑定；公司配置前核任务，配置等待后在acquire前再核任务。原生新布局保留唯一面板及UID昵称全文核验。共用适配器只增原进程本人cleanup能力，不授Skill读回、resume或重采，保原失败/native false；103/104业务与授权分支不变。",
+        "reviewed_by": "independent-rpa-review:/root/review_discovery_recovery",
+        "previous_code_digest": "319431d9dec041a4fa94f080f52cfcb40a8612bea778a9d1bdfe2fe4beb7b0db",
+        "current_code_digest": "6e94a897672f528bc26e77cf45e81847ff9ea4d12d7c097d15aa4eb7448a77d7"
       }
     }
   },

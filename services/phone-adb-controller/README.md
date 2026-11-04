@@ -12,6 +12,12 @@
 
 维护完成后独立读回 `adb-host-service.py status --config "$HOME/.config/zenithjoy/adb-service.json"`、launchd 实际子进程与各 serial；再释放本人维护锁。退出码成功或服务只剩一个，不代表四台设备都在线，更不代表获客验收成功。中途失败保留 `~/.config/zenithjoy/adb-maintenance.journal.jsonl` 与业务锁，禁止删除 journal 重放；先核清现场再处理。
 
+## 102 公司绑定与失败清场
+
+正式冻结的101/102在首个设备动作前核同一公司、租户、版本、run、设备与账号的PG绑定；102以私有文件将绑定传给原生收件人证据核验。宿主名称不决定租户身份，M4仍保留本机账号登记核验。Honor的e1b/fod/jqh/kj+布局按唯一原生面板配对识别，仍逐项核UID、昵称、评论全文与包名；作者评论过滤后即使已到底也可以合法为0条，不能据此制造客户评论。
+
+`cleanup_phone_scope`只在原进程、同run及完整已归还叶请求下授权原收尾活动。非零业务退出不等于未知执行，但该能力不允许Skill读回、resume或重新collect；序列化、复制、改名均不能取得能力。原生`execution_stopped=false`、原业务失败和错误证据保留，不将手机域归还声称为OS任意后代已停止。既有失败run不从磁盘重建此能力，现场维护须另走独立审查与固定工具。
+
 ## 五件套清单
 
 | 文件 | 用途 |

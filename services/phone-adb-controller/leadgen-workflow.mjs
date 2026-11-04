@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {runWorkflow} from './activity-commander.mjs';
 import {createHandlers} from './leadgen-handlers.mjs';
 export {runWorkflow} from './activity-commander.mjs';
-import {collectionEvidenceProof} from './collection-phone-scope.mjs';
+import {collectionEvidenceProof,collectionCleanupEvidence} from './collection-phone-scope.mjs';
 import {discoveryCleanupEvidence} from './discovery-phone-scope.mjs';
 
 export async function invokeNativeActivity(execute,state){
@@ -13,7 +13,7 @@ export async function invokeNativeActivity(execute,state){
     const result=await execute();
     if(state.nativeStopUnproven&&(state.currentActivity==='collect_videos'||['partial','failed'].includes(result?.status))){
       const scope={run_id:state.run_id,task_id:state.task_id,source_commit:state.source_commit,activity:state.currentActivity};
-      const proof=collectionEvidenceProof(result,scope)||discoveryCleanupEvidence(result,scope);
+      const proof=collectionEvidenceProof(result,scope)||collectionCleanupEvidence(result,scope)||discoveryCleanupEvidence(result,scope);
       if(!proof)state.executionUnknown=true;
       return {...result,execution_stopped:false};
     }
@@ -126,7 +126,7 @@ async function main(){
     if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
     const result=await invokeNativeActivity(()=>handlers[activity.key](options),handlers.state);
-    if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
+    if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;e.activityResult=result;throw e;}
     return result;
   }]));
   const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});

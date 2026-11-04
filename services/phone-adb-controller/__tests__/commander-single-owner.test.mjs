@@ -86,7 +86,7 @@ test('真实Workflow main在原stop文件存在时保留partial，不进入业�
   'node:fs':fs,'node:path':path,'node:url':url,'node:crypto':crypto,
   './activity-commander.mjs':{runWorkflow:async options=>{let result;try{result=await options.handlers.work();}catch(error){fs.writeFileSync(path.join(directory,'actual-error.json'),JSON.stringify({name:error.name,message:error.message}));throw error;}assert.equal(result.status,'partial');return {status:'partial',results:[]};}},
   './leadgen-handlers.mjs':{parseCollection:()=>{},createHandlers:()=>({state:{},work:async()=>{throw Error('business after stop');}})},
-  './collection-phone-scope.mjs':{collectionEvidenceProof:()=>null},
+  './collection-phone-scope.mjs':{collectionEvidenceProof:()=>null,collectionCleanupEvidence:()=>null},
   './discovery-phone-scope.mjs':{discoveryCleanupEvidence:()=>null},
   './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{throw Error('recovery after stop');}},
   './runtime-definition.mjs':{readFrozen:()=>frozen,assertCommentSampling:()=>{},assertOutreachScope:()=>{}},
