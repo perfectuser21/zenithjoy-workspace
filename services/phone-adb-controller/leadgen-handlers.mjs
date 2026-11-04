@@ -1,4 +1,5 @@
-import {verifyNoComments} from './no-comments-evidence.mjs';
+import {verifyNoComments,createNoComments} from './no-comments-evidence.mjs';
+import {createLeadgenAgentTools,verifyAgentUpstream,mergeAgentCollectionRows,aggregateAgentCollectionCommit} from './leadgen-agent-tools.mjs';
 import {verifyProducerDescriptor,verifyProducerCompany} from './producer-descriptor.mjs';
 import {createScoringHandler} from './leadgen-scoring-handler.mjs';
 import {readFileSync,writeFileSync,appendFileSync,chmodSync,renameSync,existsSync,readdirSync,lstatSync,realpathSync,mkdirSync,copyFileSync,constants} from 'node:fs';
@@ -6,7 +7,7 @@ import {join,resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import recipientProof from './queued-recipient-evidence.js';
 import lineRoutes from './line-routes.js';
-import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
+import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds,assertDiscoveryInput,canonical} from './runtime-definition.mjs';
 import {execInput,safeExecutionDiagnostic,applyNativeFailure} from './leadgen-client.mjs';
 import {createDiscoveryAction} from './leadgen-discovery-action.mjs';
 import {createPhoneAction} from './leadgen-phone-action.mjs';
@@ -20,6 +21,8 @@ import {createVideoAction} from './leadgen-video-action.mjs';
 import {startCollectionPhoneScope,startCollectionReturnedScope,invalidateCollectionPhoneProof} from './collection-phone-scope.mjs';
 import {startDiscoveryPhoneScope} from './discovery-phone-scope.mjs';
 import {createCentralDeviceLease,verifyCentralTaskAssociation,persistCentralTaskAssociation} from './central-device-lease.mjs';
+import discoveryMetrics from './discovery-metrics.js';
+import ownAccounts from './own-accounts-lib.js';
 
 export function parseCollection(result,videoId,{allowPartial=false,recipientScope}={}) {
   if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
@@ -124,7 +127,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     return r.stdout;
   };
   const nativeReceipt=()=>({runDir:env.WFR_RUN_DIR,operationId:randomUUID(),runId:`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`,taskId,profile,serial,sourceCommit,owner:run,activity:state.currentActivity});
-  const phone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope||collectionScope,checked,nativeReceipt});
+  const phone=createPhoneAction({env,state,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,getScope:()=>discoveryScope||collectionScope,checked,nativeReceipt,getAgentDeadline:()=>state.agentPhoneDeadline??null});
   const returnedContext=()=>{const frozen=readFrozen(env.WFR_RUN_DIR),binding=readBinding(env.WFR_RUN_DIR,env.WFR_ATTEMPT,frozen);return {task_id:taskId??null,run_id:state.run_id,attempt:env.WFR_ATTEMPT,source_commit:sourceCommit,profile,serial,activity:'collection',owner:run,target:frozen.deployment.target,snapshot_sha256:frozen.snapshot_sha256,binding_id:binding.id};};
   const queue=async(op,fields={})=>{if(op==='discover')discoveryScope?.assert();if(op==='sample_readback'&&state.budgetDeadline&&Date.now()>=state.budgetDeadline)throw Error('EXECUTION_DEADLINE: 采样PG读回预算已尽');const admissionOp=op==='admit_102g_comments'||op==='admit_102g_readback';const exactRecoveryOp=op==='recover_false_exclusion_102l'||op==='recover_false_exclusion_102l_readback';const rpcBudget=op==='discover'?225000:admissionOp?150000:60000;return (await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,...(admissionOp||exactRecoveryOp?{}:{limit:Number(env.LEADGEN_LIMIT||2)}),...fields}},
     ['discover','comment_history','comment_history_readback','sample_readback','collect','collect_partial','renew_video',
@@ -210,90 +213,7 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
   };
   const discoveryAction=createDiscoveryAction({root,env,state,sourceCommit,taskId,phone,bounded,queue,rpc,profile,run,isLocked:()=>locked,isClosed:()=>discoveryClosed,setClosed:v=>{discoveryClosed=v;},setScope:v=>{discoveryScope=v;},verifyPhoneAssociation});
   const getDiscovery=discoveryAction.getDiscovery;
-  const intake=async()=>{
-    state.companyConfig=await queue('company_config',{step:'102'});
-    appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.companyConfig)+'\n',{mode:0o600});
-    const sourceRun=env.LEADGEN_SOURCE_RUN;
-    if(!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun||''))throw Error('102缺有效上游101运行号');
-    const upstreamDir=resolve(env.WFR_RUN_DIR,'..',`douyin_video_discovery-${sourceRun}`);
-    const upstream=readFrozen(upstreamDir),current=readFrozen(env.WFR_RUN_DIR);
-    if(upstream.run_identity?.capability!=='douyin_video_discovery'||upstream.run_identity.tag!==sourceRun
-      ||upstream.run_identity.profile!==profile||upstream.deployment.source_commit!==current.deployment.source_commit&&!current.producer_descriptor)throw Error('上游101冻结身份或发布来源不一致');
-    const final=JSON.parse(readFileSync(join(upstreamDir,'split-result.json'),'utf8'));
-    const collect=Array.isArray(final?.results)?final.results.filter(item=>item?.activity==='collect_videos'):[];
-    const runPrefix=`douyin_video_discovery-${sourceRun}__`;
-    const attempt=typeof final?.run_id==='string'&&final.run_id.startsWith(runPrefix)?final.run_id.slice(runPrefix.length):'';
-    if(final?.status!=='completed'||final.workflow_key!=='douyin_video_discovery'
-      ||!/^a[1-9][0-9]*$/.test(attempt)
-      ||final.source_commit!==upstream.deployment.source_commit||final.profile!==profile
-      ||final.evidence_status!=='sent'||collect.length!==1
-      ||collect[0].status!=='completed'||collect[0].verification?.verified!==true)throw Error('上游101终态或collect_videos验收未通过');
-    const progressRaw=readFileSync(join(upstreamDir,'discovery-progress.json'));
-    const input=JSON.parse(progressRaw);
-    const producer=current.producer_descriptor?verifyProducerDescriptor(current.producer_descriptor,{upstream,progressRaw,progress:input,env,company:state.companyConfig,consumerSourceCommit:current.deployment.source_commit}):null;
-    if(producer)verifyProducerCompany(producer,await queue('verify_producer_company',{descriptor:producer}));
-    state.producerDescriptor=producer;
-    if(input.run!==sourceRun||input.profile!==profile||!Array.isArray(input.videos)||input.videos.length>1000
-      ||!Array.isArray(input.captures)||input.captures.length>10000)throw Error('上游101交接清单身份或数量无效');
-    const all=[...input.videos,...input.captures];
-    if(all.some(v=>!/^\d{16,24}$/.test(v.videoId||'')||typeof v.author!=='string'||!v.author.trim()))throw Error('上游视频ID或作者证据无效');
-    const ids=[...new Set(input.videos.map(v=>v.videoId))];
-    if(ids.length!==input.videos.length||input.captures.some(v=>!ids.includes(v.videoId))||ids.some(id=>!input.captures.some(v=>v.videoId===id)))throw Error('上游真实取链与保存ID清单不一致');
-    const rows=await queue('inspect_videos',{video_ids:ids});
-    if(!Array.isArray(rows)||rows.length!==ids.length||ids.some(id=>rows.filter(r=>r.video_id===id).length!==1))throw Error('PG读回缺上游真实视频ID');
-    const own=JSON.parse(readFileSync(env.OWN_ACCOUNTS_CONF||join(env.HOME,'bin-harvest/config/own-accounts.json'),'utf8'));
-    if(!Array.isArray(own.nicknames)||!Array.isArray(own.ids))throw Error('自家账号配置缺失');
-    const normalize=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
-    const ownNames=new Set([...own.nicknames,...own.ids].map(normalize));
-    const fulfilled=new Set(),priorProofs=[],ignoredFailedSamplingRuns=[];
-    if(sampleInput){
-      const siblings=readdirSync(resolve(env.WFR_RUN_DIR,'..'));
-      if(siblings.length>2000)throw Error('采样前序运行索引超界');
-      for(const name of siblings.filter(n=>/^douyin_video_processing-[A-Za-z0-9_-]+$/.test(n))){
-        const priorDir=resolve(env.WFR_RUN_DIR,'..',name);
-        if(priorDir===resolve(env.WFR_RUN_DIR)||lstatSync(priorDir).isSymbolicLink()||!lstatSync(priorDir).isDirectory())continue;
-        const file=join(priorDir,name.slice('douyin_video_processing-'.length)+'-sampling-readback.json');
-        if(!existsSync(file))continue;
-        if(lstatSync(file).isSymbolicLink()||(lstatSync(file).mode&0o077)!==0||lstatSync(file).size>10000000)throw Error('采样回执不得使用符号链接或公开权限或超界正文');
-        const prior=readFrozen(priorDir),si=prior.sampling_input;
-        if(!si||si.source_run!==sourceRun||si.comment_limit!==sampleInput.comment_limit)continue;
-        if(si.profile!==profile||si.serial!==serial||si.line!==line||prior.deployment.source_commit!==current.deployment.source_commit||prior.run_identity?.tag!==si.run_tag||prior.run_identity?.capability!=='douyin_video_processing'||prior.run_identity?.profile!==profile||prior.run_identity?.serial!==si.serial||prior.run_identity?.serial!==serial||prior.run_identity?.run_id!==name)throw Error('前序采样冻结scope不符');
-        const receipt=JSON.parse(readFileSync(file,'utf8')),final=JSON.parse(readFileSync(join(priorDir,'split-result.json'),'utf8'));
-        const attempt=typeof final.run_id==='string'?final.run_id.slice((name+'__').length):'';
-        if(!/^a[1-9][0-9]*$/.test(attempt)||final.run_id!==name+'__'+attempt||!['completed','partial','failed'].includes(final.status))throw Error('前序采样缺真实run及attempt终态');
-        const binding=readBinding(priorDir,attempt,prior);if(binding.run_id!==final.run_id||receipt.run_id!==binding.run_id)throw Error('前序采样运行绑定不一致');
-        if(final.profile!==profile||JSON.stringify(final.sampling_input)!==JSON.stringify(si)||final.source_commit!==current.deployment.source_commit||final.workflow_key!=='douyin_video_processing')throw Error('前序采样终态scope不符');
-        // 失败运行保留原件，但不兑现其采样配额，也不能堵住同批其它待处理视频。
-        // 只有冻结来源、身份及正式绑定全部一致的失败终态可以在这里忽略。
-        if(final.status==='failed'){
-          ignoredFailedSamplingRuns.push({prior_run:si.run_tag,run_id:binding.run_id,status:final.status});continue;
-        }
-        const activity=final.results?.find(r=>r.activity==='collection');
-        if(receipt.verified!==true||JSON.stringify(receipt.sampling_input)!==JSON.stringify(si)||final.profile!==profile||JSON.stringify(final.sampling_input)!==JSON.stringify(si)||final.source_commit!==current.deployment.source_commit||final.workflow_key!=='douyin_video_processing'||activity?.verification?.verified!==true||!['completed','partial'].includes(activity?.status)||!Array.isArray(receipt.videos)||receipt.videos.length>1000||JSON.stringify(activity.result?.sampling_receipts)!==JSON.stringify(receipt.videos.map(({pg_rows,...publicReceipt})=>publicReceipt)))throw Error('前序采样缺真实已验收Activity回执');
-        for(const v of receipt.videos){
-          if(!ids.includes(v.video_id)||v.source_run!==sourceRun||v.comment_limit!==si.comment_limit||!Array.isArray(v.pg_rows)||v.pg_rows.length!==v.coverage||!['quota_reached','footer_reached','no_comments'].includes(v.stop_reason)||v.stop_reason==='quota_reached'&&v.coverage!==si.comment_limit||v.coverage>si.comment_limit)throw Error('前序采样配额或上游范围不符');
-          const proof=await queue('sample_readback',{video_id:v.video_id,video_url:v.video_url,rows:v.pg_rows});
-          if(proof.verified!==true||proof.video_id!==v.video_id||proof.coverage!==v.coverage||JSON.stringify(proof.rows)!==JSON.stringify(v.pg_rows))throw Error('前序采样实际PG读回缺失');
-          fulfilled.add(v.video_id);priorProofs.push({prior_run:si.run_tag,video_id:v.video_id,coverage:proof.coverage});
-        }
-      }
-    }
-    const skipped=[],eligible=[];
-    for(const v of input.videos){const row=rows.find(r=>r.video_id===v.videoId);
-      if(!['pending','matched','rejected'].includes(row.judgment_status)||typeof row.process_status!=='string')throw Error('PG视频状态缺合法终态');
-      const currentPolicy=row.judgment_config?.company_id===state.companyConfig.company_id&&row.judgment_config?.version===state.companyConfig.version;
-      const reason=producer&&!producer.video_ids.includes(v.videoId)?'producer_scope':row.judgment_status==='rejected'&&currentPolicy?'rejected':row.process_status==='评论已采'?'completed':fulfilled.has(v.videoId)?'sample_fulfilled':ownNames.has(normalize(v.author))?'own':null;
-      if(reason)skipped.push({video_id:v.videoId,reason});else eligible.push(v.videoId);
-    }
-    state.intakeVideoIds=eligible;
-    const proof={verified:true,source_run:sourceRun,source_commit:upstream.deployment.source_commit,...(producer?{consumer_source_commit:current.deployment.source_commit,producer_descriptor:producer}:{}),
-      prior_sampling_readbacks:priorProofs,ignored_failed_sampling_runs:ignoredFailedSamplingRuns,observed_at:new Date().toISOString(),video_ids:ids,eligible_video_ids:eligible,skipped,rows,
-      duplicate_observations:input.captures.length-ids.length};
-    writeFileSync(join(env.WFR_RUN_DIR,`${run}-intake-readback.json`),JSON.stringify(proof),{mode:0o600});
-    return {historical_filter_verified:Number(rows.length===ids.length),own_filter_verified:Number(Array.isArray(own.nicknames)&&Array.isArray(own.ids)),run_dedup_verified:Number(new Set(eligible).size===eligible.length),
-      received:ids.length,eligible:eligible.length,ignored_failed_sampling_runs:ignoredFailedSamplingRuns.length,skipped_completed:skipped.filter(v=>v.reason==='completed').length,
-      skipped_sample_fulfilled:skipped.filter(v=>v.reason==='sample_fulfilled').length,skipped_rejected:skipped.filter(v=>v.reason==='rejected').length,skipped_own:skipped.filter(v=>v.reason==='own').length,duplicate_observations:proof.duplicate_observations};
-  };
+  const intake=()=>verifyAgentUpstream({env,state,queue,sampleInput,profile,serial,line,run});
   const collectionTiming=()=>{
     const actionMax=collectionBudgetExplicit?collectionBudget+480:960;
     const now=Date.now(),start=env.WF_RUN_START_TS===undefined?null:Number(env.WF_RUN_START_TS),globalSeconds=Number(env.WF_RUN_MAX_SECONDS||1800);
@@ -351,7 +271,479 @@ export function createHandlers({root,env,rpc,execute=execInput,sourceCommit,task
     proof.verified=proof.device.verified&&proof.videos.every(v=>v.verified)&&!proof.claim_receipt_unknown;
     writeFileSync(join(env.WFR_RUN_DIR,'resource-quarantine.json'),JSON.stringify(proof),{mode:0o600});return proof;
   };
-  return {state,preflight,quarantineResources,beginCollectionReadback:async evidence=>{
+  const agent={tools:new Map(),facts:{},sources:null,scoreScope:null,scored:new Set(),excluded:new Set(),videos:new Map(),captures:[],zeroComments:[],filters:[],native:new Map(),qualified:new Map(),collections:new Map(),identities:new Map(),recordings:new Map(),currentVideo:null,currentCandidate:null,attempts:0,comments:new Map(),collectionMeta:new Map(),histories:new Map(),batches:new Map(),screenIndex:0};
+  const agentSave=(name,value)=>{
+    const file=join(env.WFR_RUN_DIR,name),temp=file+'.'+randomUUID()+'.tmp';writeFileSync(temp,JSON.stringify(value),{flag:'wx',mode:0o600});renameSync(temp,file);
+  };
+  const assertAgentScope=async(scope,{readOnly=false}={})=>{
+    if(scope.run!==run||scope.run_id!==state.run_id||scope.task_id!==taskId||scope.workflow!==env.WF_BRAIN_WORKFLOW
+      ||scope.profile!==profile||scope.serial!==serial||scope.line!==line||scope.source_run!==(env.LEADGEN_SOURCE_RUN||null)
+      ||scope.source_commit!==sourceCommit||scope.limit!==Number(env.LEADGEN_LIMIT||2))throw Error('AGENT_PRIMARY_SCOPE_MISMATCH');
+    const frozen=readFrozen(env.WFR_RUN_DIR);
+    if(frozen.execution_mode!=='agent'||frozen.snapshot_sha256!==scope.snapshot_sha256||frozen.deployment.source_commit!==sourceCommit)throw Error('AGENT_PRIMARY_FROZEN_SCOPE_MISMATCH');
+    if(state.executionUnknown)throw Object.assign(Error('AGENT_PRIMARY_NATIVE_UNKNOWN'),{executionStopped:false});
+    if(needsCentralLock){
+      await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});
+      if(locked){await getCentral().ensure();await getCentral().verifyHeld();}
+      else if(scope.activity!=='preflight'&&!agent.facts.released)throw Error('AGENT_PRIMARY_RESOURCE_NOT_HELD');
+      if(!readOnly&&leased.length&&scope.activity!=='cleanup'){
+        const rows=await queue('inspect_videos',{video_ids:leased.map(v=>v.video_id)});
+        if(!Array.isArray(rows)||leased.some(v=>!rows.some(row=>row.video_id===v.video_id&&row.process_status===`处理中:${run}`))){state.executionUnknown=true;throw Object.assign(Error('AGENT_PRIMARY_VIDEO_LEASE_LOST'),{executionStopped:false});}
+      }
+    }
+    return true;
+  };
+  const prepareAgentResources=async scope=>{
+    if(scope.activity==='preflight'){
+      if(agent.facts.prepared)return;
+      const step=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?'101':'102';
+      if(step==='101'){
+        const fixed=assertDiscoveryInput(readFrozen(env.WFR_RUN_DIR),env);
+        const reply=await rpc({kind:'keywords',line,run,limit:2,keywords:fixed.sources});
+        if(canonical(reply.result)!==canonical(fixed.sources))throw Error('DISCOVERY_INPUT_SOURCE_MISMATCH');
+        agent.sources=reply.result;agent.discoveryInput=fixed;
+      }
+      const config=await queue('company_config',{step,device_binding:{profile,device_serial:serial}}),b=config?.device_binding;
+      if(!config?.company_id||!config.tenant_id||config.run_id!==run||!Number.isSafeInteger(config.version)||config.version<1
+        ||!b||b.company_id!==config.company_id||b.tenant_id!==config.tenant_id||b.version!==config.version||b.run_id!==run
+        ||b.profile!==profile||b.device_serial!==serial||b.enabled!==true||b.verification_status!=='verified'||typeof b.douyin_id!=='string'||!b.douyin_id)throw Error('COMPANY_ACCOUNT_DEVICE_NOT_VERIFIED');
+      state.company_config={...config,expected_sender:b.douyin_id};state.companyConfig=config;
+      appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
+      await getCentral().verifyTask({workflowKey:env.WF_BRAIN_WORKFLOW,companyLine:line,sourceCommit,runTag:run});await getCentral().acquire();
+      appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'acquired',task_id:taskId,run_id:state.run_id,device_name:serial,source_commit:sourceCommit,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
+      const route=(await checked(env.DOUYIN_PYTHON_BIN||'python3',[join(root,'adb-existing-route.py'),serial,adbClient])).trim();
+      if(!/^[1-9]\d{0,4}$/.test(route)||Number(route)>65535)throw Error('ADB_ROUTE_OUTPUT_INVALID');env.ADB_SERVER_SOCKET=`tcp:127.0.0.1:${route}`;env.DOUYIN_ADB_PORT=route;
+      delete env.ANDROID_ADB_SERVER_PORT;delete env.ANDROID_ADB_SERVER_ADDRESS;
+      if((await checked(adbClient,['-s',serial,'get-state'])).trim()!=='device')throw Error('设备未在线');
+      if(!(await phone('preflight')).split('\n').includes(`serial=${serial}`))throw Error('profile注册设备与本次serial不一致');
+      const held=await phone('lock-acquire',run);if(!/^lock=(acquired|held)/m.test(held))throw Error('设备锁未确认');locked=true;
+      if((await checked(adbClient,['-s',serial,'shell','dumpsys','telephony.registry'])).match(/mCallState=(\d+)/)?.[1]!=='0')throw Error('通话状态未知或设备通话中');
+      agent.facts={prepared:true,device_verified:true,lock_acquired:true,call_state_idle:true,central_lock_task_id:taskId,central_lock_run_id:state.run_id};
+      if(step==='102'){
+        state.recipientCompanyBinding={...b,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN||null};
+        state.recipientCompanyBindingFile=join(env.WFR_RUN_DIR,run+'-company-binding.json');
+        const bytes=JSON.stringify(state.recipientCompanyBinding);writeFileSync(state.recipientCompanyBindingFile,bytes,{flag:'wx',mode:0o600});state.recipientCompanyBindingSha=createHash('sha256').update(bytes).digest('hex');
+      }
+    }else if(serial==='none'&&!state.company_config){
+      state.company_config=await queue('company_config',{step:'103'});
+      if(!state.company_config?.company_id||!state.company_config.tenant_id||!Number.isSafeInteger(state.company_config.version))throw Error('COMPANY_CONFIG_UNVERIFIED');
+      appendFileSync(join(env.WFR_RUN_DIR,'company-config-receipts.jsonl'),JSON.stringify(state.company_config)+'\n',{mode:0o600});
+    }
+    if(scope.activity==='collect_videos')discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,verifyPhoneAssociation});
+    if(scope.activity==='collection'&&qualified.length)collectionScope=await startCollectionPhoneScope({root,env,state,sourceCommit,taskId,qualifiedVideoIds:qualified.map(v=>v.video_id),verifyPhoneAssociation});
+    if(scope.activity==='cleanup'){
+      if(state.collectionReturnedEvidence)collectionScope=await startCollectionReturnedScope({evidence:state.collectionReturnedEvidence,context:returnedContext(),purpose:'cleanup'});
+      if(state.discoveryCleanupEvidence?.cleanup_phone_scope)discoveryScope=await startDiscoveryPhoneScope({root,env,state,sourceCommit,taskId,lockHeld:locked,purpose:'cleanup',evidence:state.discoveryCleanupEvidence,verifyPhoneAssociation});
+    }
+  };
+  const createAgentTools=async(activity,scope)=>{
+    if(activity.key!==scope.activity||env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach')throw Error('AGENT_PRIMARY_SCOPE_MISMATCH');
+    await assertAgentScope(scope);
+    state.currentActivity=activity.key;state.budgetDeadline=scope.deadline_ms;state.agentPhoneDeadline=scope.deadline_ms;
+    if(agent.tools.has(activity.key))throw Error('AGENT_PRIMARY_ACTIVITY_ALREADY_CREATED');
+    const outcomes=[];
+    const fields=raw=>Object.fromEntries(String(raw).split('\n').filter(row=>row.includes('=')).map(row=>{const i=row.indexOf('=');return [row.slice(0,i),row.slice(i+1).trim()];}));
+    const evidenceRoot=env.LEADGEN_EVIDENCE_DIR||join('/private/tmp/openclaw-phone/evidence',profile);
+    const readNative=file=>{const s=lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.size>4*1024*1024||realpathSync(resolve(file,'..'))!==realpathSync(evidenceRoot))throw Error('AGENT_PRIMARY_NATIVE_FILE_INVALID');return readFileSync(file,'utf8');};
+    const nativeIdentity=(raw,eid,vid)=>{
+      agent.panelSession=null;agent.detailIdentity=null;
+      const f=fields(raw),p={verified:f.video_id===vid&&f.content_type==='video',expected_video_id:vid,observed_video_id:f.video_id,content_type:f.content_type,excluded_non_video:f.excluded_non_video==='true',evidence_id:eid,controller_stdout:raw,observed_at:new Date().toISOString()};
+      agentSave(`${run}-identity-${vid}.json`,p);if(!p.verified)throw Error('AGENT_PRIMARY_VIDEO_IDENTITY_MISMATCH');agent.identities.set(vid,p);agent.detailIdentity={video_id:vid};return p;
+    };
+    const rowsFromXml=xml=>recipientProof.parseNativeCommentXml(xml).rows;
+    const ownedPhone=async(command,...args)=>{
+      if(['open-video','current-video-link','back-evidence','back-to-results','open-search','commenter-identity','close-app','return-safe-desktop','detail-restored'].includes(command)){agent.panelSession=null;agent.detailIdentity=null;}
+      const detail=['qualification','collection'].includes(activity.key)&&['open-video','current-video-link'].includes(command);
+      if(!detail&&!['record-start','record-stop','record-extract-audio'].includes(command))return phone(command,...args);
+      if(!locked||!(await phone('lock-refresh',run)).startsWith('lock=refreshed'))throw Error('AGENT_PRIMARY_LOCK_UNVERIFIED');
+      const s=discoveryScope||collectionScope,ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
+      return checked(s?.zsh||ctl,[...(s?['-f',ctl]:[]),'--profile',profile,...(command==='open-video'?[]:['--lock-owner',run]),command,...args],{receipt:nativeReceipt(),timeoutMs:Math.max(1,scope.deadline_ms-Date.now()),...(detail?{env:{DOUYIN_DETAIL_PLAYBACK:'continuous_identity'}}:{})});
+    };
+    const validatePhone=async(command,args,s)=>{
+      const noArgs=['wake','unlock','open-app','account-current','search-video-tab','search-video-cards','current-video-link','open-comments','record-start','record-stop','record-status','record-extract-audio','native-audio-evidence','close-app','return-safe-desktop','detail-restored'];
+      if(noArgs.includes(command)&&args.length)throw Error('AGENT_PRIMARY_PHONE_INPUT_INVALID');
+      if(['wake','unlock','open-app','close-app','return-safe-desktop','detail-restored'].includes(command))return [];
+      if(command==='account-current')return [`${run}-account`];
+      if(command==='open-search'){
+        if(args.length!==1||!agent.sources?.some(source=>encodeURIComponent(typeof source==='string'?source:source.source||source.keyword)===args[0]))throw Error('AGENT_PRIMARY_KEYWORD_SCOPE_INVALID');
+        agent.keyword=decodeURIComponent(args[0]);agent.sourceIndex=agent.sources.findIndex(source=>(typeof source==='string'?source:source.source||source.keyword)===agent.keyword)+1;return args;
+      }
+      if(command==='search-time-layer'){
+        if(args.length)throw Error('AGENT_PRIMARY_FILTER_SCOPE_INVALID');
+        if(!agent.sourceIndex)throw Error('AGENT_PRIMARY_KEYWORD_SCOPE_INVALID');
+        return [scope.discovery_filters?.time_layer||env.LEADGEN_TIME_LAYER||'six_months',`${run}-src${agent.sourceIndex}-filter`,scope.discovery_filters?.sort||env.LEADGEN_SORT||'latest','unlimited','unlimited',scope.discovery_filters?.location||env.LEADGEN_LOCATION||'same_city'];
+      }
+      if(['search-video-tab','search-video-cards'].includes(command)){
+        if(!agent.sourceIndex)throw Error('AGENT_PRIMARY_KEYWORD_SCOPE_INVALID');return [`${run}-src${agent.sourceIndex}-${command==='search-video-tab'?'vtab':'cards'}`];
+      }
+      if(command==='back-evidence')return [s.evidence_id];
+      if(command==='search-grid-scroll'){
+        if(args.length!==1||!['up','down'].includes(args[0])||agent.discoveryInput?.max_screens===1)throw Error('AGENT_PRIMARY_SCREEN_SCOPE_INVALID');return [s.evidence_id,args[0]];
+      }
+      if(command==='tap-evidence'){
+        if(activity.key!=='collect_videos'||args.length!==2||!agent.grid?.some(row=>row.x===args[0]&&row.y===args[1]))throw Error('AGENT_PRIMARY_TAP_SCOPE_INVALID');
+        if(agent.attempts>=(agent.discoveryInput?.max_attempts||agent.discoveryInput?.max_candidates||scope.limit))throw Error('AGENT_PRIMARY_ATTEMPT_LIMIT');
+        const target=agent.grid.find(row=>row.x===args[0]&&row.y===args[1]);
+        const raw=await phone('search-video-cards',s.evidence_id+'-fresh');
+        const cards=String(raw).split('\n').map(row=>row.split('\t')).filter(f=>/^\d+$/.test(f[0]||'')&&/^\d+$/.test(f[1]||''));
+        const fresh=cards.filter(f=>f[3]===target.title&&f[4]===target.author&&f[2]===target.duration);
+        if(fresh.length!==1)throw Error('AGENT_PRIMARY_FRESH_CARD_UNVERIFIED');
+        agent.currentCandidate={...target,x:fresh[0][0],y:fresh[0][1],keyword:agent.keyword};agent.attempts++;
+        return [fresh[0][0],fresh[0][1],s.evidence_id];
+      }
+      if(command==='swipe-evidence'){
+        if(activity.key!=='collection'||args.length!==1||!['up','down'].includes(args[0])||!agent.currentVideo)throw Error('AGENT_PRIMARY_SWIPE_SCOPE_INVALID');
+        const vid=agent.currentVideo.video_id,eid=s.evidence_id+'-scroll';
+        if(agent.panelSession?.video_id!==vid)throw Error('AGENT_PRIMARY_PANEL_SESSION_UNVERIFIED');
+        const raw=await phone('ui-evidence',eid+'-panel'),parsed=recipientProof.parseNativeCommentXml(readNative(String(raw).trim())),viewport=parsed.scroll_viewport;
+        if(parsed.strict_layout!==true||!viewport||!['left','top','right','bottom'].every(k=>Number.isSafeInteger(viewport[k]))||viewport.right-viewport.left<100||viewport.bottom-viewport.top<200)throw Error('AGENT_PRIMARY_SCROLL_VIEWPORT_UNVERIFIED');
+        const x=Math.floor((viewport.left+viewport.right)/2),margin=Math.floor((viewport.bottom-viewport.top)/4),top=viewport.top+margin,bottom=viewport.bottom-margin;
+        if(bottom-top<100)throw Error('AGENT_PRIMARY_SCROLL_VIEWPORT_UNVERIFIED');
+        return [String(x),String(args[0]==='up'?bottom:top),String(x),String(args[0]==='up'?top:bottom),'500',s.evidence_id];
+      }
+      if(command==='current-video-link'){
+        if(activity.key==='collect_videos'){
+          if(!agent.currentCandidate)throw Error('AGENT_PRIMARY_LINK_SCOPE_INVALID');return [`${run}-candidate${agent.attempts}-link-t1`,agent.keyword];
+        }
+        if(!agent.currentVideo)throw Error('AGENT_PRIMARY_VIDEO_SCOPE_INVALID');return [`${run}-v${agent.currentVideo.video_id}-${activity.key}-identity`];
+      }
+      if(command==='open-video'){
+        if(args.length!==1||!/^\d{16,24}$/.test(args[0]))throw Error('AGENT_PRIMARY_VIDEO_SCOPE_INVALID');
+        const matches=(activity.key==='collection'?qualified:leased).filter(v=>v.video_id===args[0]);if(matches.length!==1)throw Error('AGENT_PRIMARY_VIDEO_SCOPE_INVALID');agent.currentVideo=matches[0];
+        return [args[0],`${run}-v${args[0]}-${activity.key}-open`];
+      }
+      if(command==='open-comments'){
+        const v=agent.currentVideo;if(!v||!agent.identities.get(v.video_id)?.verified||agent.detailIdentity?.video_id!==v.video_id)throw Error('AGENT_PRIMARY_VIDEO_IDENTITY_UNVERIFIED');return [`${run}-v${v.video_id}-collection-comments`];
+      }
+      if(command==='set-playback-speed'){
+        if(args.length!==1||args[0]!=='3.0'||!agent.currentVideo)throw Error('AGENT_PRIMARY_RECORD_SCOPE_INVALID');return ['3.0',`${run}-v${agent.currentVideo.video_id}-qualification-speed`];
+      }
+      if(['record-start','record-status','record-stop','record-extract-audio','native-audio-evidence'].includes(command)){
+        const v=agent.currentVideo;if(!v||!agent.identities.get(v.video_id)?.verified)throw Error('AGENT_PRIMARY_RECORD_SCOPE_INVALID');
+        const eid=`${run}-v${v.video_id}-qualification-record`;
+        if(command==='record-start'){
+          const seconds=Number(env.QUEUED_VIDEO_RECORD_SECONDS||25);if(!Number.isSafeInteger(seconds)||seconds<10||seconds>105||scope.deadline_ms-Date.now()<seconds*1000+15000||agent.recordings.has(v.video_id))throw Error('AGENT_PRIMARY_RECORD_SCOPE_INVALID');
+          agent.recordings.set(v.video_id,{expectedSeconds:seconds});return [eid,String(seconds),v.video_id];
+        }
+        if(command==='native-audio-evidence')return [s.evidence_id];
+        if(!agent.recordings.has(v.video_id))throw Error('AGENT_PRIMARY_RECORD_SCOPE_INVALID');return [eid];
+      }
+      if(command==='commenter-identity'){
+        if(args.length!==3||!agent.currentVideo)throw Error('AGENT_PRIMARY_COMMENT_SCOPE_INVALID');
+        if(agent.panelSession?.video_id!==agent.currentVideo.video_id)throw Error('AGENT_PRIMARY_PANEL_SESSION_UNVERIFIED');
+        const raw=await phone('ui-evidence',s.evidence_id+'-fresh-comment'),file=String(raw).trim(),rows=rowsFromXml(readNative(file));
+        const matches=rows.filter(row=>!row.author&&String(row.x)===args[0]&&String(row.y)===args[1]&&row.nickname_b64===args[2]);if(matches.length!==1)throw Error('AGENT_PRIMARY_COMMENT_SCOPE_INVALID');
+        const vid=agent.currentVideo.video_id,index=[...agent.comments.values()].filter(row=>row.video_id===vid).length+1;
+        if(index>3*(scope.comment_limit||0))throw Error('AGENT_PRIMARY_COMMENT_LIMIT');
+        agent.pendingComment={row:matches[0],video:agent.currentVideo,started:Math.floor(Date.now()/1000),index};
+        return [...args,`${run}-v${vid}-collection-person${index}-t1`];
+      }
+      throw Error('AGENT_PRIMARY_PHONE_NOT_ALLOWED');
+    };
+    const primitivePhone=async(command,...args)=>{
+      const startedAt=Date.now(),raw=await ownedPhone(command,...args);
+      if(command==='account-current'){
+        const id=fields(raw).douyin_id;if(!id||id!==state.company_config?.expected_sender)throw Error('COMPANY_ACCOUNT_IDENTITY_MISMATCH');state.account=id;agent.facts.account_verified=true;
+      }
+      if(command==='search-video-cards'){
+        const f=fields(raw);if(f.video_tab!=='1'||!f.evidence||!agent.keyword)throw Error('AGENT_PRIMARY_SOURCE_IDENTITY_UNVERIFIED');
+        if(!/^kw_matches=1$/m.test(await phone('search-kw-matches',agent.keyword,f.evidence)))throw Error('AGENT_PRIMARY_SOURCE_KEYWORD_MISMATCH');
+        agent.grid=String(raw).split('\n').flatMap(row=>{const f=row.split('\t');return /^\d+$/.test(f[0]||'')&&/^\d+$/.test(f[1]||'')&&f[3]&&f[4]?[{x:f[0],y:f[1],duration:f[2],title:f[3],author:f[4]}]:[];});
+        const receipt={source:agent.keyword,source_index:agent.sourceIndex,source_kind:'keyword',cards:agent.grid.length,verified:true,evidence_path:f.evidence,observed_at:new Date().toISOString()};
+        agentSave(`${run}-source-${agent.sourceIndex}-readback.json`,receipt);
+      }
+      if(command==='search-time-layer'){
+        const f=fields(raw),requested=scope.discovery_filters||{sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'},effective=Object.fromEntries(['sort','time_layer','duration','scope','location'].map(k=>[k,f[k]]));
+        if(effective.sort!==requested.sort||effective.time_layer!==requested.time_layer||effective.location!==requested.location||effective.duration!=='unlimited'||effective.scope!=='unlimited')throw Error('DISCOVERY_FILTER_MISMATCH');
+        agent.filters.push({invocation:agent.filters.length+1,evidence_id:args[1],verified:true,raw_stdout:raw,raw_sha256:createHash('sha256').update(raw).digest('hex'),effective});
+        agentSave(state.run_id+'-filter-readback.json',{version:1,run_id:state.run_id,run,profile,source_commit:sourceCommit,requested,receipts:agent.filters});
+      }
+      if(command==='current-video-link'){
+        const f=fields(raw);
+        if(activity.key==='collect_videos'){
+          const candidate=agent.currentCandidate;if(f.content_type!=='video'||!/^\d{16,24}$/.test(f.video_id||'')||f.return_mode!=='results'||!candidate)throw Error('AGENT_PRIMARY_LINK_IDENTITY_UNVERIFIED');
+          const metrics=discoveryMetrics.captureObservation({file:f.metrics_evidence,evidenceRoot,runDir:env.WFR_RUN_DIR,run,run_id:state.run_id,profile,source_commit:sourceCommit,line_key:lineRoutes.routeOf(line).key,video_id:f.video_id,video_url:f.resolved_url,evidence_id:f.metrics_evidence_id});
+          const video={videoId:f.video_id,videoUrl:f.resolved_url,title:candidate.title,author:candidate.author,keyword:candidate.keyword,harvestBatch:run,metrics};
+          agent.native.set(f.video_id,video);if(metrics.comment_total.value===0)agent.zeroComments.push({...video,reason:'confirmed_zero_comments'});
+        }else nativeIdentity(raw,args[0],agent.currentVideo.video_id);
+      }
+      if(['record-start','record-stop','record-extract-audio'].includes(command)){
+        const r=agent.recordings.get(agent.currentVideo.video_id);r[{'record-start':'started','record-stop':'stopped','record-extract-audio':'extracted'}[command]]=raw;
+      }
+      if(command==='open-comments'){
+        agent.panelSession=null;
+        const vid=agent.currentVideo.video_id,meta=agent.collectionMeta.get(vid)||{};meta.opened=raw;
+        if(String(raw).startsWith('comments_opened=0\nreason=no_comments_on_this_video\n')){createNoComments({runDir:env.WFR_RUN_DIR,run,videoId:vid,profile,stdout:raw});meta.stop_reason='no_comments';}
+        if(fields(raw).comments_opened==='1'){
+          const file=fields(raw).evidence;
+          if(file!==join(evidenceRoot,args[0]+'-panel.xml')||lstatSync(file).mtimeMs<Math.floor(startedAt/1000)*1000)throw Error('AGENT_PRIMARY_PANEL_SESSION_UNVERIFIED');
+          const parsed=recipientProof.parseNativeCommentXml(readNative(file));
+          if(agent.detailIdentity?.video_id!==vid)throw Error('AGENT_PRIMARY_PANEL_SESSION_UNVERIFIED');
+          if(parsed.strict_layout===true)agent.panelSession={video_id:vid,session:randomUUID()};
+        }
+        agent.collectionMeta.set(vid,meta);
+      }
+      if(command==='commenter-identity'){
+        const pending=agent.pendingComment,f=fields(raw),v=pending.video;
+        if(!f.douyin_id||f.account_type!=='personal'||f.nickname!==pending.row.nickname)throw Error('AGENT_PRIMARY_COMMENT_NATIVE_IDENTITY_INVALID');
+        const ownPath=env.OWN_ACCOUNTS_CONF||join(env.HOME,'bin-harvest/config/own-accounts.json'),own=ownAccounts.loadOwnAccounts(existsSync(ownPath)?ownPath:join(root,'config/own-accounts.json'));
+        if(ownAccounts.isOwnAccount(f.nickname,f.douyin_id,own))throw Error('AGENT_PRIMARY_OWN_ACCOUNT_EXCLUDED');
+        agent.panelSession=null;agent.detailIdentity=null;
+        const videoEid=`${run}-v${v.video_id}-collection-after-card${pending.index}`,identityRaw=await phone('current-video-link',videoEid);
+        nativeIdentity(identityRaw,videoEid,v.video_id);
+        const p=recipientProof.capture({runDir:env.WFR_RUN_DIR,line,run,sourceRun:env.LEADGEN_SOURCE_RUN,videoId:v.video_id,videoUrl:v.video_url,profile,douyinId:f.douyin_id,nickname:f.nickname,commentBody:pending.row.body,started:pending.started,profilePath:f.profile_evidence,returnedPath:f.return_evidence,profileEid:args[3],videoEid,companyBindingFile:state.recipientCompanyBindingFile,companyBindingSha:state.recipientCompanyBindingSha});
+        const receiptId=randomUUID(),row={nickname:f.nickname,douyinId:f.douyin_id,accountType:'personal',commentBody:pending.row.body,commentTime:pending.row.time,region:pending.row.region,sourceVideo:v.title,keyword:v.keyword||'',profileIp:f.profile_ip||'',profileUrl:'',sourceVideoUrl:v.video_url,recipientEvidence:JSON.parse(readFileSync(p.file,'utf8'))};
+        const old=agent.histories.get(v.video_id),oldRow=old?.rows.get(history.key(row.douyinId,row.commentBody));
+        let consumed;
+        if(oldRow){
+          const proof=history.proof(old,env.WFR_RUN_DIR,profile,args[3],oldRow.id,row.douyinId,row.commentBody,f.profile_evidence,f.return_evidence,pending.started);
+          consumed={id:oldRow.id,douyinId:row.douyinId,commentBody:row.commentBody,sourceVideoUrl:oldRow.source_video_url||v.video_url,identity_eid:proof.identity_eid,history_sha256:old.sha256};
+        }
+        agent.comments.set(receiptId,{video_id:v.video_id,row,...(consumed?{history:consumed}:{})});agent.pendingComment=null;
+        const {recipientEvidence,...publicRow}=row;return {stdout:raw,native_receipt:receiptId,comment:publicRow,historical_verified:!!consumed,navigation:{verified_video_id:agent.detailIdentity?.video_id||null,panel_session_available:false,next_phone_action:'open-comments'}};
+      }
+      if(command==='ui-evidence'){
+        const file=String(raw).trim(),xml=readNative(file);
+        if(activity.key==='cleanup')agent.facts.cleanup_xml=file;
+        if(activity.key==='collection'&&agent.currentVideo){
+          const parsed=recipientProof.parseNativeCommentXml(xml),meta=agent.collectionMeta.get(agent.currentVideo.video_id)||{};meta.latest_xml=file;
+          if(parsed.footer_reached)meta.footer_evidence={file,sha256:createHash('sha256').update(xml).digest('hex')};agent.collectionMeta.set(agent.currentVideo.video_id,meta);
+          return {stdout:raw,xml,comments:parsed.rows,footer_reached:parsed.footer_reached};
+        }
+        return {stdout:raw,xml};
+      }
+      if(command==='close-app')agent.facts.close_stdout=raw;
+      if(command==='return-safe-desktop')agent.facts.desktop_stdout=raw;
+      if(activity.key==='cleanup'&&command==='snapshot-evidence')agent.facts.cleanup_png=String(raw).split('\n')[0];
+      if(activity.key==='cleanup'&&command==='ui-evidence')agent.facts.cleanup_xml=String(raw).trim();
+      return raw;
+    };
+    const primitiveQueue=async(op,input)=>{
+      if(op==='score_scope'&&agent.scoreScope)return structuredClone(agent.scoreScope);
+      if(op==='claim_videos')state.qualificationClaimUnknown=true;
+      let value=await queue(op,input);
+      if(op==='score_scope'){
+        if(!Array.isArray(value?.ids)||!value.sources||new Set(value.ids).size!==value.ids.length||value.ids.some(id=>value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
+        const ids=value.ids.slice(0,scope.limit);value={...value,ids,sources:Object.fromEntries(ids.map(id=>[id,value.sources[id]]))};
+      }
+      outcomes.push({op,input,result:value});
+      if(op==='claim_videos'){
+        if(!Array.isArray(value)||value.some(v=>!state.intakeVideoIds?.includes(v.video_id))||value.length>scope.limit)throw Error('AGENT_PRIMARY_CLAIM_SCOPE_INVALID');
+        leased=value;qualificationClaimed=true;state.qualificationClaimUnknown=false;
+      }
+      if(op==='discover'){
+        const video=input.video;
+        if(!['pending','matched','rejected'].includes(value?.status)||typeof value.inserted!=='boolean'||value.metrics_verified!==true||value.metrics_digest!==video.metrics.digest)throw Error('AGENT_PRIMARY_DISCOVERY_READBACK_MISSING');
+        agent.videos.set(video.videoId,{...video,status:value.status,inserted:value.inserted});agent.captures.push({...video,status:value.status,inserted:value.inserted,observed_at:new Date().toISOString()});
+      }
+      if(op==='comment_history'){
+        const file=join(env.WFR_RUN_DIR,`${run}-history-${input.video_id}.json`);agentSave(`${run}-history-${input.video_id}.json`,value);
+        agent.histories.set(input.video_id,history.load(file,env.WFR_RUN_DIR,{line,run,source_run:env.LEADGEN_SOURCE_RUN||null,video_id:input.video_id,video_url:input.video_url}));
+      }
+      if(['collect','collect_partial'].includes(op)){
+        const previous=agent.collections.get(input.video_id);
+        if(!previous)throw Error('AGENT_PRIMARY_COLLECTION_COMMIT_UNVERIFIED');
+        const stored=aggregateAgentCollectionCommit({previousInserted:previous.prior_inserted,receipt:value,videoId:input.video_id,comments:input.comments.length,historical:input.history.length});
+        agent.collections.set(input.video_id,{...previous,stored,finalized:op==='collect'});
+        if(op==='collect')leased=leased.filter(video=>video.video_id!==input.video_id);
+      }
+      if(op==='comment_history_readback'){
+        const previous=agent.collections.get(input.video_id);if(!previous||value?.verified!==true)throw Error('AGENT_PRIMARY_HISTORY_READBACK_INVALID');previous.historyReadback=value;
+      }
+      if(op==='sample_readback'){
+        const previous=agent.collections.get(input.video_id);if(!previous||value?.verified!==true||value.coverage!==previous.comments.length+previous.history.length)throw Error('AGENT_PRIMARY_COLLECTION_READBACK_INVALID');previous.pgReadback=value;
+      }
+      if(op==='score_scope'){
+        if(!Array.isArray(value?.ids)||!value.sources||value.ids.some(id=>value.sources[id]!==scope.source_run))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
+        agent.scoreScope=structuredClone(value);
+      }
+      if(op==='mark_leads'){
+        if(!agent.scoreScope||!Array.isArray(value?.ids)||!Array.isArray(value.lead_ids)||new Set(value.ids).size!==value.ids.length||value.ids.some(id=>!input.ids.includes(id))||value.marked!==value.ids.length)throw Error('AGENT_PRIMARY_MARK_SCOPE_INVALID');
+      }
+      if(op==='bridge_outreach'){
+        if(!Array.isArray(value?.ids)||!Array.isArray(value.comment_ids)||value.ids.length!==value.comment_ids.length||new Set(value.ids).size!==value.ids.length||value.comment_ids.some(id=>!input.comment_ids.includes(id)))throw Error('AGENT_PRIMARY_BRIDGE_SCOPE_INVALID');
+      }
+      if(op==='score'){
+        if(!Array.isArray(value?.ids)||!Array.isArray(value.excluded_ids)||[...value.ids,...value.excluded_ids].some(id=>!input.ids.includes(id)))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
+        value.ids.forEach(id=>agent.scored.add(id));value.excluded_ids.forEach(id=>agent.excluded.add(id));
+      }
+      return value;
+    };
+    const validateInput=async(op,input)=>{
+      if(['discover','discover_readback'].includes(op)){
+        const id=input.video?.videoId??input.video?.video_id,actual=agent.native.get(id);
+        if(!actual||actual.metrics.comment_total.value===0)throw Error(actual?'DISCOVERY_CONFIRMED_ZERO_COMMENTS':'AGENT_PRIMARY_NATIVE_VIDEO_MISSING');
+        return {video:actual};
+      }
+      if(op==='inspect_videos'){
+        const ids=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?[...agent.videos.keys()]:state.intakeVideoIds;
+        if(!Array.isArray(input.video_ids)||!Array.isArray(ids)||input.video_ids.some(id=>!ids.includes(id)))throw Error('AGENT_PRIMARY_VIDEO_SCOPE_INVALID');
+      }
+      if(['renew_video','qualification_readback'].includes(op)&&!leased.some(v=>v.video_id===input.video_id))throw Error('AGENT_PRIMARY_VIDEO_SCOPE_INVALID');
+      if(['comment_history','comment_history_readback','collect','collect_partial','sample_readback'].includes(op)){
+        const v=qualified.find(v=>v.video_id===input.video_id);if(!v||input.video_url!==v.video_url)throw Error('AGENT_PRIMARY_VIDEO_SCOPE_INVALID');
+        if(['collect','collect_partial'].includes(op)){
+          if((input.history||[]).length||!Array.isArray(input.comments))throw Error('AGENT_PRIMARY_COMMENT_SCOPE_INVALID');
+          const batchKey=JSON.stringify([op,v.video_id,input.comments.map(ref=>ref?.native_receipt).sort()]);
+          if(agent.batches.has(batchKey))return agent.batches.get(batchKey);
+          const previous=agent.collections.get(v.video_id);if(previous?.finalized)throw Error('AGENT_PRIMARY_COLLECTION_ALREADY_FINALIZED');
+          const fresh=input.comments.map(ref=>{if(!ref||Object.keys(ref).join(',')!=='native_receipt')throw Error('AGENT_PRIMARY_COMMENT_RECEIPT_REQUIRED');const p=agent.comments.get(ref.native_receipt);if(!p||p.video_id!==v.video_id)throw Error('AGENT_PRIMARY_COMMENT_SCOPE_INVALID');return p;});
+          if(new Set(fresh.map(r=>JSON.stringify([r.row.douyinId,r.row.commentBody]))).size!==fresh.length)throw Error('AGENT_PRIMARY_COMMENT_DUPLICATE');
+          const selected=mergeAgentCollectionRows({previous:previous?.selected||[],fresh,videoId:v.video_id,limit:scope.comment_limit});
+          const h=agent.histories.get(v.video_id);if(!h)throw Error('AGENT_PRIMARY_HISTORY_SCOPE_MISSING');
+          const consumed=selected.filter(p=>p.history).map(p=>p.history),comments=selected.filter(p=>!p.history).map(p=>p.row),meta=agent.collectionMeta.get(v.video_id)||{};
+          const coverage=comments.length+consumed.length,stop_reason=coverage===scope.comment_limit?'quota_reached':meta.stop_reason==='no_comments'?'no_comments':meta.footer_evidence?'footer_reached':'partial';
+          if(coverage>scope.comment_limit)throw Error('AGENT_PRIMARY_COMMENT_LIMIT');
+          if(op==='collect'&&(!['footer_reached','no_comments'].includes(stop_reason)))throw Error('AGENT_PRIMARY_COLLECTION_FOOTER_UNVERIFIED');
+          agent.collections.set(v.video_id,{video_id:v.video_id,video_url:v.video_url,operation:op,comments,history:consumed,historyReceipt:h.receipt,history_sha256:h.sha256,stop_reason,rescan_count:[...agent.comments.values()].filter(p=>p.video_id===v.video_id).length,avatar_recovery_count:0,selected,prior_inserted:previous?.stored?.inserted||0,...(meta.footer_evidence?{footer_evidence:meta.footer_evidence}:{})});
+          const request={video_id:v.video_id,video_url:v.video_url,comments,history:consumed};agent.batches.set(batchKey,request);return request;
+        }
+        if(op==='sample_readback'){
+          const saved=agent.collections.get(v.video_id);if(!saved?.stored)throw Error('AGENT_PRIMARY_COLLECTION_COMMIT_MISSING');
+          return {video_id:v.video_id,video_url:v.video_url,rows:[...saved.history,...saved.comments].map(r=>({...(r.id?{id:r.id}:{}),douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl||v.video_url}))};
+        }
+        if(op==='comment_history_readback'){
+          const saved=agent.collections.get(v.video_id);if(!saved?.stored)throw Error('AGENT_PRIMARY_COLLECTION_COMMIT_MISSING');return {video_id:v.video_id,video_url:v.video_url,history:saved.history};
+        }
+      }
+      if(['score','score_recovery','score_readback','score_exclusion_readback','policy_review'].includes(op)){
+        if(!agent.scoreScope||!Array.isArray(input.ids)||input.ids.some(id=>!agent.scoreScope.ids.includes(id)))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INVALID');
+        return {...input,sources:Object.fromEntries(input.ids.map(id=>[id,agent.scoreScope.sources[id]]))};
+      }
+      if(op==='claim_videos'){
+        if(!Array.isArray(state.intakeVideoIds))throw Error('AGENT_PRIMARY_UPSTREAM_SCOPE_INVALID');
+        return {video_ids:state.intakeVideoIds,config_required:true,prefer_matched:!!sampleInput};
+      }
+      if(op==='mark_readback'){
+        const marked=outcomes.filter(row=>row.op==='mark_leads').at(-1)?.result;
+        if(!marked||canonical(input.ids)!==canonical(marked.ids)||canonical(input.lead_ids)!==canonical(marked.lead_ids))throw Error('AGENT_PRIMARY_MARK_SCOPE_INVALID');
+      }
+      if(op==='bridge_readback'){
+        const bridged=outcomes.filter(row=>row.op==='bridge_outreach').at(-1)?.result;
+        if(!bridged||canonical(input.ids)!==canonical(bridged.ids||[]))throw Error('AGENT_PRIMARY_BRIDGE_SCOPE_INVALID');
+      }
+      if(op==='mark_leads'){
+        if(!agent.scoreScope||agent.scoreScope.ids.length>scope.limit||agent.scoreScope.ids.some(id=>!agent.scored.has(id)&&!agent.excluded.has(id)))throw Error('AGENT_PRIMARY_SCORE_SCOPE_INCOMPLETE');
+        return {ids:agent.scoreScope.ids.filter(id=>agent.scored.has(id))};
+      }
+      if(op==='bridge_outreach'){
+        const marked=outcomes.filter(row=>row.op==='mark_leads').at(-1)?.result,readback=outcomes.filter(row=>row.op==='mark_readback').at(-1)?.result;
+        if(!marked||readback?.verified!==true)throw Error('AGENT_PRIMARY_MARK_READBACK_MISSING');
+        return {comment_ids:[...marked.ids]};
+      }
+      return input;
+    };
+    const qualify=async input=>{
+      const v=leased.find(v=>v.video_id===input.video_id);if(!v||!agent.identities.get(v.video_id)?.verified)throw Error('AGENT_PRIMARY_VIDEO_IDENTITY_UNVERIFIED');
+      let judgment,cached=v.judgment_status==='matched'&&v.judgment_config?.company_id===state.companyConfig?.company_id&&v.judgment_config?.version===state.companyConfig?.version;
+      if(cached)judgment={verdict:'matched',kind:'cached',config:{...v.judgment_config,run_id:run}};
+      else{
+        const {buildRecordingProof}=await import('./leadgen-agent-artifacts.mjs'),r=agent.recordings.get(v.video_id);
+        if(!r?.started||!r.stopped||!r.extracted)throw Error('AGENT_PRIMARY_RECORDING_PROOF_MISSING');
+        const audio=buildRecordingProof({runDir:env.WFR_RUN_DIR,scope:{run,video_id:v.video_id,serial},...r,evidenceRoot});
+        const remote=`/tmp/qv-${run}-${v.video_id}.wav`;
+        if(env.WFR_HOSTKEY!=='mmv'){
+          const transport=env.LEADGEN_MMV_HOSTNAME&&env.LEADGEN_MMV_HOSTKEY_ALIAS?['-o','HostName='+env.LEADGEN_MMV_HOSTNAME,'-o','HostKeyAlias='+env.LEADGEN_MMV_HOSTKEY_ALIAS]:[];
+          await checked('scp',[...transport,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15',audio.audioPath,'mmv:'+remote]);
+        }else{if(resolve(audio.audioPath)!==resolve(remote))copyFileSync(audio.audioPath,remote,constants.COPYFILE_EXCL);}
+        judgment=(await rpc({kind:'qualify',request:{cmd:'judge',line,run,sourceRun:env.LEADGEN_SOURCE_RUN||undefined,videoId:v.video_id,audio:remote}})).result;
+      }
+      if(!['matched','rejected'].includes(judgment?.verdict))throw Error('AGENT_PRIMARY_QUALIFICATION_PENDING');
+      agent.qualified.set(v.video_id,{video_id:v.video_id,cached,judgment});return judgment;
+    };
+    const qualificationReadback=async input=>{
+      const rows=await queue('inspect_videos',{video_ids:[input.video_id]}),r=agent.qualified.get(input.video_id);
+      if(!r||!Array.isArray(rows)||rows.length!==1||rows[0].judgment_status!==r.judgment.verdict)throw Error('AGENT_PRIMARY_QUALIFICATION_READBACK_MISSING');
+      r.readback=rows[0];if(r.judgment.verdict==='matched'&&!qualified.some(v=>v.video_id===input.video_id))qualified.push(leased.find(v=>v.video_id===input.video_id));return rows[0];
+    };
+    const settle=async()=>{
+      const last=op=>outcomes.filter(row=>row.op===op).at(-1)?.result;
+      if(activity.key==='preflight'){
+        if(!agent.facts.account_verified)throw Error('COMPANY_ACCOUNT_IDENTITY_UNVERIFIED');return {...agent.facts,douyin_id:state.account};
+      }
+      if(activity.key==='source')return {sources:agent.sources,source_count:agent.sources?.length||0};
+      if(activity.key==='collect_videos'){
+        const videos=[...agent.videos.values()],ids=videos.map(v=>v.videoId),actual=await queue('inspect_videos',{video_ids:ids});
+        const missing=ids.filter(id=>!actual?.some(r=>r.video_id===id&&r.line_key===lineRoutes.routeOf(line).key)).length;
+        const counts={sources:agent.sources?.length||0,sources_succeeded:agent.filters.length?1:0,source_failed:0,cards:agent.grid?.length||0,attempted:agent.attempts,opened:agent.attempts,linked:agent.native.size,persisted:videos.length,created:videos.filter(v=>v.inserted).length,reused:videos.filter(v=>!v.inserted).length,duplicate:agent.captures.length-videos.length,failed:0,screens:agent.grid?1:0,missing_identity:0,non_video:0,relocation_skipped:0,zero_comments:agent.zeroComments.length};
+        const d=agent.discoveryInput,request={...(d?{schema_version:d.schema_version,max_attempts:d.max_attempts,max_candidates:d.max_candidates,max_screens:1,source_sha256:d.source_sha256}:{}),keywords:agent.sources,source_kind:'keyword',sort:scope.discovery_filters?.sort||env.LEADGEN_SORT||'latest',time_layer:scope.discovery_filters?.time_layer||env.LEADGEN_TIME_LAYER||'six_months',location:scope.discovery_filters?.location||env.LEADGEN_LOCATION||'same_city',target_count:scope.limit,max_duration_s:Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||2400)};
+        const stop_reason=videos.length>=scope.limit?'limit_reached':agent.attempts>=(d?.max_attempts||d?.max_candidates||scope.limit)?'attempt_limit_reached':'agent_stopped';
+        agentSave('discovery-progress.json',{run,profile,request,observed_at:new Date().toISOString(),counts,videos,captures:agent.captures,zero_comment_candidates:agent.zeroComments,pending_capture:null,failures:[],known_gaps:[],relocation_reveals:[],identity_enrichments:[],stop_reason,all_results_scanned:false});
+        let outcome={request,counts,videos,captures:agent.captures,failures:[],known_gaps:[],stop_reason,all_results_scanned:false,source_completed:Number(agent.filters.length>0&&!!agent.grid),filter_invocations:agent.filters.length,persisted:counts.created,candidates:videos.length,videos_pushed:counts.created,video_manifest_readback_failures:missing,manifest_verified:Number(missing===0),...(missing||!agent.filters.length||stop_reason==='agent_stopped'?{status:'partial'}:{})};
+        if(discoveryScope){outcome=await discoveryScope.finish(outcome);state.discoveryCleanupEvidence=outcome;discoveryClosed=true;await discoveryScope.close();discoveryScope=null;}
+        return outcome;
+      }
+      if(activity.key==='dedup'){if(!agent.intake)throw Error('AGENT_PRIMARY_UPSTREAM_READBACK_MISSING');return agent.intake;}
+      if(activity.key==='qualification'){
+        const {recordQualificationResult}=await import('./leadgen-agent-artifacts.mjs');
+        return recordQualificationResult({runDir:env.WFR_RUN_DIR,scope:{run,source_commit:sourceCommit,company_id:state.companyConfig?.company_id,company_version:state.companyConfig?.version},leased,results:[...agent.qualified.values()]});
+      }
+      if(activity.key==='collection'){
+        const {recordCollectionResult}=await import('./leadgen-agent-artifacts.mjs');
+        let result=recordCollectionResult({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:{run,run_id:state.run_id,source_commit:sourceCommit,line,line_key:lineRoutes.routeOf(line).key,source_run:env.LEADGEN_SOURCE_RUN,profile,serial,company_binding:state.recipientCompanyBinding},samplingInput:sampleInput,qualifiedVideoIds:qualified.map(v=>v.video_id),videos:[...agent.collections.values()]});
+        if(collectionScope){result=await collectionScope.finish(result);state.collectionReturnedEvidence=result;await collectionScope.close();collectionScope=null;}
+        return result;
+      }
+      if(activity.key==='scoring'){
+        const readback=last('score_readback'),review=last('policy_review'),exclusion=last('score_exclusion_readback');
+        const ids=[...agent.scored],excluded_ids=[...agent.excluded];
+        if(!agent.scoreScope||!readback||readback.verified!==true||ids.some(id=>!readback.ids?.includes(id))||ids.length&&review?.verified!==true||excluded_ids.length&&exclusion?.verified!==true)throw Error('AGENT_PRIMARY_SCORE_READBACK_MISSING');
+        agentSave(`${run}-scoring-readback.json`,readback);agentSave(`${run}-policy-review.json`,review||{verified:excluded_ids.length>0,rows:[]});
+        if(exclusion)agentSave(`${run}-exclusion-readback.json`,exclusion);
+        return {scored:ids.length,ids,excluded:excluded_ids.length,excluded_ids,scoring_readback_failures:readback.failures||0,exclusion_readback_failures:exclusion?.failures||0,policy_review_failures:review?.verified===true||ids.length===0&&excluded_ids.length>0?0:1,...(!ids.length&&!excluded_ids.length?{status:'empty'}:{})};
+      }
+      if(activity.key==='mark_leads'){
+        const marked=last('mark_leads'),readback=last('mark_readback'),bridge=last('bridge_outreach'),bridgeReadback=last('bridge_readback');
+        if(!marked||readback?.verified!==true||!bridge||bridgeReadback?.verified!==true)throw Error('AGENT_PRIMARY_MARK_READBACK_MISSING');
+        agentSave(`${run}-mark_leads-readback.json`,readback);agentSave(`${run}-bridge-readback.json`,bridgeReadback);
+        return {...marked,bridge,mark_leads_readback_failures:readback.failures||0,bridge_readback_failures:(bridgeReadback.failures||0)+(bridge.verified===false?1:0),...(bridge.verified===false?{status:'partial'}:{})};
+      }
+      if(activity.key==='cleanup'){
+        if(!agent.facts.close_stdout||!agent.facts.desktop_stdout||!agent.facts.cleanup_png||!agent.facts.cleanup_xml)throw Error('AGENT_PRIMARY_CLEANUP_NATIVE_MISSING');
+        if(env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'){
+          const expected={run,run_id:state.run_id,source_commit:sourceCommit,profile,serial};
+          const proof=captureCleanupReadback({runDir:env.WFR_RUN_DIR,evidenceRoot,scope:expected,close_stdout:agent.facts.close_stdout,desktop_stdout:agent.facts.desktop_stdout,pngFile:agent.facts.cleanup_png,xmlFile:agent.facts.cleanup_xml,evidenceId:`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`});
+          if(!verifyCleanupReadback({runDir:env.WFR_RUN_DIR,scope:expected,digest:proof.digest}))throw Error('CLEANUP_NATIVE_READBACK_INVALID');agent.facts.cleanup_proof=proof;
+        }else{
+          const {verifyAgentDesktopNative}=await import('./discovery-cleanup-readback.mjs');
+          const pngStat=lstatSync(agent.facts.cleanup_png);
+          if(!pngStat.isFile()||pngStat.isSymbolicLink()||pngStat.size>10*1024*1024||realpathSync(resolve(agent.facts.cleanup_png,'..'))!==realpathSync(evidenceRoot))throw Error('AGENT_PRIMARY_NATIVE_FILE_INVALID');
+          const png=readFileSync(agent.facts.cleanup_png),xml=readNative(agent.facts.cleanup_xml);
+          verifyAgentDesktopNative(agent.facts.close_stdout,agent.facts.desktop_stdout,xml,png);
+          agentSave('agent-cleanup-readback.json',{run_id:state.run_id,source_commit:sourceCommit,profile,serial,close_stdout:agent.facts.close_stdout,desktop_stdout:agent.facts.desktop_stdout,png_sha256:createHash('sha256').update(png).digest('hex'),xml_sha256:createHash('sha256').update(xml).digest('hex')});
+        }
+        await discoveryScope?.seal();return {close_app:true,close_app_attempts:1,safe_desktop:true,safe_desktop_visible:1,lock_released:0,no_lock:false,cleanup_readback_verified:1,failures:[]};
+      }
+      throw Error('AGENT_PRIMARY_RESULT_ADAPTER_UNAVAILABLE');
+    };
+    const release=async()=>{
+      if(activity.key!=='cleanup'||state.executionUnknown||!agent.facts.cleanup_proof&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery')throw Error('AGENT_PRIMARY_CLEANUP_UNVERIFIED');
+      for(const v of leased){const r=await queue('release_video',{video_id:v.video_id});if(r.released!==true)throw Error('AGENT_PRIMARY_VIDEO_RELEASE_UNVERIFIED');}
+      const raw=await phone('lock-release',run);if(!raw.startsWith('lock=released'))throw Error('AGENT_PRIMARY_LOCK_RELEASE_UNVERIFIED');locked=false;
+      const centralReleased=await getCentral().release();if(!centralReleased)throw Error('AGENT_PRIMARY_CENTRAL_RELEASE_UNVERIFIED');
+      appendFileSync(join(env.WFR_RUN_DIR,'central-lock-events.jsonl'),JSON.stringify({event:'released',task_id:taskId,run_id:state.run_id,device_name:serial,observed_at:new Date().toISOString()})+'\n',{mode:0o600});
+      await discoveryScope?.close();discoveryScope=null;await collectionScope?.close();collectionScope=null;agent.facts.released=true;
+      return {lock_released:1,no_lock:true,central_lock_released:1,central_lock_task_id:taskId,central_lock_run_id:state.run_id,...(agent.facts.cleanup_proof?{cleanup_readback_digest:agent.facts.cleanup_proof.digest}:{})};
+    };
+    const tools=createLeadgenAgentTools({scope,runDir:env.WFR_RUN_DIR,primitives:{assertResources:assertAgentScope,prepare:prepareAgentResources,inspect:async()=>({account:state.account||null,company:state.company_config||null,leased_videos:leased,qualified_video_ids:qualified.map(v=>v.video_id),sources:agent.sources,cards:agent.grid||[],score_scope:agent.scoreScope,
+      native_video_candidates:[...agent.native.values()].map(({metrics,...video})=>({...video,metrics:{likes:metrics.likes,comment_total:metrics.comment_total,comment_tier:metrics.comment_tier}})),
+      native_comment_receipts:[...agent.comments].map(([native_receipt,p])=>({native_receipt,video_id:p.video_id,douyin_id:p.row.douyinId,nickname:p.row.nickname,comment_body:p.row.commentBody,historical_verified:!!p.history})),
+      panel_session_available:!!agent.panelSession&&agent.panelSession.video_id===agent.currentVideo?.video_id,verified_detail_video_id:agent.detailIdentity?.video_id||null,
+      business_input_examples:{discover:{video:{videoId:'从native_video_candidates选择'}},collect_partial:{video_id:'本轮合格VID',video_url:'本轮原链接',comments:[{native_receipt:'本工具返回的UUID'}],history:[]},sample_readback:{video_id:'同VID',video_url:'同原链接',rows:[]}},
+      phone_arguments:{'open-search':['URL编码的冻结关键词'],'search-time-layer':[],'search-video-tab':[],'search-video-cards':[],'tap-evidence':['新鲜cards.x','新鲜cards.y'],'swipe-evidence':['up或down；server按真实评论列表派生手势'],'current-video-link':[],'open-video':['本轮已领VID'],'open-comments':[],'commenter-identity':['新鲜comment.x','新鲜comment.y','comment.nickname_b64'],'ui-evidence':[],'snapshot-evidence':[],'set-playback-speed':['3.0'],'record-start':[],'record-status':[],'record-stop':[],'record-extract-audio':[],'close-app':[],'return-safe-desktop':[]},
+    }),
+      queue:primitiveQueue,validateInput,keywords:async()=>agent.sources,verifyUpstream:async()=>agent.intake=await verifyAgentUpstream({env,state,queue,sampleInput,profile,serial,line,run}),qualify,qualificationReadback,settle,
+      evidenceId:command=>activity.key==='cleanup'?`${run}-${env.WFR_ATTEMPT}-cleanup-desktop`:activity.key==='collection'&&agent.currentVideo?`${run}-v${agent.currentVideo.video_id}-collection-screen${++agent.screenIndex}-comments`:null,
+      validatePhone,phone:primitivePhone,release,resourceUnknown:()=>{state.executionUnknown=true;},heartbeat:async()=>{
+        await assertAgentScope(scope);
+        if(locked){const raw=(await phone('lock-refresh',run)).trim().split(/\s+/),fields=Object.fromEntries(raw.map(token=>token.split('=')));
+          if(raw.length!==3||fields.lock!=='refreshed'||fields.owner!==run||!/^\d+s$/.test(fields.ttl||''))throw Error('AGENT_PRIMARY_LOCAL_LEASE_UNVERIFIED');}
+        if(activity.key!=='cleanup')for(const v of leased){const result=await queue('renew_video',{video_id:v.video_id});if(result?.renewed!==true)throw Error('AGENT_PRIMARY_VIDEO_LEASE_UNVERIFIED');}
+        return {renewed:true,video_ids:activity.key==='cleanup'?[]:leased.map(v=>v.video_id)};
+      }}});
+    agent.tools.set(activity.key,tools);return tools;
+  };
+  return {state,preflight,createAgentTools,quarantineResources,beginCollectionReadback:async evidence=>{
       collectionScope=await startCollectionReturnedScope({evidence,context:returnedContext(),purpose:'readback'});
       return async()=>{try{await collectionScope.close();}finally{collectionScope=null;}};
     },handoffPhone:async(command,...args)=>{

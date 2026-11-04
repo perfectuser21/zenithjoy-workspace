@@ -32,6 +32,17 @@ test('纯Skill执行声明与冻结摘要共同进入真实POST及GET绑定；�
   else{const result=await action;assert.equal(posted.actor,'runtime:phone-adb-controller:agent-v1');assert.equal(posted.runtime_snapshot_sha256,digest(body));assert.equal(result.binding.actor,posted.actor);assert.equal(readBinding(dir,'a1').actor,posted.actor);}
  }
 });
+test('自洽地篡改本地请求与ACK的actor不能切换冻结模式，中央冲突字段拒绝',async t=>{
+ const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));let posted;
+ await bindRun({dir,runId:'original-code-run',brainUrl:'https://fixture.invalid',request:async(_url,input)=>{if(input)posted=input;return {binding:{id:'binding',run_id:'original-code-run__a1',...posted}};}});
+ for(const suffix of ['request','ack']){const file=join(dir,'run-bindings','a1.'+suffix+'.json'),value=JSON.parse(readFileSync(file));(suffix==='request'?value.body:value.binding).actor='runtime:phone-adb-controller:agent-v1';writeFileSync(file,JSON.stringify(value));}
+ assert.throws(()=>readBinding(dir,'a1'),/EXECUTION_MODE_BINDING_ACTOR_MISMATCH/);
+ for(const field of ['actor','runtime_snapshot_sha256']){
+  const fresh=fixture();t.after(()=>rmSync(fresh,{recursive:true,force:true}));let input;
+  await assert.rejects(bindRun({dir:fresh,runId:'conflict-run',brainUrl:'https://fixture.invalid',request:async(_url,body)=>{if(body)input=body;return {binding:{id:'binding',run_id:'conflict-run__a1',...input,payload:{...input,[field]:'different'}}};}}),/ACK内容不匹配/);
+  assert.equal(existsSync(join(fresh,'run-bindings/a1.ack.json')),false);
+ }
+});
 test('public ACK 显式空task经真实createHandlers保留空身份，缺键不得冒充空绑定',async t=>{
  for(const task of [null,undefined]){
   const dir=fixture();t.after(()=>rmSync(dir,{recursive:true,force:true}));let posted;
@@ -96,6 +107,7 @@ const modules={
  './activity-commander.mjs':{runWorkflow:async options=>{await options.handlers.preflight();throw Error('unexpected preflight success');}},
  './leadgen-handlers.mjs':{createHandlers:options=>{result.task_own=Object.hasOwn(options,'taskId');result.task_is_null=options.taskId===null;return createHandlers({...options,execute:async(command,args,opts)=>{if(args[0]?.endsWith('/adb-existing-route.py'))return {code:0,stdout:'5042\\n',stderr:''};result.calls.push(command==='adb'?'adb-read-state':'controller');if(command==='adb')return {code:0,stdout:'device\\n',stderr:''};return execInput(command,args,opts);}});},parseCollection:()=>{}},
  './activity-skill-recovery.mjs':{createActivityRecovery:()=>()=>{}},
+ './activity-skill-executor.mjs':await import(pathToFileURL(root+'activity-skill-executor.mjs')),
  './collection-phone-scope.mjs':await import(pathToFileURL(root+'collection-phone-scope.mjs')),
  './discovery-phone-scope.mjs':await import(pathToFileURL(root+'discovery-phone-scope.mjs')),
  './commander-model-receipt.mjs':await import(pathToFileURL(root+'commander-model-receipt.mjs')),

@@ -323,6 +323,9 @@ jobs:
       - name: node --test scripts/openclaw + services/phone-adb-controller + deploy-phone-adb-controller workflow 契约测试
         # 正式Pilot会校验陪跑Skill固定版本；合并前同样执行，避免旧正例只在发布时暴露。
         run: node --test --test-shard=${{ matrix.shard }}/3 scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs scripts/product-map/__tests__/leadgen-workflow-skill.test.js
+      - name: Agent 主执行与 Commander 无设备 smoke
+        if: matrix.shard == 1
+        run: bash .github/workflows/scripts/smoke/agent-first-leadgen-smoke.sh
       # Independent full recovery suite: one matrix leg is sufficient; its failure
       # still fails openclaw-scripts-test and the required L3 aggregate.
       - name: Durable publish recovery core

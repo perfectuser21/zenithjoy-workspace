@@ -30,8 +30,14 @@ test('Agent-first缺独立验收不能派Agent或接受自报成功',async()=>{
 test('Agent-first未证明终止时隔离并禁止后续Skill清场',async()=>{
  const calls=[];let quarantine=0;
  const result=await runWorkflow(base({executeAgent:async activity=>{calls.push(activity.key);return {status:'failed',execution_stopped:false,reason:'official_child_terminal_missing'};},quarantine:async()=>{quarantine++;return {verified:true};}}));
- assert.notEqual(result.status,'completed');assert.deepEqual(calls,['collect_videos']);assert.equal(quarantine,1);
+ assert.equal(result.status,'needs_review');assert.deepEqual(calls,['collect_videos']);assert.equal(quarantine,1);
  assert.equal(result.results[0].execution_stopped,false);
+});
+
+test('旧Code未知执行仍保留failed收口和隔离，不被Agent needs_review新语义改写',async()=>{
+ let cleanup=0,quarantine=0;
+ const result=await runWorkflow(base({context:{...context,execution_mode:'code'},handlers:{collect_videos:async()=>{throw Object.assign(Error('EXECUTION_DEADLINE'),{executionStopped:false});},cleanup:async()=>{cleanup++;return {};}},quarantine:async()=>{quarantine++;return {verified:true};}}));
+ assert.equal(result.status,'failed');assert.equal(cleanup,0);assert.equal(quarantine,1);assert.equal(result.results[0].execution_stopped,false);
 });
 
 test('Agent-first不能扩展至104发送路径',async()=>{

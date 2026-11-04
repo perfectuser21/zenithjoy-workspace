@@ -2,7 +2,7 @@
 import { existsSync,readFileSync,mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { readFrozen,digest } from './runtime-definition.mjs';
+import { readFrozen,digest,executionActor } from './runtime-definition.mjs';
 import { assertRuntimeHost } from './runtime-host.mjs';
 import { atomic } from './runtime-outbox.mjs';
 export function expectedPath(frozen,stepSpec){
@@ -21,7 +21,10 @@ export function expectedPath(frozen,stepSpec){
 }
 function verifyBinding(binding,record){
  if(!binding?.id || binding.run_id!==record.run_id)throw Error('运行绑定ACK身份不匹配');
- for(const [key,value] of Object.entries(record.body))if(digest(binding[key]??binding.payload?.[key])!==digest(value))throw Error(`运行绑定ACK内容不匹配: ${key}`);
+ for(const [key,value] of Object.entries(record.body)){
+  if(Object.hasOwn(binding,key)&&Object.hasOwn(binding.payload||{},key)&&digest(binding[key])!==digest(binding.payload[key]))throw Error(`运行绑定ACK内容不匹配: ${key} (顶层与payload冲突)`);
+  if(digest(binding[key]??binding.payload?.[key])!==digest(value))throw Error(`运行绑定ACK内容不匹配: ${key}`);
+ }
  for(const key of ['task_id','task_run_id']){
   const top=Object.hasOwn(binding,key),nested=Object.hasOwn(binding.payload||{},key);
   if(top&&binding[key]===undefined||nested&&binding.payload[key]===undefined
@@ -38,6 +41,7 @@ function verifyBinding(binding,record){
 export function readBinding(dir,attempt,frozen=readFrozen(dir)){
  const record=JSON.parse(readFileSync(join(dir,'run-bindings',`${attempt}.request.json`),'utf8'));
  if(record.runtime_snapshot_sha256!==frozen.snapshot_sha256)throw Error('运行绑定冻结字节摘要不匹配');
+ if(record.body.actor!==executionActor(frozen))throw Error('EXECUTION_MODE_BINDING_ACTOR_MISMATCH');
  const ack=JSON.parse(readFileSync(join(dir,'run-bindings',`${attempt}.ack.json`),'utf8'));
  return verifyBinding(ack.binding,record);
 }
@@ -54,7 +58,7 @@ export async function bindRun({dir,runId,brainUrl,request,ledgerPath=new URL('./
  const attempt=reservation.attempt_key;if(!/^a[1-9][0-9]*$/.test(attempt))throw Error('运行attempt身份无效');
  const file=join(folder,`${attempt}.request.json`),ackPath=join(folder,`${attempt}.ack.json`),blocked=join(folder,`${attempt}.blocked.json`);
  if(existsSync(blocked))throw Error('运行绑定冲突blocked');
- const body={release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,workflow_id:frozen.workflow_version.payload.workflow_id,workflow_definition_version_id:frozen.workflow_version.id,snapshot_sha256:frozen.workflow_version.payload_sha256,runtime_snapshot_sha256:frozen.snapshot_sha256,source_kind:'external',external_origin:`zenithjoy:${host}`,attempt_key:attempt,actor:'runtime:phone-adb-controller',expected_path:expectedPath(frozen,JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8')))};
+ const body={release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,workflow_id:frozen.workflow_version.payload.workflow_id,workflow_definition_version_id:frozen.workflow_version.id,snapshot_sha256:frozen.workflow_version.payload_sha256,runtime_snapshot_sha256:frozen.snapshot_sha256,source_kind:'external',external_origin:`zenithjoy:${host}`,attempt_key:attempt,actor:executionActor(frozen),expected_path:expectedPath(frozen,JSON.parse(readFileSync(join(dir,'step-dod.json'),'utf8')))};
  const run_id=`${runId}__${attempt}`,endpoint=`${(brainUrl||'').replace(/\/$/,'')}/api/brain/runs/${encodeURIComponent(run_id)}/definition`;
  let record={run_id,endpoint,body,runtime_snapshot_sha256:frozen.snapshot_sha256};
  if(existsSync(file)){

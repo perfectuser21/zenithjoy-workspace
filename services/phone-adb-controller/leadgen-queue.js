@@ -446,6 +446,9 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(op==='bridge_readback')return require('./leadgen-outreach-bridge.js').readbackBridge(pool,input);
   if(op==='bridge_outreach')return require('./leadgen-outreach-bridge.js').bridgeOutreach(pool,input,deps);
   if (op === 'mark_leads') {
+    const exactIds=Object.hasOwn(input,'ids')?input.ids:null;
+    if(Object.hasOwn(input,'ids')&&(!Array.isArray(exactIds)||exactIds.length>50||new Set(exactIds).size!==exactIds.length||exactIds.some(id=>typeof id!=='string'||!uuid.test(id))))throw Error('POLICY_MARK_IDS_INVALID');
+    if(exactIds?.length===0)return {marked:0,created:0,repeats:0,blocked:0,ids:[],lead_ids:[],recipient_calls:{model_call_count:0,passed:0,excluded:0,unknown:0}};
     const cursor=input.cursor??null;
     if(cursor!==null&&(!cursor||typeof cursor!=='object'||Array.isArray(cursor)
       ||Object.keys(cursor).sort().join(',')!=='collected_at,id,line,run,source_run'
@@ -467,15 +470,17 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
           AND ($2::text IS NULL OR harvest_batch=$2 OR id=ANY($6::uuid[]))
           AND id<>ALL($3::uuid[])
           AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
+          ${exactIds?'AND id=ANY($7::uuid[])':''}
           ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`
           :`SELECT * FROM zenithjoy.leadgen_comments
           WHERE line_key=$1 AND process_status='待分拣' AND relevance IS NOT NULL
           AND ($2::text IS NULL OR harvest_batch=$2)
           AND id<>ALL($3::uuid[])
           AND ($4::timestamptz IS NULL OR (collected_at,id)>($4::timestamptz,$5::uuid))
+          ${exactIds?'AND id=ANY($6::uuid[])':''}
           ORDER BY collected_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`,
-          sampledHistoryIds.length?[lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null,sampledHistoryIds]
-            :[lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null])).rows[0];
+          sampledHistoryIds.length?[lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null,sampledHistoryIds,...(exactIds?[exactIds]:[])]
+            :[lineKey,sourceRun,seen,cursor?.collected_at||null,cursor?.id||null,...(exactIds?[exactIds]:[])])).rows[0];
         if (!row) return null;
         seen.push(row.id);
         if(row.collected_at&&uuid.test(row.id))lastCursor={line:lineKey,run,source_run:sourceRun||null,collected_at:new Date(row.collected_at).toISOString(),id:row.id};

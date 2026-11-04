@@ -205,6 +205,12 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 ### Runner vs Commander
 
+在原正式启动输入上设置 `LEADGEN_EXECUTION_MODE=agent`，可选择 101、102、103 的 Agent 主执行路径。执行模式、任务身份、输入范围与预算冻结到本 run，不能在续跑时切换为 Code，也不适用于 104。原 Code 路径保持独立。
+
+Agent 主执行时，每个 Activity 加载自己的冻结 Skill，通过当前活动允许的手机、录音、提交和读回原语完成工作；不会调用原业务 handler 或 `resume`。底层控制器、事务、资源管理和规则校验仍由代码提供。`inspect`、`phone`、`business` 只使用本次原请求给出的入口，Agent 不创建绑定或直接调用内部队列。
+
+新路径的结果来自服务端持久工具回执和原始证据，由原独立校验确认。Skill 文件、源码测试或 Agent 的完成文字都不构成实机通过；101 视频、102 评论、103 评分及精确来源读回需要分别提供真实运行证据。
+
 获客入口复用 Cecelia 公共 Activity Runner 的固定源副本；同步工具及 `common-runner/source.json` 记录来源与摘要。`leadgen-runner-adapter.mjs` 只连接业务执行、独立读回与手机安全证据，顺序、恢复次数和状态路由统一由公共 Runner 执行。
 
 Commander 在开始时唤醒、结束时休眠，只观察、答疑、纠偏和请求中止 Agent。不可达只记录 `commander_status=unavailable`；它的回复不能判定状态、改变顺序或批准发送。旧 `*_commander_verified` 可用性硬闸已移除，身份、来源、业务读回及发送安全闸保留。检查失败可在原预算内指导一次 Skill 接手，仍由独立检查再次判定；失败进入 `needs_review`。原代码失败与 Skill 救回分别记录，接手不覆盖失败事实。

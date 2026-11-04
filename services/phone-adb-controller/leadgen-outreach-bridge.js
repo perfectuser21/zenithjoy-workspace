@@ -59,15 +59,19 @@ function buildOrderFields(row,route,types,options){
  'AI判断理由':`[${p.intent_grade}级] `+(p.judgment_reason||''),'状态':'待触达','发送状态':'未发送','搜索账号':'池转入(自动判定)','采集时间':time,'合规核验状态':bridgeMarker(row)};
 }
 async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,reviewPolicy}={}){
+ const exactIds=Object.hasOwn(input,'comment_ids')?input.comment_ids:null;
+ if(Object.hasOwn(input,'comment_ids')&&(!Array.isArray(exactIds)||exactIds.length>50||new Set(exactIds).size!==exactIds.length||exactIds.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))))throw Error('BRIDGE_COMMENT_IDS_INVALID');
+ if(exactIds?.length===0)return {published:0,protected:0,excluded:0,unknown:0,ids:[],comment_ids:[],verified:true};
  const deadlineAt=Date.now()+Math.max(1,Math.min(165000,Number(input.remaining_ms)||165000));
  const route=routeOf(input.line),outreach=require('./leadgen-outreach-orders.js'),sourceRun=input.source_run??null;
  return (lock||outreach.withOrderLock)(route.key,async()=>{
   const snapshot=await (freezeCompanyConfig||require('./company-config-lib.js').freezeCompanyConfig)(pool,{lineHint:route.key,runId:input.run,sourceRun:input.source_run,step:'103'});
   const result={published:0,protected:0,excluded:0,unknown:0,ids:[],verified:true};
   const limit=Math.max(1,Math.min(50,Number(input.limit)||10));
-  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND ($3::text IS NULL OR source_run=$3) AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,1000,sourceRun])).rows;
+  const rows=(await pool.query(`SELECT * FROM zenithjoy.leadgen_bridge_outbox WHERE line_key=$1 AND ($3::text IS NULL OR source_run=$3) AND (state IN ('pending','attempted') OR (state='unknown' AND attempted_at IS NOT NULL)) ${exactIds?'AND comment_id=ANY($4::uuid[])':''} ORDER BY CASE WHEN state='pending' THEN 0 ELSE 1 END,created_at,id LIMIT $2`,[route.key,1000,sourceRun,...(exactIds?[exactIds]:[])])).rows;
   let api=client,handled=0;
   for(const row of rows){if(handled>=limit)break;
+   if(exactIds&&!exactIds.includes(row.comment_id)){result.unknown++;result.verified=false;continue;}
    if(Date.now()>=deadlineAt){result.verified=false;result.unknown++;break;}
    if(!matchesRequestedSource(row,sourceRun)){result.unknown++;result.verified=false;continue;}
    if(row.qualification_status!=='passed'){
@@ -102,6 +106,7 @@ async function bridgeOutreach(pool,input,{client,lock,freezeCompanyConfig,review
    if(back.length===1&&fieldsMatch(row,back[0])){await pool.query("UPDATE zenithjoy.leadgen_bridge_outbox SET state='confirmed',feishu_record_id=$3,updated_at=now() WHERE line_key=$1 AND id=$2",[route.key,row.id,back[0].record_id]);result.published++;}
    else{result.unknown++;result.verified=false;}
   }
+  if(exactIds)result.comment_ids=result.ids.map(id=>{const row=rows.find(row=>row.id===id);if(!row||!exactIds.includes(row.comment_id))throw Error('BRIDGE_COMMENT_SCOPE_INVALID');return row.comment_id;});
   return result;
  });
 }

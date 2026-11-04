@@ -1,7 +1,7 @@
 // 101 collect预算与派发共用；其它流程命令、锁及既有限时保持。
 import {join} from 'node:path';
 import {discoveryCommandBudgetMs,discoveryTapBudgetMs} from './discovery-phone-scope.mjs';
-export function createPhoneAction({env,state,profile,run,isLocked,isClosed,getScope,checked,nativeReceipt}){
+export function createPhoneAction({env,state,profile,run,isLocked,isClosed,getScope,checked,nativeReceipt,getAgentDeadline=()=>null}){
   return async(command,...args)=>{
     const locked=isLocked(),scope=getScope();
     const ctl=env.DOUYIN_PHONE_ADB||join(env.HOME,'.local/bin/douyin-phone-adb');
@@ -19,6 +19,11 @@ export function createPhoneAction({env,state,profile,run,isLocked,isClosed,getSc
           if(state.budgetDeadline-Date.now()<discoveryTapBudgetMs)throw Error('budget_exhausted');
           opts.discoveryMinimumRemainingMs=discoveryTapBudgetMs;
         }
+      }
+      const agentDeadline=getAgentDeadline();
+      if(agentDeadline!==null){
+        const remaining=agentDeadline-Date.now();if(!Number.isSafeInteger(agentDeadline)||remaining<=0)throw Error('budget_exhausted');
+        opts={...opts,timeoutMs:remaining};
       }
       return scope?checked(scope.zsh,['-f',ctl,...argv],opts):checked(ctl,argv,opts);
     };
