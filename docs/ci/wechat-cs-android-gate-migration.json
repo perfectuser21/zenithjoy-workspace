@@ -103,7 +103,7 @@
   "limits": [
     "83 offline tests exercise real watcher/bridge/phone budget/recovery with isolated phone/gateway boundaries; not fresh device delivery or model output evidence.",
     "No device/UI/login operation; no runtime source, packaging bytes or production settings changed.",
-    "Nightly/release admission intentionally unchanged, separately owned by root."
+    "Old Windows CS Nightly bubble job and its sole sparse/mutex guards are retired separately in docs/ci/retired-workflows/windows-cs-nightly-retirement.json; current Douyin, generic Android and mandatory Brain same-SHA S2/S3 release acceptance remain."
   ],
   "verification": {
     "test_first_old_configuration": {
