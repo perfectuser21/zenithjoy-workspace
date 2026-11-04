@@ -38,8 +38,12 @@ def brain(home,path):
     request=Request('http://100.79.41.61:5221'+path,headers={'Authorization':'Bearer '+token(home)})
     with urlopen(request,timeout=10) as r:
         need(r.status==200,'BRAIN_HTTP');return json.loads(r.read(8*1024*1024))
-def task(home):
-    t=brain(home,'/api/brain/tasks/'+m.TASK['id']);return m.verify_task(t.get('task',t))
+def task(home,proof=None):
+    t=brain(home,'/api/brain/tasks/'+m.TASK['id'])
+    if proof is not None and proof.get('version')==2:
+        need(m.ms(proof['task_lease_epoch']['heartbeat_lease_until'])>now_ms(),'CURRENT_TASK_LEASE_EXPIRED')
+        return resumed_task(t,proof['current_maintenance_claim'])
+    return m.verify_task(t.get('task',t))
 # 历史原件逐byte保留；它们证明存在断档，不能作为连续租约或OS停止证明。
 HISTORY_SHA256={
     'history-last.json':'8fc4f4c3d7e9034f0f15164083ad377ff971456aa8f950ce3f5f97f2653a7b4f',
@@ -48,6 +52,71 @@ HISTORY_SHA256={
 GAP_FILES={'history-last.json','history-first-null.json','old-task.json','maintenance-task.json',
            'locks-before.json','acquire-request.json','acquire-ack.json','locks-after.json','locks-confirm.json'}
 LEASE_KEYS=('device_name','locked_by','locked_at','expires_at')
+RESUME_FILES={'maintenance-blocked.json','maintenance-claim-request.json','maintenance-claim-ack.json',
+              'maintenance-resume-request.json','maintenance-resume-ack.json','maintenance-task-confirm.json',
+              'maintenance-heartbeat-request.json','maintenance-heartbeat-ack.json'}
+BLOCKED_SHA256='565f77f3b6ee1311a3470b1d8ece0c04c381dbd16cce0b1e2a740c32bee1d223'
+RESUME_CLAIMER='headed-102-maintenance-resume'
+STALE_REASON='headed session stale: no initiative_runs row past grace — 降级 blocked（可恢复），非 failed'
+
+def task_document(value):
+    need(isinstance(value,dict),'TASK_RECORD');result=value.get('task',value)
+    need(isinstance(result,dict),'TASK_RECORD');return result
+
+def resumed_task(value,expected):
+    current=task_document(value);payload=current.get('payload')
+    need(isinstance(payload,dict) and m.sha(m.canonical(payload))==expected['payload_sha256']
+         and all(current.get(k)==expected[k] for k in
+                 ['id','status','claimed_by','claimed_at','executor_kind','project_id']),'CURRENT_TASK_CLAIM')
+    return dict(expected)
+
+def resume_authority(documents,files):
+    need(files['maintenance-blocked.json']==BLOCKED_SHA256,'BLOCKED_TASK_BYTES')
+    blocked=task_document(documents['maintenance-blocked.json']);payload=blocked.get('payload')
+    need(blocked.get('id')==m.TASK['id'] and blocked.get('project_id')==m.TASK['project_id']
+         and blocked.get('status')=='blocked' and blocked.get('claimed_by') is None and blocked.get('claimed_at') is None
+         and blocked.get('blocked_at')=='2026-11-04T06:35:29.529Z'
+         and blocked.get('updated_at')=='2026-11-04T06:35:29.529Z'
+         and blocked.get('error_message')==STALE_REASON,'BLOCKED_TASK_STATE')
+    need(isinstance(payload,dict) and payload.get('headed_manual')=='true'
+         and payload.get('failed_run_id')==m.SCOPE['run_id'] and payload.get('source_commit')==m.SCOPE['source_commit']
+         and payload.get('scope')=={'line':'yuesheng','send':0,'profile':m.SCOPE['profile'],
+              'device_serial':m.SCOPE['serial'],'no_raw_sql_write':True,'no_shared_adb_restart':True,
+              'keep_original_failed_result':True,'do_not_reuse_original101_maintenance':True},'BLOCKED_TASK_SCOPE')
+    need(documents['maintenance-claim-request.json']=={'claimer':RESUME_CLAIMER,'executor_kind':'headed-session',
+              'lease_seconds':14400},'NEW_CLAIM_REQUEST')
+    ack=documents['maintenance-claim-ack.json'];claimed_at=ack.get('claimed_at');lease_until=ack.get('lease_until')
+    need(ack.get('id')==m.TASK['id'] and ack.get('claimed_by')==RESUME_CLAIMER
+         and ack.get('executor_kind')=='headed-session' and type(ack.get('lease_seconds')) is int
+         and ack['lease_seconds']==14400 and ack.get('on_lease_expire')=='auto'
+         and isinstance(claimed_at,str) and isinstance(lease_until,str)
+         and m.ms(blocked['updated_at'])<m.ms(claimed_at)<=now_ms()
+         and 14400000<=m.ms(lease_until)-m.ms(claimed_at)<=14460000,'NEW_CLAIM_ACK')
+    current={'id':m.TASK['id'],'status':'in_progress','claimed_by':RESUME_CLAIMER,'claimed_at':claimed_at,
+             'executor_kind':'headed-session','project_id':m.TASK['project_id'],
+             'payload_sha256':m.sha(m.canonical(payload))}
+    need(documents['maintenance-resume-request.json']=={'status':'in_progress'},'RESUME_REQUEST')
+    resumed=documents['maintenance-resume-ack.json']
+    need(resumed.get('success') is True and resumed.get('task_id')==m.TASK['id']
+         and resumed.get('status')=='in_progress' and resumed.get('completed_at') is None
+         and isinstance(resumed.get('updated_at'),str) and m.ms(resumed['updated_at'])>=m.ms(claimed_at),'RESUME_ACK')
+    for name in ['maintenance-task.json','maintenance-task-confirm.json']:
+        resumed_task(documents[name],current)
+    need(documents['maintenance-heartbeat-request.json']=={'claimer':RESUME_CLAIMER,'lease_seconds':14400},'HEARTBEAT_REQUEST')
+    heartbeat=documents['maintenance-heartbeat-ack.json'];expiry=heartbeat.get('lease_until')
+    need(heartbeat.get('ok') is True and type(heartbeat.get('lease_seconds')) is int and heartbeat['lease_seconds']==14400
+         and type(heartbeat.get('heartbeat_count')) is int and heartbeat['heartbeat_count']>=1 and isinstance(expiry,str)
+         and m.ms(expiry)>=m.ms(lease_until) and m.ms(expiry)>now_ms(),'HEARTBEAT_ACK')
+    return {'current_maintenance_claim':current,
+            'task_lease_epoch':{'task_id':m.TASK['id'],'claimer':RESUME_CLAIMER,'claimed_at':claimed_at,
+              'lease_seconds':14400,'initial_lease_until':lease_until,
+              'heartbeat_lease_until':expiry,'heartbeat_count':heartbeat['heartbeat_count']},
+            'blocked_task_sha256':files['maintenance-blocked.json']}
+
+def current_claim_fields(authorization):
+    if authorization.get('acquisition_gap',{}).get('version')!=2:return {}
+    return {k:authorization[k] for k in ['current_maintenance_claim','task_lease_epoch','blocked_task_sha256']}
+
 
 def now_ms():return int(time.time()*1000)
 def old_task(value):
@@ -79,11 +148,12 @@ def gap_evidence(path):
     need(stat.S_IMODE(path.lstat().st_mode)==0o600,'GAP_MANIFEST_MODE')
     raw=m.read(path);value=json.loads(raw)
     need(isinstance(value,dict),'GAP_MANIFEST')
-    need(raw==m.canonical(value) and value.get('version')==1
-         and value.get('kind')=='collection-review-new-isolation-after-gap-v1'
+    need(raw==m.canonical(value) and type(value.get('version')) is int and value['version'] in [1,2]
+         and value.get('kind')=='collection-review-new-isolation-after-gap-v'+str(value['version'])
          and value.get('scope')==m.SCOPE and value.get('maintenance')==m.TASK
          and value.get('continuous_central_isolation_proven') is False,'GAP_MANIFEST')
-    files=value.get('files');need(isinstance(files,dict) and set(files)==GAP_FILES,'GAP_FILES')
+    files=value.get('files');required=GAP_FILES|(RESUME_FILES if value['version']==2 else set())
+    need(isinstance(files,dict) and set(files)==required,'GAP_FILES')
     documents={}
     for name,digest in files.items():
         need(isinstance(digest,str) and re.fullmatch('[a-f0-9]{64}',digest),'GAP_DIGEST')
@@ -98,7 +168,10 @@ def gap_evidence(path):
     need(all(free.get(k) is None for k in ['locked_by','locked_at','expires_at'])
          and first['health']['timestamp']=='2026-11-04T06:32:47.413Z','GAP_FIRST_NULL')
     terminal=old_task(first['old102']);need(old_task(documents['old-task.json'])==terminal,'GAP_OLD_TASK')
-    maintenance=documents['maintenance-task.json'];m.verify_task(maintenance.get('task',maintenance))
+    authority={}
+    if value['version']==2:authority=resume_authority(documents,files)
+    else:
+        maintenance=documents['maintenance-task.json'];m.verify_task(maintenance.get('task',maintenance))
     request=documents['acquire-request.json']
     need(set(request)=={'device_name','locked_by','ttl_minutes'} and request['device_name']==m.SCOPE['serial']
          and request['locked_by']==m.TASK['id'] and type(request['ttl_minutes']) is int
@@ -109,6 +182,8 @@ def gap_evidence(path):
          and isinstance(lease['locked_at'],str) and isinstance(lease['expires_at'],str)
          and m.ms('2026-11-04T06:32:48Z')<m.ms(lease['locked_at'])<=now_ms()
          and m.ms(lease['expires_at'])-m.ms(lease['locked_at'])==request['ttl_minutes']*60000,'GAP_ACQUIRE_LEASE')
+    if value['version']==2:
+        need(m.ms(lease['locked_at'])>=m.ms(authority['current_maintenance_claim']['claimed_at']),'DEVICE_LEASE_BEFORE_NEW_CLAIM')
     before=lock_rows(documents['locks-before.json']);target=before[m.SCOPE['serial']]
     need(all(target.get(k) is None for k in ['locked_by','locked_at','expires_at']),'GAP_BEFORE_NOT_FREE')
     others={k:v for k,v in before.items() if k!=m.SCOPE['serial']}
@@ -116,7 +191,7 @@ def gap_evidence(path):
         after=lock_rows(documents[name]);target=after[m.SCOPE['serial']]
         need({k:target.get(k) for k in LEASE_KEYS}==lease and target.get('expired') is False,'GAP_ACQUIRE_READBACK')
         need({k:v for k,v in after.items() if k!=m.SCOPE['serial']}==others,'GAP_OTHER_DEVICE_DRIFT')
-    return {'version':1,'kind':value['kind'],'original_scope':dict(m.SCOPE),'maintenance':dict(m.TASK),
+    return {'version':value['version'],'kind':value['kind'],'original_scope':dict(m.SCOPE),'maintenance':dict(m.TASK),**authority,
             'continuous_central_isolation_proven':False,'old_task':terminal,
             'last_known_old_expires_at':last['expires_at'],'first_null_observed_at':'2026-11-04T06:32:48Z',
             'first_null_record_health_timestamp':first['health']['timestamp'],
@@ -219,13 +294,16 @@ def candidate(home, sha, release_id):
 def admission(home,sha,release_id,gap_path=None):
     need(home.is_absolute() and home.resolve()==home and home.is_dir() and not home.is_symlink(),'HOME')
     gap=gap_evidence(gap_path)
-    claim=task(home);old_task(brain(home,'/api/brain/tasks/'+m.SCOPE['task_id']))
+    claim=task(home,gap) if gap['version']==2 else task(home)
+    old_task(brain(home,'/api/brain/tasks/'+m.SCOPE['task_id']))
     barrier=quiet();lease=central(home,gap);installed=candidate(home,sha,release_id)
     original=home/'.local/share/zenithjoy/phone-candidate-runs'/m.SCOPE['source_commit']/'ledger'/m.SCOPE['run_id'].removesuffix('__a1')
     proof=m.verify_original(original);quiet_recorders(original);m.legacy_record(home)
-    need(task(home)==claim and quiet()==barrier and central(home,gap)==lease
+    current=task(home,gap) if gap['version']==2 else task(home)
+    need(current==claim and quiet()==barrier and central(home,gap)==lease
          and gap_evidence(gap_path)==gap,'ADMISSION_DRIFT')
-    return {'version':1,'purpose':'retire_exact_collection_review_owner','scope':m.SCOPE,'maintenance':claim,'original':proof,'candidate':installed,'automatic_barrier':barrier,'central_lease':lease,'acquisition_gap':gap},original
+    return {'version':1,'purpose':'retire_exact_collection_review_owner','scope':m.SCOPE,'maintenance':dict(m.TASK),'original':proof,'candidate':installed,'automatic_barrier':barrier,'central_lease':lease,'acquisition_gap':gap,
+            **({k:gap[k] for k in ['current_maintenance_claim','task_lease_epoch','blocked_task_sha256']} if gap['version']==2 else {})},original
 
 def private_directory(home):
     p=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
@@ -249,7 +327,7 @@ def snapshot_value(guards,authorization,identity):
             'tool':identity,'contract_sha256':identity['files']['collection-review-maintenance-contract.json'],
             'owner_inode':guards.target_identity,'legacy_entries':guards.legacy_snapshot,
             'legacy_historical_diff':m.legacy_diff(guards.legacy_snapshot),
-            'durable_historical_entries':m.CONTRACT['lock_state']['durable']}
+            'durable_historical_entries':m.CONTRACT['lock_state']['durable'],**current_claim_fields(authorization)}
 
 def saved_snapshot(directory,authorization,identity):
     path=directory/SNAPSHOT
@@ -285,6 +363,7 @@ def execute(action,home,sha,release_id,gap_path=None):
             need(saved.get('scope')==m.SCOPE and saved.get('maintenance')==m.TASK and saved.get('execution_stopped') is False
                  and saved.get('original_business_status')=='failed' and saved.get('admission_sha256')==m.sha(m.canonical(authorization))
                  and saved.get('inventory_snapshot_sha256')==m.sha(snapshot_raw),'PRE_RETIREMENT_SCOPE')
+            need(all(saved.get(k)==v for k,v in current_claim_fields(authorization).items()),'PRE_RETIREMENT_CURRENT_CLAIM')
             need(saved.get('owner_inode')==guards.target_identity and saved.get('retirement')=={'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,'before_sha256':m.sha(m.canonical(m.CONTRACT['lock_state']['durable'])),'after_sha256':m.sha(m.canonical(m.primitives.changed_inventory(m.CONTRACT['lock_state']['durable'],m.SCOPE['serial']+'.lock',m.ARCHIVE)))},'PRE_RETIREMENT_INODE_OR_CAS')
             desktop=saved['desktop'];need(desktop['home']['home'] is True and desktop['png_sha256']==m.sha(m.read(directory/'desktop.png'))
                  and desktop['xml_sha256']==m.sha(m.read(directory/'desktop.xml')),'PRE_RETIREMENT_EVIDENCE')
@@ -325,7 +404,7 @@ def execute(action,home,sha,release_id,gap_path=None):
         desktop=phone.capture_desktop(directory,state);revalidate()
         # 证据先持久化，再动精确owner；崩溃后可读回，不补造旧结果。
         evidence={'scope':m.SCOPE,'maintenance':m.TASK,'desktop':desktop,'admission_sha256':m.sha(m.canonical(authorization)),'execution_stopped':False,'original_business_status':'failed',
-                  'inventory_snapshot_sha256':m.sha(snapshot_raw),'owner_inode':guards.target_identity,'retirement':{'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,
+                  **current_claim_fields(authorization),'inventory_snapshot_sha256':m.sha(snapshot_raw),'owner_inode':guards.target_identity,'retirement':{'source':m.SCOPE['serial']+'.lock','target':m.ARCHIVE,
                     'before_sha256':m.sha(m.canonical(m.CONTRACT['lock_state']['durable'])),
                     'after_sha256':m.sha(m.canonical(m.primitives.changed_inventory(m.CONTRACT['lock_state']['durable'],m.SCOPE['serial']+'.lock',m.ARCHIVE)))}}
         pending=directory/'pre-retirement.json'

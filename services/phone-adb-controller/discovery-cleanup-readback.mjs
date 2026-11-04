@@ -62,6 +62,8 @@ print(json.dumps(sorted(set(n.get('package','') for n in r.iter('node') if not h
  if(!packages.includes(launcher)||packages.some(p=>p&&!allowed.includes(p)))invalid();
  return launcher;
 }
+// Native desktop evidence is shared; callers still validate their own run scope.
+export {checkNative as verifyAgentDesktopNative};
 function readRegular(file,root,limit,privateFile=false){
  const st=lstatSync(file);if(st.isSymbolicLink()||!st.isFile()||st.size>limit||realpathSync(dirname(file))!==realpathSync(root)||privateFile&&(st.mode&0o077))invalid();return readFileSync(file);
 }

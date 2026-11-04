@@ -10,6 +10,85 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync,
 import { resolve, dirname, sep, basename, isAbsolute } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
+const agentWorkflows=new Set(['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring']);
+export function executionModeInput(env){
+ const mode=Object.hasOwn(env,'LEADGEN_EXECUTION_MODE')?env.LEADGEN_EXECUTION_MODE:'code';
+ if(!['code','agent'].includes(mode)||mode==='agent'&&!agentWorkflows.has(env.WF_BRAIN_WORKFLOW))throw Error('EXECUTION_MODE_INVALID');
+ return mode;
+}
+export function frozenExecutionMode(snapshot){
+ const mode=Object.hasOwn(snapshot,'execution_mode')?snapshot.execution_mode:'code';
+ if(!['code','agent'].includes(mode)||mode==='agent'&&!agentWorkflows.has(snapshot.workflow_version?.payload?.key))throw Error('EXECUTION_MODE_FROZEN_INVALID');
+ return mode;
+}
+export function assertExecutionMode(snapshot,env){
+ const mode=executionModeInput(env),frozen=frozenExecutionMode(snapshot);
+ if(mode!==frozen)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
+ return frozen;
+}
+export const executionActor=snapshot=>frozenExecutionMode(snapshot)==='agent'?'runtime:phone-adb-controller:agent-v1':'runtime:phone-adb-controller';
+const agentInputKeys=['schema_version','workflow_key','task_id','run_tag','profile','serial','line','source_run','limit','comment_limit','run_max_seconds','run_start_ts','discovery_filters','collection_budget_s'];
+const agentUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const agentToken=value=>typeof value==='string'&&/^[-A-Za-z0-9_]{1,120}$/.test(value);
+function agentInteger(raw,min=1,max=Number.MAX_SAFE_INTEGER){
+ if(typeof raw!=='string'||!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)<min||Number(raw)>max)throw Error('AGENT_INPUT_INTEGER_INVALID');
+ return Number(raw);
+}
+export function agentInput(env){
+ if(executionModeInput(env)!=='agent')return null;
+ const tasks=[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID].filter(Boolean);
+ if(!tasks.length||new Set(tasks).size!==1||typeof tasks[0]!=='string'||!agentUuid.test(tasks[0])
+   ||!['WFR_TAG','P','SERIAL','LEADGEN_LINE'].every(key=>agentToken(env[key])))throw Error('AGENT_INPUT_IDENTITY_INVALID');
+ const workflow=env.WF_BRAIN_WORKFLOW,source=env.LEADGEN_SOURCE_RUN||null;
+ if(source!==null&&!agentToken(source)||workflow==='douyin_video_discovery'&&source!==null||workflow==='douyin_video_processing'&&source===null
+   ||workflow==='douyin_comment_scoring'&&env.SERIAL!=='none'||workflow!=='douyin_comment_scoring'&&env.SERIAL==='none')throw Error('AGENT_INPUT_SOURCE_DEVICE_INVALID');
+ const limit=agentInteger(Object.hasOwn(env,'LEADGEN_LIMIT')?env.LEADGEN_LIMIT:'2',1,50);
+ const runMax=agentInteger(Object.hasOwn(env,'WF_RUN_MAX_SECONDS')?env.WF_RUN_MAX_SECONDS:'1800'),runStart=agentInteger(env.WF_RUN_START_TS);
+ if(!Number.isSafeInteger((runStart+runMax)*1000)||runStart>Math.floor(Date.now()/1000)+5)throw Error('AGENT_INPUT_BUDGET_INVALID');
+ let filters=null,sampling=null,collectionBudget=null;
+ if(workflow==='douyin_video_discovery'){
+  filters={sort:env.LEADGEN_SORT||'latest',time_layer:env.LEADGEN_TIME_LAYER||'six_months',location:env.LEADGEN_LOCATION||'same_city'};
+  if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(filters.sort)||!['unlimited','one_day','one_week','six_months'].includes(filters.time_layer)||!['same_city','unlimited'].includes(filters.location))throw Error('AGENT_INPUT_FILTERS_INVALID');
+ }
+ try{
+  sampling=commentSamplingInput(env);
+  if(workflow==='douyin_video_processing'){if(!sampling)throw Error('explicit sampling quota required');collectionBudget=collectionBudgetSeconds(env);}
+ }catch{throw Error('AGENT_INPUT_COMMENT_QUOTA_INVALID');}
+ return {schema_version:1,workflow_key:workflow,task_id:tasks[0],run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,
+  source_run:source,limit,comment_limit:sampling?.comment_limit??null,run_max_seconds:runMax,run_start_ts:runStart,discovery_filters:filters,collection_budget_s:collectionBudget};
+}
+export function validateAgentInput(input){
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==agentInputKeys.length||Object.keys(input).some(key=>!agentInputKeys.includes(key))||input.schema_version!==1)throw Error('AGENT_INPUT_FROZEN_INVALID');
+ const env={LEADGEN_EXECUTION_MODE:'agent',WF_BRAIN_WORKFLOW:input.workflow_key,WF_BRAIN_TASK_ID:input.task_id,WFR_TAG:input.run_tag,P:input.profile,SERIAL:input.serial,LEADGEN_LINE:input.line,
+  LEADGEN_LIMIT:String(input.limit),WF_RUN_MAX_SECONDS:String(input.run_max_seconds),WF_RUN_START_TS:String(input.run_start_ts),...(input.source_run===null?{}:{LEADGEN_SOURCE_RUN:input.source_run}),
+  ...(input.comment_limit===null?{}:{LEADGEN_COMMENT_LIMIT:String(input.comment_limit)}),...(input.collection_budget_s===null?{}:{QUEUED_VIDEO_COLLECTION_SECONDS:String(input.collection_budget_s)}),
+  ...(input.discovery_filters?{LEADGEN_SORT:input.discovery_filters.sort,LEADGEN_TIME_LAYER:input.discovery_filters.time_layer,LEADGEN_LOCATION:input.discovery_filters.location}:{})};
+ if(canonical(agentInput(env))!==canonical(input))throw Error('AGENT_INPUT_FROZEN_INVALID');
+ return input;
+}
+export function assertAgentInput(snapshot,env){
+ if(assertExecutionMode(snapshot,env)!=='agent'){
+  if(Object.hasOwn(snapshot,'agent_input'))throw Error('AGENT_INPUT_FROZEN_INVALID');return null;
+ }
+ const fixed=validateAgentInput(snapshot.agent_input);
+ if(fixed.workflow_key!==snapshot.workflow_version.payload.key||canonical(agentInput(env))!==canonical(fixed))throw Error('AGENT_INPUT_RESUME_MISMATCH');
+ return fixed;
+}
+export function initializeAgentBudget(env,{now=Date.now()}={}){
+ if(executionModeInput(env)!=='agent'||!isAbsolute(env.WFR_RUN_DIR||''))throw Error('AGENT_INPUT_BUDGET_INIT_INVALID');
+ let start,max;
+ if(existsSync(resolve(env.WFR_RUN_DIR,'run-definition.json'))){
+  const snapshot=readFrozen(env.WFR_RUN_DIR);if(frozenExecutionMode(snapshot)!=='agent')throw Error('EXECUTION_MODE_RESUME_MISMATCH');
+  const fixed=validateAgentInput(snapshot.agent_input);start=fixed.run_start_ts;max=fixed.run_max_seconds;
+  if(Object.hasOwn(env,'WF_RUN_START_TS')&&String(start)!==env.WF_RUN_START_TS||Object.hasOwn(env,'WF_RUN_MAX_SECONDS')&&String(max)!==env.WF_RUN_MAX_SECONDS)throw Error('AGENT_INPUT_BUDGET_RESUME_MISMATCH');
+  assertAgentInput(snapshot,{...env,WF_RUN_START_TS:String(start),WF_RUN_MAX_SECONDS:String(max)});
+ }else{
+  start=Object.hasOwn(env,'WF_RUN_START_TS')?agentInteger(env.WF_RUN_START_TS):Math.floor(now/1000);
+  max=Object.hasOwn(env,'WF_RUN_MAX_SECONDS')?agentInteger(env.WF_RUN_MAX_SECONDS):1800;
+  agentInput({...env,WF_RUN_START_TS:String(start),WF_RUN_MAX_SECONDS:String(max)});
+ }
+ return {run_start_ts:start,run_max_seconds:max};
+}
 // 单视频软预算加480秒收尾不得超过collection的7200秒合同。
 export function collectionBudgetSeconds(env){
  if(!Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS'))return 480;
@@ -118,6 +197,15 @@ export function assertDeploymentAdmission(deploymentRoot,home=userInfo().homedir
  try{lstatSync(marker);throw Error('整包部署或恢复未完成，拒绝新运行冻结');}catch(error){if(error.code!=='ENOENT')throw error;}
 }
 export async function freezeDefinition(o) {
+  const executionMode=executionModeInput({WF_BRAIN_WORKFLOW:o.workflowKey,...(Object.hasOwn(o,'executionMode')?{LEADGEN_EXECUTION_MODE:o.executionMode}:{})});
+  if(existsSync(resolve(o.runDir,'run-definition.json'))&&frozenExecutionMode(readFrozen(o.runDir))!==executionMode)throw Error('EXECUTION_MODE_RESUME_MISMATCH');
+  const fixedAgentInput=executionMode==='agent'?validateAgentInput(o.agentInput):null;
+  if(executionMode==='code'&&o.agentInput!=null)throw Error('AGENT_INPUT_MODE_INVALID');
+  if(fixedAgentInput&&(fixedAgentInput.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(key=>o.runIdentity[key]!==fixedAgentInput[key==='tag'?'run_tag':key])))throw Error('AGENT_INPUT_FREEZE_SCOPE_INVALID');
+  if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).agent_input||null)!==canonical(fixedAgentInput))throw Error('AGENT_INPUT_RESUME_MISMATCH');
+  if(fixedAgentInput?.workflow_key==='douyin_video_processing'&&!o.samplingInput)throw Error('AGENT_INPUT_FREEZE_SAMPLING_MISMATCH');
+  if(fixedAgentInput&&o.samplingInput&&(['workflow_key','run_tag','profile','serial','line','source_run','comment_limit'].some(key=>fixedAgentInput[key]!==o.samplingInput[key])||fixedAgentInput.collection_budget_s!==(o.samplingInput.collection_budget_s??480)))throw Error('AGENT_INPUT_FREEZE_SAMPLING_MISMATCH');
+  if(fixedAgentInput&&o.discoveryInput&&['run_tag','profile','serial','line'].some(key=>fixedAgentInput[key]!==o.discoveryInput[key]))throw Error('AGENT_INPUT_FREEZE_DISCOVERY_MISMATCH');
   if(o.outreachScope){const scope=outreachScope.validateOutreachScope(o.outreachScope);if(o.workflowKey!=='douyin_lead_outreach'||o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==scope[k==='tag'?'run_tag':k]))throw Error('OUTREACH_SCOPE_FREEZE_IDENTITY_INVALID');}
   if(existsSync(resolve(o.runDir,'run-definition.json'))&&canonical(readFrozen(o.runDir).outreach_scope||null)!==canonical(o.outreachScope||null))throw Error('OUTREACH_SCOPE_RESUME_MISMATCH');
   if(o.discoveryInput){const d=validateDiscoveryInput(o.discoveryInput);if(d.workflow_key!==o.workflowKey||o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==d[k==='tag'?'run_tag':k]))throw Error('DISCOVERY_INPUT_FREEZE_SCOPE_INVALID');}
@@ -180,6 +268,7 @@ export async function freezeDefinition(o) {
     });
     const entry=av.payload.contract.runtime?.entry;
     if(entry && !implementations.some(b=>b.execution_verification==='verified_local' && b.path===`services/phone-adb-controller/${entry}`)) throw Error(`运行入口没有本机已核验binding: ${entry}`);
+    if(executionMode==='agent'&&implementations.filter(b=>b.kind==='skill'&&b.execution_verification==='verified_local').length!==1)throw Error('AGENT_PRIMARY_SKILL_BINDING_UNVERIFIED');
     activities.push({reference:ref,version:av,implementations});
   }
   if(!activities.length) throw Error('运行工作流无活动');
@@ -196,6 +285,7 @@ export async function freezeDefinition(o) {
   if(o.collectionPhoneScope&&(o.collectionPhoneScope.source_commit!==manifest.source_commit||o.collectionPhoneScope.target!==manifest.target))throw Error('collection phone scope部署来源不符');
   if(o.discoveryPhoneScope&&(o.discoveryPhoneScope.source_commit!==manifest.source_commit||o.discoveryPhoneScope.target!==manifest.target||o.workflowKey!=='douyin_video_discovery'))throw Error('discovery phone scope部署来源不符');
   const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
+    ...(executionMode==='agent'?{execution_mode:'agent',agent_input:structuredClone(fixedAgentInput)}:{}),
     ...(o.discoveryInput?{discovery_input:structuredClone(o.discoveryInput)}:{}),...(o.discoveryPhoneScope?{discovery_phone_scope:structuredClone(o.discoveryPhoneScope)}:{}),...(o.collectionPhoneScope?{collection_phone_scope:structuredClone(o.collectionPhoneScope)}:{}),...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.samplingInput?{sampling_input:o.samplingInput}:{}),...(o.outreachScope?{outreach_scope:structuredClone(o.outreachScope)}:{}),...(o.producerDescriptor?{producer_descriptor:structuredClone(o.producerDescriptor)}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};

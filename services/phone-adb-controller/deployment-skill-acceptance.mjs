@@ -6,7 +6,7 @@ const inputs=['输入与交付','输入与输出'];
 const commanders=['Commander 与接手','Commander 与中断恢复','Commander 与Skill接手','Commander 接手与验收'];
 const acceptance=['验收与记录','验收','Commander 接手与验收'];
 const excluded=['Activity 方法配套'];
-const conditional=['复用已有Skill','调用范围与当前接口','单Activity受控接手','冻结来源绑定','同run有界Agent恢复合同'];
+const conditional=['复用已有Skill','纯 Skill 执行选择','调用范围与当前接口','单Activity受控接手','冻结来源绑定','同run有界Agent恢复合同'];
 export const requiresSkillAcceptance=key=>Object.hasOwn(skills,key);
 export function skillAcceptanceDefinition(key,readFile){
  need(requiresSkillAcceptance(key)&&typeof readFile==='function','缺固定原文读取器');

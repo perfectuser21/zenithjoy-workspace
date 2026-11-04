@@ -62,7 +62,7 @@ case 'current-video-link':{if(${guardUnknown}){fs.writeFileSync(process.env.WFR_
   f.frozen.files={};visit(f.runtime);
  }
  const {digest}=await load('runtime-definition.mjs');delete f.frozen.snapshot_sha256;f.frozen.snapshot_sha256=digest(f.frozen);writeFileSync(join(f.d,'run-definition.json'),JSON.stringify(f.frozen));
- writeFileSync(join(f.d,'run-bindings/a1.request.json'),JSON.stringify({runtime_snapshot_sha256:f.frozen.snapshot_sha256,run_id:scope.run_id,body:{task_id:'scope-task'}}));writeFileSync(join(f.d,'run-bindings/a1.ack.json'),JSON.stringify({binding:{id:'scope-binding',run_id:scope.run_id,task_id:'scope-task'}}));
+ writeFileSync(join(f.d,'run-bindings/a1.request.json'),JSON.stringify({runtime_snapshot_sha256:f.frozen.snapshot_sha256,run_id:scope.run_id,body:{task_id:'scope-task',actor:'runtime:phone-adb-controller'}}));writeFileSync(join(f.d,'run-bindings/a1.ack.json'),JSON.stringify({binding:{id:'scope-binding',run_id:scope.run_id,task_id:'scope-task',actor:'runtime:phone-adb-controller'}}));
  const stored=[],rpcCalls=[],rpcOptions=[],{createHandlers}=await load('leadgen-handlers.mjs'),{execInput}=await load('leadgen-client.mjs');
  const centralLease={held:false,attempted:false,async verifyTask(){},async acquire(){this.held=this.attempted=true;},async ensure(){},async release(){this.held=this.attempted=false;return true;}};
  const h=createHandlers({root:f.runtime,env:f.env,sourceCommit:'a'.repeat(40),taskId:'scope-task',centralLease,execute:(command,args,opts)=>command==='/bin/sleep'?Promise.resolve({code:0,stdout:'',stderr:''}):execInput(command,args,opts),rpc:async(body,options)=>{

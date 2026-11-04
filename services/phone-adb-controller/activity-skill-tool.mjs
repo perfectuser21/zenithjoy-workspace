@@ -15,6 +15,6 @@ export async function callActivityTool(path,op,body={}) {
  });
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){
- try{const [path,op]=process.argv.slice(2);const body=process.stdin.isTTY||op!=='phone'&&!(op==='inspect'&&process.argv[4]==='--event')?{}:JSON.parse(readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(await callActivityTool(path,op,body))+'\n');}
+ try{const [path,op]=process.argv.slice(2);const body=process.stdin.isTTY||!['phone','business'].includes(op)&&!(op==='inspect'&&process.argv[4]==='--event')?{}:JSON.parse(readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(await callActivityTool(path,op,body))+'\n');}
  catch(error){process.stderr.write(String(error.message).slice(0,300)+'\n');process.exitCode=1;}
 }

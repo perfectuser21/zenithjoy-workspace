@@ -25,7 +25,8 @@ export async function invokeNativeActivity(execute,state){
 }
 export {parseCollection,createHandlers} from './leadgen-handlers.mjs';
 import {createActivityRecovery} from './activity-skill-recovery.mjs';
-import {readFrozen,assertCommentSampling,assertOutreachScope} from './runtime-definition.mjs';
+import {createActivitySkillExecutor} from './activity-skill-executor.mjs';
+import {readFrozen,assertCommentSampling,assertOutreachScope,assertExecutionMode,assertAgentInput} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput} from './leadgen-client.mjs';
 import {judgeSteps,workflowReadbackPassed} from './step-judge.mjs';
@@ -54,12 +55,52 @@ export function activityExecutionDeadline({activity,env,previous,now=Date.now(),
   return Math.min(previous??now+requested*1000,(start+whole)*1000-(activity.key==='collect_videos'?cleanupReserveMs:0));
 }
 
+// Main and tests consume this same mode/deadline boundary. It never downgrades
+// an Agent-first request into the original Code implementation.
+export function createWorkflowExecution({runDir,frozen,binding,env,handlers,rpc,activities,taskId}){
+ const executionMode=assertExecutionMode(frozen,env),activityDeadlines=new Map();
+ const fixedAgentInput=assertAgentInput(frozen,env);
+ if(fixedAgentInput&&taskId!=null&&taskId!==fixedAgentInput.task_id)throw Object.assign(Error('AGENT_INPUT_TASK_CONFLICT'),{executionStopped:true});
+ let agentCleanupReserveMs=0;
+ if(executionMode==='agent'&&['douyin_video_discovery','douyin_video_processing'].includes(fixedAgentInput.workflow_key)){
+  const cleanup=frozen.activities.filter(entry=>entry.reference.slot_key==='cleanup');
+  const seconds=cleanup[0]?.version?.payload?.contract?.budget?.max_duration_s;
+  if(cleanup.length!==1||!Number.isSafeInteger(seconds)||seconds<1||seconds>=fixedAgentInput.run_max_seconds)throw Object.assign(Error('AGENT_PRIMARY_CLEANUP_BUDGET_UNAVAILABLE'),{executionStopped:true});
+  agentCleanupReserveMs=seconds*1000;
+ }
+ const deadlineFor=activity=>{
+  const cleanupReserveMs=executionMode==='code'&&env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?Number(activities.find(a=>a.key==='cleanup')?.budget?.max_duration_s||120)*1000:0;
+  let deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key),cleanupReserveMs});
+  if(agentCleanupReserveMs&&activity.key!=='cleanup')deadline=Math.min(deadline,(fixedAgentInput.run_start_ts+fixedAgentInput.run_max_seconds)*1000-agentCleanupReserveMs);
+  activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;handlers.state.currentActivity=activity.key;
+  if(handlers.state.executionUnknown)throw Object.assign(Error('OLD_EXECUTION_TERMINATION_UNKNOWN'),{executionStopped:false});
+  if(deadline<=Date.now())throw Object.assign(Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽'),{executionStopped:true});
+  return deadline;
+ };
+ if(executionMode==='agent'){
+  if(typeof handlers.createAgentTools!=='function')throw Object.assign(Error('AGENT_PRIMARY_TOOLS_UNAVAILABLE'),{executionStopped:true});
+  const execute=createActivitySkillExecutor({runDir,frozen,binding,env,rpc,deadlineFor,createTools:(activity,scope)=>handlers.createAgentTools(activity,scope)});
+  return {executionMode,execution:{},executeAgent:async(activity,options)=>{
+   if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',execution_stopped:true,result:{status:'partial',reason:'已收到停止请求'}};
+   return execute(activity,options);
+  }};
+ }
+ const execution=Object.fromEntries(activities.map(activity=>[activity.key,async options=>{
+  deadlineFor(activity);
+  if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
+  const result=await invokeNativeActivity(()=>handlers[activity.key](options),handlers.state);
+  if(handlers.state.executionUnknown){const error=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');error.executionStopped=false;error.activityResult=result;throw error;}
+  return result;
+ }]));
+ return {executionMode,execution};
+}
+
 async function main(){
   const env=process.env,dir=env.WFR_RUN_DIR;
-  const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);const binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
+  const frozen=readFrozen(dir);assertCommentSampling(frozen,env);assertOutreachScope(frozen,env);assertAgentInput(frozen,env);const executionMode=assertExecutionMode(frozen,env),binding=readBinding(dir,env.WFR_ATTEMPT,frozen);
   if(binding.run_id!==`${env.WFR_RUN_ID}__${env.WFR_ATTEMPT}`)throw Error('运行绑定身份不符');
   const centralWorkflow=['douyin_video_discovery','douyin_video_processing'].includes(env.WF_BRAIN_WORKFLOW);
-  const taskIds=(centralWorkflow?[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID,binding.task_id]:[binding.task_id]).filter(Boolean);
+  const taskIds=(centralWorkflow||executionMode==='agent'?[env.WF_BRAIN_TASK_ID,env.BRAIN_TASK_ID,env.WFR_BRAIN_TASK_ID,binding.task_id]:[binding.task_id]).filter(Boolean);
   if(new Set(taskIds).size>1)throw Error('CENTRAL_LOCK_TASK_CONFLICT');
   const taskId=taskIds[0]||null;
   const root=resolve(dir,'runtime');
@@ -69,6 +110,7 @@ async function main(){
   const rpc=createRpc({frozen,local:env.LEADGEN_LOCAL_RPC==='1',runContext:{run:env.WFR_TAG,run_id:binding.run_id,profile:env.P,line:env.LEADGEN_LINE}});
   const workflowContract=frozen.workflow_version?.payload?.contract||{};
   const context={brief:{purpose:workflowContract.name||env.WF_BRAIN_WORKFLOW,done_criteria:{checks:workflowContract.checks,outputs:workflowContract.outputs},boundaries:{resources:workflowContract.resources,recovery:workflowContract.recovery}},rules:workflowContract.rules||[],require_routing:true,workflow_routes:frozen.workflow_version?.payload?.contract?.on_status,always_run:frozen.workflow_version?.payload?.contract?.always_run,sampling_input:frozen.sampling_input||null,run_id:binding.run_id,binding_id:binding.id,task_id:taskId,workflow_key:env.WF_BRAIN_WORKFLOW,profile:env.P,source_commit:frozen.deployment.source_commit};
+  if(executionMode==='agent')context.execution_mode='agent';
   try{context.commander_skill=readCommanderSkill(frozen,dir);}catch{context.commander_skill_unavailable=true;}
   writeFileSync(join(dir,'activity.log'),'');
   const records=[];const record=async r=>{
@@ -116,21 +158,9 @@ async function main(){
     return {verified,metrics,probes,step_dod:local};
   };
   const handlers=createHandlers({root,env,rpc,sourceCommit:frozen.deployment.source_commit,taskId,outreachScope:frozen.outreach_scope||null});
-  const activityDeadlines=new Map();
-  const execution=Object.fromEntries(activities.map(activity=>[activity.key,async options=>{
-    const cleanupReserveMs=env.WF_BRAIN_WORKFLOW==='douyin_video_discovery'?Number(activities.find(a=>a.key==='cleanup')?.budget?.max_duration_s||120)*1000:0;
-    const deadline=activityExecutionDeadline({activity,env,previous:activityDeadlines.get(activity.key),cleanupReserveMs});
-    activityDeadlines.set(activity.key,deadline);handlers.state.budgetDeadline=deadline;
-    handlers.state.currentActivity=activity.key;
-    if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;throw e;}
-    if(deadline<=Date.now())throw Error('EXECUTION_DEADLINE: 原Activity或整轮预算已尽');
-    if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
-    const result=await invokeNativeActivity(()=>handlers[activity.key](options),handlers.state);
-    if(handlers.state.executionUnknown){const e=Error('OLD_EXECUTION_TERMINATION_UNKNOWN');e.executionStopped=false;e.activityResult=result;throw e;}
-    return result;
-  }]));
-  const recover=createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
-  const result=await runWorkflow({activities,context,handlers:execution,recover,quarantine:handlers.quarantineResources,
+  const {execution,executeAgent}=createWorkflowExecution({runDir:dir,frozen,binding,env,handlers,rpc,activities,taskId});
+  const recover=executionMode==='agent'?undefined:createActivityRecovery({runDir:dir,frozen,binding,env,handlers,rpc,verify});
+  const result=await runWorkflow({activities,context,handlers:execution,executeAgent,recover,quarantine:handlers.quarantineResources,
     commander:async receipt=>{if(context.commander_skill_unavailable)throw Error('COMMANDER_SKILL_SOURCE_UNAVAILABLE');return (await rpc({kind:'commander',receipt},{timeoutMs:75000})).decision;},record,verify,terminationUnverified:()=>handlers.state.nativeStopUnproven===true});
   for(const item of result.results){
     const file=join(dir,`activity-${item.activity}.json`);

@@ -116,6 +116,12 @@ export WF_PLAN_PATH="$WF_HOME/plans/$WF_ARG_CAP.plan"
 source "$WF_PLAN_PATH"
 [[ "${WF_RUNNER:-}" == leadgen-workflow.mjs && -z "${WF_MISSING:-}" ]] || { print -u2 '计划缺正式实现'; exit 1; }
 export WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_STEP_SPEC
+if [[ "${LEADGEN_EXECUTION_MODE:-code}" == agent ]]; then
+  # 输出只含校验过的整数；已有run恢复原绝对起点，不为续跑重置预算。
+  agent_budget="$(node "$WF_HOME/runtime-receipts.mjs" agent-budget)"
+  [[ "$agent_budget" =~ '^export WF_RUN_START_TS=[1-9][0-9]* WF_RUN_MAX_SECONDS=[1-9][0-9]*$' ]] || { print -u2 'AGENT_INPUT_BUDGET_OUTPUT_INVALID'; exit 1; }
+  eval "$agent_budget"
+fi
 if [[ "$WFR_HOSTKEY" != mmv && "$SERIAL" != none ]]; then
   unset DOUYIN_PHONE_LOCK_TEST_MODE
   DOUYIN_PHONE_LOCK_ROOT="${DOUYIN_PHONE_LOCK_ROOT:-${HOME:-}/.local/share/zenithjoy/phone-locks}"
@@ -135,7 +141,9 @@ export WF_RUNNER WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_ST
 bound="$(node "$WF_HOME/runtime-receipts.mjs" bind-run)"
 eval "$bound"
 export WFR_ATTEMPT WFR_SKIP_WORDS
-export WF_RUN_START_TS="$(date +%s)" WF_RUN_MAX_SECONDS="${WF_RUN_MAX_SECONDS:-1800}"
+if [[ "${LEADGEN_EXECUTION_MODE:-code}" != agent ]]; then
+  export WF_RUN_START_TS="$(date +%s)" WF_RUN_MAX_SECONDS="${WF_RUN_MAX_SECONDS:-1800}"
+fi
 export WF_STOP_FILE="$HOME/wf-runs/$WFR_TAG.stop"
 print -r -- "WF_RUN_STARTED tag=$WFR_TAG flow=$WF_ARG_CAP"
 exec node "$WF_HOME/leadgen-workflow.mjs"
