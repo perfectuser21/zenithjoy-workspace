@@ -10287,6 +10287,30 @@ tests:
     product: 基础设施
     note: Retained original unittest and unique compileall; blocking Smoke Glob baseline, alongside current unconditional L3 full patrol oracle. No physical-device admission claimed.
 
+  - id: company-routing-normalization-http
+    path: apps/api/src/routes/company-routing-normalization.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: 获客
+    note: Real session gate, tenant middleware and HTTP repair/readback; external auth/DB seams only.
+
+  - id: company-routing-normalization-real-pg
+    path: apps/api/tests/pg-contracts/routing-normalization-pg.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 获客
+    note: Required disposable PG contracts; actual concurrent row locks, lost COMMIT ACK, immutable history and exact receipt readback.
+
+  - id: yuesheng-device-phone-scope
+    path: services/phone-adb-controller/__tests__/yuesheng-device-scope.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: 获客
+    note: Fixed template consumer for exact e6 M4 101/102 scope; no claim of physical-device acceptance.
+
   - id: payment-public-check-contract
     path: .github/workflows/scripts/__tests__/payment-public-check.test.mjs
     type: contract
