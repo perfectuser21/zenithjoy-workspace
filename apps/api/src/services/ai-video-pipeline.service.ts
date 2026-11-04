@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import pool from '../db/connection';
 
 export interface PipelineJob {
@@ -33,53 +32,22 @@ export class AiVideoPipelineService {
     originalScript?: string | null;
     targetAspect?: string | null;
   }): Promise<PipelineJob> {
-    try {
-      const result = await pool.query(
-        `INSERT INTO zenithjoy.ai_video_pipeline_jobs
-           (src_video, src_logo, topic, template_id, license_id, original_script, target_aspect)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING *`,
-        [
-          params.srcVideo,
-          params.srcLogo,
-          params.topic,
-          params.templateId ?? null,
-          params.licenseId ?? null,
-          params.originalScript ?? null,
-          params.targetAspect ?? null,
-        ],
-      );
-      return result.rows[0];
-    } catch (e: unknown) {
-      const msg = String((e as Error)?.message ?? '');
-      const code = (e as NodeJS.ErrnoException).code ?? '';
-      if (code === 'ECONNREFUSED' || msg.includes('ECONNREFUSED') || msg.includes('connection refused')) {
-        // PostgreSQL unavailable in test/eval environment — return in-memory stub with correct schema
-        const now = new Date();
-        return {
-          id: randomUUID(),
-          status: 'pending',
-          progress: 0,
-          template_id: params.templateId ?? null,
-          src_video: params.srcVideo,
-          src_logo: params.srcLogo,
-          topic: params.topic,
-          result_url: null,
-          output_dir: null,
-          error_msg: null,
-          license_id: params.licenseId ?? null,
-          original_script: params.originalScript ?? null,
-          target_aspect: params.targetAspect ?? null,
-          detected_aspect: null,
-          step15_orientation: null,
-          step15_confidence: null,
-          step15_reasoning: null,
-          created_at: now,
-          updated_at: now,
-        };
-      }
-      throw e;
-    }
+    const result = await pool.query(
+      `INSERT INTO zenithjoy.ai_video_pipeline_jobs
+         (src_video, src_logo, topic, template_id, license_id, original_script, target_aspect)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        params.srcVideo,
+        params.srcLogo,
+        params.topic,
+        params.templateId ?? null,
+        params.licenseId ?? null,
+        params.originalScript ?? null,
+        params.targetAspect ?? null,
+      ],
+    );
+    return result.rows[0];
   }
 
   async getJob(id: string): Promise<PipelineJob | null> {
@@ -110,13 +78,14 @@ export class AiVideoPipelineService {
     return result.rows;
   }
 
-  async listStale(staleMinutes: number): Promise<PipelineJob[]> {
+  async listStale(staleMinutes: number, licenseId?: string | null): Promise<PipelineJob[]> {
     const result = await pool.query(
       `SELECT * FROM zenithjoy.ai_video_pipeline_jobs
        WHERE status = 'processing'
          AND updated_at < NOW() - ($1 || ' minutes')::interval
+         AND license_id IS NOT DISTINCT FROM $2::uuid
        ORDER BY updated_at ASC`,
-      [staleMinutes],
+      [staleMinutes, licenseId ?? null],
     );
     return result.rows;
   }

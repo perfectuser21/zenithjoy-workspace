@@ -1,0 +1,138 @@
+{
+  "canonical_script": ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
+  "required_execution": [
+    "node --test .github/workflows/scripts/smoke/helpers/media-contracts.test.mjs",
+    "bash .github/workflows/scripts/smoke/media-contracts-smoke.sh"
+  ],
+  "install_requirements": [
+    "Node 20",
+    "npm ci --workspace apps/api --workspace apps/dashboard --include-workspace-root --ignore-scripts",
+    "npm ci --prefix services/agent --ignore-scripts",
+    "ffmpeg and ffprobe",
+    "PostgreSQL initdb and pg_ctl; MEDIA_POSTGRES_BIN optional override",
+    "ffmpeg build with libass subtitles filter",
+    "fontconfig and a Chinese subtitle font (CI: fonts-noto-cjk)"
+  ],
+  "selector_action": "Run canonical once as blocking baseline; exclude aliases below from top-level execution to remove redundant runs. Keep aliases as manual compatibility calls. Unknown group/missing test/import/empty/skip/todo/failure all nonzero.",
+  "aliases_to_exclude": [
+    ".github/workflows/scripts/smoke/agent-v110-stale-recovery-smoke.sh",
+    ".github/workflows/scripts/smoke/ai-video-checkpoint-smoke.sh",
+    ".github/workflows/scripts/smoke/ai-video-pipeline-new-fields-smoke.sh",
+    ".github/workflows/scripts/smoke/ai-video-pipeline-smoke.sh",
+    ".github/workflows/scripts/smoke/ai-video-pipeline-ws1-original-script-smoke.sh",
+    ".github/workflows/scripts/smoke/ai-video-pipeline-ws1-smoke.sh",
+    ".github/workflows/scripts/smoke/aidge-capability-center-smoke.sh",
+    ".github/workflows/scripts/smoke/analyze-transcript-smoke.sh",
+    ".github/workflows/scripts/smoke/dynamic-template-compose-smoke.sh",
+    ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh",
+    ".github/workflows/scripts/smoke/local-video-path-ui-smoke.sh",
+    ".github/workflows/scripts/smoke/video-aspect-smoke.sh",
+    ".github/workflows/scripts/smoke/local-video-pipeline-smoke.sh",
+    ".github/workflows/scripts/smoke/mashup-render-smoke.sh",
+    ".github/workflows/scripts/smoke/material-delete-smoke.sh",
+    ".github/workflows/scripts/smoke/material-direct-upload-smoke.sh",
+    ".github/workflows/scripts/smoke/material-upload-smoke.sh",
+    ".github/workflows/scripts/smoke/node-agent-report-videos-smoke.sh",
+    ".github/workflows/scripts/smoke/orient-dblog-smoke.sh",
+    ".github/workflows/scripts/smoke/vision-orientation-smoke.sh",
+    ".github/workflows/scripts/smoke/rotation-normalize-smoke.sh",
+    ".github/workflows/scripts/smoke/sprint-2-1b-douyin-video-real-publish-smoke.sh",
+    ".github/workflows/scripts/smoke/stage1-report-videos-smoke.sh",
+    ".github/workflows/scripts/smoke/template-c-r-smoke.sh",
+    ".github/workflows/scripts/smoke/template-video-smoke.sh",
+    ".github/workflows/scripts/smoke/ws2-three-template-builders-smoke.sh",
+    ".github/workflows/scripts/smoke/video-job-tenant-isolation-smoke.sh"
+  ],
+  "external_delivery_scope": "No physical device, real publishing, external model/paid calls or production database writes. Real provider/model quality and published-video delivery remain human external acceptance. Uses current Wan3 CreativeCanvas + video-tools API/provider tests, never reconnects legacy Python/noop remake workflow.",
+  "business_dependency": "Required business canonical must execute acquisition report-videos real route tests; agent group independently executes real line02 module fork/IPC and its HTTP request protocol.",
+  "per_unit_groups": {
+    "video-stale-recovery-http": [
+      "pg",
+      "agent"
+    ],
+    "video-pipeline-response-and-compose": [
+      "pg",
+      "api",
+      "dashboard"
+    ],
+    "video-api": [
+      "pg",
+      "api"
+    ],
+    "ai-video-pipeline-ws1-original-script": [
+      "pg"
+    ],
+    "video-original-script-contract": [
+      "pg"
+    ],
+    "aidge-contracts": [
+      "api",
+      "dashboard"
+    ],
+    "analyze-transcript-smoke": [
+      "api"
+    ],
+    "dynamic-template-falsegreen-wrapper": [
+      "api"
+    ],
+    "video-remake-schema-probe": [
+      "api",
+      "dashboard"
+    ],
+    "video-job-api": [
+      "pg",
+      "dashboard",
+      "agent"
+    ],
+    "local-video-pipeline-smoke": [
+      "api",
+      "dashboard"
+    ],
+    "mashup-render": [
+      "api",
+      "render"
+    ],
+    "materials-delete-real-storage": [
+      "pg",
+      "api"
+    ],
+    "material-upload": [
+      "pg",
+      "api"
+    ],
+    "materials-upload-pg-isolation": [
+      "pg",
+      "api"
+    ],
+    "line02-report-videos-real-protocol": [
+      "agent"
+    ],
+    "orientation-model": [
+      "api",
+      "agent"
+    ],
+    "rotation-normalize": [
+      "agent"
+    ],
+    "sprint-2-1b-douyin-video-real-publish": [
+      "agent"
+    ],
+    "collect-report": [
+      "agent"
+    ],
+    "template-compose": [
+      "api",
+      "pg"
+    ],
+    "video-job-isolation": [
+      "pg"
+    ]
+  },
+  "canonical_groups": [
+    "render",
+    "api",
+    "dashboard",
+    "agent",
+    "pg"
+  ]
+}

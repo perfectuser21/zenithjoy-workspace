@@ -371,6 +371,10 @@ async function askVisionSelect(req: LocatorAssistRequest): Promise<{ matchIndex:
     const choice = resp.data?.choices?.[0];
     if (choice?.finish_reason === 'length') return { matchIndex: null, model: VISION_MODEL, failReason: 'truncated_output' };
     const idx = parseVisionSelectAnswer(choice?.message?.content ?? '');
+    const count = req.visionCandidateCount;
+    if (idx !== null && (idx < -1 || (typeof count === 'number' && Number.isInteger(count) && count >= 0 && idx >= count))) {
+      return { matchIndex: null, model: VISION_MODEL, failReason: 'index_out_of_bounds' };
+    }
     return { matchIndex: idx, model: VISION_MODEL, failReason: idx === null ? 'unparseable_answer' : undefined };
   } catch (err) {
     const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';

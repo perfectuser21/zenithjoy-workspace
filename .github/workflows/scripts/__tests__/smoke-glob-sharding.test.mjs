@@ -24,9 +24,9 @@ function fixture(t, { fail = false, denied = false } = {}) {
   const dir = join(root, '.github/workflows/scripts/smoke');
   mkdirSync(dir, { recursive: true });
   const names = ['a-smoke.sh', 'b-smoke.sh', 'c-smoke.sh', 'd-smoke.sh'];
-  if (denied) names.push('wechat-auto-launch-smoke.sh');
+  if (denied) names.push('account-scan-realmachine-smoke.sh');
   for (const name of names) writeFileSync(join(dir, name), `#!/bin/bash\nprintf '%s\\n' '${name}' >> "$TRACE"\nexit ${fail && name === 'b-smoke.sh' ? 7 : 0}\n`);
-  writeFileSync(join(root, '.github/workflows/scripts/smoke-baseline.txt'), names.filter(n => !n.startsWith('wechat-')).join('\n') + '\n');
+  writeFileSync(join(root, '.github/workflows/scripts/smoke-baseline.txt'), names.filter(n => n !== 'account-scan-realmachine-smoke.sh').join('\n') + '\n');
   const helperManifest = {schema_version:1, helpers:helpers.map(name=>({name,reason:'Explicit transport/device setup helper, requires caller context.',consumers:['.github/workflows/e2e-line02-android-collect.yml']}))};
   writeFileSync(join(root,'.github/workflows/scripts/smoke-helpers.json'),JSON.stringify(helperManifest));
   writeFileSync(join(root,'.github/workflows/e2e-line02-android-collect.yml'),helpers.join('\n'));
@@ -75,9 +75,9 @@ test('完整正式inline caller两分片真正执行全部脚本一次，denylis
   const all = workers.flatMap((r, i) => rows(r.output, i));
   assert.deepEqual(all.map(r => r[0]).sort(), names.sort());
   assert.equal(new Set(all.map(r => r[0])).size, names.length);
-  assert.equal(all.find(r => r[0].startsWith('wechat-'))[1], 'SKIP');
+  assert.equal(all.find(r => r[0] === 'account-scan-realmachine-smoke.sh')[1], 'SKIP');
   const actual = workers.flatMap(r => readFileSync(join(r.output, 'trace'), 'utf8').trim().split('\n'));
-  assert.deepEqual(actual.sort(), names.filter(n => !n.startsWith('wechat-')).sort());
+  assert.deepEqual(actual.sort(), names.filter(n => n !== 'account-scan-realmachine-smoke.sh').sort());
 });
 test('分片并不放过基线失败：实际caller同脚本最多一次重试仍exit1并完整记录', t => {
   const { root } = fixture(t, { fail: true });
@@ -189,10 +189,16 @@ test('正式caller强制回收忽略TERM的子进程后才返回，重试不会�
   assert.ok(!state || state.startsWith('Z'), `子进程仍在执行: ${state}`);
 });
 
-test('Android冷编译显式准备且不增加smoke预算，Gradle后台daemon被关闭', () => {
-  assert.match(workflow, /name: Prepare Android unit-test artifacts/);
-  assert.match(workflow, /:app:compileDebugUnitTestKotlin --no-daemon/);
-  assert.match(workflow, /GRADLE_OPTS: '-Dorg.gradle.daemon=false'/);
+test('Android native suites execute once in their required producer, outside Node smoke shards', () => {
+  assert.doesNotMatch(workflow, /compileDebugUnitTestKotlin|setup-android|gradle\/actions\/setup-gradle/);
+  const android=parse(readFileSync(new URL('../../android-agent-ci.yml',import.meta.url),'utf8'));
+  const steps=android.jobs['test-and-build'].steps;
+  const producer=steps.findIndex(s=>s.run==='gradle :app:testDebugUnitTest');
+  const verify=steps.findIndex(s=>s.run==='bash .github/workflows/scripts/android-agent-contracts.sh --verify-results');
+  assert.ok(producer>=0 && verify>producer);
+  assert.ok(steps.some(s=>s.uses==='android-actions/setup-android@v3'));
+  assert.equal(steps[producer]['continue-on-error'],undefined);
+  assert.ok(android.jobs['android-ci-gate'].needs.includes('test-and-build'));
 });
 
 test('Staff验收API启动失败必须带原始诊断，不进入业务断言', t => {

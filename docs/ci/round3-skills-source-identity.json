@@ -1,0 +1,71 @@
+{
+  "task_id": "c7dbedc7-e1b8-4e6f-a507-25778a67e86e",
+  "business_base": "56a123c08ee799d13858d6dd167face6b7e436b9",
+  "source_base": "675102a374811f99965d1af861378605816f6e37",
+  "source_commit": "fcdfaa9016d72c5844b831fe054ff381a5d3f82b",
+  "pinned_revision_unchanged": "60ba68d3d22bc27ade7d51b5178e3d1744932bff",
+  "implemented": [
+    "Central bootstrap and exact business copy derive SSH public type and SHA256 fingerprint with stdin closed and 5 second keygen deadline; log neither public/private body nor key fragments.",
+    "Bootstrap excludes SSH config using -F /dev/null; retains fixed private identity, pinned SHA, host key and existing maximum three attempts.",
+    "Trusted JS reader independently applies CRLF normalization, exclusive private identity, BatchMode, IdentityAgent=none, ConnectTimeout=10, strict fixed host key, 35 second hard fetch deadlines and three total attempts with 1/2 second waits.",
+    "Missing key, permanent transport errors, wrong object, loader/catalog/blob validation and exhausted retries remain fatal. No HTTPS, alternate credential or candidate-owned cache fallback.",
+    "Trusted Git/blob/catalog validation and private outside-checkout reader cache remain unchanged."
+  ],
+  "verification": [
+    {
+      "command": "python3 -m unittest discover -s distribution -p 'test*.py'",
+      "cwd": "central source isolated worktree",
+      "passed": 49,
+      "failed": 0
+    },
+    {
+      "command": "python3 scripts/__tests__/skills-source-bootstrap.test.py",
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "command": "node --test scripts/ci/__tests__/implementation-skill-source.test.mjs scripts/ci/__tests__/implementation-skill-source-transport.test.mjs",
+      "node": "20",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts -p test_skill_source_ownership.py",
+      "passed": 1
+    },
+    {
+      "command": "python3 scripts/skill_source_ownership.py",
+      "result": "passed"
+    },
+    {
+      "command": "bash scripts/ensure-skills-source.sh",
+      "source": "isolated local Git copy of existing pinned cache; no credential or network",
+      "install_verified": 87,
+      "verify_verified": 87
+    },
+    {
+      "command": "npm run product-map:check",
+      "result": "PASS no drift"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "fixture_evidence": [
+    "Actual bootstrap and actual reader subprocesses with real local Git commits and temporary Ed25519 private keys; generated fingerprint independently matches ssh-keygen -l -E sha256.",
+    "First two publickey failures then success: three requests retain identical SHA, identity path/hash, 0600 mode and host-key check; private credential removed from child environment.",
+    "Permanent key-format/repository/host-key errors: one fetch. Publickey exhaustion: three and fatal. Missing key: zero fetches. Unknown object or trusted byte mismatch: no network retries.",
+    "Keygen timeout uses a real sleeping child, closed stdin and actual five-second deadline. Fetch timeout uses real sleeping Git children with only timeout duration capped by subprocess fixture.",
+    "Diagnostic subprocess secret output and transport private-key echoes are suppressed/redacted; original fetch or verification failures stay visible and fatal."
+  ],
+  "required_wiring_request": {
+    "file": ".github/workflows/implementation-impact.yml",
+    "existing_step": "node --test scripts/ci/__tests__/implementation-skill-source.test.mjs",
+    "append": "scripts/ci/__tests__/implementation-skill-source-transport.test.mjs",
+    "owner": "root; shared workflow intentionally not edited"
+  },
+  "external_followup": "Read actual uncached CI identity fingerprint and compare to public read-only deploy-key metadata; no inference or Secret changes before that evidence.",
+  "secrets_or_proxy_changes": false
+}

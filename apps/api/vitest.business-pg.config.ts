@@ -1,0 +1,2 @@
+import { defineConfig } from 'vitest/config';
+export default defineConfig({resolve:{extensions:['.ts','.tsx','.mts','.cts','.mjs','.js','.jsx','.json']},test:{include:['tests/integration/business-contracts/**/*.pg.test.ts'],globalSetup:'tests/integration/business-contracts/global-setup.ts',setupFiles:['tests/integration/business-contracts/setup-env.ts','tests/setup-http.ts'],testTimeout:10000,hookTimeout:30000,pool:'forks',poolOptions:{forks:{singleFork:true}},sequence:{concurrent:false}}});

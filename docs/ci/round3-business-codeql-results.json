@@ -1,0 +1,291 @@
+{
+  "scope": "10 business security alerts outside original CI-unit denominator; no alert dismissed or severity changed",
+  "base_sha": "32208ce1855331fb356bf97d3734bb9c067906a1",
+  "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+  "url_child_commit": "ed3695373",
+  "units": [
+    {
+      "alert_number": 781,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/781",
+      "rule": "js/request-forgery",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 7,
+        "end_line": 131,
+        "path": "apps/api/src/services/agent-offline-monitor.ts",
+        "start_column": 28,
+        "start_line": 126
+      },
+      "first_reported": "2026-11-04T10:05:05Z",
+      "classification": "pre-existing real risk; newly surfaced/touched sink",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:apps/api/src/services/agent-offline-monitor.ts",
+      "base_blob": "b4e6d99448a34b3cfce7e2ef39e07133d29ef089",
+      "pr_change_before_security_fix": "HTTP error/timeout handling; existing request override to fetch unchanged",
+      "remediation": "fixed Feishu/Lark bot origins and validated token; reject arbitrary host/redirect; internal scan uses canonical auth plus rate limit",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 780,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/780",
+      "rule": "js/request-forgery",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 7,
+        "end_line": 91,
+        "path": "apps/api/src/services/agent-offline-monitor.ts",
+        "start_column": 28,
+        "start_line": 86
+      },
+      "first_reported": "2026-11-04T10:05:05Z",
+      "classification": "pre-existing real risk; newly surfaced/touched sink",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:apps/api/src/services/agent-offline-monitor.ts",
+      "base_blob": "b4e6d99448a34b3cfce7e2ef39e07133d29ef089",
+      "pr_change_before_security_fix": "HTTP error/timeout handling; existing request override to fetch unchanged",
+      "remediation": "fixed Feishu/Lark bot origins and validated token; reject arbitrary host/redirect; internal scan uses canonical auth plus rate limit",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 302,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/302",
+      "rule": "js/incomplete-sanitization",
+      "severity": "high",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 23,
+        "end_line": 37,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 14,
+        "start_line": 37
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 159,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/159",
+      "rule": "js/command-line-injection",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 60,
+        "end_line": 793,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 52,
+        "start_line": 793
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 158,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/158",
+      "rule": "js/command-line-injection",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 102,
+        "end_line": 783,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 23,
+        "start_line": 783
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 157,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/157",
+      "rule": "js/command-line-injection",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 79,
+        "end_line": 665,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 25,
+        "start_line": 665
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 156,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/156",
+      "rule": "js/command-line-injection",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 56,
+        "end_line": 345,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 50,
+        "start_line": 345
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 155,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/155",
+      "rule": "js/command-line-injection",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 53,
+        "end_line": 329,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 42,
+        "start_line": 329
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 154,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/154",
+      "rule": "js/command-line-injection",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 22,
+        "end_line": 41,
+        "path": "services/agent/src/handlers/video-pipeline.ts",
+        "start_column": 19,
+        "start_line": 41
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:services/agent/src/handlers/video-pipeline.ts",
+      "base_blob": "68ada1779faff3b76284e4e1569fed8a324ee69b",
+      "pr_change_before_security_fix": "license-scoped stale recovery only; command construction unchanged",
+      "remediation": "all video FFmpeg/ffprobe/HyperFrames launches use shell:false argv; remove quoteArg; choose external Node and CLI as distinct Windows arguments",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    },
+    {
+      "alert_number": 142,
+      "url": "https://github.com/perfectuser21/zenithjoy-workspace/security/code-scanning/142",
+      "rule": "js/request-forgery",
+      "severity": "critical",
+      "analysed_sha": "e84cd6084317883a662816700b3d74a1adccdd21",
+      "analysed_location": {
+        "end_column": 7,
+        "end_line": 182,
+        "path": "apps/api/src/clients/toapi.client.ts",
+        "start_column": 28,
+        "start_line": 177
+      },
+      "first_reported": "2026-07-16T11:55:24Z",
+      "classification": "pre-existing real risk; large-diff exposure",
+      "base_source_ref": "32208ce1855331fb356bf97d3734bb9c067906a1:apps/api/src/clients/toapi.client.ts",
+      "base_blob": "602d2dee60ca49c0b9cecad19832dc0a8978c3f8",
+      "pr_change_before_security_fix": "none",
+      "remediation": "fixed provider origin, encoded single ID segment, reject dot-only/empty and redirects",
+      "status": "implemented and locally verified; integrated same-SHA CodeQL result pending"
+    }
+  ],
+  "executions": {
+    "url_unit": {
+      "files": 5,
+      "tests": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    "url_pg_http": {
+      "files": 2,
+      "tests": 21,
+      "failed": 0,
+      "skipped": 0,
+      "isolation": "fresh owned PG Unix socket, synthetic official webhook request transport redirected only to a real loopback HTTP server"
+    },
+    "video": {
+      "files": 5,
+      "tests": 27,
+      "failed": 0,
+      "skipped": 0,
+      "isolation": "real child processes and FFmpeg pixels, literal shell-looking paths; no device or provider"
+    },
+    "agent_typecheck": {
+      "command": "npx tsc --noEmit --module esnext --moduleResolution bundler",
+      "exit": 0
+    },
+    "api_build": {
+      "exit": 0
+    },
+    "api_lint": {
+      "warnings": 38,
+      "max_warnings": 40,
+      "errors": 0
+    }
+  },
+  "logs": {
+    "url_red": {
+      "path": "/tmp/pr2406-codeql-url-red.log",
+      "sha256": "6f25eb62924b45361c2d661a693a7039c0e0ef15d6aab7e96e733f22aeb074fa"
+    },
+    "url_unit": {
+      "path": "/tmp/pr2406-codeql-url-final.log",
+      "sha256": "58f8ea6128021324cb29fb16a69e8f0d2fa26d54aa85911eca0debcc8f7b033d"
+    },
+    "url_pg_http": {
+      "path": "/tmp/pr2406-codeql-offline-pg.log",
+      "sha256": "10c22a460c4bd867b30292b1034d6b3b5d2be9d3fa899a2f43e9f36eab97bb65"
+    },
+    "url_build": {
+      "path": "/tmp/pr2406-codeql-url-build.log",
+      "sha256": "38445e7fbb15fb183d5b7cea86ff49833857c77cd0621e33fd670e096fc57cd9"
+    },
+    "url_lint": {
+      "path": "/tmp/pr2406-codeql-url-lint.log",
+      "sha256": "edad433b371370aaf8549eab72ac572e22075dc4cf94428deca3dea72bea006a"
+    },
+    "video_red": {
+      "path": "/tmp/pr2406-codeql-video-red.log",
+      "sha256": "6e5ebec86095246c9c9238e754a2b6db6f9dbdca00d9a526045f27faa6bd44c7"
+    },
+    "video_unit": {
+      "path": "/tmp/pr2406-codeql-video-final.log",
+      "sha256": "c808ac695a5a946dac641d11672c085a408079927848855c20cb3227fa8d33ae"
+    },
+    "agent_typecheck": {
+      "path": "/tmp/pr2406-codeql-agent-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "limits": [
+    "No production notification, paid model, device, credential lookup or production database write",
+    "Packaged Windows production runtime not exercised; native-process implementation inspected against installed pkg bootstrap and standard Windows Node CI remains required",
+    "Alert closure requires fresh integrated CodeQL analysis; historical provenance is not a dismissal"
+  ]
+}

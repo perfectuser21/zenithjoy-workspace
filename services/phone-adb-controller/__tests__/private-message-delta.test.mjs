@@ -5,6 +5,7 @@ import {mkdtempSync,writeFileSync,readFileSync,rmSync,readdirSync} from 'node:fs
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const message='明示fake批准正文';
+test('IME fixture requires real zsh; missing shell is a failure',()=>{const result=spawnSync('zsh',['-c','exit 0'],{encoding:'utf8'});assert.equal(result.error,undefined,'zsh is required');assert.equal(result.status,0);});
 const node=(value,input=false)=>`<node text="${value}" resource-id="${input?'com.ss.android.ugc.aweme:id/msg_et':'fake_bubble'}" class="${input?'android.widget.EditText':'android.widget.TextView'}"/>`;
 function check(before,after,phase){const dir=mkdtempSync(join(tmpdir(),'fake-dm-delta-'));try{
  const fn=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8').match(/^_verify_private_message_delta\(\) \{[\s\S]*?^\}/m)?.[0];
@@ -37,14 +38,16 @@ function dmFocusFlow(mode='moved'){
   const source=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
   const fn=name=>{const f=source.match(new RegExp('^'+name+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0];assert.ok(f,name);return f;};
   const python=spawnSync('python3',['-c','import sys; print(sys.executable)'],{encoding:'utf8'}).stdout.trim();assert.ok(python.startsWith('/'));
-  const state=join(d,'state.json');writeFileSync(state,JSON.stringify({ime:'original/.IME',layout:'old',focused:false,text:'',sent:false,mode}));
+  const state=join(d,'state.json');writeFileSync(state,JSON.stringify({ime:mode==='empty_original'?'':'original/.IME',layout:'old',focused:false,text:'',sent:false,mode}));
   const adb=join(d,'adb');writeFileSync(adb,`#!${python}
 import sys,json,base64,pathlib
 p=pathlib.Path(${JSON.stringify(state)});s=json.loads(p.read_text());a=sys.argv[1:];a=a[a.index('shell')+1:]
 with open(${JSON.stringify(join(d,'calls'))},'a') as f:f.write(json.dumps(a)+'\\n')
 if a==['fake-foreground']:print('mCurrentFocus=Window{1 u0 '+('other.package/.Chat' if s['mode']=='foreground_changed' and s['layout']=='new' else 'com.ss.android.ugc.aweme/.im.ChatRoomActivity')+'}')
 elif a[:4]==['settings','get','secure','default_input_method']:print(s['ime'])
-elif a[:2]==['ime','enable']:print('Input method now enabled')
+elif a[:2]==['ime','enable']:
+ print('fixture enable denied' if s['mode']=='ime_enable_failure' else 'Input method now enabled')
+elif a[:3]==['pm','list','packages']:print('package:com.android.adbkeyboard')
 elif a[:2]==['ime','set']:
  s['ime']=a[2]
  if 'adbkeyboard' in a[2]:s['layout']='new';s['focused']=False
@@ -107,4 +110,19 @@ test('即使focus正确，正文不精确也绝不点击发送',()=>{
 
 test('两次未入焦恢复的IME前树逐round独享保留，不覆盖第一现场',()=>{
  const r=dmFocusFlow('no_focus');assert.notEqual(r.status,0);assert.ok(r.proof_files.includes('focus-case-ime-ready-1.xml'));assert.ok(r.proof_files.includes('focus-case-ime-ready-2.xml'));assert.ok(r.proof_files.includes('focus-case-input-focus-1.xml'));assert.ok(r.proof_files.includes('focus-case-input-focus-2.xml'));assert.equal(r.state.sent,false);
+});
+
+// Production send_private_message is loaded above from current source without copying its implementation.
+test('actual abnormal typed readback exit restores original IME and preserves the first failure',()=>{
+ const r=dmFocusFlow('wrong_text');assert.equal(r.status,2);assert.match(r.stderr,/private-message text readback did not exactly match approved text/);assert.doesNotMatch(r.stderr,/parameter not set/);assert.equal(r.state.ime,'original/.IME');assert.equal(r.state.sent,false);assert.ok(r.calls.some(a=>a.join(' ')==='ime set original/.IME'));
+});
+test('actual enable failure invokes restore trap without hiding the denial or sending',()=>{
+ const r=dmFocusFlow('ime_enable_failure');assert.equal(r.status,2);assert.match(r.stderr,/启用失败.*fixture enable denied/);assert.doesNotMatch(r.stderr,/parameter not set/);assert.equal(r.state.ime,'original/.IME');assert.equal(r.state.sent,false);assert.ok(r.calls.some(a=>a.join(' ')==='ime set original/.IME'));assert.ok(!r.calls.some(a=>a.includes('ADB_INPUT_B64')));
+});
+test('unreadable original IME fails before switching and creates no secondary unset-variable error',()=>{
+ const r=dmFocusFlow('empty_original');assert.equal(r.status,2);assert.match(r.stderr,/original input method could not be read/);assert.doesNotMatch(r.stderr,/parameter not set/);assert.equal(r.state.sent,false);assert.ok(!r.calls.some(a=>a[0]==='ime'&&a[1]==='set'));
+});
+test('current production restore_ime with an unset original IME exits safely without touching ADB',()=>{
+ const source=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');const restore=source.match(/^\s*restore_ime\(\) \{[^\n]+\}$/m)?.[0];assert.ok(restore,'load the actual production restore function');
+ const result=spawnSync('zsh',['-c',`set -euo pipefail\nunset _ORIG_IME\n${restore}\nrestore_ime`],{encoding:'utf8',timeout:5000});assert.equal(result.status,0,result.stderr);assert.doesNotMatch(result.stderr,/parameter not set/);
 });

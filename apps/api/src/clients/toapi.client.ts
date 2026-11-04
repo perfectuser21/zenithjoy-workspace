@@ -130,6 +130,7 @@ export class ToAPIClient {
     console.log('[ToAPI] Creating video generation:', requestBody);
 
     const response = await fetch(`${TOAPI_BASE_URL}/videos/generations`, {
+      redirect: 'error',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -172,9 +173,11 @@ export class ToAPIClient {
     created_at?: number;
     completed_at?: number;
   }> {
+    if (typeof taskId !== 'string' || !taskId || taskId === '.' || taskId === '..') throw new Error('Invalid ToAPI task ID');
     console.log('[ToAPI] Getting task status:', taskId);
 
-    const response = await fetch(`${TOAPI_BASE_URL}/videos/generations/${taskId}`, {
+    const response = await fetch(new URL('/v1/videos/generations/' + encodeURIComponent(taskId), 'https://toapis.com'), {
+      redirect: 'error',
       method: 'GET',
       headers: {
         Authorization: `Bearer ${getApiToken()}`,

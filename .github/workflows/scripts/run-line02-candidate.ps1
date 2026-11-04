@@ -71,7 +71,7 @@ try {
         worker_info = (Join-Path $directory 'worker.json'); process_info = (Join-Path $directory 'process.json')
         workspace = $workspace; sha = $env:GITHUB_SHA; agent = $agent; node = $node; git = $git
         user = $testUser; keyword = $env:SMOKE_KW; bash = $bash
-        script = (Join-Path $workspace '.github\workflows\scripts\smoke\line02-keyword-comment-smoke.sh')
+        script = (Join-Path $workspace '.github\workflows\scripts\operator-probes\line02-keyword-comment.sh')
         log = (Join-Path $directory 'stdout.log'); result = (Join-Path $directory 'result.json')
     }
     $configPath = Join-Path $directory 'config.json'

@@ -1,0 +1,108 @@
+{
+  "security_scope": 21,
+  "original_172_denominator_changed": false,
+  "base_sha": "7c3cacde0fa59c635999d7d02e76ce336fa1e14d",
+  "finding": {
+    "check_run": 126624344911,
+    "candidate_sha": "a934974b871d342759e69f5f17d87e5e95004bc8",
+    "path": "apps/api/src/services/license.service.ts",
+    "line": 96,
+    "title": "Creating biased random numbers from a cryptographically secure source",
+    "dataflow": "crypto.randomBytes(8) -> bytes[i] % ALPHA.length -> license suffix",
+    "alert_introduced_by_this_CI_cleanup": false
+  },
+  "historical_evidence": [
+    {
+      "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+      "path": "apps/api/src/services/license.service.ts",
+      "blob": "f019aa9e6e7eb2e9e5559b65000c77a09df4bfc8",
+      "file_sha256": "0944e6d528bde03219504f29a8188a733d3c3116b39808bc88850d7bc556fb7d",
+      "generator_sha256": "790e3b773a711723e80e35b8a9cf81245d6c00d56314c01d69fb4cb316f8b8aa"
+    },
+    {
+      "commit": "7c3cacde0fa59c635999d7d02e76ce336fa1e14d",
+      "path": "apps/api/src/services/license.service.ts",
+      "blob": "cfdae12765be02aae81565897c7c1e8e0dd4edab",
+      "file_sha256": "6aca8d9ec3f2a00a0d31036c26e21681d3549d8db39173baaf24ba5eb615d369",
+      "generator_sha256": "790e3b773a711723e80e35b8a9cf81245d6c00d56314c01d69fb4cb316f8b8aa"
+    }
+  ],
+  "precision": {
+    "existing_alphabet": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+    "alphabet_length": 32,
+    "byte_domain_size": 256,
+    "byte_values_per_existing_index": 8,
+    "math": "256 is divisible by32; exhaustively enumerating all byte values gives8 values per existing index. Therefore current32-symbol mapping does not itself demonstrate modulo distribution bias. The historical warning is still removed by switching to a bounded cryptographic primitive, including protection if the alphabet length changes later.",
+    "not_claimed": [
+      "No claim of measured existing-license exploit or statistical imbalance with this32-symbol alphabet.",
+      "No alert dismissal, severity reduction or suppression.",
+      "No same-SHA cloud CodeQL success claimed before root rerun."
+    ]
+  },
+  "fix": "Use crypto.randomInt(ALPHA.length) for each of8 characters; remove raw-byte modulo. Retain existing alphabet, suffix length, all tier prefixes, format validator/legacy hex acceptance, quotas, SQL, registration, tenant and signing lifecycle.",
+  "consumers": [
+    "createLicense in license.service.ts",
+    "routes/admin-license.ts",
+    "current account registration/license routes",
+    "isValidLicenseKeyFormat historical hex and base32 acceptance",
+    "Agent registration/license authorization consumers"
+  ],
+  "verification": {
+    "red": {
+      "files": 1,
+      "tests": 10,
+      "passed": 9,
+      "failed": 1,
+      "failure": "Bounded RNG behavior expected8 selections but original implementation called randomInt0 times."
+    },
+    "green": {
+      "files": 7,
+      "tests": 84,
+      "passed": 84,
+      "skipped": 0,
+      "scope": [
+        "all32 bounded index to original character mappings",
+        "160 actual cryptographic generations across all5 tiers preserve accepted format",
+        "8existing historical format cases",
+        "registration fields and machine dedup",
+        "test-license production guard",
+        "account registration62cases",
+        "license auth middleware"
+      ]
+    },
+    "api_build": {
+      "command": "npm run build",
+      "exit": 0
+    },
+    "target_eslint": {
+      "command": "npx --no-install eslint src/services/license.service.ts src/services/license.service.test.ts",
+      "exit": 0
+    },
+    "git_diff_check": {
+      "exit": 0
+    }
+  },
+  "logs": {
+    "annotation": {
+      "path": "/tmp/pr2406-license-codeql-annotations.json",
+      "sha256": "bb39fe5d86598ed85b279c5e6d954852c57b824397177fb988dd104547a82056"
+    },
+    "red": {
+      "path": "/tmp/pr2406-license-unbiased-red.log",
+      "sha256": "d361041ff6a18c730571d06864fbf20e7b9484ed78cb36ed0a60deb1e9566fda"
+    },
+    "green": {
+      "path": "/tmp/pr2406-license-unbiased-green.log",
+      "sha256": "b043afc307cf0a793666e40a07c84f65ddb3e8251f689fbb14816d84133da8f3"
+    },
+    "build": {
+      "path": "/tmp/pr2406-license-unbiased-build.log",
+      "sha256": "06bc6f0cedbb1ce9a580bbaf8ff809f271a7d2e9089d9d394c2217383f4cd50c"
+    },
+    "eslint": {
+      "path": "/tmp/pr2406-license-unbiased-eslint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "authorization_boundary": "Local source/tests only; no credentials read, database write, message, device or deployment. Root owns cherry-pick and same-SHA full CI/CodeQL rerun."
+}

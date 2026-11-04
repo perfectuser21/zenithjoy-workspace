@@ -16,6 +16,7 @@
 //     playwright-core 也崩；唯一能跑通的是 spawn 外部 .cjs 从真实文件系统 require）。
 //     测试路径（options.chromiumLauncher 注入）仍走内部逻辑，保持单元测试可控。
 
+import { isDouyinSessionCookie } from '../../publishers/douyin-cookie-admission.cjs';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -233,7 +234,7 @@ export async function handleQrBindDouyinBurner(
       await page.goto(loginUrl);
     }
 
-    // 等扫码完成：轮询 storageState cookie 直到出现抖音 session cookie (sessionid_ss / sessionid / sid_tt)。
+    // 等扫码完成：轮询 storageState cookie 直到出现抖音 session cookie (sessionid_ss / sessionid)。
     // timeout 10 分钟（600000ms）— 给客户找小号手机时间。
     //
     // 替代旧 waitForURL(/^(?!.*\/login).*$/, {timeout: 600000}) 逻辑 —
@@ -242,13 +243,7 @@ export async function handleQrBindDouyinBurner(
     // 新 cookie polling 直接看抖音真登录 cookie 写入，是真扫码完成的唯一可靠信号。
     const COOKIE_POLL_INTERVAL_MS = 2000;
     const COOKIE_POLL_TIMEOUT_MS = 600000;
-    const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid', 'sid_tt'];
-    const isSessionCookie = (c: { name: string; domain: string; value: string }) =>
-      typeof c?.value === 'string' &&
-      c.value.length > 0 &&
-      typeof c?.domain === 'string' &&
-      (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
-      SESSION_COOKIE_NAMES.includes(c.name);
+    const isSessionCookie = (cookie: unknown) => isDouyinSessionCookie(cookie);
     const start = Date.now();
     type CookieEntry = { name: string; domain: string; value: string };
     type StorageStateShape = { cookies?: CookieEntry[] };

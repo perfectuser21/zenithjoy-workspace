@@ -1,0 +1,184 @@
+{
+  "base_sha": "72e0a1a4ec6ba5d268ecad060d06ca0dd774d032",
+  "scope": "Candidate-only installpack workflow and artifact provenance; no production pointer, version, runtime, required-check list, credentials or device operation changed.",
+  "old_workflow": {
+    "commit": "72e0a1a4ec6ba5d268ecad060d06ca0dd774d032",
+    "path": ".github/workflows/agent-installpack.yml",
+    "blob": "b8c50e2d1d308494883b578ce035ba192c1cad55",
+    "sha256": "d8be227e5755eb3df400ea410b01d1370b2db5006f12fe9b4ad17f877bc94aae",
+    "restore_source": "git show 72e0a1a4ec6ba5d268ecad060d06ca0dd774d032:.github/workflows/agent-installpack.yml"
+  },
+  "original_audit_base_workflow": {
+    "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+    "path": ".github/workflows/agent-installpack.yml",
+    "blob": "b8c50e2d1d308494883b578ce035ba192c1cad55",
+    "sha256": "d8be227e5755eb3df400ea410b01d1370b2db5006f12fe9b4ad17f877bc94aae",
+    "restore_source": "git show 32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/agent-installpack.yml"
+  },
+  "disposition": "Retain real core/four-module builds and Windows packaging checks; remove the previous unadmitted production publication entry. Candidate artifacts are not production release evidence.",
+  "dimensions": {
+    "current_value": "A recoverable core Windows package and all four current module packages from one source SHA remain valuable. Each successful build now retains tar, original build/module manifest, archive/manifest SHA256 and source-bound candidate receipt in GHA for14days. This does not validate the six outstanding external platform/device business obligations.",
+    "active_status": {
+      "triggers": [
+        "push main matching existing paths",
+        "workflow_dispatch publish=false"
+      ],
+      "guard": "Deprecated boolean remains false by default for existing dispatch callers. publish=true executes a real nonzero guard shell before either build job; guard performs no checkout, setup or network action.",
+      "build_consumers": [
+        "candidate-mode -> build (Windows actual pkg/overlay/icon/embedded Python checks)",
+        "candidate-mode -> build-line-modules matrix(line04,line01,line02,line05)"
+      ],
+      "existing_client_consumers": [
+        "apps/api/src/services/install-pack-manifest.ts: readInstallPackManifest reads existing production file",
+        "apps/api/src/routes/agent-install-pack.ts: GET manifest/download, license-bound download and existing protected PUT remain unchanged",
+        "apps/api/src/services/walking-skeleton.service.ts: current core manifest and existing required module versions",
+        "services/agent/src/core-upgrader.ts and module-manager.ts: existing production core/module download lifecycle"
+      ],
+      "observed_old_main_run": {
+        "run": 41837549796,
+        "head_sha": "d0f14535c40b17e6cb13f2be3c031a2e89fd3392",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "writes": "actual job steps show four module COS uploads, core COS upload and production manifest PUT succeeded; no inflight run in latest5 at observation",
+        "source_core_version": "2.0.95",
+        "limit": "Run metadata/source version is not an independent live production readback."
+      }
+    },
+    "real_effect": {
+      "removed": [
+        "core COS uploader and COS-only pip/credential setup",
+        "four-module COS uploader and COS-only pip/credential setup",
+        "cos_url mutation and output dependency",
+        "publish job, including production manifest PUT and automatic WeChat mirror writer",
+        "obsolete get_pack/output plumbing"
+      ],
+      "preserved": [
+        "all core/package/agent-panel dependency installs and production packaging script",
+        "Windows exe overlay runnable check, icon check and embedded Python/import gates",
+        "four existing module build script invocations and existing source manifests",
+        "existing WeChat COS cache objects and all reader URLs; Python preflight fallback remains in source"
+      ],
+      "production_pointer": "This change performs no production write or rollback; retain existing2.0.95 pointer. No claim of live readback made by this child. Root owns actual external evidence.",
+      "module_requirements": "No business source, module version, package version or heartbeat requirements changed."
+    },
+    "test_and_blocking": {
+      "canonical_existing": "ci-l1-process.yml existing invocation of services/agent/scripts/__tests__/installpack-build-only.test.py; no new required job/check",
+      "local_contract": "4 tests passed: executes main/manualfalse/true guard shells, validates dependency graph and full artifact paths, rejects residual production writer credentials/PUT/COS steps, recovers core+4module tar fixtures and verifies receipt/hash/missing/mismatch/immutableSHA failures.",
+      "actual_builds": "All four current module packages built with the actual production build-line-module.sh under Node20; exact embedded manifests and all candidate hashes read back. Existing cloud-built root72 core archive+manifest independently rehashed by new helper in owned local scratch.",
+      "same_SHA_cloud_pending": "Root must run changed workflow on final integrated SHA and check five retained artifact sets,14 required checks and CodeQL. Local root72 archive is not a receipt for the future SHA."
+    },
+    "duplication_and_obsolescence": "Legacy publish input retained solely as false-compatible validation; true is rejected, no dead if:false writers or replacement production endpoint. GHA artifacts replace the prior module packages existing only in disposable runner storage. No existing full promotion or ABI protocol is invented.",
+    "runtime_and_maintenance_cost": "Existing core30min/module15min hard job bounds retained; guard1min and SHA256/readback are bounded local operations. COS SDK/pip installs and external publication steps removed. Candidates retain14days; no production mirror/cache deletion.",
+    "retirement_and_dependencies": "Old workflow is recoverable by exact commit/blob/SHA256 above. Existing installers/clients/COS objects and shared APIs are retained. Actual promote/rollback installpack workflows are absent in this base; same-source core+module hashes, real business admission, immutable predecessor and concurrency check remain an existing installer external-evidence gap. This change does not claim to implement promotion, rollback, installed-client downgrade or physical acceptance."
+  },
+  "artifact_contract": {
+    "names": [
+      "zenithjoy-agent-candidate-core-${github.sha}",
+      "zenithjoy-agent-candidate-line04-${github.sha}",
+      "zenithjoy-agent-candidate-line01-${github.sha}",
+      "zenithjoy-agent-candidate-line02-${github.sha}",
+      "zenithjoy-agent-candidate-line05-${github.sha}"
+    ],
+    "each": [
+      "*.tar.gz",
+      "manifest.json",
+      "candidate-receipt.json",
+      "SHA256SUMS"
+    ],
+    "missing_artifact": "upload-artifact if-no-files-found:error plus receipt helper missing/hash/size validation before upload"
+  },
+  "verification": {
+    "contract_tests": {
+      "tests": 4,
+      "exit": 0,
+      "node": "20.20.2"
+    },
+    "actionlint": {
+      "exit": 0
+    },
+    "product_map_check": {
+      "exit": 0
+    },
+    "real_local_archive_receipt": {
+      "source_scope": "Existing root72 cloud-built core plus local production-script-built modules from72 business source; new workflow same-SHA cloud build is pending root integration.",
+      "artifacts": [
+        {
+          "component": "core",
+          "archive": "zenithjoy-agent-v2.0.96.tar.gz",
+          "archive_sha256": "419cfb2dd6490385704945bdc89b7931f4665b10a749e0a965a71f72671d04f6",
+          "candidate_dir": "/private/tmp/zj-installpack-candidate-evidence-es1tx3rn/core/dist-installpack",
+          "hashes_verified": true,
+          "embedded_module_manifest_exact": false,
+          "stdout": "[candidate] retained core 2.0.96 from 72e0a1a4ec6ba5d268ecad060d06ca0dd774d032; no production write"
+        },
+        {
+          "component": "line04",
+          "archive": "line04-wechat-cs-v1.0.153.tar.gz",
+          "archive_sha256": "506114e6766054e24349a313d79bc372e97068a435a950750df400de6434097c",
+          "candidate_dir": "/private/tmp/zj-installpack-candidate-evidence-es1tx3rn/line04/dist-modules",
+          "hashes_verified": true,
+          "embedded_module_manifest_exact": true,
+          "stdout": "[candidate] retained line04 1.0.153 from 72e0a1a4ec6ba5d268ecad060d06ca0dd774d032; no production write"
+        },
+        {
+          "component": "line01",
+          "archive": "line01-publish-v1.0.1.tar.gz",
+          "archive_sha256": "503ea9c121ea46959fa86a31caea8852d311629e50346d25a396d278b4b1a13d",
+          "candidate_dir": "/private/tmp/zj-installpack-candidate-evidence-es1tx3rn/line01/dist-modules",
+          "hashes_verified": true,
+          "embedded_module_manifest_exact": true,
+          "stdout": "[candidate] retained line01 1.0.1 from 72e0a1a4ec6ba5d268ecad060d06ca0dd774d032; no production write"
+        },
+        {
+          "component": "line02",
+          "archive": "line02-lead-gen-v1.0.11.tar.gz",
+          "archive_sha256": "1df470f027588ab8961652aba3e5aef6a258812c5d7401fe5c5504b841c6d3f3",
+          "candidate_dir": "/private/tmp/zj-installpack-candidate-evidence-es1tx3rn/line02/dist-modules",
+          "hashes_verified": true,
+          "embedded_module_manifest_exact": true,
+          "stdout": "[candidate] retained line02 1.0.11 from 72e0a1a4ec6ba5d268ecad060d06ca0dd774d032; no production write"
+        },
+        {
+          "component": "line05",
+          "archive": "line05-video-v1.0.1.tar.gz",
+          "archive_sha256": "d6b7c7036b7daa0720374f575af08d081775fa40a86e6ebb2498cf4c95c2b098",
+          "candidate_dir": "/private/tmp/zj-installpack-candidate-evidence-es1tx3rn/line05/dist-modules",
+          "hashes_verified": true,
+          "embedded_module_manifest_exact": true,
+          "stdout": "[candidate] retained line05 1.0.1 from 72e0a1a4ec6ba5d268ecad060d06ca0dd774d032; no production write"
+        }
+      ]
+    }
+  },
+  "logs": {
+    "red_node20": {
+      "path": "/tmp/pr2406-installpack-contract-red-node20.log",
+      "sha256": "18b207299838a6685267506e96350caed1e42e765a69b44ac0e4dcc393057d0f"
+    },
+    "green_contract": {
+      "path": "/tmp/pr2406-installpack-contract-green.log",
+      "sha256": "6ceaa0181c3c06c283be4435aa1382d4ec36c6d7aeaf108723e90596a80749e8"
+    },
+    "real_module_builds": {
+      "path": "/tmp/pr2406-installpack-modules-real-build.log",
+      "sha256": "e418bba45bffa9f29633ff1996fdb473026f140ef459410ef1844ecbca99c482"
+    },
+    "old_main_run_metadata": {
+      "path": "/tmp/pr2406-installpack-old-main-run.json",
+      "sha256": "704c5699be680a1c92356c09e749fea20d064eefe30d8a377779e8630c759fdd"
+    },
+    "real_candidate_archive_readback": {
+      "path": "/private/tmp/zj-installpack-candidate-evidence-es1tx3rn/receipt.json",
+      "sha256": "e5515c4883f42017a830876283ce587a4ec3d3027bcdbbdd8a667eb283cd7cbe"
+    },
+    "final_contract": {
+      "path": "/tmp/pr2406-installpack-contract-final.log",
+      "sha256": "9802802c6574f252cac05d802e3d982a286d96b9ce8ec75a3a55693b24487bd2"
+    },
+    "actionlint": {
+      "path": "/tmp/pr2406-installpack-actionlint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

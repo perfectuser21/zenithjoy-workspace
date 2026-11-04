@@ -1,14 +1,20 @@
 import { Router } from 'express';
 import { createTask, getTask, listTasks } from '../services/task-db';
 import { dispatchTask } from '../services/task-dispatch';
+import { tenantContext } from '../middleware/tenant-context';
 
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+
+const taskLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: ipKeyFn });
 export const tasksRouter = Router();
 
-tasksRouter.post('/', async (req, res, next) => {
+tasksRouter.post('/', taskLimit, tenantContext, async (req, res, next) => {
   try {
-    const { tenantId, skill, params = {} } = req.body;
-    if (!tenantId || !skill) {
-      return res.status(400).json({ error: 'tenantId and skill are required' });
+    const { tenantId: hint, skill, params = {} } = req.body;
+    const tenantId = req.tenantId!;
+    if (hint !== undefined && hint !== tenantId) return res.status(403).json({ error: 'forbidden' });
+    if (typeof skill !== 'string' || !skill.trim()) {
+      return res.status(400).json({ error: 'skill is required' });
     }
     const task = await createTask({ tenantId, skill, params });
     dispatchTask(task).catch((e) => console.warn('[tasks] dispatchTask failed:', e));
@@ -18,12 +24,10 @@ tasksRouter.post('/', async (req, res, next) => {
   }
 });
 
-tasksRouter.get('/', async (req, res, next) => {
+tasksRouter.get('/', taskLimit, tenantContext, async (req, res, next) => {
   try {
-    const { tenantId } = req.query;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return res.status(400).json({ error: 'tenantId query param required' });
-    }
+    const tenantId = req.tenantId!;
+    if (req.query.tenantId !== undefined && req.query.tenantId !== tenantId) return res.status(403).json({ error: 'forbidden' });
     const tasks = await listTasks(tenantId);
     return res.json({ tasks });
   } catch (err) {
@@ -31,16 +35,14 @@ tasksRouter.get('/', async (req, res, next) => {
   }
 });
 
-// Require tenantId to prevent IDOR across tenants
-tasksRouter.get('/:id', async (req, res, next) => {
+// Derive tenancy from the resolved identity; request hints never authorize access.
+tasksRouter.get('/:id', taskLimit, tenantContext, async (req, res, next) => {
   try {
-    const { tenantId } = req.query;
-    if (!tenantId || typeof tenantId !== 'string') {
-      return res.status(400).json({ error: 'tenantId query param required' });
-    }
+    const tenantId = req.tenantId!;
+    if (req.query.tenantId !== undefined && req.query.tenantId !== tenantId) return res.status(403).json({ error: 'forbidden' });
     const task = await getTask(req.params.id);
     if (!task) return res.status(404).json({ error: 'not found' });
-    if (task.tenantId !== tenantId) return res.status(403).json({ error: 'forbidden' });
+    if (task.tenantId !== tenantId) return res.status(404).json({ error: 'not found' });
     return res.json({ task });
   } catch (err) {
     next(err);

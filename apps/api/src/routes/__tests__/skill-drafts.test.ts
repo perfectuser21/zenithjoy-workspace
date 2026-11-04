@@ -18,6 +18,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
+import { PassThrough } from 'node:stream';
 
 // ─── Mock 基础依赖 ─────────────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ describe('[BEHAVIOR] 2 — GET /api/staff/skill-drafts/:id 返回历史 messages
     '断点续聊：创建草稿 → 发消息等 SSE done → GET → messages_json.length === 2',
     async () => {
       const { EventEmitter } = await import('events');
-      const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+      const fakeStdout = new PassThrough();
       const fakeProcess = {
         stdout: fakeStdout,
         stderr: new EventEmitter(),
@@ -148,11 +149,9 @@ describe('[BEHAVIOR] 2 — GET /api/staff/skill-drafts/:id 返回历史 messages
       const draftId: string = createRes.body.data.id;
 
       setTimeout(() => {
-        (fakeStdout as NodeJS.EventEmitter).emit(
-          'data',
-          Buffer.from('{"type":"assistant","session_id":"real-session-1","message":{"content":[{"type":"text","text":"好的，收到"}]}}\n')
+        fakeStdout.write(Buffer.from('{"type":"assistant","session_id":"real-session-1","message":{"content":[{"type":"text","text":"好的，收到"}]}}\n')
         );
-        (fakeStdout as NodeJS.EventEmitter).emit('end');
+        fakeStdout.end();
       }, 10);
 
       await request(app)
@@ -182,7 +181,7 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
   it('响应 Content-Type 包含 text/event-stream', async () => {
     // mock SSH spawn 返回固定 stream-json 输出
     const { EventEmitter } = await import('events');
-    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout = new PassThrough();
     const fakeProcess = {
       stdout: fakeStdout,
       stderr: new EventEmitter(),
@@ -191,27 +190,27 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
     };
     spawnMock.mockReturnValue(fakeProcess);
 
-    // 发出固定 SSE 输出后立即 emit close
-    setTimeout(() => {
-      (fakeStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from('{"type":"assistant","session_id":"real-session-hello","message":{"content":[{"type":"text","text":"hello"}]}}\n')
-      );
-      (fakeStdout as NodeJS.EventEmitter).emit('end');
-    }, 10);
+    // PassThrough buffers output until the route attaches its readers, just like child stdout.
+    // 回归：子进程在 HTTP 请求开始前就产出并结束；输出必须留给路由消费。
+    fakeStdout.end(Buffer.from(
+      '{"type":"assistant","session_id":"real-session-hello","message":{"content":[{"type":"text","text":"hello"}]}}\n'
+    ));
 
     const res = await request(app)
       .post('/api/staff/skill-drafts/test-draft-id-001/chat')
       .set('X-User-Email', 'staff@test.com')
       .send({ message: '你好' });
 
-    // Red：端点未实现时此断言失败
+    expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.text).toContain('hello');
+    expect(res.text).toContain('event: done');
+    expect(res.text).not.toContain('event: error');
   });
 
   it('至少收到 1 条 data: 行且最后收到 event: done', async () => {
     const { EventEmitter } = await import('events');
-    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout = new PassThrough();
     const fakeProcess = {
       stdout: fakeStdout,
       stderr: new EventEmitter(),
@@ -221,11 +220,9 @@ describe('[BEHAVIOR] 3 — POST /api/staff/skill-drafts/:id/chat SSE 流', () =>
     spawnMock.mockReturnValue(fakeProcess);
 
     setTimeout(() => {
-      (fakeStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from('{"type":"assistant","session_id":"real-session-hello","message":{"content":[{"type":"text","text":"hello"}]}}\n')
+      fakeStdout.write(Buffer.from('{"type":"assistant","session_id":"real-session-hello","message":{"content":[{"type":"text","text":"hello"}]}}\n')
       );
-      (fakeStdout as NodeJS.EventEmitter).emit('end');
+      fakeStdout.end();
     }, 10);
 
     const res = await request(app)
@@ -248,7 +245,7 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
 
   it('首条消息（草稿无 session_id）不传 --resume，让 claude 自己开新会话', async () => {
     const { EventEmitter } = await import('events');
-    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout = new PassThrough();
     spawnMock.mockReturnValue({
       stdout: fakeStdout,
       stderr: new EventEmitter(),
@@ -263,13 +260,11 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     const draftId: string = createRes.body.data.id;
 
     setTimeout(() => {
-      (fakeStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout.write(Buffer.from(
           '{"type":"assistant","session_id":"new-real-session-xyz","message":{"content":[{"type":"text","text":"你好"}]}}\n'
         )
       );
-      (fakeStdout as NodeJS.EventEmitter).emit('end');
+      fakeStdout.end();
     }, 10);
 
     await request(app)
@@ -287,7 +282,7 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
 
   it('第二条消息（草稿已有 session_id）传 --resume 续接同一会话', async () => {
     const { EventEmitter } = await import('events');
-    const fakeStdout1 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout1 = new PassThrough();
     spawnMock.mockReturnValueOnce({
       stdout: fakeStdout1,
       stderr: new EventEmitter(),
@@ -302,13 +297,11 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     const draftId: string = createRes.body.data.id;
 
     setTimeout(() => {
-      (fakeStdout1 as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout1.write(Buffer.from(
           '{"type":"assistant","session_id":"established-session-1","message":{"content":[{"type":"text","text":"好的"}]}}\n'
         )
       );
-      (fakeStdout1 as NodeJS.EventEmitter).emit('end');
+      fakeStdout1.end();
     }, 10);
 
     await request(app)
@@ -316,7 +309,7 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       .set('X-User-Email', 'staff@test.com')
       .send({ message: '第一条消息' });
 
-    const fakeStdout2 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout2 = new PassThrough();
     spawnMock.mockReturnValueOnce({
       stdout: fakeStdout2,
       stderr: new EventEmitter(),
@@ -325,13 +318,11 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     });
 
     setTimeout(() => {
-      (fakeStdout2 as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout2.write(Buffer.from(
           '{"type":"assistant","session_id":"established-session-1","message":{"content":[{"type":"text","text":"继续说"}]}}\n'
         )
       );
-      (fakeStdout2 as NodeJS.EventEmitter).emit('end');
+      fakeStdout2.end();
     }, 10);
 
     await request(app)
@@ -349,7 +340,7 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     const { EventEmitter } = await import('events');
 
     // 第一次带 session_id 起会话
-    const fakeStdout0 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout0 = new PassThrough();
     spawnMock.mockReturnValueOnce({
       stdout: fakeStdout0,
       stderr: new EventEmitter(),
@@ -362,13 +353,11 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       .send({});
     const draftId: string = createRes.body.data.id;
     setTimeout(() => {
-      (fakeStdout0 as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout0.write(Buffer.from(
           '{"type":"assistant","session_id":"dead-session-abc","message":{"content":[{"type":"text","text":"好的"}]}}\n'
         )
       );
-      (fakeStdout0 as NodeJS.EventEmitter).emit('end');
+      fakeStdout0.end();
     }, 10);
     await request(app)
       .post(`/api/staff/skill-drafts/${draftId}/chat`)
@@ -376,7 +365,7 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       .send({ message: '第一条消息' });
 
     // 第二条消息：--resume dead-session-abc 失败（会话已死），应自动清session_id重试
-    const fakeStdout1 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout1 = new PassThrough();
     spawnMock.mockReturnValueOnce({
       stdout: fakeStdout1,
       stderr: new EventEmitter(),
@@ -384,17 +373,15 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       kill: vi.fn(),
     });
     setTimeout(() => {
-      (fakeStdout1 as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout1.write(Buffer.from(
           '{"type":"result","is_error":true,"errors":["No conversation found with session ID: dead-session-abc"]}\n'
         )
       );
-      (fakeStdout1 as NodeJS.EventEmitter).emit('end');
+      fakeStdout1.end();
     }, 10);
 
     // 重试的第二次 spawn（不带 --resume）真的回复了
-    const fakeStdout2 = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout2 = new PassThrough();
     spawnMock.mockReturnValueOnce({
       stdout: fakeStdout2,
       stderr: new EventEmitter(),
@@ -402,13 +389,11 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
       kill: vi.fn(),
     });
     setTimeout(() => {
-      (fakeStdout2 as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout2.write(Buffer.from(
           '{"type":"assistant","session_id":"fresh-session-xyz","message":{"content":[{"type":"text","text":"重新开始"}]}}\n'
         )
       );
-      (fakeStdout2 as NodeJS.EventEmitter).emit('end');
+      fakeStdout2.end();
     }, 30);
 
     const res = await request(app)
@@ -428,8 +413,10 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
 
   it('回归：stdout end 和 process close 都真实触发时，assistant 回复只写入 messages_json 一次（不重复）', async () => {
     const { EventEmitter } = await import('events');
-    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout = new PassThrough();
     let closeHandler: ((code: number | null) => void) | undefined;
+    let closeEvents = 0;
+    fakeStdout.once('end', () => queueMicrotask(() => { closeEvents++; closeHandler?.(0); }));
     spawnMock.mockReturnValue({
       stdout: fakeStdout,
       stderr: new EventEmitter(),
@@ -446,15 +433,12 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     const draftId: string = createRes.body.data.id;
 
     setTimeout(() => {
-      (fakeStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout.write(Buffer.from(
           '{"type":"assistant","session_id":"dup-check-session","message":{"content":[{"type":"text","text":"只应该出现一次"}]}}\n'
         )
       );
-      // 真实场景里 stdout 'end' 和 child 'close' 都会各自触发一次——都手动模拟
-      (fakeStdout as NodeJS.EventEmitter).emit('end');
-      closeHandler?.(0);
+      // stdout ends first; its end listener emits child close after all readers consume it.
+      fakeStdout.end();
     }, 10);
 
     await request(app)
@@ -469,12 +453,14 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     const assistantMessages = (getRes.body.data.messages_json as Array<{ role: string }>).filter(
       (m) => m.role === 'assistant'
     );
+    expect(closeEvents).toBe(1);
+    expect(closeHandler).toBeTypeOf('function');
     expect(assistantMessages.length).toBe(1);
   });
 
   it('真实 result 事件 is_error=true（如"会话不存在"/认证过期）→ event: error，不当成功空回复处理', async () => {
     const { EventEmitter } = await import('events');
-    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout = new PassThrough();
     spawnMock.mockReturnValue({
       stdout: fakeStdout,
       stderr: new EventEmitter(),
@@ -483,13 +469,11 @@ describe('[BEHAVIOR] 11 — 真实 claude CLI 会话生命周期', () => {
     });
 
     setTimeout(() => {
-      (fakeStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from(
+      fakeStdout.write(Buffer.from(
           '{"type":"result","is_error":true,"errors":["No conversation found with session ID: xxx"]}\n'
         )
       );
-      (fakeStdout as NodeJS.EventEmitter).emit('end');
+      fakeStdout.end();
     }, 10);
 
     const res = await request(app)
@@ -612,7 +596,7 @@ describe('[BEHAVIOR] 9（=E2E-3）— 断点续聊集成', () => {
 
   it('POST 建草稿 → POST chat（1 条消息）→ GET → messages_json.length === 2', async () => {
     const { EventEmitter } = await import('events');
-    const fakeStdout = new EventEmitter() as NodeJS.ReadableStream & { destroy?: () => void };
+    const fakeStdout = new PassThrough();
     const fakeProcess = {
       stdout: fakeStdout,
       stderr: new EventEmitter(),
@@ -628,11 +612,9 @@ describe('[BEHAVIOR] 9（=E2E-3）— 断点续聊集成', () => {
     const draftId: string = createRes.body.data.id;
 
     setTimeout(() => {
-      (fakeStdout as NodeJS.EventEmitter).emit(
-        'data',
-        Buffer.from('{"type":"assistant","session_id":"real-session-2","message":{"content":[{"type":"text","text":"没问题，我来帮你"}]}}\n')
+      fakeStdout.write(Buffer.from('{"type":"assistant","session_id":"real-session-2","message":{"content":[{"type":"text","text":"没问题，我来帮你"}]}}\n')
       );
-      (fakeStdout as NodeJS.EventEmitter).emit('end');
+      fakeStdout.end();
     }, 10);
 
     await request(app)

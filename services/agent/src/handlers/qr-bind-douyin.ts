@@ -12,6 +12,7 @@
 // Playwright 是运行时依赖（不嵌入 .exe，由客户机 Node 装），所以这里用动态 import
 // 同时允许测试注入 chromiumLauncher。
 
+import { isDouyinSessionCookie } from '../../publishers/douyin-cookie-admission.cjs';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -151,13 +152,7 @@ export async function handleQrBindDouyin(
     const page = await ctx.newPage!();
     await page.goto!(loginUrl);
 
-    const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid', 'sid_tt'];
-    const isSessionCookie = (c: { name: string; domain: string; value: string }) =>
-      typeof c?.value === 'string' &&
-      c.value.length > 0 &&
-      typeof c?.domain === 'string' &&
-      (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
-      SESSION_COOKIE_NAMES.includes(c.name);
+    const isSessionCookie = (cookie: unknown) => isDouyinSessionCookie(cookie);
 
     type CookieEntry = { name: string; domain: string; value: string };
     type StorageStateShape = { cookies?: CookieEntry[] };

@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "lane": "business-extra",
+  "original_business_unit_count_unchanged": 48,
+  "extra_unit_count": 2,
+  "units": [
+    {
+      "unit_id": "line04-scan-scroll-detail-fields",
+      "state": "implemented_isolated_shared_api_contract_wrapper_retired",
+      "retired_path": ".github/workflows/scripts/smoke/line04-scan-scroll-detail-fields-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line04-scan-scroll-detail-fields-smoke.sh",
+      "sha256": "f0f13b75976b95c68d329c148dea1bafac17cd59ebca445d934a62bf4fede8c9",
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm-friend-scan-reconcile.test.ts",
+        "apps/api/src/routes/__tests__/crm-partial-friend-ingest.test.ts"
+      ],
+      "actual_assertions": "Actual12 contacts compare exact per-row source/message/wechat_id/add_friend_time and nullable timestamps in PostgreSQL and cookie roster; missing credential401 and foreign license403 precede writes.",
+      "source_fix": "Correct full migrated UUID/session/license fixtures; preserve shared API without reinstating old Windows scroll producer.",
+      "boundary": "This proves shared ingest/roster API fields, not Qt/Android contact scrolling or phone collection. No device or Windows runtime invoked.",
+      "evidence_ids": [
+        "business_real_pg",
+        "api_canonical_union"
+      ]
+    },
+    {
+      "unit_id": "skill-draft-longrun",
+      "state": "implemented_isolated_shared_api_contract_wrapper_retired",
+      "retired_path": ".github/workflows/scripts/smoke/skill-create-longrun-smoke.sh",
+      "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/skill-create-longrun-smoke.sh",
+      "sha256": "b960025ff226126592d85bcb04d02c6a07a48312a9a6e14f22e335e61db042a6",
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/__tests__/skill-drafts-longrun.test.ts",
+        "apps/api/src/routes/__tests__/skill-drafts.test.ts"
+      ],
+      "actual_assertions": "Real production route/SQL/one local child process: running409, bad token, invalid event preserves legitimate token, needs_input, answer rotates token, done, sealed terminal, error callback and soft timeout persisted.",
+      "source_fix": "Validate callback event before consuming its one-shot token; actual red then green fixture.",
+      "boundary": "No current Dashboard/Staff/CLI consumer found; compatibility API/data retained. Remote SSH/Claude/artifact generation replaced only at process boundary; no product or paid-worker completion claimed.",
+      "evidence_ids": [
+        "business_real_pg",
+        "legacy_skill_draft_contracts"
+      ]
+    }
+  ],
+  "execution_evidence": [
+    {
+      "id": "api_canonical_union",
+      "result": "passed",
+      "log_path": "/tmp/business-final-api-union.log",
+      "log_sha256": "d48d9d5d1f9a016a30c45b2ddcb07bcf59feed341eac4697cb32e70412b41abd",
+      "files": 62,
+      "tests_or_checks": 790
+    },
+    {
+      "id": "business_real_pg",
+      "result": "passed",
+      "log_path": "/tmp/business-final-pg.log",
+      "log_sha256": "c503e3a3beda91486114e19f821f7fb2049aa5b8063cfc3005b7adddbf257e5a",
+      "files": 1,
+      "tests_or_checks": 23
+    },
+    {
+      "id": "current_company_pg_own_instance",
+      "result": "passed",
+      "log_path": "/tmp/business-existing-pg-own-instance.log",
+      "log_sha256": "40ef63b5c80e16b0b116876d2fcada0603a5deb921efec15583baf95828b1c8e",
+      "files": 5,
+      "tests_or_checks": 49
+    },
+    {
+      "id": "dashboard_canonical_union",
+      "result": "passed",
+      "log_path": "/tmp/business-final-dashboard-union.log",
+      "log_sha256": "e7a5361568beaa9192be889f29905c1c6c2f89f8894ef80660d5c6dcf49cab58",
+      "files": 6,
+      "tests_or_checks": 36
+    },
+    {
+      "id": "staff_canonical_union",
+      "result": "passed",
+      "log_path": "/tmp/business-final-staff-union.log",
+      "log_sha256": "15f499b8096bc1d02cf505abfd2c4ebdc00e73ea804954841a7e00f1dab92b9f",
+      "files": 4,
+      "tests_or_checks": 21
+    },
+    {
+      "id": "legacy_skill_draft_contracts",
+      "result": "passed",
+      "log_path": "/tmp/business-skill-drafts.log",
+      "log_sha256": "b98783f630d6ff9a1c0a152497558de28c1118b30ad5abf21e73dc87dad51380",
+      "files": 2,
+      "tests_or_checks": 38
+    },
+    {
+      "id": "isolated_node_contracts",
+      "result": "passed",
+      "log_path": "/tmp/business-final-node.log",
+      "log_sha256": "cdf3c9cdf85290da66b8f999c8ca57d3de0f31b97cf3bbe266aeeadb91822caf",
+      "files": 3,
+      "tests_or_checks": 6
+    },
+    {
+      "id": "acceptance_spec",
+      "result": "passed",
+      "log_path": "/tmp/business-acceptance-spec.log",
+      "log_sha256": "5e150a67053bb3938b0b415d71b4f2cc1849f23430e0cbbaf470805088aff89c",
+      "files": 3,
+      "tests_or_checks": 20
+    },
+    {
+      "id": "manual_history_chromium_pg",
+      "result": "passed",
+      "log_path": "/tmp/business-manual-history.log",
+      "log_sha256": "7199c7d312518d78176c749e8697eb1c19332f79de14c8544936d01e3ee8351c",
+      "files": null,
+      "tests_or_checks": 8
+    },
+    {
+      "id": "deploy_build_process_sha",
+      "result": "passed",
+      "log_path": "/tmp/business-deploy-selfcheck.log",
+      "log_sha256": "4463709b755662a7229f85ea0791c3e91cca74b3aeab6348485a6e2c17d7d8c7",
+      "files": null,
+      "tests_or_checks": null
+    },
+    {
+      "id": "api_build",
+      "result": "passed",
+      "log_path": "/tmp/business-api-build-final.log",
+      "log_sha256": "fce64e06906cc0e7131e195491c5c83b780468e4ee1d61ef4bc9fdd9a21248bf",
+      "files": null,
+      "tests_or_checks": null
+    },
+    {
+      "id": "staff_typecheck",
+      "result": "passed",
+      "log_path": "/tmp/business-staff-typecheck.log",
+      "log_sha256": "b04b6d714908da0b5248dd8124c5d902e5b82b1f8306bfed1f661f7607bcd7fd",
+      "files": null,
+      "tests_or_checks": null
+    }
+  ]
+}

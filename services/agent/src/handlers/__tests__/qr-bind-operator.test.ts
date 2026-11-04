@@ -132,7 +132,7 @@ describe('handleQrBindOperator — SPA 3s 等待 + Session Cookie 检测', () =>
 
   it('扫码成功后写 storageState 到 sessionPath', async () => {
     const fakeStorage = {
-      cookies: [{ name: 'sessionid_ss', value: 'abc123', domain: '.douyin.com' }],
+      cookies: [{ name: 'sessionid_ss', value: 'synthetic-valid-session-token-for-fixture', domain: '.douyin.com' }],
       origins: [],
     };
     const { browser } = makeMockBrowser(fakeStorage);

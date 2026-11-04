@@ -100,11 +100,7 @@
       "name": "客户首次成功",
       "status": "active",
       "smoke_files": [
-        ".github/workflows/scripts/smoke/golden-path-1-smoke.sh",
-        ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh",
-        ".github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh",
-        ".github/workflows/scripts/smoke/feishu-orchestrator-selfcheck-smoke.sh",
-        ".github/workflows/scripts/smoke/my-works-api-smoke.sh"
+        ".github/workflows/scripts/smoke/business-contracts-smoke.sh"
       ],
       "steps": [
         {
@@ -220,7 +216,7 @@
       "name": "AI on-call 定位求助（RPA 碎片化失败保底，横切底座）",
       "status": "active",
       "smoke_files": [
-        ".github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh",
+        ".github/workflows/scripts/smoke/media-extra-contracts-smoke.sh",
         ".github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh"
       ]
     },
@@ -433,11 +429,9 @@
       "smoke_files": [
         ".github/workflows/scripts/smoke/wechat-cs-android-smoke.sh",
         ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
-        ".github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh",
         ".github/workflows/scripts/smoke/line04-cs-memory-smoke.sh",
-        ".github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh",
         ".github/workflows/scripts/smoke/line04-crm-analysis-smoke.sh",
-        ".github/workflows/scripts/smoke/crm-manual-history-smoke.sh"
+        ".github/workflows/scripts/smoke/business-contracts-smoke.sh"
       ],
       "steps": [
         {
@@ -486,7 +480,7 @@
         ".github/workflows/scripts/smoke/material-tagging-smoke.sh",
         ".github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh",
         ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh",
-        ".github/workflows/scripts/smoke/mashup-render-smoke.sh",
+        ".github/workflows/scripts/smoke/media-contracts-smoke.sh",
         ".github/workflows/scripts/smoke/mashup-history-smoke.sh"
       ]
     },
@@ -507,7 +501,7 @@
       "name": "AI爆款视频翻拍",
       "status": "active",
       "smoke_files": [
-        ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh"
+        ".github/workflows/scripts/smoke/media-contracts-smoke.sh"
       ]
     },
     {
@@ -526,7 +520,7 @@
         }
       ],
       "smoke_files": [
-        ".github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh"
+        ".github/workflows/scripts/smoke/product-delivery-contracts-smoke.sh"
       ]
     },
     {
@@ -572,7 +566,7 @@
       "name": "GP锚定闭环",
       "status": "active",
       "smoke_files": [
-        ".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh"
+        ".github/workflows/scripts/smoke/gp-anchor-contracts-smoke.sh"
       ]
     },
     {
@@ -660,5 +654,5 @@
       ]
     }
   ],
-  "digest": "73c7aac2a71e79b24c2c3a00c9ad4ef53ce7b1bbdad161b9ac9c79f2ae1f3752"
+  "digest": "17d1a312a929e91d32a979eb827be25d0e0d7688bff2f6518f91ae9cb5af19b0"
 }

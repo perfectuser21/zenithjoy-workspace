@@ -1,0 +1,40 @@
+{
+  "canonical_runtime": ".github/workflows/scripts/smoke/media-extra-contracts-smoke.sh",
+  "runtime_required_command": "bash .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh",
+  "runtime_coverage": [
+    "startup-health",
+    "installer-personal-env-isolation",
+    "agent-offline-alert",
+    "voice-prototype",
+    "android-command-bridge API/WS/shell side"
+  ],
+  "android_required_chain": {
+    "workflow": ".github/workflows/android-agent-ci.yml",
+    "required_gate": "Android CI Gate Passed",
+    "producer_job": "test-and-build (Unit Tests + Release APK)",
+    "producer_command": "gradle :app:testDebugUnitTest (existing full current Android test collection includes new AgentServiceCommandRouteTest and changed ContentJudgmentClientWiringTest)",
+    "replace_existing_old_smoke_step_with": "bash .github/workflows/scripts/smoke/android-agent-contracts-smoke.sh --verify-results",
+    "sdk": "Install Android SDK and JDK17 explicitly before Gradle. No SDK can no longer return success. --verify-results is only after successful full Gradle step; it does not replace the actual execution.",
+    "specific_verified_classes": "helpers/android-agent-contracts.py lists seven required nonempty non-skipped suites; command package all tests execute in producer",
+    "change_detection": "scripts/ci/detect-changes.mjs android signal must include services/agent-android/** and the Android canonical shell/Python verifier paths. Current detector already treats .github/workflows/** as ci; verify root integrated source."
+  },
+  "aliases_to_remove_or_exclude": [
+    ".github/workflows/scripts/smoke/agent-cmd-executor-smoke.sh",
+    ".github/workflows/scripts/smoke/device-command-bridge-smoke.sh",
+    ".github/workflows/scripts/smoke/content-judgment-client-wiring-smoke.sh",
+    ".github/workflows/scripts/smoke/startup-config-check-smoke.sh",
+    ".github/workflows/scripts/smoke/realtime-voice-mvp-smoke.sh",
+    ".github/workflows/scripts/smoke/agent-installpack-url-burn-smoke.sh",
+    ".github/workflows/scripts/smoke/agent-offline-alert-smoke.sh"
+  ],
+  "retirement": "No external stable-entry obligations identified. Root may delete compatibility aliases and rewire current registry/product-map consumers to the canonical runtime or Android required chain. Historical blob/hash recovery records remain.",
+  "dependencies": [
+    "existing locked API/root dependencies",
+    "Node20",
+    "PostgreSQL initdb+pg_ctl (same disposable socket harness as media)",
+    "ffmpeg for actual health binary check",
+    "JDK17+Android SDK for actual Android Gradle producer"
+  ],
+  "no_new_external_credentials": true,
+  "global_wiring_owner": "root; this lane does not edit workflows/registry/global selector/app.ts"
+}

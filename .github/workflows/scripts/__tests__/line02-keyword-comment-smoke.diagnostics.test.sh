@@ -11,7 +11,7 @@
 # 这是"诊断代码被自己的 set -e 打死"的典型，比没写诊断更糟——它让人以为诊断存在。
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../smoke" && pwd)/line02-keyword-comment-smoke.sh"
+SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../operator-probes" && pwd)/line02-keyword-comment.sh"
 
 PASS=0; FAIL=0
 check() { # check DESC EXPECT ACTUAL

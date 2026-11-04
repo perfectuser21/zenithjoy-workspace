@@ -1,8 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-// 内部租户 ID（ZenithJoy内部，license ZJ-1F636A96）
-export const INTERNAL_TENANT_ID = import.meta.env.VITE_TENANT_ID || '455a8ca9-5f63-4286-83ce-c5cca04cfd58';
-
 export interface AgentStatus {
   agentId: string;
   capabilities: string[];
@@ -35,7 +32,7 @@ export async function getAgentStatus(): Promise<{ agents: AgentStatus[] }> {
 }
 
 export async function listTasks(): Promise<{ tasks: AgentTask[] }> {
-  const r = await fetch(`${API_BASE}/agent/tasks?tenantId=${INTERNAL_TENANT_ID}`);
+  const r = await fetch(`${API_BASE}/agent/tasks`, { credentials: 'include' });
   if (!r.ok) throw new Error('failed');
   return r.json();
 }
@@ -43,8 +40,9 @@ export async function listTasks(): Promise<{ tasks: AgentTask[] }> {
 export async function createTask(skill: string, params: Record<string, unknown> = {}): Promise<{ task: AgentTask }> {
   const r = await fetch(`${API_BASE}/agent/tasks`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tenantId: INTERNAL_TENANT_ID, skill, params }),
+    body: JSON.stringify({ skill, params }),
   });
   if (!r.ok) throw new Error((await r.json()).error || 'failed');
   return r.json();

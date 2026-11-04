@@ -94,7 +94,7 @@ describe('Step 6B — HyperFrames 必须用 --resolution landscape 渲染 1920×
   const step6Block = step6Idx !== -1 ? SRC.slice(step6Idx, step6Idx + 500) : '';
 
   it('HyperFrames render 包含 --resolution landscape 标志', () => {
-    expect(step6Block).toContain('--resolution landscape');
+    expect(step6Block).toMatch(/['"]--resolution['"]\s*,\s*['"]landscape['"]/);
   });
 });
 

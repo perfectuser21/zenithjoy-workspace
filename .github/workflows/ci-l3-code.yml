@@ -383,6 +383,13 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Phone account patrol full offline runtime contracts
+        run: node --test scripts/phone-account-patrol/implementation-regression.test.mjs
+      - name: Fixed skill bootstrap transport contracts
+        run: python3 scripts/__tests__/skills-source-bootstrap.test.py
       - name: unittest apps/api/scripts/tests
         run: python3 -m unittest discover -s apps/api/scripts/tests -p 'test_*.py' -v
       - name: Android WeChat reception safety contracts (offline)

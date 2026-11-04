@@ -2,7 +2,7 @@
  * License 业务服务 — v1.2 Day 1-2
  *
  * 职责：
- *  - 生成 license key（ZJ-{tierPrefix}-{random}，crypto.randomBytes 防猜）
+ *  - 生成 license key（ZJ-{tierPrefix}-{random}，crypto.randomInt 防猜）
  *  - 创建 / 列出 / 吊销 license（admin 用）
  *  - Agent 注册：校验 key + 检查 expired + 检查 quota，签发 ws_token
  *
@@ -50,6 +50,7 @@ export interface LicenseRow {
   tier: Tier;
   max_machines: number;
   customer_id: string | null;
+  tenant_id?: string | null;
   customer_name: string | null;
   customer_email: string | null;
   status: LicenseStatus;
@@ -83,16 +84,15 @@ export interface LicenseMachineRow {
  * 生成 license key：ZJ-{prefix}-{8 chars random base32-ish}
  * 例：ZJ-B-A1B2C3D4 (basic) / ZJ-M-E5F6G7H8 (matrix)
  *
- * 32^8 ≈ 1.1 万亿，crypto.randomBytes 不可预测 → 不可猜。
+ * 32^8 ≈ 1.1 万亿；crypto.randomInt 无偏选择字母表索引。
  */
 export function generateLicenseKey(tier: Tier): string {
   const prefix = TIER_PREFIX[tier];
-  const bytes = crypto.randomBytes(8);
   // base32 字母表：去掉 I O 0 1 等易混淆字符
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let suffix = '';
   for (let i = 0; i < 8; i++) {
-    suffix += ALPHA[bytes[i] % ALPHA.length];
+    suffix += ALPHA[crypto.randomInt(ALPHA.length)];
   }
   return `ZJ-${prefix}-${suffix}`;
 }
@@ -167,15 +167,21 @@ export async function createLicense(
   const durationDays = input.duration_days ?? defaultDays;
   const expiresAt = new Date(Date.now() + durationDays * 86400_000);
 
+  // 一条原子语句创建租户和 license；任一约束失败都不会留下半成品。
   // 防极小概率冲突：最多重试 5 次
   for (let attempt = 0; attempt < 5; attempt++) {
     const licenseKey = generateLicenseKey(tier);
     try {
       const { rows } = await pool.query<LicenseRow>(
-        `INSERT INTO zenithjoy.licenses
+        `WITH tenant AS (
+           INSERT INTO zenithjoy.tenants (name, license_key, plan)
+           VALUES (COALESCE(NULLIF($5::text, ''), NULLIF($6::text, ''), 'License-' || $1), $1, $2)
+           RETURNING id
+         )
+         INSERT INTO zenithjoy.licenses
            (license_key, tier, max_machines, customer_id, customer_name,
-            customer_email, expires_at, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            customer_email, expires_at, notes, tenant_id)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, tenant.id FROM tenant
          RETURNING *`,
         [
           licenseKey,
@@ -267,7 +273,8 @@ export type RegisterErrorCode =
   | 'EXPIRED'
   | 'SUSPENDED'
   | 'QUOTA_EXCEEDED'
-  | 'TEST_LICENSE_IN_PRODUCTION';
+  | 'TEST_LICENSE_IN_PRODUCTION'
+  | 'LICENSE_NO_TENANT';
 
 /**
  * RegisterSuccess — 双 schema (H-1):
@@ -309,7 +316,8 @@ export interface RegisterFailure {
     | 'EXPIRED'
     | 'SUSPENDED'
     | 'LICENSE_DEVICE_LIMIT_EXCEEDED'
-    | 'TEST_LICENSE_IN_PRODUCTION';
+    | 'TEST_LICENSE_IN_PRODUCTION'
+    | 'LICENSE_NO_TENANT';
   current_count?: number;    // 仅 LICENSE_DEVICE_LIMIT_EXCEEDED 时填
   limit?: number;
 }
@@ -457,6 +465,13 @@ export async function registerAgent(
       success: false,
       error: 'EXPIRED',
     };
+  }
+
+  // Historical orphan licenses must fail before writing license_machines.
+  // Newly created licenses always carry their tenant in the same atomic statement.
+  if (license.tenant_id === null) {
+    return { ok: false, success: false, code: 'LICENSE_NO_TENANT', error: 'LICENSE_NO_TENANT',
+      message: 'License 未关联租户，请联系管理员修复绑定后重试' };
   }
 
   // 已绑定的 machine？直接续签

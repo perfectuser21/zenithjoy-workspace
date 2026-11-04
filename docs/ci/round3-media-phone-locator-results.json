@@ -1,0 +1,54 @@
+{
+  "lane": "media-phone-locator",
+  "units_total": 2,
+  "rows": [
+    {
+      "unit_id": "phone-ime",
+      "original_path": ".github/workflows/scripts/smoke/restore-ime-scope-smoke.sh",
+      "state": "implemented_verified_current_controller_function",
+      "actual_action": "Removed copied toy-function regression. Canonical now runs current private-message-delta.test.mjs; fixture loads the exact current production send_private_message function, exercises it in real zsh child processes with exclusive fake ADB state, and captures exact original IME restoration calls. New assertions cover abnormal text readback exit, enable denial with original first error retained, unreadable original failing before switch, and exact current restore_ime function safely handling an unset original variable. Zsh absence is fatal, never skip. Existing happy/focus/send-delta properties retained.",
+      "tests": [
+        "services/phone-adb-controller/__tests__/private-message-delta.test.mjs"
+      ],
+      "executed_tests": 20,
+      "boundary": "Production function bytes are read at runtime, not a copied implementation. Only platform base64 decode flag is adapted; navigation/hardware boundaries are local fixtures. No actual controller main/physical device/message sent.",
+      "mutation": "Removing the actual production EXIT trap caused actual restoration tests to fail; source restored before final green run.",
+      "old_source_sha256": "a70cc312449ce0da2d99e8402ed8685a6f1c05394bbaeb1eebd8a9f8dac5d219",
+      "old_git_blob": "124366b400292f652ec2c6bdaa0812d7b5ceddf1"
+    },
+    {
+      "unit_id": "locator-assist",
+      "original_path": ".github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh",
+      "state": "implemented_verified_offline_and_operator_probe_isolated",
+      "actual_action": "Default canonical imports real current router and service, applies real locator migrations to private UTF8 PostgreSQL, and uses a random-port loopback HTTP provider through actual axios. Verifies first visit and cached visit records, true/false verify SQL and false invalidation, extract/extract_list modes, truncated/bad/out-of-range responses, HTTP503 fallback, 64K client tree truncation, actual frame request and honest -1 no-match. Found and fixed real vision_select accepting match_index99 for candidate_count2; now explicit index_out_of_bounds fail-open. Existing unit/router suites added to strict required collection.",
+      "tests": [
+        "apps/api/tests/integration/media-extra/locator.test.ts",
+        "apps/api/src/services/locator-assist.test.ts",
+        "apps/api/src/routes/agent-burner-locator-assist.test.ts",
+        ".github/workflows/scripts/operator/rpa-locator-assist-probe.test.mjs"
+      ],
+      "executed_tests": 56,
+      "operator_probe": ".github/workflows/scripts/operator/rpa-locator-assist-probe.sh",
+      "operator_guards": "Not in smoke glob. Requires explicit I_ACCEPT_PAID_MODEL_CALLS, explicit loopback API and actual current_database() name zj_locator_probe_*. Random UUID run device marker; cleanup selects then deletes only exact owned row IDs AND that marker on every exit. No broad LIKE delete. Curl deadlines plus PG connect timeout. Safe subprocess fixtures prove activation/remote API/shared DB rejection and cleanup on mid-request failure.",
+      "boundary": "No actual paid model call or long-term model-quality result claimed. Operator quality calibration is manual, explicit and outside default CI.",
+      "mutation": "Removing vision index bounds check failed actual router/provider/PG test; source restored before final green run.",
+      "old_source_sha256": "2e51538af436152b835d033b2126437d4f3c99ffbe7eac95279fd51e91d8233c",
+      "old_git_blob": "b0e0218cc5e658396d0e718cc89c6d6b38900c3f"
+    }
+  ],
+  "validation": {
+    "combined_extra_canonical_tests": 253,
+    "extra_api": 163,
+    "extra_pg": 20,
+    "bridge_shell": 47,
+    "voice_prototype": 1,
+    "phone_ime": 20,
+    "operator_safety": 2,
+    "all_skips": 0,
+    "source_mutations_caught": "2/2; round3-media-phone-locator-mutations.json",
+    "api_typecheck": "pass",
+    "product_map_check": "pass",
+    "final_command": "PATH=/opt/homebrew/opt/node@20/bin:$PATH bash .github/workflows/scripts/smoke/media-extra-contracts-smoke.sh"
+  },
+  "scope": "Current code regression only. No physical device/ADB route touched, no real message, no paid external model call and no shared/prod DB mutation."
+}

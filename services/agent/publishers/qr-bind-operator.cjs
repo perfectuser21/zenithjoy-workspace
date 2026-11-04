@@ -11,6 +11,7 @@
  * Logs:   stderr（不干扰 JSON 解析）
  */
 const { chromium } = require('playwright-core');
+const { findDouyinSessionCookie } = require('./douyin-cookie-admission.cjs');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -22,7 +23,7 @@ const timeoutMs = parseInt(timeoutMsStr, 10) || 300000;
 const CDP_PORT = parseInt(process.env.ZENITHJOY_CHROME_DEBUG_PORT || '19222', 10);
 
 const PLATFORM_SESSION_COOKIES = {
-  douyin:       ['sessionid_ss', 'sessionid', 'sid_tt'],
+  douyin:       ['sessionid_ss', 'sessionid'],
   toutiao:      ['sessionid', 'sid_tt'],
   kuaishou:     ['userId', 'kuaishou.sid', 'passToken'],
   xiaohongshu:  ['web_session', 'galaxy_creator_session_info'],
@@ -46,6 +47,7 @@ const PLATFORM_CREATOR_URLS = {
 function isSessionReady(storageState, plat) {
   const names = PLATFORM_SESSION_COOKIES[plat] || [];
   const cookies = (storageState && storageState.cookies) || [];
+  if (plat === 'douyin') return !!findDouyinSessionCookie(cookies);
   return cookies.some(
     c => typeof c.value === 'string' && c.value.length > 0 && names.includes(c.name),
   );
@@ -269,7 +271,9 @@ async function main() {
   }
 }
 
-main().catch(e => {
+if (require.main === module) main().catch(e => {
   emit({ ok: false, platform, error: String(e) });
   process.exit(1);
 });
+
+module.exports = { isSessionReady };

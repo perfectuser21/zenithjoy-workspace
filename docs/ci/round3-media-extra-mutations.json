@@ -1,0 +1,23 @@
+[
+  {
+    "mutation": "rejected-stage2-gate",
+    "source": "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/AcquisitionCollectPollLoop.kt",
+    "exit_code": 1,
+    "caught": true,
+    "failure_excerpt": "> Task :app:testDebugUnitTest FAILED\ncom.zenithjoy.agent.ContentJudgmentClientWiringTest > AgentService production assembly invokes judgment and filters rejected stage2 URLs FAILED\n    java.lang.AssertionError at ContentJudgmentClientWiringTest.kt:22\ncom.zenithjoy.agent.ContentJudgmentClientWiringTest > all rejected results from service assembly never invoke Stage2 callback FAILED\n    java.lang.AssertionError at ContentJudgmentClientWiringTest.kt:61\n7 tests completed, 2 failed\nFAILURE: Build failed with an exception.\nExecution failed for task ':app:testDebugUnitTest'.\nBUILD FAILED in 6s"
+  },
+  {
+    "mutation": "service-command-rejection",
+    "source": "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt",
+    "exit_code": 1,
+    "caught": true,
+    "failure_excerpt": "> Task :app:testDebugUnitTest FAILED\ncom.zenithjoy.agent.AgentServiceCommandRouteTest > live service router rejects malformed and out of bounds commands without submitting FAILED\n    java.lang.AssertionError at AgentServiceCommandRouteTest.kt:23\n3 tests completed, 1 failed\nFAILURE: Build failed with an exception.\nExecution failed for task ':app:testDebugUnitTest'.\nBUILD FAILED in 10s"
+  },
+  {
+    "mutation": "offline-webhook-status",
+    "source": "apps/api/src/services/agent-offline-monitor.ts",
+    "exit_code": 1,
+    "caught": true,
+    "failure_excerpt": "    status: 'failed',\n      'AssertionError: expected true to be false // Object.is equality\\n' +"
+  }
+]
