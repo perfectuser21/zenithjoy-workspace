@@ -10,7 +10,7 @@ function fixture(t, mode = 'success') {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const agent = join(dir, 'services/agent');
   mkdirSync(join(agent, 'publishers'), { recursive: true });
-  const kw = mode === 'expired' ? {ok: false, error: 'DOUYIN_SESSION_EXPIRED'} : {ok: true, video_urls: ['https://www.douyin.com/video/123']};
+  const kw = mode === 'unavailable' ? {ok: false, error: 'DOUYIN_SESSION_UNAVAILABLE'} : mode === 'expired' ? {ok: false, error: 'DOUYIN_SESSION_EXPIRED'} : {ok: true, video_urls: ['https://www.douyin.com/video/123']};
   writeFileSync(join(agent, 'publishers/keyword-search-douyin.cjs'), `console.log('fixture keyword'); console.log(${JSON.stringify(JSON.stringify(kw))}); process.exit(${mode === 'bad-exit' ? 2 : 0});`);
   writeFileSync(join(agent, 'publishers/crawl-comments-douyin.cjs'), `console.log('fixture comments'); console.log(JSON.stringify({ok:true,commenters:[{sec_uid:'123',nickname:'test',comment_text:'test'}]}));`);
   copyFileSync(source, join(dir, 'smoke.sh'));
@@ -51,4 +51,11 @@ test('GitHub PR synthetic merge checkout is a valid same-candidate gate, distinc
   const result=run({GITHUB_SHA:merge});
   assert.equal(result.status,0,result.stdout+result.stderr);
   assert.match(result.stdout,new RegExp('candidate sha='+merge));
+});
+
+test('unavailable session shape remains a failed physical admission, without claiming expiry', t => {
+  const {run}=fixture(t,'unavailable'); const result=run();
+  assert.notEqual(result.status,0,result.stdout);
+  assert.match(result.stdout,/DOUYIN_SESSION_UNAVAILABLE/);
+  assert.doesNotMatch(result.stdout,/DOUYIN_SESSION_EXPIRED/);
 });

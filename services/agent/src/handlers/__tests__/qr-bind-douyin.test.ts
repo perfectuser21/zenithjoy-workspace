@@ -37,7 +37,7 @@ describe('qr-bind-douyin', () => {
 
     it('launches browser and writes storageState to sessionPath', async () => {
       const fakeStorageState = {
-        cookies: [{ name: 'sessionid', value: 'abc', domain: '.douyin.com' }],
+        cookies: [{ name: 'sessionid', value: 'synthetic-valid-session-token-for-fixture', domain: '.douyin.com' }],
         origins: [],
       };
       const mockPage = {
@@ -78,7 +78,7 @@ describe('qr-bind-douyin', () => {
       expect(context.storageState).toHaveBeenCalledTimes(1);
 
       const written = JSON.parse(fs.readFileSync(res.sessionPath, 'utf-8'));
-      expect(written.cookies[0].value).toBe('abc');
+      expect(written.cookies[0].value).toBe('synthetic-valid-session-token-for-fixture');
     });
 
     it('returns ok:false when launch fails', async () => {

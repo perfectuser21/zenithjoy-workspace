@@ -23,16 +23,9 @@ const sessionDir = sessionDirArg || DEFAULT_SESSION_DIR;
 const sessionPath = path.join(sessionDir, 'douyin', `${accountLabel}.json`);
 const loginUrl = 'https://creator.douyin.com/creator-micro/home';
 
-const SESSION_COOKIE_NAMES = ['sessionid_ss', 'sessionid', 'sid_tt'];
-
-function isSessionCookie(c) {
-  return (
-    typeof c?.value === 'string' &&
-    c.value.length > 0 &&
-    typeof c?.domain === 'string' &&
-    (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com') &&
-    SESSION_COOKIE_NAMES.includes(c.name)
-  );
+const { isDouyinSessionCookie } = require('./douyin-cookie-admission.cjs');
+function isSessionCookie(cookie) {
+  return isDouyinSessionCookie(cookie);
 }
 
 function emit(result) {
@@ -95,7 +88,9 @@ async function main() {
   }
 }
 
-main().catch(e => {
+if (require.main === module) main().catch(e => {
   emit({ ok: false, sessionPath, error: String(e) });
   process.exit(1);
 });
+
+module.exports = { isSessionCookie };

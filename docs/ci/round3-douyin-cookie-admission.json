@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "status": "implemented_pending_required_ci",
+  "source_base_sha": "baa31d33efd0304eda22cfc11854d6c426459420",
+  "unit": "e2e-line02-keyword-comment",
+  "denominator": {
+    "original_units": 172,
+    "external_gaps": 6,
+    "external_gap_closed": false
+  },
+  "finding": {
+    "run_id": 41825021450,
+    "job_id": 126557432092,
+    "head_sha": "c7bb94ecf358436a7f7e65b702c92ab7b80d100c",
+    "checkout_sha": "81a5afc2bd6252cddaae1251ae55de7a649fdc87",
+    "valid_synthetic_merge": true,
+    "artifact_id": 13318528194,
+    "artifact_sha256": "6564b3e5c7ea8b7cbde32364b9365a1b9356c2350054b7bb702751a8cc10b69b",
+    "actual_boundary": "Node resolved current candidate publisher; Chrome/CDP connected; current profile lacked primary sessionid, JSON fallback injected 38 cookies, primary-only consumer emitted DOUYIN_SESSION_EXPIRED. No post-injection cookie metadata proves temporal expiry or excludes sessionid_ss-only state.",
+    "evidence_directory": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/keyword-followup-41825021450"
+  },
+  "implementation": {
+    "canonical": "services/agent/publishers/douyin-cookie-admission.cjs",
+    "consumers": [
+      "keyword-search-douyin.cjs profile admission",
+      "keyword-search-douyin.cjs saved-state injection + post-injection admission",
+      "qr-bind-douyin-burner.cjs",
+      "qr-bind-douyin.cjs",
+      "qr-bind-operator.cjs Douyin branch",
+      "src/handlers/qr-bind-douyin-burner.ts injected browser branch",
+      "src/handlers/qr-bind-douyin.ts injected browser branch",
+      "src/handlers/qr-bind-operator.ts Douyin branch"
+    ],
+    "contract": "Accept sessionid or sessionid_ss, string value >20 characters without whitespace, exact douyin.com DNS boundary or subdomain; expiry omitted/-1 is session-scoped, finite future seconds is persistent, zero/past/equal-now/malformed expiry rejected. Fallback excludes unusable/foreign cookies and never converts expiry zero into session expiry -1.",
+    "sid_tt_basis": "Existing active qr-bind-douyin-burner.cjs at source base explicitly excludes sid_tt as visitor tracker and requires >20 token characters. Main/generic Douyin producers now share that stronger existing contract. Other platforms unchanged.",
+    "diagnostic": "Missing usable credential is DOUYIN_SESSION_UNAVAILABLE; presence is shape admission only. No unproven expired diagnosis; outer physical operator continues to fail nonzero.",
+    "packaging": "scripts/build-install-pack.sh recursively copies publishers/, including the new flat CJS helper. TypeScript build resolves adjacent d.cts declarations."
+  },
+  "dimensions": {
+    "current_consumer": "Active required Agent Test + explicit candidate nightly/e2e operator path.",
+    "unique_obligation": "Windows authenticated keyword -> actual video -> actual comments remains external obligation.",
+    "behavioral_equivalence": "Real current main executed with fixture OS/browser boundaries, reaching goto only; not a copied implementation. Existing QR producer admission functions called directly.",
+    "failure_detection": "Two original main cases red; now valid ss-only works, missing/wrong-domain/expired/sid_tt fail; 6 operator fixture tests include unavailable->nonzero.",
+    "required_wiring": "L4 agent-test npx vitest run discovers publishers/**/__tests__/**/*.test.ts; L3 openclaw scripts job node --test discovers candidate-gate.test.mjs.",
+    "environment_evidence": "Synthetic fixtures only, no real cookie/profile/device/network inspection. c7 artifact readonly proves bootstrap reached Chrome, not final platform login.",
+    "disposition": "Source fixed pending exact candidate required CI. External physical evidence gap remains open."
+  },
+  "verification": {
+    "red": {
+      "tests": 2,
+      "failed": 2,
+      "meaning": "Old actual main rejected ss-only current profile and ss-only JSON fallback before search"
+    },
+    "targeted": {
+      "files": 4,
+      "passed": 59,
+      "failed": 0,
+      "skipped": 0
+    },
+    "operator_gate": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build_types": {
+      "exit_code": 0,
+      "command": "npx tsc -p tsconfig.build.json --noEmit"
+    },
+    "default_full_agent": {
+      "files": 102,
+      "passed": 1088,
+      "failed": 1,
+      "total": 1089,
+      "limitation": "Snapshot before final 20/21 length-boundary addition. Only failure is existing native folder-watch event fixture owned by other lane; not all-green."
+    },
+    "raw_typecheck": {
+      "exit_code": 2,
+      "limitation": "Existing test import.meta under CommonJS tsconfig; production tsconfig.build.json succeeds."
+    },
+    "product_map": "PASS after pinned local skills cache install/verify 87 files"
+  },
+  "commands": {
+    "targeted": "cd services/agent && npx vitest run publishers/__tests__/douyin-cookie-admission.test.ts src/handlers/__tests__/qr-bind-douyin.test.ts src/handlers/__tests__/qr-bind-douyin-burner.test.ts src/handlers/__tests__/qr-bind-operator.test.ts",
+    "operator": "node --test .github/workflows/scripts/__tests__/line02-candidate-gate.test.mjs",
+    "required_agent": "cd services/agent && npx vitest run"
+  },
+  "logs": {
+    "douyin-cookie-admission-red": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-admission-red.log",
+      "sha256": "c5d962d05b4a9dac0845046ad3cf9a392ae89fbc2c34f471f124c59f7b9641a8"
+    },
+    "douyin-cookie-admission-green": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-admission-green.log",
+      "sha256": "21e9ffdbcd5a83b0d471fd06c3f000981f7faaa5b192509d8fd531bb836293b2"
+    },
+    "douyin-cookie-operator-gate": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-operator-gate.log",
+      "sha256": "aceb7264a908bcd7a899704ce0a6654f814b39622d91c96161f68a5957780311"
+    },
+    "douyin-cookie-build-types": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-build-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "douyin-cookie-agent-full": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-agent-full.log",
+      "sha256": "5901a30a988150e8b19765e0392e11c9ded1c3b0962b6e5d47ab1d6dba652b2f"
+    },
+    "douyin-cookie-product-map": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-product-map.log",
+      "sha256": "892120dce1a43b671adb7bccd58cbd0b5f5c00b40981d0b312fd1d2d2846fc46"
+    },
+    "douyin-cookie-typecheck": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-cookie-typecheck.log",
+      "sha256": "1b5401034ae7fa55cad24b7d9f65c800627219a514d3d58b4f21946fea615c06"
+    }
+  },
+  "cloud_receipt": null,
+  "remaining_evidence": "Same-candidate Windows authorized profile accepted by platform, nonempty actual search and comments receipt. Do not infer from shape/fixture or dispatch from this task."
+}

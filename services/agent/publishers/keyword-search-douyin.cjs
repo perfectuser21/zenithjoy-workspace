@@ -13,6 +13,7 @@
  * Output: 末行 stdout JSON → { ok, keyword, video_urls, error? }
  */
 const { chromium } = require('playwright-core');
+const { findDouyinSessionCookie, isUsableDouyinCookie } = require('./douyin-cookie-admission.cjs');
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -168,7 +169,7 @@ function getSessionJsonPath(burnerDataDir) {
 }
 
 // 从 session JSON 注入 Douyin cookies 到 Playwright context。
-// 用于 Chrome profile 里 sessionid 已过期时的 fallback：读 qr-bind 落盘的 JSON 重注入。
+// 用于 Chrome profile 里缺可用会话凭证时的 fallback：读 qr-bind 落盘的 JSON 重注入。
 // 返回 true 代表注入成功（JSON 存在且含 sessionid 类 cookie），false 代表跳过。
 async function injectSessionFromJson(ctx, burnerDataDir) {
   const sessionPath = getSessionJsonPath(burnerDataDir);
@@ -183,12 +184,13 @@ async function injectSessionFromJson(ctx, burnerDataDir) {
     process.stderr.write(`[keyword-search-douyin] 读取 session JSON 失败: ${e.message}\n`);
     return false;
   }
-  const douyinCookies = (raw.cookies || []).filter(
-    c => c.domain && (c.domain.endsWith('.douyin.com') || c.domain === 'douyin.com'),
+  const nowSeconds = Date.now() / 1000;
+  const douyinCookies = (Array.isArray(raw.cookies) ? raw.cookies : []).filter(
+    c => isUsableDouyinCookie(c, nowSeconds),
   );
-  const hasSession = douyinCookies.some(c => ['sessionid', 'sessionid_ss'].includes(c.name) && c.value && c.value.length > 20);
+  const hasSession = !!findDouyinSessionCookie(douyinCookies, nowSeconds);
   if (!hasSession) {
-    process.stderr.write(`[keyword-search-douyin] session JSON 中无有效 sessionid cookie\n`);
+    process.stderr.write(`[keyword-search-douyin] session JSON 中无可用 sessionid/sessionid_ss 凭证\n`);
     return false;
   }
   await ctx.addCookies(douyinCookies.map(c => ({
@@ -198,7 +200,7 @@ async function injectSessionFromJson(ctx, burnerDataDir) {
     path: c.path || '/',
     httpOnly: !!c.httpOnly,
     secure: !!c.secure,
-    expires: (c.expires && c.expires > 0) ? c.expires : -1,
+    expires: c.expires === undefined ? -1 : c.expires,
     sameSite: c.sameSite || 'None',
   })));
   process.stderr.write(`[keyword-search-douyin] 已从 session JSON 注入 ${douyinCookies.length} 个 cookies (${sessionPath})\n`);
@@ -241,32 +243,32 @@ async function main() {
     const cookies = await ctx.cookies(['https://www.douyin.com']);
     process.stderr.write(`[keyword-search-douyin] douyin cookies: ${cookies.length}\n`);
 
-    // 检查 Douyin 登录状态：必须有 sessionid（登录凭证）。
+    // 检查会话凭证形态：接受 sessionid/sessionid_ss，仍需平台验证登录。
     // ttwid/uid_tt 是访客 token，未登录也会有，不能作为"已登录"判据。
-    let sessionidCookie = cookies.find(c => c.name === 'sessionid' && c.value);
+    let sessionidCookie = findDouyinSessionCookie(cookies);
     if (!sessionidCookie) {
       const cookieNames = cookies.map(c => c.name).join(',');
-      process.stderr.write(`[keyword-search-douyin] Douyin sessionid 不存在（当前 cookies: ${cookieNames}），尝试从 session JSON 注入\n`);
+      process.stderr.write(`[keyword-search-douyin] Douyin 可用 sessionid/sessionid_ss 不存在（当前 cookies: ${cookieNames}），尝试从 session JSON 注入\n`);
       // Fallback：从 qr-bind 落盘的 session JSON 重注入 cookies。
       // 发生场景：Chrome profile 的 Cookies SQLite 未及时落盘（qr-bind 进程 exit 顺序 bug 或首次冷启动），
-      // 但 JSON 文件已正确写入 → 重注入后 sessionid 即可被识别，无需用户重新扫码。
+      // 尝试重注入可用凭证；注入后仍须由平台验证会话。
       const injected = await injectSessionFromJson(ctx, burnerDataDir);
       if (injected) {
         const newCookies = await ctx.cookies(['https://www.douyin.com']);
-        sessionidCookie = newCookies.find(c => c.name === 'sessionid' && c.value);
+        sessionidCookie = findDouyinSessionCookie(newCookies);
         if (sessionidCookie) {
-          process.stderr.write(`[keyword-search-douyin] session JSON 注入成功，sessionid 已确认\n`);
+          process.stderr.write(`[keyword-search-douyin] session JSON 注入后可用会话凭证形态已确认\n`);
         } else {
-          process.stderr.write(`[keyword-search-douyin] 注入后仍无 sessionid，session JSON 可能已过期\n`);
+          process.stderr.write(`[keyword-search-douyin] 注入后仍无可用 sessionid/sessionid_ss，无法确认会话凭证\n`);
         }
       }
     }
     if (!sessionidCookie) {
-      emit({ ok: false, keyword, video_urls: [], error: 'DOUYIN_SESSION_EXPIRED' });
+      emit({ ok: false, keyword, video_urls: [], error: 'DOUYIN_SESSION_UNAVAILABLE' });
       process.exit(0);
       return;
     }
-    process.stderr.write(`[keyword-search-douyin] sessionid 存在，继续搜索\n`);
+    process.stderr.write(`[keyword-search-douyin] 会话凭证形态符合要求，继续搜索（尚未验证平台登录）\n`);
 
     // 优先复用已有 Douyin 页面（避免 newPage 被抖音 bot 检测），没有再开新标签
     const existingPages = ctx.pages();
