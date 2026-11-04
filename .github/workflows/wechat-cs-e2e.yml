@@ -52,7 +52,7 @@ jobs:
           if-no-files-found: ignore
 
   middleware-chain:
-    name: job1 — 中台链路模拟用户（curl + mode 透传）
+    name: job1 — 真实HTTP Router/Service（隔离DB与模型）
     needs: changes
     if: needs.changes.outputs.agent_or_api == 'true'
     runs-on: ubuntu-latest
@@ -83,63 +83,13 @@ jobs:
             src/routes/__tests__/wechat.test.ts \
             --reporter=basic
 
-      - name: Build apps/api
+      - name: Real HTTP draft success/failure/gating contract (no platform or paid model)
         working-directory: apps/api
-        run: npm run build
-
-      - name: Start apps/api
-        working-directory: apps/api
-        run: |
-          node dist/index.js > /tmp/apps-api.log 2>&1 &
-          echo $! > /tmp/apps-api.pid
-          for i in $(seq 1 30); do
-            if curl -fs http://localhost:5210/health >/dev/null 2>&1; then
-              echo "apps/api ready after ${i}s"; break
-            fi
-            sleep 1
-          done
-          curl -fs http://localhost:5210/health || (cat /tmp/apps-api.log && exit 1)
-
-      - name: E2E — 监听心跳上报（进程守护端点真链路）
-        run: |
-          BODY='{"agent_id":"ci-agent","wechat_id":"ci-wx-默忆"}'
-          RESP=$(curl -s -X POST http://localhost:5210/api/wechat/listener-heartbeat \
-            -H 'Content-Type: application/json' -d "$BODY")
-          echo "heartbeat resp: $RESP"
-          echo "$RESP" | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); if(j.ok!==true) process.exit(1);" \
-            || { echo "FAIL: 心跳端点未返回 ok:true"; exit 1; }
-          echo "PASS: /listener-heartbeat ok:true"
-
-      - name: E2E — 模拟用户消息 mode:auto（schema 透传，无凭据时合理降级）
-        run: |
-          # 多租户隔离：draft-generate 现要求租户上下文（缺租户 4xx 拒绝、绝不写入任意 agent）。
-          # listen_chat 等非浏览器 caller 显式传 tenant_id（沿用 agent-context body 显式 id 范式）。
-          BODY='{"sender":"ci-客户","wechat_id":"ci_wx","content":"在吗","mode":"auto","tenant_id":"ci-tenant"}'
-          CODE=$(curl -s -o /tmp/dg.json -w '%{http_code}' -X POST \
-            http://localhost:5210/api/wechat/draft-generate \
-            -H 'Content-Type: application/json' -d "$BODY")
-          echo "draft-generate HTTP $CODE: $(cat /tmp/dg.json)"
-          test "$CODE" = "200" || { echo "FAIL: mode:auto 应 200（含 reply 或合理降级 not_in_whitelist）"; exit 1; }
-          node -e "const j=require('/tmp/dg.json'); if(!('reply' in j) && j.reason!=='not_in_whitelist' && j.ok!==true) process.exit(1);" \
-            || { echo "FAIL: 返回既无 reply 也非合理降级"; exit 1; }
-          echo "PASS: mode:auto 链路（200 + reply/合理降级）"
-
-      - name: E2E — 非法 mode 被 schema 拒（证明 mode enum 真生效）
-        run: |
-          BODY='{"sender":"ci-客户","wechat_id":"ci_wx","content":"在吗","mode":"bogus"}'
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-            http://localhost:5210/api/wechat/draft-generate \
-            -H 'Content-Type: application/json' -d "$BODY")
-          echo "非法 mode HTTP $CODE"
-          test "$CODE" = "400" || { echo "FAIL: 非法 mode 应被 zod enum 拒为 400"; exit 1; }
-          echo "PASS: 非法 mode → 400"
+        run: npx vitest run src/routes/wechat-draft-behavior.test.ts tests/services/wechat-draft.test.ts --reporter=basic
 
       - name: Static smoke（5 处修复 + 守护落地）
         run: bash .github/workflows/scripts/smoke/wechat-cs-hardening-smoke.sh
 
-      - name: Stop apps/api
-        if: always()
-        run: kill "$(cat /tmp/apps-api.pid)" 2>/dev/null || true
 
   agent-windows:
     name: job2 — Agent 启动路径 + listen_chat dryrun（self-hosted xian-rog）

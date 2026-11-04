@@ -33,10 +33,11 @@ grep -qE 'PostMessageW.*0x0100|PostMessageW.*WM_KEYDOWN' "$LISTEN" || { echo "FA
 ! grep -qE 'item\.select\(\)' "$LISTEN" || { echo "FAIL: 仍残留 item.select()（微信4.0 不切换会话）"; exit 1; }
 echo "  PASS UIA SetValue + PostMessageW Enter（后台静默，无物理输入）"
 
-echo "=== 2: wechat-rpa.ts 脚本路径基于 process.execPath ==="
-grep -qE 'path\.dirname\(process\.execPath\)' "$RPA_TS" || { echo "FAIL: 未用 process.execPath 目录"; exit 1; }
-! grep -qE "path\.resolve\(__dirname, *'\.\./\.\./wechat-rpa" "$RPA_TS" || { echo "FAIL: 仍残留 __dirname 相对路径"; exit 1; }
-echo "  PASS process.execPath 路径解析"
+echo "=== 2: 当前模块路径合同由Agent runtime suite执行 ==="
+# Core handlers/wechat-rpa.ts 已退役，不再以它的文本布局阻塞当前接待合同。
+# ci-l4-runtime Agent Test实际收集 modules/line04/__tests__/wechat-rpa-python-path.test.ts，
+# 运行真实getPythonExeForTest/buildListenerSpawnArgs（含pkg路径与core fallback）。
+test -f services/agent/modules/line04/__tests__/wechat-rpa-python-path.test.ts
 
 echo "=== 3: wechat.ts DraftGenerateSchema 含 mode 字段 ==="
 grep -qE "mode:\s*z\.enum\(\['auto', *'review'\]\)" "$ROUTE" || { echo "FAIL: DraftGenerateSchema 缺 mode enum"; exit 1; }
