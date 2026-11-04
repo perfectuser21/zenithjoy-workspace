@@ -131,19 +131,21 @@ export function verifyPatrolSmokeConsumer(repoRoot){
     aggregate?.name!=='Smoke Glob Runner'||aggregate.if!=='always()'||aggregate['continue-on-error']!==undefined||!timed(aggregate)||JSON.stringify(aggregate.needs)!==JSON.stringify(['smoke-glob-shards'])||
     aggregate.env?.SMOKE_ARTIFACTS!=='smoke-shard-reports'||aggregate.env?.SMOKE_SHARDS_RESULT!=='${{ needs.smoke-glob-shards.result }}'||!permanent(verify)||!verify.run||
     !permanent(download)||download.with?.pattern!=='smoke-glob-shard-*'||download.with?.path!=='smoke-shard-reports'||
-    gate?.name!=='Smoke Glob Gate Passed'||gate.if!=="always() && github.event_name == 'pull_request'"||gate['continue-on-error']!==undefined||!timed(gate)||
+    gate?.name!=='Smoke Glob Gate Passed'||gate.if!=="always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')"||gate['continue-on-error']!==undefined||!timed(gate)||
     JSON.stringify(gate.needs)!==JSON.stringify(['smoke-glob-runner','baseline-lint'])||!gate.steps?.length||gate.steps.some(s=>!permanent(s)||!s.run))fail('SMOKE_DISABLED');
  const root=mkdtempSync(join(tmpdir(),'patrol-smoke-consumer-'));
  try{
   const dir=join(root,'.github/workflows/scripts/smoke'),reports=join(root,'reports');mkdirSync(dir,{recursive:true});mkdirSync(reports);
   const companion='a-consumer-smoke.sh',source='f'.repeat(40);
   writeFileSync(join(dirname(dir),'smoke-baseline.txt'),companion+'\n'+name+'\n');
-  const env={PATH:'/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin',HOME:root,CI:'true',GITHUB_SHA:source,GITHUB_STEP_SUMMARY:join(root,'summary'),RUNNER_TEMP:reports,SMOKE_SHARD_COUNT:'2',SMOKE_ARTIFACTS:reports};
+  const env={PATH:'/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin',HOME:root,CI:'true',GITHUB_EVENT_NAME:'pull_request',GITHUB_SHA:source,GITHUB_STEP_SUMMARY:join(root,'summary'),RUNNER_TEMP:reports,SMOKE_SHARD_COUNT:'2',SMOKE_ARTIFACTS:reports};
   const run=(script,extra={})=>spawnSync('/bin/bash',['-c',script],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:20000,maxBuffer:2*1024*1024});
   const ok=r=>!r.error&&!r.signal&&r.status===0;
   const requireBlocked=r=>{if(r.error||r.signal||r.status===0)fail('SMOKE_CONSUMER_BYPASSED')};
   const gateRun=(result,lint)=>gate.steps.map(s=>s.run).join('\n').replaceAll('${{ needs.smoke-glob-runner.result }}',result).replaceAll('${{ needs.baseline-lint.result }}',lint);
   if(!ok(run(gateRun('success','success'))))fail('SMOKE_CONSUMER_BYPASSED');
+  // merge_group currently has no equivalent per-PR baseline deletion review: it must fail closed.
+  requireBlocked(run(gateRun('success','success'),{GITHUB_EVENT_NAME:'merge_group'}));
   requireBlocked(run(gateRun('failure','success')));requireBlocked(run(gateRun('success','failure')));
   for(const exitCode of [0,1]){
    const marker=join(root,'ran-'+exitCode),other=join(root,'companion-'+exitCode);
