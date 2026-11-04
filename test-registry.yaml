@@ -9837,3 +9837,12 @@ tests:
     product: unclassified
     execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
     note: Actual Python discovery fixtures reject empty, skip, expected failure, assertion failure and import failure; offline contracts do not prove phone delivery.
+
+  - id: ci-review-release-admission-consumer
+    path: .github/workflows/scripts/__tests__/release-admission-consumer.test.mjs
+    type: contract
+    ci: L3
+    status: active
+    product: unclassified
+    execution: ci-l3-code.yml / openclaw-scripts-test / .github/workflows/scripts/__tests__/*.test.mjs
+    note: Parses actual required release-admission workflow and runs real mandatory same-SHA S2/S3 step with isolated SSH/HTTP; keeps dependency-free Core/L1 admission unit tests independent of YAML/node_modules.
