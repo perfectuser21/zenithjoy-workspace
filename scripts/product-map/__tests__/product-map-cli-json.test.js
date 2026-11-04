@@ -1,43 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createProductMapFixture } from './helpers/cli-fixture.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const passText = readFileSync(resolve(repoRoot, 'product-map/generated/product-map.json'), 'utf8');
 const digest = JSON.parse(passText).digest;
 const expectedText = `PASS: no drift — generated files match current product-map.yaml (digest: ${digest.slice(0, 8)}...)\n`;
 
-function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'product-map-cli-json-'));
-  cpSync(resolve(repoRoot, 'scripts/product-map'), resolve(root, 'scripts/product-map'), { recursive: true });
-  cpSync(resolve(repoRoot, 'product-map'), resolve(root, 'product-map'), { recursive: true });
-  symlinkSync(resolve(repoRoot, 'node_modules'), resolve(root, 'node_modules'), 'dir');
-  const generated = JSON.parse(readFileSync(resolve(root, 'product-map/generated/product-map.json'), 'utf8'));
-  for (const gp of generated.golden_paths ?? []) {
-    for (const path of gp.smoke_files ?? []) {
-      mkdirSync(dirname(resolve(root, path)), { recursive: true });
-      cpSync(resolve(repoRoot, path), resolve(root, path));
-    }
-  }
-  // 主干活动契约（决策 3240824c）引用的探针文件与账本脚本，check 会一并校验
-  const contracts = JSON.parse(readFileSync(resolve(root, 'product-map/generated/contracts.json'), 'utf8'));
-  const deps = new Set();
-  for (const cap of Object.keys(contracts.capabilities)) {
-    const text = readFileSync(resolve(root, `product-map/contracts/${cap}.yaml`), 'utf8');
-    for (const m of text.matchAll(/^(?:checks|ledger): (\S+)$/gm)) deps.add(m[1]);
-  }
-  for (const path of deps) {
-    mkdirSync(dirname(resolve(root, path)), { recursive: true });
-    cpSync(resolve(repoRoot, path), resolve(root, path));
-  }
-  // 合同 commander_skill 指向的陪跑 skill（任务 c0fe7e30），check 校验其存在与版本
-  cpSync(resolve(repoRoot, 'services/phone-adb-controller/commander/skills'), resolve(root, 'services/phone-adb-controller/commander/skills'), { recursive: true });
-  return root;
-}
 
 function run(root, args = ['check', '--json']) {
   return spawnSync(process.execPath, ['scripts/product-map/cli.mjs', ...args], { cwd: root, encoding: 'utf8' });
@@ -54,7 +27,7 @@ function jsonResult(result, expectedStatus) {
 }
 
 async function withFixture(fn) {
-  const root = fixture();
+  const root = createProductMapFixture();
   try { await fn(root); } finally { rmSync(root, { recursive: true, force: true }); }
 }
 

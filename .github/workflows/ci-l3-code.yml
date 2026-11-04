@@ -39,37 +39,12 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Detect changed modules
         id: filter
-        run: |
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.event.after }}"
-
-          if [ "${{ github.event_name }}" = "push" ]; then
-            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              echo "dashboard=true" >> $GITHUB_OUTPUT
-              echo "api=true" >> $GITHUB_OUTPUT
-              echo "geoai=true" >> $GITHUB_OUTPUT
-              echo "ci=true" >> $GITHUB_OUTPUT
-              echo "agent_modules=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            CHANGED=$(git diff --name-only "$BEFORE" "$AFTER" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-          else
-            BASE_REF="${{ github.base_ref }}"
-            CHANGED=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null || echo "")
-          fi
-
-          echo "$CHANGED" | grep -q "^apps/dashboard/" \
-            && echo "dashboard=true" >> $GITHUB_OUTPUT || echo "dashboard=false" >> $GITHUB_OUTPUT
-          echo "$CHANGED" | grep -q "^apps/api/" \
-            && echo "api=true" >> $GITHUB_OUTPUT || echo "api=false" >> $GITHUB_OUTPUT
-          echo "$CHANGED" | grep -q "^apps/geoai/" \
-            && echo "geoai=true" >> $GITHUB_OUTPUT || echo "geoai=false" >> $GITHUB_OUTPUT
-          echo "$CHANGED" | grep -qE "^\.github/|^tsconfig\.base\.json$|^package\.json$" \
-            && echo "ci=true" >> $GITHUB_OUTPUT || echo "ci=false" >> $GITHUB_OUTPUT
-          echo "$CHANGED" | grep -qE "^services/agent/modules/|^services/agent/scripts/build-line-module\.sh$" \
-            && echo "agent_modules=true" >> $GITHUB_OUTPUT || echo "agent_modules=false" >> $GITHUB_OUTPUT
+        run: node scripts/ci/detect-changes.mjs code
 
   # ─── Dashboard ───────────────────────────────────────────────────────
   dashboard-lint:
@@ -453,103 +428,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: L3 Code Gate
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  L3 Code Gate"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          FAILED=false
-
-          if [ "${{ needs.changes.result }}" = "failure" ]; then
-            echo "FAIL: Detect Changes"
-            FAILED=true
-          fi
-
-          # Dashboard (conditional)
-          if [ "${{ needs.changes.outputs.dashboard }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
-            for job_result in \
-              "Dashboard Lint:${{ needs.dashboard-lint.result }}" \
-              "Dashboard Typecheck:${{ needs.dashboard-typecheck.result }}" \
-              "Dashboard Build:${{ needs.dashboard-build.result }}"; do
-              NAME="${job_result%%:*}"
-              RESULT="${job_result##*:}"
-              if [ "$RESULT" != "success" ]; then
-                echo "FAIL: $NAME ($RESULT)"
-                FAILED=true
-              fi
-            done
-          fi
-
-          # API (conditional)
-          if [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
-            for job_result in \
-              "API Lint:${{ needs.api-lint.result }}" \
-              "API Typecheck:${{ needs.api-typecheck.result }}"; do
-              NAME="${job_result%%:*}"
-              RESULT="${job_result##*:}"
-              if [ "$RESULT" != "success" ]; then
-                echo "FAIL: $NAME ($RESULT)"
-                FAILED=true
-              fi
-            done
-          fi
-
-          # GeoAI (conditional)
-          if [ "${{ needs.changes.outputs.geoai }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
-            if [ "${{ needs.geoai-build.result }}" != "success" ]; then
-              echo "FAIL: GeoAI Build (${{ needs.geoai-build.result }})"
-              FAILED=true
-            fi
-          fi
-
-          # Security (always)
-          if [ "${{ needs.security.result }}" != "success" ]; then
-            echo "FAIL: Security Audit (${{ needs.security.result }})"
-            FAILED=true
-          fi
-
-          # OpenClaw scripts (always)
-          if [ "${{ needs.openclaw-scripts-test.result }}" != "success" ]; then
-            echo "FAIL: OpenClaw Scripts Test (${{ needs.openclaw-scripts-test.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.collection-phone-darwin-test.result }}" != "success" ]; then
-            echo "FAIL: Collection Phone Darwin Test (${{ needs.collection-phone-darwin-test.result }})"
-            FAILED=true
-          fi
-
-          # API scripts (always)
-          if [ "${{ needs.api-scripts-test.result }}" != "success" ]; then
-            echo "FAIL: API Scripts Test (${{ needs.api-scripts-test.result }})"
-            FAILED=true
-          fi
-
-          # Agent Line Modules (conditional)
-          if [ "${{ needs.changes.outputs.agent_modules }}" = "true" ] || [ "${{ needs.changes.outputs.ci }}" = "true" ]; then
-            if [ "${{ needs.line-module-build.result }}" != "success" ]; then
-              echo "FAIL: Line Module Build (${{ needs.line-module-build.result }})"
-              FAILED=true
-            fi
-          fi
-
-          if [ "$FAILED" = "true" ]; then
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  L3 Code Gate FAILED"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            exit 1
-          fi
-
-          echo ""
-          echo "Module check results:"
-          [ "${{ needs.changes.outputs.dashboard }}" = "true" ] && echo "  Dashboard: checked" || echo "  Dashboard: skipped"
-          [ "${{ needs.changes.outputs.api }}" = "true" ] && echo "  API: checked" || echo "  API: skipped"
-          [ "${{ needs.changes.outputs.geoai }}" = "true" ] && echo "  GeoAI: checked" || echo "  GeoAI: skipped"
-          [ "${{ needs.changes.outputs.agent_modules }}" = "true" ] && echo "  Agent Line Modules: checked" || echo "  Agent Line Modules: skipped"
-
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  L3 Code Gate PASSED"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        env:
+          GATE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci/required-gate.mjs code

@@ -104,7 +104,7 @@ test('真实caller配置关掉job或node步骤必须被永久协议守卫拒绝'
  }
 });
 
-for(const target of ['worker-if','worker-continue','worker-count','matrix','fail-fast','glob-if','upload-if','aggregate-if','aggregate-needs','aggregate-continue','verify-if','download-pattern','gate-needs','gate-run','source-check','coverage-check','failure-check'])test('两worker及原required聚合真实消费者不可弱化：'+target,async t=>{
+for(const target of ['worker-if','worker-continue','worker-count','matrix','fail-fast','glob-if','upload-if','aggregate-if','aggregate-needs','aggregate-continue','verify-if','download-pattern','gate-needs','gate-run','merge-queue-bypass','source-check','coverage-check','failure-check'])test('两worker及原required聚合真实消费者不可弱化：'+target,async t=>{
  const {verifyPatrolSmokeConsumer}=await api(),f=fixture(t),path='.github/workflows/ci-smoke-glob-runner.yml';
  f.put('.github/workflows/scripts/smoke-baseline.txt','phone-account-patrol-smoke.sh\n');
  const w=YAML.parse(readFileSync(new URL('../../../'+path,import.meta.url),'utf8')),worker=w.jobs['smoke-glob-shards'],aggregate=w.jobs['smoke-glob-runner'];
@@ -115,6 +115,7 @@ for(const target of ['worker-if','worker-continue','worker-count','matrix','fail
  if(target==='aggregate-if')aggregate.if='success()';if(target==='aggregate-needs')aggregate.needs=[];if(target==='aggregate-continue')aggregate['continue-on-error']=true;
  if(target==='verify-if')verify.if='false';if(target==='download-pattern')aggregate.steps.find(s=>s.uses==='actions/download-artifact@v4').with.pattern='other-*';
  if(target==='gate-needs')w.jobs.gate.needs=['baseline-lint'];if(target==='gate-run')w.jobs.gate.steps[0].run='exit 0';
+ if(target==='merge-queue-bypass')w.jobs.gate.steps=w.jobs.gate.steps.filter(s=>s.name!=='Reject merge queue without equivalent baseline review');
  if(target==='source-check')verify.run=verify.run.replace('meta["source_sha"] == os.environ["GITHUB_SHA"]','True');
  if(target==='coverage-check')verify.run=verify.run.replace('sorted(row[0] for row in rows) == assigned','True').replace('len(all_rows) == len(inventory)','True');
  if(target==='failure-check')verify.run=verify.run.replace('os.environ["SMOKE_SHARDS_RESULT"] == "success"','True');

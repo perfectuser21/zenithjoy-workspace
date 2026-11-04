@@ -11,6 +11,7 @@ name: WeChat CS Hardening — E2E
 on:
   push:
     branches: [main]
+  merge_group:
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -33,37 +34,15 @@ jobs:
           fetch-depth: 0
       - name: Verify agent scope classification
         run: node --test scripts/ci/__tests__/wechat-agent-scope.test.mjs
-      - id: filter
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Detect changed files
+        id: filter
         env:
           SKILLS_SOURCE_SSH_KEY: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "agent_or_api=true" >> "$GITHUB_OUTPUT"
-            echo "agent=true" >> "$GITHUB_OUTPUT"
-            echo "manual dispatch: run all"
-            exit 0
-          fi
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.event.pull_request.head.sha }}"
-            FILES=$(git diff --name-only "$BASE...$HEAD")
-          else
-            BASE="${{ github.event.before }}"
-            HEAD="${{ github.sha }}"
-            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
-              BASE=$(git rev-parse "$HEAD^")
-            fi
-            FILES=$(git diff --name-only "$BASE" "$HEAD")
-          fi
-
-          echo "$FILES"
-          AGENT=false; AGENT_OR_API=false
-          AGENT=$(node scripts/ci/wechat-agent-scope.mjs "$GITHUB_WORKSPACE" "$BASE" "$HEAD" "$RUNNER_TEMP/wechat-agent-scope.json")
-          if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml$|\.github/workflows/scripts/smoke/wechat-cs-hardening-smoke\.sh$)'; then AGENT_OR_API=true; fi
-          echo "agent=$AGENT" >> "$GITHUB_OUTPUT"
-          echo "agent_or_api=$AGENT_OR_API" >> "$GITHUB_OUTPUT"
+          CI_SCOPE_PROOF: ${{ runner.temp }}/wechat-agent-scope.json
+        run: node scripts/ci/detect-changes.mjs wechat
       - name: Preserve fixed-source scope proof
         if: always()
         uses: actions/upload-artifact@v4
@@ -376,16 +355,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: WeChat CS Gate
-        run: |
-          echo "changes=${{ needs.changes.result }} job1=${{ needs.middleware-chain.result }} job2=${{ needs.agent-windows.result }} job3=${{ needs.bubble-read-gate.result }}"
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "FAIL: changes 检测未成功"; exit 1
-          fi
-          for r in "${{ needs.middleware-chain.result }}" "${{ needs.agent-windows.result }}" "${{ needs.bubble-read-gate.result }}"; do
-            case "$r" in
-              success|skipped) ;;
-              *) echo "FAIL: 有 job 结果为 $r"; exit 1 ;;
-            esac
-          done
-          echo "WeChat CS Gate Passed"
+        env:
+          GATE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci/required-gate.mjs wechat

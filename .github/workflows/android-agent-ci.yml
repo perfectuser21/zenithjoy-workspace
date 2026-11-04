@@ -17,6 +17,7 @@ on:
       - ".skills-source.json"
       - 'services/agent-android/**'
       - '.github/workflows/android-agent-ci.yml'
+  merge_group:
   pull_request:
 
 concurrency:
@@ -39,23 +40,12 @@ jobs:
         uses: ./.github/actions/skills-source
         with:
           ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - id: filter
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "android=true" >> "$GITHUB_OUTPUT"
-            echo "non-PR event: run all"
-            exit 0
-          fi
-          BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
-          FILES=$(git diff --name-only "$BASE...$HEAD")
-          echo "$FILES"
-          ANDROID=false
-          if echo "$FILES" | grep -qE '^(services/agent-android/|\.github/workflows/android-agent-ci\.yml$)'; then
-            ANDROID=true
-          fi
-          echo "android=$ANDROID" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Detect changed files
+        id: filter
+        run: node scripts/ci/detect-changes.mjs android
 
   test-and-build:
     name: Unit Tests + Release APK
@@ -161,14 +151,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Android CI Gate
-        run: |
-          echo "changes=${{ needs.changes.result }} test-and-build=${{ needs.test-and-build.result }}"
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "FAIL: changes 检测未成功"; exit 1
-          fi
-          case "${{ needs.test-and-build.result }}" in
-            success|skipped) ;;
-            *) echo "FAIL: test-and-build 结果为 ${{ needs.test-and-build.result }}"; exit 1 ;;
-          esac
-          echo "Android CI Gate Passed"
+        env:
+          GATE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci/required-gate.mjs android
