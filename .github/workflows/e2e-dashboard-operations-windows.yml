@@ -2,27 +2,7 @@ name: Dashboard Operations UI (Windows)
 # One npm/Vite/Chromium preparation for current machine/events/workers/CRM contracts.
 # These specs isolate API responses; real device/tenant API contracts remain separate.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'apps/dashboard/**'
-      - 'apps/dashboard/src/pages/MachineManagementPage.tsx'
-      - 'apps/dashboard/src/pages/Workers*'
-      - 'apps/dashboard/src/pages/WorkerLive*'
-      - 'apps/dashboard/src/pages/CustomerListPage.tsx'
-      - 'apps/dashboard/src/pages/CustomerProfilePage.tsx'
-      - 'apps/dashboard/src/api/**'
-      - 'apps/dashboard/src/components/**'
-      - 'apps/dashboard/src/config/navigation.config.ts'
-      - 'apps/dashboard/e2e/agent-machines.spec.ts'
-      - 'apps/dashboard/e2e/machine-events.spec.ts'
-      - 'apps/dashboard/e2e/workers.spec.ts'
-      - 'apps/dashboard/e2e/crm-aggrid.spec.ts'
-      - 'apps/dashboard/e2e/crm-customer-list.spec.ts'
-      - 'apps/dashboard/playwright.config.ts'
-      - 'apps/dashboard/vite.config.ts'
-      - 'package-lock.json'
-      - '.github/workflows/e2e-dashboard-operations-windows.yml'
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
