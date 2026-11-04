@@ -77,7 +77,7 @@ test('真实prepare CLI把Agent规范输入写入发布冻结件；续跑改配�
  wf.payload.key='douyin_comment_scoring';wf.payload_sha256=hash({source:{repo:wf.source_repo,path:wf.source_path,commit:wf.source_commit},payload:wf.payload});
  const release={id:'primary-input-release',environment:'scratch',target:deploymentTarget(hostname()),payload:{schema_version:1,workflows:[wf],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]}};release.manifest_sha256=hash({environment:release.environment,target:release.target,payload:release.payload});
  const manifest=join(f.dir,'deployment-manifest.json');writeFileSync(manifest,JSON.stringify({...JSON.parse(readFileSync(manifest)),release_id:release.id,observation_id:'primary-input-observation',environment:release.environment,target:release.target}));
- const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines')res.end(JSON.stringify([{id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}]));else if(req.url==='/api/brain/releases/'+release.id)res.end(JSON.stringify({release}));else{res.statusCode=404;res.end('{}');}});
+ const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines/mac-mini-m4-us')res.end(JSON.stringify({id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}));else if(req.url==='/api/brain/releases/'+release.id)res.end(JSON.stringify({release}));else{res.statusCode=404;res.end('{}');}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
  const env={...process.env,LEADGEN_EXECUTION_MODE:'agent',BRAIN_URL:'http://127.0.0.1:'+server.address().port,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_RUN_DIR:f.options.runDir,WF_DEPLOYMENT_ROOT:f.dir,WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WF_BRAIN_TASK_ID:'11111111-1111-4111-8111-111111111111',BRAIN_TASK_ID:undefined,WFR_BRAIN_TASK_ID:undefined,WF_CONTRACT_RAW_SHA256:f.options.rawContractSha256,WF_PLAN_PATH:f.options.planPath,WF_STEP_SPEC:'steps.json',WF_ARG_CAP:'test',WFR_TAG:'primary103',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',WFR_RUN_ID:'run',WFR_HOME:f.dir,WF_RUN_START_TS:'1700000000',WF_RUN_MAX_SECONDS:'1800',LEADGEN_LIMIT:'2',LEADGEN_SOURCE_RUN:'primary102'};
  const run=change=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,'prepare'],{env:{...env,...change}});let err='';child.stderr.on('data',bytes=>err+=bytes);child.on('exit',code=>resolve({code,err}));});
@@ -302,7 +302,7 @@ for(const automatic of [false,true])test(`正式prepare${automatic?'默认模板
  const taskId='11111111-2222-4333-8444-555555555555';
  const tool={path:'/usr/bin/true',sha256:'1'.repeat(64)},scope={version:1,task_id:taskId,run_id:'formal-scope__a1',attempt:'a1',source_commit:'a'.repeat(40),profile:'p',serial:'S',target,evidence_root:'/private/tmp/fixture/evidence/p',policy:{schema_version:1,host_id:target,transport:target==='xian-m4'?'usb':'tcp',endpoint:'tcp:127.0.0.1:5042',forbidden_ports:[],adb_bin:'/fixture/adb',adb_sha256:'1'.repeat(64)},executables:{python:tool,node:tool,zsh:tool}};
  const input=join(f.dir,'scope-input.json');writeFileSync(input,JSON.stringify(scope),{mode:0o600});let binding;
- const server=createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',()=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines')res.end(JSON.stringify([{id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}]));else if(req.url==='/api/brain/releases/'+release.id)res.end(JSON.stringify({release}));else if(req.url==='/api/brain/runs/formal-scope__a1/definition'){if(req.method==='POST')binding={id:'public-scope-binding',run_id:'formal-scope__a1',...JSON.parse(raw),task_run_id:null};res.end(JSON.stringify({binding}));}else{res.statusCode=404;res.end('{}');}});});
+ const server=createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',()=>{res.setHeader('Content-Type','application/json');if(req.url==='/api/brain/machines/mac-mini-m4-us')res.end(JSON.stringify({id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',status:'active',metadata:{tailscale_ip:'100.1.1.1',public_ip:'38.1.1.1'}}));else if(req.url==='/api/brain/releases/'+release.id)res.end(JSON.stringify({release}));else if(req.url==='/api/brain/runs/formal-scope__a1/definition'){if(req.method==='POST')binding={id:'public-scope-binding',run_id:'formal-scope__a1',...JSON.parse(raw),task_run_id:null};res.end(JSON.stringify({binding}));}else{res.statusCode=404;res.end('{}');}});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  const cli=new URL('../runtime-receipts.mjs',import.meta.url).pathname,env={...process.env,BRAIN_URL:'http://127.0.0.1:'+server.address().port,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_RUN_DIR:f.options.runDir,WF_DEPLOYMENT_ROOT:f.dir,WF_BRAIN_WORKFLOW:'douyin_video_processing',WF_BRAIN_TASK_ID:taskId,WF_CONTRACT_RAW_SHA256:f.options.rawContractSha256,WF_PLAN_PATH:f.options.planPath,WF_STEP_SPEC:'steps.json',WF_ARG_CAP:'test',WFR_TAG:'formal',P:'p',SERIAL:'S',WFR_RUN_ID:'formal-scope',WFR_HOME:f.dir};
  const run=args=>new Promise(resolve=>{const child=spawn(process.execPath,[cli,...args],{env});let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);child.on('close',code=>resolve({code,stdout,stderr}));});
@@ -339,4 +339,53 @@ test('v2来源交接冻结必须保采样≤5及原480预算，不影响v1',asyn
  const options=()=>{const f=fixture();f.routes['/api/brain/workflows'][0].key='douyin_video_processing';Object.assign(f.options,{workflowKey:'douyin_video_processing',producerDescriptor:d,runIdentity:{capability:'test',tag:'pendingconsumer',profile:'legacy',serial:d.serial,run_id:'run'},samplingInput:{schema_version:1,workflow_key:'douyin_video_processing',run_tag:'pendingconsumer',profile:'legacy',serial:d.serial,line:'jinuo',source_run:d.run_tag,comment_limit:5,collection_budget_s:480}});const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key='douyin_video_processing';v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});return f.options;};
  for(const change of [o=>o.samplingInput=null,o=>o.samplingInput.comment_limit=6,o=>o.samplingInput.collection_budget_s=481,o=>o.samplingInput.line='yuesheng']){const o=options();change(o);await assert.rejects(freezeDefinition(o),/PRODUCER_DESCRIPTOR_SAMPLING_SCOPE_INVALID/);}
  const o=options(),s=await freezeDefinition(o);assert.deepEqual(s.producer_descriptor,d);assert.equal(s.sampling_input.comment_limit,5);assert.equal(s.deployment.source_commit,'a'.repeat(40));
+});
+
+
+test('真实HTTP prepare仅取精确MMV活记录，全量不可用仍冻结路由；坏登记或release/source失败不冻结',async t=>{
+ const {createServer}=await import('node:http'),{spawn}=await import('node:child_process'),{existsSync,rmSync}=await import('node:fs');
+ const f=primaryFixture(),wf=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;
+ t.after(()=>rmSync(f.dir,{recursive:true,force:true}));
+ wf.payload.key='douyin_comment_scoring';wf.payload_sha256=hash({source:{repo:wf.source_repo,path:wf.source_path,commit:wf.source_commit},payload:wf.payload});
+ const release={id:'exact-mmv-release',environment:'scratch',target:deploymentTarget(hostname()),payload:{schema_version:1,workflows:[wf],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]}};
+ release.manifest_sha256=hash({environment:release.environment,target:release.target,payload:release.payload});
+ const manifest=join(f.dir,'deployment-manifest.json');
+ writeFileSync(manifest,JSON.stringify({...JSON.parse(readFileSync(manifest)),release_id:release.id,observation_id:'exact-mmv-observation',environment:release.environment,target:release.target}));
+ const valid={id:'ed3555dc-4777-446c-bdf0-d928d6a08ef1',name:'mac-mini-m4-us',status:'active',metadata:{tailscale_ip:'100.1.2.3',public_ip:'38.1.2.3'}};
+ let machine=valid,machineStatus=200,releaseStatus=200;const seen=[];
+ const server=createServer((req,res)=>{
+  seen.push(req.url);assert.equal(req.headers.authorization,'Bearer fixture-token');res.setHeader('Content-Type','application/json');
+  if(req.url==='/api/brain/machines/mac-mini-m4-us'){res.statusCode=machineStatus;res.end(typeof machine==='string'?machine:JSON.stringify(machine));}
+  else if(req.url==='/api/brain/machines'){res.statusCode=503;res.end('{"error":"inventory projection unavailable"}');}
+  else if(req.url==='/api/brain/releases/'+release.id){res.statusCode=releaseStatus;res.end(JSON.stringify({release}));}
+  else{res.statusCode=404;res.end('{}');}
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
+ const env={...process.env,HOME:f.dir,LEADGEN_EXECUTION_MODE:'agent',BRAIN_URL:'http://127.0.0.1:'+server.address().port,BRAIN_INTERNAL_TOKEN:'fixture-token',WF_DEPLOYMENT_ROOT:f.dir,WF_BRAIN_WORKFLOW:'douyin_comment_scoring',WF_BRAIN_TASK_ID:'11111111-1111-4111-8111-111111111111',BRAIN_TASK_ID:undefined,WFR_BRAIN_TASK_ID:undefined,WF_CONTRACT_RAW_SHA256:f.options.rawContractSha256,WF_PLAN_PATH:f.options.planPath,WF_STEP_SPEC:'steps.json',WF_ARG_CAP:'test',WFR_TAG:'exact103',P:'mmv-scoring',SERIAL:'none',LEADGEN_LINE:'yuesheng',WFR_RUN_ID:'exact-run',WFR_HOME:f.dir,WF_RUN_START_TS:'1700000000',WF_RUN_MAX_SECONDS:'1800',LEADGEN_LIMIT:'10',LEADGEN_SOURCE_RUN:'new102'};
+ let sequence=0;
+ async function prepare(route='tailscale'){
+  const dir=join(f.dir,'run-'+(++sequence));
+  const result=await new Promise((done,reject)=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,'prepare'],{env:{...env,WFR_RUN_DIR:dir,WFR_RUN_ID:'run-'+sequence,WFR_HOME:join(f.dir,'home-'+sequence),WF_MMV_SSH_ROUTE:route}});let err='';child.stderr.on('data',b=>err+=b);child.on('error',reject);child.on('exit',code=>done({code,err}));});
+  assert.equal(existsSync(join(dir,'run-bindings')),false,'prepare不能绑定或执行业务');
+  assert.equal(existsSync(join(dir,'native-operations')),false,'prepare不能执行phone');
+  return {...result,dir};
+ }
+ for(const route of ['tailscale','public']){
+  const result=await prepare(route);assert.equal(result.code,0,result.err);
+  const frozen=JSON.parse(readFileSync(join(result.dir,'run-definition.json')));
+  assert.deepEqual(frozen.runtime_transport,{machine_id:valid.id,ssh_hostname:route==='public'?'38.1.2.3':'100.1.2.3',ssh_hostkey_alias:'38.1.2.3'});
+  assert.equal(frozen.execution_mode,'agent');assert.equal(frozen.agent_input.source_run,'new102');
+ }
+ const invalid=[{label:'null record',body:null},{label:'array shape',body:[valid]},{label:'duplicate records',body:[valid,valid]},{label:'wrong id',body:{...valid,id:'other'}},{label:'inactive',body:{...valid,status:'offline'}},{label:'missing tailscale',body:{...valid,metadata:{public_ip:'38.1.2.3'}}},{label:'missing alias',body:{...valid,metadata:{tailscale_ip:'100.1.2.3'}}},{label:'malformed address',body:{...valid,metadata:{...valid.metadata,tailscale_ip:'100.1.2.3;command'}}},{label:'missing machine',body:{},status:404},{label:'malformed JSON',body:'not-json'}];
+ for(const sample of invalid){
+  machine=sample.body;machineStatus=sample.status||200;const result=await prepare();
+  assert.notEqual(result.code,0,sample.label);assert.equal(existsSync(join(result.dir,'run-definition.json')),false,sample.label);
+ }
+ machine=valid;machineStatus=200;releaseStatus=404;
+ let result=await prepare();assert.notEqual(result.code,0);assert.match(result.err,/Brain HTTP 404/);assert.equal(existsSync(join(result.dir,'run-definition.json')),false);
+ releaseStatus=200;writeFileSync(join(f.dir,'entry.sh'),'changed source after release\n');
+ result=await prepare();assert.notEqual(result.code,0);assert.equal(existsSync(join(result.dir,'run-definition.json')),false,'源码与发布清单不符不能冻结');
+ assert.ok(seen.includes('/api/brain/machines/mac-mini-m4-us'));
+ assert.ok(!seen.includes('/api/brain/machines'),'不回退全库存或缓存');
+ assert.ok(seen.every(path=>path==='/api/brain/machines/mac-mini-m4-us'||path==='/api/brain/releases/'+release.id),'无别名/任意机器fallback');
 });
