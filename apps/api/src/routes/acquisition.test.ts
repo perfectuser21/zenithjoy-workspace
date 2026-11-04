@@ -361,20 +361,21 @@ describe('GET /api/acquisition/pending-collect-tasks — Stage2 排除已 reject
 
 describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
+  afterEach(() => vi.mocked(db.query).mockReset().mockResolvedValue({ rows: [] } as any));
 
   it('body 带 agent_id → INSERT 时写入 acquisition_collect_tasks.agent_id', async () => {
     const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [] }) // 异步 session 探测（fire-and-forget）
-      .mockResolvedValueOnce({ rows: [{ id: 'task-new' }] }); // INSERT
+    collectStartFixture();
 
-    await request(app)
+    const response = await request(app)
       .post('/api/acquisition/collect/start')
       .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
       .send({ keywords: ['装修'], agent_id: 'agent-A' });
 
+    expect(response.status).toBe(200);
+    expect(response.body.data.task_id).toBe('fixture-task');
     const calls = (mod.default.query as any).mock.calls;
-    const insertCall = calls.find((c: any[]) => /acquisition_collect_tasks/.test(c[0]));
+    const insertCall = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_collect_tasks/.test(c[0]));
     expect(insertCall).toBeTruthy();
     const [sql, params] = insertCall;
     expect(sql).toMatch(/agent_id/);
@@ -382,16 +383,33 @@ describe('POST /api/acquisition/collect/start — agent_id 写入 [REGRESSION]',
   });
 });
 
+// Model each real DB operation rather than depending on call order: a configured
+// DATABASE_URL also enables the machine-cooldown read before the session lookup.
+function collectStartFixture(boundAgent: string | null = 'agent-burner-machine') {
+  vi.mocked(db.query).mockReset();
+  vi.mocked(db.query).mockImplementation(async (sql: any) => {
+    const text = String(sql);
+    if (text.includes('JOIN zenithjoy.license_machines')) return { rows: [] } as any;
+    if (text.includes('FROM zenithjoy.agent_platform_sessions'))
+      return { rows: boundAgent ? [{ agent_id: boundAgent }] : [] } as any;
+    if (text.includes('FROM zenithjoy.line02_account_sessions')) return { rows: [] } as any;
+    if (text.includes('INSERT INTO zenithjoy.acquisition_collect_tasks'))
+      return { rows: [{ id: 'fixture-task' }], rowCount: 1 } as any;
+    throw new Error(`Unexpected collect/start DB operation: ${text}`);
+  });
+}
+
 // ────── 方案 D：burner 账号自动路由 ──────
 // 采集任务本质要用某个抖音小号的 cookie session 登录去抓，所以任务必须派到
 // 持有该 session 的机器上；account_label 解析出的 agent_id 覆盖客户端直传的 agent_id
 // （物理约束优先于用户手选的机器）。
 describe('POST /api/acquisition/collect/start — burner account_label 自动路由 [REGRESSION]', () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.mocked(db.query).mockReset().mockResolvedValue({ rows: [] } as any); });
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('account_label 查不到 active burner session → 400 BURNER_SESSION_NOT_FOUND', async () => {
     const mod = await import('../db/connection');
-    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // session 查询查不到
+    collectStartFixture(null);
 
     const res = await request(app)
       .post('/api/acquisition/collect/start')
@@ -404,18 +422,19 @@ describe('POST /api/acquisition/collect/start — burner account_label 自动路
 
   it('account_label 命中 active burner session → INSERT 用该 session 的 agent_id（覆盖 body.agent_id）', async () => {
     const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ agent_id: 'agent-burner-machine' }] }) // session 查询命中
-      .mockResolvedValueOnce({ rows: [] }) // 异步 session 探测（fire-and-forget）
-      .mockResolvedValueOnce({ rows: [{ id: 'task-new' }] }); // INSERT
+    collectStartFixture();
+    vi.stubEnv('DATABASE_URL', 'postgresql://ci:ci@127.0.0.1:1/isolated');
 
-    await request(app)
+    const response = await request(app)
       .post('/api/acquisition/collect/start')
       .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
       .send({ keywords: ['装修'], account_label: 'burner-1', agent_id: 'agent-manually-picked' });
 
+    expect(response.status).toBe(200);
+    expect(response.body.data.task_id).toBe('fixture-task');
+    vi.unstubAllEnvs();
     const calls = (mod.default.query as any).mock.calls;
-    const insertCall = calls.find((c: any[]) => /acquisition_collect_tasks/.test(c[0]));
+    const insertCall = calls.find((c: any[]) => /INSERT INTO zenithjoy\.acquisition_collect_tasks/.test(c[0]));
     expect(insertCall).toBeTruthy();
     const [, params] = insertCall;
     expect(params).toContain('agent-burner-machine');
@@ -424,10 +443,7 @@ describe('POST /api/acquisition/collect/start — burner account_label 自动路
 
   it('查 session 时必须限定 role=burner + status=active + 本租户', async () => {
     const mod = await import('../db/connection');
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ agent_id: 'agent-x' }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: 'task-new' }] });
+    collectStartFixture('agent-x');
 
     await request(app)
       .post('/api/acquisition/collect/start')
@@ -444,23 +460,20 @@ describe('POST /api/acquisition/collect/start — burner account_label 自动路
 });
 
 describe('collect/start — tenant 从 session，不信前端占位 [BEHAVIOR]', () => {
+  afterEach(() => vi.mocked(db.query).mockReset().mockResolvedValue({ rows: [] } as any));
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('带 x-test-tenant-id + keywords → 用 session tenant 派单（不拿 body 占位）', async () => {
     const mod = await import('../db/connection');
-    // loadBindingLite 命中 + INSERT 返 id（按实现里 query 次序 mock）
-    (mod.default.query as any)
-      .mockResolvedValueOnce({ rows: [{ tenant_id: 'real', app_token: 'x', enterprise_doc_token: 'd' }] }) // loadBindingLite
-      .mockResolvedValueOnce({ rows: [{ id: 'task-1' }] }); // INSERT
+    collectStartFixture();
     const res = await request(app)
       .post('/api/acquisition/collect/start')
       .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6')
-      .send({ keywords: ['装修'] }); // 不传 tenant_id
-    expect([200, 400]).toContain(res.status); // 200 派单 / 400 仅当 binding 判定不过——关键是不 401、不崩
-    // 至少 loadBindingLite 用的是 session tenant
-    const firstArgs = (mod.default.query as any).mock.calls[0][1];
-    expect(JSON.stringify(firstArgs)).toContain('4807edc7-da2a-4e8d-9223-31f4d25c12c6');
-    expect(JSON.stringify(firstArgs)).not.toContain('current');
+      .send({ keywords: ['装修'], tenant_id: 'current' }); // spoofed tenant must be ignored
+    expect(res.status).toBe(200);
+    expect(res.body.data.task_id).toBe('fixture-task');
+    const insert = vi.mocked(db.query).mock.calls.find(([sql]) => String(sql).includes('INSERT INTO zenithjoy.acquisition_collect_tasks'));
+    expect(insert?.[1]).toEqual(['4807edc7-da2a-4e8d-9223-31f4d25c12c6', JSON.stringify(['装修']), null]);
   });
 
   it('无 tenant 上下文 → 401 NO_TENANT（不是 400 TENANT_ID_REQUIRED、不崩）', async () => {
