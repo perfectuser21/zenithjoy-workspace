@@ -14,7 +14,7 @@ vi.mock('../../auth', () => ({ auth: { api: { getSession: async ({ headers }: { 
 } } } }));
 
 let directory: string;
-const submit = vi.fn(async (_input: WanVideoInput) => ({ taskId: 'paid-task' }));
+const submit = vi.fn<(input: WanVideoInput) => Promise<{taskId: string}>>(async () => ({ taskId: 'paid-task' }));
 const signed = vi.fn(async (key: string) => `https://test.cos.ap-guangzhou.myqcloud.com/${key}?renewed=yes`);
 function app() {
   const server = express(); server.use(express.json());
