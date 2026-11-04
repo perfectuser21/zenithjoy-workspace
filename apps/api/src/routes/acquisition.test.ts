@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { listenLoopback, closeLoopback } from '../../tests/helpers/loopback-server';
 import express from 'express';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -916,19 +917,22 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
   });
 
   it('同一任务 60 秒内第 181 次上报 → 429 RATE_LIMITED', async () => {
+    const server = await listenLoopback(app);
+    try {
     const rateLimitedTaskId = '00000000-0000-0000-0000-00000000c181';
     for (let attempt = 1; attempt <= 180; attempt += 1) {
-      const res = await request(app)
+      const res = await request(server)
         .post('/api/acquisition/collect/report-videos')
         .send({ task_id: rateLimitedTaskId, videos: [{ video_id: 'v1' }] });
       expect(res.status).toBe(401);
     }
 
-    const blocked = await request(app)
+    const blocked = await request(server)
       .post('/api/acquisition/collect/report-videos')
       .send({ task_id: rateLimitedTaskId, videos: [{ video_id: 'v1' }] });
     expect(blocked.status).toBe(429);
     expect(blocked.body.error.code).toBe('RATE_LIMITED');
+    } finally { await closeLoopback(server); }
   });
 
   it('agent 与任务绑定不符 → 403', async () => {

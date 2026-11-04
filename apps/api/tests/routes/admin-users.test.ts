@@ -13,13 +13,19 @@
  */
 
 import request from 'supertest';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { Server } from 'node:http';
+import { listenLoopback, closeLoopback } from '../helpers/loopback-server';
+import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import app from '../../src/app';
 import pool from '../../src/db/connection';
 
 vi.mock('../../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn(), connect: vi.fn() },
 }));
+
+let server: Server;
+beforeAll(async () => { server = await listenLoopback(app); });
+afterAll(async () => { await closeLoopback(server); });
 
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 
@@ -54,13 +60,13 @@ describe('Admin Users 路由 (auth)', () => {
   });
 
   it('GET /api/admin/users 缺鉴权 → 401', async () => {
-    const res = await request(app).get('/api/admin/users');
+    const res = await request(server).get('/api/admin/users');
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('GET /api/admin/users 非超管 → 403', async () => {
-    const res = await request(app)
+    const res = await request(server)
       .get('/api/admin/users')
       .set('X-Feishu-User-Id', 'ou_random_user');
     expect(res.status).toBe(403);
@@ -102,7 +108,7 @@ describe('GET /api/admin/users', () => {
       ],
     });
 
-    const res = await request(app)
+    const res = await request(server)
       .get('/api/admin/users')
       .set('X-Feishu-User-Id', ADMIN_ID);
 
@@ -119,7 +125,7 @@ describe('GET /api/admin/users', () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ total: '1' }] });
     mockQuery.mockResolvedValueOnce({ rows: [makeUserRow()] });
 
-    const res = await request(app)
+    const res = await request(server)
       .get('/api/admin/users?q=alice&limit=10&offset=0')
       .set('X-Feishu-User-Id', ADMIN_ID);
 
@@ -148,7 +154,7 @@ describe('POST /api/admin/users/:userId/tenant-members', () => {
       ],
     });
 
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/admin/users/${USER_ID}/tenant-members`)
       .set('X-Feishu-User-Id', ADMIN_ID)
       .send({ tenant_id: TENANT_UUID, role: 'admin' });
@@ -160,7 +166,7 @@ describe('POST /api/admin/users/:userId/tenant-members', () => {
   });
 
   it('缺 tenant_id → 400', async () => {
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/admin/users/${USER_ID}/tenant-members`)
       .set('X-Feishu-User-Id', ADMIN_ID)
       .send({ role: 'member' });
@@ -169,7 +175,7 @@ describe('POST /api/admin/users/:userId/tenant-members', () => {
   });
 
   it('非法 role → 400', async () => {
-    const res = await request(app)
+    const res = await request(server)
       .post(`/api/admin/users/${USER_ID}/tenant-members`)
       .set('X-Feishu-User-Id', ADMIN_ID)
       .send({ tenant_id: TENANT_UUID, role: 'pirate' });
@@ -187,7 +193,7 @@ describe('DELETE /api/admin/users/:userId/tenant-members/:tenantId', () => {
 
   it('成功移除 → 200', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    const res = await request(app)
+    const res = await request(server)
       .delete(`/api/admin/users/${USER_ID}/tenant-members/${TENANT_UUID}`)
       .set('X-Feishu-User-Id', ADMIN_ID);
     expect(res.status).toBe(200);
@@ -195,7 +201,7 @@ describe('DELETE /api/admin/users/:userId/tenant-members/:tenantId', () => {
   });
 
   it('非 UUID tenantId → 400', async () => {
-    const res = await request(app)
+    const res = await request(server)
       .delete(`/api/admin/users/${USER_ID}/tenant-members/not-a-uuid`)
       .set('X-Feishu-User-Id', ADMIN_ID);
     expect(res.status).toBe(400);
@@ -212,7 +218,7 @@ describe('DELETE /api/admin/users/:userId', () => {
 
   it('删除用户 → 200', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    const res = await request(app)
+    const res = await request(server)
       .delete(`/api/admin/users/${USER_ID}`)
       .set('X-Feishu-User-Id', ADMIN_ID);
     expect(res.status).toBe(200);
@@ -221,7 +227,7 @@ describe('DELETE /api/admin/users/:userId', () => {
 
   it('用户不存在 → 404', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    const res = await request(app)
+    const res = await request(server)
       .delete(`/api/admin/users/${USER_ID}`)
       .set('X-Feishu-User-Id', ADMIN_ID);
     expect(res.status).toBe(404);

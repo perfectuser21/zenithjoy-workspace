@@ -1,4 +1,6 @@
 import request from 'supertest';
+import type { Server } from 'node:http';
+import { listenLoopback, closeLoopback } from './helpers/loopback-server';
 import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -9,6 +11,10 @@ import pool from '../src/db/connection';
 vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn() },
 }));
+
+let server: Server;
+beforeAll(async () => { server = await listenLoopback(app); });
+afterAll(async () => { await closeLoopback(server); });
 
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 
@@ -42,7 +48,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot }] });
 
     const encoded = encodeURIComponent(IMAGE_NAME);
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/${encoded}`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/${encoded}`);
 
     expect(response.status).toBe(200);
     expect(response.headers['content-type']).toContain('image/png');
@@ -52,7 +58,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   });
 
   it('should return 400 when filename contains ..', async () => {
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/..%2Fetc%2Fpasswd`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/..%2Fetc%2Fpasswd`);
 
     expect(response.status).toBe(400);
     // 路径穿越必须被拒，绝不能落到 DB 查询
@@ -62,7 +68,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
   it('should return 400 when filename contains slash after decode', async () => {
     // %2F decode 成 /，会被 express 当成路径分隔符，所以此场景实际走到我们的 handler
     // 的 filename 会是完整编码；直接测编码后的 %2F
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/sub%2Ffile.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/sub%2Ffile.png`);
 
     expect(response.status).toBe(400);
     expect(mockQuery).not.toHaveBeenCalled();
@@ -73,7 +79,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
       .mockResolvedValueOnce({ rows: [] })   // pipeline_runs lookup
       .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
 
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/any.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/any.png`);
 
     expect(response.status).toBe(404);
   });
@@ -83,7 +89,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
       .mockResolvedValueOnce({ rows: [{ output_dir: tmpRoot, cecelia_task_id: null }] })
       .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
 
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/does-not-exist.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/does-not-exist.png`);
 
     expect(response.status).toBe(404);
   });
@@ -93,7 +99,7 @@ describe('GET /api/content-images/:pipelineId/:filename', () => {
       .mockResolvedValueOnce({ rows: [{ output_dir: null, cecelia_task_id: null }] })
       .mockResolvedValueOnce({ rows: [] });  // cecelia_events fallback (empty)
 
-    const response = await request(app).get(`/api/content-images/${PIPELINE_ID}/anything.png`);
+    const response = await request(server).get(`/api/content-images/${PIPELINE_ID}/anything.png`);
 
     expect(response.status).toBe(404);
   });
