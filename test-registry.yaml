@@ -9791,6 +9791,14 @@ tests:
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
 
+  - id: ci-closeout-26d56598ebdb
+    path: .github/workflows/scripts/__tests__/api-contract-retired-callers.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
   - id: ci-closeout-5c402b34981e
     path: .github/workflows/scripts/__tests__/scan-failure-architecture.test.mjs
     type: unit
@@ -10041,6 +10049,14 @@ tests:
 
   - id: ci-closeout-3d8bed889b66
     path: scripts/acceptance-spec/__tests__/readonly.test.js
+    type: unit
+    ci: L3
+    status: active
+    product: 基础设施
+    note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-closeout-fd861d061e27
+    path: scripts/ci/__tests__/implementation-skill-source-transport.test.mjs
     type: unit
     ci: L3
     status: active

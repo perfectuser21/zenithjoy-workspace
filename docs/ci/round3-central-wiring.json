@@ -305,6 +305,7 @@
   "registered_tests": [
     ".github/workflows/scripts/__tests__/acquisition-sse-config.test.mjs",
     ".github/workflows/scripts/__tests__/android-cancel-cleanup.test.mjs",
+    ".github/workflows/scripts/__tests__/api-contract-retired-callers.test.mjs",
     ".github/workflows/scripts/__tests__/scan-failure-architecture.test.mjs",
     ".github/workflows/scripts/operator/rpa-locator-assist-probe.test.mjs",
     ".github/workflows/scripts/smoke/helpers/media-contracts.test.mjs",
@@ -337,6 +338,7 @@
     "apps/staff-hub/src/pages/QuadrantPage.test.tsx",
     "scripts/__tests__/skills-source-bootstrap.test.py",
     "scripts/acceptance-spec/__tests__/readonly.test.js",
+    "scripts/ci/__tests__/implementation-skill-source-transport.test.mjs",
     "scripts/release-gate/__tests__/two-column-fixtures.test.mjs",
     "scripts/sessions/check-health.test.mjs",
     "services/agent/modules/line02/__tests__/report-videos-runtime.test.ts",
