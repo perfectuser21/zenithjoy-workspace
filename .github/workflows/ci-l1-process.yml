@@ -255,116 +255,6 @@ jobs:
 
   # ─── 测试质量 lint 门禁（5 gates）────────────────────────────────────────
 
-  lint-test-pairing:
-    if: github.event_name == 'pull_request'
-    name: Lint — Test Pairing
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-test-pairing
-        run: bash .github/workflows/scripts/lint-test-pairing.sh origin/main
-
-  lint-test-quality:
-    if: github.event_name == 'pull_request'
-    name: Lint — Test Quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-test-quality
-        run: bash .github/workflows/scripts/lint-test-quality.sh origin/main
-
-  lint-tdd-commit-order:
-    if: github.event_name == 'pull_request'
-    name: Lint — TDD Commit Order
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-tdd-commit-order
-        run: bash .github/workflows/scripts/lint-tdd-commit-order.sh origin/main
-
-  lint-no-fake-test:
-    if: github.event_name == 'pull_request'
-    name: Lint — No Fake Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-no-fake-test
-        run: bash .github/workflows/scripts/lint-no-fake-test.sh origin/main
-
-  lint-smoke-mock-honesty:
-    if: github.event_name == 'pull_request'
-    name: Lint — Smoke Mock Honesty
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-smoke-mock-honesty
-        run: bash .github/workflows/scripts/lint-smoke-mock-honesty.sh .github/workflows/scripts/smoke
-
-  # RPA 失败必须自带现场（invariant 93ed0761）——真机验证车道三层防假绿之外补的第四道。
-  # 前三层管的是"smoke 别假绿"，这一层管的是"失败之后有没有留下能查的东西"：
-  # 私信 NO_SEARCH_INPUT 被"根治"过四次仍复发，结构性原因就是失败原因和现场
-  # 从来不在人会看的地方，排查只能靠猜（0821 白猜三轮）。散文规矩拦不住——
-  # 同类规矩当时就在登记表里，照样被"我只是改个设备设置"绕过去了，所以要机器卡。
-  lint-rpa-failure-scene:
-    if: github.event_name == 'pull_request'
-    name: Lint — RPA Failure Scene
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-rpa-failure-scene
-        run: bash .github/workflows/scripts/lint-rpa-failure-scene.sh
-
-  # 真机验证车道三层防假绿 · 第3层棘轮的真正 CI 硬闸（2026-07-30 升级，proven-to-fire
-  # 演练实测发现 realmachine-unverified-ratchet.mjs 之前只是 report-only，棘轮升不升
-  # 完全靠 ci-patrol 每日巡检"恰好注意到"，没有机械保证——本 job 补上这条硬闸，
-  # 照抄 baseline-lint(lint-smoke-baseline.sh) 的既有模式：读当前值与 baseline 比较，
-  # 超标直接卡 PR + 机械开 issue，不等巡检）。
   lint-realmachine-unverified-ratchet:
     if: github.event_name == 'pull_request'
     name: Lint — Realmachine Unverified Ratchet
@@ -486,125 +376,6 @@ jobs:
       - name: Run install-pack-ascii guard (start.bat 含中文必报红)
         run: bash services/agent/install-pack/__tests__/install-pack-ascii.test.sh
 
-  lint-feature-has-smoke:
-    if: github.event_name == 'pull_request'
-    name: Lint — Feature Has Smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-feature-has-smoke
-        env:
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: bash .github/workflows/scripts/lint-feature-has-smoke.sh origin/main
-
-  lint-gp-anchor:
-    if: github.event_name == 'pull_request'
-    name: Lint — GP Anchor
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-gp-anchor
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: bash .github/workflows/scripts/lint-gp-anchor.sh origin/main
-
-  lint-agent-version-bump:
-    if: github.event_name == 'pull_request'
-    name: Lint — Agent Version Bump
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-agent-version-bump
-        run: bash .github/workflows/scripts/lint-agent-version-bump.sh origin/main
-
-  lint-line04-manifest-version-bump:
-    if: github.event_name == 'pull_request'
-    name: Lint — Line04 Manifest Version Bump
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-line04-manifest-version-bump
-        run: bash .github/workflows/scripts/lint-line04-manifest-version-bump.sh origin/main
-
-  lint-wechat-rpa-runner:
-    if: github.event_name == 'pull_request'
-    name: Lint — WeChat RPA Runner
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-wechat-rpa-runner
-        run: bash .github/workflows/scripts/lint-wechat-rpa-runner.sh
-
-  lint-nightly-sparse-checkout-deps:
-    if: github.event_name == 'pull_request'
-    name: Lint — Nightly Sparse-Checkout Deps
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-nightly-sparse-checkout-deps
-        run: bash .github/workflows/scripts/lint-nightly-sparse-checkout-deps.sh
-
-  lint-contract-test-immutability:
-    if: github.event_name == 'pull_request'
-    name: Lint — Contract Test Immutability
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore pinned skill sources
-        if: hashFiles('.skills-source.json') != ''
-        uses: ./.github/actions/skills-source
-        with:
-          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
-      - name: Run lint-contract-test-immutability
-        run: bash .github/workflows/scripts/lint-contract-test-immutability.sh origin/main
-
   lint-workflow-yaml-parse:
     name: Lint — Workflow YAML Parse
     runs-on: ubuntu-latest
@@ -682,15 +453,56 @@ jobs:
 
   # ─── Gate job ─────────────────────────────────────────────────────────────
 
+  # Static PR policy checks share checkout/source restoration. Each step is
+  # independently fail-closed; their required parent remains l1-passed.
+  static-pr-checks:
+    if: github.event_name == 'pull_request'
+    name: Static PR Policy Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore pinned skill sources
+        if: hashFiles('.skills-source.json') != ''
+        uses: ./.github/actions/skills-source
+        with:
+          ssh-key: ${{ secrets.SKILLS_SOURCE_SSH_KEY }}
+      - name: Run lint-test-pairing
+        run: bash .github/workflows/scripts/lint-test-pairing.sh origin/main
+      - name: Run lint-test-quality
+        run: bash .github/workflows/scripts/lint-test-quality.sh origin/main
+      - name: Run lint-tdd-commit-order
+        run: bash .github/workflows/scripts/lint-tdd-commit-order.sh origin/main
+      - name: Run lint-no-fake-test
+        run: bash .github/workflows/scripts/lint-no-fake-test.sh origin/main
+      - name: Run lint-smoke-mock-honesty
+        run: bash .github/workflows/scripts/lint-smoke-mock-honesty.sh .github/workflows/scripts/smoke
+      - name: Run lint-rpa-failure-scene
+        run: bash .github/workflows/scripts/lint-rpa-failure-scene.sh
+      - name: Run lint-feature-has-smoke
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: bash .github/workflows/scripts/lint-feature-has-smoke.sh origin/main
+      - name: Run lint-gp-anchor
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash .github/workflows/scripts/lint-gp-anchor.sh origin/main
+      - name: Run lint-agent-version-bump
+        run: bash .github/workflows/scripts/lint-agent-version-bump.sh origin/main
+      - name: Run lint-line04-manifest-version-bump
+        run: bash .github/workflows/scripts/lint-line04-manifest-version-bump.sh origin/main
+      - name: Run lint-wechat-rpa-runner
+        run: bash .github/workflows/scripts/lint-wechat-rpa-runner.sh
+      - name: Run lint-nightly-sparse-checkout-deps
+        run: bash .github/workflows/scripts/lint-nightly-sparse-checkout-deps.sh
+      - name: Run lint-contract-test-immutability
+        run: bash .github/workflows/scripts/lint-contract-test-immutability.sh origin/main
+
   l1-passed:
     name: L1 Process Gate Passed
-    needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
-            lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-gp-anchor, lint-smoke-mock-honesty, lint-rpa-failure-scene, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane,
-            lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
-            lint-nightly-sparse-checkout-deps,
-            lint-contract-test-immutability, lint-workflow-yaml-parse,
-            test-deploy-lib, test-install-pack-ascii, release-admission-regression]
+    needs: [static-pr-checks, verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane, lint-workflow-yaml-parse, test-deploy-lib, test-install-pack-ascii, release-admission-regression]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -712,6 +524,10 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
           FAILED=false
+          if [ "${{ needs.static-pr-checks.result }}" != "success" ]; then
+            echo "FAIL: Static PR Policy Checks (${{ needs.static-pr-checks.result }})"
+            FAILED=true
+          fi
 
           if [ "${{ needs.verify-dev-workflow.result }}" != "success" ]; then
             echo "FAIL: /dev Workflow Verification (${{ needs.verify-dev-workflow.result }})"
@@ -738,34 +554,10 @@ jobs:
             FAILED=true
           fi
 
-          if [ "${{ needs.lint-test-pairing.result }}" != "success" ]; then
-            echo "FAIL: Lint Test Pairing (${{ needs.lint-test-pairing.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-test-quality.result }}" != "success" ]; then
-            echo "FAIL: Lint Test Quality (${{ needs.lint-test-quality.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-tdd-commit-order.result }}" != "success" ]; then
-            echo "FAIL: Lint TDD Commit Order (${{ needs.lint-tdd-commit-order.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-no-fake-test.result }}" != "success" ]; then
-            echo "FAIL: Lint No Fake Test (${{ needs.lint-no-fake-test.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-rpa-failure-scene.result }}" != "success" ]; then
-            echo "FAIL: Lint RPA Failure Scene (${{ needs.lint-rpa-failure-scene.result }})"
-            FAILED=true
-          fi
-          if [ "${{ needs.lint-smoke-mock-honesty.result }}" != "success" ]; then
-            echo "FAIL: Lint Smoke Mock Honesty (${{ needs.lint-smoke-mock-honesty.result }})"
-            FAILED=true
-          fi
 
           if [ "${{ needs.lint-realmachine-unverified-ratchet.result }}" != "success" ]; then
             echo "FAIL: Lint Realmachine Unverified Ratchet (${{ needs.lint-realmachine-unverified-ratchet.result }})"
@@ -777,40 +569,12 @@ jobs:
             FAILED=true
           fi
 
-          if [ "${{ needs.lint-feature-has-smoke.result }}" != "success" ]; then
-            echo "FAIL: Lint Feature Has Smoke (${{ needs.lint-feature-has-smoke.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-gp-anchor.result }}" != "success" ]; then
-            echo "FAIL: Lint GP Anchor (${{ needs.lint-gp-anchor.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-agent-version-bump.result }}" != "success" ]; then
-            echo "FAIL: Lint Agent Version Bump (${{ needs.lint-agent-version-bump.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-line04-manifest-version-bump.result }}" != "success" ]; then
-            echo "FAIL: Lint Line04 Manifest Version Bump (${{ needs.lint-line04-manifest-version-bump.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-wechat-rpa-runner.result }}" != "success" ]; then
-            echo "FAIL: Lint WeChat RPA Runner (${{ needs.lint-wechat-rpa-runner.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-nightly-sparse-checkout-deps.result }}" != "success" ]; then
-            echo "FAIL: Lint Nightly Sparse-Checkout Deps (${{ needs.lint-nightly-sparse-checkout-deps.result }})"
-            FAILED=true
-          fi
 
-          if [ "${{ needs.lint-contract-test-immutability.result }}" != "success" ]; then
-            echo "FAIL: Lint Contract Test Immutability (${{ needs.lint-contract-test-immutability.result }})"
-            FAILED=true
-          fi
 
           if [ "${{ needs.lint-workflow-yaml-parse.result }}" != "success" ]; then
             echo "FAIL: Lint Workflow YAML Parse (${{ needs.lint-workflow-yaml-parse.result }})"

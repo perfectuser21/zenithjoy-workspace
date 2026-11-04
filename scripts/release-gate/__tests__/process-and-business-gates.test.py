@@ -163,5 +163,21 @@ class L1AggregateTest(unittest.TestCase):
         self.assertEqual(set(self.gate["needs"]), set(self.jobs) - {"l1-passed"})
 
 
+class StaticPrChecksTest(unittest.TestCase):
+    def test_static_lints_share_one_checkout_and_keep_every_command(self):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci-l1-process.yml").read_text())["jobs"]
+        job = jobs["static-pr-checks"]
+        self.assertEqual(job["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(sum(s.get("uses") == "actions/checkout@v4" for s in job["steps"]), 1)
+        commands = "\n".join(s.get("run", "") for s in job["steps"])
+        for name in ("test-pairing", "test-quality", "tdd-commit-order", "no-fake-test",
+                     "smoke-mock-honesty", "rpa-failure-scene", "feature-has-smoke",
+                     "gp-anchor", "agent-version-bump", "line04-manifest-version-bump",
+                     "wechat-rpa-runner", "nightly-sparse-checkout-deps", "contract-test-immutability"):
+            self.assertEqual(commands.count("scripts/lint-" + name + ".sh"), 1, name)
+        self.assertFalse(any(s.get("continue-on-error") for s in job["steps"]))
+        self.assertIn("static-pr-checks", jobs["l1-passed"]["needs"])
+
+
 if __name__ == "__main__":
     unittest.main()
