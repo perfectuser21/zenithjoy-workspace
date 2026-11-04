@@ -1,0 +1,76 @@
+name: Dashboard Operations UI (Windows)
+# One npm/Vite/Chromium preparation for current machine/events/workers/CRM contracts.
+# These specs isolate API responses; real device/tenant API contracts remain separate.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/MachineManagementPage.tsx'
+      - 'apps/dashboard/src/pages/Workers*'
+      - 'apps/dashboard/src/pages/WorkerLive*'
+      - 'apps/dashboard/src/pages/CustomerListPage.tsx'
+      - 'apps/dashboard/src/pages/CustomerProfilePage.tsx'
+      - 'apps/dashboard/src/api/**'
+      - 'apps/dashboard/src/components/**'
+      - 'apps/dashboard/src/config/navigation.config.ts'
+      - 'apps/dashboard/e2e/agent-machines.spec.ts'
+      - 'apps/dashboard/e2e/machine-events.spec.ts'
+      - 'apps/dashboard/e2e/workers.spec.ts'
+      - 'apps/dashboard/e2e/crm-aggrid.spec.ts'
+      - 'apps/dashboard/e2e/crm-customer-list.spec.ts'
+      - 'apps/dashboard/playwright.config.ts'
+      - 'apps/dashboard/vite.config.ts'
+      - 'package-lock.json'
+      - '.github/workflows/e2e-dashboard-operations-windows.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dashboard-operations-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  operations-ui:
+    name: Machines, Events, Workers and CRM (Windows Chromium)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies once
+        run: npm ci
+      - name: Install Chromium once
+        working-directory: apps/dashboard
+        run: npx playwright install chromium
+      - name: Start shared Dashboard
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'dev-user-001'
+          VITE_MOCK_USER_NAME: '测试用户'
+        run: |
+          npx vite --host 127.0.0.1 --port 5173 --strictPort > /tmp/dashboard-vite.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:5173 >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fs http://127.0.0.1:5173 >/dev/null || { cat /tmp/dashboard-vite.log; exit 1; }
+      - name: Run all five distinct UI contracts
+        working-directory: apps/dashboard
+        env:
+          BASE_URL: 'http://127.0.0.1:5173'
+          E2E_BASE_URL: 'http://127.0.0.1:5173'
+        run: npx playwright test e2e/agent-machines.spec.ts e2e/machine-events.spec.ts e2e/workers.spec.ts e2e/crm-aggrid.spec.ts e2e/crm-customer-list.spec.ts --reporter=list,html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-operations-ui
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+            apps/dashboard/screenshots/
+          retention-days: 7
