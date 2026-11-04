@@ -67,7 +67,7 @@ describe('[BEHAVIOR-01] 同机同次离线只告警一次（去重）', () => {
   });
 
   it('同一 agent_id 超阈值后，第二次扫描不重复发告警', async () => {
-    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'http://mock-webhook.test/hook');
+    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
 
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', mockFetch);
@@ -86,7 +86,7 @@ describe('[BEHAVIOR-01] 同机同次离线只告警一次（去重）', () => {
   });
 
   it('sendOfflineAlert 直接调用仍正常发送（去重由 scanAndAlert 层控制）', async () => {
-    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'http://mock-webhook.test/hook');
+    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
 
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', mockFetch);
@@ -112,7 +112,7 @@ describe('[BEHAVIOR-02] 恢复后推恢复通知并复位去重', () => {
   });
 
   it('恢复通知 text 含 "已恢复" 或 "recovered"', async () => {
-    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'http://mock-webhook.test/hook');
+    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -139,7 +139,7 @@ describe('[BEHAVIOR-02] 恢复后推恢复通知并复位去重', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 describe('[BEHAVIOR-03] sendOfflineAlert fetch 失败时 throw 不 warn', () => {
   it('fetch 失败时抛出错误（不吞掉）', async () => {
-    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'http://mock-webhook.test/hook');
+    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
 
     const mockFetch = vi.fn().mockRejectedValue(new Error('network fail'));
     vi.stubGlobal('fetch', mockFetch);
@@ -185,7 +185,7 @@ describe('[BEHAVIOR-03] sendOfflineAlert fetch 失败时 throw 不 warn', () => 
 // ──────────────────────────────────────────────────────────────────────────────
 describe('[BEHAVIOR-04] webhook URL 来自 env 不硬编码', () => {
   it('使用 FEISHU_ALERT_WEBHOOK env 作为 webhook URL', async () => {
-    const customUrl = 'http://custom-webhook-env.test/hook';
+    const customUrl = 'https://open.feishu.cn/open-apis/bot/v2/hook/custom-env-fixture';
     vi.stubEnv('FEISHU_ALERT_WEBHOOK', customUrl);
 
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
@@ -206,7 +206,7 @@ describe('[BEHAVIOR-04] webhook URL 来自 env 不硬编码', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 describe('[BEHAVIOR-05] 告警 payload 含 hostname/offline_duration_minutes/agent_id', () => {
   it('飞书 POST body 中 text 含三个必填字段信息', async () => {
-    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'http://mock-webhook.test/hook');
+    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -237,7 +237,7 @@ describe('[BEHAVIOR-05] 告警 payload 含 hostname/offline_duration_minutes/age
   });
 
   it('offline_duration_minutes 必须是整数', async () => {
-    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'http://mock-webhook.test/hook');
+    vi.stubEnv('FEISHU_ALERT_WEBHOOK', 'https://open.feishu.cn/open-apis/bot/v2/hook/fixture');
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', mockFetch);
 

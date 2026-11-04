@@ -1,7 +1,7 @@
 /**
  * 内部触发端点：POST /api/internal/agent-offline-scan
  *
- * 无鉴权（内部/smoke 调用），不暴露给 dashboard 前端。
+ * 内部 token 鉴权（内部/隔离测试调用），不暴露给 dashboard 前端。
  * 供 CI smoke 脚本和人工排查调用，绕过 setInterval 直接触发一次扫描。
  *
  * 合同: sprints/07201705-agent-offline-alert/contract-draft.md
@@ -9,7 +9,9 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { scanAndAlert } from '../services/agent-offline-monitor';
+import { internalAuth } from '../middleware/internal-auth';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+import { scanAndAlert, resolveFeishuWebhook } from '../services/agent-offline-monitor';
 
 const router = Router();
 
@@ -25,7 +27,7 @@ const router = Router();
  *   或失败时:
  *   { success: false, error: string, data?: { send_errors } }
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }), internalAuth, async (req: Request, res: Response) => {
   const body = req.body || {};
   const thresholdHours = body.threshold_hours
     ? Number(body.threshold_hours)
@@ -33,6 +35,10 @@ router.post('/', async (req: Request, res: Response) => {
   const webhookOverride = body.webhook_override
     ? String(body.webhook_override)
     : undefined;
+
+  if (webhookOverride) {
+    try { resolveFeishuWebhook(webhookOverride); } catch { return res.status(400).json({ success: false, error: 'Invalid Feishu webhook' }); }
+  }
 
   let result;
   try {

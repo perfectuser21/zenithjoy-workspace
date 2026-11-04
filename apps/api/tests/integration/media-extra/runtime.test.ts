@@ -3,15 +3,19 @@ import {loadOrInitConfig} from '../../../../../services/agent/src/config-loader'
 // Session is an isolated identity boundary. Actual application mounts, SQL, env burner and webhook transport execute.
 vi.mock('../../../src/auth',()=>({auth:{api:{getSession:async({headers}:{headers:Headers})=>{const id=headers.get('cookie')?.match(/user=([^;]+)/)?.[1];return id?{user:{id,email:id+'@example.test'}}:null;}}}}));
 import app from '../../../src/app';import pool from '../../../src/db/connection';import {_resetAlertedMap} from '../../../src/services/agent-offline-monitor';import {verifyStartupConfig,REQUIRED_ENV_GROUPS} from '../../../src/startup-check';
-let webhook:Server;let webhookStatus=200;const captures:any[]=[];let webhookUrl:string;
+let webhook:Server;let webhookStatus=200;const captures:any[]=[];let webhookUrl:string;let refusedUrl='';
+const webhookProvider='https://open.feishu.cn/open-apis/bot/v2/hook/synthetic-fixture';
+const refusedProvider='https://open.feishu.cn/open-apis/bot/v2/hook/synthetic-refused';
+const nativeFetch=globalThis.fetch;
 beforeAll(async()=>{
  if(!process.env.DATABASE_HOST?.startsWith('/tmp/zj-media-'))throw new Error('requires disposable PostgreSQL harness');
  await pool.query(`CREATE SCHEMA IF NOT EXISTS zenithjoy;CREATE TABLE zenithjoy.licenses(id uuid DEFAULT gen_random_uuid(),license_key text,customer_id text,status text,created_at timestamptz DEFAULT now());CREATE TABLE zenithjoy.agents(agent_id text PRIMARY KEY,hostname text,platform text,status text,updated_at timestamptz);INSERT INTO zenithjoy.licenses(license_key,customer_id,status)VALUES('fixture-personal-a','alice','active'),('fixture-personal-b','bob','active');`);
  webhook=createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;captures.push(JSON.parse(body));res.statusCode=webhookStatus;res.setHeader('Content-Type','application/json');res.end('{"ok":true}');});await new Promise<void>(r=>webhook.listen(0,'127.0.0.1',r));webhookUrl=`http://127.0.0.1:${(webhook.address()as any).port}/webhook`;
- vi.stubEnv('FEISHU_ALERT_WEBHOOK',webhookUrl);
+ vi.stubEnv('FEISHU_ALERT_WEBHOOK',webhookProvider);vi.stubEnv('ZENITHJOY_INTERNAL_TOKEN','synthetic-offline-internal');
+ vi.stubGlobal('fetch',(input:RequestInfo|URL,init?:RequestInit)=>{const target=String(input);if(target===webhookProvider)return nativeFetch(webhookUrl,init);if(target===refusedProvider)return nativeFetch(refusedUrl,init);throw new Error('Unexpected external transport in isolated fixture');});
 });
-afterEach(()=>{vi.unstubAllEnvs();vi.stubEnv('FEISHU_ALERT_WEBHOOK',webhookUrl);});
-afterAll(async()=>{vi.unstubAllEnvs();await pool.end();await new Promise<void>(r=>webhook.close(()=>r()));});
+afterEach(()=>{vi.unstubAllEnvs();vi.stubEnv('FEISHU_ALERT_WEBHOOK',webhookProvider);vi.stubEnv('ZENITHJOY_INTERNAL_TOKEN','synthetic-offline-internal');});
+afterAll(async()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();await pool.end();await new Promise<void>(r=>webhook.close(()=>r()));});
 describe('actual mounted startup health and explicit complete DB fixture',()=>{
  it.each(['/health','/api/health'])('uses production mount %s with positive and missing-key negative config',async path=>{
   vi.stubEnv('TOAPI_API_KEY','fixture-not-a-real-key');vi.stubEnv('BETTER_AUTH_SECRET','fixture-secret-'.repeat(4));
@@ -47,7 +51,10 @@ describe('actual personal dotenv burn uses the current account and explicit envi
  });
 });
 describe('offline alert scans only isolated SQL fixture and loopback webhook',()=>{
- const scan=(url=webhookUrl)=>request(app).post('/api/internal/agent-offline-scan').send({threshold_hours:4,webhook_override:url}).timeout({response:3000,deadline:5000});
+ const scan=(url=webhookProvider)=>request(app).post('/api/internal/agent-offline-scan').set('X-Internal-Token','synthetic-offline-internal').send({threshold_hours:4,webhook_override:url}).timeout({response:3000,deadline:5000});
+ it('real internal auth and provider validation reject unauthorized and local override before dispatch',async()=>{
+  const count=captures.length;expect((await request(app).post('/api/internal/agent-offline-scan').send({webhook_override:webhookProvider})).status).toBe(401);expect((await scan(webhookUrl)).status).toBe(400);expect(captures).toHaveLength(count);
+ });
  it('sends one alert for stale Windows agent, dedupes while stale, then sends one recovery',async()=>{
   _resetAlertedMap();captures.length=0;await pool.query("INSERT INTO zenithjoy.agents VALUES('fixture-agent','isolated-host','windows','online',now()-interval '5 hours'),('fresh','fresh-host','windows','online',now()),('android','android-host','android','online',now()-interval '5 hours')");
   const first=await scan();expect(first.status).toBe(200);expect(first.body.success).toBe(true);expect(first.body.data.alerted).toHaveLength(1);expect(first.body.data.alerted[0]).toMatchObject({agent_id:'fixture-agent',hostname:'isolated-host',offline_duration_minutes:300});expect(captures).toHaveLength(1);expect(captures[0].content.text).toMatch(/isolated-host.*fixture-agent.*300 分钟/);
@@ -57,7 +64,7 @@ describe('offline alert scans only isolated SQL fixture and loopback webhook',()
  it('refused webhook reports exact agent send_errors as JSON and remains retryable',async()=>{
   _resetAlertedMap();await pool.query("UPDATE zenithjoy.agents SET updated_at=now()-interval '5 hours' WHERE agent_id='fixture-agent'");
   const closed=createServer();await new Promise<void>(r=>closed.listen(0,'127.0.0.1',r));const port=(closed.address()as any).port;await new Promise<void>(r=>closed.close(()=>r()));
-  const failure=await scan(`http://127.0.0.1:${port}/refused`);expect(failure.status).toBe(200);expect(failure.headers['content-type']).toContain('application/json');expect(failure.body.success).toBe(false);expect(failure.body.data.alerted).toEqual([]);expect(failure.body.data.send_errors).toEqual([{agent_id:'fixture-agent',hostname:'isolated-host',error:expect.any(String)}]);expect(failure.body.data.send_errors[0].error).toMatch(/fetch failed|ECONNREFUSED/);
+  refusedUrl=`http://127.0.0.1:${port}/refused`;const failure=await scan(refusedProvider);expect(failure.status).toBe(200);expect(failure.headers['content-type']).toContain('application/json');expect(failure.body.success).toBe(false);expect(failure.body.data.alerted).toEqual([]);expect(failure.body.data.send_errors).toEqual([{agent_id:'fixture-agent',hostname:'isolated-host',error:expect.any(String)}]);expect(failure.body.data.send_errors[0].error).toMatch(/fetch failed|ECONNREFUSED/);
   expect((await scan()).body.data.alerted.map((a:any)=>a.agent_id)).toEqual(['fixture-agent']);
  });
  it('webhook HTTP 503 cannot be counted as a successful alert',async()=>{

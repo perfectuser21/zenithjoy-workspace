@@ -60,6 +60,22 @@ export function _resetAlertedMap(): void {
  * - 未设 FEISHU_ALERT_WEBHOOK 时：仅打 console.info，不 throw。
  * - 发送失败：打 console.error 并 throw（INV-01）。
  */
+export function resolveFeishuWebhook(value: string): string {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error('Invalid Feishu webhook'); }
+  const prefix = '/open-apis/bot/v2/hook/';
+  const token = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+    || (url.port && url.port !== '443') || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    throw new Error('Invalid Feishu webhook');
+  }
+  // Reconstruct a fixed provider origin; never dispatch the input URL or follow
+  // an upstream redirect into an internal service. No arbitrary-host override.
+  if (url.hostname === 'open.feishu.cn') return 'https://open.feishu.cn/open-apis/bot/v2/hook/' + encodeURIComponent(token);
+  if (url.hostname === 'open.larksuite.com') return 'https://open.larksuite.com/open-apis/bot/v2/hook/' + encodeURIComponent(token);
+  throw new Error('Invalid Feishu webhook');
+}
+
 export async function sendOfflineAlert(
   agent: AgentOfflineAlert,
   webhookOverride?: string,
@@ -83,7 +99,8 @@ export async function sendOfflineAlert(
   });
 
   try {
-    const response = await fetch(webhook, {
+    const response = await fetch(resolveFeishuWebhook(webhook), {
+      redirect: 'error',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
@@ -123,7 +140,8 @@ export async function sendRecoveryAlert(
   });
 
   try {
-    const response = await fetch(webhook, {
+    const response = await fetch(resolveFeishuWebhook(webhook), {
+      redirect: 'error',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
