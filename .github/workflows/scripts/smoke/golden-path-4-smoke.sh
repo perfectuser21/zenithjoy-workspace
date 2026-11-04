@@ -205,7 +205,7 @@ diff -r services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rp
 echo "Step 3l rsync 同步校验通过"
 
 # version bump 校验
-EXPECTED="1.0.153"
+EXPECTED="1.0.154"
 SOURCE_VERSION=$(node -e "process.stdout.write(require('./services/agent/modules/line04/manifest.json').version)")
 BUILD_VERSION=$(node -e "process.stdout.write(require('./services/agent/build-modules/line04/manifest.json').version)")
 API_VERSION=$(sed -n "s/.*'line04-wechat-cs'.*required_version: '\\([^']*\\)'.*/\\1/p" apps/api/src/services/walking-skeleton.service.ts)
