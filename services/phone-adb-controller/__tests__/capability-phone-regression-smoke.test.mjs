@@ -44,7 +44,8 @@ function capabilityDependency(workflow, wrapper, installer) {
  const step=Object.values(YAML.parse(workflow).jobs).flatMap(j=>j.steps||[]).find(s=>s.run?.includes('prepare-smoke-os-packages.sh'));
  assert.ok(step,'正式Smoke必须调用固定依赖准备入口');
  assert.match(step.run,/^timeout 300s bash \.github\/workflows\/scripts\/prepare-smoke-os-packages\.sh$/);
- assert.match(wrapper,/^packages=\(zsh python3 jq libxml2-utils\)$/m);
+ const packages=wrapper.match(/^packages=\(([^)]*)\)$/m)?.[1].split(/\s+/);assert.ok(packages,'显式安装包数组必须存在');
+ for(const required of ['zsh','python3','jq','libxml2-utils'])assert.ok(packages.includes(required),'missing required package: '+required);
  assert.match(wrapper,/if ! command -v ffmpeg[^\n]*packages\+=\(ffmpeg\)/);
  assert.match(wrapper,/^bash \.github\/workflows\/scripts\/prepare-openclaw-os-packages\.sh[^\n]*"\$\{packages\[@\]\}"$/m);
  for(const tool of ['zsh','python3','jq','xmllint'])assert.match(wrapper,new RegExp('^'+tool+' --version$','m'));
@@ -57,11 +58,12 @@ test('完整动态回归进入必绿基线，Glob runner显式安装所选套的
  assert.ok(baseline.includes('capability-phone-regression-smoke.sh'),'新动态回归必须纳入必绿棘轮');
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
  capabilityDependency(workflow,smokeWrapper,signedInstaller);
- assert.match(workflow,/npm ci --workspace=apps\/api --workspace=apps\/agent-panel --include-workspace-root/);
+ const install=Object.values(YAML.parse(workflow).jobs).flatMap(job=>job.steps||[]).find(step=>step.run?.includes('npm ci --workspace=apps/api'));assert.ok(install);
+ for(const flag of ['--workspace=apps/api','--workspace=apps/agent-panel','--include-workspace-root'])assert.ok(install.run.split(/\s+/).includes(flag),'missing locked install flag: '+flag);
 });
 test('capability依赖守卫拒绝包缺失、准备入口或helper断链及漏版本核验',()=>{
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
- for(const pkg of ['zsh','python3','jq','libxml2-utils'])assert.throws(()=>capabilityDependency(workflow,smokeWrapper.replace('packages=(zsh python3 jq libxml2-utils)','packages=('+['zsh','python3','jq','libxml2-utils'].filter(p=>p!==pkg).join(' ')+')'),signedInstaller));
+ for(const pkg of ['zsh','python3','jq','libxml2-utils'])assert.throws(()=>capabilityDependency(workflow,smokeWrapper.replace(/^packages=\(([^)]*)\)$/m,(_all,packages)=>'packages=('+packages.split(/\s+/).filter(p=>p!==pkg).join(' ')+')'),signedInstaller));
  for(const tool of ['zsh','python3','jq','xmllint'])assert.throws(()=>capabilityDependency(workflow,smokeWrapper.replace('\n'+tool+' --version\n','\ntrue\n'),signedInstaller));
  for(const wrapper of [smokeWrapper.replace('prepare-openclaw-os-packages.sh','unrelated.sh'),smokeWrapper.replace('"${packages[@]}"','"zsh"')])assert.throws(()=>capabilityDependency(workflow,wrapper,signedInstaller));
  assert.throws(()=>capabilityDependency(workflow.replace('prepare-smoke-os-packages.sh','unrelated.sh'),smokeWrapper,signedInstaller));
