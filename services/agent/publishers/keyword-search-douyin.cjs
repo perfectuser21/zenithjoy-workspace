@@ -13,7 +13,7 @@
  * Output: 末行 stdout JSON → { ok, keyword, video_urls, error? }
  */
 const { chromium } = require('playwright-core');
-const { findDouyinSessionCookie, isUsableDouyinCookie } = require('./douyin-cookie-admission.cjs');
+const { findDouyinSessionCookie, isUsableDouyinCookie, isDouyinPageUrl } = require('./douyin-cookie-admission.cjs');
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -272,7 +272,7 @@ async function main() {
 
     // 优先复用已有 Douyin 页面（避免 newPage 被抖音 bot 检测），没有再开新标签
     const existingPages = ctx.pages();
-    const existingDouyin = existingPages.find(p => p.url().includes('douyin.com'));
+    const existingDouyin = existingPages.find(p => isDouyinPageUrl(p.url()));
     const page = existingDouyin || await ctx.newPage();
     const pageIsNew = !existingDouyin;
     process.stderr.write(`[keyword-search-douyin] 使用${pageIsNew ? '新' : '已有'} tab (${page.url().slice(0, 60)})\n`);

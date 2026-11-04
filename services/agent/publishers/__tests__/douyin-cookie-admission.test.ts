@@ -11,7 +11,7 @@ const session = (extra = {}) => ({ name: 'sessionid_ss', value: 'synthetic-sessi
 
 // Run the actual command's main(), replacing only browser/process/filesystem boundaries.
 // Reaching goto proves admission, not platform login or successful collection.
-async function runKeyword(initial: unknown[], fallback?: unknown[]) {
+async function runKeyword(initial: unknown[], fallback?: unknown[], existingUrls = ['https://www.douyin.com/']) {
   let cookies = initial;
   const injected: unknown[][] = [];
   let navigations = 0;
@@ -19,8 +19,16 @@ async function runKeyword(initial: unknown[], fallback?: unknown[]) {
   let diagnostics = '';
   let finish!: () => void;
   const finished = new Promise<void>(resolve => { finish = resolve; });
-  const page = { url: () => 'https://www.douyin.com/', goto: async () => { navigations++; throw new Error('FIXTURE_SEARCH_BOUNDARY'); } };
-  const context = { cookies: async () => cookies, addCookies: async (next: unknown[]) => { injected.push(next); cookies = next; }, pages: () => [page] };
+  let newPages = 0;
+  const existingNavigations: string[] = [];
+  const newNavigations: string[] = [];
+  const pages = existingUrls.map(url => ({ url: () => url, goto: async () => { navigations++; existingNavigations.push(url); throw new Error('FIXTURE_SEARCH_BOUNDARY'); } }));
+  const context = {
+    cookies: async () => cookies,
+    addCookies: async (next: unknown[]) => { injected.push(next); cookies = next; },
+    pages: () => pages,
+    newPage: async () => { newPages++; return { url: () => 'about:blank', goto: async (target: string) => { navigations++; newNavigations.push(target); throw new Error('FIXTURE_SEARCH_BOUNDARY'); }, close: async () => {} }; },
+  };
   const browser = { contexts: () => [context], close: async () => {} };
   const fakeFs = {
     existsSync: (p: string) => p === 'C:/fixture/chrome.exe' || (p.endsWith('fixture-profile.json') && fallback !== undefined),
@@ -41,7 +49,7 @@ async function runKeyword(initial: unknown[], fallback?: unknown[]) {
   const proc = { argv: ['node', filename, 'fixture-keyword'], env: { CHROME_EXECUTABLE_PATH: 'C:/fixture/chrome.exe' }, platform: 'win32', stdout: { write: (s: string) => { output += s; } }, stderr: { write: (s: string) => { diagnostics += s; } }, exit: () => finish() };
   vm.runInNewContext(readFileSync(filename, 'utf8'), { require: requireFixture, process: proc, __dirname: publisherDir, setTimeout, console }, { filename });
   await finished;
-  return { navigations, injected, result: JSON.parse(output.trim().split('\n').at(-1)!), diagnostics };
+  return { navigations, newPages, existingNavigations, newNavigations, injected, result: JSON.parse(output.trim().split('\n').at(-1)!), diagnostics };
 }
 
 describe('actual keyword command cookie admission', () => {
@@ -119,5 +127,56 @@ describe('actual keyword command rejects invalid credentials', () => {
     expect(run.navigations).toBe(1);
     expect(run.injected[0]).toHaveLength(1);
     expect(run.injected[0][0]).toMatchObject({ name: 'sessionid_ss', expires: -1 });
+  });
+});
+
+
+describe('actual keyword command existing-page URL boundary', () => {
+  it.each([
+    'https://www.douyin.com.evil.test/',
+    'https://evil.test/path/douyin.com',
+    'https://evil.test/?redirect=https://www.douyin.com',
+    'https://evil-douyin.com/',
+    'https://.douyin.com/',
+    'http://www.douyin.com/',
+    'https://user:pass@www.douyin.com/',
+    'https://www.douyin.com:444/',
+  ])('rejects existing foreign/unsafe URL and opens a trusted new search tab: %s', async url => {
+    const run = await runKeyword([session()], undefined, [url]);
+    expect(run.existingNavigations).toEqual([]);
+    expect(run.newPages).toBe(1);
+    expect(run.newNavigations).toEqual(['https://www.douyin.com/search/fixture-keyword?type=video']);
+    expect(run.result).toMatchObject({ ok: false, error: 'FIXTURE_SEARCH_BOUNDARY' });
+  });
+  it('skips an earlier foreign page and reuses the later trusted HTTPS page', async () => {
+    const run = await runKeyword([session()], undefined, ['https://evil.test/?douyin.com', 'https://creator.douyin.com/']);
+    expect(run.existingNavigations).toEqual(['https://creator.douyin.com/']);
+    expect(run.newPages).toBe(0);
+    expect(run.newNavigations).toEqual([]);
+  });
+});
+
+
+describe('production Douyin page URL predicate', () => {
+  it.each([
+    'https://douyin.com/', 'https://www.douyin.com/', 'https://creator.douyin.com/path?q=1',
+    'HTTPS://WWW.DOUYIN.COM/', 'https://www.douyin.com:443/',
+  ])('admits HTTPS pages on the exact DNS boundary and default port: %s', url => {
+    expect(admission.isDouyinPageUrl(url)).toBe(true);
+  });
+  it.each([
+    'https://www.douyin.com.evil.test/', 'https://evil-douyin.com/', 'https://douyin.comevil.test/',
+    'https://evil.test/path/douyin.com', 'https://evil.test/?next=https://www.douyin.com',
+    'https://douyin.com@evil.test/', 'https://user@douyin.com/', 'https://user:pass@douyin.com/',
+    'http://douyin.com/', 'ftp://douyin.com/', 'javascript:alert("douyin.com")',
+    'https://douyin.com:444/', 'https://.douyin.com/', 'https://a..douyin.com/',
+    'https://douyin.com./', 'https://foo-.douyin.com/', 'https://douyin.com%00.evil.test/',
+    '//douyin.com/', '.douyin.com', '', null, undefined, {},
+  ])('rejects malformed, foreign or unsafe page URL %j', url => {
+    expect(admission.isDouyinPageUrl(url)).toBe(false);
+  });
+  it('keeps cookie domain leading-dot admission distinct from page hostname admission', () => {
+    expect(admission.isDouyinDomain('.douyin.com')).toBe(true);
+    expect(admission.isDouyinPageUrl('https://.douyin.com/')).toBe(false);
   });
 });

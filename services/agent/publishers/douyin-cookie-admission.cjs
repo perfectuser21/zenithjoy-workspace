@@ -7,6 +7,19 @@ function isDouyinDomain(domain) {
     /^(?:\.)?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*douyin\.com$/i.test(domain);
 }
 
+// Page URLs use HTTPS origins, not cookie-domain syntax. URL.hostname may retain
+// a leading dot, which is valid cookie scope syntax but not an admitted page host.
+function isDouyinPageUrl(candidate) {
+  if (typeof candidate !== 'string') return false;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'https:' && parsed.username === '' && parsed.password === '' &&
+      parsed.port === '' && !parsed.hostname.startsWith('.') && isDouyinDomain(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
 function hasUsableExpiry(cookie, nowSeconds) {
   return cookie.expires === undefined || cookie.expires === -1 ||
     (typeof cookie.expires === 'number' && Number.isFinite(cookie.expires) && cookie.expires > nowSeconds);
@@ -29,4 +42,4 @@ function findDouyinSessionCookie(cookies, nowSeconds = Date.now() / 1000) {
   return Array.isArray(cookies) ? cookies.find(cookie => isDouyinSessionCookie(cookie, nowSeconds)) : undefined;
 }
 
-module.exports = { isDouyinDomain, isUsableDouyinCookie, isDouyinSessionCookie, findDouyinSessionCookie };
+module.exports = { isDouyinPageUrl, isDouyinDomain, isUsableDouyinCookie, isDouyinSessionCookie, findDouyinSessionCookie };

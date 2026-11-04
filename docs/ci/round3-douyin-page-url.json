@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "source_base_sha": "72e0a1a4ec6ba5d268ecad060d06ca0dd774d032",
+  "status": "implemented_pending_required_ci",
+  "scope": "Additional CodeQL page-URL boundary finding, outside original172. Existing19 alert identifiers remain unchanged; this is additional number20 in action count, not a renumbering or claim of20 introduced risks.",
+  "finding": {
+    "check_id": 126592631868,
+    "check_head": "72e0a1a4ec6ba5d268ecad060d06ca0dd774d032",
+    "severity": "high",
+    "title": "Incomplete URL substring sanitization",
+    "path": "services/agent/publishers/keyword-search-douyin.cjs",
+    "line": 275,
+    "annotations": 1,
+    "original_substring_logic_present_in_base322": true,
+    "base322_blob": "473c6a96db8ea66b37901841709dd73c51dea805",
+    "base322_sha256": "3b0eb28f12ec60e3ea88df24c5a1d61cf84e66d600ee69f4702129fe52e7ea23",
+    "current_alert_first_introduced_by_this_audit_claimed": false,
+    "raw_check": "codeql-page-url-72e-check.json",
+    "raw_annotation": "codeql-page-url-72e-annotations.json"
+  },
+  "implementation": {
+    "canonical_predicate": "services/agent/publishers/douyin-cookie-admission.cjs:isDouyinPageUrl",
+    "actual_consumer": "keyword-search-douyin.cjs existingPages.find calls the actual predicate",
+    "contract": "Parse absolute URL using new URL; require HTTPS, no username/password, default HTTPS port only (explicit443 is normalized to default), and exact douyin.com DNS boundary or well-formed subdomain. Cookie leading-dot syntax is explicitly rejected for page hostnames. Invalid/foreign pages are skipped; actual command opens newPage and navigates fixed trusted search URL.",
+    "cookie_contract_changed": false,
+    "other_platform_contracts_changed": false,
+    "packaging_members_changed": false,
+    "delivery": "Complete Core2.0.96 only. Existing shared helper is recursively packed with publishers; module-only old Core continues using old publishers."
+  },
+  "dimensions": {
+    "current_value": "Ensure current keyword collection reuses only authentic HTTPS Douyin tabs, without selecting unrelated pages based on path/query/suffix text.",
+    "active_status": "Actual publisher main is consumed by current Core Line02 and explicit same-candidate Windows operator workflow; existing required Agent tests discover updated fixture.",
+    "real_effect": "Actual main browser-boundary fixture rejects8 unsafe existing URLs and skips earlier foreign page in favor of later trusted page. Navigation stops at synthetic search boundary, not platform login or collection success.",
+    "test_and_blocking": "Old main9 failures with original36 cookie tests passing; new real production predicate28 shape cases plus cookie/page separation and actual main9; four targeted files97 pass; default Agent102 files1127 pass; production build types0. Cloud CodeQL/14checks/installer must rerun on new candidate.",
+    "duplication_and_obsolescence": "Reuse existing shared production helper; no copied test implementation or substring rearrangement. Original36 cookie tests and unrelated platform semantics retained.",
+    "runtime_and_maintenance_cost": "URL parsing occurs only while selecting existing pages; no new job or device activity. No measured CPU/RSS savings claim.",
+    "retirement_and_dependencies": "No gate dismissed, suppressed or weakened. Old19 remain separate historical action records; newhigh1 remains pending same-SHA CodeQL. External physical6 gaps stay open."
+  },
+  "verification": {
+    "red": {
+      "files": 1,
+      "failed": 9,
+      "passed": 36,
+      "command": "cd services/agent && npx vitest run publishers/__tests__/douyin-cookie-admission.test.ts"
+    },
+    "targeted": {
+      "files": 4,
+      "passed": 97,
+      "failed": 0,
+      "skipped": 0,
+      "helper_and_actual_main_tests": 74
+    },
+    "default_agent": {
+      "files": 102,
+      "passed": 1127,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build_types": {
+      "exit_code": 0,
+      "command": "cd services/agent && npx tsc -p tsconfig.build.json --noEmit"
+    },
+    "product_map": "PASS no drift",
+    "cloud_codeql_after_fix": null,
+    "same_sha_required_ci_after_fix": null
+  },
+  "required_consumer": {
+    "workflow": ".github/workflows/ci-l4-runtime.yml",
+    "job": "agent-test",
+    "command": "cd services/agent && npx vitest run",
+    "discovery": "services/agent/vitest.config.ts includes publishers/**/__tests__/**/*.test.ts"
+  },
+  "logs": {
+    "douyin-page-url-red": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-page-url-red.log",
+      "sha256": "16fe6f12d7f54f303a05b9c3ecdd00f339707f54ec45d27c01c870096f97b6dd"
+    },
+    "douyin-page-url-green": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-page-url-green.log",
+      "sha256": "a8c7f71be331ecc131b8c1623fa86538505e8819282be7624e96f7dbf99fe6e2"
+    },
+    "douyin-page-url-agent-full": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-page-url-agent-full.log",
+      "sha256": "843a20afb2d320ad283eba48fc24d06b91620320148929abec23e0b3ad7b2d16"
+    },
+    "douyin-page-url-build-types": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-page-url-build-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "douyin-page-url-product-map": {
+      "path": "/Users/administrator/perfect21/zenithjoy/.worktrees/ci-audit-20261104/round3/checks/douyin-page-url-product-map.log",
+      "sha256": "892120dce1a43b671adb7bccd58cbd0b5f5c00b40981d0b312fd1d2d2846fc46"
+    }
+  },
+  "physical_activity": false,
+  "version_or_central_workflow_changed": false
+}
