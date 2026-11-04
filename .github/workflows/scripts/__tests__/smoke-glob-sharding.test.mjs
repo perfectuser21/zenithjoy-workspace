@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync, cpSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import {parse} from 'yaml';
 
+const helpers = ['remote-adb.sh','line02-android-accessibility-ui.sh','line02-android-cancel-candidate-setup.sh','remote-android-install.sh'];
 const workflow = readFileSync(new URL('../../ci-smoke-glob-runner.yml', import.meta.url), 'utf8');
 function step(name) {
   const tail = workflow.split(`      - name: ${name}\n`)[1];
@@ -24,7 +26,14 @@ function fixture(t, { fail = false, denied = false } = {}) {
   if (denied) names.push('wechat-auto-launch-smoke.sh');
   for (const name of names) writeFileSync(join(dir, name), `#!/bin/bash\nprintf '%s\\n' '${name}' >> "$TRACE"\nexit ${fail && name === 'b-smoke.sh' ? 7 : 0}\n`);
   writeFileSync(join(root, '.github/workflows/scripts/smoke-baseline.txt'), names.filter(n => !n.startsWith('wechat-')).join('\n') + '\n');
+  const helperManifest = {schema_version:1, helpers:helpers.map(name=>({name,reason:'Explicit transport/device setup helper, requires caller context.',consumers:['.github/workflows/e2e-line02-android-collect.yml']}))};
+  writeFileSync(join(root,'.github/workflows/scripts/smoke-helpers.json'),JSON.stringify(helperManifest));
+  writeFileSync(join(root,'.github/workflows/e2e-line02-android-collect.yml'),helpers.join('\n'));
+  for(const name of helpers)writeFileSync(join(dir,name),`#!/bin/bash\nprintf '%s\n' '${name}' >> "$TRACE"\nexit 97\n`);
+  const selector=new URL('../smoke-selection.py',import.meta.url);
+  if(existsSync(selector))cpSync(selector,join(root,'.github/workflows/scripts/smoke-selection.py'));
   return { root, names };
+
 }
 function run(root, index, count = 2, extraEnv = {}) {
   const output = join(root, `worker-${index}`);
@@ -223,4 +232,49 @@ test('OpenClaw三片完整覆盖原两片文件集合，失败片不能报通过
  writeFileSync(files[0],"import {test} from 'node:test';test('must fail',()=>{throw Error('fixture');});");
  const codes=[1,2,3].map(shard=>spawnSync(process.execPath,['--test',`--test-shard=${shard}/3`,...files],{env:{...childEnv,TRACE:join(root,'failed-trace')},encoding:'utf8',timeout:10000}).status);
  assert.equal(codes.filter(x=>x!==0).length,1);
+});
+
+for(const name of helpers)test(`helper baseline overlap rejects both real worker and aggregate before execution: ${name}`,t=>{
+ const {root}=fixture(t);
+ const baseline=join(root,'.github/workflows/scripts/smoke-baseline.txt');
+ writeFileSync(baseline,readFileSync(baseline,'utf8')+name+'\n');
+ const worker=run(root,0);assert.notEqual(worker.status,0,worker.stdout+worker.stderr);
+ assert.match(worker.stdout+worker.stderr,/baseline.*helper|helper.*baseline/i);
+ assert.equal(existsSync(join(worker.output,'trace')),false,'reject all execution before selecting a shard');
+ const independent=fixture(t).root;
+ assert.equal(run(independent,0).status,0);assert.equal(run(independent,1).status,0);assert.equal(verify(independent).status,0);
+ const aggregateBaseline=join(independent,'.github/workflows/scripts/smoke-baseline.txt');
+ writeFileSync(aggregateBaseline,readFileSync(aggregateBaseline,'utf8')+name+'\n');
+ const aggregate=verify(independent);assert.notEqual(aggregate.status,0);assert.match(aggregate.stdout+aggregate.stderr,/baseline.*helper|helper.*baseline/i);
+});
+test('four context-only helpers stay at original paths and outside execution; aggregate records exact exclusions',t=>{
+ const {root,names}=fixture(t),workers=[run(root,0),run(root,1)];
+ for(const r of workers)assert.equal(r.status,0,r.stdout+r.stderr);
+ const all=workers.flatMap((r,i)=>rows(r.output,i));assert.deepEqual(all.map(r=>r[0]).sort(),names.sort());
+ assert.equal(verify(root).status,0);
+ for(const r of workers){const meta=JSON.parse(readFileSync(join(r.output,`smoke-glob-shard-${workers.indexOf(r)}/manifest.json`),'utf8'));assert.deepEqual(meta.excluded_helpers,helpers.slice().sort());}
+ for(const name of helpers)assert.ok(existsSync(join(root,'.github/workflows/scripts/smoke',name)));
+ const metaFile=join(artifact(root,0),'manifest.json'),meta=JSON.parse(readFileSync(metaFile,'utf8'));
+ meta.excluded_helpers.pop();writeFileSync(metaFile,JSON.stringify(meta));assert.notEqual(verify(root).status,0,'forged helper omission rejected');
+});
+for(const mode of ['wildcard','unknown','duplicate','missing-file','missing-consumer','unreferenced-consumer'])test(`invalid helper selection fails closed before any side effects: ${mode}`,t=>{
+ const {root}=fixture(t),file=join(root,'.github/workflows/scripts/smoke-helpers.json'),manifest=JSON.parse(readFileSync(file,'utf8'));
+ if(mode==='wildcard')manifest.helpers[0].name='*.sh';
+ if(mode==='unknown')manifest.helpers[0].name='absent.sh';
+ if(mode==='duplicate')manifest.helpers.push(manifest.helpers[0]);
+ if(mode==='missing-file')rmSync(join(root,'.github/workflows/scripts/smoke',helpers[0]));
+ if(mode==='missing-consumer')manifest.helpers[0].consumers=['absent.yml'];
+ if(mode==='unreferenced-consumer')writeFileSync(join(root,'.github/workflows/e2e-line02-android-collect.yml'),'unrelated caller');
+ writeFileSync(file,JSON.stringify(manifest));const r=run(root,0);assert.notEqual(r.status,0,r.stdout+r.stderr);assert.equal(existsSync(join(r.output,'trace')),false);
+});
+
+test('explicit device workflow stays bounded and keeps all four helper consumers',()=>{
+ const source=readFileSync(new URL('../../e2e-line02-android-collect.yml',import.meta.url),'utf8');
+ const job=Object.values(parse(source).jobs).find(j=>JSON.stringify(j.steps).includes('remote-adb.sh'));
+ assert.ok(Number.isInteger(job?.['timeout-minutes'])&&job['timeout-minutes']>0&&job['timeout-minutes']<=25,'explicit device caller retains finite job budget');
+ for(const name of ['remote-adb.sh','remote-android-install.sh','line02-android-cancel-candidate-setup.sh'])assert.ok(JSON.stringify(job.steps).includes(name));
+ for(const name of ['remote-adb.sh','remote-android-install.sh','line02-android-cancel-candidate-setup.sh'])assert.ok(source.includes(name));
+ const setup=readFileSync(new URL('../smoke/line02-android-cancel-candidate-setup.sh',import.meta.url),'utf8');
+ const cleanup=readFileSync(new URL('../smoke/line02-android-cancel-candidate-cleanup.sh',import.meta.url),'utf8');
+ for(const caller of [setup,cleanup])assert.ok(caller.includes('line02-android-accessibility-ui.sh'));
 });
