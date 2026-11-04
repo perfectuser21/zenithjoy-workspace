@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$repo_root/apps/api"
-npx vitest run src/routes/__tests__/video-tools.test.ts src/routes/__tests__/video-tools-direct-upload.test.ts src/routes/__tests__/video-tools-image-generation.test.ts src/routes/__tests__/video-tools-canvas-image-upload.test.ts src/services/__tests__/ali-video-provider.test.ts src/services/__tests__/creative-image-provider.test.ts src/services/creative-canvas-gateway.test.ts
+npx vitest run src/services/__tests__/wan-remake-workflow.test.ts src/routes/__tests__/video-tools.test.ts src/routes/__tests__/video-tools-direct-upload.test.ts src/routes/__tests__/video-tools-image-generation.test.ts src/routes/__tests__/video-tools-canvas-image-upload.test.ts src/services/__tests__/ali-video-provider.test.ts src/services/__tests__/creative-image-provider.test.ts src/services/creative-canvas-gateway.test.ts
 cd "$repo_root/apps/dashboard"
 npx vitest run src/pages/__tests__/VideoToolsPage.test.tsx src/pages/__tests__/CreativeCanvasPage.test.tsx src/config/__tests__/navigation.config.test.ts
 # Validate the checked-in starter graph before it is distributed by the canvas.
@@ -22,3 +22,8 @@ assert.ok(uploaded.links.some(link => link[5] === 'ZENITHJOY_ASSET'), 'uploaded 
 NODE
 cd "$repo_root/apps/api"
 npx vitest run src/services/creative-canvas-configured.test.ts
+
+# Selective video editing node, browser uploads and template contracts (no paid generation).
+cd "$repo_root"
+node --experimental-vm-modules --test infrastructure/comfyui/tests/remake-extension.test.mjs
+python3 -m unittest discover -s infrastructure/comfyui/tests -p test_wan_remake.py

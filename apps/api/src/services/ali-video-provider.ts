@@ -14,6 +14,7 @@ export interface WanVideoInput {
   ratio?: string;
   duration?: number;
   audio?: boolean;
+  promptExtend?: boolean;
 }
 
 export interface AliVideoTask {
@@ -155,7 +156,7 @@ export class AliVideoProvider {
       body: JSON.stringify({
         model: 'wan3.0-video',
         input: { prompt: input.prompt, ...(input.media?.length ? { media: input.media } : {}) },
-        parameters: { resolution: input.resolution ?? '720P', duration: input.duration ?? 5, ratio: input.ratio ?? 'adaptive', audio: input.audio ?? true, prompt_extend: true },
+        parameters: { resolution: input.resolution ?? '720P', duration: input.duration ?? 5, ratio: input.ratio ?? 'adaptive', audio: input.audio ?? true, prompt_extend: input.promptExtend ?? true },
       }),
     });
     const taskId = text(asObject(body.output).task_id);

@@ -5,8 +5,8 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { createVideoToolsRouter } from '../video-tools';
-import { AliVideoProvider, type WanVideoInput } from '../../services/ali-video-provider';
+import { createVideoToolsRouter } from '../../routes/video-tools';
+import { AliVideoProvider, type WanVideoInput } from '../ali-video-provider';
 
 vi.mock('../../auth', () => ({ auth: { api: { getSession: async ({ headers }: { headers: Headers }) => {
   const id = headers.get('cookie')?.match(/user=([^;]+)/)?.[1];
@@ -78,6 +78,14 @@ it.each(['color', 'logo'])('isolates product %s edits from shape, scene and face
   expect(prompt).toContain(productMode === 'color' ? '只修改' : '只替换');
   expect(prompt).toContain('背景保持原样');
   expect(prompt).toContain('人物面部保持原样');
+});
+
+it('color-only works from the original video and target color without requiring a replacement photo', async () => {
+  const result = await post(app(), {referenceAssetId: await asset('video'), productMode:'color', targetColor:'深蓝色', background:false, face:false});
+  expect(result.status).toBe(202);
+  expect(submit.mock.calls[0][0].media).toHaveLength(1);
+  expect(submit.mock.calls[0][0].prompt).toContain('深蓝色');
+  expect(submit.mock.calls[0][0].prompt).not.toContain('图片');
 });
 
 it('deduplicates simultaneous clicks in one mounted router and a later retry after restart', async () => {
