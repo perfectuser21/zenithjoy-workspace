@@ -47,6 +47,10 @@ describe('current business UI behavior',()=>{
   auth.mockReturnValue({isSuperAdmin:true,user:{email:'fixture-admin@example.test'}});adminFetch.mockResolvedValue({ok:true,json:async()=>({success:true,total:1,data:[{session_id:'fixture-session',platform:'douyin',status:'active',expires_at:null}]})});
   page(<AdminPlatformSessionsPage/>);expect(await screen.findByTestId('platform-sessions-table-row')).toHaveTextContent('fixture-session');expect(screen.getByTestId('session-status')).toHaveTextContent('active');expect(adminFetch).toHaveBeenCalledWith('/api/admin/customers/platform-sessions','fixture-admin@example.test');
  });
+ it('admin publish log page sends the selected tenant and renders returned work/status fields',async()=>{
+  auth.mockReturnValue({isSuperAdmin:true,user:{email:'fixture-admin@example.test'}});adminFetch.mockResolvedValue({ok:true,json:async()=>({success:true,total:1,data:[{log_id:'fixture-log',work_id:'fixture-work',platform:'douyin',status:'success',created_at:'2026-11-04T00:00:00Z'}]})});
+  page(<AdminPublishLogsPage/>,'/?tenant_id=fixture-tenant');expect(await screen.findByTestId('publish-logs-table-row')).toHaveTextContent('fixture-work');expect(screen.getByTestId('publish-logs-table-row')).toHaveTextContent('success');expect(adminFetch).toHaveBeenCalledWith('/api/admin/customers/publish-logs?tenant_id=fixture-tenant','fixture-admin@example.test');
+ });
  it('operator binding targets discovered local agent and refreshes browser sessions',async()=>{
   auth.mockReturnValue({user:{email:'xuxiao21xx@icloud.com'},authLoading:false});page(<OperatorPage/>);
   await screen.findByText(/本机 Agent 已就绪/);expect(screen.getAllByRole('button',{name:'登录'})).toHaveLength(8);

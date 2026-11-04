@@ -229,3 +229,41 @@ it('manual history default production router authenticates a real cookie, confir
  expect((await request(app).get(read).set('Cookie',d.cookie)).body.record.raw_text).toBe(body.text);expect((await request(app).get(read).set('Cookie',alien.cookie)).status).toBe(404);
  expect((await pool.query('SELECT id FROM zenithjoy.crm_manual_history_imports WHERE tenant_id=$1',[d.tenant])).rows).toHaveLength(1);
 });
+
+it('real SSE sends the persisted own-task state; anonymous, malformed and foreign subscriptions fail closed',async()=>{
+ const {listenLoopback,closeLoopback}=await import('../../helpers/loopback-server');
+ const d=await device(),other=await account();
+ const task=(await pool.query("INSERT INTO zenithjoy.acquisition_collect_tasks(tenant_id,status,video_count,lead_count_raw) VALUES($1,'running',3,2) RETURNING id",[d.tenant])).rows[0].id;
+ expect((await request(app).get(`/api/acquisition/collect/${task}/sse`)).status).toBe(401);
+ expect((await request(app).get('/api/acquisition/collect/not-a-uuid/sse').set('Cookie',d.cookie)).status).toBe(400);
+ expect((await request(app).get(`/api/acquisition/collect/${task}/sse`).set('Cookie',other.cookie)).status).toBe(404);
+ const server=await listenLoopback(app),controller=new AbortController();
+ try {
+  const address=server.address();if(!address||typeof address==='string')throw new Error('missing loopback address');
+  const response=await fetch(`http://127.0.0.1:${address.port}/api/acquisition/collect/${task}/sse`,{headers:{Cookie:d.cookie.map(v=>v.split(';')[0]).join('; ')},signal:controller.signal});
+  expect(response.status).toBe(200);expect(response.headers.get('content-type')).toContain('text/event-stream');
+  const reader=response.body!.getReader();const first=await reader.read();const wire=new TextDecoder().decode(first.value);expect(wire).toContain('data:');expect(wire).toContain(task);expect(wire).toContain('"video_count":3');expect(wire).toContain('"lead_count_raw":2');
+  controller.abort();await reader.cancel().catch(()=>{});
+ } finally {controller.abort();await closeLoopback(server);}
+});
+
+it('paid license signup links the existing tenant and account identity, without silently creating a free customer',async()=>{
+ const paid=await request(app).post('/api/admin/license').set('X-Internal-Token',process.env.ZENITHJOY_INTERNAL_TOKEN!).send({tier:'matrix'});expect(paid.status).toBe(200);
+ const license=paid.body.data;
+ const signup=await request(app).post('/api/auth/sign-up/email').send({email:`paid-${randomUUID()}@example.test`,password:'Local-test-password-123',name:'Paid fixture',license_key:license.license_key});expect(signup.status).toBe(200);
+ const me=await request(app).get('/api/account/me').set('Cookie',signup.headers['set-cookie']);expect(me.status).toBe(200);expect(me.body.license).toMatchObject({license_key:license.license_key,tier:'matrix',max_machines:3});
+ const rows=(await pool.query('SELECT tenant_id,customer_id FROM zenithjoy.licenses WHERE customer_id=$1',[signup.body.user.id])).rows;expect(rows).toHaveLength(1);expect(rows[0].customer_id).toBe(signup.body.user.id);
+ expect((await pool.query('SELECT tenant_id,role FROM zenithjoy.tenant_members WHERE feishu_user_id=$1',[signup.body.user.id])).rows).toEqual([{tenant_id:rows[0].tenant_id,role:'owner'}]);
+});
+
+it('moment generation persists both tenants independently and never reports success after database rejection',async()=>{
+ const {generateMomentDraft}=await import('../../../src/services/wechat-draft');
+ const owners=[await account(),await account()];model.mockResolvedValue({content:'合成朋友圈草稿'});
+ for(const owner of owners)await pool.query("INSERT INTO zenithjoy.wechat_marketing_profile(tenant_id,customer,industry,audience,hook) VALUES($1,'same-fixture-customer','software','operators','fixture-hook')",[owner.tenant]);
+ for(const owner of owners){const result=await generateMomentDraft({customer:'same-fixture-customer',tenant_id:owner.tenant});expect(result.ok).toBe(true);}
+ expect((await pool.query("SELECT tenant_id FROM zenithjoy.wechat_publish_task WHERE target_user='same-fixture-customer' ORDER BY tenant_id")).rows).toHaveLength(2);
+ const duplicate=await generateMomentDraft({customer:'same-fixture-customer',tenant_id:owners[0].tenant});expect(duplicate).toEqual({ok:false,reason:'already_generated_today'});
+ await pool.query("INSERT INTO zenithjoy.wechat_marketing_profile(tenant_id,customer,industry,audience,hook) VALUES($1,'rejected-fixture-customer','software','operators','fixture-hook')",[owners[0].tenant]);
+ await pool.query(`CREATE FUNCTION zenithjoy.reject_fixture_moment() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.target_user='rejected-fixture-customer' THEN RAISE EXCEPTION 'injected fixture insert failure'; END IF; RETURN NEW; END $$;CREATE TRIGGER reject_fixture_moment BEFORE INSERT ON zenithjoy.wechat_publish_task FOR EACH ROW EXECUTE FUNCTION zenithjoy.reject_fixture_moment()`);
+ try{const rejected=await generateMomentDraft({customer:'rejected-fixture-customer',tenant_id:owners[0].tenant});expect(rejected).toEqual({ok:false,reason:'persist_failed'});}finally{await pool.query('DROP TRIGGER reject_fixture_moment ON zenithjoy.wechat_publish_task;DROP FUNCTION zenithjoy.reject_fixture_moment()');}
+});

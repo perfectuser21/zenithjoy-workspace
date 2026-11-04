@@ -625,7 +625,7 @@ export interface GenerateMomentDraftSuccess {
 
 export interface GenerateMomentDraftSkipped {
   ok: false;
-  reason: 'profile_missing' | 'already_generated_today';
+  reason: 'profile_missing' | 'already_generated_today' | 'persist_failed';
 }
 
 export type GenerateMomentDraftResult =
@@ -696,9 +696,10 @@ export async function generateMomentDraft(
       `SELECT task_id FROM zenithjoy.wechat_publish_task
         WHERE type = $1
           AND target_user = $2
+          AND tenant_id = $3::uuid
           AND created_at::date = CURRENT_DATE
         LIMIT 1`,
-      ['moment', customer],
+      ['moment', customer, tenant_id],
     );
     if (dupResult.rows && dupResult.rows.length > 0) {
       return { ok: false, reason: 'already_generated_today' };
@@ -754,6 +755,7 @@ export async function generateMomentDraft(
     );
   } catch (err) {
     console.warn('[wechat-draft] DB INSERT wechat_publish_task (moment) 失败:', err);
+    return { ok: false, reason: 'persist_failed' };
   }
 
   if (aiError) {

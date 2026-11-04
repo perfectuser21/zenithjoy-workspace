@@ -1,0 +1,1043 @@
+{
+  "schema_version": 1,
+  "lane": "business",
+  "task_id": "c7dbedc7-e1b8-4e6f-a507-25778a67e86e",
+  "base": "32208ce1855331fb356bf97d3734bb9c067906a1",
+  "unit_count": 48,
+  "original_script_count": 52,
+  "source_history_preserved": true,
+  "retired_shells": 49,
+  "operator_probe_moves": 1,
+  "retained_repaired_shells": 2,
+  "units": [
+    {
+      "unit_id": "cs-workbench",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/cs-account-workbench-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/cs-account-workbench-smoke.sh",
+          "sha256": "6306133bb16a6e3b3d8dc03a5b48a1041b68f5a4e5a7e5310df69443a59538af",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/dashboard/src/pages/__tests__/BusinessSurfaces.test.tsx",
+        "apps/api/src/routes/cs-machines-tenant-scope.test.ts"
+      ],
+      "implemented_contract": "Real owner cookie sees only its machine; URL visibility and five-tab CS context rendered.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "crm-blacklist-onboarding",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line04-crm-blacklist-ingest-onboarding-smoke.sh",
+          "sha256": "03e012ccd2a43af358982d095df1a3cae25364385ca98aee13d7f604d427a5fd",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm-friend-scan-reconcile.test.ts",
+        "apps/api/src/routes/__tests__/crm-partial-friend-ingest.test.ts"
+      ],
+      "implemented_contract": "License-derived CRM ingest, bot blacklist, own identity/onboarding and internal-hidden roster; no forged admin email.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "crm-identity",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line04-crm-table-identity-smoke.sh",
+          "sha256": "c3202f63336a182a540b3bccc9e33f5a11600d1a0b1cf374c55d2c7478f08109",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm-table-identity.test.ts",
+        "apps/api/tests/routes/crm-identity-mark.test.ts"
+      ],
+      "implemented_contract": "Current identity write persists; internal customers are deliberately absent from roster; UUID fixtures and real cookie reads.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "account-identity",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/account-me-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/account-me-smoke.sh",
+          "sha256": "c41668457226f321046a6bdb2ead96e175d4174b510c69c8caff2bb4e53c996a",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/__tests__/account.test.ts"
+      ],
+      "implemented_contract": "JSON-parsed actual signup user.id -> customer_id/tenant/owner -> account/me, no greedy session-ID sed.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "account-scan-result",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/account-scan-result-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/account-scan-result-smoke.sh",
+          "sha256": "905e88b26540afa96060c6dce1799a975f2450d26b45f41b71b6bbdb4e666105",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/agent-burner.test.ts"
+      ],
+      "implemented_contract": "Real UUID task closes done exactly once; duplicate HTTP succeeds with idempotent=true, sessions and SCREEN_LOCKED diagnostics read back.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "acquisition-collect",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/acquisition-collect-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/acquisition-collect-smoke.sh",
+          "sha256": "3afa38f3df282a1a23d75658aebf9ba05d35306bb05c7e9177e516f1084b16ab",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/acquisition-collect.test.ts",
+        "apps/api/src/routes/acquisition.test.ts"
+      ],
+      "implemented_contract": "Current two-stage production report-videos then report, real counts/cards/leads; expand/manual behavior isolated at provider transport.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "acquisition-machine-tenant-fixtures",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/acquisition-config-ui-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/acquisition-config-ui-smoke.sh",
+          "sha256": "6c170beb206db168b6aa494dcf6c49546a27c25d3b0b62582418132b36626183",
+          "action": "retire_duplicate_glob_shell"
+        },
+        {
+          "path": ".github/workflows/scripts/smoke/line02-machine-burner-routing-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line02-machine-burner-routing-smoke.sh",
+          "sha256": "98dcbff1f51e81ef07499d93f0aeb15c441eb53129ad17951a16154ef6c7762b",
+          "action": "retire_duplicate_glob_shell"
+        },
+        {
+          "path": ".github/workflows/scripts/smoke/machines-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/machines-smoke.sh",
+          "sha256": "cdc844d6b4c79cc4ae467a80bc9507424b1c1185a1a6a45960b48eccc754f1f2",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/agent-machines.test.ts",
+        "apps/api/src/services/__tests__/agent-machines-normalize.test.ts",
+        "apps/api/tests/routes/acquisition-dispatch.test.ts"
+      ],
+      "implemented_contract": "Actual registered UUID agents and owner cookies replace malformed tenant strings and psql command-tag captures.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "acquisition-dispatch-real-scheduling-smoke",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/acquisition-dispatch-real-scheduling-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/acquisition-dispatch-real-scheduling-smoke.sh",
+          "sha256": "b99bdd511e301b2fa579fad4aab546437139e563f915211109813677bc62dd94",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/acquisition-dispatch.test.ts",
+        "apps/api/tests/routes/acquisition-dispatch.test.ts"
+      ],
+      "implemented_contract": "Live Android eligibility yields a real queued assignment; current negative auth remains 401; scheduling/remap behavior covered in service contracts.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "acquisition-dispatch",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh",
+          "sha256": "30c96ac02b3b0d1b1d5973a78a344f5899d9d2fb1381f626b510777ee1d540bb",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/acquisition-dispatch.test.ts",
+        "apps/api/tests/routes/acquisition-dispatch.test.ts"
+      ],
+      "implemented_contract": "Fresh heartbeat, capabilities and burner session fixture produces actual assignment and Android payload.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "acquisition-ia-redesign-smoke",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/acquisition-ia-redesign-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/acquisition-ia-redesign-smoke.sh",
+          "sha256": "3a31bacf0311acde304e7f3e7ad9b15909ba61e8816367225b5a391778c55d3f",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/dashboard/src/pages/AcquisitionTasksPage.test.tsx"
+      ],
+      "implemented_contract": "Stage1 registers real numeric video IDs before Stage2; cards/comment fields/counts and cross-tenant 404 assert current protocol.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "admin-platform-sessions-pages",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/admin-platform-sessions-pages-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/admin-platform-sessions-pages-smoke.sh",
+          "sha256": "49744de73e73dfdfd9d18d7f3fecd478109823b08fe422b660247e57e190b6b4",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/dashboard/src/pages/__tests__/BusinessSurfaces.test.tsx",
+        "apps/api/src/routes/admin-customers.test.ts"
+      ],
+      "implemented_contract": "Both restricted pages render real rows/selected tenant and refuse non-admin data requests.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "agent-events",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/agent-events-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/agent-events-smoke.sh",
+          "sha256": "0cae1b8f7410b6885f6641ac1fe06e254f23fe7e86bc8e9ea4396efaa6b2e65f",
+          "action": "retire_duplicate_glob_shell"
+        },
+        {
+          "path": ".github/workflows/scripts/smoke/machine-events-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/machine-events-smoke.sh",
+          "sha256": "057cd38b5ecbc5fd5e4a7eaa3d01d4759b6d64a61c5922b47af87845022d7a57",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/agent-events.test.ts"
+      ],
+      "implemented_contract": "Required license tier/tenant real fixture; single+batch events persist derived tenant, machine logs/upgrades read back and foreign machine 404.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "license-register-lifecycle",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/agent-hardening-h1-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/agent-hardening-h1-smoke.sh",
+          "sha256": "6c5e8cbf20785736a6aa782fdfc93aaf7b0e903f2894564590193c3cd26b4bfa",
+          "action": "retire_duplicate_glob_shell"
+        },
+        {
+          "path": ".github/workflows/scripts/smoke/license-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/license-smoke.sh",
+          "sha256": "f294d36bd951a7a55cde54f4f4e9b5fd200a7284813a256ec2558ef08a155754",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/services/license.service.test.ts",
+        "apps/api/tests/routes/admin-license.test.ts",
+        "apps/api/tests/h1/ws1/license-register-dual-schema.test.ts"
+      ],
+      "implemented_contract": "Atomic tenant+paid-license create, paid signup, dual register/reconnect/quota; orphan fails403 before any machine row.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "android-collect-protocol-v2",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/android-collect-protocol-v2-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/android-collect-protocol-v2-smoke.sh",
+          "sha256": "e1c9c82357c309ced6b9327a1684cb5c6613156c713d83246f7265f719bc51da",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/acquisition.test.ts",
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/AcquisitionCollectPollLoopTest.kt"
+      ],
+      "implemented_contract": "Split backend PostgreSQL protocol from native compile; Kotlin tests remain in android-agent-ci testDebugUnitTest, no tail-masked Gradle failure.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": "Native Kotlin execution belongs to dedicated Android CI; no physical result claimed."
+    },
+    {
+      "unit_id": "clips-operator-ocr-probe",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/clips-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/clips-smoke.sh",
+          "sha256": "937b47abfb8da0e7a433bfd47b6c7abe80686af4d0b62a4d8c24092632d3c4a1",
+          "action": "move_operator_only"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/controllers/clips.controller.test.ts",
+        "apps/api/src/controllers/clips-callback-content-type.test.ts",
+        "apps/api/src/services/clips-extractor.service.test.ts",
+        "apps/api/src/services/clips.service.test.ts",
+        ".github/workflows/scripts/operator-probes/clips-ocr.sh"
+      ],
+      "implemented_contract": "Remove fake-green no-cookie CI entry. Preserve explicit cookie/source/external opt-in bounded OCR operator probe; external OCR deliberately not run.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": "Explicit operator OCR receipt remains unexecuted by authorization boundary."
+    },
+    {
+      "unit_id": "content-judgment",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/content-judgment-gate-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/content-judgment-gate-smoke.sh",
+          "sha256": "9001c0ce240d971cbe4b3363f105b0a3d55fc719f6fc937c38346ab17baddfcf",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/content-judgment.test.ts",
+        "apps/api/src/services/content-judgment-evidence.test.ts"
+      ],
+      "implemented_contract": "Actual parser + SQL producer use injected transport response, matched persisted and cache calls provider exactly once; not only force_result.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "content-publish-dispatch",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh",
+          "sha256": "ff58c72be4fdf26726352960837b00001f4012557042eca0f1c93d0ca3e38646",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/services/__tests__/content-publish-dispatch.test.ts",
+        "apps/api/src/routes/__tests__/publish-dispatch.test.ts"
+      ],
+      "implemented_contract": "Preserve CAS, idempotency, claim and legacy queue exclusion tests; real media fixture coverage is separately coordinated with media lane.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "crm-manual-history",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/crm-manual-history-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/crm-manual-history-smoke.sh",
+          "sha256": "8127a4426189bf99d501d12eb93e41f0060418658d6027656ad99020033aaa3c",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/__tests__/crm-manual-history-session.test.ts",
+        "apps/api/src/routes/__tests__/crm-manual-history.test.ts",
+        "apps/api/src/services/crm/__tests__/manual-history.test.ts",
+        "scripts/test/crm-manual-history-integration.mjs"
+      ],
+      "implemented_contract": "Default real cookie/SQL concurrent confirmation and foreign404; existing Chromium+disposable PostgreSQL fixture actually executed, eight checks passed.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "shared-cs-oneclick-config",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/cs-oneclick-setup-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/cs-oneclick-setup-smoke.sh",
+          "sha256": "ffbbf8d009fabd83979fb7a4179d828d025e7942a33500869d623d78a1d5090e",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/regression/line04-cs-config-permission.test.ts",
+        "apps/api/src/services/wechat/__tests__/cs-account-config-store.test.ts"
+      ],
+      "implemented_contract": "Actual owner-cookie setup -> license_machines binding -> service_agents -> per-CS config -> Android shared agent-config. Unauthenticated401/foreign403 remain.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "cs-stats",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/cs-stats-service-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/cs-stats-service-smoke.sh",
+          "sha256": "d231495223d4ba7fb47517af363150a2bbf742fb913a4f03c901b4243a770220",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/wechat/__tests__/cs-stats.test.ts"
+      ],
+      "implemented_contract": "Exact fixture CS row, received1/replies0 before receipt then replies1, served1 and numeric duration; draft is not delivered.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "deploy-version-selfcheck",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/deploy-version-selfcheck-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/deploy-version-selfcheck-smoke.sh",
+          "sha256": "cfdb5bba6eae60b70247850fd744ab3a303afbc29c1b915b0aa4e34fb75e1b31",
+          "action": "retain_repaired"
+        }
+      ],
+      "canonical_test_paths": [
+        ".github/workflows/scripts/smoke/deploy-version-selfcheck-smoke.sh",
+        "apps/api/src/__tests__/build-info.test.ts"
+      ],
+      "implemented_contract": "Real build JSON -> isolated own loopback app process -> health/version -> correct SHA pass and wrong SHA failure; no worker startup or kill_port.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "scheduler-dispatch",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/dm-dispatch-sweep-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/dm-dispatch-sweep-smoke.sh",
+          "sha256": "4c691e2aca08ff7b8f9d697b833328713affa3aebf1228954c0661baf959bc73",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/services/scheduler.test.ts",
+        "apps/api/tests/index-scheduler-wiring.test.ts"
+      ],
+      "implemented_contract": "Real timer advanced in isolated test calls DM sweep; exact per-tenant dispatch/overlap failures asserted. No optional health PASS.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "douyin-dm-outreach-android-smoke",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/douyin-dm-outreach-android-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/douyin-dm-outreach-android-smoke.sh",
+          "sha256": "0899ac0fbcaed76481dd2924a7a06f5bcea67607af7619888dfcb363bc10f7d6",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/acquisition-dispatch-douyin-id.test.ts",
+        "apps/api/src/routes/agent-burner-dm-error-code.test.ts",
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/DmOutreachRateLimiterTest.kt",
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/DmOutreachSnapshotDisciplineTest.kt"
+      ],
+      "implemented_contract": "Actual SQL build/dispatch/douyin_id Android payload and repeated result count; native pure logic tests remain exclusively in dedicated Android CI.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": "Native Kotlin execution belongs to dedicated Android CI; no physical result claimed."
+    },
+    {
+      "unit_id": "dynamic-scenes-compose",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/dynamic-scenes-compose-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/dynamic-scenes-compose-smoke.sh",
+          "sha256": "c73ffc78e7fd145efc9e3ad41bf5e56dc93c50f841895939f157364459a255b8",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/controllers/__tests__/ai-video-pipeline-template.test.ts",
+        "apps/api/tests/controllers/ai-video-pipeline-ai.controller.test.ts"
+      ],
+      "implemented_contract": "Unsafe default production/paid compose smoke removed; template behavior kept in media canonical fixture contracts, external render receipt is separate.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "free-onboarding",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/free-tier-onboarding-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/free-tier-onboarding-smoke.sh",
+          "sha256": "b2b7fb2f9c2135771a395b7b52f55b779d034b92c6bb3780fe76e615fc1ed5ad",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/auth-bridge.test.ts",
+        "apps/api/tests/auth-bridge-initial-grant.test.ts"
+      ],
+      "implemented_contract": "Current source+05-07 migration establish quota1; actual signup owns one free license/tenant/member, receives100 credits and cookie works200 including invalid-key fallback.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "mock-seed-boundary",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/h2-bug3-bug9-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/h2-bug3-bug9-smoke.sh",
+          "sha256": "ce066f9fc48ff0dd326426980568660b6dca442303588aa63bb921f4783a3e63",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/routes/_smoke-acquisition-seed.test.ts",
+        "apps/api/tests/integration/agent-dual-register.integration.test.ts"
+      ],
+      "implemented_contract": "Current seed route tests cover wrong/missing token, invalid body and production refusal; dual identity is also covered by actual register/reconnect PG lifecycle.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "leads-reply-assignee",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/leads-reply-assignee-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/leads-reply-assignee-smoke.sh",
+          "sha256": "a9189f8695f8b374de13ca37a4f94c2c0b1b1872752aadc69a8329fed201030f",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/acquisition.test.ts",
+        "apps/api/src/services/acquisition-dispatch.test.ts",
+        "apps/dashboard/src/pages/__tests__/LeadsPage.test.tsx"
+      ],
+      "implemented_contract": "Current leads fields and assignment rendering retained; real comment/grade/douyin identity rows now read via current workbench API.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "company-profile-collect",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line02-company-profile-collect-smoke.sh",
+          "sha256": "ec849e04d9daaff3ff0fcc1994b9b5c9a5719a270499eb97ba18b56653d75ce9",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/routes/company-profile-config.test.ts",
+        "apps/api/src/routes/company-profile-scratch.test.ts",
+        "apps/api/src/routes/line02-account-status-regression.test.ts",
+        "apps/dashboard/src/pages/CompanyProfilePage.config.test.tsx",
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts"
+      ],
+      "implemented_contract": "Remove obsolete bare company_profiles/time-window contract. Existing current company wiki/CAS PG lane and UI contract retained; current collection separately real SQL.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "line02-dm-dispatch",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line02-dm-dispatch-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line02-dm-dispatch-smoke.sh",
+          "sha256": "37a725931161de5b5dcc311a7d567387b1d7fc00e00b084fa095b37e33d59551",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/acquisition-dispatch.test.ts",
+        "apps/api/src/routes/agent-burner.test.ts"
+      ],
+      "implemented_contract": "Actual assignment -> queued dm_outreach -> persisted sent receipt -> outreach-history, duplicate report does not duplicate log.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "collect-terminal",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line02-stage2-collect-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line02-stage2-collect-smoke.sh",
+          "sha256": "fc70436e579723ce4c7e3693038691a8e50d9e397d6497f3bf30aa6503cbcdab",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/acquisition.test.ts"
+      ],
+      "implemented_contract": "Current Stage1 report-videos -> stage_1_done, complete registered Stage2 videos -> done and terminal ignored replay. No malformed task IDs or swallowed seed errors.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "line04-crm-glide-smoke",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line04-crm-glide-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line04-crm-glide-smoke.sh",
+          "sha256": "44cc982848eb51257e73046bbf77d4cfa313b7bdc5e2eeb24f85e6213bc84a50",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm.test.ts",
+        "apps/api/src/services/crm/customer-roster.test.ts",
+        "apps/dashboard/src/pages/__tests__/CustomerListPage.test.tsx"
+      ],
+      "implemented_contract": "Current shared CRM using actual cookie and license scope; source named Glide is no longer treated as architecture/retirement fact.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "line04-crm-scan-reconcile-smoke",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/line04-crm-scan-reconcile-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/line04-crm-scan-reconcile-smoke.sh",
+          "sha256": "b84b5a4099f7d5dab349a665b16691db656dcf71d6ebc4455d6f53d47489fe76",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/crm-friend-scan-reconcile.test.ts"
+      ],
+      "implemented_contract": "Real DB dry-run miss3 never deletes, reappearing resets0, bot blacklist/self filter/internal hiding and scoped roster verified.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "my-works",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/my-works-api-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/my-works-api-smoke.sh",
+          "sha256": "e56d6e00c0d3546684b761db4ce8cce4a419a9d0492bbc1d2ace5942c142de30",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/routes/__tests__/publish-dispatch.test.ts",
+        "apps/api/src/services/__tests__/content-publish-dispatch.test.ts",
+        "apps/dashboard/src/pages/__tests__/MyWorksPage.test.tsx"
+      ],
+      "implemented_contract": "Current my-works UI and dispatch behavior retained; image decode/signature/SQL publication seam coordinated with media fixture lane.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "operator-browser-session-ui",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/operator-page-medium-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/operator-page-medium-smoke.sh",
+          "sha256": "089f6b42f7703903f5907d8b78fd05032fad38de2589b5a1e06acb4b0d7456b8",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/dashboard/src/pages/__tests__/BusinessSurfaces.test.tsx",
+        "apps/api/src/routes/operator-sessions.test.ts",
+        "apps/api/src/routes/operator.test.ts"
+      ],
+      "implemented_contract": "Real OperatorPage renders8 platforms, discovers injected local agent and submits exact bind payload then refreshes. Server invalid/failure behaviors retained.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "moments-local-profile-review-contract",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/path4-ws4-local-profile-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/path4-ws4-local-profile-smoke.sh",
+          "sha256": "60cf852a960c58234474e6a382d21fd50d630e5e3cde7f753760182cb33562bb",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/services/wechat-draft.test.ts"
+      ],
+      "implemented_contract": "Actual profile upsert/moment approve/reject/foreign404 preserves dispatch axis; new dual-schema migration makes producer writes possible and dashboard approval valid.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "schedule-auth",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/schedule-dispatch-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/schedule-dispatch-smoke.sh",
+          "sha256": "6ac91f088b0df8ba1989be684f78ff8c906737ec194e905efc809cf798ac2fd9",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/routes/__tests__/schedule.test.ts",
+        "apps/api/src/routes/__tests__/schedule-executor.test.ts",
+        "apps/api/src/services/__tests__/schedule-service.test.ts"
+      ],
+      "implemented_contract": "Current route contracts assert401, scoped agent whitelist, stale/degraded read and atomic oneoff claim/receipt semantics; no non404-as-success.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "screenshots-static",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/screenshots-static-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/screenshots-static-smoke.sh",
+          "sha256": "8e76c1f33f17d6c8770c276b007ee64fc14451fd98f94ba9d2059c27ff3538a4",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/routes/screenshots-static.test.ts"
+      ],
+      "implemented_contract": "Actual app same temporary volume returns exact unique bytes; missing/dotfile/traversal404 and finally removes its own directory.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "session-health",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/session-health-medium-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/session-health-medium-smoke.sh",
+          "sha256": "405c62318f1920d33a661e22c7765f6c8301ea3a364955a021889c4b82c60cb1",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "scripts/sessions/check-health.test.mjs"
+      ],
+      "implemented_contract": "Import-safe actual logic: malformed/expired/missing/unauthorized/redirect/unknown responses; offline inspection never marks an unchecked session healthy. No writeback or alerts in tests.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "session-health-current-report-contract",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/session-health-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/session-health-smoke.sh",
+          "sha256": "16d7eff51efdbf843a51c47fc9d31c0526db44c27eb2923959e35cfd6a5769bc",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "scripts/sessions/check-health.test.mjs",
+        "apps/api/src/routes/operator.test.ts"
+      ],
+      "implemented_contract": "Every35 distinct current platform definition yields exact5-field schema; live decision includes unknown. No overwrite of checked-in report or actual platform account.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "skill-registry-api-contract",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/skill-registry-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/skill-registry-smoke.sh",
+          "sha256": "11e1ab4dc56ec033f0c811e08644a74a1b017e5c2d7184c431d5d5a2b9ac9070",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/routes/__tests__/skills.test.ts"
+      ],
+      "implemented_contract": "Real seeded nonempty array/schema and agent_statuses asserted against production SQL, plus HTTP service-error contract.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "sse-smoke",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/sse-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/sse-smoke.sh",
+          "sha256": "2aa99366a6f3ba6056ecbbcbcd45f39ca8880f6d61a6d118a3c2ac3121c3ccc8",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/sse-endpoints.test.ts"
+      ],
+      "implemented_contract": "Native actual SSE stream receives exact persisted task/counts; anonymous401/malformed400/foreign404. DB error now caught; media UUID seams separately fixed.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "staff-acceptance-readonly-ui",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/staff-acceptance-quadrant-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/staff-acceptance-quadrant-smoke.sh",
+          "sha256": "9a520f0f351e66993ae1152ebc3bf89d4633d4321f18f3a3b490da3ea901e485",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/staff-hub/src/pages/QuadrantPage.test.tsx",
+        "apps/staff-hub/src/pages/AcceptancePage.test.tsx",
+        "apps/staff-hub/src/pages/AcceptanceDetailPage.test.tsx",
+        "scripts/acceptance-spec/__tests__/readonly.test.js"
+      ],
+      "implemented_contract": "Actual quadrant lock/degraded/verdict matrix and new-run mandatory selection gate render; readonly generated HTML verified and actual staff typecheck exit0.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "staff-hub-env-badge",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/staff-hub-env-badge-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/staff-hub-env-badge-smoke.sh",
+          "sha256": "d2304b287e2eff493115b79df06474a02baf857a1f357d2bfe2e895789efe39c",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/staff-hub/src/components/EnvBadge.test.tsx"
+      ],
+      "implemented_contract": "Current component tests render staging badge and assert absent production; remove repeated destructive builds and shared dist cleanup.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "staff-line-health",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/staff-line-health-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/staff-line-health-smoke.sh",
+          "sha256": "6ff6419fd28ad9bcce19461461b95ca989042e2302b5bb30e6e2135878b4b665",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/src/services/__tests__/line-health.test.ts",
+        "apps/api/src/routes/__tests__/staff.test.ts"
+      ],
+      "implemented_contract": "Current service/http fixtures isolate GitHub/Brain/version transports, real response types and unknown/degraded guards; connected is not production freshness evidence.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "warmup-dispatch",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/warmup-dispatch-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/warmup-dispatch-smoke.sh",
+          "sha256": "9399287c639057d6d80c508db94889b65b98b8ff42234f801531014451640ab3",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/src/services/warmup-dispatch.test.ts",
+        "apps/api/src/routes/agent-burner-warmup.test.ts"
+      ],
+      "implemented_contract": "Real queued warmup operator_nickname/task_type -> exact2 liveness rows/alive+1196 -> done; second HTTP200 idempotent leaves2 rows.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "shared-cs-reply-escalation-persistence",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/wechat-cs-reply-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/wechat-cs-reply-smoke.sh",
+          "sha256": "ae4d3268c9a7c27ed7bf1b96eae3e6098062c1c39a9459efbe2f998e957e8572",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/services/wechat-draft.test.ts",
+        "apps/api/src/routes/wechat-draft-behavior.test.ts"
+      ],
+      "implemented_contract": "Actual draft service with isolated model persists escalation+AI stage, draft ledger and receipt transition. Dual-schema fix repairs previously swallowed NOT NULL; real callback stats prove delivery counting.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "android-moments-controller-safety",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/wechat-moments-controller-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/wechat-moments-controller-smoke.sh",
+          "sha256": "f78329aab05a59864865358b8abb071414668f9194ef1da41c73c824430ce9c8",
+          "action": "retain_repaired"
+        }
+      ],
+      "canonical_test_paths": [
+        "services/wechat-moments-controller/__tests__/safety.test.mjs",
+        ".github/workflows/scripts/smoke/wechat-moments-controller-smoke.sh"
+      ],
+      "implemented_contract": "Actual CLI with synthetic registry/strict local adapters verifies same-owner lock idempotency, competing owner refusal, foreign-release refusal, repeat-publish refusal and visual failure zero taps.",
+      "real_pg_assertions": false,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    },
+    {
+      "unit_id": "work-performance",
+      "state": "implemented_isolated_contracts",
+      "sources": [
+        {
+          "path": ".github/workflows/scripts/smoke/work-performance-smoke.sh",
+          "restore": "32208ce1855331fb356bf97d3734bb9c067906a1:.github/workflows/scripts/smoke/work-performance-smoke.sh",
+          "sha256": "ea43d8077513ff27dc873f37ef67a5ee1f065897f0ed5d5bea4900ac59bce100",
+          "action": "retire_duplicate_glob_shell"
+        }
+      ],
+      "canonical_test_paths": [
+        "apps/api/tests/integration/business-contracts/lifecycle.pg.test.ts",
+        "apps/api/tests/routes/work-performance.test.ts",
+        "apps/api/tests/routes/snapshots.test.ts"
+      ],
+      "implemented_contract": "Real work/platform/content snapshot saves555 reads back to owner only; actual PG IDOR red case fixed by JOIN works tenant filter.",
+      "real_pg_assertions": true,
+      "scope_limit": "Code/SQL/HTTP/UI regression only; no production deployment, physical device, customer message or paid-provider proof is inferred.",
+      "external_evidence": null
+    }
+  ],
+  "verification_status": "19 real PostgreSQL/HTTP/SSE/auth lifecycle tests passed; current API/UI/node/deployment/Chromium groups passed; final canonical union replay underway",
+  "additional_retirements": [
+    "sprints/line00-session-health-medium/tests/ws6/session-health-check.test.ts",
+    "sprints/zj-ops1-session-health/tests/ws4/ci-session.test.ts"
+  ],
+  "updated_compatibility_callers": [
+    "scripts/smoke/clips-smoke.sh",
+    "sprints/07081557-wechat-cs-reply-integration/tests/e2e-verify.sh"
+  ]
+}
