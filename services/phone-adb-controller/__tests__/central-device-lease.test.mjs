@@ -116,10 +116,10 @@ test('正式 M4 102 预检先拿中央锁，清场后按同 owner 放锁',async 
   assert.ok(f.events.indexOf('lock-release')<f.events.indexOf('central-release'));
 });
 
-test('正式 M4 102 中央锁冲突时零设备动作',async t=>{
+test('正式 M4 102 双核任务后中央锁冲突仍零设备动作',async t=>{
   const f=handlerFixture(t,{acquireError:'CENTRAL_LOCK_BUSY'});
   await assert.rejects(f.handlers.preflight(),/CENTRAL_LOCK_BUSY/);
-  assert.deepEqual(f.events,['task-verified','central-acquire']);
+  assert.deepEqual(f.events,['task-verified','task-verified','central-acquire']);
 });
 
 test('本地锁归位失败时中央锁保留，清场不得误报成功',async t=>{
