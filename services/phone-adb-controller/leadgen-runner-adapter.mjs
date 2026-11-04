@@ -45,7 +45,8 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
   try{
    if(primaryError)throw Error(primaryError);
    if(agentPrimary){
-    const result=await executeAgent(activity,{context,guidance:input.commander_guidance||[],signal:opts.signal,onEvent:opts.onAgentEvent});
+    const deadline_ms=Math.floor(Date.now()+a.budget.max_duration_s*1000);
+    const result=await executeAgent(activity,{context,deadline_ms,guidance:input.commander_guidance||[],signal:opts.signal,onEvent:async event=>({...await opts.onAgentEvent(event),commander_status:bridge.status})});
     if(!result||typeof result.execution_stopped!=='boolean')throw Object.assign(Error('AGENT_PRIMARY_RECEIPT_INVALID'),{executionStopped:false});
     evidence={...result,status:statusOf(result.status),attempt:input.attempt};
    }else{
@@ -102,7 +103,7 @@ export async function runWorkflow({activities,context={},handlers={},executeAgen
   const row=receipt.activities.find(r=>r.key===activity.key),attempt=row?.attempts?.at(-1),actual=attempt?.adapter_result||native.get(activity.key);
   if(!row||!actual)return {activity:activity.key,status:'blocked',reason:primaryError||(resourceUnsafe?'资源租约未验证，保留隔离':unsafe?'原执行终止未知，保留资源':'前序活动未通过'),...(resourceUnsafe?{resource_unverified:true}:{}),...(row?{checks:row.checks}:{} )};
   const status=row.status==='completed'&&actual.status==='skipped'?'skipped':row.status;
-  return {activity:activity.key,...actual,status,attempts:row.attempts,checks:row.checks,...(attempt?.execution_stopped===false?{execution_stopped:false}:{}),...(attempt?.recovery&&attempt.reason_code?{skill_error:attempt.reason_code}:{}),commander_status:commanderStatuses.get(activity.key)||bridge.status,commander_interventions:row.commander_interventions||0,rescued:row.rescued===true,validator_verdict:row.validator_verdict?.verdict||'unknown',code_failures:row.code_failures||0,skill_rescues:row.skill_rescues||0,...(actual.code_failure?{code_failure:actual.code_failure}:row.attempts.length>1?{code_failure:row.attempts[0].adapter_result}:{})};
+  return {activity:activity.key,...actual,status,attempts:row.attempts,checks:row.checks,...(attempt?.execution_stopped===false?{execution_stopped:false}:{}),...(attempt?.recovery&&attempt.reason_code?{skill_error:attempt.reason_code}:{}),commander_status:actual.commander_status==='unavailable'?'unavailable':commanderStatuses.get(activity.key)||bridge.status,commander_interventions:row.commander_interventions||0,rescued:row.rescued===true,validator_verdict:row.validator_verdict?.verdict||'unknown',code_failures:row.code_failures||0,skill_rescues:row.skill_rescues||0,...(actual.code_failure?{code_failure:actual.code_failure}:row.attempts.length>1?{code_failure:row.attempts[0].adapter_result}:{})};
  });
  let resource_quarantine;
  if(unsafe||resourceUnsafe||receipt.execution_unknown){

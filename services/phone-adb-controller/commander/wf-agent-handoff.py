@@ -253,6 +253,19 @@ def stop(directory):
         end = datetime.fromisoformat(load(directory / 'envelope.json')['cleanup_deadline_at'].replace('Z', '+00:00')).timestamp()
     else:
         end = time.time() + 44.1
+        activity_path = directory / 'activity-request.json'
+        if activity_path.exists():
+            activity = load(activity_path)
+            if activity.get('mode') == 'execute' or 'worker_expires_at' in request:
+                deadline = activity.get('deadline_ms')
+                if (activity.get('mode') != 'execute'
+                        or any(activity.get(key) != request.get(key) for key in ('run_id', 'task_id', 'nonce'))
+                        or type(deadline) is not int or deadline <= 0
+                        or request.get('expires_at') != deadline / 1000):
+                    raise ValueError('primary stop deadline identity mismatch')
+                end = min(end, deadline / 1000)
+        elif 'worker_expires_at' in request:
+            raise ValueError('primary stop activity scope missing')
     # rpc子进程硬超时还要+2秒；先为独立读回保留完整的RPC+进程退出预算。
     left = end - time.time()
     readback_reserve = min(12, max(2.5, left / 2))

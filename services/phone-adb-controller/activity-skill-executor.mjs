@@ -32,7 +32,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
  if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
  assertAgentInput(frozen,env);
  if(typeof createTools!=='function'||typeof rpc!=='function'||typeof deadlineFor!=='function')throw noLaunch('AGENT_PRIMARY_DEPENDENCY_UNAVAILABLE');
- return async(activity,{context={},guidance=[],signal,onEvent=async()=>({action:'none'})}={})=>{
+ return async(activity,{context={},guidance=[],signal,deadline_ms:runnerDeadline,onEvent=async()=>({action:'none'})}={})=>{
   if(assertExecutionMode(frozen,env)!=='agent')throw noLaunch('AGENT_PRIMARY_EXECUTION_MODE_REQUIRED');
   const fixed=assertAgentInput(frozen,env);
   const directory=join(runDir,'skill-primary',activity.key);
@@ -40,7 +40,10 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
   if(signal?.aborted)throw noLaunch('AGENT_PRIMARY_CANCELLED_BEFORE_START');
   const taskId=fixed.task_id;
   if(context.task_id!=null&&context.task_id!==taskId||binding.task_id!=null&&binding.task_id!==taskId||!uuid.test(taskId||'')||!uuid.test(binding.id||''))throw noLaunch('AGENT_PRIMARY_TASK_BINDING_REQUIRED');
-  const method=frozenMethod(frozen,activity.key,runDir),deadline=deadlineFor(activity);
+  const method=frozenMethod(frozen,activity.key,runDir),outerDeadline=Math.min(deadlineFor(activity),runnerDeadline??Infinity);
+  const available=Math.floor(outerDeadline-Date.now()),checkReserve=Math.min(10000,Math.floor(available/10)),stopReserve=Math.min(48000,Math.floor(available/5)),ownerReserve=Math.min(10000,Math.floor(available/10));
+  if(!Number.isSafeInteger(outerDeadline)||available<100)throw noLaunch('AGENT_PRIMARY_DEADLINE_EXHAUSTED');
+  const deadline=outerDeadline-checkReserve,receiptDeadline=deadline-stopReserve,workerDeadline=receiptDeadline-ownerReserve,rpcDeadline=deadline-Math.floor(stopReserve/2);
   const front=method.text.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1];
   const metadata=front?.match(/^metadata:\n((?:[ \t]+[^\n]*(?:\n|$))*)/m)?.[1]||'';
   const declarations=[...metadata.matchAll(/^  primary_execution: *(\S+) *$/gm)];
@@ -60,7 +63,7 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    workflow_key:scope.workflow,run_tag:scope.run,profile:scope.profile,serial:scope.serial,line:scope.line,
    source_run:fixed.source_run,limit:fixed.limit,comment_limit:fixed.comment_limit,run_max_seconds:fixed.run_max_seconds,
    discovery_filters:structuredClone(fixed.discovery_filters),discovery_input:structuredClone(frozen.discovery_input||null),
-   activity_key:activity.key,nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,source_commit:scope.source_commit,
+   activity_key:activity.key,nonce:randomBytes(24).toString('hex'),deadline_ms:deadline,worker_deadline_ms:workerDeadline,receipt_deadline_ms:receiptDeadline,source_commit:scope.source_commit,
    workflow_definition_version_id:frozen.workflow_version.id,runtime_snapshot_sha256:frozen.snapshot_sha256,
    release_id:frozen.release.id,observation_id:frozen.deployment.observation_id,method,broker_host:frozen.deployment.target,
    broker_request_path:join(directory,'broker-request.json'),broker_tool_path:join(runDir,'runtime','activity-skill-tool.mjs'),
@@ -83,13 +86,13 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    if(typeof tools.heartbeat==='function'){
     heartbeat=setInterval(()=>{if(heartbeatBusy||heartbeatError)return;heartbeatBusy=true;heartbeatJob=Promise.resolve().then(()=>tools.heartbeat()).catch(error=>{heartbeatError=error;return broker.abort('resource_heartbeat_unverified');}).finally(()=>{heartbeatBusy=false;});},60000);heartbeat.unref();
    }
-   const stallMs=Math.max(1000,Number(activity.budget?.stall_s||300)*1000);
+   const stallMs=Math.max(1000,Number(activity.budget?.stall_s||Math.min(30,available/5000))*1000);
    stall=setInterval(()=>{
     if(stallBusy||Date.now()-lastProgress<stallMs)return;stallBusy=true;
-    stallJob=Promise.resolve().then(async()=>{const action=await onEvent({type:'stall',elapsed_ms:Date.now()-lastProgress});if(action?.action==='abort')await broker.abort(action.reason);})
+    stallJob=Promise.resolve().then(async()=>{await broker.report({type:'stall',elapsed_ms:Date.now()-lastProgress});})
      .catch(async error=>{heartbeatError=error;await broker.abort('event_sink_failed');}).finally(()=>{lastProgress=Date.now();stallBusy=false;});
    },Math.min(1000,stallMs));stall.unref();
-   receipt=(await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,deadline-Date.now())})).result;
+   receipt=(await rpc({kind:'activity_skill',request},{timeoutMs:Math.max(1,rpcDeadline-Date.now())})).result;
    // Revoke the capability synchronously before any await can admit a late
    // authorized call. A live request includes its Commander/log/reply tail.
    const sealed=broker.seal();
@@ -102,19 +105,29 @@ export function createActivitySkillExecutor({runDir,frozen,binding,env,rpc,creat
    stopped=sealed.sealed===true&&sealed.pending===0&&sealed.active===0&&!sealed.execution_unknown
     &&officialStopped(receipt)&&receipt.source_commit===request.source_commit&&!nativeUnknown(actual);
    const resourceFailure=heartbeatError?{resource_unverified:true,resource_unknown_reasons:['heartbeat_unverified']}:{};
-   if(!stopped)return {status:'failed',execution_stopped:false,reason:'Skill、原生操作或业务提交结果未知',...uncertainty(actual,receipt,request),...resourceFailure,skill_receipt:receipt};
-   if(heartbeatError)return {status:'failed',execution_stopped:true,reason:'Skill执行期间资源续期未验证',...uncertainty(actual,receipt,request),...resourceFailure,skill_receipt:receipt};
+   if(!stopped)return {status:'failed',execution_stopped:false,reason:'Skill、原生操作或业务提交结果未知',...uncertainty(actual,receipt,request),...resourceFailure,commander_status:actual.commander_status,skill_receipt:receipt};
+   if(heartbeatError)return {status:'failed',execution_stopped:true,reason:'Skill执行期间资源续期未验证',...uncertainty(actual,receipt,request),...resourceFailure,commander_status:actual.commander_status,skill_receipt:receipt};
    await tools.settle({execution_stopped:true,receipt});
    actual=broker.getResult();
    if(nativeUnknown(actual)){stopped=false;return {status:'failed',execution_stopped:false,reason:'Skill封闭原生操作终止未知',...uncertainty(actual,receipt,request),skill_receipt:receipt};}
    if(activity.key==='cleanup')await tools.release({execution_stopped:true,receipt});
    actual=broker.getResult();
    if(nativeUnknown(actual)){stopped=false;return {status:'failed',execution_stopped:false,reason:'Skill收尾原生操作终止未知',...uncertainty(actual,receipt,request),skill_receipt:receipt};}
-   if(actual.commander_aborted)return {status:'failed',execution_stopped:true,reason:'Commander请求中止，等待复核',skill_receipt:receipt};
-   if(receipt.status!=='ok'||!object(actual.result))return {status:'partial',execution_stopped:true,reason:'Skill未交付当前Activity持久工具结果',skill_receipt:receipt};
+   if(actual.commander_aborted)return {status:'failed',execution_stopped:true,reason:'Commander请求中止，等待复核',commander_status:actual.commander_status,skill_receipt:receipt};
+   if(receipt.status!=='ok'||!object(actual.result))return {status:'partial',execution_stopped:true,reason:'Skill未交付当前Activity持久工具结果',commander_status:actual.commander_status,skill_receipt:receipt};
    return {status:['failed','partial','paused','needs_review'].includes(actual.result.status)?'partial':actual.result.status==='empty'?'empty':'completed',
-    execution_stopped:true,result:actual.result,skill_receipt:receipt};
-  }catch(error){error.executionStopped=stopped&&error.executionStopped!==false;throw error;}
+    execution_stopped:true,result:actual.result,commander_status:actual.commander_status,skill_receipt:receipt};
+  }catch(error){
+   if(broker&&!stopped){
+    const sealed=broker.seal();
+    // A child-only stop acknowledgement never proves that its parent returned.
+    error.executionStopped=false;
+    const stopReceipt=await stop('execution_failed');
+    try{writeFileSync(join(directory,'failure-stop-receipt.json'),JSON.stringify({sealed,receipt:stopReceipt}),{flag:'wx',mode:0o600});}
+    catch{error.stopRecordingFailure=true;}
+   }else error.executionStopped=stopped&&error.executionStopped!==false;
+   throw error;
+  }
   finally{
    signal?.removeEventListener('abort',abort);clearInterval(heartbeat);clearInterval(stall);await heartbeatJob;await stallJob;await abortJob;
    if(broker)await broker.close();

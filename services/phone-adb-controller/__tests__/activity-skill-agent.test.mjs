@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,writeFileSync,mkdirSync,readFileSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {runSkillAgent} from '../leadgen-skill-agent.mjs';
+import {runSkillAgent,stopSkillAgent,skillRunKey} from '../leadgen-skill-agent.mjs';
+import {execInput} from '../leadgen-client.mjs';
+import {fileURLToPath} from 'node:url';
 
 test('isolated transport fixture: actual parent CLI args, official child receipt required, never plain parent text success',async()=>{
  const home=mkdtempSync(join(tmpdir(),'skill-agent-'));const seen=[];
@@ -215,4 +217,23 @@ test('Commander stop只停止原官方child并独立读回；child终止不冒�
  for(const [name,value]of Object.entries({'activity-request.json':q,'agent-request.json':request,'spawn-claimed.json':{...request,source_commit:q.source_commit},'spawn-receipt.json':receipt,'agent-binding.json':{...request,child_run_id:receipt.runId,child_session_key:receipt.childSessionKey}}))writeFileSync(join(dir,name),JSON.stringify(value),{mode:0o600});
  const deps={home,verifyWorkspace:()=>true,execute:async(command,args)=>{assert.equal(command,'python3');assert.equal(args[1],'stop');assert.equal(args[2],dir);stops++;writeFileSync(join(dir,'child-stop-readback.json'),JSON.stringify({runId:receipt.runId,status:'aborted',endedAt:Date.now()}),{mode:0o600});return {code:0,stdout:'',stderr:''};}};
  try{const actual=await api.stopSkillAgent(q,deps);assert.equal(actual.child_execution_stopped,true);assert.equal(actual.execution_stopped,false);assert.equal(stops,1);await api.stopSkillAgent(q,deps);assert.equal(stops,1);await assert.rejects(()=>api.stopSkillAgent({...q,source_commit:'b'.repeat(40)},deps));assert.equal(stops,1);}finally{rmSync(home,{recursive:true,force:true});}
+});
+
+for(const budget of [1000,3000])test(`真实Python stop消费execute冻结截止${budget}ms，不继承旧44秒尾部`,async t=>{
+ const home=mkdtempSync(join(tmpdir(),'primary-python-stop-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const started=Date.now(),deadline=started+budget,child='11111111-1111-4111-8111-111111111111';
+ const q={protocol:'leadgen-activity-v1',binding_id:'fixture-binding',activity_key:'scoring',source_commit:'a'.repeat(40),broker_host:'mmv',broker_tool_path:'/fixture/tool.mjs',broker_request_path:'/fixture/request.json',method:{name:'fixture',version:'0.1.0',text:'fixture'},mode:'execute',run_id:'bounded_stop__a1',task_id:null,nonce:'f'.repeat(48),deadline_ms:deadline,worker_deadline_ms:started-1000,receipt_deadline_ms:started-500};
+ const dir=join(home,'.openclaw','leadgen-activity-runs',skillRunKey(q));mkdirSync(dir,{recursive:true});
+ const request={run_id:q.run_id,task_id:null,parent_session_key:'agent:work-commander:fixture',nonce:q.nonce,expires_at:deadline/1000,worker_expires_at:q.worker_deadline_ms/1000};
+ for(const [name,value] of Object.entries({'activity-request.json':q,'agent-request.json':request,'agent-binding.json':{...request,child_run_id:child,child_session_key:'agent:skill-factory:subagent:fixture'},'spawn-claimed.json':{...request,source_commit:q.source_commit},'spawn-receipt.json':{runId:child,childSessionKey:'agent:skill-factory:subagent:fixture',resolvedProvider:'openai',resolvedModel:'gpt-6.1-sol'}}))writeFileSync(join(dir,name),JSON.stringify(value));
+ const cli=join(dir,'openclaw');writeFileSync(cli,'#!/usr/bin/python3\nimport json,os,sys,time\nwith open(os.environ["STOP_TRACE"],"a") as out: out.write(json.dumps(sys.argv[1:])+"\\n")\n'+(budget===3000?'time.sleep(10)\n':'')+'print(json.dumps({"runId":"'+child+'","status":"aborted","endedAt":1}))\n',{mode:0o700});
+ let result;
+ const actual=await stopSkillAgent(q,{home,verifyWorkspace:()=>true,execute:async(command,args,options)=>{
+  assert.equal(command,'python3');assert.equal(args[0],fileURLToPath(new URL('../commander/wf-agent-handoff.py',import.meta.url)));assert.ok(options.timeoutMs<=budget);
+  try{result=await execInput('/usr/bin/python3',args,{...options,env:{...process.env,OPENCLAW:cli,STOP_TRACE:join(dir,'trace')}});return result;}catch(error){result={code:-1,stderr:error.message};throw error;}
+ }});assert.equal(actual.execution_stopped,false);assert.equal(actual.child_execution_stopped,false);
+ assert.notEqual(result.code,0);assert.ok(Date.now()<deadline+600,'真实stop进程必须在冻结截止附近退出，不能等满44秒');
+ if(budget===1000)assert.equal(existsSync(join(dir,'trace')),false,'不足RPC+退出余量不得启动网络子进程');
+ else assert.match(result.stderr,/TimeoutExpired|timed out/);
+ assert.equal(existsSync(join(dir,'child-stop-readback.json')),false);
 });

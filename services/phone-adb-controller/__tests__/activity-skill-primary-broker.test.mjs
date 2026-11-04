@@ -49,7 +49,7 @@ test('primary将Commander指导留到下一inspect且完整记录交流',async()
 test('primary Commander abort和未知执行阻断写入且不宣称已停止',async()=>{
   let stops=0;
   await using(async(b,count)=>{
-    await call(b,{op:'inspect'});
+    await call(b,{op:'inspect',progress:'请求中止前的预检进度'});
     assert.equal((await call(b,{op:'business',operation:'discover',input:{}})).ok,false);
     assert.equal(count(),0);assert.equal(stops,1);assert.equal(b.getResult().execution_unknown,true);
   },{onEvent:async()=>({action:'abort',reason:'证据冲突'}),onAbort:async()=>{stops++;return {execution_stopped:false};}});
@@ -83,7 +83,7 @@ test('primary provider异常只返回固定错误码，Agent和事件账均不�
 test('primary同步seal拒绝晚到业务且不会触发新的Commander回合',async()=>{
   let events=0;
   await using(async(b,count)=>{
-    await call(b,{op:'inspect'});assert.equal(events,1);
+    await call(b,{op:'inspect',progress:'检查已完成'});assert.equal(events,1);
     assert.deepEqual(b.seal(),{sealed:true,pending:0,active:0,execution_unknown:false});
     assert.equal((await call(b,{op:'business',operation:'discover',input:{}})).ok,false);
     assert.equal((await call(b,{op:'inspect'})).ok,false);
@@ -98,4 +98,46 @@ test('primary seal覆盖等待授权及事件记录中的请求，并在授权�
     const seal=b.seal();assert.equal(seal.pending,1);assert.equal(seal.active,0);assert.equal(seal.execution_unknown,true);
     release();assert.equal((await pending).ok,false);assert.equal(count(),0);assert.equal(b.getResult().execution_unknown,true);
   },{authorize:async()=>{entered=true;await new Promise(resolve=>release=resolve);return true;}});
+});
+
+for(const reason of ['throws','hangs'])test(`Observer ${reason}不伪装成native或commit未知，工具结果和不可用记录仍保留`,async()=>using(async b=>{
+ let timer;const out=await Promise.race([call(b,{op:'business',operation:'discover',input:{video_id:'1234567890123456'}}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Observer阻塞了工具返回')),200);})]).finally(()=>clearTimeout(timer));
+ assert.equal(out.ok,true);assert.equal(b.getResult().execution_unknown,false);
+ assert.deepEqual(b.getResult().result.videos,['1234567890123456']);
+ const row=JSON.parse(readFileSync(join(b.directory,'broker-events.jsonl'),'utf8').trim());
+ assert.equal(row.commander_status,'unavailable');assert.equal(row.response.ok,true);
+},{observerTimeoutMs:20,onEvent:async()=>{if(reason==='throws')throw Error('Observer unavailable Bearer private-secret');await new Promise(()=>{});}}));
+test('无显式事件的inspect只读上下文，不为工具完成再等待一轮Observer',async()=>{
+ let turns=0;await using(async b=>{const out=await call(b,{op:'inspect'});assert.equal(out.ok,true);assert.equal(turns,0);}, {onEvent:async()=>{turns++;return {action:'none'};}});
+});
+
+test('Observer晚到steer记录为未应用，不能在工具返回后暗改业务结果',async()=>{
+ let release;
+ await using(async b=>{
+  const out=await call(b,{op:'inspect',question:'请指导预检'});assert.equal(out.ok,true);
+  release({action:'steer',text:'读取原生账号证据'});await new Promise(resolve=>setImmediate(resolve));
+  const late=JSON.parse(readFileSync(join(b.directory,'broker-observer-late-events.jsonl'),'utf8').trim());
+  assert.equal(late.action_applied,false);assert.equal(late.action.text,'读取原生账号证据');assert.equal(b.getResult().execution_unknown,false);
+  assert.equal((await call(b,{op:'inspect'})).result.commander_guidance,undefined);
+ },{observerTimeoutMs:20,onEvent:()=>new Promise(resolve=>{release=resolve;})});
+});
+
+test('primary在Worker截止后拒新业务，原handoff余量只用于inspect和停止读证',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.now()});const q={...request(),worker_deadline_ms:Date.now()+1000,receipt_deadline_ms:Date.now()+2000};
+ await using(async(b,count)=>{t.mock.timers.tick(1000);assert.equal((await call(b,{op:'business',operation:'discover',input:{}})).error,'SKILL_PRIMARY_WORKER_EXPIRED');assert.equal((await call(b,{op:'inspect'})).ok,true);assert.equal(count(),0);},{request:q});
+});
+test('primary不接受放宽或颠倒阶段截止，不能把额外阶段字段当延预算入口',async()=>{
+ const q=request();for(const patch of [{worker_deadline_ms:q.deadline_ms+1,receipt_deadline_ms:q.deadline_ms+2},{worker_deadline_ms:q.deadline_ms-1},{worker_deadline_ms:q.deadline_ms-2,receipt_deadline_ms:q.deadline_ms-2}])await assert.rejects(()=>using(async()=>{},{request:{...q,...patch}}),/SKILL_PRIMARY_REQUEST_INVALID/);
+});
+
+test('report的Observer在seal后才返回abort只留未应用记录，不再stop或加入指导',async()=>{
+ let release,entered,stops=0,turns=0;const ready=new Promise(resolve=>{entered=resolve;});
+ await using(async b=>{
+  const pending=b.report({type:'stall',elapsed_ms:1000});await ready;
+  assert.deepEqual(b.seal(),{sealed:true,pending:0,active:0,execution_unknown:false});
+  release({action:'abort',reason:'已经晚到'});assert.equal((await pending).action,'none');
+  assert.equal(stops,0);assert.equal(b.getResult().commander_aborted,false);assert.equal(b.getResult().execution_unknown,false);
+  const row=JSON.parse(readFileSync(join(b.directory,'broker-events.jsonl'),'utf8').trim());assert.equal(row.action_applied,false);assert.equal(row.commander_action.action,'abort');
+  await b.report({type:'stall',elapsed_ms:2000});assert.equal(turns,1);
+ },{onEvent:async()=>{turns++;entered();return await new Promise(resolve=>{release=resolve;});},onAbort:async()=>{stops++;return {execution_stopped:false};}});
 });
