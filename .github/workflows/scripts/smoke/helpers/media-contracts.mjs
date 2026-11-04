@@ -37,7 +37,7 @@ export function runContractGroups(selected=process.argv.slice(2)){
    for(const k of Object.keys(env))if(/(API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY)/i.test(k))delete env[k];
    if(name==='pg'||g.postgres){
     if(!pgBin)throw new Error('PostgreSQL initdb/pg_ctl required; set MEDIA_POSTGRES_BIN');
-    exec(path.join(pgBin,'initdb'),['-D',temp+'/data','-U','media_contract','-A','trust','--no-locale'],{stdio:'ignore'});
+    exec(path.join(pgBin,'initdb'),['-D',temp+'/data','-U','media_contract','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'ignore'});
     exec(path.join(pgBin,'pg_ctl'),['-D',temp+'/data','-l',temp+'/postgres.log','-o',`-F -k ${temp} -h ''`,'-w','start'],{stdio:'ignore'});pgStarted=true;
     Object.assign(env,{DATABASE_HOST:temp,DATABASE_PORT:'5432',DATABASE_USER:'media_contract',DATABASE_NAME:'postgres',DATABASE_PASSWORD:''});
    }

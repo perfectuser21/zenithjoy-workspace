@@ -6,7 +6,7 @@ import app from '../../../src/app';import pool from '../../../src/db/connection'
 let webhook:Server;let webhookStatus=200;const captures:any[]=[];let webhookUrl:string;
 beforeAll(async()=>{
  if(!process.env.DATABASE_HOST?.startsWith('/tmp/zj-media-'))throw new Error('requires disposable PostgreSQL harness');
- await pool.query(`CREATE SCHEMA zenithjoy;CREATE TABLE zenithjoy.licenses(id uuid DEFAULT gen_random_uuid(),license_key text,customer_id text,status text,created_at timestamptz DEFAULT now());CREATE TABLE zenithjoy.agents(agent_id text PRIMARY KEY,hostname text,platform text,status text,updated_at timestamptz);INSERT INTO zenithjoy.licenses(license_key,customer_id,status)VALUES('fixture-personal-a','alice','active'),('fixture-personal-b','bob','active');`);
+ await pool.query(`CREATE SCHEMA IF NOT EXISTS zenithjoy;CREATE TABLE zenithjoy.licenses(id uuid DEFAULT gen_random_uuid(),license_key text,customer_id text,status text,created_at timestamptz DEFAULT now());CREATE TABLE zenithjoy.agents(agent_id text PRIMARY KEY,hostname text,platform text,status text,updated_at timestamptz);INSERT INTO zenithjoy.licenses(license_key,customer_id,status)VALUES('fixture-personal-a','alice','active'),('fixture-personal-b','bob','active');`);
  webhook=createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;captures.push(JSON.parse(body));res.statusCode=webhookStatus;res.setHeader('Content-Type','application/json');res.end('{"ok":true}');});await new Promise<void>(r=>webhook.listen(0,'127.0.0.1',r));webhookUrl=`http://127.0.0.1:${(webhook.address()as any).port}/webhook`;
  vi.stubEnv('FEISHU_ALERT_WEBHOOK',webhookUrl);
 });
