@@ -123,15 +123,17 @@ describe('folder-watch', () => {
     const fixture=fileURLToPath(new URL('./fixtures/folder-watch-native.mjs',import.meta.url));
     const loader=createRequire(import.meta.url).resolve('tsx');
     const result=spawnSync(process.execPath,['--import',pathToFileURL(loader).href,fixture,tmpDir],{
-      encoding:'utf8',timeout:10000,
+      encoding:'utf8',timeout:10000,cwd:fileURLToPath(new URL('../../../',import.meta.url)),
     });
     expect(result.error?.message).toBeUndefined();
     expect(result.status,result.stderr).toBe(0);
     const report=JSON.parse(result.stdout);
     const target=path.join(tmpDir,'watched','native-event.mp4');
     expect(report.target).toBe(target);
+    expect(report.registration.registered).toBe(true);
+    expect(report.registration.errors).toEqual([]);
+    expect(report.rawEvents.some((event:{filename:string|null})=>event.filename==='native-event.mp4')).toBe(true);
     expect(report.published).toBe(1);
-    expect(report.events.some((event:{file:string})=>path.basename(event.file).startsWith('ready-'))).toBe(true);
     expect(report.events.some((event:{file:string})=>event.file===target)).toBe(true);
     expect(report.elapsedMs).toBeLessThan(8000);
     expect(fs.readFileSync(target,'utf8')).toBe('native video publication');
