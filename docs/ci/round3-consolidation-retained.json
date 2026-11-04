@@ -4,56 +4,8 @@
       "id": "script:.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh",
       "path": ".github/workflows/scripts/smoke/commander-codex-agent-smoke.sh",
       "kind": "script",
-      "review_lane": "root-additional",
       "unit_id": "commander-regression",
-      "disposition": "simplify_merge_optimize",
       "implementation_state": "implemented_retained",
-      "reason": "实际恢复pinned源、生成合同check、真Node fakeSSH/curl执行准备/收尾/读回/lease回归；不碰手机Brain。部分套同时L1和L3全glob跑。",
-      "missing_evidence": [],
-      "evidence": [
-        "smoke-additional-review-core.json",
-        "current-inventory/smoke-glob-discovery.json",
-        "current-inventory/smoke-glob-sources.json"
-      ],
-      "dimensions": {
-        "current_value": "Commander wf-agent-run/wf-launch现役手机编排，中央Skill合同是其真实输入；source ownership adapter保护私有cache不执行candidate loader。",
-        "active_status": {
-          "independent_review": "Commander wf-agent-run/wf-launch现役手机编排，中央Skill合同是其真实输入；source ownership adapter保护私有cache不执行candidate loader。 实际命令/当前代码消费者见source与explicit_references；baseline/DIR glob只证明被调用，不证明产品现役。",
-          "current_pinned_declaration": {
-            "type": "dynamic_top_level_glob",
-            "command_id": "command:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards/14",
-            "workflow_id": "workflow:.github/workflows/ci-smoke-glob-runner.yml",
-            "job_id": "job:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards",
-            "required_parent": "Smoke Glob Gate",
-            "selector": ".github/workflows/scripts/smoke-selection.py",
-            "top_level_ordinal": 59,
-            "ordinal": 59,
-            "shard_index": 1,
-            "shard_count": 2,
-            "excluded_helper": null,
-            "excluded_required": null,
-            "baseline": true,
-            "denylist": false,
-            "execution_policy": "baseline_failure_blocks",
-            "scope": "CI code regression only; discovery/PASS is not device or business delivery evidence"
-          },
-          "current_source_sha256": "3b5deb67c5d1944788a50a32782ca7f54cb6684fb576a22f614d492bc23248d7",
-          "scope": "Declaration and independent source review; not live device/business proof."
-        },
-        "real_effect": "实际恢复pinned源、生成合同check、真Node fakeSSH/curl执行准备/收尾/读回/lease回归；不碰手机Brain。部分套同时L1和L3全glob跑。",
-        "test_and_blocking": "保pinned bootstrap/反自报/放锁真实负例，统一一次required执行可减重复，不能去掉中央来源安装或改成只检查skill文件存在。",
-        "duplication_and_obsolescence": "真实整改单元 commander-regression；保pinned bootstrap/反自报/放锁真实负例，统一一次required执行可减重复，不能去掉中央来源安装或改成只检查skill文件存在。 不以历史PASS或注册状态代替今天价值/独有义务。",
-        "runtime_and_maintenance_cost": "16行；依赖与外呼/写入边界按本条源码已核。成本判断仅计明确的重复build/套件、provider/设备/服务依赖，不猜RSS与节省秒数。",
-        "retirement_and_dependencies": "保pinned bootstrap/反自报/放锁真实负例，统一一次required执行可减重复，不能去掉中央来源安装或改成只检查skill文件存在。 原文恢复坐标 50247d9013ed7ec40062fd836e0cabfe1a2a9fd8:.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh。保产品数据/receipt/ledger/包和共享非CS Windows能力；当前有界处置无额外关键证据缺口；仍不声明本轮已运行设备/模型/HTTP。"
-      },
-      "current_reassessment": "具体职责与七维重新核实；原lane审计原文在original_lane_observation或原始ledger中保留。",
-      "integration_source": {
-        "candidate_sha": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
-        "inventory_id_present": true,
-        "path_present": true,
-        "sha256": "3b5deb67c5d1944788a50a32782ca7f54cb6684fb576a22f614d492bc23248d7",
-        "delivery_claim": "merged source tree verified; not proof of production deployment/device/external-account success"
-      },
       "action": "retained pinned-source bootstrap; removed six duplicated behavior suites already directly selected by required L3",
       "canonical_tests": [
         "scripts/product-map/__tests__/commander-skill-contracts.test.js"
@@ -65,75 +17,96 @@
         "blob": "a15db6c5c26eb39b8f8b5d68310aadd79e9cb325",
         "sha256": "3b5deb67c5d1944788a50a32782ca7f54cb6684fb576a22f614d492bc23248d7"
       },
-      "scope_limit": "isolated local source/fixture execution; no physical or production action"
+      "scope_limit": "isolated local source/fixture execution; no physical or production action",
+      "original_review": {
+        "review_lane": "root-additional",
+        "disposition": "simplify_merge_optimize",
+        "reason": "实际恢复pinned源、生成合同check、真Node fakeSSH/curl执行准备/收尾/读回/lease回归；不碰手机Brain。部分套同时L1和L3全glob跑。",
+        "missing_evidence": [],
+        "evidence": [
+          "smoke-additional-review-core.json",
+          "current-inventory/smoke-glob-discovery.json",
+          "current-inventory/smoke-glob-sources.json"
+        ],
+        "dimensions": {
+          "current_value": "Commander wf-agent-run/wf-launch现役手机编排，中央Skill合同是其真实输入；source ownership adapter保护私有cache不执行candidate loader。",
+          "active_status": {
+            "independent_review": "Commander wf-agent-run/wf-launch现役手机编排，中央Skill合同是其真实输入；source ownership adapter保护私有cache不执行candidate loader。 实际命令/当前代码消费者见source与explicit_references；baseline/DIR glob只证明被调用，不证明产品现役。",
+            "current_pinned_declaration": {
+              "type": "dynamic_top_level_glob",
+              "command_id": "command:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards/14",
+              "workflow_id": "workflow:.github/workflows/ci-smoke-glob-runner.yml",
+              "job_id": "job:.github/workflows/ci-smoke-glob-runner.yml#smoke-glob-shards",
+              "required_parent": "Smoke Glob Gate",
+              "selector": ".github/workflows/scripts/smoke-selection.py",
+              "top_level_ordinal": 59,
+              "ordinal": 59,
+              "shard_index": 1,
+              "shard_count": 2,
+              "excluded_helper": null,
+              "excluded_required": null,
+              "baseline": true,
+              "denylist": false,
+              "execution_policy": "baseline_failure_blocks",
+              "scope": "CI code regression only; discovery/PASS is not device or business delivery evidence"
+            },
+            "current_source_sha256": "3b5deb67c5d1944788a50a32782ca7f54cb6684fb576a22f614d492bc23248d7",
+            "scope": "Declaration and independent source review; not live device/business proof."
+          },
+          "real_effect": "实际恢复pinned源、生成合同check、真Node fakeSSH/curl执行准备/收尾/读回/lease回归；不碰手机Brain。部分套同时L1和L3全glob跑。",
+          "test_and_blocking": "保pinned bootstrap/反自报/放锁真实负例，统一一次required执行可减重复，不能去掉中央来源安装或改成只检查skill文件存在。",
+          "duplication_and_obsolescence": "真实整改单元 commander-regression；保pinned bootstrap/反自报/放锁真实负例，统一一次required执行可减重复，不能去掉中央来源安装或改成只检查skill文件存在。 不以历史PASS或注册状态代替今天价值/独有义务。",
+          "runtime_and_maintenance_cost": "16行；依赖与外呼/写入边界按本条源码已核。成本判断仅计明确的重复build/套件、provider/设备/服务依赖，不猜RSS与节省秒数。",
+          "retirement_and_dependencies": "保pinned bootstrap/反自报/放锁真实负例，统一一次required执行可减重复，不能去掉中央来源安装或改成只检查skill文件存在。 原文恢复坐标 50247d9013ed7ec40062fd836e0cabfe1a2a9fd8:.github/workflows/scripts/smoke/commander-codex-agent-smoke.sh。保产品数据/receipt/ledger/包和共享非CS Windows能力；当前有界处置无额外关键证据缺口；仍不声明本轮已运行设备/模型/HTTP。"
+        },
+        "current_reassessment": "具体职责与七维重新核实；原lane审计原文在original_lane_observation或原始ledger中保留。",
+        "integration_source": {
+          "candidate_sha": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
+          "inventory_id_present": true,
+          "path_present": true,
+          "sha256": "3b5deb67c5d1944788a50a32782ca7f54cb6684fb576a22f614d492bc23248d7",
+          "delivery_claim": "merged source tree verified; not proof of production deployment/device/external-account success"
+        }
+      },
+      "dimensions": {
+        "current_value": "retained pinned-source bootstrap; removed six duplicated behavior suites already directly selected by required L3",
+        "active_status": {
+          "wrapper_exists": true,
+          "canonical_tests": [
+            "scripts/product-map/__tests__/commander-skill-contracts.test.js"
+          ],
+          "central_wiring": "root integration must reconcile baseline/registry/GP and required callers; source existence alone is not execution proof"
+        },
+        "real_effect": "actual modified bootstrap shell passed all 9 canonical contracts; pinned source installed and verified",
+        "test_and_blocking": {
+          "source_execution_entries": [
+            "scripts/product-map/__tests__/commander-skill-contracts.test.js"
+          ],
+          "status": "implemented_retained",
+          "scope": "isolated local source/fixture execution; no physical or production action"
+        },
+        "duplication_and_obsolescence": "retained pinned-source bootstrap; removed six duplicated behavior suites already directly selected by required L3",
+        "runtime_and_maintenance_cost": "Retired wrappers no longer repeat builds, source grep or live external requests; required canonical fixtures execute from their owning suite. No guessed timing/RSS savings.",
+        "retirement_and_dependencies": {
+          "recovery": {
+            "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+            "path": ".github/workflows/scripts/smoke/commander-codex-agent-smoke.sh",
+            "blob": "a15db6c5c26eb39b8f8b5d68310aadd79e9cb325",
+            "sha256": "3b5deb67c5d1944788a50a32782ca7f54cb6684fb576a22f614d492bc23248d7"
+          },
+          "canonical_tests": [
+            "scripts/product-map/__tests__/commander-skill-contracts.test.js"
+          ],
+          "closure": "central reference rewiring and integrated required-suite verification remain with root"
+        }
+      }
     },
     {
       "id": "script:.github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh",
       "path": ".github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh",
       "kind": "script",
-      "review_lane": "root-additional",
       "unit_id": "android-cancel-fixture-cleanup",
-      "disposition": "simplify_merge_optimize",
       "implementation_state": "implemented_retained",
-      "reason": "显式e2e-line02-android-collect always清场有真实当前消费者，必须保设备/无障碍恢复及隔离租户数据清理；无参数不是独立smoke。 有ADB才restore/force-stop/uninstall，有E2E DB/tenant才DELETE+残留计数，有PID才kill；仅set -u，restore/psql/test失败后仍能末尾echo PASS/exit0。空env完全no-op。",
-      "missing_evidence": [
-        "原cleanup源可掩盖restore/psql/residual失败；helper排除只修选择，不证明运行清场可靠。",
-        "This is a read-only assessed action, not an implementation; no source mutation or candidate verification is claimed."
-      ],
-      "evidence": [
-        "current-inventory/smoke-glob-discovery.json",
-        ".github/workflows/scripts/smoke-helpers.json",
-        ".github/workflows/scripts/smoke-selection.py",
-        "verification/verification-summary.json"
-      ],
-      "dimensions": {
-        "current_value": "Explicit E2E teardown can restore accessibility, uninstall the isolated APK, remove the bounded tenant fixture and stop its API. Without that owned context it only prints PASS, so it is not a standalone test.",
-        "active_status": {
-          "current_candidate": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
-          "actual_explicit_consumers": [
-            ".github/workflows/e2e-line02-android-collect.yml"
-          ],
-          "discovery_policy": "explicit_helper_only, never retired"
-        },
-        "real_effect": {
-          "source_semantics": "有ADB才restore/force-stop/uninstall，有E2E DB/tenant才DELETE+残留计数，有PID才kill；仅set -u，restore/psql/test失败后仍能末尾echo PASS/exit0。空env完全no-op。",
-          "actual_commands": [
-            {
-              "line": 16,
-              "text": "  psql \"$E2E_DATABASE_URL\" -X -v ON_ERROR_STOP=1 \\"
-            },
-            {
-              "line": 29,
-              "text": "  RESIDUAL_COUNT=$(psql \"$E2E_DATABASE_URL\" -X -Atq \\"
-            }
-          ],
-          "assertion_evidence": [
-            {
-              "line": 38,
-              "text": "  test \"$RESIDUAL_COUNT\" -eq 0"
-            }
-          ],
-          "scope": "Complete smoke source was read; dependent source/caller and specific contract checks recorded. No external/device/paid model operation executed."
-        },
-        "test_and_blocking": "smoke-selection.py validates exact manifest and literal live consumer; baseline intersection, missing consumer, wildcard/helper substitution fail closed; required shard aggregation matches exclusions.",
-        "duplication_and_obsolescence": "上下文helper不是standalone smoke；不把helper记录当退役或PASS。",
-        "runtime_and_maintenance_cost": "避免无参数重复SSH/ADB/安装调用；不虚构实际节省时间。",
-        "retirement_and_dependencies": {
-          "retired": false,
-          "manifest": ".github/workflows/scripts/smoke-helpers.json",
-          "preserved_consumers": [
-            ".github/workflows/e2e-line02-android-collect.yml"
-          ]
-        }
-      },
-      "current_reassessment": "具体职责与七维重新核实；原lane审计原文在original_lane_observation或原始ledger中保留。",
-      "integration_source": {
-        "candidate_sha": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
-        "inventory_id_present": true,
-        "path_present": true,
-        "sha256": "f81a808171c7fa634e7e9c4ab4a5cb7c340ce4fd85197e0388d9d041a48e9643",
-        "delivery_claim": "merged source tree verified; not proof of production deployment/device/external-account success"
-      },
       "action": "fail-closed cleanup with all remaining scopes still attempted",
       "canonical_tests": [
         ".github/workflows/scripts/__tests__/android-cancel-cleanup.test.mjs"
@@ -145,7 +118,102 @@
         "blob": "6e8df28107d5cb337ab0cd2c2aec1fb8fd71ae52",
         "sha256": "f81a808171c7fa634e7e9c4ab4a5cb7c340ce4fd85197e0388d9d041a48e9643"
       },
-      "scope_limit": "isolated local source/fixture execution; no physical or production action"
+      "scope_limit": "isolated local source/fixture execution; no physical or production action",
+      "original_review": {
+        "review_lane": "root-additional",
+        "disposition": "simplify_merge_optimize",
+        "reason": "显式e2e-line02-android-collect always清场有真实当前消费者，必须保设备/无障碍恢复及隔离租户数据清理；无参数不是独立smoke。 有ADB才restore/force-stop/uninstall，有E2E DB/tenant才DELETE+残留计数，有PID才kill；仅set -u，restore/psql/test失败后仍能末尾echo PASS/exit0。空env完全no-op。",
+        "missing_evidence": [
+          "原cleanup源可掩盖restore/psql/residual失败；helper排除只修选择，不证明运行清场可靠。",
+          "This is a read-only assessed action, not an implementation; no source mutation or candidate verification is claimed."
+        ],
+        "evidence": [
+          "current-inventory/smoke-glob-discovery.json",
+          ".github/workflows/scripts/smoke-helpers.json",
+          ".github/workflows/scripts/smoke-selection.py",
+          "verification/verification-summary.json"
+        ],
+        "dimensions": {
+          "current_value": "Explicit E2E teardown can restore accessibility, uninstall the isolated APK, remove the bounded tenant fixture and stop its API. Without that owned context it only prints PASS, so it is not a standalone test.",
+          "active_status": {
+            "current_candidate": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
+            "actual_explicit_consumers": [
+              ".github/workflows/e2e-line02-android-collect.yml"
+            ],
+            "discovery_policy": "explicit_helper_only, never retired"
+          },
+          "real_effect": {
+            "source_semantics": "有ADB才restore/force-stop/uninstall，有E2E DB/tenant才DELETE+残留计数，有PID才kill；仅set -u，restore/psql/test失败后仍能末尾echo PASS/exit0。空env完全no-op。",
+            "actual_commands": [
+              {
+                "line": 16,
+                "text": "  psql \"$E2E_DATABASE_URL\" -X -v ON_ERROR_STOP=1 \\"
+              },
+              {
+                "line": 29,
+                "text": "  RESIDUAL_COUNT=$(psql \"$E2E_DATABASE_URL\" -X -Atq \\"
+              }
+            ],
+            "assertion_evidence": [
+              {
+                "line": 38,
+                "text": "  test \"$RESIDUAL_COUNT\" -eq 0"
+              }
+            ],
+            "scope": "Complete smoke source was read; dependent source/caller and specific contract checks recorded. No external/device/paid model operation executed."
+          },
+          "test_and_blocking": "smoke-selection.py validates exact manifest and literal live consumer; baseline intersection, missing consumer, wildcard/helper substitution fail closed; required shard aggregation matches exclusions.",
+          "duplication_and_obsolescence": "上下文helper不是standalone smoke；不把helper记录当退役或PASS。",
+          "runtime_and_maintenance_cost": "避免无参数重复SSH/ADB/安装调用；不虚构实际节省时间。",
+          "retirement_and_dependencies": {
+            "retired": false,
+            "manifest": ".github/workflows/scripts/smoke-helpers.json",
+            "preserved_consumers": [
+              ".github/workflows/e2e-line02-android-collect.yml"
+            ]
+          }
+        },
+        "current_reassessment": "具体职责与七维重新核实；原lane审计原文在original_lane_observation或原始ledger中保留。",
+        "integration_source": {
+          "candidate_sha": "e592490f409a3a26d6e1d1c8b04abd7ca18420a3",
+          "inventory_id_present": true,
+          "path_present": true,
+          "sha256": "f81a808171c7fa634e7e9c4ab4a5cb7c340ce4fd85197e0388d9d041a48e9643",
+          "delivery_claim": "merged source tree verified; not proof of production deployment/device/external-account success"
+        }
+      },
+      "dimensions": {
+        "current_value": "fail-closed cleanup with all remaining scopes still attempted",
+        "active_status": {
+          "wrapper_exists": true,
+          "canonical_tests": [
+            ".github/workflows/scripts/__tests__/android-cancel-cleanup.test.mjs"
+          ],
+          "central_wiring": "root integration must reconcile baseline/registry/GP and required callers; source existence alone is not execution proof"
+        },
+        "real_effect": "original seven fixture tests all failed; after implementation all seven pass, zero skipped; subprocess copies only fake adb/psql/helper",
+        "test_and_blocking": {
+          "source_execution_entries": [
+            ".github/workflows/scripts/__tests__/android-cancel-cleanup.test.mjs"
+          ],
+          "status": "implemented_retained",
+          "scope": "isolated local source/fixture execution; no physical or production action"
+        },
+        "duplication_and_obsolescence": "fail-closed cleanup with all remaining scopes still attempted",
+        "runtime_and_maintenance_cost": "Retired wrappers no longer repeat builds, source grep or live external requests; required canonical fixtures execute from their owning suite. No guessed timing/RSS savings.",
+        "retirement_and_dependencies": {
+          "recovery": {
+            "commit": "32208ce1855331fb356bf97d3734bb9c067906a1",
+            "path": ".github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh",
+            "blob": "6e8df28107d5cb337ab0cd2c2aec1fb8fd71ae52",
+            "sha256": "f81a808171c7fa634e7e9c4ab4a5cb7c340ce4fd85197e0388d9d041a48e9643"
+          },
+          "canonical_tests": [
+            ".github/workflows/scripts/__tests__/android-cancel-cleanup.test.mjs"
+          ],
+          "closure": "central reference rewiring and integrated required-suite verification remain with root"
+        }
+      }
     }
   ]
 }

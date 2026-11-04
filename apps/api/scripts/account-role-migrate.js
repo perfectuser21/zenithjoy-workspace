@@ -78,8 +78,6 @@ async function run() {
 
     if (isDryRun) {
       console.log('[account-role-migrate] dry-run complete — 未写入任何数据');
-      await client.release();
-      await pool.end();
       return;
     }
 
