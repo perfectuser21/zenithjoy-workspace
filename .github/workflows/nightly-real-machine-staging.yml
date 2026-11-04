@@ -1,21 +1,10 @@
 name: Nightly Real-Machine Regression (staging)
 
-# ═══════════════════════════════════════════════════════════════════
-# 6站2轨 CI/CD 模型第④站 · 真机轨（2026-07-09 定稿，见 Notion CI 指南 v3）
-#
-# 每晚在 xian-rog（agent 已指向 staging 中台）把「已交付的真机能力」
-# 用 full check 回归一遍：
-#   - 真微信：气泡门（真发 marker 到文件传输助手 → 验气泡可读+方向）
-#   - 真抖音·读侧：关键词搜索 + 评论抓取（DPAPI 真 session）
-#
-# 定位：
-#   - 真机能力的常态回归主防线（抓「无关改动误伤 + 微信/抖音升级」）
-#   - 同时充当 RPA 的 staging 真机验证（替掉出版本时的人肉复测）
-#   - promote 生产前查「最近 2 晚 nightly 绿」（Release Gate 证据源，刀C）
-#
-# 红 → 自动开 Issue（[nightly-red] 前缀），不阻塞任何 PR。
-# 真安卓（Honor100）接入后（刀D）在此加 job。
-# ═══════════════════════════════════════════════════════════════════
+# Current nightly lanes: approved Line02 Douyin read-side and the original generic
+# Android account-scan lane. Neither is Android customer-service delivery proof.
+# API releases separately require same-SHA frozen Brain business acceptance S2/S3.
+# Android customer-service CI's 83 offline cases are not physical acceptance.
+# Two completed main runs / 36h / complete jobs remain release evidence policy.
 
 on:
   schedule:
@@ -31,152 +20,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ─── 真微信 full check：复用 wechat-cs-e2e job3 的气泡门（PsExec -i 1 进 session 1）───
-  wechat-bubble:
-    # ⚠️ 三个 job 显示名的前缀（真微信/真抖音/真安卓）被 promote-all-prod.yml 证据②按
-    # startswith 匹配作放行证据——改 job 名必须同步改 promote，否则会全部落入 missing 判红。
-    name: 真微信 — 气泡门 full check（真发文件传输助手）
-    runs-on: [self-hosted, wechat-capable]
-    concurrency:
-      group: zj-rog-desktop
-      cancel-in-progress: false
-    timeout-minutes: 10
-    env:
-      PYTHONUTF8: '1'
-      PYTHONIOENCODING: 'utf-8'
-    steps:
-      # xian-rog 到 github.com 的出境网络存在两层独立问题（pc4 车道 PR#1590/#1592 已验证
-      # 并修复的同一根因）：出境带宽被 GFW 统计限速到 ~10KB/s，以及间歇性 TCP 连接失败
-      # （"Failed to connect to github.com port 443"，内置重试落空）。sparse-checkout 解决
-      # 体积问题，HK exit-node 临时开关解决建连问题；--exit-node-allow-lan-access 保证
-      # 真机 USB/局域网访问不受影响，checkout 完立即关闭不常驻占用。
-      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
-        shell: bash
-        run: |
-          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
-
-      # selfcheck_bubbles.py 通过 sys.path 依赖 ../wechat-rpa（import listen_chat/find_weixin），
-      # sparse 列表必须含 services/agent/wechat-rpa（07-30~08-16 漏拉连红 17 晚，issue #1639）；
-      # 由 lint-nightly-sparse-checkout-deps.sh 机械对账守卫。
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          sparse-checkout: |
-            services/agent/tools
-            services/agent/wechat-rpa
-          sparse-checkout-cone-mode: false
-
-      - name: 关闭 exit-node（不常驻占用）
-        if: always()
-        shell: bash
-        run: |
-          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
-
-      # run 块必须全 ASCII：PowerShell 5.1 按 GBK 解析 UTF-8 临时 .ps1 会吞引号（0702 实锤）
-      - name: Run bubble gate in session 1 via PsExec
-        shell: powershell
-        run: |
-          $py = 'C:\Users\asus\anaconda3\python.exe'
-          $script = Join-Path $env:GITHUB_WORKSPACE 'services\agent\tools\selfcheck_bubbles.py'
-          $outJson = 'C:\Users\Public\zj-bubble-gate.json'
-          $outLog = 'C:\Users\Public\zj-bubble-gate-stdout.txt'
-          Remove-Item $outJson, $outLog -ErrorAction SilentlyContinue
-          $bat = 'C:\Users\Public\zj-bubble-gate.bat'
-          $lines = @(
-            '@echo off',
-            'set PYTHONUTF8=1',
-            ('"' + $py + '" "' + $script + '" > "' + $outLog + '" 2>&1')
-          )
-          Set-Content -Path $bat -Value $lines -Encoding ascii
-          # Two-phase desktop handoff: acquire the high-priority lease, then wait until the
-          # resident listener reaches its loop-top safe point before PsExec grabs session-1.
-          # Old installed agents acknowledge through a post-acquire safe-point log; new agents
-          # acknowledge the exact lease id through broker status. All failures are closed.
-          $port = if ($env:ZENITHJOY_LOCAL_PORT) { $env:ZENITHJOY_LOCAL_PORT } else { '58432' }
-          $leaseBase = "http://127.0.0.1:$port/api/agent/desktop-lease-broker"
-          $listenerLog = 'C:\Users\Public\zj-listener.log'
-          $listenerLogLineCount = 0
-          if (Test-Path $listenerLog) {
-            $listenerLogLineCount = @(Get-Content $listenerLog -Encoding utf8).Count
-          }
-          $leaseId = $null
-          try {
-            try {
-              $acqBody = @{ clientId = 'ci/wechat-bubble'; priority = 10; ttlMs = 180000 } | ConvertTo-Json -Compress
-              $acq = Invoke-RestMethod -Uri "$leaseBase/acquire" -Method Post -Body $acqBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop
-              if (-not $acq.granted -or -not $acq.lease_id) {
-                throw 'not granted'
-              }
-              $leaseId = [string]$acq.lease_id
-              Write-Host "desktop-lease acquired lease_id=$leaseId"
-
-              $acknowledged = $false
-              $deadline = (Get-Date).AddSeconds(30)
-              while ((Get-Date) -lt $deadline) {
-                $status = Invoke-RestMethod -Uri "$leaseBase/status" -Method Get -TimeoutSec 5 -ErrorAction Stop
-                if (-not $status.held -or [string]$status.client_id -ne 'ci/wechat-bubble') {
-                  throw 'desktop-lease owner changed while waiting for quiescence'
-                }
-
-                $leaseField = $status.PSObject.Properties['lease_id']
-                if ($null -ne $leaseField) {
-                  if ([string]$status.lease_id -ne $leaseId) {
-                    throw 'desktop-lease id changed while waiting for quiescence'
-                  }
-                  if (
-                    $status.yield_acknowledged -and
-                    [string]$status.yield_acknowledged_by -eq 'line04/listen_chat'
-                  ) {
-                    $acknowledged = $true
-                    Write-Host "desktop-lease quiescence acknowledged lease_id=$leaseId"
-                    break
-                  }
-                } elseif (Test-Path $listenerLog) {
-                  $newLines = @(Get-Content $listenerLog -Encoding utf8 | Select-Object -Skip $listenerLogLineCount)
-                  if ($newLines | Select-String -SimpleMatch '(CI)') {
-                    $acknowledged = $true
-                    Write-Host "desktop-lease legacy quiescence acknowledged lease_id=$leaseId"
-                    break
-                  }
-                }
-                Start-Sleep -Milliseconds 500
-              }
-              if (-not $acknowledged) {
-                throw 'desktop-lease quiescence timeout'
-              }
-            } catch {
-              Write-Error ("desktop-lease acquire failed closed: " + $_)
-              throw
-            }
-
-            & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
-            if (-not (Test-Path $outJson)) {
-              if (Test-Path $outLog) { Get-Content $outLog }
-              Write-Error 'bubble gate produced no result JSON (script crash or PsExec failure)'
-              exit 1
-            }
-            $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
-            Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
-            if (-not $j.ok) {
-              if (Test-Path $outLog) { Get-Content $outLog }
-              Write-Error ("bubble gate FAILED: " + $j.err)
-              exit 1
-            }
-            Write-Host "bubble gate PASS"
-          } finally {
-            if ($leaseId) {
-              try {
-                $relBody = @{ leaseId = $leaseId; clientId = 'ci/wechat-bubble' } | ConvertTo-Json -Compress
-                Invoke-RestMethod -Uri "$leaseBase/release" -Method Post -Body $relBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
-                Write-Host "desktop-lease released lease_id=$leaseId"
-              } catch { Write-Host "desktop-lease release failed (ignored, TTL will expire): $_" }
-            }
-          }
-
-  # 真抖音使用ROG专用测试profile；与微信和独立F06共享桌面互斥。
+  # 真抖音保留原批准测试profile、同SHA候选和与独立F06的桌面互斥。
   douyin-read:
     name: 真抖音 — keyword→comment 读侧 full check
-    needs: [wechat-bubble]
     if: always()
     runs-on: [self-hosted, wechat-capable]
     concurrency:
@@ -219,7 +65,6 @@ jobs:
   # 但 job 一律以真实退出码收尾——车道瘫痪必须红+报警，不准包装成绿。
   account-scan:
     name: 真安卓 — account-scan 真机验证车道
-    needs: [wechat-bubble]
     if: always()
     runs-on: [self-hosted, android-capable]
     timeout-minutes: 10
@@ -268,7 +113,7 @@ jobs:
   # ─── 汇总 + 红→自动开 Issue（值班闭环最小版）───
   nightly-report:
     name: Nightly 真机回归汇总（红→开 Issue）
-    needs: [wechat-bubble, douyin-read, account-scan]
+    needs: [douyin-read, account-scan]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -277,12 +122,11 @@ jobs:
     steps:
       - name: Summarize and open issue on failure
         run: |
-          WECHAT="${{ needs.wechat-bubble.result }}"
           DOUYIN="${{ needs.douyin-read.result }}"
           ACCOUNT_SCAN="${{ needs.account-scan.result }}"
           ACCOUNT_SCAN_CODE="${{ needs.account-scan.outputs.exit_code }}"
           TODAY=$(TZ=Asia/Shanghai date +%F)
-          echo "wechat-bubble=$WECHAT douyin-read=$DOUYIN account-scan=$ACCOUNT_SCAN(code=$ACCOUNT_SCAN_CODE)"
+          echo "douyin-read=$DOUYIN account-scan=$ACCOUNT_SCAN(code=$ACCOUNT_SCAN_CODE)"
 
           ACCOUNT_SCAN_LABEL="$ACCOUNT_SCAN"
           if [ "$ACCOUNT_SCAN_CODE" = "3" ]; then
@@ -294,20 +138,19 @@ jobs:
             echo ""
             echo "| 真机能力 | 结果 |"
             echo "|---|---|"
-            echo "| 真微信 气泡门 | $WECHAT |"
             echo "| 真抖音 keyword→comment 读侧 | $DOUYIN |"
             echo "| 真安卓 account-scan 真机验证车道 | $ACCOUNT_SCAN_LABEL |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$WECHAT" != "success" ] || [ "$DOUYIN" != "success" ] || [ "$ACCOUNT_SCAN" != "success" ]; then
-            TITLE="[nightly-red] 真机回归失败 $TODAY (微信=$WECHAT 抖音=$DOUYIN account-scan=$ACCOUNT_SCAN_LABEL)"
+          if [ "$DOUYIN" != "success" ] || [ "$ACCOUNT_SCAN" != "success" ]; then
+            TITLE="[nightly-red] 真机回归失败 $TODAY (抖音=$DOUYIN account-scan=$ACCOUNT_SCAN_LABEL)"
             # 同日去重：已有同标题 open issue 则不重复开
             EXIST=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
               --search "in:title [nightly-red] $TODAY" --json number --jq 'length')
             if [ "$EXIST" = "0" ]; then
               gh issue create --repo "$GITHUB_REPOSITORY" \
                 --title "$TITLE" \
-                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| wechat-bubble | %s |\n| douyin-read | %s |\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。account-scan=envfail(环境未就绪) 同样要处理——车道瘫痪不是噪音（decision 2f11ae25）。' "$WECHAT" "$DOUYIN" "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| douyin-read | %s |\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。account-scan=envfail(环境未就绪) 同样要处理——车道瘫痪不是噪音（decision 2f11ae25）。' "$DOUYIN" "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
               echo "issue created"
             else
               echo "same-day nightly-red issue already open, skip"

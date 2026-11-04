@@ -301,7 +301,6 @@ jobs:
                    .github/workflows/scripts/__tests__/android-cancel-workflow.real-fixture.test.sh \
                    .github/workflows/scripts/__tests__/windows-cancel-workflow.evidence-correlation.test.sh \
                    .github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh \
-                   .github/workflows/scripts/__tests__/lint-nightly-sparse-checkout-deps.test.sh \
                    .github/workflows/scripts/__tests__/lint-realmachine-unverified-ratchet.test.sh \
                    .github/workflows/scripts/__tests__/dm-send-realmachine-smoke.test.sh \
                    .github/workflows/scripts/__tests__/adb-target.test.sh \
@@ -486,8 +485,6 @@ jobs:
         run: bash .github/workflows/scripts/lint-line04-manifest-version-bump.sh origin/main
       - name: Run lint-wechat-rpa-runner
         run: bash .github/workflows/scripts/lint-wechat-rpa-runner.sh
-      - name: Run lint-nightly-sparse-checkout-deps
-        run: bash .github/workflows/scripts/lint-nightly-sparse-checkout-deps.sh
       - name: Run lint-contract-test-immutability
         run: bash .github/workflows/scripts/lint-contract-test-immutability.sh origin/main
 

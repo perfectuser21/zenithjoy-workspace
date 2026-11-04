@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "retirements": [
+    {
+      "path": ".github/workflows/scripts/lint-nightly-sparse-checkout-deps.sh",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "89399068bb3b6fcc64c6207421521c2ff9fdc862",
+      "source_sha256": "aab0e579d5b01da4c1ff734b895a19f107945f746ca497644f02eaef16685eea",
+      "reason": "Sole retired Windows CS/PsExec/sparse wiring guard; no unique current Android behavior assurance.",
+      "replacement_obligations": [
+        "Line02 exact-SHA/profile/interactive desktop exclusion and cleanup retained",
+        "shared broker/Line02 runtime and Node/Python/SDK tests unchanged",
+        "release-admission mandatory same-SHA frozen Brain S2/S3 retained"
+      ],
+      "baseline_remove": null
+    },
+    {
+      "path": ".github/workflows/scripts/__tests__/lint-nightly-sparse-checkout-deps.test.sh",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "12d8ec6a0466ec8ce812529858005beaff36acc4",
+      "source_sha256": "d741c96c08bde79139e9e2bf50da261e4442a181dd5fdb8884cc5bffa26e317c",
+      "reason": "Sole retired Windows CS/PsExec/sparse wiring guard; no unique current Android behavior assurance.",
+      "replacement_obligations": [
+        "Line02 exact-SHA/profile/interactive desktop exclusion and cleanup retained",
+        "shared broker/Line02 runtime and Node/Python/SDK tests unchanged",
+        "release-admission mandatory same-SHA frozen Brain S2/S3 retained"
+      ],
+      "baseline_remove": null
+    },
+    {
+      "path": ".github/workflows/scripts/smoke/line04-ci-desktop-mutex-smoke.sh",
+      "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+      "source_blob": "493af5cba69dc92e9e79e76def32c4041cccaef3",
+      "source_sha256": "44091525f61a4d7ecb36b2639e95207cf132df3c1190f088947338a4c9c54089",
+      "reason": "Sole retired Windows CS/PsExec/sparse wiring guard; no unique current Android behavior assurance.",
+      "replacement_obligations": [
+        "Line02 exact-SHA/profile/interactive desktop exclusion and cleanup retained",
+        "shared broker/Line02 runtime and Node/Python/SDK tests unchanged",
+        "release-admission mandatory same-SHA frozen Brain S2/S3 retained"
+      ],
+      "baseline_remove": "BASELINE-REMOVE: line04-ci-desktop-mutex-smoke.sh — sole retired Windows CS guard; shared runtime tests/current Android/frozen Brain obligations preserved"
+    }
+  ],
+  "partial_workflow_retirement": {
+    "path": ".github/workflows/nightly-real-machine-staging.yml",
+    "job": "wechat-bubble",
+    "source_commit": "4dce62432fdb7b88aadc2513bfc0cad63e517e47",
+    "source_blob": "1f2ba694f3768a8e901b2d905245d14ba4af37c2",
+    "retained": [
+      "douyin-read",
+      "account-scan",
+      "nightly-report"
+    ]
+  },
+  "new_physical_acceptance_claim": false
+}
