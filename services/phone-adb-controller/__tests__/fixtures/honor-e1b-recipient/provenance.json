@@ -1,0 +1,10 @@
+{
+  "profile": {
+    "raw_sha256": "1ee589fbbcb8d5ef92371ec9b1bd5d07802afbf2f20da0b3e8149b02e4a5c6fa",
+    "sanitized": true
+  },
+  "returned": {
+    "raw_sha256": "3688a7799b6a34e5a17e1e7968eb8166b35ecc1680ff615ca055433b7703741d",
+    "sanitized": true
+  }
+}
