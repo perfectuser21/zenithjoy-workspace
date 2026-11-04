@@ -5,6 +5,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'apps/dashboard/**'
       - 'apps/dashboard/src/pages/MachineManagementPage.tsx'
       - 'apps/dashboard/src/pages/Workers*'
       - 'apps/dashboard/src/pages/WorkerLive*'
