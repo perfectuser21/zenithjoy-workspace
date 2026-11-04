@@ -52,8 +52,8 @@ describe('composeTemplate', () => {
   it('returns 404 when job not found', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] });
     const { composeTemplate } = await import('../../controllers/ai-video-pipeline-ai.controller');
-    const req = { params: { id: 'notfound' }, body: { transcript: 'test', duration: 10 } } as any;
-    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as any;
+    const req = { params: { id: 'notfound' }, body: { transcript: 'test', duration: 10 } } as unknown as Request;
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
     const next = vi.fn();
     await composeTemplate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(404);

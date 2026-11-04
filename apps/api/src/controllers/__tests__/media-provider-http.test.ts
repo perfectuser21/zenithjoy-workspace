@@ -1,14 +1,15 @@
 import {beforeAll,afterAll,beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
-import http from 'node:http';import express from 'express';import request from 'supertest';
-const boundary=vi.hoisted(()=>({port:0,query:vi.fn(),payloads:[]as any[],reply:{}as any,status:200}));
+import http from 'node:http';import type {AddressInfo} from 'node:net';import express from 'express';import request from 'supertest';
+type ProviderPayload={model:string;messages:Array<{content:unknown}>};
+const boundary=vi.hoisted(()=>({port:0,query:vi.fn(),payloads:[]as ProviderPayload[],reply:{}as Record<string,unknown>,status:200}));
 vi.mock('../../db/connection',()=>({default:{query:boundary.query}}));
 // The paid HTTPS transport is redirected to a real isolated HTTP provider server.
-vi.mock('https',()=>({default:{request:(options:any,callback:any)=>{expect(options.hostname).toBe('openrouter.ai');return http.request({...options,hostname:'127.0.0.1',port:boundary.port},callback);}}}));
+vi.mock('https',()=>({default:{request:(options:http.RequestOptions,callback:(response:http.IncomingMessage)=>void)=>{expect(options.hostname).toBe('openrouter.ai');return http.request({...options,hostname:'127.0.0.1',port:boundary.port},callback);}}}));
 import router from '../../routes/ai-video-pipeline';
 import {getTemplate} from '../../templates/registry';
-const app=express();app.use(express.json());app.use('/api/ai-video/jobs',router);app.use((err:any,_req:any,res:any,_next:any)=>res.status(err.status??500).json({error:err.message}));
+const app=express();app.use(express.json());app.use('/api/ai-video/jobs',router);app.use((err:Error & {status?:number},req:express.Request,res:express.Response,next:express.NextFunction)=>{void req;void next;res.status(err.status??500).json({error:err.message});});
 let server:http.Server;
-beforeAll(async()=>{server=http.createServer(async(req,res)=>{let data='';for await(const c of req)data+=c;boundary.payloads.push(JSON.parse(data));res.writeHead(boundary.status,{'Content-Type':'application/json'});res.end(JSON.stringify(boundary.reply));});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));boundary.port=(server.address()as any).port;});
+beforeAll(async()=>{server=http.createServer(async(req,res)=>{let data='';for await(const c of req)data+=c;boundary.payloads.push(JSON.parse(data));res.writeHead(boundary.status,{'Content-Type':'application/json'});res.end(JSON.stringify(boundary.reply));});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));boundary.port=(server.address()as AddressInfo).port;});
 afterAll(async()=>new Promise<void>(r=>server.close(()=>r())));
 afterEach(()=>vi.unstubAllGlobals());
 beforeEach(()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('/* isolated GSAP CDN */')));boundary.query.mockReset().mockResolvedValue({rows:[{id:'job',template_id:'C'}]});boundary.payloads=[];boundary.status=200;boundary.reply={choices:[{message:{content:'{}'}}]};});
