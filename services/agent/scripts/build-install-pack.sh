@@ -181,7 +181,7 @@ WHEEL_PKGS_BASE="pywinauto pywin32 comtypes six requests"
 # PYWEBVIEW_CLOSURE：pywebview win32 运行闭包，跨平台打包机第二步用 --no-deps 显式展开。
 # 见下方 install_embedded_pkgs() 非 Windows 分支注释——code-review Critical①的修法与闭包依据。
 PYWEBVIEW_CLOSURE="pywebview==6.2.1 pythonnet==3.1.0 clr_loader==0.3.1 cffi>=1.17 pycparser proxy_tools==0.1.0 bottle typing_extensions"
-GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
+PIP_ZIPAPP_URL="https://bootstrap.pypa.io/pip/pip.pyz"
 HOST_PY="${HOST_PYTHON:-python3}"
 
 install_embedded_pkgs() {
@@ -189,8 +189,11 @@ install_embedded_pkgs() {
     *NT*|*MINGW*|*MSYS*|*CYGWIN*)
       # Windows 打包机：embeddable bootstrap pip 后真装。host==target 平台（win32==win32），
       # pip 环境标记（sys_platform 等）天然按正确平台求值，$WHEEL_PKGS(含 pywebview) 原样单步装，不动。
-      curl -L --retry 3 -o "${PYTHON_EMBED_DIR}/get-pip.py" "$GETPIP_URL" || return 1
-      "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/get-pip.py" --target "$SITE_PKGS" || return 1
+      # get-pip.py historically called pip in-process with argv[0]=pip, tripping
+      # Windows self-modification protection. Execute the official zipapp instead.
+      curl -fL --retry 3 -o "${PYTHON_EMBED_DIR}/pip.pyz" "$PIP_ZIPAPP_URL" || return 1
+      "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/pip.pyz" install --upgrade \
+        --target "$SITE_PKGS" pip setuptools wheel || return 1
       "${PYTHON_EMBED_DIR}/python.exe" -m pip install --target "$SITE_PKGS" $WHEEL_PKGS || return 1
       ;;
     *)
