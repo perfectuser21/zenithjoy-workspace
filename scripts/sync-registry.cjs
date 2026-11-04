@@ -4,7 +4,7 @@
 /**
  * Registry Auto-Sync Phase 0 — 只读检查 + CI block
  *
- * 扫描 services/creator/scripts/publishers/ 目录，
+ * 扫描 services/content-pipeline/scripts/publishers/ 目录，
  * 与 docs/registry/features/publisher.yml + docs/registry/system-registry.yml 对比，
  * 发现漂移则 exit 1（CI block PR）。
  *
@@ -18,7 +18,7 @@ const _log = console.log.bind(console);
 
 // ─── 常量 ──────────────────────────────────────────────────────
 const REPO_ROOT = path.resolve(__dirname, '..');
-const PUBLISHERS_DIR = path.join(REPO_ROOT, 'services/creator/scripts/publishers');
+const PUBLISHERS_DIR = path.join(REPO_ROOT, 'services/content-pipeline/scripts/publishers');
 const PUBLISHER_YML = path.join(REPO_ROOT, 'docs/registry/features/publisher.yml');
 const SYSTEM_YML = path.join(REPO_ROOT, 'docs/registry/system-registry.yml');
 
