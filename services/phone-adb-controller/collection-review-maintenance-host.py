@@ -10,6 +10,7 @@ import socket
 import stat
 import subprocess
 import sys
+import time
 from urllib.request import Request,urlopen
 
 import sys
@@ -39,10 +40,97 @@ def brain(home,path):
         need(r.status==200,'BRAIN_HTTP');return json.loads(r.read(8*1024*1024))
 def task(home):
     t=brain(home,'/api/brain/tasks/'+m.TASK['id']);return m.verify_task(t.get('task',t))
-def central(home):
-    records=brain(home,'/api/brain/device-locks')['locks'];found=[x for x in records if x['device_name']==m.SCOPE['serial']]
-    need(len(found)==1 and found[0]['locked_by']==m.SCOPE['task_id'] and found[0].get('expired') is False,'CENTRAL_OWNER')
-    return {k:found[0][k] for k in ['device_name','locked_by','locked_at']}
+# 历史原件逐byte保留；它们证明存在断档，不能作为连续租约或OS停止证明。
+HISTORY_SHA256={
+    'history-last.json':'8fc4f4c3d7e9034f0f15164083ad377ff971456aa8f950ce3f5f97f2653a7b4f',
+    'history-first-null.json':'4f2dc723b9166a0f015f0254f498d7680de09f8addaa8b4de98fac473b5737e1',
+}
+GAP_FILES={'history-last.json','history-first-null.json','old-task.json','maintenance-task.json',
+           'locks-before.json','acquire-request.json','acquire-ack.json','locks-after.json','locks-confirm.json'}
+LEASE_KEYS=('device_name','locked_by','locked_at','expires_at')
+
+def now_ms():return int(time.time()*1000)
+def old_task(value):
+    need(isinstance(value,dict),'OLD_TASK_RECORD');t=value.get('task',value)
+    need(isinstance(t,dict) and isinstance(t.get('result'),dict),'OLD_TASK_RECORD')
+    expired=t['result'].get('lease_expired',{});need(isinstance(expired,dict),'OLD_TASK_RECORD')
+    need(t.get('id')==m.SCOPE['task_id'] and t.get('status')=='failed'
+         and t.get('completed_at')=='2026-11-04T05:25:41.289Z' and t.get('claimed_by') is None
+         and all(expired.get(k)==v for k,v in {
+             'at':'2026-11-04T05:25:41.286Z','source':'claim','claimer':'interactive-leadgen-validation-75f3',
+             'lease_until':'2026-11-04T05:25:21.939Z','heartbeat_count':0}.items()),'OLD_TASK_TERMINAL')
+    return {'id':m.SCOPE['task_id'],'status':'failed','completed_at':t['completed_at'],
+            'lease_expired':{k:expired[k] for k in ['at','source','claimer','lease_until','heartbeat_count']}}
+
+def lock_rows(value):
+    rows=value.get('locks');need(isinstance(rows,list) and rows,'GAP_LOCKS')
+    result={}
+    for row in rows:
+        need(isinstance(row,dict) and isinstance(row.get('device_name'),str)
+             and row['device_name'] not in result,'GAP_LOCK_SET')
+        result[row['device_name']]=row
+    need(m.SCOPE['serial'] in result,'GAP_TARGET_MISSING');return result
+
+def gap_evidence(path):
+    need(path is not None,'GAP_EVIDENCE_REQUIRED');path=Path(path)
+    need(path.is_absolute() and not path.is_symlink(),'GAP_EVIDENCE_PATH')
+    directory=path.parent;st=directory.lstat()
+    need(stat.S_ISDIR(st.st_mode) and st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o700,'GAP_DIRECTORY')
+    need(stat.S_IMODE(path.lstat().st_mode)==0o600,'GAP_MANIFEST_MODE')
+    raw=m.read(path);value=json.loads(raw)
+    need(isinstance(value,dict),'GAP_MANIFEST')
+    need(raw==m.canonical(value) and value.get('version')==1
+         and value.get('kind')=='collection-review-new-isolation-after-gap-v1'
+         and value.get('scope')==m.SCOPE and value.get('maintenance')==m.TASK
+         and value.get('continuous_central_isolation_proven') is False,'GAP_MANIFEST')
+    files=value.get('files');need(isinstance(files,dict) and set(files)==GAP_FILES,'GAP_FILES')
+    documents={}
+    for name,digest in files.items():
+        need(isinstance(digest,str) and re.fullmatch('[a-f0-9]{64}',digest),'GAP_DIGEST')
+        record=directory/name;need(stat.S_IMODE(record.lstat().st_mode)==0o600,'GAP_RECORD_MODE')
+        body=m.read(record);need(m.sha(body)==digest,'GAP_RECORD_BYTES');documents[name]=json.loads(body)
+        need(isinstance(documents[name],dict),'GAP_RECORD_TYPE')
+    need(all(files[name]==digest for name,digest in HISTORY_SHA256.items()),'GAP_HISTORY_BYTES')
+    last=documents['history-last.json']['independent_readback']['lock']
+    need(last.get('device_name')==m.SCOPE['serial'] and last.get('locked_by')==m.SCOPE['task_id']
+         and last.get('expires_at')=='2026-11-04T05:17:26.274Z','GAP_LAST_LEASE')
+    first=documents['history-first-null.json'];free=lock_rows(first['locks'])[m.SCOPE['serial']]
+    need(all(free.get(k) is None for k in ['locked_by','locked_at','expires_at'])
+         and first['health']['timestamp']=='2026-11-04T06:32:47.413Z','GAP_FIRST_NULL')
+    terminal=old_task(first['old102']);need(old_task(documents['old-task.json'])==terminal,'GAP_OLD_TASK')
+    maintenance=documents['maintenance-task.json'];m.verify_task(maintenance.get('task',maintenance))
+    request=documents['acquire-request.json']
+    need(set(request)=={'device_name','locked_by','ttl_minutes'} and request['device_name']==m.SCOPE['serial']
+         and request['locked_by']==m.TASK['id'] and type(request['ttl_minutes']) is int
+         and 1<=request['ttl_minutes']<=240,'GAP_ACQUIRE_REQUEST')
+    ack=documents['acquire-ack.json'];need(ack.get('acquired') is True and isinstance(ack.get('lock'),dict),'GAP_ACQUIRE_ACK')
+    lease={k:ack['lock'].get(k) for k in LEASE_KEYS}
+    need(lease['device_name']==m.SCOPE['serial'] and lease['locked_by']==m.TASK['id']
+         and isinstance(lease['locked_at'],str) and isinstance(lease['expires_at'],str)
+         and m.ms('2026-11-04T06:32:48Z')<m.ms(lease['locked_at'])<=now_ms()
+         and m.ms(lease['expires_at'])-m.ms(lease['locked_at'])==request['ttl_minutes']*60000,'GAP_ACQUIRE_LEASE')
+    before=lock_rows(documents['locks-before.json']);target=before[m.SCOPE['serial']]
+    need(all(target.get(k) is None for k in ['locked_by','locked_at','expires_at']),'GAP_BEFORE_NOT_FREE')
+    others={k:v for k,v in before.items() if k!=m.SCOPE['serial']}
+    for name in ['locks-after.json','locks-confirm.json']:
+        after=lock_rows(documents[name]);target=after[m.SCOPE['serial']]
+        need({k:target.get(k) for k in LEASE_KEYS}==lease and target.get('expired') is False,'GAP_ACQUIRE_READBACK')
+        need({k:v for k,v in after.items() if k!=m.SCOPE['serial']}==others,'GAP_OTHER_DEVICE_DRIFT')
+    return {'version':1,'kind':value['kind'],'original_scope':dict(m.SCOPE),'maintenance':dict(m.TASK),
+            'continuous_central_isolation_proven':False,'old_task':terminal,
+            'last_known_old_expires_at':last['expires_at'],'first_null_observed_at':'2026-11-04T06:32:48Z',
+            'first_null_record_health_timestamp':first['health']['timestamp'],
+            'maintenance_lease':lease,'manifest_path':str(path),'manifest_sha256':m.sha(raw),'files':files}
+
+def central(home,proof):
+    records=brain(home,'/api/brain/device-locks')['locks'];rows=lock_rows({'locks':records});live=rows[m.SCOPE['serial']]
+    lease=proof['maintenance_lease']
+    need(all(live.get(k)==lease[k] for k in ['device_name','locked_by','locked_at'])
+         and live.get('locked_by')==m.TASK['id'] and live.get('expired') is False
+         and isinstance(live.get('expires_at'),str)
+         and m.ms(live['expires_at'])>=m.ms(lease['expires_at']) and m.ms(live['expires_at'])>now_ms(),'CENTRAL_MAINTENANCE_OWNER')
+    # 同一acquire epoch的任务heartbeat可延长expires；不重写原始租约或伪造连续性。
+    return dict(lease)
 def quiet():
     state=service.service_state();cron=subprocess.run(['/usr/bin/crontab','-l'],capture_output=True,text=True,timeout=10,check=True).stdout
     processes=subprocess.run(['/bin/ps','-axo','pid=,command='],capture_output=True,text=True,timeout=10,check=True).stdout
@@ -128,13 +216,16 @@ def candidate(home, sha, release_id):
             'observation_id': observation['id'], 'manifest_sha256': release['manifest_sha256']}
 
 
-def admission(home,sha,release_id):
+def admission(home,sha,release_id,gap_path=None):
     need(home.is_absolute() and home.resolve()==home and home.is_dir() and not home.is_symlink(),'HOME')
-    claim=task(home);barrier=quiet();lease=central(home);installed=candidate(home,sha,release_id)
+    gap=gap_evidence(gap_path)
+    claim=task(home);old_task(brain(home,'/api/brain/tasks/'+m.SCOPE['task_id']))
+    barrier=quiet();lease=central(home,gap);installed=candidate(home,sha,release_id)
     original=home/'.local/share/zenithjoy/phone-candidate-runs'/m.SCOPE['source_commit']/'ledger'/m.SCOPE['run_id'].removesuffix('__a1')
     proof=m.verify_original(original);quiet_recorders(original);m.legacy_record(home)
-    need(task(home)==claim and quiet()==barrier and central(home)==lease,'ADMISSION_DRIFT')
-    return {'version':1,'purpose':'retire_exact_collection_review_owner','scope':m.SCOPE,'maintenance':claim,'original':proof,'candidate':installed,'automatic_barrier':barrier,'central_lease':lease},original
+    need(task(home)==claim and quiet()==barrier and central(home,gap)==lease
+         and gap_evidence(gap_path)==gap,'ADMISSION_DRIFT')
+    return {'version':1,'purpose':'retire_exact_collection_review_owner','scope':m.SCOPE,'maintenance':claim,'original':proof,'candidate':installed,'automatic_barrier':barrier,'central_lease':lease,'acquisition_gap':gap},original
 
 def private_directory(home):
     p=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
@@ -168,19 +259,21 @@ def saved_snapshot(directory,authorization,identity):
         return None,None
     st=directory.lstat();need(stat.S_ISDIR(st.st_mode) and st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o700,'JOURNAL_DIR')
     raw=m.read(path);value=json.loads(raw)
+    need(isinstance(value,dict),'SAVED_SNAPSHOT_TYPE')
     need(raw==m.canonical(value) and value.get('version')==1 and value.get('scope')==m.SCOPE
          and value.get('maintenance')==m.TASK and value.get('admission')==authorization
          and value.get('tool')==identity,'SAVED_SNAPSHOT_BINDING')
     return value,raw
 
-def execute(action,home,sha,release_id):
+def execute(action,home,sha,release_id,gap_path=None):
     need(action in ['plan','apply'],'ACTION')
-    authorization,original=admission(home,sha,release_id)
+    def admit():return admission(home,sha,release_id,gap_path) if gap_path is not None else admission(home,sha,release_id)
+    authorization,original=admit()
     directory=home/'.config/zenithjoy'/('collection-review-maintenance-'+m.TASK['id'])
     identity=tool_identity();saved_inventory,snapshot_raw=saved_snapshot(directory,authorization,identity)
     with m.OwnedGuards(home,legacy_snapshot=saved_inventory['legacy_entries'] if saved_inventory else None) as guards:
         # 同一guard内二次核准，不能用锁外快照跨越owner变化。
-        need(admission(home,sha,release_id)[0]==authorization,'LOCKED_ADMISSION_DRIFT')
+        need(admit()[0]==authorization,'LOCKED_ADMISSION_DRIFT')
         inventory=snapshot_value(guards,authorization,identity)
         if saved_inventory is not None:need(saved_inventory==inventory,'SAVED_SNAPSHOT_CONTENT')
         if not guards.verify():
@@ -199,7 +292,7 @@ def execute(action,home,sha,release_id):
                  and type(e.get('pid')) is int and e['pid']>1 and e['intent_at']<=e['started_at']<=e['ended_at'] for e in desktop['leaves']),'PRE_RETIREMENT_LEAVES')
             final={**saved,'released':True,'archive':m.ARCHIVE,'owner':m.SCOPE['owner'],'serial':m.SCOPE['serial'],
                    'other_owners_unchanged':True,'central_lease_released':False,'old_run_modified':False,'production_promoted':False,'replayed_inputs':False}
-            need(guards.verify() is False and admission(home,sha,release_id)[0]==authorization
+            need(guards.verify() is False and admit()[0]==authorization
                  and m.read(directory/SNAPSHOT)==snapshot_raw and tool_identity()==identity,'RECONCILIATION_DRIFT')
             if completion is not None:need(completion==final,'COMPLETION_EVIDENCE_DRIFT')
             elif action=='apply':phone_module.atomic_new(directory/'completion.json',final)
@@ -212,13 +305,13 @@ def execute(action,home,sha,release_id):
             need(m.read(directory/SNAPSHOT)==snapshot_raw,'SAVED_SNAPSHOT_DRIFT')
         phone=phone_module.Phone(home,original);state=phone.home_state()
         if action=='plan':
-            need(guards.verify() and admission(home,sha,release_id)[0]==authorization and tool_identity()==identity,'PLAN_DRIFT')
+            need(guards.verify() and admit()[0]==authorization and tool_identity()==identity,'PLAN_DRIFT')
             return {**authorization,'inventory_snapshot':inventory,'home':state,'needs_new_cleanup':not state['home'],'central_lease_released':False,'execution_stopped':False}
         intent=directory/'admission.json'
         if intent.exists():need(m.read(intent)==m.canonical(authorization),'SAVED_ADMISSION_DRIFT')
         else:phone_module.atomic_new(intent,authorization)
         def revalidate():
-            need(guards.verify(),'OWNER_NO_LONGER_ACTIVE');need(admission(home,sha,release_id)[0]==authorization,'ADMISSION_DRIFT')
+            need(guards.verify(),'OWNER_NO_LONGER_ACTIVE');need(admit()[0]==authorization,'ADMISSION_DRIFT')
             need(m.read(directory/SNAPSHOT)==snapshot_raw and tool_identity()==identity,'SAVED_SNAPSHOT_DRIFT')
         if not state['home']:
             call=phone.command(['shell','dumpsys','telephony.registry']).decode()
@@ -244,9 +337,9 @@ def execute(action,home,sha,release_id):
 
 if __name__=='__main__':
     try:
-        need(len(sys.argv)==4 and os.geteuid()!=0,'ARGUMENTS')
+        need(len(sys.argv)==6 and sys.argv[4]=='--gap-evidence' and os.geteuid()!=0,'ARGUMENTS')
         home=Path(pwd.getpwuid(os.geteuid()).pw_dir).resolve()
-        print(json.dumps(execute(sys.argv[1],home,sys.argv[2],sys.argv[3]),sort_keys=True))
+        print(json.dumps(execute(sys.argv[1],home,sys.argv[2],sys.argv[3],Path(sys.argv[5])),sort_keys=True))
     except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
         # 不输出argv、原生stderr、凭据或完整process table。
         print(type(error).__name__+': '+str(error)[:180] if isinstance(error,ValueError) else type(error).__name__,file=sys.stderr);sys.exit(1)

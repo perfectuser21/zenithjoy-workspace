@@ -31,6 +31,7 @@ class GapEvidenceTest(unittest.TestCase):
           'acquire-request.json':{'device_name':m.SCOPE['serial'],'locked_by':m.TASK['id'],'ttl_minutes':50},
           'acquire-ack.json':{'acquired':True,'lock':self.lease},
           'locks-after.json':{'locks':[self.other,self.lease]},'locks-confirm.json':{'locks':[self.lease,self.other]}}
+        self.records=json.loads(json.dumps(self.records))
         self.manifest={'version':1,'kind':'collection-review-new-isolation-after-gap-v1','scope':m.SCOPE,'maintenance':m.TASK,'continuous_central_isolation_proven':False,'files':{}}
         self.path=self.root/'authorization.json';self.save()
         history={n:self.manifest['files'][n] for n in ['history-last.json','history-first-null.json']}
@@ -88,6 +89,31 @@ class GapEvidenceTest(unittest.TestCase):
                 self.assertEqual(h.central(self.root,proof),proof['maintenance_lease'])
         for live in [{**self.lease,'locked_by':m.SCOPE['task_id']},{**self.lease,'locked_at':'2026-11-04T08:01:00Z'},{**self.lease,'expires_at':'2026-11-04T08:04:00Z'},{**self.lease,'expired':True}]:
             with self.subTest(live=live),patch.object(h,'brain',return_value={'locks':[live]}),self.assertRaises(ValueError):h.central(self.root,proof)
+    def test_real_admission_binds_gap_and_live_old_failure_before_any_phone(self):
+        def api(home,path):
+            if path.endswith('/tasks/'+m.TASK['id']):return self.maintenance
+            if path.endswith('/tasks/'+m.SCOPE['task_id']):return self.old
+            if path.endswith('/device-locks'):return {'locks':[self.lease,self.other]}
+            raise AssertionError(path)
+        with patch.object(h,'brain',side_effect=api),patch.object(h,'quiet',return_value={'cron':'frozen'}),patch.object(h,'candidate',return_value={'source_commit':'a'*40}),patch.object(h.m,'verify_original',return_value={'execution_stopped':False,'leaves':1486}),patch.object(h,'quiet_recorders'),patch.object(h.m,'legacy_record'):
+            proof,_=h.admission(self.root,'a'*40,'release',self.path)
+            self.assertEqual(proof['central_lease']['locked_by'],m.TASK['id'])
+            self.assertEqual(proof['scope']['task_id'],m.SCOPE['task_id'])
+            self.assertEqual(proof['acquisition_gap'],self.verify())
+            self.old['status']='in_progress'
+            with self.assertRaisesRegex(ValueError,'OLD_TASK_TERMINAL'):h.admission(self.root,'a'*40,'release',self.path)
+    def test_gap_manifest_change_cannot_adopt_old_snapshot_or_journal(self):
+        from types import SimpleNamespace
+        proof=self.verify();directory=self.root/'journal';directory.mkdir(mode=0o700)
+        identity={'source_commit':'b'*40,'files':{'collection-review-maintenance-contract.json':'c'*64}}
+        auth={'acquisition_gap':proof}
+        inventory=h.snapshot_value(SimpleNamespace(target_identity=[1,2,3,4],legacy_snapshot=m.CONTRACT['lock_state']['legacy']),auth,identity)
+        h.phone_module.atomic_new(directory/h.SNAPSHOT,inventory)
+        self.assertEqual(h.saved_snapshot(directory,auth,identity)[0],inventory)
+        changed=copy.deepcopy(auth);changed['acquisition_gap']['manifest_sha256']='0'*64
+        with self.assertRaisesRegex(ValueError,'SAVED_SNAPSHOT_BINDING'):h.saved_snapshot(directory,changed,identity)
+        (directory/h.SNAPSHOT).unlink();(directory/'cleanup-intent.json').write_text('{}')
+        with self.assertRaisesRegex(ValueError,'SNAPSHOT_MISSING_WITH_JOURNAL'):h.saved_snapshot(directory,auth,identity)
     def test_no_gap_proof_cannot_enter_phone_or_guards(self):
         with patch.object(h,'quiet') as q,patch.object(h.phone_module,'Phone') as p,patch.object(h.m,'OwnedGuards') as g:
             with self.assertRaises(ValueError):h.admission(self.root,'a'*40,'00000000-0000-0000-0000-000000000000')
