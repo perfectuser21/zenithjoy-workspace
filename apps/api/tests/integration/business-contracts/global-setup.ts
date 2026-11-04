@@ -17,7 +17,7 @@ export default async function setup() {
  try {
   await admin.query('CREATE DATABASE "zenithjoy_business_contract_test"'); created=true;
   const db=new Pool({...connection,database:'zenithjoy_business_contract_test'});
-  try {await db.query('CREATE SCHEMA zenithjoy');await db.query('SET search_path = zenithjoy,public');for(const file of migrations){try{await db.query(await readFile(resolve('db/migrations',file),'utf8'));}catch(error){throw new Error(`Business fixture migration failed: ${file}`,{cause:error});}}}finally{await db.end();}
+  try {await db.query('CREATE SCHEMA zenithjoy');await db.query('SET search_path = zenithjoy,public');await db.query(await readFile(resolve('../../db/migrations/20260527_operator_sessions.sql'),'utf8'));for(const file of migrations){try{await db.query(await readFile(resolve('db/migrations',file),'utf8'));}catch(error){throw new Error(`Business fixture migration failed: ${file}`,{cause:error});}}}finally{await db.end();}
   return cleanup;
  } catch(error){await cleanup();throw error;}
 }

@@ -170,24 +170,23 @@ describe('operator-sessions routes', () => {
       expect(res.status).toBe(400);
     });
 
-    it('updates 条目缺 platform 跳过（updated=0）', async () => {
+    it('updates 条目缺 platform 返回400且不写SQL', async () => {
       const res = await request(app)
         .post('/api/operator/sessions/status')
         .send({ updates: [{ status: 'active' }] });
-      expect(res.status).toBe(200);
-      expect(res.body.updated).toBe(0);
+      expect(res.status).toBe(400);
     });
   });
 
   describe('POST /api/operator/sessions/status — DB 错误处理', () => {
-    it('DB 写入抛错时 updated 只计成功条数', async () => {
+    it('DB 写入抛错时返回500且不能报告成功', async () => {
       const pool = (await import('../db/connection')).default as { query: ReturnType<typeof vi.fn> };
       pool.query.mockRejectedValue(new Error('DB down'));
       const res = await request(app)
         .post('/api/operator/sessions/status')
         .send({ updates: [{ platform: 'douyin', status: 'expired', checkedAt: '2026-05-27T10:00:00Z' }] });
-      expect(res.status).toBe(200);
-      expect(res.body.updated).toBe(0);
+      expect(res.status).toBe(500);
+      expect(res.body.ok).toBe(false);
     });
   });
 

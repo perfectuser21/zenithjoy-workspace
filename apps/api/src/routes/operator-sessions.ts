@@ -210,45 +210,47 @@ router.get('/', async (_req: Request, res: Response) => {
 router.post('/status', internalAuth, async (req: Request, res: Response) => {
   const { updates } = req.body || {};
 
-  if (!Array.isArray(updates)) {
-    return res.status(400).json({ error: 'updates 必须是数组' });
+  if (!Array.isArray(updates) || updates.length === 0 || updates.length > VALID_PLATFORMS.length) {
+    return res.status(400).json({ error: 'updates 必须是非空平台数组' });
   }
-
-  let updated = 0;
-
+  const seen = new Set<string>();
+  const rows: Array<{ platform: string; secret_name: string; status: string; checked_at: string }> = [];
   for (const update of updates) {
-    const { platform, status, checkedAt } = update as {
-      platform?: string;
-      status?: string;
-      checkedAt?: string;
-    };
-    if (!platform || !status) continue;
-
-    const ts = checkedAt || new Date().toISOString();
-
-    try {
-      const result = await pool.query(
-        `INSERT INTO operator_sessions (platform, secret_name, status, last_checked_at, last_valid_at)
-         VALUES ($1, $2, $3, $4, CASE WHEN $3 = 'active' THEN $4::TIMESTAMPTZ ELSE NULL END)
-         ON CONFLICT (platform) DO UPDATE
-           SET status = $3,
-               last_checked_at = $4::TIMESTAMPTZ,
-               last_valid_at = CASE
-                 WHEN $3 = 'active' THEN $4::TIMESTAMPTZ
-                 ELSE operator_sessions.last_valid_at
-               END,
-               updated_at = NOW()`,
-        [platform, buildSecretName(platform), status, ts],
-      );
-      if ((result.rowCount ?? 0) > 0) {
-        updated++;
-      }
-    } catch (err) {
-      console.error(`[POST status] 平台 ${platform} 写入失败:`, err);
+    if (!update || typeof update !== 'object') return res.status(400).json({ error: '无效 update' });
+    const { platform, status, checkedAt } = update;
+    if (!VALID_PLATFORMS.includes(platform) || seen.has(platform)
+      || !['active', 'expired', 'missing'].includes(status)
+      || (checkedAt !== undefined && (typeof checkedAt !== 'string' || !Number.isFinite(Date.parse(checkedAt))))) {
+      return res.status(400).json({ error: '无效 platform/status/checkedAt 或重复平台' });
     }
+    seen.add(platform);
+    rows.push({ platform, secret_name: buildSecretName(platform), status,
+      checked_at: checkedAt === undefined ? new Date().toISOString() : new Date(checkedAt).toISOString() });
   }
-
-  return res.status(200).json({ ok: true, updated });
+  try {
+    // One statement makes the whole batch atomic: a failed row cannot leave an
+    // earlier platform updated while telling the patrol that all writes succeeded.
+    const result = await pool.query(
+      `INSERT INTO operator_sessions (platform, secret_name, status, last_checked_at, last_valid_at)
+       SELECT platform, secret_name, status, checked_at,
+              CASE WHEN status = 'active' THEN checked_at ELSE NULL END
+       FROM jsonb_to_recordset($1::jsonb)
+         AS incoming(platform text, secret_name text, status text, checked_at timestamptz)
+       ON CONFLICT (platform) DO UPDATE SET
+         status = EXCLUDED.status,
+         secret_name = EXCLUDED.secret_name,
+         last_checked_at = EXCLUDED.last_checked_at,
+         last_valid_at = CASE WHEN EXCLUDED.status = 'active' THEN EXCLUDED.last_checked_at
+                              ELSE operator_sessions.last_valid_at END,
+         updated_at = NOW()`,
+      [JSON.stringify(rows)],
+    );
+    if (result.rowCount !== rows.length) throw new Error('incomplete session status write');
+    return res.status(200).json({ ok: true, updated: result.rowCount });
+  } catch (err) {
+    console.error('[POST status] 回写失败:', err);
+    return res.status(500).json({ ok: false, error: 'SESSION_STATUS_WRITE_FAILED' });
+  }
 });
 
 export const operatorSessionsRouter = router;
