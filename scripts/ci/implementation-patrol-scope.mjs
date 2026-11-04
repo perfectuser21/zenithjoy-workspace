@@ -1,6 +1,6 @@
 /** 巡查范围分类只声明适用性；不是准入PASS，也不缩减原门禁diff。 */
 import {execFileSync,spawnSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync,appendFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync,existsSync,appendFileSync,lstatSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -139,12 +139,19 @@ export function verifyPatrolRequiredConsumer(repoRoot){
  return {runtime_verified:true,gate_failure_skip_blocked:true,workflow:'.github/workflows/ci-l3-code.yml',job:'api-scripts-test',command};
 }
 
-// The retired patrol alias is no longer a glob inventory obligation. Its required
-// runtime consumer is verified separately; this still exercises both real glob
-// workers and the unchanged required aggregate using isolated patrol sentinels.
+// The original baseline alias retains its distinct full-directory compileall
+// obligation alongside the required L3 regression suite. Pin its actual commands
+// before exercising both real glob workers with isolated patrol sentinels.
 /** Shared glob consumer: execution, failure and complete shard coverage stay strict. */
 export function verifyPatrolSmokeConsumer(repoRoot){
  const name='phone-account-patrol-smoke.sh';
+ const alias=join(repoRoot,'.github/workflows/scripts/smoke',name);
+ try{
+  // Exact original bytes include both test_runner.py and full-directory compileall.
+  // Do not infer their execution merely from an alias/baseline filename.
+  const baseline=readFileSync(join(repoRoot,'.github/workflows/scripts/smoke-baseline.txt'),'utf8').split('\n');
+  if(!lstatSync(alias).isFile()||sha(readFileSync(alias))!=='de1eecb6d8c760c9ef72615fdc19d55f439b257e08efa54db74b418b84394b85'||baseline.filter(row=>row===name).length!==1)fail('SMOKE_ALIAS_DISABLED');
+ }catch{fail('SMOKE_ALIAS_DISABLED')}
  const w=YAML.parse(readFileSync(join(repoRoot,'.github/workflows/ci-smoke-glob-runner.yml'),'utf8'));
  const worker=w.jobs?.['smoke-glob-shards'],aggregate=w.jobs?.['smoke-glob-runner'],gate=w.jobs?.gate;
  const permanent=s=>s&&s.if===undefined&&s['continue-on-error']===undefined;

@@ -71,3 +71,4 @@ wechat-cs-hardening-smoke.sh
 wechat-moments-controller-smoke.sh
 wechat-rpa-real-agent-smoke.sh
 worker-activity-smoke.sh
+phone-account-patrol-smoke.sh

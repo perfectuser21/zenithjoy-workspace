@@ -307,7 +307,6 @@
     "schedule-dispatch-smoke.sh",
     "dispatch-two-step-smoke.sh",
     "brain-device-job-mirror-smoke.sh",
-    "phone-account-patrol-smoke.sh",
     "publish-recovery-core-smoke.sh",
     "pdd-listing-driver-smoke.sh"
   ],
@@ -369,7 +368,8 @@
     "services/phone-adb-controller/__tests__/leadgen-agent-artifacts.test.mjs",
     "services/phone-adb-controller/__tests__/leadgen-agent-resource.test.mjs",
     "services/phone-adb-controller/__tests__/leadgen-agent-tools.test.mjs",
-    "services/wechat-moments-controller/__tests__/safety.test.mjs"
+    "services/wechat-moments-controller/__tests__/safety.test.mjs",
+    ".github/workflows/scripts/smoke/phone-account-patrol-smoke.sh"
   ],
   "required_contracts": {
     "business": "API Integration Test / vitest.business-pg.config.ts plus baseline business-contracts-smoke.sh",
@@ -510,7 +510,6 @@
     ".github/workflows/scripts/smoke/path4-sprint-1-ws6-smoke.sh",
     ".github/workflows/scripts/smoke/path4-ws4-local-profile-smoke.sh",
     ".github/workflows/scripts/smoke/pdd-listing-driver-smoke.sh",
-    ".github/workflows/scripts/smoke/phone-account-patrol-smoke.sh",
     ".github/workflows/scripts/smoke/phone-adb-controller-smoke.sh",
     ".github/workflows/scripts/smoke/phone-wall-push-smoke.sh",
     ".github/workflows/scripts/smoke/preflight-delivery-selfcheck-smoke.sh",
@@ -576,7 +575,7 @@
     "verification": "--verify-results; seven actual nonempty unskipped XML suites",
     "removed_duplicate_preparation": "Smoke Glob shards no longer prepare or compile Android artifacts"
   },
-  "phone_patrol_required": "L3 API Scripts Test (Python): node --test scripts/phone-account-patrol/implementation-regression.test.mjs",
+  "phone_patrol_required": "Retain original phone-account-patrol-smoke.sh in blocking Smoke Glob baseline: real unittest test_runner.py plus unique compileall. Unconditional L3 API Scripts Test also runs the full current Node/Python/JS patrol oracle; neither consumer is an assertion of physical-device execution.",
   "local_validation": "Evidence manifests in the isolated audit round3/checks; CI receipt pending, no production or physical completion inferred.",
   "session_health_repair": {
     "workflow": ".github/workflows/session-health-check.yml",
@@ -596,30 +595,30 @@
   },
   "baseline_counts": {
     "before": 159,
-    "after": 73,
-    "removed": 92,
+    "after": 74,
+    "removed": 91,
     "added": 6,
     "new_canonical_entries": 5,
     "new_upstream_entries": 1
   },
   "top_level_smoke_counts": {
     "before": 300,
-    "after": 120,
-    "original_entries_removed_or_relocated": 186,
+    "after": 121,
+    "original_entries_removed_or_relocated": 185,
     "new_canonical_entries": 5,
     "new_upstream_entries": 1
   },
   "post_ci_additional_evidence": "docs/ci/round3-post-ci-consolidation.json",
   "audit_scope_baseline_counts": {
     "before": 159,
-    "after": 72,
-    "removed": 92,
+    "after": 73,
+    "removed": 91,
     "added": 5
   },
   "audit_scope_top_level_smoke_counts": {
     "before": 300,
-    "after": 119,
-    "original_entries_removed_or_relocated": 186,
+    "after": 120,
+    "original_entries_removed_or_relocated": 185,
     "new_canonical_entries": 5
   },
   "upstream_integration": {
@@ -631,11 +630,19 @@
       "baseline": 160
     },
     "integrated_candidate": {
-      "top_level_smoke": 120,
-      "baseline": 73
+      "top_level_smoke": 121,
+      "baseline": 74
     },
     "skills_revision": "eb8b8efa8237afe079c2733422f2d745f53fc3a3",
     "scope": "Original 300/159 inventory and 172 action units stay frozen; preserve independently merged current-main additions."
   },
-  "installer_candidate_boundary": "agent-installpack.yml only retains SHA-bound core and four module candidates; deprecated publish=true fails before builds. No COS upload or production manifest update; real business admission/promotion remains outside CI completion."
+  "installer_candidate_boundary": "agent-installpack.yml only retains SHA-bound core and four module candidates; deprecated publish=true fails before builds. No COS upload or production manifest update; real business admission/promotion remains outside CI completion.",
+  "retained_original_guarantees": [
+    {
+      "path": ".github/workflows/scripts/smoke/phone-account-patrol-smoke.sh",
+      "disposition": "keep",
+      "reason": "Final dependency review found unique compileall not yet replaced. Preserve the exact original low-cost real unittest/compileall alias and its blocking baseline; keep original scope classifier and full central diff unchanged. No special N/A exception introduced.",
+      "source_commit": "d0f14535c40b17e6cb13f2be3c031a2e89fd3392"
+    }
+  ]
 }

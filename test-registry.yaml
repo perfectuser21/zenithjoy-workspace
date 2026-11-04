@@ -10278,3 +10278,11 @@ tests:
     status: active
     product: 基础设施
     note: Current contracts; required execution recorded in docs/ci/round3-central-wiring.json.
+
+  - id: ci-smoke-phone-account-patrol
+    path: .github/workflows/scripts/smoke/phone-account-patrol-smoke.sh
+    type: smoke
+    ci: L4
+    status: active
+    product: 基础设施
+    note: Retained original unittest and unique compileall; blocking Smoke Glob baseline, alongside current unconditional L3 full patrol oracle. No physical-device admission claimed.
