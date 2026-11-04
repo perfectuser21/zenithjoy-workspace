@@ -341,18 +341,33 @@ test('纯汇总离线执行正式ownership步骤：无key普通仓通过，mixed
  const denied=execute();assert.equal(denied.status,1,denied.stdout+denied.stderr);assert.match(denied.stderr,/mixed\/SkIlL\.Md/);
  assert.equal(existsSync(join(root,'.skills-source')),false);assert.equal(existsSync(join(root,'.skills-runtime')),false);
 });
-for(const mode of ['exited','not-ready'])test('workbench启动诊断保预算且脱敏，不进入业务断言：'+mode,t=>{
+for(const mode of ['exited','exited-before-first-probe','not-ready'])test('workbench启动诊断保预算且脱敏，不进入业务断言：'+mode,t=>{
  const root=mkdtempSync(join(tmpdir(),'workbench-startup-diagnostic-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
  for(const file of ['apps/api/src/services/workbench.ts','apps/api/src/routes/staff.ts','apps/staff-hub/src/pages/HomePage.tsx']){mkdirSync(join(root,file,'..'),{recursive:true});writeFileSync(join(root,file),'');}
  const bin=join(root,'fixture-bin');mkdirSync(bin);
  const noise='for i in $(seq 1 180); do echo "STARTUP_NOISE_$i" >&2; done; echo STARTUP_FIXTURE_REFUSED >&2; echo "Authorization: Bearer fixture-bearer" >&2; echo "postgres://user:fixture-password@db.invalid/db" >&2; echo "API_KEY=fixture-api-key" >&2; echo "https://service.invalid/path?token=fixture-query-token" >&2;';
- for(const [name,body]of Object.entries({npm:'exit 0',node:noise+(mode==='exited'?'exit 42':'exec /bin/sleep 30'),curl:'printf "%s\\n" "$*" >> "$CURL_TRACE";exit 7',sleep:'printf "%s\\n" "$*" >> "$SLEEP_TRACE";/bin/sleep 0.01'}))writeFileSync(join(bin,name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
+ for(const [name,body]of Object.entries({npm:'exit 0',node:'printf "%s\\n" "$$" > "$CHILD_PID";'+noise+(mode.startsWith('exited')?'exit 42':'exec /bin/sleep 30'),curl:'printf "%s\\n" "$*" >> "$CURL_TRACE";exit 7',sleep:'printf "%s\\n" "$*" >> "$SLEEP_TRACE";/bin/sleep 0.01'}))writeFileSync(join(bin,name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
+ // 夹具只控制调度：子进程确已停止后，仍原样枚举正式入口的30次尝试。
+ if(mode==='exited-before-first-probe')writeFileSync(join(bin,'seq'),`#!/bin/bash
+if [[ "$*" == '1 30' ]]; then
+ for fixture_wait in $(/usr/bin/seq 1 100); do
+  if [[ -s "$CHILD_PID" ]]; then
+   fixture_state=$(/bin/ps -o stat= -p "$(cat "$CHILD_PID")" 2>/dev/null || true)
+   if [[ -z "$fixture_state" || "$fixture_state" == *Z* ]]; then printf stopped > "$EXIT_SCHEDULE"; exec /usr/bin/seq "$@"; fi
+  fi
+  /bin/sleep 0.01
+ done
+ exit 91
+fi
+exec /usr/bin/seq "$@"
+`,{mode:0o755});
  const script=readFileSync(new URL('../smoke/staff-workbench-smoke.sh',import.meta.url),'utf8').replaceAll('/tmp/staff-workbench-smoke-api.log',join(root,'api.log'));
- const r=spawnSync('bash',['-c',script],{cwd:root,env:{PATH:bin+':'+process.env.PATH,HOME:root,CURL_TRACE:join(root,'curl.trace'),SLEEP_TRACE:join(root,'sleep.trace'),DOTENV_CONFIG_PATH:'/dev/null'},encoding:'utf8',timeout:5000});
+ const r=spawnSync('bash',['-c',script],{cwd:root,env:{PATH:bin+':'+process.env.PATH,HOME:root,CHILD_PID:join(root,'child.pid'),EXIT_SCHEDULE:join(root,'exit-schedule'),CURL_TRACE:join(root,'curl.trace'),SLEEP_TRACE:join(root,'sleep.trace'),DOTENV_CONFIG_PATH:'/dev/null'},encoding:'utf8',timeout:5000});
  assert.notEqual(r.status,0);assert.equal(r.signal,null);const output=r.stdout+r.stderr;
- assert.match(output,/STARTUP_FIXTURE_REFUSED/);assert.match(output,new RegExp('startup='+mode));if(mode==='exited')assert.match(output,/child_exit=42/);
+ assert.match(output,/STARTUP_FIXTURE_REFUSED/);assert.match(output,new RegExp('startup='+(mode.startsWith('exited')?'exited':mode)));if(mode.startsWith('exited'))assert.match(output,/child_exit=42/);
  assert.doesNotMatch(output,/fixture-bearer|fixture-password|fixture-api-key|fixture-query-token|STARTUP_NOISE_1\n/);
  assert.doesNotMatch(output,/两个工作台端点无认证头/);assert.doesNotMatch(readFileSync(join(root,'curl.trace'),'utf8'),/\/api\/staff/);
+ if(mode==='exited-before-first-probe'){assert.equal(readFileSync(join(root,'exit-schedule'),'utf8'),'stopped');assert.equal(readFileSync(join(root,'curl.trace'),'utf8'),'');}
  const sleeps=existsSync(join(root,'sleep.trace'))?readFileSync(join(root,'sleep.trace'),'utf8').trim().split('\n'):[];
  assert.ok(sleeps.length<=30);if(mode==='not-ready')assert.equal(sleeps.length,30);assert.ok(sleeps.every(n=>n==='0.5'));
 });
