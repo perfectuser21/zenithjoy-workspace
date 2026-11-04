@@ -31,10 +31,51 @@ node -r dotenv/config dist/index.js > /tmp/staff-workbench-smoke-api.log 2>&1 &
 API_PID=$!
 trap 'kill $API_PID 2>/dev/null || true' EXIT
 
+startup_diagnostic() {
+  echo "FAIL: staff-workbench API startup=$1 child_exit=${2:-unknown}" >&2
+  # Bound and redact diagnostics before sending them to the CI job log.
+  python3 - /tmp/staff-workbench-smoke-api.log <<'PY_DIAGNOSTIC' >&2 || echo "startup diagnostic unavailable (no raw log fallback)" >&2
+import os, re, sys
+with open(sys.argv[1], 'rb') as stream:
+    stream.seek(0, 2)
+    offset = max(0, stream.tell() - 16384)
+    stream.seek(offset)
+    text = stream.read().decode('utf-8', errors='replace')
+if offset:
+    text = text.partition('\n')[2]
+text = '\n'.join(text.splitlines()[-80:])
+for key, value in sorted(os.environ.items(), key=lambda item: len(item[1]), reverse=True):
+    if len(value) >= 4 and re.search(r'TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|CREDENTIAL|AUTHORIZATION', key, re.I):
+        text = text.replace(value, '[REDACTED]')
+text = re.sub(r'(-----BEGIN [^-]*PRIVATE KEY-----)[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)', '[REDACTED PRIVATE KEY]', text)
+text = re.sub(r'(?i)(\bBearer\s+)[^\s\"\']+', r'\1[REDACTED]', text)
+text = re.sub(r'(?i)([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@', r'\1[REDACTED]@', text)
+text = re.sub(r'(?i)((?:api[_-]?key|access[_-]?token|token|password|passwd|secret|authorization)[\"\']?\s*[:=]\s*[\"\']?)[^&\s\"\']+', r'\1[REDACTED]', text)
+print(text)
+PY_DIAGNOSTIC
+}
+
+READY=0
 for _ in $(seq 1 30); do
-  if curl -s -o /dev/null "${API}/health"; then break; fi
+  if ! kill -0 "$API_PID" 2>/dev/null; then
+    CHILD_EXIT=0
+    wait "$API_PID" || CHILD_EXIT=$?
+    startup_diagnostic exited "$CHILD_EXIT"
+    exit 1
+  fi
+  if curl -s -o /dev/null "${API}/health"; then READY=1; break; fi
   sleep 0.5
 done
+if [ "$READY" -ne 1 ]; then
+  if kill -0 "$API_PID" 2>/dev/null; then
+    startup_diagnostic not-ready running
+  else
+    CHILD_EXIT=0
+    wait "$API_PID" || CHILD_EXIT=$?
+    startup_diagnostic exited "$CHILD_EXIT"
+  fi
+  exit 1
+fi
 
 fail() { echo "FAIL: $1"; exit 1; }
 
